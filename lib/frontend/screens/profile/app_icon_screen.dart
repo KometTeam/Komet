@@ -5,8 +5,8 @@ import '../../widgets/connection_status.dart';
 import '../../../core/config/app_icon.dart';
 import '../../../core/utils/haptics.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/glossy_pill.dart';
 import '../../widgets/settings_radio_tile.dart';
+import '../../widgets/settings_card.dart';
 
 class AppIconScreen extends StatefulWidget {
   const AppIconScreen({super.key});
@@ -57,11 +57,8 @@ class _AppIconScreenState extends State<AppIconScreen> {
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
           children: [
-            GlossyPill(
-              color: cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(28),
+            SettingsPanel(
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-              depth: 6,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

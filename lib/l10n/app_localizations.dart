@@ -740,6 +740,24 @@ abstract class AppLocalizations {
   /// **'Account'**
   String get infoAccountSection;
 
+  /// No description provided for @infoPacketSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Login packet'**
+  String get infoPacketSection;
+
+  /// No description provided for @infoChatsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats in login packet'**
+  String get infoChatsSection;
+
+  /// No description provided for @infoChatSettingsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Per-chat settings'**
+  String get infoChatSettingsSection;
+
   /// No description provided for @infoServerSection.
   ///
   /// In en, this message translates to:
@@ -751,6 +769,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'User'**
   String get infoUserSection;
+
+  /// No description provided for @infoExperimentsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Experiments'**
+  String get infoExperimentsSection;
 
   /// No description provided for @infoYMapSection.
   ///
@@ -800,11 +824,149 @@ abstract class AppLocalizations {
   /// **'id'**
   String get infoId;
 
+  /// No description provided for @infoPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'phone'**
+  String get infoPhone;
+
+  /// No description provided for @infoPhotoId.
+  ///
+  /// In en, this message translates to:
+  /// **'photoId'**
+  String get infoPhotoId;
+
+  /// No description provided for @infoAccountStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'accountStatus'**
+  String get infoAccountStatus;
+
+  /// No description provided for @infoContactOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'contact options'**
+  String get infoContactOptions;
+
+  /// No description provided for @infoProfileOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'profile options'**
+  String get infoProfileOptions;
+
+  /// No description provided for @infoNames.
+  ///
+  /// In en, this message translates to:
+  /// **'names'**
+  String get infoNames;
+
+  /// No description provided for @infoBaseUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'baseUrl'**
+  String get infoBaseUrl;
+
+  /// No description provided for @infoBaseRawUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'baseRawUrl'**
+  String get infoBaseRawUrl;
+
   /// No description provided for @infoChatMarker.
   ///
   /// In en, this message translates to:
   /// **'chatMarker'**
   String get infoChatMarker;
+
+  /// No description provided for @infoServerTime.
+  ///
+  /// In en, this message translates to:
+  /// **'server time'**
+  String get infoServerTime;
+
+  /// No description provided for @infoUpdates.
+  ///
+  /// In en, this message translates to:
+  /// **'updates'**
+  String get infoUpdates;
+
+  /// No description provided for @infoMessagesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'messages in packet'**
+  String get infoMessagesCount;
+
+  /// No description provided for @infoContactsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'contacts in packet'**
+  String get infoContactsCount;
+
+  /// No description provided for @infoPresenceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'presence records'**
+  String get infoPresenceCount;
+
+  /// No description provided for @infoConfigHash.
+  ///
+  /// In en, this message translates to:
+  /// **'config hash'**
+  String get infoConfigHash;
+
+  /// No description provided for @infoChatsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'chats loaded'**
+  String get infoChatsCount;
+
+  /// No description provided for @infoChatsActive.
+  ///
+  /// In en, this message translates to:
+  /// **'active'**
+  String get infoChatsActive;
+
+  /// No description provided for @infoChatsHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'hidden'**
+  String get infoChatsHidden;
+
+  /// No description provided for @infoChatsDialogs.
+  ///
+  /// In en, this message translates to:
+  /// **'dialogs'**
+  String get infoChatsDialogs;
+
+  /// No description provided for @infoChatsGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'groups'**
+  String get infoChatsGroups;
+
+  /// No description provided for @infoChatsChannels.
+  ///
+  /// In en, this message translates to:
+  /// **'channels'**
+  String get infoChatsChannels;
+
+  /// No description provided for @infoChatsUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'unread chats'**
+  String get infoChatsUnread;
+
+  /// No description provided for @infoChatsNewMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'new messages'**
+  String get infoChatsNewMessages;
+
+  /// No description provided for @infoChatsMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'messages in loaded chats'**
+  String get infoChatsMessages;
 
   /// No description provided for @infoAccountRemovalEnabled.
   ///
@@ -1543,6 +1705,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Material You or dimensional Glossy capsules'**
   String get appearanceVisualStyleSubtitle;
+
+  /// No description provided for @appearanceStyleAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Match theme'**
+  String get appearanceStyleAuto;
 
   /// No description provided for @appearanceVisualStyleMaterialYou.
   ///
@@ -3109,6 +3277,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Details'**
   String get chatInfoShowMoreExtra;
+
+  /// No description provided for @chatSendConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Send this message to the chat?'**
+  String get chatSendConfirmMessage;
+
+  /// No description provided for @chatSendConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get chatSendConfirmAction;
+
+  /// No description provided for @chatInfoRowDisableForward.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarding disabled'**
+  String get chatInfoRowDisableForward;
+
+  /// No description provided for @chatInfoRowCopyDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Copying disabled'**
+  String get chatInfoRowCopyDisabled;
+
+  /// No description provided for @chatInfoRowOnlyAdminCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Admins can call'**
+  String get chatInfoRowOnlyAdminCall;
+
+  /// No description provided for @chatInfoRowAllCanPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone can pin'**
+  String get chatInfoRowAllCanPin;
+
+  /// No description provided for @chatInfoRowMembersSeeLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Members see the link'**
+  String get chatInfoRowMembersSeeLink;
+
+  /// No description provided for @chatInfoRowConfirmBeforeSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm before sending'**
+  String get chatInfoRowConfirmBeforeSend;
+
+  /// No description provided for @chatInfoRowOnlyOwnerIconTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner edits title and icon'**
+  String get chatInfoRowOnlyOwnerIconTitle;
+
+  /// No description provided for @chatInfoRowPromotedDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Promoted content off'**
+  String get chatInfoRowPromotedDisabled;
+
+  /// No description provided for @chatInfoRowUserId.
+  ///
+  /// In en, this message translates to:
+  /// **'User ID'**
+  String get chatInfoRowUserId;
 
   /// No description provided for @chatInfoRowId.
   ///

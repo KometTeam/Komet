@@ -398,118 +398,126 @@ class ComposerInputBar extends StatelessWidget {
                         },
                         child: ValueListenableBuilder<bool>(
                           valueListenable: hasText,
-                          builder: (context, hasText, _) => ValueListenableBuilder<bool>(
-                            valueListenable: voiceRec.locked,
-                            builder: (context, voiceLocked, _) =>
-                                ValueListenableBuilder<bool>(
-                                  valueListenable: voiceRec.isRecording,
-                                  builder: (context, voiceRecording, _) =>
-                                      AnimatedBuilder(
-                                        animation: Listenable.merge([
-                                          note.videoNoteMode,
-                                          note.isRecording,
-                                          note.locked,
-                                        ]),
-                                        builder: (context, _) {
-                                          final videoMode =
-                                              note.videoNoteMode.value;
-                                          final noteRecording =
-                                              note.isRecording.value;
-                                          final recording =
-                                              voiceRecording || noteRecording;
-                                          final locked = noteRecording
-                                              ? note.locked.value
-                                              : voiceLocked;
-                                          final sendMode =
-                                              hasText ||
-                                              hasForward ||
-                                              locked ||
-                                              forceSend;
-                                          final pill = _actionSurface(
-                                            color: _flat
-                                                ? Colors.transparent
-                                                : recording
-                                                ? cs.error
-                                                : _frost
-                                                ? AppFrost.glassTint(cs)
-                                                : cs.surfaceContainerHighest,
-                                            onTap:
-                                                (hasText ||
-                                                    hasForward ||
-                                                    forceSend)
-                                                ? onSendText
-                                                : locked
-                                                ? () => noteRecording
-                                                      ? note.stop(cancel: false)
-                                                      : voiceRec.stop(
-                                                          cancel: false,
-                                                        )
-                                                : null,
-                                            onLongPress:
-                                                (hasText &&
-                                                    !forceSend &&
-                                                    !hasForward)
-                                                ? onScheduleMessage
-                                                : null,
-                                            child: SizedBox(
-                                              width: 54,
-                                              height: 54,
-                                              child: Center(
-                                                child: ComposerMorphIcon(
-                                                  action: sendMode
-                                                      ? ComposerAction.send
-                                                      : videoMode
-                                                      ? ComposerAction.videocam
-                                                      : ComposerAction.mic,
-                                                  color: recording
-                                                      ? (_flat
-                                                            ? cs.error
-                                                            : cs.onError)
-                                                      : sendMode
-                                                      ? cs.primary
-                                                      : _flat
-                                                      ? cs.onSurfaceVariant
-                                                      : cs.onSurface,
+                          builder: (context, hasText, _) =>
+                              ValueListenableBuilder<bool>(
+                                valueListenable: voiceRec.locked,
+                                builder: (context, voiceLocked, _) =>
+                                    ValueListenableBuilder<bool>(
+                                      valueListenable: voiceRec.isRecording,
+                                      builder: (context, voiceRecording, _) =>
+                                          AnimatedBuilder(
+                                            animation: Listenable.merge([
+                                              note.videoNoteMode,
+                                              note.isRecording,
+                                              note.locked,
+                                            ]),
+                                            builder: (context, _) {
+                                              final videoMode =
+                                                  note.videoNoteMode.value;
+                                              final noteRecording =
+                                                  note.isRecording.value;
+                                              final recording =
+                                                  voiceRecording ||
+                                                  noteRecording;
+                                              final locked = noteRecording
+                                                  ? note.locked.value
+                                                  : voiceLocked;
+                                              final sendMode =
+                                                  hasText ||
+                                                  hasForward ||
+                                                  locked ||
+                                                  forceSend;
+                                              final pill = _actionSurface(
+                                                color: _flat
+                                                    ? Colors.transparent
+                                                    : recording
+                                                    ? cs.error
+                                                    : _frost
+                                                    ? AppFrost.glassTint(cs)
+                                                    : cs.surfaceContainerHighest,
+                                                onTap:
+                                                    (hasText ||
+                                                        hasForward ||
+                                                        forceSend)
+                                                    ? onSendText
+                                                    : locked
+                                                    ? () => noteRecording
+                                                          ? note.stop(
+                                                              cancel: false,
+                                                            )
+                                                          : voiceRec.stop(
+                                                              cancel: false,
+                                                            )
+                                                    : null,
+                                                onLongPress:
+                                                    (hasText &&
+                                                        !forceSend &&
+                                                        !hasForward)
+                                                    ? onScheduleMessage
+                                                    : null,
+                                                child: SizedBox(
+                                                  width: 54,
+                                                  height: 54,
+                                                  child: Center(
+                                                    child: ComposerMorphIcon(
+                                                      action: sendMode
+                                                          ? ComposerAction.send
+                                                          : videoMode
+                                                          ? ComposerAction
+                                                                .videocam
+                                                          : ComposerAction.mic,
+                                                      color: recording
+                                                          ? (_flat
+                                                                ? cs.error
+                                                                : cs.onError)
+                                                          : sendMode
+                                                          ? cs.primary
+                                                          : _flat
+                                                          ? cs.onSurfaceVariant
+                                                          : cs.onSurface,
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
-                                            ),
-                                          );
-                                          final visual = _recordingButtonVisual(
-                                            pill: pill,
-                                            cs: cs,
-                                            active: recording && !locked,
-                                          );
-                                          final voiceEnabled =
-                                              !sendMode && !forceSend;
-                                          return GestureDetector(
-                                            onTap: voiceEnabled
-                                                ? note.toggleMode
-                                                : null,
-                                            onLongPressStart: voiceEnabled
-                                                ? (_) => videoMode
-                                                      ? note.start()
-                                                      : voiceRec.start()
-                                                : null,
-                                            onLongPressMoveUpdate: voiceEnabled
-                                                ? (d) => videoMode
-                                                      ? note.handleDrag(
-                                                          d.offsetFromOrigin,
-                                                        )
-                                                      : voiceRec.handleDrag(
-                                                          d.offsetFromOrigin,
-                                                        )
-                                                : null,
-                                            onLongPressEnd: voiceEnabled
-                                                ? (_) => videoMode
-                                                      ? note.handleEnd()
-                                                      : voiceRec.handleEnd()
-                                                : null,
-                                            child: visual,
-                                          );
-                                        },
-                                      ),
-                                ),
-                          ),
+                                              );
+                                              final visual =
+                                                  _recordingButtonVisual(
+                                                    pill: pill,
+                                                    cs: cs,
+                                                    active:
+                                                        recording && !locked,
+                                                  );
+                                              final voiceEnabled =
+                                                  !sendMode && !forceSend;
+                                              return GestureDetector(
+                                                onTap: voiceEnabled
+                                                    ? note.toggleMode
+                                                    : null,
+                                                onLongPressStart: voiceEnabled
+                                                    ? (_) => videoMode
+                                                          ? note.start()
+                                                          : voiceRec.start()
+                                                    : null,
+                                                onLongPressMoveUpdate:
+                                                    voiceEnabled
+                                                    ? (d) => videoMode
+                                                          ? note.handleDrag(
+                                                              d.offsetFromOrigin,
+                                                            )
+                                                          : voiceRec.handleDrag(
+                                                              d.offsetFromOrigin,
+                                                            )
+                                                    : null,
+                                                onLongPressEnd: voiceEnabled
+                                                    ? (_) => videoMode
+                                                          ? note.handleEnd()
+                                                          : voiceRec.handleEnd()
+                                                    : null,
+                                                child: visual,
+                                              );
+                                            },
+                                          ),
+                                    ),
+                              ),
                         ),
                       ),
                     ],
@@ -525,7 +533,7 @@ class ComposerInputBar extends StatelessWidget {
     return _barSurface(cs, bar);
   }
 
-  bool get _flat => style == ComposerStyle.materialYou;
+  bool get _flat => !ComposerChrome.isGlossy(style);
 
   bool get _frost => ComposerMaterial.isFrost(background);
 

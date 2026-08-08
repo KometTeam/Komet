@@ -118,6 +118,8 @@ import 'chat/retain_offset_physics.dart';
 import 'profile_action_sheets.dart';
 import '../../../core/media/media_playback.dart';
 import '../../widgets/media_playback_pill.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 
 class _DateSeparatorItem {
   final DateTime date;
@@ -598,7 +600,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   ChatChromeStyle get _effectiveChrome {
     final chrome = AppChatChrome.current.value;
-    if (chrome == ChatChromeStyle.liquidGlass) return ChatChromeStyle.transparent;
+    if (chrome == ChatChromeStyle.liquidGlass) {
+      return ChatChromeStyle.transparent;
+    }
     if (_wallpaper != null && chrome == ChatChromeStyle.none) {
       return ChatChromeStyle.blur;
     }
@@ -1612,7 +1616,9 @@ class _ChatScreenState extends State<ChatScreen>
     if (_historyAutoloadSuppressed) return;
     if (_isLoading) return;
     if (_commentsMode) {
-      if (_commentsLoadingMore || !_commentsHasMore || _messages.isEmpty) return;
+      if (_commentsLoadingMore || !_commentsHasMore || _messages.isEmpty) {
+        return;
+      }
       final pos = _scrollController.position;
       if (pos.pixels - pos.minScrollExtent <= _historyPrefetchExtent) {
         unawaited(_loadMoreComments());
@@ -1692,7 +1698,10 @@ class _ChatScreenState extends State<ChatScreen>
     return null;
   }
 
-  Future<void> _holdScrollAfterAppend(String? anchorId, double? beforeDy) async {
+  Future<void> _holdScrollAfterAppend(
+    String? anchorId,
+    double? beforeDy,
+  ) async {
     if (anchorId == null || beforeDy == null) return;
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !_scrollController.hasClients) return;
@@ -2218,7 +2227,11 @@ class _ChatScreenState extends State<ChatScreen>
 
   String? _effectiveStatus(CachedMessage msg) {
     if (msg.senderId != _myId) return null;
-    if (msg.status == 'sending' || msg.status == 'error') return msg.status;
+    if (msg.status == 'sending' ||
+        msg.status == 'pending' ||
+        msg.status == 'error') {
+      return msg.status;
+    }
     return 'sent';
   }
 
@@ -2692,6 +2705,7 @@ class _ChatScreenState extends State<ChatScreen>
               selected: selected,
               onReply: _replySelected,
               onForward: _forwardSelected,
+              allowForward: !(chat?.forwardDisabled ?? false),
             ),
           ),
         ),
@@ -2699,7 +2713,7 @@ class _ChatScreenState extends State<ChatScreen>
     );
     Widget wrapChrome(Widget child) {
       if (_composerFrosted) {
-        if (AppComposerStyle.current.value != ComposerStyle.materialYou) {
+        if (ComposerChrome.isGlossy(AppComposerStyle.current.value)) {
           return child;
         }
         return _FrostedPanel(
@@ -2778,7 +2792,7 @@ class _ChatScreenState extends State<ChatScreen>
                 color: cs.onSurface,
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Outfit',
+                fontFamily: displayFontOf(context),
               ),
             ),
             const SizedBox(height: 16),
@@ -2927,6 +2941,7 @@ class _ChatScreenState extends State<ChatScreen>
           builder: (ctx, setLocalState) {
             return AlertDialog(
               backgroundColor: cs.surfaceContainerHigh,
+              shape: AppShape.dialogBorder,
               title: const Text('Удалить сообщение'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -3183,7 +3198,8 @@ class _ChatScreenState extends State<ChatScreen>
                             headerStatus: _headerStatusNotifier,
                             scheduledCount: _scheduledCount,
                             otherUnread: _otherUnread,
-                            showCall: !_commentsMode &&
+                            showCall:
+                                !_commentsMode &&
                                 widget.chatType == 'DIALOG' &&
                                 !_peerIsBot,
                             onClose: widget.onClose,
@@ -3868,6 +3884,16 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
+    if (chat?.confirmBeforeSend ?? false) {
+      final l10n = AppLocalizations.of(context)!;
+      final confirmed = await showConfirmDialog(
+        context,
+        message: l10n.chatSendConfirmMessage,
+        confirmLabel: l10n.chatSendConfirmAction,
+      );
+      if (!confirmed || !mounted) return;
+    }
+
     final wireText = await _encryptOutgoing(text);
     if (wireText == null || !mounted) return;
     final encrypted = wireText != text;
@@ -4028,6 +4054,9 @@ class _ChatScreenState extends State<ChatScreen>
         }
         return;
       }
+      final failed = isPermanentSendFailure(e);
+      final status = failed ? 'error' : 'pending';
+      if (failed) logger.w('Отправка отклонена сервером: $e');
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
         final queued = CachedMessage(
@@ -4037,7 +4066,7 @@ class _ChatScreenState extends State<ChatScreen>
           senderId: _myId,
           text: text,
           time: now,
-          status: 'pending',
+          status: status,
           payload: composedPayload,
         );
         _messages[index] = queued;
@@ -4051,7 +4080,7 @@ class _ChatScreenState extends State<ChatScreen>
               messageId: tempId,
               time: now,
               text: text,
-              status: 'pending',
+              status: status,
               elements: elements,
             ),
           );
@@ -5586,9 +5615,7 @@ class _ChatScreenState extends State<ChatScreen>
     final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(
-        child: SmallSpinner(size: 22, color: cs.onSurfaceVariant),
-      ),
+      child: Center(child: SmallSpinner(size: 22, color: cs.onSurfaceVariant)),
     );
   }
 
@@ -5670,7 +5697,8 @@ class _ChatScreenState extends State<ChatScreen>
 
                               final bool isChannelPost =
                                   !_commentsMode &&
-                                  (chat?.type ?? widget.chatType) == 'CHANNEL' &&
+                                  (chat?.type ?? widget.chatType) ==
+                                      'CHANNEL' &&
                                   !message.isControl;
                               final bool isCommentedPost =
                                   _commentsMode &&
@@ -5746,9 +5774,12 @@ class _ChatScreenState extends State<ChatScreen>
                                 onReply: message.isControl
                                     ? null
                                     : () => _startReply(message),
-                                onForward: message.isControl
+                                onForward:
+                                    message.isControl ||
+                                        (chat?.forwardDisabled ?? false)
                                     ? null
                                     : () => _forwardMessages([message]),
+                                allowCopy: !(chat?.copyDisabled ?? false),
                                 onMarkUnread: message.isControl
                                     ? null
                                     : () => _markMessageUnread(message),
@@ -6135,7 +6166,10 @@ class _ChatScreenState extends State<ChatScreen>
       FileAttachment(fileId: fileId),
     ).id;
     try {
-      final realId = await messagesModule.sendFileMessage(widget.chatId, fileId);
+      final realId = await messagesModule.sendFileMessage(
+        widget.chatId,
+        fileId,
+      );
       final ok = realId != null;
       if (!mounted) return ok;
       if (ok) {
@@ -6271,7 +6305,9 @@ class _ChatScreenState extends State<ChatScreen>
 
     var durationMs = video.item.duration?.inMilliseconds;
     if (durationMs == null && DesktopVideoProbe.supported) {
-      durationMs = (await DesktopVideoProbe.duration(file.path))?.inMilliseconds;
+      durationMs = (await DesktopVideoProbe.duration(
+        file.path,
+      ))?.inMilliseconds;
     }
     final dims = await video.item.dimensions();
     Uint8List? thumbBytes;
@@ -6949,9 +6985,7 @@ class _PinnedMessageBanner extends StatelessWidget {
     if (frosted) {
       return GlassSurface(
         liquid: liquid,
-        borderRadius: floating
-            ? BorderRadius.circular(16)
-            : BorderRadius.zero,
+        borderRadius: floating ? BorderRadius.circular(16) : BorderRadius.zero,
         frostTint: Colors.transparent,
         border: floating ? null : bottomBorder,
         backdropKey: backdropKey,
@@ -7059,6 +7093,7 @@ class _SelectableMessageRow extends StatefulWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
+  final bool allowCopy;
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
   final bool Function() isPinned;
@@ -7083,6 +7118,7 @@ class _SelectableMessageRow extends StatefulWidget {
     this.onEdit,
     this.onReply,
     this.onForward,
+    this.allowCopy = true,
     this.onMarkUnread,
     this.onPin,
     required this.isPinned,
@@ -7153,6 +7189,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onEdit: widget.onEdit,
       onReply: widget.onReply,
       onForward: widget.onForward,
+      allowCopy: widget.allowCopy,
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
       isPinned: _isPinnedNow(),
@@ -7221,6 +7258,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onEdit: widget.onEdit,
       onReply: widget.onReply,
       onForward: widget.onForward,
+      allowCopy: widget.allowCopy,
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
       isPinned: _isPinnedNow(),

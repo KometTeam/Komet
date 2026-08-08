@@ -23,6 +23,8 @@ import '../../widgets/small_spinner.dart';
 import '../../../backend/api.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
+import '../../../core/config/app_frost.dart';
+import '../../../core/config/app_shape.dart';
 
 class LoginScreen extends StatefulWidget {
   final int? returnToAccountId;
@@ -409,7 +411,7 @@ class _LoginScreenState extends State<LoginScreen> {
       context: screenContext,
       barrierDismissible: true,
       barrierLabel: '',
-      barrierColor: Colors.black54,
+      barrierColor: AppFrost.scrim(),
       transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
       transitionBuilder: (context, anim1, anim2, child) {
@@ -424,9 +426,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: AlertDialog(
                 backgroundColor: cs.surfaceContainerHigh,
                 surfaceTintColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                shape: AppShape.dialogBorder,
                 contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
                 actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                 content: Column(
@@ -840,7 +840,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   const Spacer(),
                                   Icon(
-                                    Icons.keyboard_arrow_down,
+                                    Symbols.keyboard_arrow_down,
                                     color: cs.onSurfaceVariant,
                                   ),
                                 ],
@@ -1005,7 +1005,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           color: cs.onPrimaryContainer,
                                         )
                                       : Icon(
-                                          Icons.arrow_forward,
+                                          Symbols.arrow_forward,
                                           color: _isPhoneValid
                                               ? cs.onPrimaryContainer
                                               : cs.onSurfaceVariant,
@@ -1068,4 +1068,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-

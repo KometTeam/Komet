@@ -18,6 +18,8 @@ import '../../widgets/liquid_glass.dart';
 import '../../widgets/lottie_image.dart';
 import '../../widgets/small_spinner.dart';
 import 'story_owner_info.dart';
+import '../../../core/config/app_frost.dart';
+import '../../../core/config/app_fonts.dart';
 
 const _quickReactions = ['❤️', '🔥', '😍', '👏', '😂', '😮'];
 const Duration _photoDuration = Duration(seconds: 5);
@@ -64,7 +66,8 @@ Future<void> openStoryViewer(
           animation: animation,
           child: child,
           builder: (context, child) {
-            final closing = animation.status == AnimationStatus.reverse ||
+            final closing =
+                animation.status == AnimationStatus.reverse ||
                 animation.status == AnimationStatus.dismissed;
             // Круговое раскрытие — только на открытии; закрытие всегда
             // мягким fade + scale (круг «схлопыванием» резал кадр).
@@ -214,7 +217,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       return;
     }
     setState(() => _loading[ownerId] = true);
-    final stories = await storiesModule.getByOwner(widget.previews[index].owner);
+    final stories = await storiesModule.getByOwner(
+      widget.previews[index].owner,
+    );
     if (!mounted) return;
     setState(() {
       _stories[ownerId] = stories;
@@ -434,8 +439,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                     ? _buildActiveOwner()
                     : _OwnerCover(
                         preview: widget.previews[index],
-                        overrideInfo: widget.ownerOverrides[
-                            widget.previews[index].owner.ownerId],
+                        overrideInfo:
+                            widget.ownerOverrides[widget
+                                .previews[index]
+                                .owner
+                                .ownerId],
                       );
                 return _CubePage(
                   controller: _ownerController,
@@ -530,9 +538,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           ),
           const _TopScrim(),
           if (loading)
-            const Center(
-              child: SmallSpinner(size: 28, color: Colors.white),
-            ),
+            const Center(child: SmallSpinner(size: 28, color: Colors.white)),
           SafeArea(
             child: Column(
               children: [
@@ -612,14 +618,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                     info?.name.isNotEmpty == true ? info!.name : '…',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      fontFamily: 'Outfit',
-                      shadows: [
-                        Shadow(color: Colors.black54, blurRadius: 4),
-                      ],
+                      fontFamily: displayFontOf(context),
+                      shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
                     ),
                   ),
                   if (story != null && story.time > 0)
@@ -1034,7 +1038,10 @@ class _StoryMediaView extends StatelessWidget {
     final Widget blurBg = preview != null
         ? Positioned.fill(
             child: ImageFiltered(
-              imageFilter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+              imageFilter: ui.ImageFilter.blur(
+                sigmaX: AppFrost.mediaBackdropSigma,
+                sigmaY: AppFrost.mediaBackdropSigma,
+              ),
               child: Image(image: preview, fit: BoxFit.cover),
             ),
           )
@@ -1056,24 +1063,22 @@ class _StoryMediaView extends StatelessWidget {
           fit: BoxFit.contain,
         );
       } else if (preview != null) {
-        fg = Center(child: Image(image: preview, fit: BoxFit.contain));
+        fg = Center(
+          child: Image(image: preview, fit: BoxFit.contain),
+        );
       } else {
         fg = const SizedBox.shrink();
       }
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          blurBg,
-          fg,
-        ],
-      );
+      return Stack(fit: StackFit.expand, children: [blurBg, fg]);
     }
 
     final url = media.url;
     Widget fg;
     if (url == null || url.isEmpty) {
       fg = preview != null
-          ? Center(child: Image(image: preview, fit: BoxFit.contain))
+          ? Center(
+              child: Image(image: preview, fit: BoxFit.contain),
+            )
           : const SizedBox.shrink();
     } else {
       fg = CachedNetworkImage(
@@ -1081,22 +1086,24 @@ class _StoryMediaView extends StatelessWidget {
         fit: BoxFit.contain,
         fadeInDuration: const Duration(milliseconds: 200),
         placeholder: preview != null
-            ? (context, _) => Center(child: Image(image: preview, fit: BoxFit.contain))
+            ? (context, _) => Center(
+                child: Image(image: preview, fit: BoxFit.contain),
+              )
             : null,
         errorWidget: (context, _, _) => preview != null
-            ? Center(child: Image(image: preview, fit: BoxFit.contain))
+            ? Center(
+                child: Image(image: preview, fit: BoxFit.contain),
+              )
             : const Center(
-                child: Icon(Symbols.broken_image, color: Colors.white54, size: 48),
+                child: Icon(
+                  Symbols.broken_image,
+                  color: Colors.white54,
+                  size: 48,
+                ),
               ),
       );
     }
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        blurBg,
-        fg,
-      ],
-    );
+    return Stack(fit: StackFit.expand, children: [blurBg, fg]);
   }
 }
 

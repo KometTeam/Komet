@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/utils/haptics.dart';
 import 'lottie_image.dart';
+import '../../core/config/app_frost.dart';
 
 class _PeekData {
   final String? url;
@@ -210,7 +211,10 @@ class _PeekOverlay extends StatelessWidget {
             children: [
               Positioned.fill(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20 * t, sigmaY: 20 * t),
+                  filter: ImageFilter.blur(
+                    sigmaX: AppFrost.overlaySigma * t,
+                    sigmaY: AppFrost.overlaySigma * t,
+                  ),
                   child: ColoredBox(
                     color: Colors.black.withValues(alpha: 0.3 * t),
                   ),

@@ -146,6 +146,12 @@ class CachedChat {
     return iAmAdmin(myId) || options.contains('ALL_CAN_PIN_MESSAGE');
   }
 
+  bool get forwardDisabled => options.contains('DISABLE_FORWARD');
+
+  bool get copyDisabled => options.contains('MESSAGE_COPY_NOT_ALLOWED');
+
+  bool get confirmBeforeSend => options.contains('CONFIRM_BEFORE_SEND');
+
   bool get isMuted {
     if (dontDisturbUntil == ChatsModule.muteOff) return false;
     if (dontDisturbUntil < 0) return true;
@@ -502,7 +508,10 @@ class ChatsModule {
     if (cached.unreadCount == next && nextMark == currentMark) return;
     final participants = Map<int, int>.from(cached.participants)
       ..[accountId] = nextMark;
-    final updated = cached.copyWith(unreadCount: next, participants: participants);
+    final updated = cached.copyWith(
+      unreadCount: next,
+      participants: participants,
+    );
     await AppDatabase.saveChats([updated.toDbRow()]);
     _bump();
   }
@@ -1571,7 +1580,9 @@ class ChatsModule {
     };
     final packet = await api.sendRequest(Opcode.msgSend, payload);
     if (!packet.isOk) {
-      logger.w('_createChat($chatType): server error payload=${packet.payload}');
+      logger.w(
+        '_createChat($chatType): server error payload=${packet.payload}',
+      );
       return null;
     }
     final data = packet.payload;
@@ -1882,7 +1893,9 @@ class ChatsModule {
         'operation': 'add',
       });
       if (!packet.isOk) {
-        logger.w('addMembers $chatId: ${messageFromErrorPayload(packet.payload)}');
+        logger.w(
+          'addMembers $chatId: ${messageFromErrorPayload(packet.payload)}',
+        );
         return false;
       }
       final data = packet.payload;

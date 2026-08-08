@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/l10n/app_localizations.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/account.dart';
 import '../../../main.dart';
@@ -99,7 +100,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: cs.onSurfaceVariant),
+          icon: Icon(Symbols.arrow_back, color: cs.onSurfaceVariant),
           onPressed: _isSubmitting ? null : () => Navigator.pop(context),
         ),
       ),
@@ -113,7 +114,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         child: _isSubmitting
             ? SmallSpinner(size: 22, color: cs.onSurfaceVariant)
             : Icon(
-                Icons.arrow_forward,
+                Symbols.arrow_forward,
                 color: _canSubmit ? cs.onPrimaryContainer : cs.onSurfaceVariant,
               ),
       ),

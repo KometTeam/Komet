@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/config/app_shape.dart';
 
 /// Shared confirmation dialog. Returns true if confirmed, false otherwise.
 Future<bool> showConfirmDialog(
@@ -14,7 +15,7 @@ Future<bool> showConfirmDialog(
     context: context,
     builder: (context) => AlertDialog(
       backgroundColor: cs.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: AppShape.dialogBorder,
       title: title == null
           ? null
           : Text(title, style: TextStyle(color: cs.onSurface)),

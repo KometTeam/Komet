@@ -10,6 +10,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/prompt_dialog.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../../core/config/app_fonts.dart';
 
 class CallParticipantView {
   final String name;
@@ -118,7 +119,7 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
                     color: cs.onSurface,
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    fontFamily: 'Outfit',
+                    fontFamily: displayFontOf(context),
                   ),
                 ),
               ),
@@ -358,7 +359,7 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
         color: cs.onSurface,
         fontSize: 20,
         fontWeight: FontWeight.w700,
-        fontFamily: 'Outfit',
+        fontFamily: displayFontOf(context),
       ),
     ),
   );

@@ -18,6 +18,7 @@ import '../../widgets/prompt_dialog.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/web_qr_login.dart';
 import 'web_qr_scan_screen.dart';
+import '../../../core/config/app_fonts.dart';
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key});
@@ -212,7 +213,7 @@ class _DevicesScreenState extends State<DevicesScreen>
         title: ConnectionTitleText(
           l10n.devicesTitle,
           style: TextStyle(
-            fontFamily: 'Outfit',
+            fontFamily: displayFontOf(context),
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: cs.onSurface,
@@ -264,7 +265,7 @@ class _DevicesScreenState extends State<DevicesScreen>
               Text(
                 l10n.devicesPromoTitle,
                 style: TextStyle(
-                  fontFamily: 'Outfit',
+                  fontFamily: displayFontOf(context),
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: cs.onSurface,
@@ -287,7 +288,7 @@ class _DevicesScreenState extends State<DevicesScreen>
                 label: Text(
                   l10n.devicesScanQrButton,
                   style: TextStyle(
-                    fontFamily: 'Outfit',
+                    fontFamily: displayFontOf(context),
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
@@ -463,7 +464,7 @@ class _DevicesScreenState extends State<DevicesScreen>
                     Text(
                       title,
                       style: TextStyle(
-                        fontFamily: 'Outfit',
+                        fontFamily: displayFontOf(context),
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: cs.onSurface,

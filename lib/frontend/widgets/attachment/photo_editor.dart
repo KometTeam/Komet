@@ -13,8 +13,19 @@ import 'package:komet/frontend/widgets/custom_notification.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../small_spinner.dart';
+import '../../../core/config/app_shape.dart';
 
 const Color _kPanel = Color(0xFF0A0A0A);
+
+const List<Color> _kPenWheel = [
+  Color(0xFFFF3B30),
+  Color(0xFFFFCC00),
+  Color(0xFF34C759),
+  Color(0xFF00C7BE),
+  Color(0xFF2F8FFF),
+  Color(0xFFAF52DE),
+  Color(0xFFFF3B30),
+];
 
 class CropState {
   final int quarterTurns;
@@ -404,9 +415,7 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
   Widget _buildViewport() {
     final img = _image;
     if (img == null) {
-      return const Center(
-        child: SmallSpinner(size: 36, color: Colors.white),
-      );
+      return const Center(child: SmallSpinner(size: 36, color: Colors.white));
     }
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -445,7 +454,7 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
             onPressed: _flip,
             icon: Icon(
               Symbols.flip,
-              color: _flipH ? kEditorAccent : Colors.white,
+              color: _flipH ? MediaAccent.of(context) : Colors.white,
             ),
             tooltip: l10n.photoEditorFlipTooltip,
           ),
@@ -501,7 +510,7 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
             child: Text(
               l10n.photoEditorDone,
               style: TextStyle(
-                color: _baking ? Colors.white38 : kEditorAccent,
+                color: _baking ? Colors.white38 : MediaAccent.of(context),
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -594,7 +603,9 @@ class _StraightenRuler extends StatelessWidget {
       onDoubleTap: () => onChanged(0),
       child: SizedBox(
         height: 56,
-        child: CustomPaint(painter: _RulerPainter(value)),
+        child: CustomPaint(
+          painter: _RulerPainter(value, MediaAccent.of(context)),
+        ),
       ),
     );
   }
@@ -602,8 +613,9 @@ class _StraightenRuler extends StatelessWidget {
 
 class _RulerPainter extends CustomPainter {
   final double value;
+  final Color accent;
 
-  _RulerPainter(this.value);
+  _RulerPainter(this.value, this.accent);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -638,14 +650,15 @@ class _RulerPainter extends CustomPainter {
       Offset(cx, baseY - 18),
       Offset(cx, baseY + 2),
       Paint()
-        ..color = kEditorAccent
+        ..color = accent
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _RulerPainter old) => old.value != value;
+  bool shouldRepaint(covariant _RulerPainter old) =>
+      old.value != value || old.accent != accent;
 }
 
 const Color _kDrawPanel = Color(0xFF101010);
@@ -897,6 +910,7 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: const Color(0xFF1E1E1E),
+          shape: AppShape.dialogBorder,
           title: Text(
             l10n.photoEditorTextDialogTitle,
             style: const TextStyle(color: Colors.white),
@@ -1094,7 +1108,12 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
                 if (selected != null)
                   Positioned.fill(
                     child: IgnorePointer(
-                      child: CustomPaint(painter: _SelectionPainter(selected)),
+                      child: CustomPaint(
+                        painter: _SelectionPainter(
+                          selected,
+                          MediaAccent.of(context),
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -1235,17 +1254,7 @@ class _PhotoDrawEditorState extends State<PhotoDrawEditor> {
         padding: const EdgeInsets.all(4),
         decoration: const BoxDecoration(
           shape: BoxShape.circle,
-          gradient: SweepGradient(
-            colors: [
-              Color(0xFFFF3B30),
-              Color(0xFFFFCC00),
-              kOnlineGreen,
-              Color(0xFF00C7BE),
-              kEditorAccent,
-              Color(0xFFAF52DE),
-              Color(0xFFFF3B30),
-            ],
-          ),
+          gradient: SweepGradient(colors: _kPenWheel),
         ),
         child: Container(
           decoration: BoxDecoration(
@@ -1650,8 +1659,9 @@ Size textMarkSize(TextMark t) {
 
 class _SelectionPainter extends CustomPainter {
   final TextMark text;
+  final Color accent;
 
-  _SelectionPainter(this.text);
+  _SelectionPainter(this.text, this.accent);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1676,7 +1686,7 @@ class _SelectionPainter extends CustomPainter {
     _dashedLine(canvas, bl, tl, border);
 
     final fill = Paint()
-      ..color = kEditorAccent
+      ..color = accent
       ..style = PaintingStyle.fill;
     final ring = Paint()
       ..color = Colors.white
@@ -2349,9 +2359,7 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
   Widget _buildPreview() {
     final img = _image;
     if (img == null) {
-      return const Center(
-        child: SmallSpinner(size: 36, color: Colors.white),
-      );
+      return const Center(child: SmallSpinner(size: 36, color: Colors.white));
     }
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -2664,12 +2672,16 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: selected ? kEditorAccent : Colors.white, size: 30),
+          Icon(
+            icon,
+            color: selected ? MediaAccent.of(context) : Colors.white,
+            size: 30,
+          ),
           const SizedBox(height: 6),
           Text(
             label,
             style: TextStyle(
-              color: selected ? kEditorAccent : Colors.white70,
+              color: selected ? MediaAccent.of(context) : Colors.white70,
               fontSize: 12,
             ),
           ),
@@ -2704,7 +2716,7 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
             child: Text(
               l10n.photoEditorDone,
               style: TextStyle(
-                color: _baking ? Colors.white38 : kEditorAccent,
+                color: _baking ? Colors.white38 : MediaAccent.of(context),
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -2720,7 +2732,7 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
     return IconButton(
       onPressed: disabled ? null : () => setState(() => _tab = tab),
       icon: Icon(icon),
-      color: selected ? kEditorAccent : Colors.white,
+      color: selected ? MediaAccent.of(context) : Colors.white,
       disabledColor: Colors.white24,
     );
   }

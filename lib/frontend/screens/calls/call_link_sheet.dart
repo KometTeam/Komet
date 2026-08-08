@@ -9,6 +9,7 @@ import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/small_spinner.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/main.dart' show messagesModule;
+import '../../../core/config/app_shape.dart';
 
 Future<bool> showCreatedCallSheet(
   BuildContext context, {
@@ -196,9 +197,7 @@ class _CreatedCallCardState extends State<_CreatedCallCard> {
                     child: FilledButton(
                       onPressed: () => Navigator.of(context).pop(true),
                       style: FilledButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                        shape: AppShape.buttonBorder,
                       ),
                       child: Text(
                         l10n.callLinkStart,

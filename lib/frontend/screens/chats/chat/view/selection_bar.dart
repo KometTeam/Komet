@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
+import '../../../../../core/config/app_fonts.dart';
 
 class SelectionTopBar extends StatelessWidget {
   final ColorScheme cs;
@@ -51,7 +52,7 @@ class SelectionTopBar extends StatelessWidget {
                   color: cs.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Outfit',
+                  fontFamily: displayFontOf(context),
                 ),
               ),
             ),
@@ -114,7 +115,7 @@ class SelectionTopBar extends StatelessWidget {
                       color: cs.onSurface,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      fontFamily: 'Outfit',
+                      fontFamily: displayFontOf(context),
                     ),
                   ),
                 ),
@@ -149,6 +150,7 @@ class SelectionBottomBar extends StatelessWidget {
   final Set<String> selected;
   final VoidCallback onReply;
   final VoidCallback onForward;
+  final bool allowForward;
 
   const SelectionBottomBar({
     super.key,
@@ -156,6 +158,7 @@ class SelectionBottomBar extends StatelessWidget {
     required this.selected,
     required this.onReply,
     required this.onForward,
+    this.allowForward = true,
   });
 
   @override
@@ -169,6 +172,7 @@ class SelectionBottomBar extends StatelessWidget {
             if (single) ...[
               Expanded(
                 child: _pill(
+                  context,
                   cs,
                   icon: Symbols.reply,
                   label: 'Ответить',
@@ -176,18 +180,22 @@ class SelectionBottomBar extends StatelessWidget {
                   onTap: onReply,
                 ),
               ),
-              const SizedBox(width: 12),
+              if (allowForward) const SizedBox(width: 12),
             ] else
               const Spacer(),
-            Expanded(
-              child: _pill(
-                cs,
-                icon: Symbols.forward,
-                label: 'Переслать',
-                iconLeading: true,
-                onTap: onForward,
-              ),
-            ),
+            if (allowForward)
+              Expanded(
+                child: _pill(
+                  context,
+                  cs,
+                  icon: Symbols.forward,
+                  label: 'Переслать',
+                  iconLeading: true,
+                  onTap: onForward,
+                ),
+              )
+            else if (!single)
+              const Spacer(),
           ],
         ),
       ),
@@ -195,6 +203,7 @@ class SelectionBottomBar extends StatelessWidget {
   }
 
   Widget _pill(
+    BuildContext context,
     ColorScheme cs, {
     required IconData icon,
     required String label,
@@ -207,7 +216,7 @@ class SelectionBottomBar extends StatelessWidget {
         color: cs.onSurface,
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        fontFamily: 'Outfit',
+        fontFamily: displayFontOf(context),
       ),
     );
     final iconWidget = Icon(icon, color: cs.onSurface, size: 22, weight: 500);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/cache/info_cache.dart';
+import '../../core/config/app_colors.dart';
 
 class OnlineDot extends StatelessWidget {
   final int userId;
@@ -14,7 +15,7 @@ class OnlineDot extends StatelessWidget {
     required this.userId,
     required this.borderColor,
     this.size = 12,
-    this.color = const Color(0xFF2EC36B),
+    this.color = kSuccessGreen,
     this.borderWidth = 2,
   });
 

@@ -14,6 +14,7 @@ import '../widgets/chat_menu_overlay.dart';
 import '../widgets/confirm_dialog.dart';
 import '../widgets/custom_notification.dart';
 import '../widgets/small_spinner.dart';
+import '../widgets/sheet_helpers.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
@@ -116,9 +117,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final clear = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
+      shape: kSheetShape,
       builder: (sheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),

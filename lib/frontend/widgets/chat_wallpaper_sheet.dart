@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/config/chat_wallpaper_themes.dart';
+import 'package:komet/core/config/app_colors.dart';
 import 'package:komet/core/storage/chat_wallpaper_store.dart';
+import '../../core/config/app_fonts.dart';
 
 enum WallpaperPickType { none, theme, gallery }
 
@@ -10,12 +12,10 @@ class WallpaperPick {
   final WallpaperPickType type;
   final ChatWallpaperTheme? theme;
 
-  const WallpaperPick.none()
-      : type = WallpaperPickType.none,
-        theme = null;
+  const WallpaperPick.none() : type = WallpaperPickType.none, theme = null;
   const WallpaperPick.gallery()
-      : type = WallpaperPickType.gallery,
-        theme = null;
+    : type = WallpaperPickType.gallery,
+      theme = null;
   const WallpaperPick.theme(this.theme) : type = WallpaperPickType.theme;
 }
 
@@ -81,12 +81,12 @@ class _ChatWallpaperGalleryScreenState
           icon: const Icon(Symbols.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Обои',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w700,
-            fontFamily: 'Outfit',
+            fontFamily: displayFontOf(context),
           ),
         ),
       ),
@@ -169,7 +169,9 @@ class _ChatWallpaperGalleryScreenState
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(child: _ApplyButton(enabled: _changed, onTap: _apply)),
+                  Expanded(
+                    child: _ApplyButton(enabled: _changed, onTap: _apply),
+                  ),
                 ],
               ),
             ),
@@ -216,6 +218,7 @@ class _SampleBubbles extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _bubble(
+              context,
               text: 'Как насчёт новых обоев для этого чата?',
               color: cs.surfaceContainerHighest.withValues(alpha: 0.94),
               textColor: cs.onSurface,
@@ -223,6 +226,7 @@ class _SampleBubbles extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             _bubble(
+              context,
               text: 'Выглядит отлично 🔥',
               color: cs.primary,
               textColor: cs.onPrimary,
@@ -234,7 +238,8 @@ class _SampleBubbles extends StatelessWidget {
     );
   }
 
-  Widget _bubble({
+  Widget _bubble(
+    BuildContext context, {
     required String text,
     required Color color,
     required Color textColor,
@@ -255,7 +260,7 @@ class _SampleBubbles extends StatelessWidget {
             style: TextStyle(
               color: textColor,
               fontSize: 15,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
         ),
@@ -336,7 +341,7 @@ class _TileFrame extends StatelessWidget {
                   color: selected ? cs.primary : cs.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Outfit',
+                  fontFamily: displayFontOf(context),
                 ),
               ),
             ],
@@ -363,7 +368,7 @@ class _NoneTile extends StatelessWidget {
       child: ColoredBox(
         color: cs.surfaceContainerHighest,
         child: const Center(
-          child: Icon(Symbols.block, color: Color(0xFFFF3B30), size: 34),
+          child: Icon(Symbols.block, color: kDangerRed, size: 34),
         ),
       ),
     );
@@ -419,7 +424,7 @@ class _GalleryButton extends StatelessWidget {
                 color: cs.onSurface,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Outfit',
+                fontFamily: displayFontOf(context),
               ),
             ),
           ],
@@ -456,7 +461,7 @@ class _ApplyButton extends StatelessWidget {
                 color: cs.onPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                fontFamily: 'Outfit',
+                fontFamily: displayFontOf(context),
               ),
             ),
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../contacts/contact_sheet_common.dart';
+import '../../../core/config/app_fonts.dart';
 
 class ConfirmChoice {
   final bool confirmed;
@@ -135,7 +136,7 @@ class _ConfirmCardState extends State<_ConfirmCard> {
               color: cs.onSurface,
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
           const SizedBox(height: 8),
@@ -159,8 +160,7 @@ class _ConfirmCardState extends State<_ConfirmCard> {
                     Checkbox(
                       value: _checked,
                       visualDensity: VisualDensity.compact,
-                      materialTapTargetSize:
-                          MaterialTapTargetSize.shrinkWrap,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       onChanged: (v) => setState(() => _checked = v ?? false),
                     ),
                     const SizedBox(width: 8),
@@ -195,9 +195,9 @@ class _ConfirmCardState extends State<_ConfirmCard> {
                         foregroundColor: cs.onErrorContainer,
                       )
                     : null,
-                onPressed: () => Navigator.of(context).pop(
-                  ConfirmChoice(confirmed: true, checked: _checked),
-                ),
+                onPressed: () => Navigator.of(
+                  context,
+                ).pop(ConfirmChoice(confirmed: true, checked: _checked)),
                 child: Text(widget.confirmLabel),
               ),
             ],
@@ -282,7 +282,7 @@ class _ComplaintCardState extends State<_ComplaintCard> {
               color: cs.onSurface,
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
           const SizedBox(height: 6),

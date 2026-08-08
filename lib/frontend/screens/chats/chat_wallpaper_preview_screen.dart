@@ -6,6 +6,8 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/storage/chat_wallpaper_store.dart';
 import 'package:komet/frontend/widgets/chat_wallpaper_view.dart';
+import '../../../core/config/app_frost.dart';
+import '../../../core/config/app_fonts.dart';
 
 class ChatWallpaperPreviewScreen extends StatefulWidget {
   final Uint8List imageBytes;
@@ -100,13 +102,13 @@ class _ChatWallpaperPreviewScreenState
             icon: const Icon(Symbols.arrow_back, color: Colors.white),
             onPressed: () => Navigator.pop(context),
           ),
-          const Text(
+          Text(
             'Обои',
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
         ],
@@ -158,7 +160,10 @@ class _Frosted extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        filter: ui.ImageFilter.blur(
+          sigmaX: AppFrost.panelSigma,
+          sigmaY: AppFrost.panelSigma,
+        ),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.14),
@@ -258,7 +263,7 @@ class _DimLabel extends StatelessWidget {
       color: color,
       fontSize: 16,
       fontWeight: FontWeight.w600,
-      fontFamily: 'Outfit',
+      fontFamily: displayFontOf(context),
     );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -279,7 +284,8 @@ class _RevealClipper extends CustomClipper<Rect> {
   const _RevealClipper(this.fraction);
 
   @override
-  Rect getClip(Size size) => Rect.fromLTWH(0, 0, size.width * fraction, size.height);
+  Rect getClip(Size size) =>
+      Rect.fromLTWH(0, 0, size.width * fraction, size.height);
 
   @override
   bool shouldReclip(_RevealClipper oldClipper) =>
@@ -324,11 +330,11 @@ class _ToggleChip extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Outfit',
+                  fontFamily: displayFontOf(context),
                 ),
               ),
             ],
@@ -350,7 +356,7 @@ class _ApplyButton extends StatelessWidget {
       onTap: onTap,
       child: _Frosted(
         radius: 26,
-        child: const SizedBox(
+        child: SizedBox(
           height: 52,
           child: Center(
             child: Text(
@@ -359,7 +365,7 @@ class _ApplyButton extends StatelessWidget {
                 color: Colors.white,
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
-                fontFamily: 'Outfit',
+                fontFamily: displayFontOf(context),
               ),
             ),
           ),
@@ -384,6 +390,7 @@ class _SamplePreview extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _bubble(
+              context,
               text: 'Как насчёт новых обоев для этого чата?',
               color: cs.surfaceContainerHighest.withValues(alpha: 0.92),
               textColor: cs.onSurface,
@@ -391,6 +398,7 @@ class _SamplePreview extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             _bubble(
+              context,
               text: 'Отличная идея.',
               color: cs.primary,
               textColor: cs.onPrimary,
@@ -402,7 +410,8 @@ class _SamplePreview extends StatelessWidget {
     );
   }
 
-  Widget _bubble({
+  Widget _bubble(
+    BuildContext context, {
     required String text,
     required Color color,
     required Color textColor,
@@ -423,7 +432,7 @@ class _SamplePreview extends StatelessWidget {
             style: TextStyle(
               color: textColor,
               fontSize: 15,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
         ),

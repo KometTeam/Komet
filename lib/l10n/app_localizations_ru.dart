@@ -351,10 +351,22 @@ class AppLocalizationsRu extends AppLocalizations {
   String get infoAccountSection => 'Аккаунт';
 
   @override
+  String get infoPacketSection => 'Пакет входа';
+
+  @override
+  String get infoChatsSection => 'Чаты в пакете входа';
+
+  @override
+  String get infoChatSettingsSection => 'Настройки отдельных чатов';
+
+  @override
   String get infoServerSection => 'Сервер';
 
   @override
   String get infoUserSection => 'Пользователь';
+
+  @override
+  String get infoExperimentsSection => 'Эксперименты';
 
   @override
   String get infoYMapSection => 'Y-Map';
@@ -381,7 +393,76 @@ class AppLocalizationsRu extends AppLocalizations {
   String get infoId => 'id аккаунта:';
 
   @override
+  String get infoPhone => 'Телефон:';
+
+  @override
+  String get infoPhotoId => 'id аватарки:';
+
+  @override
+  String get infoAccountStatus => 'Статус аккаунта:';
+
+  @override
+  String get infoContactOptions => 'Опции контакта:';
+
+  @override
+  String get infoProfileOptions => 'Опции профиля:';
+
+  @override
+  String get infoNames => 'Имена:';
+
+  @override
+  String get infoBaseUrl => 'Ссылка на аватарку:';
+
+  @override
+  String get infoBaseRawUrl => 'Исходная аватарка:';
+
+  @override
   String get infoChatMarker => 'chatMarker';
+
+  @override
+  String get infoServerTime => 'Время сервера:';
+
+  @override
+  String get infoUpdates => 'Количество обновлений:';
+
+  @override
+  String get infoMessagesCount => 'Сообщений в пакете:';
+
+  @override
+  String get infoContactsCount => 'Контактов в пакете:';
+
+  @override
+  String get infoPresenceCount => 'Статусов присутствия:';
+
+  @override
+  String get infoConfigHash => 'Хеш конфигурации:';
+
+  @override
+  String get infoChatsCount => 'Загружено чатов:';
+
+  @override
+  String get infoChatsActive => 'Активных:';
+
+  @override
+  String get infoChatsHidden => 'Скрытых:';
+
+  @override
+  String get infoChatsDialogs => 'Диалогов:';
+
+  @override
+  String get infoChatsGroups => 'Групп:';
+
+  @override
+  String get infoChatsChannels => 'Каналов:';
+
+  @override
+  String get infoChatsUnread => 'Непрочитанных чатов:';
+
+  @override
+  String get infoChatsNewMessages => 'Новых сообщений:';
+
+  @override
+  String get infoChatsMessages => 'Сообщений в загруженных чатах:';
 
   @override
   String get infoAccountRemovalEnabled => 'Мгновенное удаление аккаунта:';
@@ -780,6 +861,9 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get appearanceVisualStyleSubtitle =>
       'Material You или объёмные Glossy-капсулы';
+
+  @override
+  String get appearanceStyleAuto => 'Как в теме';
 
   @override
   String get appearanceVisualStyleMaterialYou => 'Material You';
@@ -1614,6 +1698,39 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get chatInfoShowMoreExtra => 'Подробнее';
+
+  @override
+  String get chatSendConfirmMessage => 'Отправить это сообщение в чат?';
+
+  @override
+  String get chatSendConfirmAction => 'Отправить';
+
+  @override
+  String get chatInfoRowDisableForward => 'Пересылка запрещена';
+
+  @override
+  String get chatInfoRowCopyDisabled => 'Копирование запрещено';
+
+  @override
+  String get chatInfoRowOnlyAdminCall => 'Звонить могут админы';
+
+  @override
+  String get chatInfoRowAllCanPin => 'Все могут закреплять';
+
+  @override
+  String get chatInfoRowMembersSeeLink => 'Ссылка видна участникам';
+
+  @override
+  String get chatInfoRowConfirmBeforeSend => 'Подтверждать отправку';
+
+  @override
+  String get chatInfoRowOnlyOwnerIconTitle => 'Название меняет владелец';
+
+  @override
+  String get chatInfoRowPromotedDisabled => 'Реклама отключена';
+
+  @override
+  String get chatInfoRowUserId => 'ID пользователя';
 
   @override
   String get chatInfoRowId => 'ID чата';

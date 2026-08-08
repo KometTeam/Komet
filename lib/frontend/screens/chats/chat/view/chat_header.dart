@@ -16,6 +16,7 @@ import 'package:komet/frontend/widgets/online_dot.dart';
 import 'package:komet/frontend/widgets/profile_hero.dart';
 import 'package:komet/main.dart' show storiesModule;
 import 'package:komet/models/story.dart';
+import '../../../../../core/config/app_fonts.dart';
 
 class ChatHeaderRow extends StatelessWidget {
   final bool glossy;
@@ -85,7 +86,7 @@ class ChatHeaderRow extends StatelessWidget {
       color: cs.onSurface,
       fontSize: 17,
       fontWeight: FontWeight.w600,
-      fontFamily: 'Outfit',
+      fontFamily: displayFontOf(context),
     );
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
@@ -152,7 +153,7 @@ class ChatHeaderRow extends StatelessWidget {
                                   color: cs.onPrimaryContainer,
                                   fontSize: d * 0.36,
                                   fontWeight: FontWeight.w600,
-                                  fontFamily: 'Outfit',
+                                  fontFamily: displayFontOf(context),
                                 ),
                               ),
                             ),
@@ -270,7 +271,7 @@ class ChatHeaderRow extends StatelessWidget {
       color: cs.onSurface,
       fontSize: 16,
       fontWeight: FontWeight.w600,
-      fontFamily: 'Outfit',
+      fontFamily: displayFontOf(context),
     );
     return Row(
       children: [

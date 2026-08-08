@@ -356,7 +356,7 @@ class _SelectionToggle extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isSelected ? kEditorAccent : Colors.transparent,
+              color: isSelected ? MediaAccent.of(context) : Colors.transparent,
               border: Border.all(color: Colors.white, width: 2),
             ),
             child: isSelected
@@ -466,7 +466,7 @@ class _FileToggleState extends State<_FileToggle> {
         builder: (context, t, _) {
           final color = Color.lerp(
             Colors.white54,
-            Color.lerp(Colors.white, kEditorAccent, 0.4),
+            Color.lerp(Colors.white, MediaAccent.of(context), 0.4),
             t,
           );
           return Icon(Symbols.description, color: color, size: 24);
@@ -484,7 +484,7 @@ class _SendButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: kEditorAccent,
+      color: MediaAccent.of(context),
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),

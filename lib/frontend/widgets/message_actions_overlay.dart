@@ -21,11 +21,7 @@ class ReactionEmoji {
   final String? animationUrl;
   final String? staticUrl;
 
-  const ReactionEmoji({
-    required this.emoji,
-    this.animationUrl,
-    this.staticUrl,
-  });
+  const ReactionEmoji({required this.emoji, this.animationUrl, this.staticUrl});
 }
 
 class MessageReader {
@@ -114,6 +110,7 @@ void showMessageActions({
   Future<bool> Function(int reasonId)? onReport,
   VoidCallback? onDelete,
   bool allowDelete = true,
+  bool allowCopy = true,
   VoidCallback? onEdit,
   VoidCallback? onReply,
   VoidCallback? onForward,
@@ -153,6 +150,7 @@ void showMessageActions({
       onReport: onReport,
       onDelete: onDelete,
       allowDelete: allowDelete,
+      allowCopy: allowCopy,
       onEdit: onEdit,
       onReply: onReply,
       onForward: onForward,
@@ -189,6 +187,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final Future<bool> Function(int reasonId)? onReport;
   final VoidCallback? onDelete;
   final bool allowDelete;
+  final bool allowCopy;
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
@@ -217,6 +216,7 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onReport,
     this.onDelete,
     this.allowDelete = true,
+    this.allowCopy = true,
     this.onEdit,
     this.onReply,
     this.onForward,
@@ -503,7 +503,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         _Action(Symbols.reply, l10n.msgActionsReply, _reply),
       if (widget.onForward != null)
         _Action(Symbols.forward, l10n.msgActionsForward, _forward),
-      if (hasText) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
+      if (hasText && widget.allowCopy)
+        _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
       if (widget.isMe && widget.onEdit != null)
         _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
       if (widget.onPin != null)
@@ -1004,7 +1005,11 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     );
   }
 
-  Widget _buildQuickRow(ColorScheme cs, double cell, List<ReactionEmoji> quick) {
+  Widget _buildQuickRow(
+    ColorScheme cs,
+    double cell,
+    List<ReactionEmoji> quick,
+  ) {
     return Center(
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1232,9 +1237,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     if (_readByLoading) {
       body = const Padding(
         padding: EdgeInsets.symmetric(vertical: 28),
-        child: Center(
-          child: SmallSpinner(size: 24),
-        ),
+        child: Center(child: SmallSpinner(size: 24)),
       );
     } else {
       final readers = _readers ?? const <MessageReader>[];
@@ -1315,9 +1318,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     if (_reportLoading) {
       body = const Padding(
         padding: EdgeInsets.symmetric(vertical: 28),
-        child: Center(
-          child: SmallSpinner(size: 24),
-        ),
+        child: Center(child: SmallSpinner(size: 24)),
       );
     } else {
       final reasons = _reasons ?? const <({int id, String title})>[];
@@ -1644,9 +1645,7 @@ class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
           _buildSearchField(cs),
           Expanded(
             child: !_loaded
-                ? const Center(
-                    child: SmallSpinner(size: 26),
-                  )
+                ? const Center(child: SmallSpinner(size: 26))
                 : _results.isEmpty
                 ? const SizedBox.shrink()
                 : LottieScrollScope(
@@ -1761,7 +1760,8 @@ class _ReactionGlyph extends StatelessWidget {
     final anim = reaction.animationUrl;
     final still = reaction.staticUrl;
     final hasAsset =
-        (anim != null && anim.isNotEmpty) || (still != null && still.isNotEmpty);
+        (anim != null && anim.isNotEmpty) ||
+        (still != null && still.isNotEmpty);
     if (!hasAsset) {
       return Center(
         child: Text(reaction.emoji, style: TextStyle(fontSize: size * 0.9)),

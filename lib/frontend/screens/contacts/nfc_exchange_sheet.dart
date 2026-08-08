@@ -17,6 +17,7 @@ import '../../../models/contact_info.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/small_spinner.dart';
+import '../../../core/config/app_shape.dart';
 
 enum _Stage {
   checking,
@@ -159,7 +160,10 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
       );
       if (!mounted) return;
       setState(() => _stage = _Stage.added);
-      showCustomNotification(context, AppLocalizations.of(context)!.nfcContactAdded);
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.nfcContactAdded,
+      );
       await Future.delayed(const Duration(milliseconds: 700));
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -412,7 +416,8 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           ),
           const SizedBox(height: 4),
           Text(
-            formatPhone(_peerPhone) ?? l10n.nfcPeerIdFallback('${_peerId ?? ''}'),
+            formatPhone(_peerPhone) ??
+                l10n.nfcPeerIdFallback('${_peerId ?? ''}'),
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 24),
@@ -421,9 +426,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
             child: FilledButton(
               onPressed: (_stage == _Stage.adding || loading) ? null : _add,
               style: FilledButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                shape: AppShape.buttonBorder,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: _stage == _Stage.adding

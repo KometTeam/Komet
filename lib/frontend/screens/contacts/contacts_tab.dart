@@ -19,6 +19,9 @@ import '../../widgets/springy_tap.dart';
 import '../chats/chat_info_screen.dart';
 import 'nfc_exchange_sheet.dart';
 import 'open_contact_profile.dart';
+import '../../../core/config/app_frost.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 
 enum _SearchMode { phone, id }
 
@@ -57,7 +60,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
       context: context,
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black54,
+      barrierColor: AppFrost.scrim(),
       transitionDuration: const Duration(milliseconds: 320),
       pageBuilder: (_, _, _) => const Align(
         alignment: Alignment.topCenter,
@@ -240,7 +243,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
                             color: cs.onSurface,
                             fontSize: 24,
                             fontWeight: FontWeight.w700,
-                            fontFamily: 'Outfit',
+                            fontFamily: displayFontOf(context),
                           ),
                         ),
                         const ConnectionStatusLine(),
@@ -495,9 +498,7 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
                 selected: {_mode},
                 onSelectionChanged: (s) => _setMode(s.first),
                 showSelectedIcon: false,
-                style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                ),
+                style: ButtonStyle(visualDensity: VisualDensity.compact),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -570,9 +571,7 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
               FilledButton(
                 onPressed: _loading ? null : _submit,
                 style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: AppShape.buttonBorder,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _loading

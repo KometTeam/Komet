@@ -19,6 +19,7 @@ import '../../widgets/schedule_time_picker.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/reload_on_reconnect.dart';
+import '../../../core/config/app_fonts.dart';
 
 class ScheduledMessagesScreen extends StatefulWidget {
   final int chatId;
@@ -117,7 +118,7 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen>
                   color: cs.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Outfit',
+                  fontFamily: displayFontOf(context),
                 ),
               ),
               const SizedBox(height: 16),
@@ -249,7 +250,7 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen>
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Outfit',
+                fontFamily: displayFontOf(context),
               ),
             ),
             Text(

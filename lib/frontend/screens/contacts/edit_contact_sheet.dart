@@ -6,6 +6,8 @@ import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/komet_avatar.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/main.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import '../../../core/config/app_shape.dart';
 
 enum EditContactAction { updated, removed }
 
@@ -132,6 +134,7 @@ class _EditContactCardState extends State<_EditContactCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        shape: AppShape.dialogBorder,
         title: Text(l10n.editContactDeleteConfirmTitle),
         content: Text(l10n.editContactDeleteConfirmBody),
         actions: [
@@ -158,9 +161,9 @@ class _EditContactCardState extends State<_EditContactCard> {
       return;
     }
 
-    Navigator.of(context).pop(
-      const EditContactResult(EditContactAction.removed),
-    );
+    Navigator.of(
+      context,
+    ).pop(const EditContactResult(EditContactAction.removed));
   }
 
   @override
@@ -260,14 +263,12 @@ class _EditContactCardState extends State<_EditContactCard> {
           ),
           if (hasText)
             InkWell(
-              onTap: _busy
-                  ? null
-                  : () => setState(() => controller.clear()),
+              onTap: _busy ? null : () => setState(() => controller.clear()),
               borderRadius: BorderRadius.circular(20),
               child: Padding(
                 padding: const EdgeInsets.all(4),
                 child: Icon(
-                  Icons.close,
+                  Symbols.close,
                   size: 18,
                   color: cs.onSurfaceVariant,
                 ),
@@ -294,7 +295,10 @@ class _EditContactCardState extends State<_EditContactCard> {
               )
             : Text(
                 l10n.editContactSave,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
       ),
     );
@@ -313,14 +317,19 @@ class _EditContactCardState extends State<_EditContactCard> {
             ? SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: cs.error),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: cs.error,
+                ),
               )
             : Text(
                 l10n.editContactDelete,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
       ),
     );
   }
-
 }

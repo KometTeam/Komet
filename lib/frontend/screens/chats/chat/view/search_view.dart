@@ -12,6 +12,7 @@ import 'package:komet/frontend/widgets/komet_avatar.dart';
 import 'package:komet/frontend/widgets/small_spinner.dart';
 import 'package:komet/frontend/screens/chats/chat/chat_search_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/message_search_result.dart';
+import '../../../../../core/config/app_fonts.dart';
 
 class SearchTopBar extends StatelessWidget {
   const SearchTopBar({
@@ -37,13 +38,17 @@ class SearchTopBar extends StatelessWidget {
       textInputAction: TextInputAction.search,
       onSubmitted: search.submit,
       cursorColor: cs.primary,
-      style: TextStyle(color: cs.onSurface, fontSize: 16, fontFamily: 'Outfit'),
+      style: TextStyle(
+        color: cs.onSurface,
+        fontSize: 16,
+        fontFamily: displayFontOf(context),
+      ),
       decoration: InputDecoration(
         hintText: 'Поиск...',
         hintStyle: TextStyle(
           color: cs.onSurfaceVariant,
           fontSize: 16,
-          fontFamily: 'Outfit',
+          fontFamily: displayFontOf(context),
         ),
         border: InputBorder.none,
         isDense: true,
@@ -164,7 +169,8 @@ class SearchOverlay extends StatelessWidget {
                     bottom: MediaQuery.paddingOf(context).bottom + 16,
                   ),
                   itemCount: results.length,
-                  itemBuilder: (context, index) => _tile(results[index]),
+                  itemBuilder: (context, index) =>
+                      _tile(context, results[index]),
                 );
               }
               if (loading) {
@@ -196,7 +202,7 @@ class SearchOverlay extends StatelessWidget {
     );
   }
 
-  Widget _tile(MessageSearchResult r) {
+  Widget _tile(BuildContext context, MessageSearchResult r) {
     final name = senderName(r.senderId);
     final date = formatDateWords(DateTime.fromMillisecondsSinceEpoch(r.time));
     return InkWell(
@@ -228,7 +234,7 @@ class SearchOverlay extends StatelessWidget {
                             color: cs.primary,
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            fontFamily: 'Outfit',
+                            fontFamily: displayFontOf(context),
                           ),
                         ),
                       ),

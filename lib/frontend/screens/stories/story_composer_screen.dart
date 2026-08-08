@@ -9,6 +9,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../main.dart' show fileUploader, messagesModule, storiesModule;
 import '../../widgets/custom_notification.dart';
 import '../../widgets/primary_loading_button.dart';
+import '../../../core/config/app_frost.dart';
 
 const int _storyExpiration = 86400000;
 
@@ -177,7 +178,10 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
       children: [
         Positioned.fill(
           child: ImageFiltered(
-            imageFilter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+            imageFilter: ui.ImageFilter.blur(
+              sigmaX: AppFrost.mediaBackdropSigma,
+              sigmaY: AppFrost.mediaBackdropSigma,
+            ),
             child: backdrop,
           ),
         ),

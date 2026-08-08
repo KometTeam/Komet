@@ -15,6 +15,8 @@ import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import 'password_entry_screen.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 
 class SecurityScreen extends StatefulWidget {
   const SecurityScreen({super.key});
@@ -217,7 +219,7 @@ class _SecurityScreenState extends State<SecurityScreen>
               color: cs.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
           const Spacer(),
@@ -250,7 +252,7 @@ class _SecurityScreenState extends State<SecurityScreen>
     final l10n = AppLocalizations.of(context)!;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppShape.cardRadius,
       depth: 6,
       child: Column(
         children: [
@@ -351,7 +353,7 @@ class _SecurityScreenState extends State<SecurityScreen>
     final isSafeMode = _privacyConfig?.safeMode ?? false;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppShape.cardRadius,
       depth: 6,
       child: Column(
         children: [
@@ -532,7 +534,7 @@ class _SecurityScreenState extends State<SecurityScreen>
             ),
             _settingsRow(
               cs,
-              icon: Icons.visibility_off_outlined,
+              icon: Symbols.visibility_off,
               label: l10n.securityShowOnlineStatus,
               trailingText: _privacyConfig?.hidden == true
                   ? l10n.securityPrivacyNobody
@@ -713,7 +715,7 @@ class _SecurityScreenState extends State<SecurityScreen>
         _privacyConfig?.audioTranscriptionEnabled ?? true;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppShape.cardRadius,
       depth: 6,
       child: Column(
         children: [
@@ -758,7 +760,7 @@ class _SecurityScreenState extends State<SecurityScreen>
           ),
           _settingsRow(
             cs,
-            icon: Icons.mic_none_outlined,
+            icon: Symbols.mic,
             label: l10n.securityAudioTranscription,
             trailingWidget: Switch(
               value: audioTranscription,
@@ -783,7 +785,7 @@ class _SecurityScreenState extends State<SecurityScreen>
     final count = _blockedContacts.length;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppShape.cardRadius,
       depth: 6,
       child: Material(
         color: Colors.transparent,
@@ -873,7 +875,9 @@ class _SecurityScreenState extends State<SecurityScreen>
           child: InkWell(
             onTap: onTap ?? () => showCustomNotification(context, label),
             borderRadius: isLast
-                ? const BorderRadius.vertical(bottom: Radius.circular(20))
+                ? const BorderRadius.vertical(
+                    bottom: Radius.circular(AppShape.card),
+                  )
                 : BorderRadius.zero,
             child: Padding(
               padding: EdgeInsets.symmetric(

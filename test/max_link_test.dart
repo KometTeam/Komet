@@ -101,18 +101,18 @@ void main() {
 
     test('message links carry the message id', () {
       final byName =
-          MaxLink.parse('max.ru/somechannel/117008613873053494')
+          MaxLink.parse('max.ru/somechannel/900000000000000001')
               as MaxContentLink;
       expect(byName.kind, MaxContentKind.public);
-      expect(byName.messageId, 117008613873053494);
+      expect(byName.messageId, 900000000000000001);
       expect(byName.baseUrl, 'https://max.ru/somechannel');
 
       final byId =
-          MaxLink.parse('max.ru/c/1673760/117008613873053494')
+          MaxLink.parse('max.ru/c/424242/900000000000000001')
               as MaxContentLink;
       expect(byId.kind, MaxContentKind.content);
-      expect(byId.messageId, 117008613873053494);
-      expect(byId.baseUrl, 'https://max.ru/c/1673760');
+      expect(byId.messageId, 900000000000000001);
+      expect(byId.baseUrl, 'https://max.ru/c/424242');
     });
 
     test('invite, call and sticker links keep their own types', () {
@@ -129,12 +129,12 @@ void main() {
 
     test('uid and cid open a contact and a chat', () {
       expect(
-        (MaxLink.parse('max://max.ru/?uid=105587131') as MaxContactIdLink)
+        (MaxLink.parse('max://max.ru/?uid=434343') as MaxContactIdLink)
             .userId,
-        105587131,
+        434343,
       );
-      final chat = MaxLink.parse('max://max.ru/?cid=1673760') as MaxChatIdLink;
-      expect(chat.chatId, 1673760);
+      final chat = MaxLink.parse('max://max.ru/?cid=424242') as MaxChatIdLink;
+      expect(chat.chatId, 424242);
       expect(chat.messageId, isNull);
     });
   });

@@ -9,6 +9,8 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/primary_loading_button.dart';
 import '../../widgets/small_spinner.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 
 class PasswordEntryScreen extends StatefulWidget {
   const PasswordEntryScreen({super.key});
@@ -74,6 +76,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
       return await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
+          shape: AppShape.dialogBorder,
           title: Text(l10n.passwordEntryConfirmTitle),
           content: TextField(
             controller: controller,
@@ -189,7 +192,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               color: cs.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
         ],
@@ -390,7 +393,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               ),
               _buildActionRow(
                 cs,
-                icon: Icons.email_outlined,
+                icon: Symbols.mail,
                 label: l10n.passwordEntryChangeEmailAction,
                 isLast: false,
                 onTap: () => _openWithPassword(
@@ -403,7 +406,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               ),
               _buildActionRow(
                 cs,
-                icon: Icons.delete_outline,
+                icon: Symbols.delete,
                 label: l10n.passwordEntryDeleteAction,
                 isLast: true,
                 textColor: cs.error,
@@ -478,7 +481,9 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
           child: InkWell(
             onTap: onTap,
             borderRadius: isLast
-                ? const BorderRadius.vertical(bottom: Radius.circular(20))
+                ? const BorderRadius.vertical(
+                    bottom: Radius.circular(AppShape.card),
+                  )
                 : BorderRadius.zero,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),

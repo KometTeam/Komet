@@ -20,6 +20,7 @@ import '../../widgets/spectrum_tint.dart';
 import '../../../l10n/app_localizations.dart';
 import 'call_link_sheet.dart';
 import 'call_screen.dart';
+import '../../../core/config/app_fonts.dart';
 
 class CallsTab extends StatefulWidget {
   const CallsTab({super.key});
@@ -490,7 +491,7 @@ class _CallsTabState extends State<CallsTab>
                       color: cs.onSurface,
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
-                      fontFamily: 'Outfit',
+                      fontFamily: displayFontOf(context),
                     ),
                   ),
                   const ConnectionStatusLine(),

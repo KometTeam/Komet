@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'password_2fa_screen.dart';
 import 'registration_screen.dart';
 import 'session_stale_recovery.dart';
@@ -314,7 +315,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: cs.onSurfaceVariant),
+          icon: Icon(Symbols.arrow_back, color: cs.onSurfaceVariant),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -528,7 +529,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                     child: recovering
                         ? SmallSpinner(size: 24, color: cs.onPrimaryContainer)
                         : Icon(
-                            Icons.arrow_forward,
+                            Symbols.arrow_forward,
                             color: _codeController.text.length == 6
                                 ? cs.onPrimaryContainer
                                 : cs.onSurfaceVariant,

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/utils/haptics.dart';
 import '../../../models/story.dart';
@@ -110,7 +111,8 @@ class _StoryRingState extends State<StoryRing> {
       owner: widget.preview.owner,
       overrideInfo: widget.ownerOverride,
       builder: (context, info) {
-        final name = widget.selfLabel ??
+        final name =
+            widget.selfLabel ??
             (info?.name.isNotEmpty == true ? info!.name : '…');
         return Padding(
           padding: const EdgeInsets.only(right: 16),
@@ -212,7 +214,13 @@ class SegmentedRingPainter extends CustomPainter {
 
     for (var i = 0; i < n; i++) {
       final start = -math.pi / 2 + gap / 2 + i * segment;
-      canvas.drawArc(rect, start, sweep, false, i < read ? readPaint : unreadPaint);
+      canvas.drawArc(
+        rect,
+        start,
+        sweep,
+        false,
+        i < read ? readPaint : unreadPaint,
+      );
     }
   }
 
@@ -355,7 +363,7 @@ class _StorySelfTileState extends State<StorySelfTile> {
                                 color: cs.primary,
                               ),
                               child: Icon(
-                                Icons.add,
+                                Symbols.add,
                                 size: 14,
                                 color: cs.onPrimary,
                               ),

@@ -1,17 +1,27 @@
 import 'package:flutter/foundation.dart';
 
 import '../../frontend/widgets/liquid_glass.dart';
+import 'app_visual_style.dart';
 import 'persisted_setting.dart';
 
-enum NavPillStyle { glossy, frostBlur, liquidGlass }
+enum NavPillStyle { auto, glossy, frostBlur, liquidGlass }
 
 class NavPillMaterial {
-  static bool isLiquid(NavPillStyle style) =>
-      style == NavPillStyle.liquidGlass && LiquidGlass.isSupported;
+  static NavPillStyle resolve(NavPillStyle style) {
+    if (style != NavPillStyle.auto) return style;
+    return AppVisualStyle.current.value == VisualStyle.liquidGlass
+        ? NavPillStyle.liquidGlass
+        : NavPillStyle.glossy;
+  }
 
-  static bool isFrost(NavPillStyle style) =>
-      style == NavPillStyle.frostBlur ||
-      (style == NavPillStyle.liquidGlass && !LiquidGlass.isSupported);
+  static bool isLiquid(NavPillStyle style) =>
+      resolve(style) == NavPillStyle.liquidGlass && LiquidGlass.isSupported;
+
+  static bool isFrost(NavPillStyle style) {
+    final resolved = resolve(style);
+    return resolved == NavPillStyle.frostBlur ||
+        (resolved == NavPillStyle.liquidGlass && !LiquidGlass.isSupported);
+  }
 }
 
 class AppNavPillStyle {
@@ -19,7 +29,7 @@ class AppNavPillStyle {
 
   static final _setting = PersistedEnum<NavPillStyle>(
     prefKey: prefKey,
-    defaultValue: NavPillStyle.frostBlur,
+    defaultValue: NavPillStyle.auto,
     encode: (value) => value.name,
     decode: _parse,
   );
@@ -31,5 +41,5 @@ class AppNavPillStyle {
   static Future<void> save(NavPillStyle value) => _setting.save(value);
 
   static NavPillStyle _parse(String? val) =>
-      enumFromName(NavPillStyle.values, val, NavPillStyle.frostBlur);
+      enumFromName(NavPillStyle.values, val, NavPillStyle.auto);
 }

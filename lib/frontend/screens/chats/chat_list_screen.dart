@@ -84,10 +84,12 @@ import '../../../backend/modules/webapp.dart';
 import '../../../models/story.dart';
 import '../webapp/open_mini_app.dart';
 import '../stories/story_ring.dart';
+import '../../widgets/attachment/bubbles/bubble_context.dart';
 import '../../widgets/sending_clock_icon.dart';
 import '../stories/story_viewer_screen.dart';
 import '../downloads_screen.dart';
 import '../../widgets/media_playback_pill.dart';
+import '../../../core/config/app_fonts.dart';
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -1545,7 +1547,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                                                       ) +
                                                       8) *
                                                   (1.0 - _pullRatio),
-                                              height: FoldedStoryStack.outerSize,
+                                              height:
+                                                  FoldedStoryStack.outerSize,
                                               child: OverflowBox(
                                                 alignment: Alignment.centerLeft,
                                                 maxWidth:
@@ -1575,7 +1578,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                             color: cs.onSurface,
                                             fontSize: 20,
                                             fontWeight: FontWeight.w600,
-                                            fontFamily: 'Outfit',
+                                            fontFamily: displayFontOf(context),
                                           ),
                                         ),
                                       ),
@@ -1753,9 +1756,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               ),
             ),
           if (!widget.forwardMode)
-            const MediaPlaybackPill(
-              margin: EdgeInsets.fromLTRB(20, 6, 20, 2),
-            ),
+            const MediaPlaybackPill(margin: EdgeInsets.fromLTRB(20, 6, 20, 2)),
           if (!widget.forwardMode) _buildInformerBanner(),
         ],
       ),
@@ -2407,7 +2408,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 color: cs.onSurface,
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Outfit',
+                fontFamily: displayFontOf(context),
               ),
             ),
           ],
@@ -2687,6 +2688,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     return oneLine.isEmpty ? null : oneLine;
   }
 
+  static const double _ownStatusIconSize = 14;
+
   String? _ownStatusFor(CachedChat chat, bool isPlaceholder) {
     if (isPlaceholder || chat.id == 0) return null;
     final me = _profile?.id;
@@ -2695,31 +2698,19 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _ownStatusIcon(ColorScheme cs, String status, bool read) {
-    if (isSendingStatus(status)) {
-      return SendingClockIcon(color: cs.outline, size: 14);
-    }
-    IconData icon;
-    Color color;
-    switch (status) {
-      case 'sending':
-      case 'pending':
-        icon = Symbols.schedule;
-        color = cs.outline;
-      case 'error':
-        icon = Symbols.error;
-        color = Colors.redAccent;
-      default:
-        if (read) {
-          icon = Symbols.done_all;
-          color = kReadReceiptBlue;
-        } else {
-          icon = Symbols.check;
-          color = cs.outline;
-        }
-    }
+    final sending = isSendingStatus(status);
+    final effective = (read && !sending && status != 'error') ? 'read' : status;
+    final visual = messageStatusVisual(effective, dimColor: cs.outline);
     return Padding(
       padding: const EdgeInsets.only(left: 6),
-      child: Icon(icon, size: 16, color: color, fill: 1),
+      child: sending
+          ? SendingClockIcon(color: visual.color, size: _ownStatusIconSize)
+          : Icon(
+              visual.icon,
+              size: _ownStatusIconSize,
+              color: visual.color,
+              weight: 400,
+            ),
     );
   }
 

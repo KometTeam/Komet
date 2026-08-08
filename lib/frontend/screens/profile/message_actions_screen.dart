@@ -5,8 +5,8 @@ import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/utils/haptics.dart';
-import '../../widgets/glossy_pill.dart';
 import '../../widgets/settings_radio_tile.dart';
+import '../../widgets/settings_card.dart';
 
 class MessageActionsScreen extends StatelessWidget {
   const MessageActionsScreen({super.key});
@@ -53,11 +53,8 @@ class _StyleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
+    return SettingsPanel(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-      depth: 6,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

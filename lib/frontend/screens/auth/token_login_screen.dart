@@ -9,6 +9,7 @@ import '../../widgets/adaptive_shell.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/small_spinner.dart';
+import '../../../core/config/app_shape.dart';
 
 class TokenLoginScreen extends StatefulWidget {
   final int? returnToAccountId;
@@ -141,7 +142,7 @@ class _TokenLoginScreenState extends State<TokenLoginScreen> {
           onPressed: _isLoading ? null : _login,
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(52),
-            shape: const StadiumBorder(),
+            shape: AppShape.buttonBorder,
           ),
           child: _isLoading
               ? const SmallSpinner(size: 22)
@@ -346,7 +347,7 @@ class _TokenLoginScreenState extends State<TokenLoginScreen> {
         return ChoiceChip(
           label: Text(opt.label),
           avatar: isSelected
-              ? Icon(Icons.check, size: 18, color: cs.onSecondaryContainer)
+              ? Icon(Symbols.check, size: 18, color: cs.onSecondaryContainer)
               : Icon(opt.icon, size: 18, color: cs.onSurfaceVariant),
           selected: isSelected,
           showCheckmark: false,

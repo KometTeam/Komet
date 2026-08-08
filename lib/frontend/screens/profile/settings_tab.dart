@@ -46,6 +46,8 @@ import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
 import '../../widgets/media_playback_pill.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -290,9 +292,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                     backgroundColor: cs.error,
                     foregroundColor: cs.onError,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    shape: AppShape.buttonBorder,
                   ),
                   child: const Text('Выйти'),
                 ),
@@ -825,7 +825,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                           color: nameColor,
                           fontSize: lerpDouble(20, 26, pt),
                           fontWeight: FontWeight.w700,
-                          fontFamily: 'Outfit',
+                          fontFamily: displayFontOf(context),
                         ),
                       ),
                     ),
@@ -1025,7 +1025,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                       Symbols.check_circle,
                       fill: 1,
                       size: 15,
-                      color: online ? kOnlineGreen : cs.mutedText,
+                      color: online ? kSuccessGreen : cs.mutedText,
                     ),
                     const SizedBox(width: 5),
                     Text(

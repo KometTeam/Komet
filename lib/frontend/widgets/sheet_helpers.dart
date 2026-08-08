@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/config/app_shape.dart';
+
 /// Standard rounded top shape for modal bottom sheets.
-const RoundedRectangleBorder kSheetShape = RoundedRectangleBorder(
-  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-);
+const RoundedRectangleBorder kSheetShape = AppShape.sheetBorder;
 
 /// The little drag "grabber" pill shown at the top of a bottom sheet.
 class SheetGrabber extends StatelessWidget {

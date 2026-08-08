@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/config/app_frost.dart';
+
 Future<T?> showBlurredCard<T>(
   BuildContext context,
   Widget Function(BuildContext hostContext) builder,
@@ -10,13 +12,16 @@ Future<T?> showBlurredCard<T>(
     context: context,
     barrierDismissible: true,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black.withValues(alpha: 0.28),
+    barrierColor: AppFrost.scrim(),
     transitionDuration: const Duration(milliseconds: 260),
     pageBuilder: (_, _, _) => builder(context),
     transitionBuilder: (_, anim, _, child) {
       final t = Curves.easeOutCubic.transform(anim.value);
       return BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14 * t, sigmaY: 14 * t),
+        filter: ImageFilter.blur(
+          sigmaX: AppFrost.overlaySigma * t,
+          sigmaY: AppFrost.overlaySigma * t,
+        ),
         child: Opacity(
           opacity: anim.value,
           child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),

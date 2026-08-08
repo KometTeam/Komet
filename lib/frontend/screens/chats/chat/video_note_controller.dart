@@ -19,6 +19,7 @@ import '../../../../core/utils/logger.dart';
 import '../../../widgets/custom_notification.dart';
 import '../../../widgets/lottie_slash_icon.dart';
 import 'voice_record_controller.dart';
+import '../../../../core/config/app_frost.dart';
 
 const String _flashIcon = 'assets/lottie/ic_flash_on_to_off.json';
 
@@ -304,7 +305,7 @@ class VideoNoteRecordingLayer extends StatefulWidget {
 class _VideoNoteRecordingLayerState extends State<VideoNoteRecordingLayer>
     with SingleTickerProviderStateMixin {
   static const double _circle = 260;
-  static const double _maxBlur = 18;
+  static const double _maxBlur = AppFrost.overlaySigma;
 
   late final AnimationController _reveal = AnimationController(
     vsync: this,

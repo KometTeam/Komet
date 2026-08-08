@@ -1,5 +1,25 @@
 import 'package:flutter/material.dart';
 
+const String kDisplayFontFamily = 'Outfit';
+
+@immutable
+class AppDisplayFont extends ThemeExtension<AppDisplayFont> {
+  final String? family;
+
+  const AppDisplayFont(this.family);
+
+  @override
+  AppDisplayFont copyWith({String? family}) =>
+      AppDisplayFont(family ?? this.family);
+
+  @override
+  AppDisplayFont lerp(ThemeExtension<AppDisplayFont>? other, double t) =>
+      t < 0.5 ? this : (other as AppDisplayFont? ?? this);
+}
+
+String? displayFontOf(BuildContext context) =>
+    Theme.of(context).extension<AppDisplayFont>()?.family ?? kDisplayFontFamily;
+
 class AppFont {
   final String id;
   final String label;
@@ -36,6 +56,11 @@ class AppFonts {
       return AppFont(id: id, label: family, fontFamily: family);
     }
     return builtIn.firstWhere((f) => f.id == id, orElse: () => fallback);
+  }
+
+  static String? displayFamily(String id) {
+    final font = resolve(id);
+    return font.isSystem ? kDisplayFontFamily : font.fontFamily;
   }
 
   static TextTheme textTheme(String id, TextTheme base) {

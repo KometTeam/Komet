@@ -871,12 +871,14 @@ class KometAppState extends State<KometApp>
     _themeCacheFontId = _fontId;
     _themeCacheLight = light;
     _themeCacheDark = dark;
+    final displayFont = AppDisplayFont(AppFonts.displayFamily(_fontId));
     _lightTheme = withM3ETheme(
       ThemeData(
         useMaterial3: true,
         colorScheme: light,
         pageTransitionsTheme: _appPageTransitions,
         progressIndicatorTheme: _expressiveProgressTheme,
+        extensions: [displayFont],
         textTheme: AppFonts.textTheme(
           _fontId,
           ThemeData(brightness: Brightness.light).textTheme,
@@ -889,6 +891,7 @@ class KometAppState extends State<KometApp>
         colorScheme: dark,
         pageTransitionsTheme: _appPageTransitions,
         progressIndicatorTheme: _expressiveProgressTheme,
+        extensions: [displayFont],
         textTheme: AppFonts.textTheme(
           _fontId,
           ThemeData(brightness: Brightness.dark).textTheme,
@@ -1109,9 +1112,7 @@ class _StartupScreenState extends State<_StartupScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: cs.surface,
-      body: Center(
-        child: SmallSpinner(size: 36, color: cs.primary),
-      ),
+      body: Center(child: SmallSpinner(size: 36, color: cs.primary)),
     );
   }
 }

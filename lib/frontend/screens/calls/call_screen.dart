@@ -20,6 +20,7 @@ import '../../../core/cache/info_cache.dart';
 import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
+import '../../../core/config/app_colors.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/logger.dart';
 import '../../../l10n/app_localizations.dart';
@@ -30,9 +31,7 @@ import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import 'call_participants_sheet.dart';
 import 'komet_hub.dart';
-
-const Color _kEndRed = Color(0xFFE5484D);
-const Color _kAcceptGreen = Color(0xFF2EC36B);
+import '../../../core/config/app_fonts.dart';
 
 class CallScreen extends StatefulWidget {
   final String name;
@@ -603,7 +602,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
               color: cs.onSurface,
               fontSize: 24,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
           const SizedBox(height: 2),
@@ -673,7 +672,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       borderRadius: BorderRadius.circular(20),
       depth: 6,
       borderSide: speaking
-          ? const BorderSide(color: _kAcceptGreen, width: 2.5)
+          ? const BorderSide(color: kSuccessGreen, width: 2.5)
           : null,
       padding: EdgeInsets.all(showVideo ? 0 : 12),
       child: showVideo
@@ -1136,7 +1135,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           color: cs.onPrimaryContainer,
           fontSize: size * 0.38,
           fontWeight: FontWeight.w600,
-          fontFamily: 'Outfit',
+          fontFamily: displayFontOf(context),
         ),
       ),
     );
@@ -1154,7 +1153,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           color: cs.onSurface,
           fontSize: 30,
           fontWeight: FontWeight.w600,
-          fontFamily: 'Outfit',
+          fontFamily: displayFontOf(context),
           height: 1.1,
         ),
       ),
@@ -1228,14 +1227,14 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           _CallButton(
             icon: Symbols.call_end,
             label: l10n.callDecline,
-            background: _kEndRed,
+            background: kDangerRed,
             foreground: Colors.white,
             onTap: _decline,
           ),
           _CallButton(
             icon: Symbols.call,
             label: l10n.callAccept,
-            background: _kAcceptGreen,
+            background: kSuccessGreen,
             foreground: Colors.white,
             onTap: _accept,
           ),
@@ -1290,7 +1289,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           _CallButton(
             icon: Symbols.call_end,
             label: l10n.callEndButton,
-            background: _kEndRed,
+            background: kDangerRed,
             foreground: Colors.white,
             onTap: _hangup,
           ),
@@ -1550,7 +1549,7 @@ class _CallInfoSheet extends StatelessWidget {
                   color: cs.onSurface,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  fontFamily: 'Outfit',
+                  fontFamily: displayFontOf(context),
                 ),
               ),
               const SizedBox(height: 2),

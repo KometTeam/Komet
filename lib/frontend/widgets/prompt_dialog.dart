@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/config/app_fonts.dart';
+import '../../core/config/app_shape.dart';
 
 Future<String?> showTextInputDialog(
   BuildContext context, {
@@ -20,12 +22,13 @@ Future<String?> showTextInputDialog(
         final cs = Theme.of(dialogContext).colorScheme;
         return AlertDialog(
           backgroundColor: cs.surfaceContainerHigh,
+          shape: AppShape.dialogBorder,
           title: title == null
               ? null
               : Text(
                   title,
                   style: TextStyle(
-                    fontFamily: 'Outfit',
+                    fontFamily: displayFontOf(context),
                     fontWeight: FontWeight.w600,
                     fontSize: 18,
                     color: cs.onSurface,

@@ -349,10 +349,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get infoAccountSection => 'Account';
 
   @override
+  String get infoPacketSection => 'Login packet';
+
+  @override
+  String get infoChatsSection => 'Chats in login packet';
+
+  @override
+  String get infoChatSettingsSection => 'Per-chat settings';
+
+  @override
   String get infoServerSection => 'Server';
 
   @override
   String get infoUserSection => 'User';
+
+  @override
+  String get infoExperimentsSection => 'Experiments';
 
   @override
   String get infoYMapSection => 'Y-Map';
@@ -379,7 +391,76 @@ class AppLocalizationsEn extends AppLocalizations {
   String get infoId => 'id';
 
   @override
+  String get infoPhone => 'phone';
+
+  @override
+  String get infoPhotoId => 'photoId';
+
+  @override
+  String get infoAccountStatus => 'accountStatus';
+
+  @override
+  String get infoContactOptions => 'contact options';
+
+  @override
+  String get infoProfileOptions => 'profile options';
+
+  @override
+  String get infoNames => 'names';
+
+  @override
+  String get infoBaseUrl => 'baseUrl';
+
+  @override
+  String get infoBaseRawUrl => 'baseRawUrl';
+
+  @override
   String get infoChatMarker => 'chatMarker';
+
+  @override
+  String get infoServerTime => 'server time';
+
+  @override
+  String get infoUpdates => 'updates';
+
+  @override
+  String get infoMessagesCount => 'messages in packet';
+
+  @override
+  String get infoContactsCount => 'contacts in packet';
+
+  @override
+  String get infoPresenceCount => 'presence records';
+
+  @override
+  String get infoConfigHash => 'config hash';
+
+  @override
+  String get infoChatsCount => 'chats loaded';
+
+  @override
+  String get infoChatsActive => 'active';
+
+  @override
+  String get infoChatsHidden => 'hidden';
+
+  @override
+  String get infoChatsDialogs => 'dialogs';
+
+  @override
+  String get infoChatsGroups => 'groups';
+
+  @override
+  String get infoChatsChannels => 'channels';
+
+  @override
+  String get infoChatsUnread => 'unread chats';
+
+  @override
+  String get infoChatsNewMessages => 'new messages';
+
+  @override
+  String get infoChatsMessages => 'messages in loaded chats';
 
   @override
   String get infoAccountRemovalEnabled => 'account-removal-enabled';
@@ -775,6 +856,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get appearanceVisualStyleSubtitle =>
       'Material You or dimensional Glossy capsules';
+
+  @override
+  String get appearanceStyleAuto => 'Match theme';
 
   @override
   String get appearanceVisualStyleMaterialYou => 'Material You';
@@ -1605,6 +1689,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatInfoShowMoreExtra => 'Details';
+
+  @override
+  String get chatSendConfirmMessage => 'Send this message to the chat?';
+
+  @override
+  String get chatSendConfirmAction => 'Send';
+
+  @override
+  String get chatInfoRowDisableForward => 'Forwarding disabled';
+
+  @override
+  String get chatInfoRowCopyDisabled => 'Copying disabled';
+
+  @override
+  String get chatInfoRowOnlyAdminCall => 'Admins can call';
+
+  @override
+  String get chatInfoRowAllCanPin => 'Anyone can pin';
+
+  @override
+  String get chatInfoRowMembersSeeLink => 'Members see the link';
+
+  @override
+  String get chatInfoRowConfirmBeforeSend => 'Confirm before sending';
+
+  @override
+  String get chatInfoRowOnlyOwnerIconTitle => 'Owner edits title and icon';
+
+  @override
+  String get chatInfoRowPromotedDisabled => 'Promoted content off';
+
+  @override
+  String get chatInfoRowUserId => 'User ID';
 
   @override
   String get chatInfoRowId => 'Chat ID';

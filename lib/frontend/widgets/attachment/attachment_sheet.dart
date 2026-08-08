@@ -45,7 +45,7 @@ Future<void> showAttachmentSheet(
     isScrollControlled: true,
     requestFocus: false,
     backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.45),
+    barrierColor: AppFrost.scrim(),
     builder: (_) => AttachmentSheet(
       title: title,
       onSend: onSend,
@@ -1093,7 +1093,9 @@ class _ThumbnailState extends State<_Thumbnail> {
   }
 
   void _resolveProvider() {
-    final file = widget.editedFile ?? (widget.item.isVideo ? null : widget.item.localFile);
+    final file =
+        widget.editedFile ??
+        (widget.item.isVideo ? null : widget.item.localFile);
     if (file != null) {
       _provider = ResizeImage(
         FileImage(file),

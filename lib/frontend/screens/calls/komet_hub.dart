@@ -7,6 +7,7 @@ import '../../../core/calls/call_session.dart';
 import '../../../core/games/checkers.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../../core/config/app_fonts.dart';
 
 Future<void> showKometHub(
   BuildContext context, {
@@ -115,7 +116,7 @@ class _KometHubState extends State<_KometHub> {
               color: cs.onSurface,
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
         ],

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
@@ -88,8 +89,23 @@ class OutboxService {
             elements: elements.isEmpty ? null : elements,
           );
         } catch (e) {
-          logger.w('Outbox: отправка ${pending.id} не удалась: $e');
-          continue;
+          if (!isPermanentSendFailure(e)) {
+            logger.w('Outbox: отправка ${pending.id} не удалась: $e');
+            continue;
+          }
+          logger.w('Outbox: ${pending.id} отклонено сервером: $e');
+          final failed = pending.copyWith(status: 'error');
+          await AppDatabase.saveMessages([failed.toDbRow()]);
+          chats.emitMessageSent(pending.chatId, pending.id, failed);
+          await chats.applyOutgoing(
+            accountId,
+            pending.chatId,
+            messageId: failed.id,
+            time: failed.time,
+            text: text,
+            status: 'error',
+            elements: elements.isEmpty ? null : elements,
+          );
         }
       }
     } catch (e) {
