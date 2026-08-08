@@ -814,6 +814,8 @@
     }
   },
   "uploadNotificationVideo": "Видео",
+  "uploadNotificationVideoNote": "Кружок",
+  "uploadNotificationVoice": "Голосовое сообщение",
   "uploadNotificationFile": "Файл",
   "uploadNotificationMultiple": "{count, plural, other{Отправка файлов: {count}}}",
   "@uploadNotificationMultiple": {

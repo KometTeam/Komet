@@ -2479,6 +2479,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get uploadNotificationVideo => 'Видео';
 
   @override
+  String get uploadNotificationVideoNote => 'Кружок';
+
+  @override
+  String get uploadNotificationVoice => 'Голосовое сообщение';
+
+  @override
   String get uploadNotificationFile => 'Файл';
 
   @override

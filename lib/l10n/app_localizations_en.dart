@@ -2465,6 +2465,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uploadNotificationVideo => 'Video';
 
   @override
+  String get uploadNotificationVideoNote => 'Video message';
+
+  @override
+  String get uploadNotificationVoice => 'Voice message';
+
+  @override
   String get uploadNotificationFile => 'File';
 
   @override

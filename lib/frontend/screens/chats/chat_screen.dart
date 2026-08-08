@@ -337,7 +337,6 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<ReactionAnimationEvent?> _reactionAnimation =
       ValueNotifier(null);
   int _reactionAnimationToken = 0;
-  final Map<String, ValueNotifier<List<double>>> _photoUploadProgress = {};
   final ValueNotifier<int> _scheduledCount = ValueNotifier(0);
 
   late final VoiceRecordController _voiceRec = VoiceRecordController(
@@ -358,7 +357,7 @@ class _ChatScreenState extends State<ChatScreen>
   StreamSubscription<UploadJobEvent>? _uploadEventSub;
 
   ValueListenable<List<double>>? _photoProgressFor(CachedMessage m) =>
-      _photoUploadProgress[m.id] ?? UploadService.instance.progressFor(m.id);
+      UploadService.instance.progressFor(m.id);
 
   ValueNotifier<Map<String, dynamic>?> _reactionNotifierFor(CachedMessage m) {
     final existing = _reactionNotifiers[m.id];
@@ -2088,10 +2087,6 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _reactionNotifiers.clear();
     _reactionAnimation.dispose();
-    for (final n in _photoUploadProgress.values) {
-      n.dispose();
-    }
-    _photoUploadProgress.clear();
     ChatActivityStore.instance
         .listenable(widget.chatId)
         .removeListener(_recomputeHeaderStatus);
@@ -6022,77 +6017,24 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
     final wave = _buildWave(amps);
-    final tempId = _nextTempId();
-    final progress = ValueNotifier<List<double>>(const [0]);
-    _photoUploadProgress[tempId] = progress;
-    _messages.add(
-      CachedMessage(
-        id: tempId,
-        accountId: _myId,
-        chatId: widget.chatId,
-        senderId: _myId,
-        time: DateTime.now().millisecondsSinceEpoch,
-        status: 'sending',
-        attachments: [AudioAttachment(duration: durationMs)],
+    final placeholder = _addOptimisticMediaMessage(
+      AudioAttachment(
+        duration: durationMs,
+        waveform: String.fromCharCodes(wave),
       ),
     );
-    _lastSentId = tempId;
-    _bumpMessages();
-    Haptics.send();
-    _scrollToBottom();
 
-    try {
-      final info = await messagesModule.requestAudioUploadUrl();
-      if (info == null || info.url.isEmpty) throw Exception('no_url');
-
-      final ok = await fileUploader.uploadMediaFile(
-        Uri.parse(info.url),
-        file,
-        onProgress: (sent, total) {
-          if (total > 0) progress.value = [(sent / total).clamp(0.0, 1.0)];
-        },
-      );
-      if (!ok) throw Exception('upload_failed');
-      if (!mounted) {
-        _disposePhotoProgress(tempId);
-        return;
-      }
-
-      final serverMsg = await messagesModule.sendAudioMessage(
-        widget.chatId,
-        info.token,
-        duration: durationMs,
+    unawaited(
+      UploadService.instance.sendVoice(
+        accountId: _myId,
+        chatId: widget.chatId,
+        tempId: placeholder.id,
+        file: file,
+        durationMs: durationMs,
         wave: wave,
-      );
-      if (!mounted) {
-        _disposePhotoProgress(tempId);
-        return;
-      }
-      if (serverMsg == null) throw Exception('send_failed');
-
-      final real = CachedMessage.fromPushPayload(
-        _myId,
-        widget.chatId,
-        serverMsg,
-      );
-      final idx = _messages.indexWhere((m) => m.id == tempId);
-      if (idx != -1) {
-        _messages[idx] = real;
-        _bumpMessages();
-        unawaited(_persistOutgoing(real, removeId: tempId));
-      }
-      _disposePhotoProgress(tempId);
-    } catch (_) {
-      if (mounted) {
-        _failPhotoMessage(tempId);
-      } else {
-        _disposePhotoProgress(tempId);
-      }
-    } finally {
-      try {
-        await file.delete();
-      } catch (_) {}
-    }
+        placeholder: placeholder,
+      ),
+    );
   }
 
   Future<void> _sendVideoNote(File file, int durationMs) async {
@@ -6102,85 +6044,23 @@ class _ChatScreenState extends State<ChatScreen>
       } catch (_) {}
       return;
     }
-    final tempId = _nextTempId();
-    final progress = ValueNotifier<List<double>>(const [0]);
-    _photoUploadProgress[tempId] = progress;
-    _messages.add(
-      CachedMessage(
-        id: tempId,
+    final placeholder = _addOptimisticMediaMessage(
+      VideoAttachment(duration: durationMs, videoType: 1, localPath: file.path),
+    );
+
+    unawaited(
+      UploadService.instance.sendVideoNote(
         accountId: _myId,
         chatId: widget.chatId,
-        senderId: _myId,
-        time: DateTime.now().millisecondsSinceEpoch,
-        status: 'sending',
-        attachments: [VideoAttachment(duration: durationMs, videoType: 1)],
+        tempId: placeholder.id,
+        file: file,
+        durationMs: durationMs,
+        placeholder: placeholder,
       ),
     );
-    _lastSentId = tempId;
-    _bumpMessages();
-    Haptics.send();
-    _scrollToBottom();
-
-    try {
-      final info = await messagesModule.requestVideoNoteUploadUrl();
-      if (info == null || info.url.isEmpty) throw Exception('no_url');
-      final ok = await fileUploader.uploadMediaFile(
-        Uri.parse(info.url),
-        file,
-        onProgress: (sent, total) {
-          if (total > 0) progress.value = [(sent / total).clamp(0.0, 1.0)];
-        },
-      );
-      if (!ok) throw Exception('upload_failed');
-      if (!mounted) {
-        _disposePhotoProgress(tempId);
-        return;
-      }
-      final serverMsg = await messagesModule.sendVideoNoteMessage(
-        widget.chatId,
-        info.token,
-        duration: durationMs,
-      );
-      if (!mounted) {
-        _disposePhotoProgress(tempId);
-        return;
-      }
-      if (serverMsg == null) throw Exception('send_failed');
-      final real = CachedMessage.fromPushPayload(
-        _myId,
-        widget.chatId,
-        serverMsg,
-      );
-      final idx = _messages.indexWhere((m) => m.id == tempId);
-      if (idx != -1) {
-        _messages[idx] = real;
-        _bumpMessages();
-        unawaited(_persistOutgoing(real, removeId: tempId));
-      }
-      _disposePhotoProgress(tempId);
-    } catch (e) {
-      logger.w('sendVideoNote failed: $e');
-      if (mounted) {
-        _failPhotoMessage(tempId);
-        final reason = e is PacketError
-            ? '${e.errorKey ?? ''} ${e.message}'.trim()
-            : e is Exception && e.toString().contains('send_failed')
-            ? 'сервер не обработал видео'
-            : e is Exception && e.toString().contains('upload_failed')
-            ? 'загрузка отклонена'
-            : e.toString();
-        showCustomNotification(context, 'Кружок не отправлен: $reason');
-      } else {
-        _disposePhotoProgress(tempId);
-      }
-    } finally {
-      try {
-        await file.delete();
-      } catch (_) {}
-    }
   }
 
-  CachedMessage _addOptimisticFileMessage(FileAttachment attachment) {
+  CachedMessage _addOptimisticMediaMessage(MessageAttachment attachment) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = _nextTempId();
     final msg = CachedMessage(
@@ -6225,7 +6105,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _sendHistoryFile(FileHistoryEntry entry) async {
-    final tempId = _addOptimisticFileMessage(
+    final tempId = _addOptimisticMediaMessage(
       FileAttachment(
         fileId: entry.fileId,
         fileToken: entry.token,
@@ -6251,7 +6131,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<bool> _sendFileById(int fileId) async {
-    final tempId = _addOptimisticFileMessage(
+    final tempId = _addOptimisticMediaMessage(
       FileAttachment(fileId: fileId),
     ).id;
     try {
@@ -6478,10 +6358,24 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
       _failPhotoMessage(event.tempId);
-      if (event.kind == UploadKind.file) {
-        showCustomNotification(context, 'Ошибка: ${event.reason}');
-      }
+      final text = _uploadFailureText(event.kind, event.reason);
+      if (text != null) showCustomNotification(context, text);
     }
+  }
+
+  String? _uploadFailureText(UploadKind kind, String reason) {
+    final detail = switch (reason) {
+      'no_upload_url' => 'сервер не выдал ссылку',
+      'upload_failed' => 'загрузка отклонена',
+      'send_failed' => 'сервер не принял сообщение',
+      _ => reason,
+    };
+    return switch (kind) {
+      UploadKind.file => 'Ошибка: $reason',
+      UploadKind.videoNote => 'Кружок не отправлен: $detail',
+      UploadKind.voice => 'Голосовое не отправлено: $detail',
+      UploadKind.photo || UploadKind.video => null,
+    };
   }
 
   void _syncUploadStatus() {
@@ -6735,19 +6629,13 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-
   void _failPhotoMessage(String tempId) {
     final idx = _messages.indexWhere((m) => m.id == tempId);
     if (idx != -1) {
       _messages[idx] = _messages[idx].copyWith(status: 'error');
       _bumpMessages();
     }
-    _disposePhotoProgress(tempId);
     Haptics.error();
-  }
-
-  void _disposePhotoProgress(String tempId) {
-    _photoUploadProgress.remove(tempId)?.dispose();
   }
 
   void _refuseUnencrypted(String what) {
@@ -6836,7 +6724,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     final placeholder = scheduledTime != null
         ? null
-        : _addOptimisticFileMessage(
+        : _addOptimisticMediaMessage(
             FileAttachment(name: filename, size: size),
           );
 

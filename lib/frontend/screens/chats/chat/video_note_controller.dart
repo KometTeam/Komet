@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:lottie/lottie.dart' show AssetLottie;
 import 'package:path_provider/path_provider.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -16,7 +17,10 @@ import '../../../../core/media/native_video_note_recorder.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../widgets/custom_notification.dart';
+import '../../../widgets/lottie_slash_icon.dart';
 import 'voice_record_controller.dart';
+
+const String _flashIcon = 'assets/lottie/ic_flash_on_to_off.json';
 
 class VideoNoteController {
   VideoNoteController({
@@ -89,6 +93,7 @@ class VideoNoteController {
   bool get _stub => !_rec.isAvailable;
 
   Future<void> _initCamera() async {
+    unawaited(AssetLottie(_flashIcon).load());
     if (_stub) {
       _camReady.value = true;
       _textureId.value = null;
@@ -457,17 +462,24 @@ class _CameraControls extends StatelessWidget {
         children: [
           if (controller.cameraControlsAvailable)
             _ControlButton(
-              icon: Symbols.flip_camera_ios,
-              color: cs.onSurface,
               onTap: controller.flipCamera,
+              child: Icon(
+                Symbols.flip_camera_ios,
+                size: 24,
+                color: cs.onSurface,
+                fill: 1,
+              ),
             ),
           if (controller.flashAvailable)
             ValueListenableBuilder<bool>(
               valueListenable: controller.flashOn,
               builder: (context, on, _) => _ControlButton(
-                icon: on ? Symbols.flash_on : Symbols.flash_off,
-                color: on ? cs.primary : cs.onSurface,
                 onTap: controller.toggleFlash,
+                child: LottieSlashIcon(
+                  asset: _flashIcon,
+                  slashed: !on,
+                  color: on ? cs.primary : cs.onSurface,
+                ),
               ),
             ),
         ],
@@ -477,14 +489,9 @@ class _CameraControls extends StatelessWidget {
 }
 
 class _ControlButton extends StatelessWidget {
-  const _ControlButton({
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
+  const _ControlButton({required this.child, required this.onTap});
 
-  final IconData icon;
-  final Color color;
+  final Widget child;
   final VoidCallback onTap;
 
   @override
@@ -492,10 +499,7 @@ class _ControlButton extends StatelessWidget {
     return InkResponse(
       onTap: onTap,
       radius: 26,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(icon, size: 24, color: color, fill: 1),
-      ),
+      child: Padding(padding: const EdgeInsets.all(8), child: child),
     );
   }
 }

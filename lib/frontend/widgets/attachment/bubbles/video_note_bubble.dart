@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -15,6 +17,7 @@ import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../models/attachment.dart';
 import '../../small_spinner.dart';
+import '../../upload_progress_ring.dart';
 
 class VideoNoteBubble extends StatefulWidget {
   final VideoAttachment attachment;
@@ -26,6 +29,7 @@ class VideoNoteBubble extends StatefulWidget {
   final ColorScheme cs;
   final Color textColor;
   final Widget meta;
+  final ValueListenable<List<double>>? uploadProgress;
 
   const VideoNoteBubble({
     super.key,
@@ -38,6 +42,7 @@ class VideoNoteBubble extends StatefulWidget {
     required this.cs,
     required this.textColor,
     required this.meta,
+    this.uploadProgress,
   });
 
   @override
@@ -57,6 +62,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   final ValueNotifier<double> _ringProgress = ValueNotifier(0);
   Uint8List? _preview;
   VideoPlayerController? _controller;
+  VideoPlayerController? _local;
   Future<void>? _initializing;
   Duration? _pendingSeek;
   double? _lastAngle;
@@ -70,6 +76,19 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   int? get _videoId => widget.attachment.videoId;
   String get _cacheName => 'videonote_$_videoId.mp4';
   int get _attachmentDurationMs => widget.attachment.duration ?? 0;
+  String? get _localPath => widget.attachment.localPath;
+
+  String? get _posterUrl {
+    for (final candidate in [
+      widget.attachment.thumbnail,
+      widget.attachment.baseUrl,
+    ]) {
+      if (candidate == null || candidate.isEmpty) continue;
+      if (candidate.startsWith('data:')) continue;
+      return candidate;
+    }
+    return null;
+  }
 
   bool get _ready {
     final controller = _controller;
@@ -81,7 +100,14 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     super.initState();
     _expand = AnimationController(vsync: this, duration: _expandDuration);
     _preview = _previewBytes(widget.attachment.previewData);
-    if (VideoNotePreloader.autoLoads(widget.attachment.duration)) _preload();
+    final local = _localPath;
+    if (local != null) {
+      unawaited(_openLocalPreview(File(local)));
+      return;
+    }
+    if (VideoNotePreloader.autoLoads(widget.attachment.duration)) {
+      unawaited(_warmCache());
+    }
   }
 
   @override
@@ -90,6 +116,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     if (old.attachment.previewData != widget.attachment.previewData) {
       _preview = _previewBytes(widget.attachment.previewData);
     }
+    if (old.attachment.localPath != _localPath) _dropLocalPreview();
   }
 
   @override
@@ -98,6 +125,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     _PreviewPool.unregister(this);
     _expand.dispose();
     _ringProgress.dispose();
+    _dropLocalPreview();
     final controller = _controller;
     _controller = null;
     if (controller != null) {
@@ -105,6 +133,34 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
       MediaPlayback.instance.releaseVideoNote(controller);
     }
     super.dispose();
+  }
+
+  Future<void> _openLocalPreview(File file) async {
+    final controller = VideoPlayerController.file(file);
+    try {
+      await controller.initialize();
+    } catch (e) {
+      logger.w('VideoNoteBubble: локальное превью не открылось: $e');
+      await controller.dispose();
+      return;
+    }
+    if (!mounted || file.path != _localPath) {
+      await controller.dispose();
+      return;
+    }
+    await controller.setVolume(0);
+    if (!mounted) {
+      await controller.dispose();
+      return;
+    }
+    setState(() => _local = controller);
+  }
+
+  void _dropLocalPreview() {
+    final local = _local;
+    if (local == null) return;
+    _local = null;
+    unawaited(local.dispose());
   }
 
   void _claimPlayback() {
@@ -152,11 +208,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     }
   }
 
-  Future<void> _preload() async {
-    final file = await _fetch(priority: false);
-    if (file == null || !mounted) return;
-    await _ensureController(file);
-  }
+  Future<void> _warmCache() => _fetch(priority: false);
 
   Future<File?> _fetch({required bool priority}) {
     final videoId = _videoId;
@@ -176,6 +228,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   }
 
   Future<VideoPlayerController?> _ensureController(File file) async {
+    if (!mounted) return null;
     if (_controller != null) return _controller;
     final live = MediaPlayback.instance.liveVideoNote(_cacheName);
     if (live != null) {
@@ -230,6 +283,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   }
 
   Future<void> _toggle() async {
+    if (_videoId == null) return;
     if (_ready) {
       if (_controller!.value.isPlaying) {
         await _pause();
@@ -388,13 +442,14 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   }
 
   Widget _buildCircle(double size) {
-    final controller = _controller;
     final ready = _ready;
     final playing = ready && _playing && !_scrubbing;
     final preview = _preview;
+    final local = _local;
+    final uploading = widget.uploadProgress;
 
     return GestureDetector(
-      onTap: _toggle,
+      onTap: uploading == null ? _toggle : null,
       child: SizedBox(
         width: size,
         height: size,
@@ -409,58 +464,107 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
                   child: AnimatedSwitcher(
                     duration: _swapDuration,
                     child: ready
-                        ? SizedBox.expand(
-                            key: const ValueKey('note-video'),
-                            child: FittedBox(
-                              fit: BoxFit.cover,
-                              clipBehavior: Clip.hardEdge,
-                              child: SizedBox(
-                                width: controller!.value.size.width,
-                                height: controller.value.size.height,
-                                child: VideoPlayer(controller),
-                              ),
-                            ),
+                        ? _videoSurface(
+                            _controller!,
+                            const ValueKey('note-video'),
                           )
-                        : preview != null
-                        ? SizedBox.expand(
-                            key: const ValueKey('note-preview'),
-                            child: Image.memory(
-                              preview,
-                              fit: BoxFit.cover,
-                              gaplessPlayback: true,
-                            ),
-                          )
-                        : SizedBox.expand(
-                            key: const ValueKey('note-empty'),
-                            child: ColoredBox(
-                              color: widget.cs.surfaceContainerHighest,
-                            ),
-                          ),
+                        : local != null && local.value.isInitialized
+                        ? _videoSurface(local, const ValueKey('note-local'))
+                        : _buildPoster(preview),
                   ),
                 ),
               ),
             ),
-            if (ready) _buildRing(size),
-            if (!playing)
-              Container(
-                width: 52,
-                height: 52,
-                decoration: const BoxDecoration(
-                  color: Colors.black45,
-                  shape: BoxShape.circle,
+            if (uploading != null) ...[
+              Positioned.fill(
+                child: ClipOval(
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.35),
+                  ),
                 ),
-                child: _loading
-                    ? const Padding(
-                        padding: EdgeInsets.all(14),
-                        child: SmallSpinner(size: 36, color: Colors.white),
-                      )
-                    : Icon(
-                        _error ? Symbols.error : Symbols.play_arrow,
-                        color: Colors.white,
-                        size: 30,
-                      ),
               ),
+              UploadProgressRing(
+                progress: uploading,
+                color: Colors.white,
+                trackColor: Colors.white24,
+              ),
+            ] else ...[
+              if (ready) _buildRing(size),
+              if (!playing)
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: const BoxDecoration(
+                    color: Colors.black45,
+                    shape: BoxShape.circle,
+                  ),
+                  child: _loading
+                      ? const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: SmallSpinner(size: 36, color: Colors.white),
+                        )
+                      : Icon(
+                          _error ? Symbols.error : Symbols.play_arrow,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPoster(Uint8List? preview) {
+    final url = _posterUrl;
+    if (url == null) {
+      return _inlinePreview(preview, const ValueKey('note-preview'));
+    }
+
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return SizedBox.expand(
+      key: const ValueKey('note-poster'),
+      child: CachedNetworkImage(
+        imageUrl: url,
+        fit: BoxFit.cover,
+        memCacheWidth: (_baseSize * dpr).round(),
+        fadeInDuration: _swapDuration,
+        placeholderFadeInDuration: Duration.zero,
+        placeholder: (_, _) => _inlinePreview(preview, null),
+        errorWidget: (_, _, _) => _inlinePreview(preview, null),
+      ),
+    );
+  }
+
+  Widget _inlinePreview(Uint8List? preview, Key? key) {
+    if (preview == null) {
+      return SizedBox.expand(
+        key: key,
+        child: ColoredBox(color: widget.cs.surfaceContainerHighest),
+      );
+    }
+    return SizedBox.expand(
+      key: key,
+      child: Image.memory(
+        preview,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+      ),
+    );
+  }
+
+  Widget _videoSurface(VideoPlayerController controller, Key key) {
+    return SizedBox.expand(
+      key: key,
+      child: FittedBox(
+        fit: BoxFit.cover,
+        clipBehavior: Clip.hardEdge,
+        child: SizedBox(
+          width: controller.value.size.width,
+          height: controller.value.size.height,
+          child: VideoPlayer(controller),
         ),
       ),
     );

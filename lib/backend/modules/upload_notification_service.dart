@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -5,7 +7,7 @@ import 'package:flutter/widgets.dart';
 import '../../l10n/app_localizations.dart';
 import '../../main.dart' show KometApp;
 
-enum UploadKind { photo, video, file }
+enum UploadKind { photo, video, videoNote, voice, file }
 
 class _NotificationJob {
   _NotificationJob({required this.kind, required this.count, this.filename});
@@ -41,6 +43,8 @@ class _NotificationJob {
     return switch (kind) {
       UploadKind.photo => l10n.uploadNotificationPhotos(count),
       UploadKind.video => l10n.uploadNotificationVideo,
+      UploadKind.videoNote => l10n.uploadNotificationVideoNote,
+      UploadKind.voice => l10n.uploadNotificationVoice,
       UploadKind.file =>
         name == null || name.isEmpty ? l10n.uploadNotificationFile : name,
     };
@@ -52,8 +56,10 @@ class UploadNotificationService {
     'ru.komet.app/upload_service',
   );
   static const int _minIntervalMs = 350;
+  static const Duration _startDelay = Duration(milliseconds: 700);
 
   static final Map<String, _NotificationJob> _jobs = {};
+  static Timer? _startTimer;
   static bool _running = false;
   static String? _lastTitle;
   static String? _lastBody;
@@ -75,7 +81,14 @@ class UploadNotificationService {
       count: count < 1 ? 1 : count,
       filename: filename,
     );
-    _push(force: true);
+    if (_running) {
+      _push(force: true);
+      return;
+    }
+    _startTimer ??= Timer(_startDelay, () {
+      _startTimer = null;
+      _push(force: true);
+    });
   }
 
   static void report(
@@ -102,16 +115,20 @@ class UploadNotificationService {
   }
 
   static void _stop() {
+    _startTimer?.cancel();
+    _startTimer = null;
+    final wasRunning = _running;
     _running = false;
     _lastTitle = null;
     _lastBody = null;
     _lastPercent = -1;
     _lastPushAt = 0;
-    _invoke('stop', const <String, dynamic>{});
+    if (wasRunning) _invoke('stop', const <String, dynamic>{});
   }
 
   static void _push({bool force = false}) {
     if (_jobs.isEmpty) return;
+    if (!_running && _startTimer != null) return;
 
     var sumSent = 0;
     var sumTotal = 0;

@@ -4706,6 +4706,18 @@ abstract class AppLocalizations {
   /// **'Video'**
   String get uploadNotificationVideo;
 
+  /// No description provided for @uploadNotificationVideoNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Video message'**
+  String get uploadNotificationVideoNote;
+
+  /// No description provided for @uploadNotificationVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice message'**
+  String get uploadNotificationVoice;
+
   /// No description provided for @uploadNotificationFile.
   ///
   /// In en, this message translates to:
