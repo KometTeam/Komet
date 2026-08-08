@@ -919,6 +919,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callGroupWaitingParticipants => 'Waiting for participants…';
 
   @override
+  String get callLinkGroupCall => 'Group call';
+
+  @override
+  String get callLinkSendInMax => 'Send in MAX';
+
+  @override
+  String get callLinkStart => 'Start call';
+
+  @override
+  String get callLinkSent => 'Link sent';
+
+  @override
+  String get callLinkSendFailed => 'Couldn\'t send the link';
+
+  @override
+  String get callLinkCreateFailed => 'Couldn\'t create the call';
+
+  @override
   String get callParticipantYou => 'You';
 
   @override

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'contacts.dart';
 import '../api.dart';
+import '../../core/calls/call_link.dart';
 import '../../core/calls/ws2_signaling.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/utils/ids.dart';
@@ -26,6 +27,22 @@ class OutgoingCallParams {
     required this.peerExternalId,
     required this.isVideo,
   });
+}
+
+class CreatedCall {
+  final String conversationId;
+  final String joinToken;
+  final String? callName;
+  final int? chatId;
+
+  const CreatedCall({
+    required this.conversationId,
+    required this.joinToken,
+    this.callName,
+    this.chatId,
+  });
+
+  String get url => CallLink.url(joinToken);
 }
 
 class CallLinkPreview {
@@ -84,24 +101,26 @@ class CallsModule {
 
   _CallerEndpoint _parseCallerEndpoint(
     Map payload,
-    String key, {
+    List<String> keys, {
     required String context,
   }) {
-    final raw = payload[key];
-    final parsed = raw is String
-        ? jsonDecode(raw) as Map<dynamic, dynamic>
-        : const <dynamic, dynamic>{};
+    for (final key in keys) {
+      final raw = payload[key];
+      final parsed = raw is String
+          ? jsonDecode(raw) as Map<dynamic, dynamic>
+          : const <dynamic, dynamic>{};
 
-    final endpoint = parsed['endpoint'] as String?;
-    if (endpoint == null) {
-      throw _CallerEndpointMissingException('$context: no endpoint');
+      final endpoint = parsed['endpoint'] as String?;
+      if (endpoint == null) continue;
+
+      final id = parsed['id'];
+      final callsUserId = (id is Map ? id['internal'] as int? : null) ?? 0;
+      final external = id is Map ? int.tryParse('${id['external']}') : null;
+
+      return (endpoint: endpoint, callsUserId: callsUserId, external: external);
     }
 
-    final id = parsed['id'];
-    final callsUserId = (id is Map ? id['internal'] as int? : null) ?? 0;
-    final external = id is Map ? int.tryParse('${id['external']}') : null;
-
-    return (endpoint: endpoint, callsUserId: callsUserId, external: external);
+    throw _CallerEndpointMissingException('$context: no endpoint');
   }
 
   Future<OutgoingCallParams> initiateCall(
@@ -121,11 +140,9 @@ class CallsModule {
       throw Exception('initiateCall: bad response');
     }
 
-    final parsed = _parseCallerEndpoint(
-      payload,
+    final parsed = _parseCallerEndpoint(payload, const [
       'internalCallerParams',
-      context: 'initiateCall',
-    );
+    ], context: 'initiateCall');
 
     return OutgoingCallParams(
       conversationId: (payload['conversationId'] as String?) ?? conversationId,
@@ -136,33 +153,34 @@ class CallsModule {
     );
   }
 
-  Future<OutgoingCallParams> startGroupCall({bool isVideo = false}) async {
+  Future<CreatedCall> createConference() async {
     final conversationId = uuidV4();
-    logger.i('[call] VIDEO_CHAT_START_ACTIVE group conv=$conversationId');
+    logger.i('[call] VIDEO_CHAT_START conv=$conversationId');
 
-    final payload = await _api.sendRequestMap(Opcode.videoChatStartActive, {
+    final payload = await _api.sendRequestMap(Opcode.videoChatStart, {
       'conversationId': conversationId,
-      'internalParams': _internalParams(),
-      'isVideo': isVideo,
     });
-    logger.i('[call] VIDEO_CHAT_START_ACTIVE keys=${payload?.keys.toList()}');
+    logger.i('[call] VIDEO_CHAT_START keys=${payload?.keys.toList()}');
 
     if (payload == null) {
-      throw Exception('startGroupCall: bad response');
+      throw Exception('createConference: bad response');
     }
 
-    final parsed = _parseCallerEndpoint(
-      payload,
-      'internalCallerParams',
-      context: 'startGroupCall',
-    );
+    final id = (payload['conversationId'] as String?) ?? conversationId;
+    final rawLink =
+        (payload['joinLink'] as String?) ?? await createJoinLink(id) ?? '';
+    final token = CallLink.normalizeToken(rawLink);
+    if (token == null) {
+      throw Exception('createConference: no joinLink');
+    }
 
-    return OutgoingCallParams(
-      conversationId: (payload['conversationId'] as String?) ?? conversationId,
-      endpoint: parsed.endpoint,
-      callsUserId: parsed.callsUserId,
-      peerExternalId: 0,
-      isVideo: isVideo,
+    final name = (payload['callName'] as String?)?.trim();
+
+    return CreatedCall(
+      conversationId: id,
+      joinToken: token,
+      callName: (name?.isEmpty ?? true) ? null : name,
+      chatId: payload['chatId'] is int ? payload['chatId'] as int : null,
     );
   }
 
@@ -189,7 +207,10 @@ class CallsModule {
   });
 
   Future<CallLinkPreview?> resolveCallLink(String url) async {
-    final payload = await _api.sendRequestMap(Opcode.linkInfo, {'link': url});
+    final token = CallLink.normalizeToken(url);
+    final payload = await _api.sendRequestMap(Opcode.linkInfo, {
+      'link': token == null ? url : CallLink.path(token),
+    });
     if (payload == null) return null;
 
     final vc = payload['videoConference'];
@@ -219,11 +240,10 @@ class CallsModule {
       throw Exception('joinByLink: bad response');
     }
 
-    final parsed = _parseCallerEndpoint(
-      payload,
+    final parsed = _parseCallerEndpoint(payload, const [
       'internalParams',
-      context: 'joinByLink',
-    );
+      'internalCallerParams',
+    ], context: 'joinByLink');
 
     return OutgoingCallParams(
       conversationId: (payload['conversationId'] as String?) ?? '',

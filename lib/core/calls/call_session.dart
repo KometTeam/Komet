@@ -179,7 +179,8 @@ class CallSession {
 
   Stream<int> get participantStreamUpdates => _participantStreamUpdates.stream;
 
-  MediaStream? streamOf(int participantId) => _participantStreams[participantId];
+  MediaStream? streamOf(int participantId) =>
+      _participantStreams[participantId];
 
   int get participantCount => _participants.length;
 
@@ -251,6 +252,8 @@ class CallSession {
     signaling.done.then((_) => _onSignalingLost());
     await signaling.connect();
     logger.i('[call] signaling connected to ${ws2Config.uri.host}');
+    logger.i('[call] ws2 url ${_maskedUrl()}');
+    unawaited(_wakeSignalingIfSilent(signaling));
     Timer(const Duration(seconds: 10), () {
       if (_ended || _gotConnection) return;
       logger.w(
@@ -258,6 +261,55 @@ class CallSession {
         'конференция закрыта или токен протух',
       );
     });
+  }
+
+  String _maskedUrl() {
+    final token = ws2Config.uri.queryParameters['token'];
+    if (token == null || token.length < 12) return ws2Config.uri.toString();
+    final masked =
+        '${token.substring(0, 4)}…${token.substring(token.length - 6)}';
+    return ws2Config.uri.toString().replaceAll(
+      Uri.encodeQueryComponent(token),
+      masked,
+    );
+  }
+
+  /// Кадры ws2 приходят в broadcast-канал Rust-ядра, а подписка на него
+  /// создаётся уже после того, как сокет открыт: нотификацию `connection`,
+  /// присланную сразу после хэндшейка, ядро выбрасывает. Если её нет — толкаем
+  /// сервер командой (ответы идут по sequence и гонке не подвержены).
+  Future<void> _wakeSignalingIfSilent(Ws2Signaling signaling) async {
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    if (_ended || _gotConnection || _signaling != signaling) return;
+
+    logger.w('[call] "connection" не пришла за 1.2 с — бужу ws2');
+    try {
+      final response = await signaling.sendCommand(
+        'change-media-settings',
+        extra: {
+          'mediaSettings': {
+            'isVideoEnabled': _localVideo,
+            'isAudioEnabled': !_muted,
+            'isScreenSharingEnabled': _localScreen,
+            'isAnimojiEnabled': false,
+          },
+        },
+      );
+      logger.i('[call] ws2 wake ok: $response');
+    } catch (e) {
+      logger.w('[call] ws2 wake failed: $e');
+      return;
+    }
+
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    if (_ended || _gotConnection || _signaling != signaling) return;
+
+    logger.w('[call] всё ещё тихо — шлю accept-call вслепую');
+    try {
+      await accept(activate: false);
+    } catch (e) {
+      logger.w('[call] accept-call failed: $e');
+    }
   }
 
   void _onSignalingLost() {

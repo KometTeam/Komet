@@ -52,8 +52,10 @@ class Ws2Config {
     return Ws2Config(uri: uri, userId: userId);
   }
 
-  /// Исходящий звонок: `endpoint` из ответа opcode 78 уже содержит токен и
-  /// conversationId/userId в query — дописываем клиентские параметры.
+  /// Исходящий звонок или вход в конференцию: `endpoint` из ответа opcode 78 /
+  /// 166 уже содержит токен и conversationId/userId в query — дописываем
+  /// клиентские параметры. Без `tgt=start` медиасервер принимает сокет, но не
+  /// поднимает разговор и не шлёт нотификацию `connection`.
   factory Ws2Config.fromEndpoint(
     String endpoint, {
     required int userId,
@@ -72,6 +74,7 @@ class Ws2Config {
         'clientType': 'ONE_ME',
         'appVersion': _appVersion,
         'osVersion': osVersion ?? defaultOsVersion,
+        'tgt': 'start',
       },
     );
     return Ws2Config(uri: uri, userId: userId);

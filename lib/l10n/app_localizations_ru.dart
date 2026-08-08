@@ -923,6 +923,24 @@ class AppLocalizationsRu extends AppLocalizations {
   String get callGroupWaitingParticipants => 'Ожидание участников…';
 
   @override
+  String get callLinkGroupCall => 'Групповой звонок';
+
+  @override
+  String get callLinkSendInMax => 'Отправить в MAX';
+
+  @override
+  String get callLinkStart => 'Начать звонок';
+
+  @override
+  String get callLinkSent => 'Ссылка отправлена';
+
+  @override
+  String get callLinkSendFailed => 'Не удалось отправить ссылку';
+
+  @override
+  String get callLinkCreateFailed => 'Не удалось создать звонок';
+
+  @override
   String get callParticipantYou => 'Вы';
 
   @override

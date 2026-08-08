@@ -1814,6 +1814,42 @@ abstract class AppLocalizations {
   /// **'Waiting for participants…'**
   String get callGroupWaitingParticipants;
 
+  /// No description provided for @callLinkGroupCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Group call'**
+  String get callLinkGroupCall;
+
+  /// No description provided for @callLinkSendInMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Send in MAX'**
+  String get callLinkSendInMax;
+
+  /// No description provided for @callLinkStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start call'**
+  String get callLinkStart;
+
+  /// No description provided for @callLinkSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Link sent'**
+  String get callLinkSent;
+
+  /// No description provided for @callLinkSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t send the link'**
+  String get callLinkSendFailed;
+
+  /// No description provided for @callLinkCreateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t create the call'**
+  String get callLinkCreateFailed;
+
   /// No description provided for @callParticipantYou.
   ///
   /// In en, this message translates to:
