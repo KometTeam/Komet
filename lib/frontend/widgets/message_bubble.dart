@@ -1936,6 +1936,7 @@ class MessageBubble extends StatelessWidget {
       senderId: message.senderId,
       audioId: audioId,
       preloadedText: cachedTranscription?.text,
+      uploadProgress: ctx.uploadProgress,
     );
   }
 }

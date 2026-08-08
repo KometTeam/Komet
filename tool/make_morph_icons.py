@@ -1,9 +1,15 @@
-"""Собирает lottie-морфы иконок композера прямо из шрифта Material Symbols.
+"""Собирает lottie-морфы иконок прямо из шрифта Material Symbols.
 
 Контуры глифов берутся из MaterialSymbolsOutlined.ttf (инстанс по умолчанию —
 FILL 0, GRAD 0, opsz 24, wght 400, то есть ровно то, что рисует Icon в приложении),
 разбиваются на равное число безье-сегментов и попарно сопоставляются, чтобы
-lottie мог интерполировать один глиф в другой.
+lottie мог интерполировать один глиф в другой. Спекам с fill=1 контуры считаются
+по FILL=1 — для кнопок, которые рисуют Icon(..., fill: 1).
+
+SPECS — морфы композера (ComposerMorphIcon), проигрываются вперёд.
+SLASH_SPECS — переключатели «обычная/перечёркнутая» (LottieSlashIcon): оба глифа
+лежат статикой, а перечёркивание рисуется бегущей по диагонали маской, поэтому
+одного ассета хватает на оба направления.
 
     python3 tool/make_morph_icons.py
 
@@ -36,6 +42,8 @@ class Font:
             '>H', self.data[maxp_off + 4:maxp_off + 6])[0]
         self._read_loca()
         self._read_cmap()
+        self._read_fvar()
+        self._read_gvar()
 
     def _read_loca(self):
         off, _ = self.tables['loca']
@@ -90,9 +98,131 @@ class Font:
                 for c in range(s, e + 1):
                     self.cmap[c] = g + (c - s)
 
-    def contours(self, codepoint):
+    def _read_fvar(self):
+        off, _ = self.tables['fvar']
+        axes_off, _, axis_count, axis_size = struct.unpack(
+            '>HHHH', self.data[off + 4:off + 12])
+        self.axes = []
+        for i in range(axis_count):
+            p = off + axes_off + i * axis_size
+            self.axes.append(self.data[p:p + 4].decode('latin1'))
+
+    def _read_gvar(self):
+        off, _ = self.tables['gvar']
+        axis_count, shared_count, shared_off, glyph_count, flags, data_off = (
+            struct.unpack('>HHIHHI', self.data[off + 4:off + 20]))
+        base = off + 20
+        if flags & 1:
+            raw = struct.unpack(
+                '>%dI' % (glyph_count + 1), self.data[base:base + 4 * (glyph_count + 1)])
+            offsets = list(raw)
+        else:
+            raw = struct.unpack(
+                '>%dH' % (glyph_count + 1), self.data[base:base + 2 * (glyph_count + 1)])
+            offsets = [v * 2 for v in raw]
+        shared = []
+        p = off + shared_off
+        for i in range(shared_count):
+            step = 2 * axis_count
+            shared.append(struct.unpack('>%dh' % axis_count,
+                                        self.data[p + i * step:p + (i + 1) * step]))
+        self.gvar = {
+            'axis_count': axis_count,
+            'shared': shared,
+            'offsets': offsets,
+            'data': off + data_off,
+        }
+
+    def _axis_deltas(self, gid, axis, contours):
+        """Deltas that move the glyph to the `axis`=1 instance.
+
+        Only tuples peaking on `axis` alone contribute: every other tuple is
+        multiplied by an axis coordinate that stays at its default zero.
+        """
+        gvar = self.gvar
+        start = gvar['data'] + gvar['offsets'][gid]
+        end = gvar['data'] + gvar['offsets'][gid + 1]
+        if end <= start:
+            return None
+
+        d = self.data[start:end]
+        axis_count = gvar['axis_count']
+        index = self.axes.index(axis)
+        n_points = sum(len(c) for c in contours) + 4
+
+        tuple_count, cursor = struct.unpack('>HH', d[0:4])
+        shared_points = None
+        if tuple_count & 0x8000:
+            shared_points, cursor = _packed_points(d, cursor)
+
+        total = [(0.0, 0.0)] * n_points
+        applied = False
+        p = 4
+        for _ in range(tuple_count & 0x0FFF):
+            var_size, tuple_index = struct.unpack('>HH', d[p:p + 4])
+            p += 4
+            if tuple_index & 0x8000:
+                peak = struct.unpack('>%dh' % axis_count, d[p:p + 2 * axis_count])
+                p += 2 * axis_count
+            else:
+                peak = gvar['shared'][tuple_index & 0x0FFF]
+            if tuple_index & 0x4000:
+                p += 4 * axis_count
+            block, cursor = cursor, cursor + var_size
+
+            if peak[index] <= 0 or any(
+                    v for i, v in enumerate(peak) if i != index):
+                continue
+
+            q = block
+            points = shared_points
+            if tuple_index & 0x2000:
+                points, q = _packed_points(d, q)
+            size = n_points if points is None else len(points)
+            xs, q = _packed_deltas(d, q, size)
+            ys, _ = _packed_deltas(d, q, size)
+
+            scale = 16384.0 / peak[index]
+            sparse = [None] * n_points
+            for k, point in enumerate(range(size) if points is None else points):
+                if point < n_points:
+                    sparse[point] = (xs[k] * scale, ys[k] * scale)
+            _infer_deltas(contours, sparse)
+            total = [(a[0] + b[0], a[1] + b[1]) for a, b in zip(total, sparse)]
+            applied = True
+
+        return total if applied else None
+
+    def contours(self, codepoint, fill=0.0):
         gid = self.cmap[codepoint]
-        return self._glyph_contours(gid)
+        contours = self._glyph_contours(gid)
+        if fill <= 0:
+            return contours
+        if self._is_composite(gid):
+            raise SystemExit('fill=1 не поддержан для составного глифа %04X'
+                             % codepoint)
+
+        deltas = self._axis_deltas(gid, 'FILL', contours)
+        if deltas is None:
+            return contours
+
+        out = []
+        index = 0
+        for contour in contours:
+            shifted = []
+            for x, y, on in contour:
+                dx, dy = deltas[index]
+                index += 1
+                shifted.append((x + dx * fill, y + dy * fill, on))
+            out.append(shifted)
+        return out
+
+    def _is_composite(self, gid):
+        goff, _ = self.tables['glyf']
+        start, end = self.loca[gid], self.loca[gid + 1]
+        if start == end:
+            return False
+        return struct.unpack('>h', self.data[goff + start:goff + start + 2])[0] < 0
 
     def _glyph_contours(self, gid, depth=0):
         goff, _ = self.tables['glyf']
@@ -195,6 +325,94 @@ class Font:
 
 def _f2dot14(d, p):
     return struct.unpack('>h', d[p:p + 2])[0] / 16384.0
+
+
+def _packed_points(d, p):
+    """gvar packed point numbers; None means «все точки глифа»."""
+    count = d[p]
+    p += 1
+    if count == 0:
+        return None, p
+    if count & 0x80:
+        count = ((count & 0x7F) << 8) | d[p]
+        p += 1
+    points, value = [], 0
+    while len(points) < count:
+        control = d[p]
+        p += 1
+        run = (control & 0x7F) + 1
+        for _ in range(run):
+            if control & 0x80:
+                value += struct.unpack('>H', d[p:p + 2])[0]
+                p += 2
+            else:
+                value += d[p]
+                p += 1
+            points.append(value)
+    return points[:count], p
+
+
+def _packed_deltas(d, p, count):
+    out = []
+    while len(out) < count:
+        control = d[p]
+        p += 1
+        run = (control & 0x3F) + 1
+        if control & 0x80:
+            out.extend([0] * run)
+        elif control & 0x40:
+            for _ in range(run):
+                out.append(struct.unpack('>h', d[p:p + 2])[0])
+                p += 2
+        else:
+            for _ in range(run):
+                out.append(struct.unpack('>b', d[p:p + 1])[0])
+                p += 1
+    return out[:count], p
+
+
+def _interpolate(v, v1, d1, v2, d2):
+    if v1 > v2:
+        v1, d1, v2, d2 = v2, d2, v1, d1
+    if v1 == v2:
+        return d1 if d1 == d2 else 0.0
+    if v <= v1:
+        return d1
+    if v >= v2:
+        return d2
+    return d1 + (d2 - d1) * (v - v1) / (v2 - v1)
+
+
+def _infer_deltas(contours, deltas):
+    """IUP: точки, которых нет в тапле, тянутся за соседними опорными."""
+    first = 0
+    for contour in contours:
+        last = first + len(contour) - 1
+        refs = [i for i in range(first, last + 1) if deltas[i] is not None]
+        if not refs:
+            for i in range(first, last + 1):
+                deltas[i] = (0.0, 0.0)
+        elif len(refs) == 1:
+            for i in range(first, last + 1):
+                deltas[i] = deltas[refs[0]]
+        else:
+            for k, a in enumerate(refs):
+                b = refs[(k + 1) % len(refs)]
+                i = first if a == last else a + 1
+                while i != b:
+                    deltas[i] = (
+                        _interpolate(contour[i - first][0],
+                                     contour[a - first][0], deltas[a][0],
+                                     contour[b - first][0], deltas[b][0]),
+                        _interpolate(contour[i - first][1],
+                                     contour[a - first][1], deltas[a][1],
+                                     contour[b - first][1], deltas[b][1]),
+                    )
+                    i = first if i == last else i + 1
+        first = last + 1
+    for i, value in enumerate(deltas):
+        if value is None:
+            deltas[i] = (0.0, 0.0)
 
 
 def to_cubic(contour):
@@ -367,9 +585,9 @@ def _area(path):
     return area / 2
 
 
-def glyph_paths(codepoint, count):
+def glyph_paths(codepoint, count, fill=0.0):
     out = []
-    for contour in _font.contours(codepoint):
+    for contour in _font.contours(codepoint, fill):
         path = _exact_path(contour, count)
         if not path:
             continue
@@ -414,10 +632,10 @@ def outer_sign(shapes):
     return 1.0 if biggest[0] > 0 else -1.0
 
 
-def pair_glyphs(from_cp, to_cp, count):
+def pair_glyphs(from_cp, to_cp, count, fill=0.0):
     """[(path_from, path_to), ...] with matching vertex counts and winding."""
-    src = glyph_paths(from_cp, count)
-    dst = glyph_paths(to_cp, count)
+    src = glyph_paths(from_cp, count, fill)
+    dst = glyph_paths(to_cp, count, fill)
     src_sign = outer_sign(src)
     dst_sign = outer_sign(dst)
 
@@ -441,6 +659,8 @@ def pair_glyphs(from_cp, to_cp, count):
 MIC = 0xE31D
 CAM = 0xE04B
 SEND = 0xE163
+FLASH_ON = 0xE3E7
+FLASH_OFF = 0xE3E6
 
 POINTS = 56
 FPS = 60
@@ -504,6 +724,54 @@ def shape_item(index, path_from, path_to):
     }
 
 
+def _group(items, name):
+    items = list(items)
+    items.append({
+        'ty': 'fl',
+        'c': {'a': 0, 'k': [1, 1, 1, 1], 'ix': 4},
+        'o': {'a': 0, 'k': 100, 'ix': 5},
+        'r': 1,
+        'bm': 0,
+        'nm': 'Fill',
+        'mn': 'ADBE Vector Graphic - Fill',
+        'hd': False,
+    })
+    items.append({
+        'ty': 'tr',
+        'p': {'a': 0, 'k': [0, 0], 'ix': 2},
+        'a': {'a': 0, 'k': [0, 0], 'ix': 1},
+        's': {'a': 0, 'k': [100, 100], 'ix': 3},
+        'r': {'a': 0, 'k': 0, 'ix': 6},
+        'o': {'a': 0, 'k': 100, 'ix': 7},
+        'sk': {'a': 0, 'k': 0, 'ix': 4},
+        'sa': {'a': 0, 'k': 0, 'ix': 5},
+        'nm': 'Transform',
+    })
+    return {
+        'ty': 'gr',
+        'it': items,
+        'nm': name,
+        'np': len(items),
+        'cix': 2,
+        'bm': 0,
+        'ix': 1,
+        'mn': 'ADBE Vector Group',
+        'hd': False,
+    }
+
+
+def static_shape(index, path):
+    return {
+        'ind': index,
+        'ty': 'sh',
+        'ix': index + 1,
+        'ks': {'a': 0, 'k': path_value(path), 'ix': 2},
+        'nm': 'Path %d' % (index + 1),
+        'mn': 'ADBE Vector Shape - Group',
+        'hd': False,
+    }
+
+
 def keyframes(stops, vector):
     out = []
     for i, (frame, value) in enumerate(stops):
@@ -539,30 +807,10 @@ def transform(rotation=None, scale=None, offset_x=None):
     return ks
 
 
-def build(name, from_cp, to_cp, rotation=None, scale=None, offset_x=None):
-    pairs = pair_glyphs(from_cp, to_cp, POINTS)
+def build(name, from_cp, to_cp, rotation=None, scale=None, offset_x=None,
+          fill=0.0):
+    pairs = pair_glyphs(from_cp, to_cp, POINTS, fill)
     items = [shape_item(i, a, b) for i, (a, b) in enumerate(pairs)]
-    items.append({
-        'ty': 'fl',
-        'c': {'a': 0, 'k': [1, 1, 1, 1], 'ix': 4},
-        'o': {'a': 0, 'k': 100, 'ix': 5},
-        'r': 1,
-        'bm': 0,
-        'nm': 'Fill',
-        'mn': 'ADBE Vector Graphic - Fill',
-        'hd': False,
-    })
-    items.append({
-        'ty': 'tr',
-        'p': {'a': 0, 'k': [0, 0], 'ix': 2},
-        'a': {'a': 0, 'k': [0, 0], 'ix': 1},
-        's': {'a': 0, 'k': [100, 100], 'ix': 3},
-        'r': {'a': 0, 'k': 0, 'ix': 6},
-        'o': {'a': 0, 'k': 100, 'ix': 7},
-        'sk': {'a': 0, 'k': 0, 'ix': 4},
-        'sa': {'a': 0, 'k': 0, 'ix': 5},
-        'nm': 'Transform',
-    })
 
     return {
         'v': '5.12.1',
@@ -582,22 +830,107 @@ def build(name, from_cp, to_cp, rotation=None, scale=None, offset_x=None):
             'sr': 1,
             'ks': transform(rotation, scale, offset_x),
             'ao': 0,
-            'shapes': [{
-                'ty': 'gr',
-                'it': items,
-                'nm': 'Group 1',
-                'np': len(items),
-                'cix': 2,
-                'bm': 0,
-                'ix': 1,
-                'mn': 'ADBE Vector Group',
-                'hd': False,
-            }],
+            'shapes': [_group(items, 'Group 1')],
             'ip': 0,
             'op': DUR,
             'st': 0,
             'bm': 0,
         }],
+        'markers': [],
+    }
+
+
+def _wipe_quad(cut, ahead):
+    """Половина плоскости по обе стороны от диагонали x + y = cut."""
+    reach = CANVAS * 1.5
+    mid = (cut / 2, cut / 2)
+    along = (reach / math.sqrt(2), -reach / math.sqrt(2))
+    depth = reach * math.sqrt(2) * (1 if ahead else -1)
+    corners = [
+        (mid[0] + along[0], mid[1] + along[1]),
+        (mid[0] - along[0], mid[1] - along[1]),
+        (mid[0] - along[0] + depth, mid[1] - along[1] + depth),
+        (mid[0] + along[0] + depth, mid[1] + along[1] + depth),
+    ]
+    return {
+        'i': [[0, 0]] * 4,
+        'o': [[0, 0]] * 4,
+        'v': [[r2(x), r2(y)] for x, y in corners],
+        'c': True,
+    }
+
+
+def wipe_mask(span, ahead):
+    start, end = span
+    return [{
+        'inv': False,
+        'mode': 'a',
+        'pt': {
+            'a': 1,
+            'k': [
+                {'i': EASE_IN, 'o': EASE_OUT, 't': 0,
+                 's': [_wipe_quad(start, ahead)]},
+                {'t': DUR, 's': [_wipe_quad(end, ahead)]},
+            ],
+            'ix': 1,
+        },
+        'o': {'a': 0, 'k': 100, 'ix': 3},
+        'x': {'a': 0, 'k': 0, 'ix': 4},
+        'nm': 'Wipe',
+    }]
+
+
+def _diagonal_span(*glyphs):
+    values = [v[0][0] + v[0][1] for paths in glyphs for _, path in paths
+              for v in path]
+    margin = CANVAS * 0.04
+    return min(values) - margin, max(values) + margin
+
+
+def build_slash(name, plain_cp, slashed_cp, fill=0.0, scale=None):
+    """Кадр 0 — обычный глиф, последний — перечёркнутый.
+
+    Оба глифа лежат статичными слоями, а по диагонали (перпендикулярно самой
+    перечёркивающей линии) едет маска: перечёркнутый слой открывается ровно там,
+    где обычный закрывается, поэтому линия выглядит нарисованной поверх иконки.
+    """
+    plain = glyph_paths(plain_cp, POINTS, fill)
+    slashed = glyph_paths(slashed_cp, POINTS, fill)
+    span = _diagonal_span(plain, slashed)
+
+    def layer(index, paths, ahead, title):
+        items = [static_shape(i, path) for i, (_, path) in enumerate(paths)]
+        return {
+            'ddd': 0,
+            'ind': index,
+            'ty': 4,
+            'nm': title,
+            'sr': 1,
+            'ks': transform(scale=scale),
+            'ao': 0,
+            'hasMask': True,
+            'masksProperties': wipe_mask(span, ahead),
+            'shapes': [_group(items, title)],
+            'ip': 0,
+            'op': DUR,
+            'st': 0,
+            'bm': 0,
+        }
+
+    return {
+        'v': '5.12.1',
+        'fr': FPS,
+        'ip': 0,
+        'op': DUR,
+        'w': int(CANVAS),
+        'h': int(CANVAS),
+        'nm': name,
+        'ddd': 0,
+        'assets': [],
+        'layers': [
+            layer(1, slashed, False, 'slashed'),
+            layer(2, plain, True, 'plain'),
+        ],
         'markers': [],
     }
 
@@ -645,15 +978,30 @@ SPECS = [
 ]
 
 
+SLASH_SPECS = [
+    dict(
+        name='ic_flash_on_to_off',
+        plain_cp=FLASH_ON, slashed_cp=FLASH_OFF,
+        fill=1.0,
+        scale=[(0, 100), (11, 92), (DUR, 100)],
+    ),
+]
+
+
+def _write(name, data):
+    path = os.path.join(OUT_DIR, name + '.json')
+    with open(path, 'w') as fh:
+        json.dump(data, fh, separators=(',', ':'))
+    print(f'{name:24s} {os.path.getsize(path) // 1024:3d} KB  '
+          f'layers={len(data["layers"])}')
+
+
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     for spec in SPECS:
-        data = build(**spec)
-        path = os.path.join(OUT_DIR, spec['name'] + '.json')
-        with open(path, 'w') as fh:
-            json.dump(data, fh, separators=(',', ':'))
-        print(f"{spec['name']:24s} {os.path.getsize(path) // 1024:3d} KB  "
-              f"paths={len(data['layers'][0]['shapes'][0]['it']) - 2}")
+        _write(spec['name'], build(**spec))
+    for spec in SLASH_SPECS:
+        _write(spec['name'], build_slash(**spec))
 
 
 if __name__ == '__main__':

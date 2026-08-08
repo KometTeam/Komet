@@ -291,6 +291,106 @@ class UploadService {
     );
   }
 
+  Future<void> sendVoice({
+    required int accountId,
+    required int chatId,
+    required String tempId,
+    required File file,
+    required int durationMs,
+    required Uint8List wave,
+    CachedMessage? placeholder,
+  }) {
+    return _sendRecording(
+      accountId: accountId,
+      chatId: chatId,
+      tempId: tempId,
+      file: file,
+      kind: UploadKind.voice,
+      placeholder: placeholder,
+      requestUpload: () async {
+        final info = await messagesModule.requestAudioUploadUrl();
+        return info == null ? null : (url: info.url, token: info.token);
+      },
+      send: (token) => messagesModule.sendAudioMessage(
+        chatId,
+        token,
+        duration: durationMs,
+        wave: wave,
+      ),
+    );
+  }
+
+  Future<void> sendVideoNote({
+    required int accountId,
+    required int chatId,
+    required String tempId,
+    required File file,
+    required int durationMs,
+    CachedMessage? placeholder,
+  }) {
+    return _sendRecording(
+      accountId: accountId,
+      chatId: chatId,
+      tempId: tempId,
+      file: file,
+      kind: UploadKind.videoNote,
+      placeholder: placeholder,
+      requestUpload: () async {
+        final info = await messagesModule.requestVideoNoteUploadUrl();
+        return info == null ? null : (url: info.url, token: info.token);
+      },
+      send: (token) => messagesModule.sendVideoNoteMessage(
+        chatId,
+        token,
+        duration: durationMs,
+      ),
+    );
+  }
+
+  Future<void> _sendRecording({
+    required int accountId,
+    required int chatId,
+    required String tempId,
+    required File file,
+    required UploadKind kind,
+    required Future<({String url, String token})?> Function() requestUpload,
+    required Future<Map<String, dynamic>?> Function(String token) send,
+    CachedMessage? placeholder,
+  }) {
+    return _run(
+      UploadJob._(
+        id: tempId,
+        accountId: accountId,
+        chatId: chatId,
+        kind: kind,
+        slots: 1,
+        placeholder: placeholder,
+      ),
+      (job) async {
+        try {
+          final info = await requestUpload();
+          if (info == null || info.url.isEmpty) {
+            throw const UploadFailure('no_upload_url');
+          }
+          final ok = await fileUploader.uploadMediaFile(
+            Uri.parse(info.url),
+            file,
+            onProgress: (sent, total) => job.report(0, sent, total),
+          );
+          if (!ok) throw const UploadFailure('upload_failed');
+          job.markUploaded();
+          final sent = await send(info.token);
+          if (sent == null) return null;
+          return CachedMessage.fromPushPayload(accountId, chatId, sent);
+        } finally {
+          try {
+            await file.delete();
+          } catch (_) {}
+        }
+      },
+    );
+  }
+
   Future<void> sendFile({
     required int accountId,
     required int chatId,

@@ -51,6 +51,7 @@ void main() {
       isMounted: () => true,
       onRecorded: (File file, int durationMs) async {},
       formatElapsed: (milliseconds) => '$milliseconds',
+      bottomInset: () => 0,
     );
 
     await tester.pumpWidget(

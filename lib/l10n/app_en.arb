@@ -1070,6 +1070,8 @@
     }
   },
   "uploadNotificationVideo": "Video",
+  "uploadNotificationVideoNote": "Video message",
+  "uploadNotificationVoice": "Voice message",
   "uploadNotificationFile": "File",
   "uploadNotificationMultiple": "{count, plural, other{Sending {count} files}}",
   "@uploadNotificationMultiple": {

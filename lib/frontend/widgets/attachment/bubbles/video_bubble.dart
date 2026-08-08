@@ -33,6 +33,7 @@ class VideoBubble extends StatelessWidget {
         cs: ctx.cs,
         textColor: ctx.text,
         meta: ctx.meta(),
+        uploadProgress: ctx.uploadProgress,
       );
     }
     final hasCaption = message.text != null && message.text!.isNotEmpty;

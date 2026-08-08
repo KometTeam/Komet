@@ -29,6 +29,7 @@ class VoiceMessageBubble extends StatefulWidget {
   final int senderId;
   final int? audioId;
   final String? preloadedText;
+  final ValueListenable<List<double>>? uploadProgress;
 
   const VoiceMessageBubble({
     super.key,
@@ -47,6 +48,7 @@ class VoiceMessageBubble extends StatefulWidget {
     required this.senderId,
     this.audioId,
     this.preloadedText,
+    this.uploadProgress,
   });
 
   @override
@@ -101,7 +103,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     );
   }
 
+  bool get _uploading => widget.uploadProgress != null;
+
   void _toggle() {
+    if (_uploading) return;
     _claimPlayback();
     _audio.toggle();
   }
@@ -176,8 +181,9 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       widget.isMe ? widget.cs.onPrimaryContainer : widget.cs.primary;
 
   Widget _buildPlayButton() {
+    final uploading = widget.uploadProgress;
     return GestureDetector(
-      onTap: _toggle,
+      onTap: uploading == null ? _toggle : null,
       child: Container(
         width: 32,
         height: 32,
@@ -187,46 +193,73 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
               : widget.cs.primaryContainer,
           shape: BoxShape.circle,
         ),
-        child: AnimatedBuilder(
-          animation: Listenable.merge([
-            _audio.downloaded,
-            _audio.downloadProgress,
-            _audio.playing,
-          ]),
-          builder: (context, _) {
-            final progress = _audio.downloadProgress.value;
-            if (progress != null) {
-              return Padding(
-                padding: const EdgeInsets.all(4),
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  value: progress > 0 ? progress : null,
-                  color: _accent,
-                  backgroundColor: _accent.withValues(alpha: 0.2),
-                ),
-              );
-            }
-            final IconData icon;
-            if (_audio.playing.value) {
-              icon = Symbols.pause;
-            } else if (_audio.downloaded.value) {
-              icon = Symbols.play_arrow;
-            } else {
-              icon = Symbols.arrow_downward;
-            }
-            return AnimatedSwitcher(
-              duration: const Duration(milliseconds: 160),
-              transitionBuilder: (child, animation) =>
-                  ScaleTransition(scale: animation, child: child),
-              child: Icon(
-                icon,
-                key: ValueKey(icon),
-                color: _accent,
-                size: 18,
+        child: uploading != null
+            ? _buildUploadIndicator(uploading)
+            : AnimatedBuilder(
+                animation: Listenable.merge([
+                  _audio.downloaded,
+                  _audio.downloadProgress,
+                  _audio.playing,
+                ]),
+                builder: (context, _) {
+                  final progress = _audio.downloadProgress.value;
+                  if (progress != null) {
+                    return Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        value: progress > 0 ? progress : null,
+                        color: _accent,
+                        backgroundColor: _accent.withValues(alpha: 0.2),
+                      ),
+                    );
+                  }
+                  final IconData icon;
+                  if (_audio.playing.value) {
+                    icon = Symbols.pause;
+                  } else if (_audio.downloaded.value) {
+                    icon = Symbols.play_arrow;
+                  } else {
+                    icon = Symbols.arrow_downward;
+                  }
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 160),
+                    transitionBuilder: (child, animation) =>
+                        ScaleTransition(scale: animation, child: child),
+                    child: Icon(
+                      icon,
+                      key: ValueKey(icon),
+                      color: _accent,
+                      size: 18,
+                    ),
+                  );
+                },
               ),
-            );
-          },
-        ),
+      ),
+    );
+  }
+
+  Widget _buildUploadIndicator(ValueListenable<List<double>> progress) {
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: ValueListenableBuilder<List<double>>(
+        valueListenable: progress,
+        builder: (context, values, _) {
+          final value = values.isEmpty
+              ? 0.0
+              : values.reduce((a, b) => a + b) / values.length;
+          return TweenAnimationBuilder<double>(
+            tween: Tween<double>(end: value.clamp(0.0, 1.0)),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            builder: (context, shown, _) => CircularProgressIndicator(
+              strokeWidth: 2,
+              value: shown >= 1.0 ? null : shown,
+              color: _accent,
+              backgroundColor: _accent.withValues(alpha: 0.2),
+            ),
+          );
+        },
       ),
     );
   }
@@ -626,7 +659,10 @@ class _WaveformPainter extends CustomPainter {
 
   void _paintKnob(Canvas canvas, Size size, double center) {
     if (!knob) return;
-    final x = (size.width * progress.clamp(0.0, 1.0)).clamp(1.5, size.width - 1.5);
+    final x = (size.width * progress.clamp(0.0, 1.0)).clamp(
+      1.5,
+      size.width - 1.5,
+    );
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(x - 1.5, 0, 3, size.height),
