@@ -5,19 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:ogg_opus_player/ogg_opus_player.dart';
 
 import '../../../backend/modules/messages.dart'
     show CachedMessage, ContactCache;
 import '../../../backend/modules/shared_content.dart';
 import '../../../core/cache/info_cache.dart';
+import '../../../core/media/voice_audio_controller.dart';
 import '../../../core/utils/download_history.dart';
 import '../../../core/utils/download_progress.dart';
 import '../../../core/utils/file_download.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/logger.dart';
-import '../../../core/utils/media_cache.dart';
 import '../../../core/utils/media_saver.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/attachment.dart';
@@ -1166,81 +1165,39 @@ class _ProfileVoiceTile extends StatefulWidget {
 }
 
 class _ProfileVoiceTileState extends State<_ProfileVoiceTile> {
-  OggOpusPlayer? _player;
-  bool _isPlaying = false;
-  bool _loadingAudio = false;
-  Timer? _ticker;
-  final ValueNotifier<double> _progress = ValueNotifier(0.0);
+  late final VoiceAudioController _player;
 
   AudioAttachment get _audio => widget.item.attachment as AudioAttachment;
   int get _durationSec => ((_audio.duration ?? 0) / 1000).round();
 
   @override
+  void initState() {
+    super.initState();
+    _player = VoiceAudioController(
+      cacheName: '${_audio.audioId ?? widget.item.messageId}.ogg',
+      resolveUrl: () async => _audio.fileUrl ?? _audio.baseUrl ?? '',
+      fallbackDuration: Duration(milliseconds: _audio.duration ?? 0),
+    );
+    _player.failure.addListener(_onFailure);
+  }
+
+  @override
   void dispose() {
-    _ticker?.cancel();
-    _player?.state.removeListener(_onPlayerState);
-    _player?.dispose();
-    _progress.dispose();
+    _player.failure.removeListener(_onFailure);
+    _player.dispose();
     super.dispose();
   }
 
-  Future<void> _togglePlay() async {
-    if (_loadingAudio) return;
-
-    if (_player != null) {
-      if (_isPlaying) {
-        _player!.pause();
-      } else {
-        final dur = _audio.duration ?? 0;
-        if (dur > 0 && _player!.currentPosition * 1000 >= dur - 50) {
-          _progress.value = 0;
-        }
-        _player!.play();
-      }
-      return;
-    }
-
-    final url = _audio.fileUrl ?? _audio.baseUrl ?? '';
-    if (url.isEmpty) return;
-
-    setState(() => _loadingAudio = true);
-    try {
-      final name = '${_audio.audioId ?? widget.item.messageId}.ogg';
-      final file = await MediaCache.getOrDownload(name, url);
-      if (!mounted) return;
-      if (file == null) {
-        showCustomNotification(context, 'Не удалось загрузить аудио');
-        return;
-      }
-      final player = OggOpusPlayer(file.path);
-      _player = player;
-      player.state.addListener(_onPlayerState);
-      _ticker = Timer.periodic(
-        const Duration(milliseconds: 60),
-        (_) => _onTick(),
-      );
-      player.play();
-    } catch (e) {
-      logger.w('ProfileVoiceTile._togglePlay: $e');
-      if (mounted) showCustomNotification(context, 'Ошибка воспроизведения');
-    } finally {
-      if (mounted) setState(() => _loadingAudio = false);
-    }
-  }
-
-  void _onTick() {
-    final player = _player;
-    final dur = _audio.duration ?? 0;
-    if (player == null || dur <= 0) return;
-    _progress.value = (player.currentPosition * 1000 / dur).clamp(0.0, 1.0);
-  }
-
-  void _onPlayerState() {
+  void _onFailure() {
     if (!mounted) return;
-    final state = _player?.state.value;
-    final playing = state == PlayerState.playing;
-    if (playing != _isPlaying) setState(() => _isPlaying = playing);
-    if (state == PlayerState.ended) _progress.value = 1.0;
+    switch (_player.failure.value) {
+      case VoiceAudioFailure.none:
+        return;
+      case VoiceAudioFailure.download:
+        showCustomNotification(context, 'Не удалось загрузить аудио');
+      case VoiceAudioFailure.playback:
+        showCustomNotification(context, 'Ошибка воспроизведения');
+    }
   }
 
   @override
@@ -1255,7 +1212,7 @@ class _ProfileVoiceTileState extends State<_ProfileVoiceTile> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: _togglePlay,
+            onTap: _player.toggle,
             child: Container(
               width: 46,
               height: 46,
@@ -1263,37 +1220,58 @@ class _ProfileVoiceTileState extends State<_ProfileVoiceTile> {
                 color: cs.primary,
                 shape: BoxShape.circle,
               ),
-              child: _loadingAudio
-                  ? const Padding(
-                      padding: EdgeInsets.all(13),
-                      child: SmallSpinner(size: 36, color: Colors.white),
-                    )
-                  : ValueListenableBuilder<double>(
-                      valueListenable: _progress,
-                      builder: (context, progress, child) => Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          if (progress > 0 && progress < 1)
-                            SizedBox(
-                              width: 46,
-                              height: 46,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                value: progress,
-                                color: cs.onPrimary.withValues(alpha: 0.5),
-                                backgroundColor: Colors.transparent,
-                              ),
-                            ),
-                          child!,
-                        ],
-                      ),
-                      child: Icon(
-                        _isPlaying ? Symbols.pause : Symbols.play_arrow,
+              child: AnimatedBuilder(
+                animation: Listenable.merge([
+                  _player.downloaded,
+                  _player.downloadProgress,
+                  _player.playing,
+                  _player.position,
+                  _player.duration,
+                ]),
+                builder: (context, _) {
+                  final download = _player.downloadProgress.value;
+                  if (download != null) {
+                    return Padding(
+                      padding: const EdgeInsets.all(11),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        value: download > 0 ? download : null,
                         color: cs.onPrimary,
-                        size: 24,
-                        fill: 1,
+                        backgroundColor: cs.onPrimary.withValues(alpha: 0.25),
                       ),
-                    ),
+                    );
+                  }
+                  final total = _player.duration.value;
+                  final progress = total > 0
+                      ? (_player.position.value / total).clamp(0.0, 1.0)
+                      : 0.0;
+                  final IconData icon;
+                  if (_player.playing.value) {
+                    icon = Symbols.pause;
+                  } else if (_player.downloaded.value) {
+                    icon = Symbols.play_arrow;
+                  } else {
+                    icon = Symbols.arrow_downward;
+                  }
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (progress > 0 && progress < 1)
+                        SizedBox(
+                          width: 46,
+                          height: 46,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            value: progress,
+                            color: cs.onPrimary.withValues(alpha: 0.5),
+                            backgroundColor: Colors.transparent,
+                          ),
+                        ),
+                      Icon(icon, color: cs.onPrimary, size: 24, fill: 1),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
           const SizedBox(width: 12),

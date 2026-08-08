@@ -1,6 +1,7 @@
 import 'anim_command.dart';
 import 'crush_command.dart';
 import 'epsh_files_command.dart';
+import 'fake_video_message_command.dart';
 import 'info_command.dart';
 import 'send_control_command.dart';
 import 'slash_command.dart';
@@ -21,6 +22,11 @@ const List<SlashCommand> kSlashCommands = [
     'Тест устойчивости веб клиента макса',
     run: runCrush,
     hidden: true,
+  ),
+  SlashCommand(
+    '/FakeVideoMessage',
+    'кружок с подменённой длиной: [13:37 | 10000 (сек)]',
+    run: runFakeVideoMessage,
   ),
   SlashCommand(
     '/sendControlPayload',

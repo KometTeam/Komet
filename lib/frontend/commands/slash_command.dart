@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../../backend/modules/messages.dart';
 import '../../core/media/gallery_source.dart';
 
@@ -18,6 +20,7 @@ class CommandContext {
   final Future<void> Function(String id, String text) updateMessage;
   final Future<void> Function(List<PickedPhoto> photos, String caption)
   sendPhotos;
+  final Future<void> Function(File file, int durationMs) sendVideoNote;
 
   const CommandContext({
     required this.accountId,
@@ -31,6 +34,7 @@ class CommandContext {
     required this.postMessage,
     required this.updateMessage,
     required this.sendPhotos,
+    required this.sendVideoNote,
   });
 
   void notifyAntiFlood() =>

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
+import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
 import '../../widgets/small_spinner.dart';
@@ -171,10 +172,10 @@ class _Password2FAScreenState extends State<Password2FAScreen>
                     borderSide: BorderSide.none,
                   ),
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      _isPasswordVisible
-                          ? Icons.visibility_off
-                          : Icons.visibility,
+                    icon: AnimatedSlashIcon(
+                      icon: Icons.visibility,
+                      slashedIcon: Icons.visibility_off,
+                      slashed: _isPasswordVisible,
                       color: cs.onSurfaceVariant,
                     ),
                     onPressed: () {

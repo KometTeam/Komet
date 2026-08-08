@@ -123,6 +123,7 @@ class StoriesModule {
     if (acc == null) return;
     final map = <String, dynamic>{};
     _peerStories.forEach((ownerId, stories) {
+      if (!_previews.containsKey(ownerId)) return;
       map['$ownerId'] = stories.map((s) => s.toJson()).toList();
     });
     await AppDatabase.setSyncValue(acc, _peersKey, jsonEncode(map));
@@ -147,6 +148,11 @@ class StoriesModule {
 
   int? lastViewedStoryId(int ownerId) => _lastViewed[ownerId];
 
+  void clearLastViewed(int ownerId) {
+    if (_lastViewed.remove(ownerId) == null) return;
+    unawaited(_persistProgress());
+  }
+
   /// Кольца-превью, отсортированные: сначала непрочитанные, затем по времени.
   List<StoryPreview> get previews {
     final list = _previews.values.where((p) => !p.isEmpty).toList();
@@ -160,6 +166,83 @@ class StoriesModule {
   bool get hasAny => previews.isNotEmpty;
 
   StoryPreview? previewFor(int ownerId) => _previews[ownerId];
+
+  final Map<int, StoryPreview> _peerPreviews = {};
+  final Set<int> _requestedOwners = {};
+
+  static const int _ownersChunk = 20;
+
+  StoryPreview? previewOf(int ownerId) {
+    final feed = _previews[ownerId];
+    if (feed != null) return feed.isEmpty ? null : feed;
+    final peer = _peerPreviews[ownerId];
+    return (peer == null || peer.isEmpty) ? null : peer;
+  }
+
+  Future<void> loadOwnersPreviews(List<int> ownerIds) async {
+    if (_api.state != SessionState.online) return;
+    final missing = ownerIds
+        .where((id) => id > 0 && !_requestedOwners.contains(id))
+        .toSet()
+        .toList();
+    if (missing.isEmpty) return;
+    _requestedOwners.addAll(missing);
+
+    var changed = false;
+    for (var i = 0; i < missing.length; i += _ownersChunk) {
+      final end = i + _ownersChunk > missing.length
+          ? missing.length
+          : i + _ownersChunk;
+      final chunk = missing.sublist(i, end);
+      try {
+        final packet = await _api.sendRequest(Opcode.storiesGetByOwner, {
+          'owners': [
+            for (final id in chunk) StoryOwner(ownerId: id).toMap(),
+          ],
+        }, silent: true);
+        if (packet.isError) continue;
+        if (_applyOwnerPayload(packet.payload, chunk)) changed = true;
+      } catch (e) {
+        logger.w('StoriesModule.loadOwnersPreviews: $e');
+      }
+    }
+    if (changed) _bump();
+  }
+
+  bool _applyOwnerPayload(Object? data, List<int> requested) {
+    if (data is! Map) return false;
+    var changed = false;
+    final seen = <int>{};
+    final rawPreviews = data['storiesPreviews'];
+    if (rawPreviews is List) {
+      for (final raw in rawPreviews) {
+        final preview = StoryPreview.fromMap(raw);
+        if (preview == null) continue;
+        final id = preview.owner.ownerId;
+        seen.add(id);
+        if (preview.isEmpty) {
+          _peerPreviews.remove(id);
+        } else {
+          _peerPreviews[id] = preview;
+        }
+        _refreshPreview(preview);
+        changed = true;
+      }
+    }
+    for (final id in requested) {
+      if (!seen.contains(id) && _peerPreviews.remove(id) != null) changed = true;
+    }
+    final rawPeers = data['peerStories'];
+    if (rawPeers is List) {
+      for (final raw in rawPeers) {
+        final peer = PeerStories.fromMap(raw);
+        if (peer == null) continue;
+        _peerStories[peer.owner.ownerId] = peer.stories;
+        changed = true;
+      }
+    }
+    return changed;
+  }
 
   List<Story>? cachedStories(int ownerId) => _peerStories[ownerId];
 
@@ -178,6 +261,11 @@ class StoriesModule {
     _applyPreview(preview);
     _bump();
     unawaited(_persistPreviews());
+  }
+
+  void _refreshPreview(StoryPreview preview) {
+    if (!_previews.containsKey(preview.owner.ownerId)) return;
+    _applyPreview(preview);
   }
 
   void _applyPreview(StoryPreview preview) {
@@ -234,7 +322,7 @@ class StoriesModule {
       if (rawPreviews is List) {
         for (final raw in rawPreviews) {
           final preview = StoryPreview.fromMap(raw);
-          if (preview != null) _applyPreview(preview);
+          if (preview != null) _refreshPreview(preview);
         }
       }
 
@@ -255,6 +343,31 @@ class StoriesModule {
     } catch (e) {
       logger.w('StoriesModule.getByOwner: $e');
       return _peerStories[owner.ownerId] ?? const [];
+    }
+  }
+
+  Future<StoryPreview?> loadOwnerPreview(StoryOwner owner) async {
+    final cached = _previews[owner.ownerId];
+    if (_api.state != SessionState.online) return cached;
+    try {
+      final packet = await _api.sendRequest(Opcode.storiesGetByOwner, {
+        'owners': [owner.toMap()],
+      });
+      throwIfPacketError(packet);
+      final data = packet.payload;
+      if (data is! Map) return cached;
+
+      _applyOwnerPayload(data, [owner.ownerId]);
+      _requestedOwners.add(owner.ownerId);
+      final own = previewOf(owner.ownerId);
+
+      _bump();
+      unawaited(_persistPreviews());
+      unawaited(_persistPeers());
+      return own;
+    } catch (e) {
+      logger.w('StoriesModule.loadOwnerPreview: $e');
+      return cached;
     }
   }
 

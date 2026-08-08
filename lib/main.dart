@@ -23,6 +23,7 @@ import 'core/storage/chat_encryption_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
 import 'core/config/app_show_extra_info.dart';
+import 'core/config/app_spectrum_background.dart';
 import 'core/config/app_bubble_behavior.dart';
 import 'core/config/komet_settings.dart';
 import 'core/config/debug_test.dart';
@@ -87,6 +88,7 @@ import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/liquid_glass.dart';
 import 'frontend/widgets/small_spinner.dart';
 import 'frontend/widgets/theme_reveal.dart';
+import 'frontend/widgets/floating_video_note.dart';
 
 final api = Api();
 final accountModule = AccountModule(api);
@@ -183,6 +185,7 @@ void main(List<String> args) async {
   if (AppInstance.isNamed) {
     SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
   }
+  await TlsConfig.applyMincifryTrust();
   await AppDatabase.init();
   final activeAccountId = await TokenStorage.getActiveAccountId();
   if (activeAccountId != null) {
@@ -227,6 +230,7 @@ void main(List<String> args) async {
   final videoNoteRearCameraFuture = AppVideoNoteRearCamera.load();
   final digitalIdNativeFuture = AppDigitalIdNative.load();
   final showExtraInfoFuture = AppShowExtraInfo.load();
+  final spectrumBackgroundFuture = AppSpectrumBackground.load();
   final trafficCaptureFuture = TrafficMonitor.instance.load();
   final debugLogFuture = DebugSessionLog.instance.init();
 
@@ -287,6 +291,7 @@ void main(List<String> args) async {
     videoNoteRearCameraFuture,
     digitalIdNativeFuture,
     showExtraInfoFuture,
+    spectrumBackgroundFuture,
   ]);
   await DeviceContactsService.loadFromStartup();
   await trafficCaptureFuture;
@@ -1007,6 +1012,9 @@ class KometAppState extends State<KometApp>
                             RepaintBoundary(
                               key: _captureBoundaryKey,
                               child: sChild!,
+                            ),
+                            const Positioned.fill(
+                              child: FloatingVideoNoteLayer(),
                             ),
                             if (fpsOn) const FpsOverlayLayer(),
                           ],

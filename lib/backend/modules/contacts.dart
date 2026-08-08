@@ -159,7 +159,7 @@ class ContactsModule {
     final resp = await api.sendRequest(Opcode.contactUpdate, {
       'action': 'ADD',
       'contactId': id,
-      'firstName': firstName,
+      if (firstName.isNotEmpty) 'firstName': firstName,
     });
 
     final profile = await AppDatabase.loadActiveProfile();
@@ -328,6 +328,70 @@ class ContactsModule {
     return true;
   }
 
+  static final Set<int> _blockedIds = <int>{};
+  static bool _blockedLoaded = false;
+
+  static void clearBlockedCache() {
+    _blockedIds.clear();
+    _blockedLoaded = false;
+  }
+
+  static const int _blockedPageSize = 100;
+  static const int _blockedMaxPages = 20;
+
+  static Future<bool> isBlocked(Api api, int contactId) async {
+    if (!_blockedLoaded) await _loadBlockedIds(api);
+    return _blockedIds.contains(contactId);
+  }
+
+  static Future<void> _loadBlockedIds(Api api) async {
+    final ids = <int>{};
+    try {
+      for (var page = 0; page < _blockedMaxPages; page++) {
+        final map = await api.sendRequestMap(Opcode.contactList, {
+          'status': 'BLOCKED',
+          'count': _blockedPageSize,
+          'from': page * _blockedPageSize,
+        });
+        final contacts = map?['contacts'];
+        if (contacts is! List) return;
+        ids.addAll(
+          contacts.whereType<Map>().map((c) => c['id']).whereType<int>(),
+        );
+        if (contacts.length < _blockedPageSize) break;
+      }
+    } catch (e) {
+      logger.w('Не удалось получить список заблокированных: $e');
+      return;
+    }
+    _blockedIds
+      ..clear()
+      ..addAll(ids);
+    _blockedLoaded = true;
+  }
+
+  static Future<bool> setBlocked(Api api, int contactId, bool blocked) async {
+    try {
+      final packet = await api.sendRequest(Opcode.contactUpdate, {
+        'contactId': contactId,
+        'action': blocked ? 'BLOCK' : 'UNBLOCK',
+      });
+      if (packet.isError) return false;
+    } catch (e) {
+      logger.w('setBlocked $contactId: $e');
+      return false;
+    }
+
+    if (blocked) {
+      _blockedIds.add(contactId);
+    } else {
+      _blockedIds.remove(contactId);
+    }
+    ContactInfoFetch.invalidate(contactId);
+    revision.value++;
+    return true;
+  }
+
   static Future<void> syncFromLoginPayload(
     Map<dynamic, dynamic> data,
     int accountId,
@@ -401,6 +465,10 @@ class ContactsModule {
     }
   }
 
+  static final Map<int, ContactPhotos> _photosHead = {};
+
+  static ContactPhotos? cachedPhotos(int contactId) => _photosHead[contactId];
+
   static Future<ContactPhotos> fetchPhotos(
     Api api,
     int contactId, {
@@ -418,7 +486,9 @@ class ContactsModule {
         ? rawUrls.whereType<String>().toList()
         : <String>[];
     final total = map['total'] is int ? map['total'] as int : urls.length;
-    return ContactPhotos(urls: urls, total: total);
+    final photos = ContactPhotos(urls: urls, total: total);
+    if (from == 0) _photosHead[contactId] = photos;
+    return photos;
   }
 
   static Future<List<CachedContact>> getContacts(int accountId) async {

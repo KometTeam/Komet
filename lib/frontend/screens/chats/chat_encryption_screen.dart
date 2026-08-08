@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/primary_loading_button.dart';
 import '../../widgets/settings_card.dart';
@@ -156,10 +157,10 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
                               borderSide: BorderSide.none,
                             ),
                             suffixIcon: IconButton(
-                              icon: Icon(
-                                _keyVisible
-                                    ? Symbols.visibility_off
-                                    : Symbols.visibility,
+                              icon: AnimatedSlashIcon(
+                                icon: Symbols.visibility,
+                                slashedIcon: Symbols.visibility_off,
+                                slashed: _keyVisible,
                                 color: cs.onSurfaceVariant,
                               ),
                               onPressed: () =>

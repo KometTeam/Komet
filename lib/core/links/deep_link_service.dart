@@ -7,6 +7,7 @@ import '../../frontend/debug/log_export.dart';
 import '../../frontend/widgets/max_link_handler.dart';
 import '../../main.dart';
 import 'desktop_url_scheme.dart';
+import 'max_link.dart';
 
 class DeepLinkService {
   DeepLinkService._();
@@ -73,7 +74,9 @@ class DeepLinkService {
 
     if (!_ready || context == null) return;
     final pending = _pending;
-    if (pending == null || api.state != SessionState.online) return;
+    if (pending == null) return;
+    final needsConnection = MaxLink.parse(pending)?.needsConnection ?? true;
+    if (needsConnection && api.state != SessionState.online) return;
     _pending = null;
     tryHandleMaxLink(context, pending);
   }

@@ -50,12 +50,14 @@ class StickerPanel extends StatefulWidget {
   final double height;
   final void Function(StickerItem sticker) onStickerTap;
   final void Function(Animoji animoji)? onEmojiTap;
+  final void Function(double delta)? onResize;
 
   const StickerPanel({
     super.key,
     required this.height,
     required this.onStickerTap,
     this.onEmojiTap,
+    this.onResize,
   });
 
   @override
@@ -68,6 +70,7 @@ class _StickerPanelState extends State<StickerPanel>
   static const double _headerHeight = 34;
   static const double _searchFieldHeight = 50;
   static const double _toggleBarHeight = 48;
+  static const double _resizeHandleHeight = 16;
   static const int _modeEmoji = 0;
   static const int _modeStickers = 1;
   static const String _modePrefKey = 'komet_panel_mode';
@@ -251,12 +254,13 @@ class _StickerPanelState extends State<StickerPanel>
       height: widget.height,
       child: GlassSurface(
         liquid: false,
-        frostTint: AppFrost.panelTint(cs),
+        frostTint: AppFrost.glassTint(cs),
         border: Border(top: AppFrost.hairline(cs)),
         child: SafeArea(
           top: false,
           child: Column(
             children: [
+              if (widget.onResize != null) _buildResizeHandle(cs),
               Expanded(
                 child: _mode == _modeEmoji && widget.onEmojiTap != null
                     ? EmojiPanel(onEmojiTap: widget.onEmojiTap!)
@@ -264,6 +268,26 @@ class _StickerPanelState extends State<StickerPanel>
               ),
               if (widget.onEmojiTap != null) _buildToggleBar(cs),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResizeHandle(ColorScheme cs) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragUpdate: (details) => widget.onResize!(-details.delta.dy),
+      child: SizedBox(
+        height: _resizeHandleHeight,
+        child: Center(
+          child: Container(
+            width: 38,
+            height: 4,
+            decoration: BoxDecoration(
+              color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
         ),
       ),

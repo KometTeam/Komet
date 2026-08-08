@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'contacts.dart';
 import '../api.dart';
+import '../../core/calls/ws2_signaling.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/utils/ids.dart';
 import '../../core/utils/logger.dart';
@@ -135,15 +136,56 @@ class CallsModule {
     );
   }
 
+  Future<OutgoingCallParams> startGroupCall({bool isVideo = false}) async {
+    final conversationId = uuidV4();
+    logger.i('[call] VIDEO_CHAT_START_ACTIVE group conv=$conversationId');
+
+    final payload = await _api.sendRequestMap(Opcode.videoChatStartActive, {
+      'conversationId': conversationId,
+      'internalParams': _internalParams(),
+      'isVideo': isVideo,
+    });
+    logger.i('[call] VIDEO_CHAT_START_ACTIVE keys=${payload?.keys.toList()}');
+
+    if (payload == null) {
+      throw Exception('startGroupCall: bad response');
+    }
+
+    final parsed = _parseCallerEndpoint(
+      payload,
+      'internalCallerParams',
+      context: 'startGroupCall',
+    );
+
+    return OutgoingCallParams(
+      conversationId: (payload['conversationId'] as String?) ?? conversationId,
+      endpoint: parsed.endpoint,
+      callsUserId: parsed.callsUserId,
+      peerExternalId: 0,
+      isVideo: isVideo,
+    );
+  }
+
+  Future<String?> createJoinLink(String conversationId) async {
+    if (conversationId.isEmpty) return null;
+
+    final payload = await _api.sendRequestMap(Opcode.videoChatCreateJoinLink, {
+      'conversationId': conversationId,
+    });
+
+    final link = payload?['joinLink'];
+    return link is String && link.isNotEmpty ? link : null;
+  }
+
   String _internalParams() => jsonEncode({
     'platform': 'ANDROID',
-    'sdkVersion': '0.1.16.4',
+    'sdkVersion': '0.2.1.3',
     'clientAppKey': 'CGPGAGLGDIHBABABA',
     'deviceId': _api.deviceId ?? '',
     'protocolVersion': 5,
     'onlyAdminCanRecord': false,
-    'waitForAdmin': false,
-    'capabilities': '3c03f',
+    'isWaitForAdminEnabled': false,
+    'hexCapability': Ws2Config.defaultCapabilities,
   });
 
   Future<CallLinkPreview?> resolveCallLink(String url) async {
@@ -165,11 +207,13 @@ class CallsModule {
     String token, {
     bool isVideo = false,
   }) async {
+    logger.i('[call] VIDEO_CHAT_JOIN link=$token isVideo=$isVideo');
     final payload = await _api.sendRequestMap(Opcode.videoChatJoinByLink, {
       'joinLink': token,
       'internalParams': _internalParams(),
       'isVideo': isVideo,
     });
+    logger.i('[call] VIDEO_CHAT_JOIN keys=${payload?.keys.toList()}');
 
     if (payload == null) {
       throw Exception('joinByLink: bad response');

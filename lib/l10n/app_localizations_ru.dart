@@ -65,6 +65,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get serverPortLabel => 'Порт';
 
   @override
+  String get serverTrustMincifryTitle => 'Доверять сертификату Минцифры';
+
+  @override
+  String get serverTrustMincifrySubtitle =>
+      'Нужно для api2.oneme.ru: его сертификат выпущен под корнем Russian Trusted Root CA, которого нет в обычном хранилище. Корень зашит в приложение, остальные хосты проверяются как раньше.';
+
+  @override
   String get serverApply => 'Применить и переподключиться';
 
   @override
@@ -831,10 +838,23 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearanceNavPillFrost => 'G-FrostBlur';
 
   @override
+  String get playbackPillAt => 'в';
+
+  @override
+  String get playbackPillYou => 'Вы';
+
+  @override
   String get appearanceGradientTitle => 'Градиент';
 
   @override
   String get appearanceGradientSubtitle => 'Объём и блики в Glossy-капсулах';
+
+  @override
+  String get appearanceSpectrumTitle => 'Спектр на фоне';
+
+  @override
+  String get appearanceSpectrumSubtitle =>
+      'Экспериментально — живые полосы под интерфейсом';
 
   @override
   String get appearanceAccentColorTitle => 'Акцентный цвет';
@@ -1194,6 +1214,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get contactProfileActionCall => 'Звонок';
 
   @override
+  String get contactProfileActionAddContact => 'Добавить в контакты';
+
+  @override
   String get contactProfileInfoPhone => 'Телефон';
 
   @override
@@ -1393,6 +1416,131 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get chatInfoActionLeave => 'Покинуть';
+
+  @override
+  String get chatInfoActionMuted => 'Без звука';
+
+  @override
+  String get chatInfoNotificationsOn => 'Уведомления включены';
+
+  @override
+  String get chatInfoNotificationsOff => 'Уведомления отключены';
+
+  @override
+  String get chatInfoMenuBlock => 'Заблокировать';
+
+  @override
+  String get chatInfoMenuUnblock => 'Разблокировать';
+
+  @override
+  String get chatInfoMenuDeleteChat => 'Удалить чат';
+
+  @override
+  String get chatInfoMenuClearHistory => 'Очистить историю';
+
+  @override
+  String get chatInfoClearHistoryTitle => 'Очистить историю';
+
+  @override
+  String get chatInfoClearHistoryMessage =>
+      'Все сообщения в этом чате будут удалены без возможности восстановления.';
+
+  @override
+  String get chatInfoClearHistoryForAll => 'Для всех';
+
+  @override
+  String get chatInfoClearHistoryConfirm => 'Очистить';
+
+  @override
+  String get chatInfoClearHistoryDone => 'История очищена';
+
+  @override
+  String get chatInfoDeleteChatTitle => 'Удалить чат';
+
+  @override
+  String get chatInfoDeleteChatMessage =>
+      'Чат будет удалён вместе со всей перепиской.';
+
+  @override
+  String get chatInfoDeleteChatConfirm => 'Удалить';
+
+  @override
+  String get chatInfoLeaveGroupTitle => 'Покинуть группу';
+
+  @override
+  String get chatInfoLeaveGroupMessage =>
+      'Вы больше не будете получать сообщения этой группы.';
+
+  @override
+  String get chatInfoLeaveChannelTitle => 'Покинуть канал';
+
+  @override
+  String get chatInfoLeaveChannelMessage =>
+      'Вы больше не будете получать публикации этого канала.';
+
+  @override
+  String get chatInfoLeaveConfirm => 'Покинуть';
+
+  @override
+  String get chatInfoLeaveFailed => 'Не удалось покинуть чат';
+
+  @override
+  String get chatInfoCallConfirmTitle => 'Начать звонок';
+
+  @override
+  String chatInfoCallConfirmMessage(String name) {
+    return 'Позвонить $name?';
+  }
+
+  @override
+  String get chatInfoConfirmYes => 'Да';
+
+  @override
+  String get chatInfoConfirmNo => 'Нет';
+
+  @override
+  String get chatInfoCallFailed => 'Не удалось начать звонок';
+
+  @override
+  String get chatInfoBlockConfirmTitle => 'Заблокировать';
+
+  @override
+  String chatInfoBlockConfirmMessage(String name) {
+    return 'Вы уверены, что хотите заблокировать $name?';
+  }
+
+  @override
+  String get chatInfoBlockDone => 'Пользователь заблокирован';
+
+  @override
+  String get chatInfoUnblockDone => 'Пользователь разблокирован';
+
+  @override
+  String get chatInfoBlockFailed => 'Не удалось изменить блокировку';
+
+  @override
+  String get chatInfoComplaintTitle => 'Пожаловаться';
+
+  @override
+  String get chatInfoComplaintSubtitle => 'Выберите причину жалобы';
+
+  @override
+  String get chatInfoComplaintSend => 'Пожаловаться';
+
+  @override
+  String get chatInfoComplaintClose => 'Закрыть';
+
+  @override
+  String get chatInfoComplaintEmpty => 'Не удалось загрузить причины жалобы';
+
+  @override
+  String get chatInfoComplaintSent => 'Жалоба отправлена';
+
+  @override
+  String get chatInfoComplaintFailed => 'Не удалось отправить жалобу';
+
+  @override
+  String get chatInfoActionCancel => 'Отмена';
 
   @override
   String get chatInfoBio => 'О себе';
@@ -2231,6 +2379,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get contactBubbleOpenProfile => 'Открыть профиль';
 
   @override
+  String get miniAppOpen => 'Открыть';
+
+  @override
+  String get miniAppFailed => 'Не удалось открыть приложение';
+
+  @override
   String get editContactMenu => 'Редактировать контакт';
 
   @override
@@ -2309,4 +2463,49 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get downloadsHistoryCleared => 'История загрузок очищена';
+
+  @override
+  String uploadNotificationPhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count фото',
+      one: 'Фото',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get uploadNotificationVideo => 'Видео';
+
+  @override
+  String get uploadNotificationFile => 'Файл';
+
+  @override
+  String uploadNotificationMultiple(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Отправка файлов: $count',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get uploadNotificationPreparing => 'Подготовка…';
+
+  @override
+  String uploadSpeedBytes(String value) {
+    return '$value Б/с';
+  }
+
+  @override
+  String uploadSpeedKb(String value) {
+    return '$value КБ/с';
+  }
+
+  @override
+  String uploadSpeedMb(String value) {
+    return '$value МБ/с';
+  }
 }

@@ -132,6 +132,7 @@ class VideoAttachment extends MessageAttachment {
   final int? height;
   final int? duration;
   final int? size;
+  final String? localPath;
 
   final int? videoType;
 
@@ -149,6 +150,7 @@ class VideoAttachment extends MessageAttachment {
     this.duration,
     this.size,
     this.videoType,
+    this.localPath,
   }) : super(type: AttachmentType.video);
 
   factory VideoAttachment.fromMap(Map<String, dynamic> map) {
@@ -429,10 +431,13 @@ class LocationAttachment extends MessageAttachment {
 }
 
 class ControlAttachment extends MessageAttachment {
+  static const String botStartedEvent = 'botStarted';
+
   final String? event;
   final String? title;
   final List<int>? userIds;
   final int? userId;
+  final String? startPayload;
 
   const ControlAttachment({
     super.previewData,
@@ -442,7 +447,10 @@ class ControlAttachment extends MessageAttachment {
     this.title,
     this.userIds,
     this.userId,
+    this.startPayload,
   }) : super(type: AttachmentType.control);
+
+  bool get isBotStart => event == botStartedEvent;
 
   factory ControlAttachment.fromMap(Map<String, dynamic> map) {
     String? title = map['title']?.toString();
@@ -459,6 +467,7 @@ class ControlAttachment extends MessageAttachment {
       userId: map['userId'] is int
           ? map['userId'] as int
           : int.tryParse(map['userId']?.toString() ?? ''),
+      startPayload: map['startPayload']?.toString(),
     );
   }
 
@@ -471,6 +480,7 @@ class ControlAttachment extends MessageAttachment {
     'title': title,
     'userIds': userIds,
     'userId': userId,
+    'startPayload': startPayload,
   };
 }
 

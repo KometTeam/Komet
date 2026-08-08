@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show base64Encode;
 import 'dart:io' show File;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -11,10 +12,12 @@ import 'package:flutter/services.dart';
 import 'package:komet/backend/modules/chat_preview.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/comments.dart';
-import 'package:komet/backend/modules/file_uploader.dart';
-import 'package:komet/backend/modules/upload_notification_service.dart';
+import 'package:komet/backend/modules/upload_service.dart';
+import 'package:komet/backend/modules/webapp.dart';
+import 'package:komet/frontend/screens/webapp/open_mini_app.dart';
+import 'package:komet/frontend/widgets/sending_clock_icon.dart';
+import 'package:komet/core/media/desktop_video_probe.dart';
 import 'package:komet/core/media/gallery_source.dart';
-import 'package:komet/core/media/image_optimizer.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
 import 'package:komet/frontend/screens/contacts/open_contact_profile.dart';
@@ -40,6 +43,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_activity_store.dart';
+import '../../../core/storage/chat_members_store.dart';
 import '../../../core/crypto/chat_crypto_service.dart';
 import '../../../core/crypto/encrypted_photo.dart';
 import '../../../core/crypto/message_decryption_cache.dart';
@@ -64,6 +68,7 @@ import 'chat/command_panel_controller.dart';
 import 'chat/sticker_panel_controller.dart';
 import 'chat/chat_search_controller.dart';
 import 'chat/message_search_result.dart';
+import 'chat/typing_label.dart';
 import 'chat/upload_status.dart';
 import 'chat/view/search_view.dart';
 import 'chat/view/composer_input.dart';
@@ -109,6 +114,10 @@ import '../../widgets/liquid_glass.dart';
 import 'scheduled_messages_screen.dart';
 import 'chat_encryption_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
+import 'chat/retain_offset_physics.dart';
+import 'profile_action_sheets.dart';
+import '../../../core/media/media_playback.dart';
+import '../../widgets/media_playback_pill.dart';
 
 class _DateSeparatorItem {
   final DateTime date;
@@ -198,9 +207,26 @@ class _MeasureSizeState extends State<_MeasureSize> {
 
 class ForwardRequest {
   final int sourceChatId;
-  final List<CachedMessage> optimistic;
+  final String sourceChatName;
+  final String sourceChatIconUrl;
+  final String sourceChatType;
+  final List<CachedMessage> messages;
 
-  const ForwardRequest({required this.sourceChatId, required this.optimistic});
+  ForwardRequest({
+    required this.sourceChatId,
+    required this.sourceChatName,
+    required this.sourceChatIconUrl,
+    required this.sourceChatType,
+    required List<CachedMessage> messages,
+  }) : messages = List.unmodifiable(messages);
+
+  ForwardRequest withMessages(List<CachedMessage> value) => ForwardRequest(
+    sourceChatId: sourceChatId,
+    sourceChatName: sourceChatName,
+    sourceChatIconUrl: sourceChatIconUrl,
+    sourceChatType: sourceChatType,
+    messages: value,
+  );
 }
 
 class ReplyRequest {
@@ -224,6 +250,8 @@ class ChatScreen extends StatefulWidget {
   final int? initialMessageTime;
   final String? commentPostId;
   final CachedMessage? postMessage;
+  final String? botStartPayload;
+  final String? initialText;
 
   const ChatScreen({
     super.key,
@@ -240,7 +268,21 @@ class ChatScreen extends StatefulWidget {
     this.initialMessageTime,
     this.commentPostId,
     this.postMessage,
+    this.botStartPayload,
+    this.initialText,
   });
+
+  static final List<_ChatScreenState> _open = [];
+
+  static bool startBotInVisibleChat(int chatId, String startPayload) {
+    for (final screen in _open.reversed) {
+      if (screen.widget.chatId != chatId) continue;
+      if (!screen.mounted || !screen._isRouteCurrent) continue;
+      unawaited(screen._sendBotStart(startPayload));
+      return true;
+    }
+    return false;
+  }
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -268,6 +310,7 @@ class _ChatScreenState extends State<ChatScreen>
   int _readMarkTime = 0;
   Timer? _readMarkTimer;
   final GlobalKey _listKey = GlobalKey();
+  final GlobalKey _unreadSeparatorKey = GlobalKey();
   final Object _profileHeroTag = UniqueKey();
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
   bool _isLoading = true;
@@ -277,7 +320,8 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<UploadStatus> _uploadStatus = ValueNotifier(
     const UploadStatus(),
   );
-  StreamSubscription<UploadEvent>? _uploadSub;
+  String? _uploadStatusJobId;
+  ValueListenable<UploadBytes>? _uploadStatusBytes;
   StreamSubscription<Packet>? _pushSub;
   StreamSubscription<MessageEvent>? _messageEventSub;
   StreamSubscription<Map<String, CommentsInfo>>? _commentsInfoSub;
@@ -308,10 +352,13 @@ class _ChatScreenState extends State<ChatScreen>
     isMounted: () => mounted,
     onRecorded: _sendVideoNote,
     formatElapsed: formatVoiceElapsed,
+    bottomInset: () => _composerHeight.value,
   );
 
+  StreamSubscription<UploadJobEvent>? _uploadEventSub;
+
   ValueListenable<List<double>>? _photoProgressFor(CachedMessage m) =>
-      _photoUploadProgress[m.id];
+      _photoUploadProgress[m.id] ?? UploadService.instance.progressFor(m.id);
 
   ValueNotifier<Map<String, dynamic>?> _reactionNotifierFor(CachedMessage m) {
     final existing = _reactionNotifiers[m.id];
@@ -456,11 +503,15 @@ class _ChatScreenState extends State<ChatScreen>
 
   int _otherStatus = 0;
   int? _otherSeenTime;
-  int? _participantsCount;
 
   final ValueNotifier<CachedMessage?> _replyTo = ValueNotifier(null);
+  final ValueNotifier<List<CachedMessage>> _pendingForwards = ValueNotifier(
+    const [],
+  );
   static const bool _crossChatReplySupported = false;
   int? _replySourceChatId;
+  ForwardRequest? _forwardRequest;
+  bool _forwardSending = false;
   final ValueNotifier<String?> _highlightMessageId = ValueNotifier(null);
   Timer? _highlightTimer;
   final ValueNotifier<double?> _jumpCacheExtent = ValueNotifier<double?>(null);
@@ -493,8 +544,6 @@ class _ChatScreenState extends State<ChatScreen>
   bool _previewChat = false;
   bool _subscribing = false;
   String? _channelLink;
-  bool _forwardRequestDone = false;
-
   final ChatController _chatController = ChatController();
 
   List<CachedMessage> get _messages => _chatController.messages;
@@ -510,10 +559,17 @@ class _ChatScreenState extends State<ChatScreen>
   static const double _avgMessageHeight = 72.0;
   static const double _historyPrefetchExtent = _avgMessageHeight * 8;
   static const double _scrollDownRevealExtent = _avgMessageHeight * 30;
+  static const double _scrollDownRevealFactor = 0.6;
   static const double _scrollDownTeleportFactor = 2.0;
   static const double _glossyHeaderHeight = 76.0;
   static const double _glossySearchHeight = 58.0;
   static const double _pinnedBannerLift = 6.0;
+  static const double _unreadSeparatorHeight = 30.0;
+  static const double _unreadSeparatorInset = 72.0;
+  static const double _unreadAnchorFallbackAlignment = 0.3;
+  static const int _jumpStallLimit = 8;
+  static const int _jumpFrameLimit = 240;
+  static const double _jumpStepMaxScreens = 4.0;
 
   final BackdropKey _barBackdrop = BackdropKey();
   final BackdropKey _pillBackdrop = BackdropKey();
@@ -528,6 +584,7 @@ class _ChatScreenState extends State<ChatScreen>
   set _myId(int v) => _chatController.myId = v;
   CachedChat? chat;
   bool _peerIsBot = false;
+  bool _botStartRequested = false;
   ChatWallpaper? _wallpaper;
 
   bool get _composerFrosted =>
@@ -559,6 +616,12 @@ class _ChatScreenState extends State<ChatScreen>
   late final AnimationController _scrollDownAnimController;
   late final CurvedAnimation _scrollDownCurved;
   bool _scrollDownVisible = false;
+  final ValueNotifier<int> _newMessageCount = ValueNotifier(0);
+  bool _clearCountScheduled = false;
+  bool _retainOffsetOnce = false;
+  late final ScrollPhysics _listPhysics = RetainOffsetScrollPhysics(
+    retain: _consumeRetainOffset,
+  );
   int _listEpoch = 0;
   final List<({String id, double pixels, double alignment})> _returnStack = [];
   bool _returningToAnchor = false;
@@ -596,6 +659,7 @@ class _ChatScreenState extends State<ChatScreen>
     _previewChat = widget.channelSubscribed == false;
     _chatController.chatId = widget.chatId;
     _chatController.isMounted = () => mounted;
+    if (!_commentsMode) ChatScreen._open.add(this);
     unawaited(PushService.clearChatNotification(widget.chatId));
     unawaited(
       animojiModule
@@ -607,6 +671,8 @@ class _ChatScreenState extends State<ChatScreen>
           .catchError((_) {}),
     );
     WidgetsBinding.instance.addObserver(this);
+    _uploadEventSub = UploadService.instance.events.listen(_onUploadEvent);
+    _syncUploadStatus();
     chats.chatsChanged.addListener(_onChatsBump);
     _messageController.addListener(_onTextChanged);
     _scrollController.addListener(_onScrollForDate);
@@ -615,6 +681,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.addListener(_scheduleReadMarker);
     _scrollController.addListener(_exitTextSelectionOnScroll);
     _scrollController.addListener(_updateScrollDownVisible);
+    MediaPlayback.instance.enterChat(widget.chatId);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
     AppChatChrome.current.addListener(_onVisualStyleChanged);
     AppComposerStyle.current.addListener(_onVisualStyleChanged);
@@ -667,6 +734,11 @@ class _ChatScreenState extends State<ChatScreen>
           ? null
           : incomingReply.sourceChatId;
     }
+    final incomingForward = widget.forwardRequest;
+    if (incomingForward != null) {
+      _forwardRequest = incomingForward;
+      _pendingForwards.value = incomingForward.messages;
+    }
     _pushSub = api.pushStream
         .where(
           (p) =>
@@ -689,6 +761,9 @@ class _ChatScreenState extends State<ChatScreen>
       _commentsInfoSub = commentsModule.infoStream.listen(_onCommentsInfo);
     }
     ChatActivityStore.instance
+        .listenable(widget.chatId)
+        .addListener(_recomputeHeaderStatus);
+    ChatMembersStore.instance
         .listenable(widget.chatId)
         .addListener(_recomputeHeaderStatus);
     _connSub = api.stateStream.listen((_) {
@@ -718,11 +793,7 @@ class _ChatScreenState extends State<ChatScreen>
       reverseCurve: Curves.easeIn,
     );
 
-    unawaited(
-      _fastPreloadCache().then((_) {
-        if (mounted) unawaited(_runForwardRequest());
-      }),
-    );
+    unawaited(_fastPreloadCache());
     unawaited(_loadParticipantsCount());
     WidgetsBinding.instance.addPostFrameCallback(_onFirstFrameRendered);
   }
@@ -743,11 +814,6 @@ class _ChatScreenState extends State<ChatScreen>
       final link = info?['link'];
       if (link is String && link.isNotEmpty) _channelLink = link;
     }
-    final count = info?['participantsCount'] as int?;
-    if (count != null && count != _participantsCount) {
-      _participantsCount = count;
-      _recomputeHeaderStatus();
-    }
   }
 
   Future<void> _loadPeerKind() async {
@@ -758,6 +824,9 @@ class _ChatScreenState extends State<ChatScreen>
     if (cached != null) _applyPeerKind(cached.isBot);
     final info = await ContactInfoFetch.get(peerId);
     if (info != null) _applyPeerKind(info.isBot);
+    if ((info ?? cached)?.isBot ?? false) {
+      unawaited(BotInfoFetch.get(peerId));
+    }
   }
 
   void _applyPeerKind(bool isBot) {
@@ -814,6 +883,7 @@ class _ChatScreenState extends State<ChatScreen>
         _hasMoreHistory = !cached.reachedStart;
         _messagesRev.value++;
       });
+      _mergePendingMedia();
       _syncReactionNotifiersFromMessages();
       _requestCommentCounts();
       _revealOrHoldInitial();
@@ -835,6 +905,7 @@ class _ChatScreenState extends State<ChatScreen>
         _messages = first;
         _messagesRev.value++;
       });
+      _mergePendingMedia();
       _requestCommentCounts();
       _revealOrHoldInitial();
     }
@@ -922,7 +993,44 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted || !_isLoading) return;
       _shimmerController.repeat();
     });
-    _loadHistory();
+    unawaited(_loadHistory().then((_) => _sendPendingBotStart()));
+  }
+
+  bool get _isRouteCurrent {
+    if (!mounted) return false;
+    final route = ModalRoute.of(context);
+    return route == null || route.isCurrent;
+  }
+
+  Future<void> _sendPendingBotStart() async {
+    final payload = widget.botStartPayload;
+    if (payload == null || _botStartRequested || !mounted) return;
+    _botStartRequested = true;
+    await _sendBotStart(payload);
+  }
+
+  Future<void> _sendBotStart(String startPayload) async {
+    if (_myId == 0) {
+      final profile = await AppDatabase.loadActiveProfile();
+      if (!mounted) return;
+      _myId = profile?.id ?? 0;
+    }
+    try {
+      final sent = await messagesModule.sendBotStart(
+        widget.chatId,
+        startPayload,
+      );
+      if (!mounted) return;
+      if (sent == null) {
+        showCustomNotification(context, 'Не удалось запустить бота');
+        return;
+      }
+      await _persistOutgoing(
+        CachedMessage.fromPushPayload(_myId, widget.chatId, sent),
+      );
+    } catch (_) {
+      if (mounted) showCustomNotification(context, 'Не удалось запустить бота');
+    }
   }
 
   void _onLoadingFinished() {
@@ -941,18 +1049,41 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  void _positionToMessage(String messageId, double alignment) {
+  double _unreadAnchorAlignment() {
+    final listBox = _listKey.currentContext?.findRenderObject();
+    if (listBox is! RenderBox || listBox.size.height <= 0) {
+      return _unreadAnchorFallbackAlignment;
+    }
+    final separator =
+        _unreadSeparatorKey.currentContext?.size?.height ??
+        _unreadSeparatorHeight;
+    final glossy = AppVisualStyle.current.value.glossyChrome;
+    final chromeBottom = _effectiveChrome == ChatChromeStyle.color
+        ? 0.0
+        : MediaQuery.paddingOf(context).top +
+              (glossy ? _glossyHeaderHeight : kToolbarHeight) +
+              _pinnedBannerHeight.value;
+    final desiredTop = chromeBottom + separator + _unreadSeparatorInset;
+    return (desiredTop / listBox.size.height).clamp(0.0, 0.5);
+  }
+
+  void _positionToMessage(String messageId) {
     _pinnedMessageId = messageId;
-    _pinnedAlignment = alignment.clamp(0.0, 1.0);
+    _jumpCacheExtent.value = _jumpCacheExtentPx;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _pinnedAlignment = _unreadAnchorAlignment();
       _scrollToLoadedMessage(
         messageId,
         alignment: _pinnedAlignment,
         highlight: false,
         notifyIfMissing: false,
         onSettled: () {
-          if (mounted) setState(_markPositioned);
+          if (!mounted) return;
+          setState(_markPositioned);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _jumpCacheExtent.value = null;
+          });
         },
       );
     });
@@ -1008,7 +1139,7 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (firstUnread > 0 || !_hasMoreHistory) {
         _initialPositionDone = true;
-        _positionToMessage(_messages[firstUnread].id, 0.15);
+        _positionToMessage(_messages[firstUnread].id);
       } else {
         _positioningInFlight = true;
         unawaited(_loadUntilUnreadReady());
@@ -1072,6 +1203,7 @@ class _ChatScreenState extends State<ChatScreen>
           chatType: widget.chatType,
           heroTag: _profileHeroTag,
           initialTab: initialTab,
+          openedFromChat: true,
           onJumpToMessage: (chatRoute == null || widget.embedded)
               ? null
               : (messageId, time) {
@@ -1124,7 +1256,7 @@ class _ChatScreenState extends State<ChatScreen>
     _positioningInFlight = false;
     _initialPositionDone = true;
     if (idx >= 0) {
-      _positionToMessage(_messages[idx].id, 0.15);
+      _positionToMessage(_messages[idx].id);
     } else {
       setState(_markPositioned);
     }
@@ -1167,6 +1299,7 @@ class _ChatScreenState extends State<ChatScreen>
     final atBottom = candidate.id == _messages.last.id;
 
     if (_unreadAnchorTime != null &&
+        _userDidScroll &&
         _unreadSeparatorScrolledPast(
           atBottom,
           topIndex,
@@ -1534,6 +1667,52 @@ class _ChatScreenState extends State<ChatScreen>
     _loadGroupSenderNames();
   }
 
+  bool _consumeRetainOffset() {
+    if (!_retainOffsetOnce) return false;
+    _retainOffsetOnce = false;
+    return true;
+  }
+
+  void _retainOffsetForNextLayout() {
+    _retainOffsetOnce = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _retainOffsetOnce = false;
+    });
+  }
+
+  String? _viewportAnchorId() {
+    final listBox = _listKey.currentContext?.findRenderObject();
+    if (listBox is! RenderBox || !listBox.attached) return null;
+    final height = listBox.size.height;
+    for (final message in _messages) {
+      final box = _messageKeys[message.id]?.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached) continue;
+      final dy = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
+      if (dy >= 0 && dy <= height) return message.id;
+    }
+    return null;
+  }
+
+  Future<void> _holdScrollAfterAppend(String? anchorId, double? beforeDy) async {
+    if (anchorId == null || beforeDy == null) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !_scrollController.hasClients) return;
+
+    final afterDy = _messageOffsetInList(anchorId);
+    if (afterDy == null) return;
+    final delta = beforeDy - afterDy;
+    if (delta.abs() <= 0.5) return;
+
+    final pos = _scrollController.position;
+    if (pos.userScrollDirection != ScrollDirection.idle) return;
+    final target = (pos.pixels + delta).clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    );
+    if ((target - pos.pixels).abs() <= 0.5) return;
+    _scrollController.jumpTo(target);
+  }
+
   double? _messageOffsetInList(String messageId) {
     final listBox = _listKey.currentContext?.findRenderObject();
     final box = _keyForMessage(messageId).currentContext?.findRenderObject();
@@ -1784,11 +1963,19 @@ class _ChatScreenState extends State<ChatScreen>
     if (comment.senderId == _myId) return;
     if (_messages.any((m) => m.id == comment.id)) return;
     final nearBottom = _isNearListBottom();
+    final anchorId = nearBottom ? null : _viewportAnchorId();
+    final anchorDy = anchorId == null ? null : _messageOffsetInList(anchorId);
+    if (!nearBottom) _retainOffsetForNextLayout();
     _messages.add(comment);
     _syncReactionNotifiersFromMessages();
     _bumpMessages();
     unawaited(_resolveCommentNames([comment]));
-    if (nearBottom) _scrollToBottom();
+    if (nearBottom) {
+      _scrollToBottom();
+    } else {
+      _noteMissedMessage();
+      unawaited(_holdScrollAfterAppend(anchorId, anchorDy));
+    }
   }
 
   bool _isNearListBottom() {
@@ -1850,11 +2037,13 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   void dispose() {
+    ChatScreen._open.remove(this);
     _chatController.persistSessionCache();
     if (_previewChat) {
       unawaited(chats.subscribeChat(api, widget.chatId, subscribe: false));
     }
     WidgetsBinding.instance.removeObserver(this);
+    _uploadEventSub?.cancel();
     chats.chatsChanged.removeListener(_onChatsBump);
     _otherUnread.dispose();
     _animojiHold.dispose();
@@ -1868,6 +2057,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.removeListener(_updateScrollDownVisible);
     _readMarkTimer?.cancel();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
+    MediaPlayback.instance.leaveChat(widget.chatId);
     AppChatChrome.current.removeListener(_onVisualStyleChanged);
     AppComposerStyle.current.removeListener(_onVisualStyleChanged);
     AppComposerBackground.current.removeListener(_onVisualStyleChanged);
@@ -1879,11 +2069,12 @@ class _ChatScreenState extends State<ChatScreen>
     _floatingDate.dispose();
     _scrollDownCurved.dispose();
     _scrollDownAnimController.dispose();
+    _newMessageCount.dispose();
     _hasText.dispose();
     _scheduledCount.dispose();
     _showAttachmentPanel.removeListener(_onAttachPanelToggle);
     _showAttachmentPanel.dispose();
-    _uploadSub?.cancel();
+    _detachUploadStatus();
     _pushSub?.cancel();
     _messageEventSub?.cancel();
     _commentsInfoSub?.cancel();
@@ -1902,6 +2093,9 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _photoUploadProgress.clear();
     ChatActivityStore.instance
+        .listenable(widget.chatId)
+        .removeListener(_recomputeHeaderStatus);
+    ChatMembersStore.instance
         .listenable(widget.chatId)
         .removeListener(_recomputeHeaderStatus);
     PresenceFetch.revision.removeListener(_onPresenceChanged);
@@ -1935,6 +2129,7 @@ class _ChatScreenState extends State<ChatScreen>
     _shimmerStartTimer?.cancel();
     _shimmerController.dispose();
     _replyTo.dispose();
+    _pendingForwards.dispose();
     _highlightTimer?.cancel();
     _highlightMessageId.dispose();
     _goToMessageSettleTimer?.cancel();
@@ -1979,7 +2174,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (_myId == 0 || _commentsMode || _messageController.text.isNotEmpty) {
       return;
     }
-    final draft = DraftStore.instance.get(_myId, widget.chatId);
+    final shared = widget.initialText?.trim();
+    final draft = (shared != null && shared.isNotEmpty)
+        ? shared
+        : DraftStore.instance.get(_myId, widget.chatId);
     if (draft == null || draft.isEmpty) return;
     _messageController.text = draft;
     _messageController.selection = TextSelection.collapsed(
@@ -2099,7 +2297,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _startTextSelection(CachedMessage message, Offset globalPosition) {
-    if (message.isControl || (message.text?.isEmpty ?? true)) return;
+    if (message.isControl || message.selectableText == null) return;
     _textSelection.value = (id: message.id, pos: globalPosition);
   }
 
@@ -2213,7 +2411,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _forwardMessages(List<CachedMessage> msgs) async {
-    final forwardable = msgs.where((m) => !m.id.startsWith('temp_')).toList();
+    final forwardable = msgs
+        .where((message) => int.tryParse(message.id) != null)
+        .toList();
     if (forwardable.isEmpty) {
       showCustomNotification(context, 'Нечего пересылать');
       return;
@@ -2225,21 +2425,20 @@ class _ChatScreenState extends State<ChatScreen>
     );
     if (target == null || !mounted) return;
 
-    if (api.state != SessionState.online) {
-      showCustomNotification(context, 'Нет соединения');
-      return;
-    }
-
     final ordered = [...forwardable]..sort((a, b) => a.time.compareTo(b.time));
+    final request = ForwardRequest(
+      sourceChatId: widget.chatId,
+      sourceChatName: widget.name,
+      sourceChatIconUrl: widget.imageUrl,
+      sourceChatType: widget.chatType,
+      messages: ordered,
+    );
 
     if (target.chatId == widget.chatId) {
-      await _forwardIntoCurrentChat(ordered);
+      _setForwardRequest(request);
       return;
     }
 
-    final optimistic = await _seedForwardsToChat(target, ordered);
-    if (!mounted) return;
-    Haptics.send();
     pushSwipeable(
       context,
       (_) => ChatScreen(
@@ -2247,162 +2446,125 @@ class _ChatScreenState extends State<ChatScreen>
         name: target.name,
         imageUrl: target.imageUrl,
         chatType: target.chatType,
-        forwardRequest: ForwardRequest(
-          sourceChatId: widget.chatId,
-          optimistic: optimistic,
-        ),
+        forwardRequest: request,
       ),
     );
   }
 
-  Future<void> _forwardIntoCurrentChat(List<CachedMessage> sources) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final optimistic = <CachedMessage>[];
-    var i = 0;
-    for (final src in sources) {
-      final msg = MessagesModule.buildForwardMessage(
+  void _setForwardRequest(ForwardRequest request) {
+    _cancelReply();
+    _forwardRequest = request;
+    _pendingForwards.value = request.messages;
+  }
+
+  void _cancelForward() {
+    _forwardRequest = null;
+    _pendingForwards.value = const [];
+  }
+
+  Future<bool> _sendForwardRequest() async {
+    var request = _forwardRequest;
+    if (request == null) return true;
+    if (api.state != SessionState.online) {
+      showCustomNotification(context, 'Нет соединения');
+      return false;
+    }
+    Haptics.send();
+    while (request != null && request.messages.isNotEmpty) {
+      if (!identical(_forwardRequest, request)) return false;
+      final source = request.messages.first;
+      final optimistic = MessagesModule.buildForwardMessage(
         myId: _myId,
         targetChatId: widget.chatId,
-        sourceChatId: widget.chatId,
-        source: src,
+        sourceChatId: request.sourceChatId,
+        source: source,
         tempId: _nextTempId(),
-        time: now + i,
+        time: DateTime.now().millisecondsSinceEpoch,
         status: 'sending',
-        sourceChatName: widget.name,
-        sourceChatIconUrl: widget.imageUrl,
-        sourceChatType: widget.chatType,
+        sourceChatName: request.sourceChatName,
+        sourceChatIconUrl: request.sourceChatIconUrl,
+        sourceChatType: request.sourceChatType,
       );
-      optimistic.add(msg);
-      _messages.add(msg);
-      unawaited(_persistOutgoing(msg));
-      i++;
+      _messages.add(optimistic);
+      _bumpMessages();
+      _scrollToBottom();
+      await _syncForwardOutgoing(optimistic);
+      final sent = await _sendOneForward(optimistic, request.sourceChatId);
+      if (!sent || !mounted) return false;
+      if (!identical(_forwardRequest, request)) return false;
+      final remaining = request.messages.skip(1).toList(growable: false);
+      if (remaining.isEmpty) {
+        _cancelForward();
+        return true;
+      }
+      request = request.withMessages(remaining);
+      _forwardRequest = request;
+      _pendingForwards.value = request.messages;
     }
-    _bumpMessages();
-    Haptics.send();
-    _scrollToBottom();
-    if (optimistic.isNotEmpty) {
-      final last = optimistic.last;
-      unawaited(
-        chats.applyOutgoing(
-          _myId,
-          widget.chatId,
-          messageId: last.id,
-          time: last.time,
-          text: MessagesModule.forwardPreviewText(last),
-          status: 'sending',
-        ),
-      );
-    }
-    for (final opt in optimistic) {
-      await _sendOneForward(opt, widget.chatId);
-    }
+    _cancelForward();
+    return true;
   }
 
-  Future<List<CachedMessage>> _seedForwardsToChat(
-    ForwardTarget target,
-    List<CachedMessage> sources,
-  ) async {
-    await chats.ensureChatCached(api, _myId, target.chatId);
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final optimistic = <CachedMessage>[];
-    var i = 0;
-    for (final src in sources) {
-      final msg = MessagesModule.buildForwardMessage(
-        myId: _myId,
-        targetChatId: target.chatId,
-        sourceChatId: widget.chatId,
-        source: src,
-        tempId: _nextTempId(),
-        time: now + i,
-        status: 'sending',
-        sourceChatName: widget.name,
-        sourceChatIconUrl: widget.imageUrl,
-        sourceChatType: widget.chatType,
-      );
-      optimistic.add(msg);
-      await AppDatabase.saveMessages([msg.toDbRow()]);
-      i++;
-    }
-    final cached = MessageSessionCache.get(_myId, target.chatId);
-    if (cached != null) {
-      MessageSessionCache.save(_myId, target.chatId, [
-        ...cached.messages,
-        ...optimistic,
-      ], reachedStart: cached.reachedStart);
-    }
-    if (optimistic.isNotEmpty) {
-      final last = optimistic.last;
-      unawaited(
-        chats.applyOutgoing(
-          _myId,
-          target.chatId,
-          messageId: last.id,
-          time: last.time,
-          text: MessagesModule.forwardPreviewText(last),
-          status: 'sending',
-        ),
-      );
-    }
-    return optimistic;
-  }
-
-  Future<void> _runForwardRequest() async {
-    final req = widget.forwardRequest;
-    if (req == null || _forwardRequestDone) return;
-    _forwardRequestDone = true;
-    for (final opt in req.optimistic) {
-      await _sendOneForward(opt, req.sourceChatId);
-    }
-  }
-
-  Future<void> _sendOneForward(
+  Future<bool> _sendOneForward(
     CachedMessage optimistic,
     int sourceChatId,
   ) async {
     final link = optimistic.payload?['link'];
     final rawWireId = link is Map ? link['messageId'] : null;
     final wireId = rawWireId is int ? rawWireId : null;
-    if (wireId == null) return;
+    if (wireId == null) return false;
     try {
       final realId = await messagesModule.forwardMessage(
         widget.chatId,
         sourceChatId,
         wireId,
       );
-      if (!mounted) return;
       final sent = MessagesModule.reidentifyMessage(
         optimistic,
         realId.isNotEmpty ? realId : optimistic.id,
         status: 'sent',
       );
-      final index = _messages.indexWhere((m) => m.id == optimistic.id);
-      if (index != -1) {
-        _messages[index] = sent;
-        _bumpMessages();
+      if (mounted) {
+        final index = _messages.indexWhere((m) => m.id == optimistic.id);
+        if (index != -1) {
+          _messages[index] = sent;
+          _bumpMessages();
+        }
       }
-      unawaited(_persistOutgoing(sent, removeId: optimistic.id));
-      unawaited(
-        chats.applyOutgoing(
-          _myId,
-          widget.chatId,
-          messageId: sent.id,
-          time: sent.time,
-          text: MessagesModule.forwardPreviewText(sent),
-          status: 'sent',
-        ),
-      );
+      await _syncForwardOutgoing(sent, removeId: optimistic.id);
+      return true;
     } catch (_) {
       final index = _messages.indexWhere((m) => m.id == optimistic.id);
       if (index != -1 && mounted) {
         _messages.removeAt(index);
         _bumpMessages();
       }
-      unawaited(AppDatabase.deleteMessage(_myId, widget.chatId, optimistic.id));
+      try {
+        await AppDatabase.deleteMessage(_myId, widget.chatId, optimistic.id);
+      } catch (_) {}
       if (mounted) {
         Haptics.error();
         showCustomNotification(context, 'Не удалось переслать');
       }
+      return false;
     }
+  }
+
+  Future<void> _syncForwardOutgoing(
+    CachedMessage message, {
+    String? removeId,
+  }) async {
+    await _persistOutgoing(message, removeId: removeId);
+    try {
+      await chats.applyOutgoing(
+        _myId,
+        widget.chatId,
+        messageId: message.id,
+        time: message.time,
+        text: MessagesModule.forwardPreviewText(message),
+        status: message.status ?? 'sending',
+      );
+    } catch (_) {}
   }
 
   Widget _buildComposerArea(BuildContext context) {
@@ -2472,6 +2634,7 @@ class _ChatScreenState extends State<ChatScreen>
                   backdropKey: _pillBackdrop,
                   attachAnim: _attachAnim,
                   replyTo: _replyTo,
+                  forwardMessages: _pendingForwards,
                   myId: _myId,
                   hasText: _hasText,
                   uploadStatus: _uploadStatus,
@@ -2486,6 +2649,7 @@ class _ChatScreenState extends State<ChatScreen>
                   onOpenAttachScheduled: _openAttachmentSheetScheduled,
                   onSendHistory: _sendHistoryFile,
                   onCancelReply: _cancelReply,
+                  onCancelForward: _cancelForward,
                   onPickReplyChat: _commentsMode || !_crossChatReplySupported
                       ? null
                       : () => unawaited(_pickReplyChat()),
@@ -2545,7 +2709,7 @@ class _ChatScreenState extends State<ChatScreen>
         }
         return _FrostedPanel(
           sigma: AppFrost.sigma,
-          tint: AppFrost.panelTint(cs),
+          tint: AppFrost.glassTint(cs),
           border: Border(top: AppFrost.hairline(cs)),
           backdropKey: _barBackdrop,
           child: child,
@@ -2832,9 +2996,14 @@ class _ChatScreenState extends State<ChatScreen>
     if (_commentsMode) return;
     switch (event) {
       case MessageAddedEvent(:final message):
-        if (message.senderId == _myId) return;
+        if (message.senderId == _myId && !message.isControl) return;
         if (_messages.any((m) => m.id == message.id)) return;
         final nearBottom = _isNearBottom();
+        final anchorId = nearBottom ? null : _viewportAnchorId();
+        final anchorDy = anchorId == null
+            ? null
+            : _messageOffsetInList(anchorId);
+        if (!nearBottom) _retainOffsetForNextLayout();
         _lastSentId = message.id;
         _messages.add(message);
         _bumpMessages();
@@ -2844,6 +3013,8 @@ class _ChatScreenState extends State<ChatScreen>
           _scrollToBottom();
           _scheduleReadMarker();
         } else {
+          _noteMissedMessage();
+          unawaited(_holdScrollAfterAppend(anchorId, anchorDy));
           _reapplyPinIfNeeded();
         }
         _prank.checkTrigger(message);
@@ -2960,7 +3131,7 @@ class _ChatScreenState extends State<ChatScreen>
           : (chrome == ChatChromeStyle.transparent && !glossy)
           ? _FrostedPanel(
               sigma: AppFrost.sigma,
-              tint: AppFrost.panelTint(cs),
+              tint: AppFrost.glassTint(cs),
               border: Border(bottom: AppFrost.hairline(cs)),
               backdropKey: _barBackdrop,
               child: const SizedBox.expand(),
@@ -3001,6 +3172,7 @@ class _ChatScreenState extends State<ChatScreen>
                             glossy: glossy,
                             frosted:
                                 glossy && chrome == ChatChromeStyle.transparent,
+                            backdropVisible: t == 0 && s == 0,
                             liquid: _liquidChrome,
                             backdropKey: _pillBackdrop,
                             cs: cs,
@@ -3072,6 +3244,25 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  bool get _hasMiniApp {
+    if (widget.chatType != 'DIALOG' || _commentsMode) return false;
+    final peerId = _resolveOtherId();
+    if (peerId == null) return false;
+    if (hasMiniAppOption(ContactCache.getOptions(peerId))) return true;
+    return hasMiniAppOption(chat?.options);
+  }
+
+  Future<void> _openMiniApp() async {
+    final peerId = _resolveOtherId();
+    if (peerId == null) return;
+    await openMiniApp(
+      context,
+      botId: peerId,
+      chatId: widget.chatId,
+      title: _headerName(),
+    );
+  }
+
   void _openChatMenu(BuildContext btnContext) {
     final box = btnContext.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
@@ -3080,6 +3271,13 @@ class _ChatScreenState extends State<ChatScreen>
       context: context,
       anchorRect: anchorRect,
       items: [
+        if (_hasMiniApp)
+          ChatMenuItem(
+            icon: Symbols.apps,
+            label: AppLocalizations.of(context)!.miniAppOpen,
+            dividerAfter: true,
+            onTap: () => unawaited(_openMiniApp()),
+          ),
         ChatMenuItem(
           icon: (chat?.isMuted ?? false)
               ? Symbols.volume_off
@@ -3133,9 +3331,11 @@ class _ChatScreenState extends State<ChatScreen>
         _previewChat = false;
         _subscribing = false;
         chat = result.chat;
-        _participantsCount =
-            result.subscribersCount ?? ((_participantsCount ?? 0) + 1);
       });
+      ChatMembersStore.instance.setCount(
+        widget.chatId,
+        result.subscribersCount,
+      );
       _recomputeHeaderStatus();
       showCustomNotification(context, 'Вы подписались на канал');
     } catch (e) {
@@ -3285,20 +3485,27 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _clearHistory() async {
-    final confirmed = await showConfirmDialog(
+    final current = chat;
+    final canClearForAll =
+        (widget.chatType == 'CHAT' || widget.chatType == 'CHANNEL') &&
+        (current?.iAmAdmin(_myId) ?? false);
+    final choice = await showBlurredConfirm(
       context,
       title: 'Очистить историю',
       message:
           'Все сообщения в этом чате будут удалены без возможности '
           'восстановления.',
       confirmLabel: 'Очистить',
+      cancelLabel: 'Отмена',
       destructive: true,
+      checkboxLabel: canClearForAll ? 'Для всех' : null,
     );
-    if (!mounted || !confirmed) return;
+    if (!mounted || !choice.confirmed) return;
     final err = await chats.clearHistory(
       api,
       chatId: widget.chatId,
-      lastEventTime: chat?.lastEventTime ?? 0,
+      lastEventTime: current?.lastEventTime ?? 0,
+      forAll: canClearForAll && choice.checked,
     );
     if (!mounted) return;
     if (err != null) {
@@ -3430,17 +3637,27 @@ class _ChatScreenState extends State<ChatScreen>
     _headerStatusNotifier.value = _headerStatus();
   }
 
+  int get _memberCount =>
+      ChatMembersStore.instance.count(widget.chatId) ??
+      chat?.participants.length ??
+      0;
+
+  bool get _isGroupChat =>
+      widget.chatType == 'CHAT' || widget.chatType == 'CHANNEL';
+
   String _headerStatus() {
     final conn = connectionStatusLabel(api.state);
     if (conn != null) return conn;
-    final activity = ChatActivityStore.instance.activity(widget.chatId);
-    if (activity != null) return activity.label;
+    final activity = ChatActivityStore.instance.snapshot(widget.chatId);
+    if (activity != null) {
+      return chatActivityLabel(activity, withNames: _isGroupChat);
+    }
     if (widget.chatType == 'CHAT') {
-      final count = _participantsCount ?? chat?.participants.length ?? 0;
+      final count = _memberCount;
       return '$count участников';
     }
     if (widget.chatType == 'CHANNEL') {
-      final count = _participantsCount ?? chat?.participants.length ?? 0;
+      final count = _memberCount;
       return '$count подписчиков';
     }
     if (_otherStatus == 1) return 'В сети';
@@ -3461,6 +3678,14 @@ class _ChatScreenState extends State<ChatScreen>
       userId,
       chatActivityFromType(payload['type']),
     );
+    unawaited(_ensureTypingName(userId));
+  }
+
+  Future<void> _ensureTypingName(int userId) async {
+    if (!_isGroupChat) return;
+    if (ContactCache.get(userId) != null) return;
+    final resolved = await messagesModule.ensureContactNames({userId});
+    if (resolved && mounted) _recomputeHeaderStatus();
   }
 
   void _clearTyping(int userId) {
@@ -3609,6 +3834,23 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _sendMessage() async {
+    if (_forwardRequest == null) {
+      await _sendTextMessage();
+      return;
+    }
+    if (_forwardSending || _myId == 0) return;
+    _forwardSending = true;
+    try {
+      final forwarded = await _sendForwardRequest();
+      if (!forwarded || !mounted) return;
+      if (_messageController.text.trim().isEmpty) return;
+      await _sendTextMessage();
+    } finally {
+      _forwardSending = false;
+    }
+  }
+
+  Future<void> _sendTextMessage() async {
     final content = _messageController.buildContent();
     final rawText = content.text;
     final text = rawText.trim();
@@ -3980,6 +4222,7 @@ class _ChatScreenState extends State<ChatScreen>
     postMessage: _postCommandMessage,
     updateMessage: _updateCommandMessage,
     sendPhotos: _sendPhotos,
+    sendVideoNote: _sendVideoNote,
   );
 
   Future<void> _scheduleMessage() async {
@@ -4123,6 +4366,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _scrollToBottom() {
     _returnStack.clear();
+    _newMessageCount.value = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
       final pos = _scrollController.position;
@@ -4153,15 +4397,30 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _updateScrollDownVisible() {
-    if (!_scrollController.hasClients) return;
+    if (!_scrollController.hasClients) {
+      _setScrollDownVisible(_newMessageCount.value > 0);
+      return;
+    }
     final pos = _scrollController.position;
+    final atBottom = _isNearBottom();
     if (_returnStack.isNotEmpty &&
-        _isNearBottom() &&
+        atBottom &&
         pos.userScrollDirection != ScrollDirection.idle) {
       _returnStack.clear();
     }
-    final show =
-        pos.pixels >= _scrollDownRevealExtent || _returnStack.isNotEmpty;
+    if (atBottom && _newMessageCount.value > 0) _clearNewMessageCountSoon();
+    final reveal = math.min(
+      _scrollDownRevealExtent,
+      pos.viewportDimension * _scrollDownRevealFactor,
+    );
+    _setScrollDownVisible(
+      pos.pixels >= reveal ||
+          _returnStack.isNotEmpty ||
+          _newMessageCount.value > 0,
+    );
+  }
+
+  void _setScrollDownVisible(bool show) {
     if (show == _scrollDownVisible) return;
     _scrollDownVisible = show;
     if (show) {
@@ -4169,6 +4428,22 @@ class _ChatScreenState extends State<ChatScreen>
     } else {
       _scrollDownAnimController.reverse();
     }
+  }
+
+  void _noteMissedMessage() {
+    _newMessageCount.value++;
+    _updateScrollDownVisible();
+  }
+
+  void _clearNewMessageCountSoon() {
+    if (_clearCountScheduled) return;
+    _clearCountScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _clearCountScheduled = false;
+      if (!mounted || !_isNearBottom()) return;
+      _newMessageCount.value = 0;
+      _updateScrollDownVisible();
+    });
   }
 
   void _pushReturnAnchor(String messageId) {
@@ -4260,6 +4535,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _startReply(CachedMessage message) {
+    _cancelForward();
     _replyTo.value = message;
     _replySourceChatId = null;
     _messageFocusNode.requestFocus();
@@ -4596,12 +4872,7 @@ class _ChatScreenState extends State<ChatScreen>
       messageId,
     ).currentContext?.findRenderObject();
     if (laidOut is! RenderBox || !laidOut.attached) {
-      var below = 0.0;
-      for (var i = pos + 1; i < items.length; i++) {
-        below += items[i] is _MessageItem ? _avgMessageHeight : 44.0;
-      }
-      final maxExtent = _scrollController.position.maxScrollExtent;
-      _scrollController.jumpTo(below.clamp(0.0, maxExtent).toDouble());
+      _jumpNearMessage(messageId);
     }
 
     if (highlight) {
@@ -4619,10 +4890,78 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  ({int oldest, int newest}) _visibleItemRange(
+    List<Object> items,
+    RenderBox listBox,
+  ) {
+    var oldest = -1;
+    var newest = -1;
+    final viewportBottom = listBox.size.height;
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      if (item is! _MessageItem) continue;
+      final box = _messageKeys[item.message.id]?.currentContext
+          ?.findRenderObject();
+      if (box is! RenderBox || !box.attached) {
+        if (oldest != -1) break;
+        continue;
+      }
+      final top = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
+      if (top + box.size.height <= 0 || top >= viewportBottom) {
+        if (oldest != -1) break;
+        continue;
+      }
+      if (oldest == -1) oldest = i;
+      newest = i;
+    }
+    return (oldest: oldest, newest: newest);
+  }
+
+  double _jumpStepScreens(int index, ({int oldest, int newest}) visible) {
+    if (visible.oldest == -1) return 1;
+    final perScreen = visible.newest - visible.oldest + 1;
+    if (perScreen <= 0) return 1;
+    final away = index < visible.oldest
+        ? visible.oldest - index
+        : index - visible.newest;
+    return (away / perScreen).clamp(1.0, _jumpStepMaxScreens);
+  }
+
+  bool _jumpNearMessage(String messageId) {
+    if (!_scrollController.hasClients) return false;
+    final listBox = _listKey.currentContext?.findRenderObject();
+    if (listBox is! RenderBox || listBox.size.height <= 0) return false;
+    final items = _buildCombinedItems();
+    final index = items.indexWhere(
+      (it) => it is _MessageItem && it.message.id == messageId,
+    );
+    if (index == -1) return false;
+
+    final visible = _visibleItemRange(items, listBox);
+    final position = _scrollController.position;
+    final step = position.viewportDimension * _jumpStepScreens(index, visible);
+    final double next;
+    if (visible.oldest == -1 || index < visible.oldest) {
+      next = position.pixels + step;
+    } else if (index > visible.newest) {
+      next = position.pixels - step;
+    } else {
+      return false;
+    }
+    final clamped = next.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((clamped - position.pixels).abs() < 0.5) return false;
+    _scrollController.jumpTo(clamped);
+    return true;
+  }
+
   void _alignLoadedMessage(
     String messageId,
     double alignment,
     int attempt, {
+    int frames = 0,
     VoidCallback? onSettled,
   }) {
     if (!mounted || !_scrollController.hasClients) {
@@ -4632,15 +4971,17 @@ class _ChatScreenState extends State<ChatScreen>
     final listBox = _listKey.currentContext?.findRenderObject();
     final box = _keyForMessage(messageId).currentContext?.findRenderObject();
     if (listBox is! RenderBox || box is! RenderBox || !box.attached) {
-      if (attempt >= 8) {
+      if (attempt >= _jumpStallLimit || frames >= _jumpFrameLimit) {
         onSettled?.call();
         return;
       }
+      final moved = _jumpNearMessage(messageId);
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _alignLoadedMessage(
           messageId,
           alignment,
-          attempt + 1,
+          moved ? 0 : attempt + 1,
+          frames: frames + 1,
           onSettled: onSettled,
         ),
       );
@@ -4660,7 +5001,8 @@ class _ChatScreenState extends State<ChatScreen>
     if (viewportHeight <= 0 ||
         delta.abs() <= 0.5 ||
         (target - pos.pixels).abs() <= 0.5 ||
-        attempt >= 8) {
+        attempt >= _jumpStallLimit ||
+        frames >= _jumpFrameLimit) {
       onSettled?.call();
       return;
     }
@@ -4671,6 +5013,7 @@ class _ChatScreenState extends State<ChatScreen>
         messageId,
         alignment,
         attempt + 1,
+        frames: frames + 1,
         onSettled: onSettled,
       ),
     );
@@ -4873,6 +5216,7 @@ class _ChatScreenState extends State<ChatScreen>
     final cs = Theme.of(context).colorScheme;
     final accent = cs.primary;
     return Padding(
+      key: _unreadSeparatorKey,
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
       child: Row(
         children: [
@@ -4983,13 +5327,43 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  Widget? _buildPinnedBanner({required bool floating}) {
+  Widget _buildPinnedAndPill() {
+    return ValueListenableBuilder<PlaybackKind?>(
+      valueListenable: MediaPlayback.instance.primary,
+      builder: (context, kind, _) {
+        final merged = kind != null;
+        final banner = _buildPinnedBanner(
+          floating: true,
+          borderRadius: merged
+              ? const BorderRadius.vertical(top: Radius.circular(16))
+              : null,
+        );
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ?banner,
+            MediaPlaybackPill(
+              borderRadius: banner == null
+                  ? BorderRadius.circular(16)
+                  : const BorderRadius.vertical(bottom: Radius.circular(16)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget? _buildPinnedBanner({
+    required bool floating,
+    BorderRadius? borderRadius,
+  }) {
     final pinned = chat;
     if (pinned == null || !pinned.hasPinnedMessage) return null;
     return _PinnedMessageBanner(
       text: pinned.pinnedMsgText,
       isPreview: pinned.pinnedMsgIsPreview,
       floating: floating,
+      borderRadius: borderRadius,
       frosted: _effectiveChrome == ChatChromeStyle.transparent,
       liquid: _liquidChrome,
       backdropKey: _pillBackdrop,
@@ -5035,6 +5409,7 @@ class _ChatScreenState extends State<ChatScreen>
                   ),
                 ),
               ),
+              VideoNoteRecordingLayer(controller: _note),
               if (frosted)
                 Positioned(left: 0, right: 0, bottom: 0, child: composer),
               SearchOverlay(
@@ -5060,21 +5435,10 @@ class _ChatScreenState extends State<ChatScreen>
         _pinnedBannerLift;
   }
 
-  void _resetPinnedBannerHeight() {
-    if (_pinnedBannerHeight.value == 0) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && chat?.hasPinnedMessage != true) {
-        _pinnedBannerHeight.value = 0;
-      }
-    });
-  }
-
   Widget _buildUnderlapBody() {
     final cs = Theme.of(context).colorScheme;
     final vignette = _effectiveChrome == ChatChromeStyle.none;
     final bannerTop = _pinnedBannerTop();
-    final banner = _buildPinnedBanner(floating: true);
-    if (banner == null) _resetPinnedBannerHeight();
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -5106,16 +5470,15 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ),
         ],
-        if (banner != null)
-          Positioned(
-            top: bannerTop,
-            left: 8,
-            right: 8,
-            child: _MeasureSize(
-              onHeight: (value) => _pinnedBannerHeight.value = value,
-              child: banner,
-            ),
+        Positioned(
+          top: bannerTop,
+          left: 8,
+          right: 8,
+          child: _MeasureSize(
+            onHeight: (value) => _pinnedBannerHeight.value = value,
+            child: _buildPinnedAndPill(),
           ),
+        ),
         ValueListenableBuilder<double>(
           valueListenable: _composerHeight,
           builder: (context, height, _) => Positioned(
@@ -5131,6 +5494,7 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ),
         ),
+        VideoNoteRecordingLayer(controller: _note),
         Positioned(
           left: 0,
           right: 0,
@@ -5263,6 +5627,7 @@ class _ChatScreenState extends State<ChatScreen>
                   return CustomScrollView(
                     controller: _scrollController,
                     reverse: true,
+                    physics: _listPhysics,
                     cacheExtent: cacheExtent,
                     slivers: [
                       SliverPadding(
@@ -5550,30 +5915,82 @@ class _ChatScreenState extends State<ChatScreen>
         builder: (context, child) {
           final t = _scrollDownCurved.value;
           if (t == 0) return const SizedBox.shrink();
+          final backdropVisible = t >= 1;
           return Opacity(
             opacity: t,
-            child: Transform.scale(scale: 0.82 + 0.18 * t, child: child),
-          );
-        },
-        child: SizedBox(
-          width: 46,
-          height: 46,
-          child: GlossyPill(
-            color: frosted || _liquidChrome ? AppFrost.pillTint(cs) : null,
-            blurSigma: frosted && !_liquidChrome ? AppFrost.sigma : null,
-            liquid: _liquidChrome,
-            backdropKey: _pillBackdrop,
-            elevated: true,
-            onTap: _onScrollDownTap,
-            child: Center(
-              child: Icon(
-                Symbols.keyboard_arrow_down,
-                color: cs.onSurface,
-                weight: 500,
-                size: 26,
+            child: Transform.scale(
+              scale: 0.82 + 0.18 * t,
+              child: SizedBox(
+                width: 46,
+                height: 46,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: GlossyPill(
+                        color: frosted || _liquidChrome
+                            ? AppFrost.glassTint(cs)
+                            : null,
+                        blurSigma: frosted && !_liquidChrome && backdropVisible
+                            ? AppFrost.sigma
+                            : null,
+                        liquid: _liquidChrome,
+                        backdropKey: _pillBackdrop,
+                        elevated: true,
+                        onTap: _onScrollDownTap,
+                        child: child!,
+                      ),
+                    ),
+                    Positioned(
+                      top: -5,
+                      right: -3,
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: _newMessageCount,
+                        builder: (context, count, _) => count <= 0
+                            ? const SizedBox.shrink()
+                            : AnimatedValueSwap<int>(
+                                value: count > 99 ? 100 : count,
+                                alignment: Alignment.centerRight,
+                                builder: (context, value) =>
+                                    _unreadBadge(cs, value),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+          );
+        },
+        child: Center(
+          child: Icon(
+            Symbols.keyboard_arrow_down,
+            color: cs.onSurface,
+            weight: 500,
+            size: 26,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _unreadBadge(ColorScheme cs, int count) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 21),
+      height: 21,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: cs.primary,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: TextStyle(
+          color: cs.onPrimary,
+          fontSize: 12,
+          height: 1,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -5763,7 +6180,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  String _addOptimisticFileMessage(FileAttachment attachment) {
+  CachedMessage _addOptimisticFileMessage(FileAttachment attachment) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = _nextTempId();
     final msg = CachedMessage(
@@ -5780,7 +6197,7 @@ class _ChatScreenState extends State<ChatScreen>
     _bumpMessages();
     Haptics.send();
     _scrollToBottom();
-    return tempId;
+    return msg;
   }
 
   void _updateFileMessageStatus(
@@ -5815,7 +6232,7 @@ class _ChatScreenState extends State<ChatScreen>
         name: entry.filename,
         size: entry.size,
       ),
-    );
+    ).id;
     _showAttachmentPanel.value = false;
     try {
       final realId = await messagesModule.sendFileMessage(
@@ -5834,7 +6251,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<bool> _sendFileById(int fileId) async {
-    final tempId = _addOptimisticFileMessage(FileAttachment(fileId: fileId));
+    final tempId = _addOptimisticFileMessage(
+      FileAttachment(fileId: fileId),
+    ).id;
     try {
       final realId = await messagesModule.sendFileMessage(widget.chatId, fileId);
       final ok = realId != null;
@@ -5929,75 +6348,33 @@ class _ChatScreenState extends State<ChatScreen>
     if (jobs.isEmpty || !mounted) return;
 
     final tempId = _nextTempId();
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final progress = ValueNotifier<List<double>>(
-      List<double>.filled(jobs.length, 0),
+    final placeholder = CachedMessage(
+      id: tempId,
+      accountId: _myId,
+      chatId: widget.chatId,
+      senderId: _myId,
+      text: caption.isEmpty ? null : caption,
+      time: DateTime.now().millisecondsSinceEpoch,
+      status: 'sending',
+      attachments: attachments,
     );
-    _photoUploadProgress[tempId] = progress;
 
-    _messages.add(
-      CachedMessage(
-        id: tempId,
-        accountId: _myId,
-        chatId: widget.chatId,
-        senderId: _myId,
-        text: caption.isEmpty ? null : caption,
-        time: now,
-        status: 'sending',
-        attachments: attachments,
-      ),
-    );
+    _messages.add(placeholder);
     _lastSentId = tempId;
     _bumpMessages();
     Haptics.send();
     _scrollToBottom();
 
-    try {
-      final tokens = await _uploadPhotos(jobs, progress);
-      if (!mounted) {
-        _disposePhotoProgress(tempId);
-        return;
-      }
-      if (tokens.any((t) => t == null)) {
-        _failPhotoMessage(tempId);
-        return;
-      }
-
-      progress.value = List<double>.filled(jobs.length, 1);
-
-      final serverMsg = await messagesModule.sendPhotoMessage(
-        widget.chatId,
-        tokens.cast<String>(),
-        caption: caption.isEmpty ? null : caption,
-      );
-      if (!mounted) {
-        _disposePhotoProgress(tempId);
-        return;
-      }
-      if (serverMsg == null) {
-        _failPhotoMessage(tempId);
-        return;
-      }
-
-      final real = CachedMessage.fromPushPayload(
-        _myId,
-        widget.chatId,
-        serverMsg,
-      );
-      final idx = _messages.indexWhere((m) => m.id == tempId);
-      if (idx != -1) {
-        _messages[idx] = real;
-        _bumpMessages();
-        unawaited(_persistOutgoing(real));
-      }
-      _disposePhotoProgress(tempId);
-    } catch (e) {
-      if (mounted) {
-        _failPhotoMessage(tempId);
-      } else {
-        _disposePhotoProgress(tempId);
-      }
-    }
+    unawaited(
+      UploadService.instance.sendPhotos(
+        accountId: _myId,
+        chatId: widget.chatId,
+        tempId: tempId,
+        jobs: jobs,
+        caption: caption,
+        placeholder: placeholder,
+      ),
+    );
   }
 
   Future<void> _sendVideo(
@@ -6012,103 +6389,162 @@ class _ChatScreenState extends State<ChatScreen>
         await video.item.originFile();
     if (file == null || !mounted) return;
 
-    final scheduled = scheduledTime != null;
-    final durationMs = video.item.duration?.inMilliseconds;
+    var durationMs = video.item.duration?.inMilliseconds;
+    if (durationMs == null && DesktopVideoProbe.supported) {
+      durationMs = (await DesktopVideoProbe.duration(file.path))?.inMilliseconds;
+    }
+    final dims = await video.item.dimensions();
+    Uint8List? thumbBytes;
+    try {
+      thumbBytes = await video.item.thumbnail(512);
+    } catch (_) {}
+    if (!mounted) return;
+    final thumbData = thumbBytes == null || thumbBytes.isEmpty
+        ? null
+        : 'data:image/jpeg;base64,${base64Encode(thumbBytes)}';
 
-    String? tempId;
-    ValueNotifier<List<double>>? progress;
-    if (scheduled) {
+    final tempId = _nextTempId();
+    CachedMessage? placeholder;
+
+    if (scheduledTime != null) {
       showCustomNotification(context, 'Загрузка…');
     } else {
-      tempId = _nextTempId();
-      progress = ValueNotifier<List<double>>(const [0]);
-      _photoUploadProgress[tempId] = progress;
-      _messages.add(
-        CachedMessage(
-          id: tempId,
-          accountId: _myId,
-          chatId: widget.chatId,
-          senderId: _myId,
-          text: caption.isEmpty ? null : caption,
-          time: DateTime.now().millisecondsSinceEpoch,
-          status: 'sending',
-          attachments: [VideoAttachment(duration: durationMs)],
-        ),
+      placeholder = CachedMessage(
+        id: tempId,
+        accountId: _myId,
+        chatId: widget.chatId,
+        senderId: _myId,
+        text: caption.isEmpty ? null : caption,
+        time: DateTime.now().millisecondsSinceEpoch,
+        status: 'sending',
+        attachments: [
+          VideoAttachment(
+            duration: durationMs,
+            localPath: file.path,
+            previewData: thumbData,
+            width: dims?.$1,
+            height: dims?.$2,
+          ),
+        ],
       );
+      _messages.add(placeholder);
       _lastSentId = tempId;
       _bumpMessages();
       Haptics.send();
       _scrollToBottom();
     }
 
-    final progressNotifier = progress;
-    try {
-      final info = await messagesModule.requestVideoUploadUrl();
-      if (info == null || info.url.isEmpty) throw Exception('no_url');
-
-      final ok = await fileUploader.uploadVideoFile(
-        Uri.parse(info.url),
-        file,
-        onProgress: progressNotifier == null
-            ? null
-            : (sent, total) {
-                if (total > 0) {
-                  progressNotifier.value = [(sent / total).clamp(0.0, 1.0)];
-                }
-              },
-      );
-      if (!ok) throw Exception('upload_failed');
-      if (!mounted) {
-        if (tempId != null) _disposePhotoProgress(tempId);
-        return;
-      }
-
-      final serverMsg = await messagesModule.sendVideoMessage(
-        widget.chatId,
-        info.token,
-        caption: caption.isEmpty ? null : caption,
+    unawaited(
+      UploadService.instance.sendVideo(
+        accountId: _myId,
+        chatId: widget.chatId,
+        tempId: tempId,
+        file: file,
+        caption: caption,
+        placeholder: placeholder,
         scheduledTime: scheduledTime,
-      );
-      if (!mounted) {
-        if (tempId != null) _disposePhotoProgress(tempId);
-        return;
-      }
-      if (serverMsg == null) throw Exception('send_failed');
+      ),
+    );
+  }
 
-      if (scheduled) {
+  void _onUploadEvent(UploadJobEvent event) {
+    if (!mounted || event.chatId != widget.chatId) return;
+    _syncUploadStatus();
+    if (event is UploadJobDone) {
+      if (event.scheduled) {
         Haptics.send();
         _markHasScheduled();
+        final at = event.scheduledTime;
         showCustomNotification(
           context,
-          'Запланировано на '
-          '${formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(scheduledTime))}',
+          at == null
+              ? 'Запланировано'
+              : 'Запланировано на '
+                    '${formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(at))}',
         );
-      } else {
-        final real = CachedMessage.fromPushPayload(
-          _myId,
-          widget.chatId,
-          serverMsg,
-        );
-        final idx = _messages.indexWhere((m) => m.id == tempId);
-        if (idx != -1) {
-          _messages[idx] = real;
-          _bumpMessages();
-          unawaited(_persistOutgoing(real, removeId: tempId));
-        }
-        _disposePhotoProgress(tempId!);
-      }
-    } catch (_) {
-      if (!mounted) {
-        if (tempId != null) _disposePhotoProgress(tempId);
         return;
       }
-      if (scheduled) {
+      final real = event.message;
+      if (real == null) return;
+      final idx = _messages.indexWhere((m) => m.id == event.tempId);
+      if (idx != -1) {
+        _messages[idx] = real;
+        _bumpMessages();
+      }
+    } else if (event is UploadJobFailed) {
+      if (event.scheduled) {
         Haptics.error();
-        showCustomNotification(context, 'Не удалось запланировать видео');
-      } else {
-        _failPhotoMessage(tempId!);
+        showCustomNotification(context, 'Не удалось запланировать');
+        return;
+      }
+      _failPhotoMessage(event.tempId);
+      if (event.kind == UploadKind.file) {
+        showCustomNotification(context, 'Ошибка: ${event.reason}');
       }
     }
+  }
+
+  void _syncUploadStatus() {
+    final job = UploadService.instance.activeFileJob(widget.chatId);
+    if (job?.id == _uploadStatusJobId) return;
+    _detachUploadStatus();
+    if (job == null) {
+      _uploadStatus.value = const UploadStatus();
+      return;
+    }
+    _uploadStatusJobId = job.id;
+    _uploadStatusBytes = job.bytes;
+    job.bytes.addListener(_onUploadBytes);
+    _onUploadBytes();
+  }
+
+  void _onUploadBytes() {
+    final bytes = _uploadStatusBytes?.value;
+    if (bytes == null) return;
+    _uploadStatus.value = UploadStatus(
+      active: true,
+      sent: bytes.sent,
+      total: bytes.total,
+    );
+  }
+
+  void _detachUploadStatus() {
+    _uploadStatusBytes?.removeListener(_onUploadBytes);
+    _uploadStatusBytes = null;
+    _uploadStatusJobId = null;
+  }
+
+  void _mergePendingMedia() {
+    _syncUploadStatus();
+    final service = UploadService.instance;
+    var changed = false;
+
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      final msg = _messages[i];
+      if (!isSendingStatus(msg.status)) continue;
+      final done = service.completedFor(msg.id);
+      if (done != null) {
+        if (done.id != msg.id && _messages.any((m) => m.id == done.id)) {
+          _messages.removeAt(i);
+        } else {
+          _messages[i] = done;
+        }
+        changed = true;
+        continue;
+      }
+      if (service.didFail(msg.id)) {
+        _messages[i] = msg.copyWith(status: 'error');
+        changed = true;
+      }
+    }
+
+    for (final msg in service.pendingFor(widget.chatId)) {
+      if (_messages.any((m) => m.id == msg.id)) continue;
+      _messages.add(msg);
+      changed = true;
+    }
+
+    if (changed) _bumpMessages();
   }
 
   Future<void> _sendScheduledPhotos(
@@ -6139,43 +6575,16 @@ class _ChatScreenState extends State<ChatScreen>
     if (jobs.isEmpty || !mounted) return;
 
     showCustomNotification(context, 'Загрузка…');
-    final progress = ValueNotifier<List<double>>(
-      List<double>.filled(jobs.length, 0),
-    );
-    try {
-      final tokens = await _uploadPhotos(jobs, progress);
-      if (!mounted) return;
-      if (tokens.any((t) => t == null)) {
-        showCustomNotification(context, 'Не удалось загрузить фото');
-        return;
-      }
-
-      final result = await messagesModule.sendPhotoMessage(
-        widget.chatId,
-        tokens.cast<String>(),
-        caption: caption.isEmpty ? null : caption,
+    unawaited(
+      UploadService.instance.sendPhotos(
+        accountId: _myId,
+        chatId: widget.chatId,
+        tempId: _nextTempId(),
+        jobs: jobs,
+        caption: caption,
         scheduledTime: scheduledTime,
-      );
-      if (!mounted) return;
-      if (result != null) {
-        Haptics.send();
-        _markHasScheduled();
-        showCustomNotification(
-          context,
-          'Запланировано на '
-          '${formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(scheduledTime))}',
-        );
-      } else {
-        showCustomNotification(context, 'Не удалось запланировать');
-      }
-    } catch (_) {
-      if (mounted) {
-        Haptics.error();
-        showCustomNotification(context, 'Ошибка при загрузке');
-      }
-    } finally {
-      progress.dispose();
-    }
+      ),
+    );
   }
 
   Future<void> _sendAttachMessage(
@@ -6234,13 +6643,12 @@ class _ChatScreenState extends State<ChatScreen>
     }
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     _keyboardBeforeStickers = keyboard > 120 || _messageFocusNode.hasFocus;
-    if (keyboard > 120) _stickers.panelHeight = keyboard;
+    if (keyboard > 120) _stickers.setBaseHeight(keyboard);
     FocusManager.instance.primaryFocus?.unfocus();
     _stickers.showPanel.value = true;
   }
 
   Future<void> _sendSticker(StickerItem sticker) async {
-    _stickers.hide();
     await _sendAttachMessage([
       StickerAttachment(
         stickerId: sticker.id.toString(),
@@ -6327,105 +6735,11 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  static const int _photoUploadConcurrency = 3;
-  static const int _photoUploadAttempts = 3;
-
-  Future<List<String?>> _uploadPhotos(
-    List<({File file, GalleryItem? item})> jobs,
-    ValueNotifier<List<double>> progress,
-  ) async {
-    final tokens = List<String?>.filled(jobs.length, null);
-    var nextIndex = 0;
-    var failed = false;
-
-    Future<void> worker() async {
-      while (!failed) {
-        final i = nextIndex++;
-        if (i >= jobs.length) return;
-        final token = await _uploadOnePhoto(jobs[i], i, progress);
-        if (token == null) {
-          failed = true;
-          return;
-        }
-        tokens[i] = token;
-      }
-    }
-
-    final workerCount = math.min(_photoUploadConcurrency, jobs.length);
-    await Future.wait(List.generate(workerCount, (_) => worker()));
-    return tokens;
-  }
-
-  Future<String?> _uploadOnePhoto(
-    ({File file, GalleryItem? item}) job,
-    int index,
-    ValueNotifier<List<double>> progress,
-  ) async {
-    File file;
-    try {
-      file = await optimizePhotoForUpload(job.file, item: job.item);
-    } catch (e) {
-      logger.w('optimize photo: $e');
-      file = job.file;
-    }
-    for (var attempt = 0; attempt < _photoUploadAttempts; attempt++) {
-      if (attempt > 0) {
-        await Future.delayed(Duration(seconds: attempt));
-        if (!mounted) return null;
-        _setPhotoProgress(progress, index, 0);
-      }
-      try {
-        final url = await messagesModule.requestPhotoUploadUrl();
-        if (url == null || url.isEmpty) continue;
-        final token = await fileUploader.uploadPhoto(
-          Uri.parse(url),
-          file,
-          filename: _photoFilename(file),
-          onProgress: (sent, total) {
-            if (total <= 0) return;
-            _setPhotoProgress(progress, index, (sent / total).clamp(0.0, 1.0));
-          },
-        );
-        if (token != null) return token;
-      } catch (e) {
-        logger.w('uploadOnePhoto attempt ${attempt + 1}: $e');
-      }
-    }
-    return null;
-  }
-
-  void _setPhotoProgress(
-    ValueNotifier<List<double>> progress,
-    int index,
-    double value,
-  ) {
-    final next = List<double>.from(progress.value);
-    if (index < next.length) {
-      next[index] = value;
-      progress.value = next;
-    }
-  }
-
-  String _photoFilename(File file) {
-    final segments = file.uri.pathSegments;
-    final name = segments.isNotEmpty ? segments.last : '';
-    return name.isNotEmpty ? name : 'photo.jpg';
-  }
 
   void _failPhotoMessage(String tempId) {
     final idx = _messages.indexWhere((m) => m.id == tempId);
     if (idx != -1) {
-      final old = _messages[idx];
-      _messages[idx] = CachedMessage(
-        id: old.id,
-        accountId: old.accountId,
-        chatId: old.chatId,
-        senderId: old.senderId,
-        text: old.text,
-        time: old.time,
-        status: 'error',
-        attachments: old.attachments,
-      );
+      _messages[idx] = _messages[idx].copyWith(status: 'error');
       _bumpMessages();
     }
     _disposePhotoProgress(tempId);
@@ -6516,140 +6830,28 @@ class _ChatScreenState extends State<ChatScreen>
     required int size,
     int? scheduledTime,
   }) async {
-    final file = (name: filename, size: size);
-    final done = Completer<void>();
+    if (_myId == 0) return;
 
     _showAttachmentPanel.value = false;
-    _uploadStatus.value = UploadStatus(active: true, total: file.size);
 
-    final scheduled = scheduledTime != null;
-    final tempId = scheduled
+    final placeholder = scheduledTime != null
         ? null
         : _addOptimisticFileMessage(
-            FileAttachment(name: file.name, size: file.size),
+            FileAttachment(name: filename, size: size),
           );
 
-    UploadNotificationService.start(file.name);
-
-    var notifLastSent = 0;
-    var notifLastMs = DateTime.now().millisecondsSinceEpoch;
-    var notifSpeedBps = 0;
-    var notifLastPercent = -1;
-
-    void stopNotif() => UploadNotificationService.stop();
-
-    _uploadSub?.cancel();
-    _uploadSub = fileUploader
-        .upload(
-          chatId: widget.chatId,
-          file: source,
-          filename: file.name,
-          totalSize: file.size,
-          scheduledTime: scheduledTime,
-        )
-        .listen(
-          (event) {
-            if (!mounted) return;
-            switch (event) {
-              case UploadProgress(:final sent, :final total):
-                _uploadStatus.value = UploadStatus(
-                  active: true,
-                  sent: sent,
-                  total: total,
-                );
-                final nowMs = DateTime.now().millisecondsSinceEpoch;
-                final elapsed = nowMs - notifLastMs;
-                if (elapsed >= 500) {
-                  notifSpeedBps = ((sent - notifLastSent) * 1000 / elapsed)
-                      .round();
-                  notifLastSent = sent;
-                  notifLastMs = nowMs;
-                }
-                final percent = total > 0 ? (sent * 100 ~/ total) : 0;
-                if (percent != notifLastPercent) {
-                  notifLastPercent = percent;
-                  UploadNotificationService.update(
-                    filename: file.name,
-                    progressPercent: percent,
-                    speedBps: notifSpeedBps,
-                  );
-                }
-              case UploadDone(
-                :final fileId,
-                :final token,
-                :final url,
-                :final messageId,
-              ):
-                stopNotif();
-                FileHistoryCache.add(
-                  FileHistoryEntry(
-                    fileId: fileId,
-                    url: url,
-                    token: token,
-                    filename: file.name,
-                    size: file.size,
-                    sentAt: DateTime.now(),
-                  ),
-                );
-                if (scheduled) {
-                  Haptics.send();
-                  showCustomNotification(
-                    context,
-                    'Запланировано на '
-                    '${formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(scheduledTime))}',
-                  );
-                } else {
-                  _updateFileMessageStatus(
-                    tempId!,
-                    'sent',
-                    realId: messageId,
-                    attachment: FileAttachment(
-                      fileId: fileId,
-                      fileToken: token,
-                      name: file.name,
-                      size: file.size,
-                    ),
-                  );
-                }
-              case UploadError(:final message):
-                stopNotif();
-                showCustomNotification(context, 'Ошибка: $message');
-                if (tempId != null) _updateFileMessageStatus(tempId, 'error');
-            }
-          },
-          onDone: () {
-            if (!mounted) return;
-            stopNotif();
-            if (tempId != null) {
-              final inFlight = _messages.firstWhere(
-                (m) => m.id == tempId,
-                orElse: () => CachedMessage(
-                  id: '',
-                  accountId: 0,
-                  chatId: 0,
-                  senderId: 0,
-                  time: 0,
-                ),
-              );
-              if (inFlight.id == tempId && inFlight.status == 'sending') {
-                _updateFileMessageStatus(tempId, 'error');
-              }
-            }
-            _uploadStatus.value = const UploadStatus();
-            _uploadSub = null;
-            if (!done.isCompleted) done.complete();
-          },
-          onError: (Object e) {
-            if (!mounted) return;
-            stopNotif();
-            showCustomNotification(context, 'Ошибка: $e');
-            if (tempId != null) _updateFileMessageStatus(tempId, 'error');
-            _uploadStatus.value = const UploadStatus();
-            _uploadSub = null;
-            if (!done.isCompleted) done.complete();
-          },
-        );
-    return done.future;
+    final sending = UploadService.instance.sendFile(
+      accountId: _myId,
+      chatId: widget.chatId,
+      tempId: placeholder?.id ?? _nextTempId(),
+      source: source,
+      filename: filename,
+      size: size,
+      placeholder: placeholder,
+      scheduledTime: scheduledTime,
+    );
+    _syncUploadStatus();
+    await sending;
   }
 }
 
@@ -6774,6 +6976,7 @@ class _PinnedMessageBanner extends StatelessWidget {
   final bool floating;
   final bool frosted;
   final bool liquid;
+  final BorderRadius? borderRadius;
   final BackdropKey? backdropKey;
 
   const _PinnedMessageBanner({
@@ -6782,21 +6985,24 @@ class _PinnedMessageBanner extends StatelessWidget {
     required this.onTap,
     this.onUnpin,
     this.floating = false,
+    this.borderRadius,
     this.frosted = false,
     this.liquid = false,
     this.backdropKey,
   });
+
+  BorderRadius get _radius => borderRadius ?? BorderRadius.circular(16);
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final content = Material(
       color: frosted
-          ? AppFrost.panelTint(cs)
+          ? AppFrost.glassTint(cs)
           : floating
           ? cs.surfaceContainerHigh.withValues(alpha: 0.92)
           : cs.surfaceContainerHigh,
-      borderRadius: floating ? BorderRadius.circular(16) : null,
+      borderRadius: floating ? _radius : null,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -7159,7 +7365,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       return;
     }
     final selected = widget.selectedIds.value.contains(widget.message.id);
-    final hasText = widget.message.text?.isNotEmpty ?? false;
+    final hasText = widget.message.selectableText != null;
     if (selected && hasText && !widget.message.isControl) {
       widget.onStartTextSelection(globalPosition);
     } else {

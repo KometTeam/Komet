@@ -10,6 +10,7 @@ import '../../core/cache/info_cache.dart';
 import '../../core/cache/message_session_cache.dart';
 import 'shared_content.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/chat_members_store.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
@@ -559,6 +560,41 @@ class ChatsModule {
   final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   void _bump() => chatsChanged.value = chatsChanged.value + 1;
 
+  static const Set<String> _membershipEvents = {
+    'add',
+    'joinByLink',
+    'leave',
+    'remove',
+  };
+
+  void _applyMembershipControl(
+    int accountId,
+    int chatId,
+    CachedMessage message,
+  ) {
+    final control = message.controlAttachment;
+    final event = control?.event;
+    if (control == null || event == null) return;
+    if (!_membershipEvents.contains(event)) return;
+
+    if (message.senderId != accountId) {
+      final affected = control.userIds?.length ?? 1;
+      ChatMembersStore.instance.adjust(chatId, switch (event) {
+        'add' => affected,
+        'joinByLink' => 1,
+        'leave' => -1,
+        'remove' => -affected,
+        _ => 0,
+      });
+    }
+    _refreshChatInfo(chatId);
+  }
+
+  void _refreshChatInfo(int chatId) {
+    ChatInfoFetch.invalidate(chatId);
+    unawaited(ChatInfoFetch.get(chatId));
+  }
+
   Future<bool> _updateChat(
     int accountId,
     int chatId,
@@ -819,6 +855,7 @@ class ChatsModule {
         final cached = CachedMessage.fromPushPayload(accountId, chatId, msg);
         await AppDatabase.saveMessages([cached.toDbRow()]);
         emittedMessage = cached;
+        _applyMembershipControl(accountId, chatId, cached);
         _messageEventsController.add(MessageAddedEvent(chatId, cached));
       }
     }
@@ -1160,6 +1197,7 @@ class ChatsModule {
   }) async {
     final cachedAt = DateTime.now().millisecondsSinceEpoch;
     final id = chat['id'];
+    ChatMembersStore.instance.applyChatPayload(chat);
     Map<int, CachedChat> existing = const {};
     Map<String, dynamic>? existingRow;
     if (preloadedExisting != null) {
@@ -1260,6 +1298,7 @@ class ChatsModule {
     final rows = <Map<String, dynamic>>[];
     for (final c in chats.whereType<Map>()) {
       final map = c.cast<dynamic, dynamic>();
+      ChatMembersStore.instance.applyChatPayload(map);
       final parsed = parseChatRow(
         map,
         accountId,
@@ -1360,7 +1399,9 @@ class ChatsModule {
     final payload = packet.payload as Map?;
     final chats = payload?['chats'] as List?;
     if (chats == null || chats.isEmpty) return null;
-    return Map<String, dynamic>.from(chats.first as Map);
+    final info = Map<String, dynamic>.from(chats.first as Map);
+    ChatMembersStore.instance.applyChatPayload(info);
+    return info;
   }
 
   Future<Map<int, int>> getReadMarks(Api api, int accountId, int chatId) async {
@@ -1461,6 +1502,8 @@ class ChatsModule {
       throw const PacketError('Не удалось подписаться');
     }
     final count = chatMap['participantsCount'];
+    if (count is! int) ChatMembersStore.instance.adjust(cached.id, 1);
+    _refreshChatInfo(cached.id);
     return (chat: cached, subscribersCount: count is int ? count : null);
   }
 
@@ -1850,6 +1893,10 @@ class ChatsModule {
           await cacheServerChat(chat.cast<dynamic, dynamic>(), accountId);
         }
       }
+      if (chat is! Map || chat['participantsCount'] is! int) {
+        ChatMembersStore.instance.adjust(chatId, userIds.length);
+      }
+      _refreshChatInfo(chatId);
       return true;
     } on PacketError catch (e) {
       logger.w('addMembers $chatId: ${e.message}');

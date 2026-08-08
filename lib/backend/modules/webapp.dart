@@ -13,6 +13,11 @@ abstract class EntryBannerApps {
   };
 }
 
+const Set<String> kMiniAppOptions = {'HAS_WEBAPP', 'HAS_WEB_APP', 'WEBAPP'};
+
+bool hasMiniAppOption(Set<String>? options) =>
+    options != null && options.any(kMiniAppOptions.contains);
+
 class WebAppLaunch {
   final String url;
 

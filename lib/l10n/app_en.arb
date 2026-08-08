@@ -18,6 +18,8 @@
   "serverSettingsTitle": "Server",
   "serverHostLabel": "Host",
   "serverPortLabel": "Port",
+  "serverTrustMincifryTitle": "Trust the Минцифры CA",
+  "serverTrustMincifrySubtitle": "Required for api2.oneme.ru: its certificate chains to the Russian Trusted Root CA, which is absent from the standard trust store. The root is bundled with the app; other hosts keep using the usual roots.",
   "serverApply": "Apply and reconnect",
   "serverUseDefault": "Reset to default",
   "serverInvalidHostOrPort": "Enter a valid host and port (1–65535)",
@@ -316,8 +318,12 @@
   "appearanceNavPillSubtitle": "Section switcher on the chats screen",
   "appearanceNavPillGlossy": "Glossy",
   "appearanceNavPillFrost": "G-FrostBlur",
+  "playbackPillAt": "at",
+  "playbackPillYou": "You",
   "appearanceGradientTitle": "Gradient",
   "appearanceGradientSubtitle": "Depth and highlights in Glossy capsules",
+  "appearanceSpectrumTitle": "Spectrum background",
+  "appearanceSpectrumSubtitle": "Experimental — living bars beneath the interface",
   "appearanceAccentColorTitle": "Accent color",
   "appearanceAccentColorSystem": "System",
   "appearanceAccentColorSubtitle": "Main color of the interface and bubbles",
@@ -452,6 +458,7 @@
   "contactProfileActionChat": "Chat",
   "contactProfileActionSound": "Sound",
   "contactProfileActionCall": "Call",
+  "contactProfileActionAddContact": "Add to contacts",
   "contactProfileInfoPhone": "Phone",
   "contactProfileInfoCountry": "Country",
   "contactProfileInfoGender": "Gender",
@@ -599,6 +606,59 @@
   "sharedCopyLink": "Copy link",
   "sharedLinkCopied": "Link copied",
   "chatInfoActionLeave": "Leave",
+  "chatInfoActionMuted": "Muted",
+  "chatInfoNotificationsOn": "Notifications on",
+  "chatInfoNotificationsOff": "Notifications off",
+  "chatInfoMenuBlock": "Block",
+  "chatInfoMenuUnblock": "Unblock",
+  "chatInfoMenuDeleteChat": "Delete chat",
+  "chatInfoMenuClearHistory": "Clear history",
+  "chatInfoClearHistoryTitle": "Clear history",
+  "chatInfoClearHistoryMessage": "All messages in this chat will be deleted permanently.",
+  "chatInfoClearHistoryForAll": "For everyone",
+  "chatInfoClearHistoryConfirm": "Clear",
+  "chatInfoClearHistoryDone": "History cleared",
+  "chatInfoDeleteChatTitle": "Delete chat",
+  "chatInfoDeleteChatMessage": "The chat will be deleted together with the whole conversation.",
+  "chatInfoDeleteChatConfirm": "Delete",
+  "chatInfoLeaveGroupTitle": "Leave group",
+  "chatInfoLeaveGroupMessage": "You will no longer receive messages from this group.",
+  "chatInfoLeaveChannelTitle": "Leave channel",
+  "chatInfoLeaveChannelMessage": "You will no longer receive posts from this channel.",
+  "chatInfoLeaveConfirm": "Leave",
+  "chatInfoLeaveFailed": "Could not leave the chat",
+  "chatInfoCallConfirmTitle": "Start a call",
+  "chatInfoCallConfirmMessage": "Call {name}?",
+  "@chatInfoCallConfirmMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInfoConfirmYes": "Yes",
+  "chatInfoConfirmNo": "No",
+  "chatInfoCallFailed": "Could not start the call",
+  "chatInfoBlockConfirmTitle": "Block",
+  "chatInfoBlockConfirmMessage": "Are you sure you want to block {name}?",
+  "@chatInfoBlockConfirmMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInfoBlockDone": "User blocked",
+  "chatInfoUnblockDone": "User unblocked",
+  "chatInfoBlockFailed": "Could not change the block state",
+  "chatInfoComplaintTitle": "Report",
+  "chatInfoComplaintSubtitle": "Choose a reason for the report",
+  "chatInfoComplaintSend": "Report",
+  "chatInfoComplaintClose": "Close",
+  "chatInfoComplaintEmpty": "Could not load the report reasons",
+  "chatInfoComplaintSent": "Report sent",
+  "chatInfoComplaintFailed": "Could not send the report",
+  "chatInfoActionCancel": "Cancel",
   "chatInfoBio": "About",
   "chatInfoInviteLink": "Invite link",
   "chatInfoCollapse": "Collapse",
@@ -973,6 +1033,8 @@
   "contactBubbleNew": "New contact",
   "contactBubbleAlreadyAdded": "Already in your contacts",
   "contactBubbleOpenProfile": "Open profile",
+  "miniAppOpen": "Open",
+  "miniAppFailed": "Couldn't open the app",
   "editContactMenu": "Edit contact",
   "editContactTitle": "Edit contact",
   "editContactFirstName": "First name",
@@ -998,5 +1060,48 @@
   "downloadsClearTitle": "Clear download history?",
   "downloadsClearBody": "The files will stay on the device, but this list will be cleared.",
   "downloadsClearConfirm": "Clear",
-  "downloadsHistoryCleared": "Download history cleared"
+  "downloadsHistoryCleared": "Download history cleared",
+  "uploadNotificationPhotos": "{count, plural, =1{Photo} other{{count} photos}}",
+  "@uploadNotificationPhotos": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadNotificationVideo": "Video",
+  "uploadNotificationFile": "File",
+  "uploadNotificationMultiple": "{count, plural, other{Sending {count} files}}",
+  "@uploadNotificationMultiple": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadNotificationPreparing": "Preparing…",
+  "uploadSpeedBytes": "{value} B/s",
+  "@uploadSpeedBytes": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSpeedKb": "{value} KB/s",
+  "@uploadSpeedKb": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSpeedMb": "{value} MB/s",
+  "@uploadSpeedMb": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  }
 }

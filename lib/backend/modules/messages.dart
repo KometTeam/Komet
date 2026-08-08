@@ -297,6 +297,8 @@ class ReplyInfo {
     this.attachments,
   });
 
+  bool get missing => previewText().isEmpty;
+
   static ReplyInfo? fromPayload(Map<String, dynamic>? payload) {
     if (payload == null) return null;
     final link = payload['link'];
@@ -411,6 +413,30 @@ class CachedMessage {
     this.deleted = false,
     this.editHistory,
   });
+
+  ControlAttachment? get controlAttachment =>
+      attachments?.whereType<ControlAttachment>().firstOrNull;
+
+  ForwardedMessageAttachment? get forwardedAttachment =>
+      attachments?.whereType<ForwardedMessageAttachment>().firstOrNull;
+
+  String? get selectableText {
+    final own = text;
+    if (own != null && own.isNotEmpty) return own;
+    final forwarded = forwardedAttachment?.originalText;
+    if (forwarded != null && forwarded.isNotEmpty) return forwarded;
+    return null;
+  }
+
+  String? get botStartPayload {
+    final control = controlAttachment;
+    if (control == null || !control.isBotStart) return null;
+    final payload = (control.startPayload ?? text)?.trim();
+    return (payload == null || payload.isEmpty) ? null : payload;
+  }
+
+  bool get isSilentBotStart =>
+      (controlAttachment?.isBotStart ?? false) && botStartPayload == null;
 
   CachedMessage copyWith({
     String? status,
@@ -807,6 +833,26 @@ class MessagesModule {
       'notify': notify,
     };
     return _api.sendRequest(Opcode.msgSend, payload);
+  }
+
+  Future<Map<String, dynamic>?> sendBotStart(
+    int chatId,
+    String startPayload,
+  ) async {
+    final response = await _api.sendRequest(Opcode.msgSend, {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {
+            '_type': 'CONTROL',
+            'event': ControlAttachment.botStartedEvent,
+            'startPayload': startPayload,
+          },
+        ],
+      },
+    });
+    return _sentMessageMap(response);
   }
 
   Future<String> _sendAndExtractMessageId(

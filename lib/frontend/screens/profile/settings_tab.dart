@@ -4,8 +4,6 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart'
-    show OverScrollHeaderStretchConfiguration;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -18,10 +16,12 @@ import '../../../core/utils/format.dart';
 import '../../../core/utils/update_checker.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/profile_header_scroll.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
@@ -38,12 +38,14 @@ import 'cloud_storage_screen.dart';
 import 'customization_section.dart';
 import 'debug_menu_screen.dart';
 import 'devices_screen.dart';
+import '../../widgets/spectrum_tint.dart';
 import 'edit_profile_screen.dart';
 import 'info_screen.dart';
 import 'komet_settings_screen.dart';
 import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
+import '../../widgets/media_playback_pill.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -52,7 +54,7 @@ class SettingsTab extends StatefulWidget {
   State<SettingsTab> createState() => _SettingsTabState();
 }
 
-class _SettingsTabState extends State<SettingsTab> {
+class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   ProfileData? _profile;
   bool _isPhoneVisible = false;
   ScrollController? _scrollController;
@@ -358,7 +360,7 @@ class _SettingsTabState extends State<SettingsTab> {
         final delta = expandedH - collapsedH;
         _syncHeaderDelta(delta);
         return Scaffold(
-          backgroundColor: cs.surface,
+          backgroundColor: spectrumSurfaceColor(cs),
           body: NotificationListener<ScrollNotification>(
             onNotification: (n) => _handleScrollNotification(n, delta),
             child: CustomScrollView(
@@ -366,18 +368,23 @@ class _SettingsTabState extends State<SettingsTab> {
               controller: _scrollController ??= ScrollController(
                 initialScrollOffset: delta,
               ),
-              physics: _HeaderPullScrollPhysics(
+              physics: HeaderPullScrollPhysics(
                 delta: delta,
                 isArmed: () => _expandArmed,
                 parent: const BouncingScrollPhysics(),
               ),
               slivers: [
                 SliverPersistentHeader(
-                  delegate: _ProfileHeaderDelegate(
+                  delegate: MorphHeaderDelegate(
                     collapsedExtent: collapsedH,
                     expandedExtent: expandedH,
                     headerBuilder: (ctx, t) =>
                         _buildHeader(ctx, cs, fullName, phone, t),
+                  ),
+                ),
+                const SliverToBoxAdapter(
+                  child: MediaPlaybackPill(
+                    margin: EdgeInsets.fromLTRB(16, 8, 16, 0),
                   ),
                 ),
                 SliverToBoxAdapter(
@@ -867,10 +874,10 @@ class _SettingsTabState extends State<SettingsTab> {
                                   ),
                                 ),
                                 const SizedBox(width: 4),
-                                Icon(
-                                  _isPhoneVisible
-                                      ? Symbols.visibility
-                                      : Symbols.visibility_off,
+                                AnimatedSlashIcon(
+                                  icon: Symbols.visibility,
+                                  slashedIcon: Symbols.visibility_off,
+                                  slashed: !_isPhoneVisible,
                                   size: 14,
                                   color: Color.lerp(
                                     cs.mutedText,
@@ -1057,125 +1064,6 @@ class _SettingsTabState extends State<SettingsTab> {
       }),
     );
   }
-}
-
-class _HeaderPullScrollPhysics extends ScrollPhysics {
-  final double delta;
-  final ValueGetter<bool> isArmed;
-
-  const _HeaderPullScrollPhysics({
-    required this.delta,
-    required this.isArmed,
-    super.parent,
-  });
-
-  static final SpringDescription _expressiveSpring =
-      SpringDescription.withDampingRatio(mass: 1, stiffness: 380, ratio: 0.9);
-
-  static const double _flingVelocity = 400;
-
-  @override
-  _HeaderPullScrollPhysics applyTo(ScrollPhysics? ancestor) {
-    return _HeaderPullScrollPhysics(
-      delta: delta,
-      isArmed: isArmed,
-      parent: buildParent(ancestor),
-    );
-  }
-
-  @override
-  double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
-    if (delta <= 0 || offset <= 0 || position.pixels <= 0) {
-      return super.applyPhysicsToUserOffset(position, offset);
-    }
-    final px = position.pixels;
-    final free = math.max(0.0, px - delta);
-    if (offset <= free) return offset;
-    if (!isArmed()) return free;
-    final inZone = offset - free;
-    final expandedFraction = (1 - math.min(px, delta) / delta).clamp(0.0, 1.0);
-    final friction = lerpDouble(0.58, 0.3, expandedFraction)!;
-    return free + inZone * friction;
-  }
-
-  @override
-  Simulation? createBallisticSimulation(
-    ScrollMetrics position,
-    double velocity,
-  ) {
-    if (delta > 0) {
-      final px = position.pixels;
-      final tolerance = toleranceFor(position);
-      if (px > 0 && px < delta) {
-        final double target;
-        if (velocity <= -_flingVelocity) {
-          target = 0;
-        } else if (velocity >= _flingVelocity) {
-          target = delta;
-        } else {
-          target = px < delta / 2 ? 0 : delta;
-        }
-        if ((target - px).abs() < tolerance.distance &&
-            velocity.abs() < tolerance.velocity) {
-          return null;
-        }
-        return ScrollSpringSimulation(
-          _expressiveSpring,
-          px,
-          target,
-          velocity,
-          tolerance: tolerance,
-        );
-      }
-      if (px >= delta && velocity < 0) {
-        return BouncingScrollSimulation(
-          position: px,
-          velocity: velocity,
-          leadingExtent: delta,
-          trailingExtent: math.max(delta, position.maxScrollExtent),
-          spring: spring,
-          tolerance: tolerance,
-        );
-      }
-    }
-    return super.createBallisticSimulation(position, velocity);
-  }
-}
-
-class _ProfileHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final double collapsedExtent;
-  final double expandedExtent;
-  final Widget Function(BuildContext context, double t) headerBuilder;
-
-  _ProfileHeaderDelegate({
-    required this.collapsedExtent,
-    required this.expandedExtent,
-    required this.headerBuilder,
-  });
-
-  @override
-  double get minExtent => collapsedExtent;
-
-  @override
-  double get maxExtent => expandedExtent;
-
-  @override
-  OverScrollHeaderStretchConfiguration get stretchConfiguration =>
-      OverScrollHeaderStretchConfiguration();
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    final range = expandedExtent - collapsedExtent;
-    final t = range <= 0 ? 0.0 : (1 - shrinkOffset / range).clamp(0.0, 1.0);
-    return headerBuilder(context, t);
-  }
-
-  @override
-  bool shouldRebuild(covariant _ProfileHeaderDelegate oldDelegate) => true;
 }
 
 class _SettingsItem {

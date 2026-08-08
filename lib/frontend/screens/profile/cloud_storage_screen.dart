@@ -9,7 +9,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/cloud_storage.dart';
-import '../../../backend/modules/upload_manager.dart';
+import '../../../backend/modules/upload_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
@@ -52,6 +52,8 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   bool _isUploading = false;
   final ValueNotifier<double> _uploadProgress = ValueNotifier(0);
   bool _animateNewCard = false;
+  StreamSubscription<UploadJobEvent>? _uploadEventSub;
+  UploadJob? _uploadJob;
 
   @override
   void initState() {
@@ -60,47 +62,73 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     _pageController = PageController(viewportFraction: _cardViewportFraction);
     _pageController.addListener(_onPageScroll);
     _checkEnv();
-    _bindUploadManager();
+    _uploadEventSub = UploadService.instance.events.listen(_onUploadEvent);
   }
 
   void _onPageScroll() {
     _currentFilePage.value = _pageController.page?.round() ?? 0;
   }
 
-  void _bindUploadManager() {
-    final mgr = UploadManager.instance;
-    if (mgr.isActive) {
-      setState(() => _isUploading = true);
-      _mode.open();
+  void _syncUploadJob() {
+    final chatId = _envGroupId;
+    final job = chatId == null
+        ? null
+        : UploadService.instance.activeFileJob(chatId);
+    if (identical(job, _uploadJob)) return;
+
+    _uploadJob?.progress.removeListener(_onUploadProgress);
+    _uploadJob = job;
+
+    if (job == null) {
+      _uploadProgress.value = 0;
+      if (_isUploading) setState(() => _isUploading = false);
+      return;
     }
-    mgr.onProgress = (progress, _) {
-      if (!mounted) return;
-      if (!_isUploading) setState(() => _isUploading = true);
-      _uploadProgress.value = progress;
-    };
-    mgr.onDone = (file) {
-      if (!mounted) return;
-      _uploadProgress.value = 0;
-      setState(() => _isUploading = false);
-      _prependFile(file);
-    };
-    mgr.onError = (msg) {
-      if (!mounted) return;
-      _uploadProgress.value = 0;
-      setState(() => _isUploading = false);
+
+    job.progress.addListener(_onUploadProgress);
+    _onUploadProgress();
+    if (_isUploading) return;
+    setState(() => _isUploading = true);
+    _mode.open();
+  }
+
+  void _onUploadProgress() {
+    final values = _uploadJob?.progress.value;
+    if (values == null || values.isEmpty) return;
+    _uploadProgress.value = values.first;
+  }
+
+  Future<void> _onUploadEvent(UploadJobEvent event) async {
+    final chatId = _envGroupId;
+    final accountId = _accountId;
+    if (!mounted || chatId == null || accountId == null) return;
+    if (event.chatId != chatId || event.kind != UploadKind.file) return;
+
+    _syncUploadJob();
+
+    if (event is UploadJobFailed) {
       showCustomNotification(
         context,
-        AppLocalizations.of(context)!.devicesGenericError(msg),
+        AppLocalizations.of(context)!.devicesGenericError(event.reason),
       );
-    };
+      return;
+    }
+    if (event is! UploadJobDone) return;
+
+    final newest = await CloudStorageModule.fetchLatestFile(
+      messagesModule,
+      accountId,
+      chatId,
+      expectedFileId: event.fileId,
+    );
+    if (!mounted || newest == null) return;
+    _prependFile(newest);
   }
 
   @override
   void dispose() {
-    final mgr = UploadManager.instance;
-    mgr.onProgress = null;
-    mgr.onDone = null;
-    mgr.onError = null;
+    _uploadEventSub?.cancel();
+    _uploadJob?.progress.removeListener(_onUploadProgress);
     _mode.dispose();
     _pageController.dispose();
     _currentFilePage.dispose();
@@ -205,6 +233,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     );
     if (!mounted) return;
     setState(() => _files = files.reversed.toList());
+    _syncUploadJob();
   }
 
   void _prependFile(CloudFile file) {
@@ -268,13 +297,17 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     _uploadProgress.value = 0;
     setState(() => _isUploading = true);
 
-    await UploadManager.instance.start(
-      chatId: chatId,
+    final service = UploadService.instance;
+    final sending = service.sendFile(
       accountId: accountId,
-      file: File(picked.path!),
+      chatId: chatId,
+      tempId: service.newTempId(),
+      source: File(picked.path!),
       filename: picked.name,
-      totalSize: picked.size,
+      size: picked.size,
     );
+    _syncUploadJob();
+    await sending;
   }
 
   void _showSendByIdSheet() {

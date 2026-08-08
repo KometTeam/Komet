@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../models/attachment.dart';
 import '../../lottie_image.dart';
+import '../../sending_clock_icon.dart';
 import 'bubble_context.dart';
 
 class StickerBubble extends StatelessWidget {
@@ -86,6 +87,9 @@ class StickerBubble extends StatelessWidget {
   Widget _buildStickerStatusIcon() {
     final status = ctx.overrideStatus ?? ctx.message.status;
     final v = messageStatusVisual(status, dimColor: Colors.white);
+    if (isSendingStatus(status)) {
+      return SendingClockIcon(color: v.color, size: 13);
+    }
     return Icon(v.icon, size: 13, color: v.color);
   }
 }

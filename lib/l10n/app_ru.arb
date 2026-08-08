@@ -18,6 +18,8 @@
   "serverSettingsTitle": "Сервер",
   "serverHostLabel": "Хост",
   "serverPortLabel": "Порт",
+  "serverTrustMincifryTitle": "Доверять сертификату Минцифры",
+  "serverTrustMincifrySubtitle": "Нужно для api2.oneme.ru: его сертификат выпущен под корнем Russian Trusted Root CA, которого нет в обычном хранилище. Корень зашит в приложение, остальные хосты проверяются как раньше.",
   "serverApply": "Применить и переподключиться",
   "serverUseDefault": "Сбросить к умолчанию",
   "serverInvalidHostOrPort": "Укажите корректный хост и порт (1–65535)",
@@ -274,8 +276,12 @@
   "appearanceNavPillSubtitle": "Переключатель разделов на экране чатов",
   "appearanceNavPillGlossy": "Glossy",
   "appearanceNavPillFrost": "G-FrostBlur",
+  "playbackPillAt": "в",
+  "playbackPillYou": "Вы",
   "appearanceGradientTitle": "Градиент",
   "appearanceGradientSubtitle": "Объём и блики в Glossy-капсулах",
+  "appearanceSpectrumTitle": "Спектр на фоне",
+  "appearanceSpectrumSubtitle": "Экспериментально — живые полосы под интерфейсом",
   "appearanceAccentColorTitle": "Акцентный цвет",
   "appearanceAccentColorSystem": "Системный",
   "appearanceAccentColorSubtitle": "Основной цвет интерфейса и пузырей",
@@ -396,6 +402,7 @@
   "contactProfileActionChat": "Чат",
   "contactProfileActionSound": "Звук",
   "contactProfileActionCall": "Звонок",
+  "contactProfileActionAddContact": "Добавить в контакты",
   "contactProfileInfoPhone": "Телефон",
   "contactProfileInfoCountry": "Страна",
   "contactProfileInfoGender": "Пол",
@@ -455,6 +462,45 @@
   "sharedCopyLink": "Копировать ссылку",
   "sharedLinkCopied": "Ссылка скопирована",
   "chatInfoActionLeave": "Покинуть",
+  "chatInfoActionMuted": "Без звука",
+  "chatInfoNotificationsOn": "Уведомления включены",
+  "chatInfoNotificationsOff": "Уведомления отключены",
+  "chatInfoMenuBlock": "Заблокировать",
+  "chatInfoMenuUnblock": "Разблокировать",
+  "chatInfoMenuDeleteChat": "Удалить чат",
+  "chatInfoMenuClearHistory": "Очистить историю",
+  "chatInfoClearHistoryTitle": "Очистить историю",
+  "chatInfoClearHistoryMessage": "Все сообщения в этом чате будут удалены без возможности восстановления.",
+  "chatInfoClearHistoryForAll": "Для всех",
+  "chatInfoClearHistoryConfirm": "Очистить",
+  "chatInfoClearHistoryDone": "История очищена",
+  "chatInfoDeleteChatTitle": "Удалить чат",
+  "chatInfoDeleteChatMessage": "Чат будет удалён вместе со всей перепиской.",
+  "chatInfoDeleteChatConfirm": "Удалить",
+  "chatInfoLeaveGroupTitle": "Покинуть группу",
+  "chatInfoLeaveGroupMessage": "Вы больше не будете получать сообщения этой группы.",
+  "chatInfoLeaveChannelTitle": "Покинуть канал",
+  "chatInfoLeaveChannelMessage": "Вы больше не будете получать публикации этого канала.",
+  "chatInfoLeaveConfirm": "Покинуть",
+  "chatInfoLeaveFailed": "Не удалось покинуть чат",
+  "chatInfoCallConfirmTitle": "Начать звонок",
+  "chatInfoCallConfirmMessage": "Позвонить {name}?",
+  "chatInfoConfirmYes": "Да",
+  "chatInfoConfirmNo": "Нет",
+  "chatInfoCallFailed": "Не удалось начать звонок",
+  "chatInfoBlockConfirmTitle": "Заблокировать",
+  "chatInfoBlockConfirmMessage": "Вы уверены, что хотите заблокировать {name}?",
+  "chatInfoBlockDone": "Пользователь заблокирован",
+  "chatInfoUnblockDone": "Пользователь разблокирован",
+  "chatInfoBlockFailed": "Не удалось изменить блокировку",
+  "chatInfoComplaintTitle": "Пожаловаться",
+  "chatInfoComplaintSubtitle": "Выберите причину жалобы",
+  "chatInfoComplaintSend": "Пожаловаться",
+  "chatInfoComplaintClose": "Закрыть",
+  "chatInfoComplaintEmpty": "Не удалось загрузить причины жалобы",
+  "chatInfoComplaintSent": "Жалоба отправлена",
+  "chatInfoComplaintFailed": "Не удалось отправить жалобу",
+  "chatInfoActionCancel": "Отмена",
   "chatInfoBio": "О себе",
   "chatInfoInviteLink": "Ссылка-приглашение",
   "chatInfoCollapse": "Свернуть",
@@ -731,6 +777,8 @@
   "contactBubbleNew": "Новый контакт",
   "contactBubbleAlreadyAdded": "Уже твой контакт",
   "contactBubbleOpenProfile": "Открыть профиль",
+  "miniAppOpen": "Открыть",
+  "miniAppFailed": "Не удалось открыть приложение",
   "editContactMenu": "Редактировать контакт",
   "editContactTitle": "Редактировать контакт",
   "editContactFirstName": "Имя",
@@ -756,5 +804,48 @@
   "downloadsClearTitle": "Очистить историю загрузок?",
   "downloadsClearBody": "Файлы останутся на устройстве, но этот список будет очищен.",
   "downloadsClearConfirm": "Очистить",
-  "downloadsHistoryCleared": "История загрузок очищена"
+  "downloadsHistoryCleared": "История загрузок очищена",
+  "uploadNotificationPhotos": "{count, plural, =1{Фото} other{{count} фото}}",
+  "@uploadNotificationPhotos": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadNotificationVideo": "Видео",
+  "uploadNotificationFile": "Файл",
+  "uploadNotificationMultiple": "{count, plural, other{Отправка файлов: {count}}}",
+  "@uploadNotificationMultiple": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadNotificationPreparing": "Подготовка…",
+  "uploadSpeedBytes": "{value} Б/с",
+  "@uploadSpeedBytes": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSpeedKb": "{value} КБ/с",
+  "@uploadSpeedKb": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSpeedMb": "{value} МБ/с",
+  "@uploadSpeedMb": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  }
 }

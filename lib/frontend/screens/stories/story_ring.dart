@@ -8,6 +8,64 @@ import '../../../models/story.dart';
 import '../../widgets/komet_avatar.dart';
 import 'story_owner_info.dart';
 
+class StoryAvatarRing extends StatelessWidget {
+  final double diameter;
+  final int total;
+  final int read;
+  final double strokeWidth;
+  final double ringGap;
+  final double haloWidth;
+  final Widget child;
+
+  const StoryAvatarRing({
+    super.key,
+    required this.diameter,
+    required this.child,
+    this.total = 0,
+    this.read = 0,
+    this.strokeWidth = 2.8,
+    this.ringGap = 6,
+    this.haloWidth = 2,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final outer = diameter + ringGap * 2;
+    final visible = total > 0;
+    return SizedBox(
+      width: outer,
+      height: outer,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size.square(outer),
+            painter: visible
+                ? SegmentedRingPainter(
+                    total: total,
+                    read: read,
+                    unreadColors: [cs.primary, cs.tertiary, cs.primary],
+                    readColor: cs.outlineVariant,
+                    strokeWidth: strokeWidth,
+                  )
+                : null,
+          ),
+          Container(
+            width: diameter + haloWidth * 2,
+            height: diameter + haloWidth * 2,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: visible ? cs.surface : Colors.transparent,
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
 /// Кольцо-превью истории владельца в шапке списка чатов.
 class StoryRing extends StatefulWidget {
   final StoryPreview preview;
@@ -71,36 +129,14 @@ class _StoryRingState extends State<StoryRing> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(
-                      width: diameter + 12,
-                      height: diameter + 12,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CustomPaint(
-                            size: Size.square(diameter + 12),
-                            painter: _SegmentedRingPainter(
-                              total: widget.preview.totalCount,
-                              read: widget.preview.readCount,
-                              unreadColors: [cs.primary, cs.tertiary, cs.primary],
-                              readColor: cs.outlineVariant,
-                              strokeWidth: 2.8,
-                            ),
-                          ),
-                          Container(
-                            width: diameter + 4,
-                            height: diameter + 4,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: cs.surface,
-                            ),
-                          ),
-                          KometAvatar(
-                            name: name == '…' ? '?' : name,
-                            size: diameter,
-                            imageUrl: info?.avatarUrl,
-                          ),
-                        ],
+                    StoryAvatarRing(
+                      diameter: diameter,
+                      total: widget.preview.totalCount,
+                      read: widget.preview.readCount,
+                      child: KometAvatar(
+                        name: name == '…' ? '?' : name,
+                        size: diameter,
+                        imageUrl: info?.avatarUrl,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -128,14 +164,14 @@ class _StoryRingState extends State<StoryRing> {
 }
 
 /// Прерывистое кольцо: одна дуга на каждую историю; прочитанные приглушены.
-class _SegmentedRingPainter extends CustomPainter {
+class SegmentedRingPainter extends CustomPainter {
   final int total;
   final int read;
   final List<Color> unreadColors;
   final Color readColor;
   final double strokeWidth;
 
-  _SegmentedRingPainter({
+  SegmentedRingPainter({
     required this.total,
     required this.read,
     required this.unreadColors,
@@ -146,9 +182,12 @@ class _SegmentedRingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final n = total < 1 ? 1 : total;
-    final center = size.center(Offset.zero);
-    final radius = (size.width - strokeWidth) / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
+    final rect = Rect.fromLTWH(
+      strokeWidth / 2,
+      strokeWidth / 2,
+      size.width - strokeWidth,
+      size.height - strokeWidth,
+    );
 
     final segment = (2 * math.pi) / n;
     final gap = n == 1 ? 0.0 : math.min(0.16, segment * 0.30);
@@ -178,7 +217,7 @@ class _SegmentedRingPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SegmentedRingPainter old) =>
+  bool shouldRepaint(SegmentedRingPainter old) =>
       old.total != total ||
       old.read != read ||
       old.readColor != readColor ||
@@ -260,7 +299,7 @@ class _StorySelfTileState extends State<StorySelfTile> {
                       if (preview != null)
                         CustomPaint(
                           size: Size.square(diameter + 12),
-                          painter: _SegmentedRingPainter(
+                          painter: SegmentedRingPainter(
                             total: preview.totalCount,
                             read: preview.readCount,
                             unreadColors: [cs.primary, cs.tertiary, cs.primary],
@@ -349,6 +388,19 @@ class _StorySelfTileState extends State<StorySelfTile> {
 
 /// Свёрнутая мини-стопка колец, показывается в заголовке при закрытом доке.
 class FoldedStoryStack extends StatelessWidget {
+  static const int maxShown = 3;
+  static const double avatarSize = 28;
+  static const double _rim = 1.5;
+  static const double _gap = 1.5;
+  static const double step = 14;
+
+  static const double outerSize = avatarSize + (_rim + _gap) * 2;
+
+  static double widthFor(int count) {
+    final shown = count > maxShown ? maxShown : (count < 1 ? 1 : count);
+    return outerSize + step * (shown - 1);
+  }
+
   final List<StoryPreview> previews;
   final double opacity;
 
@@ -361,35 +413,43 @@ class FoldedStoryStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final shown = previews.take(3).toList();
+    final shown = previews.take(maxShown).toList();
     return Opacity(
       opacity: opacity.clamp(0.0, 1.0),
-      child: Stack(
-      children: [
-        for (var i = 0; i < shown.length; i++)
-          Positioned(
-            left: i * 14.0,
-            child: StoryOwnerBuilder(
-              owner: shown[i].owner,
-              builder: (context, info) => Container(
-                padding: const EdgeInsets.all(1.5),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: cs.surface,
-                  border: Border.all(
-                    color: shown[i].hasUnread ? cs.primary : cs.outlineVariant,
-                    width: 1.5,
+      child: SizedBox(
+        height: outerSize,
+        width: widthFor(shown.length),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (var i = 0; i < shown.length; i++)
+              Positioned(
+                left: i * step,
+                top: 0,
+                child: StoryOwnerBuilder(
+                  owner: shown[i].owner,
+                  builder: (context, info) => Container(
+                    padding: const EdgeInsets.all(_gap),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: cs.surface,
+                      border: Border.all(
+                        color: shown[i].hasUnread
+                            ? cs.primary
+                            : cs.outlineVariant,
+                        width: _rim,
+                      ),
+                    ),
+                    child: KometAvatar(
+                      name: info?.name.isNotEmpty == true ? info!.name : '?',
+                      size: avatarSize,
+                      imageUrl: info?.avatarUrl,
+                    ),
                   ),
                 ),
-                child: KometAvatar(
-                  name: info?.name.isNotEmpty == true ? info!.name : '?',
-                  size: 28,
-                  imageUrl: info?.avatarUrl,
-                ),
               ),
-            ),
-          ),
-      ],
+          ],
+        ),
       ),
     );
   }

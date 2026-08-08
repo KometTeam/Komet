@@ -4,7 +4,7 @@ import 'persisted_setting.dart';
 
 class AppStories {
   static const prefKey = 'dev_stories';
-  static const bool defaultValue = false;
+  static const bool defaultValue = true;
 
   static final _setting = PersistedSetting<bool>(
     prefKey: prefKey,

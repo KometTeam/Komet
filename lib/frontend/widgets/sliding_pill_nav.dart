@@ -132,7 +132,7 @@ class SlidingPillNav extends StatelessWidget {
     final base = liquid
         ? (translucent ? backgroundColor! : AppLiquidGlass.navTint(cs))
         : (backgroundColor ??
-              (frost ? AppFrost.navPillTint(cs) : cs.surfaceContainerHigh));
+              (frost ? AppFrost.glassTint(cs) : cs.surfaceContainerHigh));
     final useGradient = glossy && gradient && !liquid;
     final frosted = frost && !liquid && base.a < 1;
 

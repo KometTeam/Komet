@@ -47,6 +47,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_frost.dart';
+import '../../../core/config/app_spectrum_background.dart';
 import '../../../core/config/app_nav_pill_style.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_stories.dart';
@@ -74,12 +75,19 @@ import '../../../main.dart'
         messagesModule,
         storiesModule;
 import '../../widgets/attachment/attachment_sheet.dart';
+import '../../widgets/spectrum_background.dart';
+import '../../widgets/spectrum_tint.dart';
 import '../../widgets/update_dialog.dart';
 import '../stories/story_composer_screen.dart';
 import '../stories/story_owner_info.dart';
+import '../../../backend/modules/webapp.dart';
+import '../../../models/story.dart';
+import '../webapp/open_mini_app.dart';
 import '../stories/story_ring.dart';
+import '../../widgets/sending_clock_icon.dart';
 import '../stories/story_viewer_screen.dart';
 import '../downloads_screen.dart';
+import '../../widgets/media_playback_pill.dart';
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -152,6 +160,36 @@ class ChatListScreen extends StatefulWidget {
     this.archiveMode = false,
   });
 
+  static _ChatListScreenState? _root;
+
+  static bool selectTab(int index) {
+    final root = _root;
+    if (root == null || !root.mounted) return false;
+    root._onNavTabSelected(index);
+    return true;
+  }
+
+  static bool selectFolder(String folderId) {
+    final root = _root;
+    if (root == null || !root.mounted) return false;
+    root._onNavTabSelected(0);
+    return root._selectFolder(folderId);
+  }
+
+  static bool openSavedMessages() {
+    final root = _root;
+    if (root == null || !root.mounted) return false;
+    root._openSavedMessages();
+    return true;
+  }
+
+  static bool openSearch() {
+    final root = _root;
+    if (root == null || !root.mounted) return false;
+    root._openSearch();
+    return true;
+  }
+
   @override
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
@@ -159,7 +197,7 @@ class ChatListScreen extends StatefulWidget {
 enum _DeleteKind { personalLike, ownerGroup, blocked }
 
 class _ChatListScreenState extends State<ChatListScreen>
-    with TickerProviderStateMixin, RouteAware {
+    with TickerProviderStateMixin, RouteAware, SpectrumSurface {
   String? _selectedFolderId;
 
   List<ChatFolder> _folders = [];
@@ -258,6 +296,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       _storiesDockedOpen,
       _storiesAnimClosing,
       _storiesOverscrollRevealArmed,
+      storiesModule.storiesChanged.value,
       _sessionState,
       identityHashCode(_profile),
     ]);
@@ -553,6 +592,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   @override
   void initState() {
     super.initState();
+    if (!widget.forwardMode && !widget.archiveMode) ChatListScreen._root = this;
     _fabController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -694,6 +734,21 @@ class _ChatListScreenState extends State<ChatListScreen>
     return {
       me: StoryOwnerInfo(name: 'Ваша история', avatarUrl: self.avatarUrl),
     };
+  }
+
+  StoryPreview? _storyPreviewFor(int ownerId) {
+    if (!AppStories.current.value || ownerId == 0) return null;
+    final preview = storiesModule.previewFor(ownerId);
+    return (preview == null || preview.isEmpty) ? null : preview;
+  }
+
+  void _openStoriesForOwner(int ownerId, [Offset? origin]) {
+    final index = storiesModule.previews.indexWhere(
+      (p) => p.owner.ownerId == ownerId,
+    );
+    if (index < 0) return;
+    Haptics.tap();
+    _openStories(index, origin);
   }
 
   void _openStories(int index, [Offset? origin]) {
@@ -1248,6 +1303,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   @override
   void dispose() {
+    if (ChatListScreen._root == this) ChatListScreen._root = null;
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
     chats.chatsChanged.removeListener(_onChatsChanged);
@@ -1480,16 +1536,29 @@ class _ChatListScreenState extends State<ChatListScreen>
                                           child: GestureDetector(
                                             behavior: HitTestBehavior.opaque,
                                             onTap: () => _openStories(0),
-                                            child: Container(
-                                              width: 50 * (1.0 - _pullRatio),
-                                              height: 32,
-                                              margin: const EdgeInsets.only(
-                                                right: 8,
-                                              ),
-                                              child: FoldedStoryStack(
-                                                previews:
-                                                    storiesModule.previews,
-                                                opacity: 1.0 - _pullRatio,
+                                            child: SizedBox(
+                                              width:
+                                                  (FoldedStoryStack.widthFor(
+                                                        storiesModule
+                                                            .previews
+                                                            .length,
+                                                      ) +
+                                                      8) *
+                                                  (1.0 - _pullRatio),
+                                              height: FoldedStoryStack.outerSize,
+                                              child: OverflowBox(
+                                                alignment: Alignment.centerLeft,
+                                                maxWidth:
+                                                    FoldedStoryStack.widthFor(
+                                                      storiesModule
+                                                          .previews
+                                                          .length,
+                                                    ),
+                                                child: FoldedStoryStack(
+                                                  previews:
+                                                      storiesModule.previews,
+                                                  opacity: 1.0 - _pullRatio,
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1575,12 +1644,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onTap: widget.forwardMode
-                                  ? null
-                                  : () => pushSwipeable(
-                                      context,
-                                      (_) => const SearchScreen(),
-                                    ),
+                              onTap: widget.forwardMode ? null : _openSearch,
                               child: GlossyPill(
                                 color: cs.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(50),
@@ -1687,6 +1751,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                         },
                       ),
               ),
+            ),
+          if (!widget.forwardMode)
+            const MediaPlaybackPill(
+              margin: EdgeInsets.fromLTRB(20, 6, 20, 2),
             ),
           if (!widget.forwardMode) _buildInformerBanner(),
         ],
@@ -1819,6 +1887,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         previewCipherText: isPlaceholder
                             ? null
                             : chat.lastMsgTextOneLine,
+                        hasMiniApp: _hasMiniApp(secondId, chat),
                       ),
                     );
                   } else {
@@ -2099,6 +2168,29 @@ class _ChatListScreenState extends State<ChatListScreen>
 
             return Stack(
               children: [
+                if (AppSpectrumBackground.isEnabled)
+                  Positioned.fill(
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([
+                        _navPageAnimController,
+                        _navDragDx,
+                      ]),
+                      child: const RepaintBoundary(child: SpectrumBackground()),
+                      builder: (context, child) {
+                        final pageDisplayT = _effectivePageNavRowT(
+                          inactiveWidth: inactiveWidth,
+                          bubbleLeftForIndex: bubbleLeftForPageT,
+                        );
+                        return Transform.translate(
+                          offset: Offset(
+                            -pageDisplayT * pageW * SpectrumTuning.parallax,
+                            0,
+                          ),
+                          child: child,
+                        );
+                      },
+                    ),
+                  ),
                 ClipRect(
                   child: SizedBox(
                     width: pageW,
@@ -2231,7 +2323,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                       return GlossyPill(
                                         onTap: _toggleFab,
                                         color: frost || liquid
-                                            ? AppFrost.fabTint(cs)
+                                            ? AppFrost.glassTint(cs)
                                             : cs.primaryContainer,
                                         blurSigma: frost
                                             ? AppFrost.sigma
@@ -2543,28 +2635,31 @@ class _ChatListScreenState extends State<ChatListScreen>
     return f.title;
   }
 
+  bool _selectFolder(String folderId) {
+    final target = _folders.indexWhere((f) => f.id == folderId);
+    if (target < 0) return false;
+    setState(() => _selectedFolderId = folderId);
+    if (_folderPageController.hasClients) {
+      final cur = _folderPageController.page?.round() ?? 0;
+      if (cur == target) return true;
+      if ((target - cur).abs() > 1) {
+        final neighbor = target > cur ? target - 1 : target + 1;
+        _folderPageController.jumpToPage(neighbor);
+      }
+      _folderPageController.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    return true;
+  }
+
   Widget _buildFolderChip(String title, {required String folderId}) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedFolderId == folderId;
     return GestureDetector(
-      onTap: () {
-        final target = _folders.indexWhere((f) => f.id == folderId);
-        if (target < 0) return;
-        setState(() => _selectedFolderId = folderId);
-        if (_folderPageController.hasClients) {
-          final cur = _folderPageController.page?.round() ?? 0;
-          if (cur == target) return;
-          if ((target - cur).abs() > 1) {
-            final neighbor = target > cur ? target - 1 : target + 1;
-            _folderPageController.jumpToPage(neighbor);
-          }
-          _folderPageController.animateToPage(
-            target,
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOutCubic,
-          );
-        }
-      },
+      onTap: () => _selectFolder(folderId),
       child: GlossyPill(
         color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(50),
@@ -2600,6 +2695,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _ownStatusIcon(ColorScheme cs, String status, bool read) {
+    if (isSendingStatus(status)) {
+      return SendingClockIcon(color: cs.outline, size: 14);
+    }
     IconData icon;
     Color color;
     switch (status) {
@@ -2735,6 +2833,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     int? previewMessageId,
     String previewPrefix = '',
     String? previewCipherText,
+    bool hasMiniApp = false,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
@@ -2783,8 +2882,16 @@ class _ChatListScreenState extends State<ChatListScreen>
           )
         : _buildPreviewLine(cs, message, messageRanges, draft, messageItalic);
 
-    final Widget avatarCircle = CircleAvatar(
-      radius: 24,
+    final storyOwnerId = chatType == 'DIALOG'
+        ? presenceUserId
+        : (int.tryParse(id) ?? 0);
+    final story = (_isSelectionMode || widget.forwardMode)
+        ? null
+        : _storyPreviewFor(storyOwnerId);
+    final avatarRadius = story == null ? 24.0 : 20.0;
+
+    final CircleAvatar rawAvatar = CircleAvatar(
+      radius: avatarRadius,
       backgroundColor: cs.surfaceContainerHighest,
       backgroundImage: imageUrl.isNotEmpty
           ? CachedNetworkImageProvider(
@@ -2796,10 +2903,34 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: imageUrl.isEmpty
           ? Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 20),
+              style: TextStyle(
+                color: cs.onSurfaceVariant,
+                fontSize: story == null ? 20 : 17,
+              ),
             )
           : null,
     );
+
+    final Widget avatarCircle = story == null
+        ? rawAvatar
+        : Builder(
+            builder: (avatarContext) => GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _openStoriesForOwner(
+                storyOwnerId,
+                storyOriginOf(avatarContext),
+              ),
+              child: StoryAvatarRing(
+                diameter: avatarRadius * 2,
+                total: story.totalCount,
+                read: story.readCount,
+                strokeWidth: 2.2,
+                ringGap: 4,
+                haloWidth: 1.5,
+                child: rawAvatar,
+              ),
+            ),
+          );
     return SpringyTap(
       key: ValueKey('chat_$id'),
       child: InkWell(
@@ -2982,6 +3113,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               Expanded(
                                 child: ActivitySubtitle(
                                   chatId: int.tryParse(id) ?? 0,
+                                  group: chatType != 'DIALOG',
                                   child: messageLine,
                                 ),
                               ),
@@ -3004,6 +3136,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                                   size: 16,
                                   weight: 400,
                                 ),
+                              if (hasMiniApp) ...[
+                                const SizedBox(width: 8),
+                                _miniAppButton(
+                                  cs,
+                                  botId: presenceUserId,
+                                  chatId: int.tryParse(id) ?? 0,
+                                  name: name,
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -3013,6 +3154,42 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _hasMiniApp(int contactId, CachedChat chat) {
+    if (contactId == 0 || widget.forwardMode || _isSelectionMode) return false;
+    final options = ContactCache.getOptions(contactId);
+    if (options != null && options.any(kMiniAppOptions.contains)) return true;
+    return chat.options.any(kMiniAppOptions.contains);
+  }
+
+  Widget _miniAppButton(
+    ColorScheme cs, {
+    required int botId,
+    required int chatId,
+    required String name,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => unawaited(
+        openMiniApp(context, botId: botId, chatId: chatId, title: name),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        decoration: BoxDecoration(
+          color: cs.primary,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          AppLocalizations.of(context)!.miniAppOpen,
+          style: TextStyle(
+            color: cs.onPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -3189,6 +3366,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       ),
     );
   }
+
+  void _openSearch() =>
+      unawaited(pushSwipeable(context, (_) => const SearchScreen()));
 
   void _openSavedMessages() {
     CachedChat? self;

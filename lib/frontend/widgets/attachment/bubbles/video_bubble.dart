@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/main.dart';
 
+import '../../../../core/media/preview_image.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
+import '../../upload_progress_ring.dart';
 import '../../photo_viewer.dart';
 import 'bubble_context.dart';
 import 'video_note_bubble.dart';
@@ -21,18 +23,16 @@ class VideoBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final message = ctx.message;
     if (video.isNote) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          VideoNoteBubble(
-            attachment: video,
-            messageId: message.id,
-            chatId: message.chatId,
-            cs: ctx.cs,
-          ),
-          const SizedBox(height: 6),
-          ctx.meta(),
-        ],
+      return VideoNoteBubble(
+        attachment: video,
+        messageId: message.id,
+        chatId: message.chatId,
+        senderId: message.senderId,
+        isMe: ctx.isMe,
+        time: message.time,
+        cs: ctx.cs,
+        textColor: ctx.text,
+        meta: ctx.meta(),
       );
     }
     final hasCaption = message.text != null && message.text!.isNotEmpty;
@@ -63,39 +63,78 @@ class VideoBubble extends StatelessWidget {
       child: Icon(Symbols.videocam, size: 48, color: ctx.cs.onSurfaceVariant),
     );
 
+    final localThumb = dataUriImage(video, video.previewData);
+    final uploading = ctx.uploadProgress;
+
+    Widget previewImage() {
+      if (previewUrl.isNotEmpty && !previewUrl.startsWith('data:')) {
+        return CachedNetworkImage(
+          imageUrl: previewUrl,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          memCacheWidth: (width * dpr).round(),
+          fadeInDuration: Duration.zero,
+          placeholderFadeInDuration: Duration.zero,
+          errorWidget: (_, _, _) => localThumb == null
+              ? placeholder()
+              : Image(
+                  image: localThumb,
+                  width: width,
+                  height: height,
+                  fit: BoxFit.cover,
+                ),
+        );
+      }
+      if (localThumb != null) {
+        return Image(
+          image: localThumb,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => placeholder(),
+        );
+      }
+      return placeholder();
+    }
+
     final preview = ClipRRect(
       borderRadius: BorderRadius.circular(BubbleContext.photoBorderRadius),
       child: Stack(
         children: [
-          previewUrl.isEmpty
-              ? placeholder()
-              : CachedNetworkImage(
-                  imageUrl: previewUrl,
-                  width: width,
-                  height: height,
-                  fit: BoxFit.cover,
-                  memCacheWidth: (width * dpr).round(),
-                  fadeInDuration: Duration.zero,
-                  placeholderFadeInDuration: Duration.zero,
-                  errorWidget: (_, _, _) => placeholder(),
+          previewImage(),
+          if (uploading != null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.35),
+                child: Center(
+                  child: UploadProgressRing(
+                    progress: uploading,
+                    color: Colors.white,
+                    trackColor: Colors.white24,
+                  ),
                 ),
-          Positioned.fill(
-            child: Center(
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: const BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Symbols.play_arrow,
-                  color: Colors.white,
-                  size: 30,
+              ),
+            )
+          else
+            Positioned.fill(
+              child: Center(
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Symbols.play_arrow,
+                    color: Colors.white,
+                    size: 30,
+                  ),
                 ),
               ),
             ),
-          ),
           if (durationMs != null && durationMs > 0)
             Positioned(
               left: 6,
@@ -112,12 +151,13 @@ class VideoBubble extends StatelessWidget {
                 ),
               ),
             ),
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _playVideo(ctx.context, video),
+          if (uploading == null)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _playVideo(ctx.context, video),
+              ),
             ),
-          ),
         ],
       ),
     );

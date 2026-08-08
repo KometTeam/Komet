@@ -12,17 +12,14 @@ Future<T?> showBlurredCard<T>(
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: Colors.black.withValues(alpha: 0.28),
     transitionDuration: const Duration(milliseconds: 260),
-    pageBuilder: (_, _, _) => const SizedBox.shrink(),
-    transitionBuilder: (_, anim, _, _) {
+    pageBuilder: (_, _, _) => builder(context),
+    transitionBuilder: (_, anim, _, child) {
       final t = Curves.easeOutCubic.transform(anim.value);
       return BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 14 * t, sigmaY: 14 * t),
         child: Opacity(
           opacity: anim.value,
-          child: Transform.scale(
-            scale: 0.94 + 0.06 * t,
-            child: builder(context),
-          ),
+          child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
         ),
       );
     },

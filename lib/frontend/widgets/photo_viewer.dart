@@ -21,6 +21,7 @@ import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../../models/attachment.dart';
 import 'attachment/photo_hero.dart';
+import 'animated_slash_icon.dart';
 import 'chat_menu_overlay.dart';
 import 'custom_notification.dart';
 import 'liquid_glass.dart';
@@ -1016,6 +1017,7 @@ class _VideoPlaybackSession extends ChangeNotifier {
   bool _active;
   late bool _hasBeenActive = _active;
   late bool _playWhenActive = _active;
+  bool _wasCompleted = false;
   bool _disposed = false;
 
   _VideoPlaybackSession({
@@ -1036,7 +1038,8 @@ class _VideoPlaybackSession extends ChangeNotifier {
 
   bool get loading => _loading;
   bool get error => _error;
-  bool get buffering => value?.isBuffering ?? false;
+  bool get completed => value?.isCompleted ?? false;
+  bool get buffering => (value?.isBuffering ?? false) && !completed;
   bool get active => _active;
   double? get dragValue => _dragValue;
   double get volume => _volume;
@@ -1097,6 +1100,7 @@ class _VideoPlaybackSession extends ChangeNotifier {
       }
       controller.addListener(_onTick);
       _controller = controller;
+      _wasCompleted = controller.value.isCompleted;
       installed = true;
       old?.removeListener(_onTick);
       try {
@@ -1120,6 +1124,9 @@ class _VideoPlaybackSession extends ChangeNotifier {
   }
 
   void _onTick() {
+    final isCompleted = completed;
+    if (isCompleted && !_wasCompleted) _playWhenActive = false;
+    _wasCompleted = isCompleted;
     _notify();
   }
 
@@ -1348,8 +1355,10 @@ class _VideoControlPanel extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        volume == 0 ? Symbols.volume_off : Symbols.volume_up,
+                      AnimatedSlashIcon(
+                        icon: Symbols.volume_up,
+                        slashedIcon: Symbols.volume_off,
+                        slashed: volume == 0,
                         color: Colors.white,
                         size: 20,
                       ),

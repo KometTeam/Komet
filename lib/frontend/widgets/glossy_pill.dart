@@ -96,6 +96,7 @@ class GlossyPill extends StatelessWidget {
   final double? blurSigma;
   final bool liquid;
   final BackdropKey? backdropKey;
+  final bool keepInkLayer;
 
   const GlossyPill({
     super.key,
@@ -111,8 +112,11 @@ class GlossyPill extends StatelessWidget {
     this.blurSigma,
     this.liquid = false,
     this.backdropKey,
+    this.keepInkLayer = false,
   }) : borderRadius =
            borderRadius ?? const BorderRadius.all(Radius.circular(100));
+
+  bool get _inert => !keepInkLayer && onTap == null && onLongPress == null;
 
   double? _sigmaFor(Color base) =>
       blurSigma != null && base.a < 1 ? blurSigma : null;
@@ -141,13 +145,15 @@ class GlossyPill extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: borderRadius,
-          border: GlossyDecor.rimBorder(base),
+          border: borderSide != null
+              ? Border.fromBorderSide(borderSide!)
+              : GlossyDecor.rimBorder(base),
           boxShadow: [GlossyDecor.dropShadow(base, depth)],
         ),
         child: LiquidGlassSurface(
           borderRadius: borderRadius,
           tint: Colors.transparent,
-          child: onTap == null && onLongPress == null
+          child: _inert
               ? content
               : Material(
                   type: MaterialType.transparency,
@@ -176,7 +182,7 @@ class GlossyPill extends StatelessWidget {
         side: borderSide ?? BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
-      child: onTap == null && onLongPress == null
+      child: _inert
           ? content
           : InkWell(onTap: onTap, onLongPress: onLongPress, child: content),
     );
@@ -204,7 +210,9 @@ class GlossyPill extends StatelessWidget {
           borderRadius: borderRadius,
           color: gradient ? null : base,
           gradient: gradient ? GlossyDecor.fillGradient(base) : null,
-          border: GlossyDecor.rimBorder(base),
+          border: borderSide != null
+              ? Border.fromBorderSide(borderSide!)
+              : GlossyDecor.rimBorder(base),
           boxShadow: [GlossyDecor.dropShadow(base, depth)],
         ),
         child: ClipRRect(
@@ -240,7 +248,7 @@ class GlossyPill extends StatelessWidget {
                   ),
                 ),
               ],
-              if (onTap == null && onLongPress == null)
+              if (_inert)
                 content
               else
                 Material(

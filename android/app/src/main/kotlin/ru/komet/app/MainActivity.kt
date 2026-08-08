@@ -27,6 +27,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import android.media.MediaCodecInfo
 import android.net.Uri
@@ -83,6 +84,7 @@ class MainActivity : FlutterActivity() {
         const val NFC_PHASE_MIN_MS = 350L
         const val NFC_PHASE_JITTER_MS = 400
         const val BLE_PERMS_REQUEST = 7711
+        const val CAMERA_PERM_REQUEST = 7712
         val NFC_READER_FLAGS = NfcAdapter.FLAG_READER_NFC_A or
             NfcAdapter.FLAG_READER_NFC_B or
             NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
@@ -189,37 +191,46 @@ class MainActivity : FlutterActivity() {
             "ru.komet.app/upload_service",
         ).setMethodCallHandler { call, result ->
             val ctx = this
-            when (call.method) {
-                "start" -> {
-                    val filename = call.argument<String>("filename") ?: "Файл"
-                    val intent = Intent(ctx, UploadForegroundService::class.java).apply {
-                        action = UploadForegroundService.ACTION_START
-                        putExtra(UploadForegroundService.EXTRA_FILENAME, filename)
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            fun uploadIntent(call: MethodCall, action: String) =
+                Intent(ctx, UploadForegroundService::class.java).apply {
+                    this.action = action
+                    putExtra(UploadForegroundService.EXTRA_TITLE, call.argument<String>("title"))
+                    putExtra(UploadForegroundService.EXTRA_BODY, call.argument<String>("body") ?: "")
+                    putExtra(UploadForegroundService.EXTRA_PROGRESS, call.argument<Int>("progress") ?: 0)
+                    putExtra(
+                        UploadForegroundService.EXTRA_INDETERMINATE,
+                        call.argument<Boolean>("indeterminate") ?: true,
+                    )
+                }
+
+            fun launch(intent: Intent, asForeground: Boolean) {
+                try {
+                    if (asForeground && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startForegroundService(intent)
                     } else {
                         startService(intent)
                     }
+                } catch (e: Exception) {
+                    Log.w("UploadService", "${intent.action} failed: ${e.message}")
+                }
+            }
+
+            when (call.method) {
+                "start" -> {
+                    launch(uploadIntent(call, UploadForegroundService.ACTION_START), true)
                     result.success(null)
                 }
                 "update" -> {
-                    val filename = call.argument<String>("filename") ?: "Файл"
-                    val progress = call.argument<Int>("progress") ?: 0
-                    val speed    = call.argument<Long>("speed") ?: 0L
-                    val intent = Intent(ctx, UploadForegroundService::class.java).apply {
-                        action = UploadForegroundService.ACTION_UPDATE
-                        putExtra(UploadForegroundService.EXTRA_FILENAME, filename)
-                        putExtra(UploadForegroundService.EXTRA_PROGRESS, progress)
-                        putExtra(UploadForegroundService.EXTRA_SPEED, speed)
-                    }
-                    startService(intent)
+                    launch(uploadIntent(call, UploadForegroundService.ACTION_UPDATE), false)
                     result.success(null)
                 }
                 "stop" -> {
-                    startService(Intent(ctx, UploadForegroundService::class.java).apply {
-                        action = UploadForegroundService.ACTION_STOP
-                    })
+                    launch(
+                        Intent(ctx, UploadForegroundService::class.java).apply {
+                            action = UploadForegroundService.ACTION_STOP
+                        },
+                        false,
+                    )
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -231,6 +242,7 @@ class MainActivity : FlutterActivity() {
             "ru.komet.app/video_note",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "permission" -> requestCameraPermission(result)
                 "init" -> {
                     val front = call.argument<Boolean>("front") ?: true
                     val size = call.argument<Int>("size") ?: 480
@@ -248,6 +260,10 @@ class MainActivity : FlutterActivity() {
                 "start" -> noteRecorder?.start(result)
                     ?: result.error("NOT_READY", "recorder not initialized", null)
                 "switch" -> noteRecorder?.switchCamera(result)
+                "torch" -> noteRecorder?.setTorch(
+                    call.argument<Boolean>("on") ?: false,
+                    result,
+                )
                     ?: result.error("NOT_READY", "recorder not initialized", null)
                 "stop" -> noteRecorder?.stop(result)
                     ?: result.error("NOT_READY", "recorder not initialized", null)
@@ -294,6 +310,16 @@ class MainActivity : FlutterActivity() {
                     CallRinger.stop()
                     NotificationManagerCompat.from(this).cancel(CallConst.NOTIF_ID)
                     CallForegroundService.start(applicationContext, caller)
+                    result.success(null)
+                }
+                "setScreenShare" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    val caller = call.argument<String>("caller") ?: "Звонок"
+                    CallForegroundService.setScreenShare(
+                        applicationContext,
+                        enabled,
+                        caller,
+                    )
                     result.success(null)
                 }
                 "notifyEnded" -> {
@@ -575,12 +601,42 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private var cameraPermResult: MethodChannel.Result? = null
+
+    private fun requestCameraPermission(result: MethodChannel.Result) {
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.CAMERA,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            result.success(true); return
+        }
+        if (cameraPermResult != null) {
+            result.success(false); return
+        }
+        cameraPermResult = result
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.CAMERA),
+            CAMERA_PERM_REQUEST,
+        )
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == CAMERA_PERM_REQUEST) {
+            val pending = cameraPermResult
+            cameraPermResult = null
+            pending?.success(
+                grantResults.isNotEmpty() &&
+                    grantResults.all { it == PackageManager.PERMISSION_GRANTED },
+            )
+            return
+        }
         if (requestCode != BLE_PERMS_REQUEST) return
         if (!NfcExchange.active) return
         val granted = grantResults.isNotEmpty() &&

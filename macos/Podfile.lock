@@ -86,6 +86,8 @@ PODS:
     - GoogleUtilities/Privacy
   - kolibri (0.0.1):
     - FlutterMacOS
+  - komet_crypto (0.0.1):
+    - FlutterMacOS
   - media_kit_libs_macos_video (1.0.4):
     - FlutterMacOS
   - media_kit_video (0.0.1):
@@ -143,6 +145,7 @@ DEPENDENCIES:
   - FlutterMacOS (from `Flutter/ephemeral`)
   - geolocator_apple (from `Flutter/ephemeral/.symlinks/plugins/geolocator_apple/darwin`)
   - kolibri (from `Flutter/ephemeral/.symlinks/plugins/kolibri/macos`)
+  - komet_crypto (from `Flutter/ephemeral/.symlinks/plugins/komet_crypto/macos`)
   - media_kit_libs_macos_video (from `Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_video/macos`)
   - media_kit_video (from `Flutter/ephemeral/.symlinks/plugins/media_kit_video/macos`)
   - mobile_scanner (from `Flutter/ephemeral/.symlinks/plugins/mobile_scanner/darwin`)
@@ -201,6 +204,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/geolocator_apple/darwin
   kolibri:
     :path: Flutter/ephemeral/.symlinks/plugins/kolibri/macos
+  komet_crypto:
+    :path: Flutter/ephemeral/.symlinks/plugins/komet_crypto/macos
   media_kit_libs_macos_video:
     :path: Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_video/macos
   media_kit_video:
@@ -252,6 +257,7 @@ SPEC CHECKSUMS:
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleUtilities: 4f2618a4a1e762a1ee134a1e2323bba9843e06da
   kolibri: 93062ece67f68ec0b909876b527aa15e198b4a73
+  komet_crypto: 856fa27dc180350f88a7cf6de6b512d2d221b737
   media_kit_libs_macos_video: 85a23e549b5f480e72cae3e5634b5514bc692f65
   media_kit_video: fa6564e3799a0a28bff39442334817088b7ca758
   mobile_scanner: 9157936403f5a0644ca3779a38ff8404c5434a93

@@ -92,7 +92,7 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
     if (hasExplicitLink) return ranges;
     for (final match in linkPattern.allMatches(widget.text)) {
       final raw = match.group(0)!;
-      final target = raw.startsWith('www.') ? 'https://$raw' : raw;
+      final target = linkTarget(raw);
       ranges.add(
         FormatRange(
           format: TextFormat.link,

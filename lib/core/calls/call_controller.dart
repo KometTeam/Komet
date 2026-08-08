@@ -150,12 +150,37 @@ class CallController {
     final config = Ws2Config.fromEndpoint(
       out.endpoint,
       userId: out.callsUserId,
+      device: _api?.callsDevice,
+      osVersion: _api?.callsOsVersion,
     );
     final session = CallSession(ws2Config: config, role: CallRole.caller);
     _bind(session);
     await session.start();
     CallBridge.instance.notifyAccepted();
     return session;
+  }
+
+  Future<({CallSession session, String? joinLink})> createGroupCall({
+    bool isVideo = false,
+  }) async {
+    if (_active != null) throw StateError('уже идёт звонок');
+    final out = await _calls!.startGroupCall(isVideo: isVideo);
+    final joinLink = await _calls!.createJoinLink(out.conversationId);
+    final config = Ws2Config.fromEndpoint(
+      out.endpoint,
+      userId: out.callsUserId,
+      device: _api?.callsDevice,
+      osVersion: _api?.callsOsVersion,
+    );
+    final session = CallSession(
+      ws2Config: config,
+      role: CallRole.caller,
+      isGroup: true,
+    );
+    _bind(session);
+    await session.start();
+    CallBridge.instance.notifyAccepted();
+    return (session: session, joinLink: joinLink);
   }
 
   Future<CallLinkPreview?> previewCallLink(String url) =>
@@ -167,8 +192,14 @@ class CallController {
     final config = Ws2Config.fromEndpoint(
       params.endpoint,
       userId: params.callsUserId,
+      device: _api?.callsDevice,
+      osVersion: _api?.callsOsVersion,
     );
-    final session = CallSession(ws2Config: config, role: CallRole.joiner);
+    final session = CallSession(
+      ws2Config: config,
+      role: CallRole.joiner,
+      isGroup: true,
+    );
     _bind(session);
     await session.start();
     CallBridge.instance.notifyAccepted();
@@ -181,6 +212,8 @@ class CallController {
     final config = Ws2Config.fromVcp(
       call.params,
       conversationId: call.conversationId,
+      device: _api?.callsDevice,
+      osVersion: _api?.callsOsVersion,
     );
     final session = CallSession(
       ws2Config: config,
@@ -200,6 +233,8 @@ class CallController {
     final config = Ws2Config.fromVcp(
       call.params,
       conversationId: call.conversationId,
+      device: _api?.callsDevice,
+      osVersion: _api?.callsOsVersion,
     );
     final signaling = Ws2Signaling(config);
     try {

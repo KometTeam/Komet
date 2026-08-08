@@ -56,9 +56,12 @@ String messageFromErrorPayload(dynamic payload) {
     if (msg == 'FAIL_WRONG_PASSWORD' || msg == 'FAIL_LOGIN_TOKEN') {
       return 'Ваш токен был отклонён сервером, хм... Попробуйте войти ещё раз.';
     }
-    for (final key in ['localizedMessage', 'message', 'title']) {
+    for (final key in ['localizedMessage', 'title', 'message']) {
       final v = payload[key];
-      if (v is String && v.trim().isNotEmpty) return v.trim();
+      if (v is! String) continue;
+      final text = v.trim();
+      if (text.isEmpty || _isRawServerTemplate(text)) continue;
+      return text;
     }
     return 'Неизвестная ошибка';
   }
@@ -66,6 +69,9 @@ String messageFromErrorPayload(dynamic payload) {
   final s = payload.toString();
   return s.isNotEmpty ? s : 'Неизвестная ошибка';
 }
+
+bool _isRawServerTemplate(String text) =>
+    text.startsWith('Key: ') || text.startsWith('key: ');
 
 bool isSessionExpiredPayload(dynamic payload) {
   return payload is Map &&

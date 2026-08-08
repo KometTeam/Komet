@@ -148,3 +148,9 @@ maxmint/
 maxtun/
 turnprobe/
 test/live_server_probe_test.dart
+
+# local kolibri development: point the plugin at third_party/kolibri and the
+# Rust core at third_party/kolibri/kolibri-net instead of the published ones
+pubspec_overrides.yaml
+.cargo/
+third_party/kolibri/

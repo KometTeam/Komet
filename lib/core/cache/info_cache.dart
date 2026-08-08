@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../backend/api.dart';
+import '../../models/bot_info.dart';
 import '../../models/chat_info.dart';
 import '../../models/contact_info.dart';
 import '../protocol/opcode_map.dart';
+import '../storage/chat_members_store.dart';
 
 Api? _api;
 
@@ -279,6 +281,36 @@ class PresenceFetch {
   }
 }
 
+class BotInfoFetch {
+  static final _cache = InfoCache<BotInfo>(
+    ttl: const Duration(minutes: 30),
+    fetcher: _fetch,
+  );
+
+  static Future<BotInfo?> get(int botId, {bool forceRefresh = false}) =>
+      _cache.get(botId, forceRefresh: forceRefresh);
+
+  static BotInfo? peek(int botId) => _cache.peek(botId);
+
+  static List<BotCommand> commandsOf(int botId) =>
+      _cache.peek(botId)?.commands ?? const [];
+
+  static void invalidate(int botId) => _cache.invalidate(botId);
+  static void clear() => _cache.clear();
+
+  static Future<BotInfo?> _fetch(int botId) async {
+    final api = _api;
+    if (api == null || api.state != SessionState.online) return null;
+    final resp = await api.sendRequest(Opcode.botInfo, {'botId': botId});
+    final data = resp.payload;
+    if (data is! Map) return null;
+    final info = BotInfo.fromPayload(botId, Map<String, dynamic>.from(data));
+    final contact = info.contact;
+    if (contact != null) ContactInfoFetch.putContact(botId, contact.raw);
+    return info;
+  }
+}
+
 class ChatInfoFetch {
   static final _cache = InfoCache<ChatInfo>(
     ttl: const Duration(minutes: 5),
@@ -305,6 +337,7 @@ class ChatInfoFetch {
     if (chats is! List || chats.isEmpty) return null;
     final first = chats.first;
     if (first is! Map) return null;
+    ChatMembersStore.instance.applyChatPayload(first);
     return ChatInfo.fromMap(Map<String, dynamic>.from(first));
   }
 }

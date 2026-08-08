@@ -46,8 +46,11 @@ class SelectableMessageText extends StatefulWidget {
 
 class _SelectableMessageTextState extends State<SelectableMessageText>
     with SingleTickerProviderStateMixin {
-  static const double _ballRadius = 8.0;
-  static const double _hitSize = 44.0;
+  static const double _ballRadius = 10.0;
+  static const double _hitInner = 20.0;
+  static const double _hitOuter = 36.0;
+  static const double _hitAbove = 18.0;
+  static const double _hitBelow = 42.0;
 
   final GlobalKey _textKey = GlobalKey();
   final ValueNotifier<bool> _toolbarVisible = ValueNotifier(false);
@@ -59,6 +62,9 @@ class _SelectableMessageTextState extends State<SelectableMessageText>
   String? _cachedText;
   bool _dragging = false;
   bool _exiting = false;
+  double? _dragStartLocalY;
+  double _dragAnchorY = 0;
+  double _dragLineHeight = 0;
 
   RenderParagraph? _cachedParagraph;
 
@@ -182,18 +188,46 @@ class _SelectableMessageTextState extends State<SelectableMessageText>
     }
   }
 
-  void _onHandleDragStart() {
+  ui.TextBox? _edgeBox(RenderParagraph rp, bool isStart) {
+    if (!_selection.isValid || _selection.isCollapsed) return null;
+    final boxes = rp.getBoxesForSelection(_selection);
+    if (boxes.isEmpty) return null;
+    return isStart ? boxes.first : boxes.last;
+  }
+
+  void _onHandleDragStart(Offset globalPos, bool isStart) {
     _dragging = true;
     _settle?.cancel();
     _entrance.value = 1.0;
     _toolbarVisible.value = false;
+    _dragStartLocalY = null;
+    final rp = _paragraph;
+    if (rp == null || !rp.hasSize) return;
+    final box = _edgeBox(rp, isStart);
+    if (box == null) return;
+    final rect = box.toRect();
+    _dragStartLocalY = rp.globalToLocal(globalPos).dy;
+    _dragAnchorY = rect.center.dy;
+    _dragLineHeight = rect.height;
+  }
+
+  double _lineSnappedY(double fingerLocalY) {
+    final startY = _dragStartLocalY;
+    if (startY == null || _dragLineHeight <= 0) return fingerLocalY;
+    final dragged = fingerLocalY - startY;
+    final direction = dragged < 0 ? -1 : 1;
+    final lines = direction * (dragged.abs() / _dragLineHeight).floor();
+    return _dragAnchorY + lines * _dragLineHeight;
   }
 
   void _onHandleDrag(Offset globalPos, bool isStart) {
     final rp = _paragraph;
     if (rp == null || !rp.hasSize) return;
     final len = _text(rp).length;
-    final off = rp.getPositionForOffset(rp.globalToLocal(globalPos)).offset;
+    final local = rp.globalToLocal(globalPos);
+    final off = rp
+        .getPositionForOffset(Offset(local.dx, _lineSnappedY(local.dy)))
+        .offset;
     if (isStart) {
       final ns = off.clamp(0, math.max(0, _selection.end - 1)).toInt();
       _applySelection(
@@ -209,6 +243,7 @@ class _SelectableMessageTextState extends State<SelectableMessageText>
 
   void _onHandleDragEnd() {
     _dragging = false;
+    _dragStartLocalY = null;
     _settle?.cancel();
     _settle = Timer(const Duration(milliseconds: 140), () {
       if (!mounted || _dragging) return;
@@ -280,38 +315,52 @@ class _SelectableMessageTextState extends State<SelectableMessageText>
     return Stack(children: children);
   }
 
-  Widget _handle(ColorScheme cs, Offset lineBottomGlobal, {required bool isStart}) {
+  Widget _handle(
+    ColorScheme cs,
+    Offset lineBottomGlobal, {
+    required bool isStart,
+  }) {
     final center = Offset(
       lineBottomGlobal.dx,
       lineBottomGlobal.dy + _ballRadius,
     );
+    final leftInset = isStart ? _hitOuter : _hitInner;
     return Positioned(
-      left: center.dx - _hitSize / 2,
-      top: center.dy - _hitSize / 2,
-      width: _hitSize,
-      height: _hitSize,
+      left: center.dx - leftInset,
+      top: center.dy - _hitAbove,
+      width: _hitInner + _hitOuter,
+      height: _hitAbove + _hitBelow,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onPanStart: (_) => _onHandleDragStart(),
+        onPanStart: (d) => _onHandleDragStart(d.globalPosition, isStart),
         onPanUpdate: (d) => _onHandleDrag(d.globalPosition, isStart),
         onPanEnd: (_) => _onHandleDragEnd(),
         onPanCancel: _onHandleDragEnd,
-        child: Center(
-          child: Transform.scale(
-            scale: Curves.easeOutBack.transform(_entrance.value.clamp(0.0, 1.0)),
-            child: Container(
-              width: _ballRadius * 2,
-              height: _ballRadius * 2,
-              decoration: BoxDecoration(
-                color: cs.primary,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: leftInset - _ballRadius,
+              top: _hitAbove - _ballRadius,
+            ),
+            child: Transform.scale(
+              scale: Curves.easeOutBack.transform(
+                _entrance.value.clamp(0.0, 1.0),
+              ),
+              child: Container(
+                width: _ballRadius * 2,
+                height: _ballRadius * 2,
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

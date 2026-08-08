@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/connection_status.dart';
 
 class WebQrScanScreen extends StatefulWidget {
@@ -85,8 +86,10 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
               valueListenable: _controller,
               builder: (context, state, _) {
                 final on = state.torchState == TorchState.on;
-                return Icon(
-                  on ? Symbols.flash_on : Symbols.flash_off,
+                return AnimatedSlashIcon(
+                  icon: Symbols.flash_on,
+                  slashedIcon: Symbols.flash_off,
+                  slashed: !on,
                   color: Colors.white,
                 );
               },

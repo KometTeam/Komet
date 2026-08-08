@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import 'package:komet/core/storage/chat_activity_store.dart';
+import 'package:komet/frontend/screens/chats/chat/typing_label.dart';
 import 'package:komet/frontend/widgets/animated_text_swap.dart';
 
 class AnimatedChatTile extends StatefulWidget {
@@ -126,30 +127,37 @@ class ActivitySubtitle extends StatefulWidget {
     super.key,
     required this.chatId,
     required this.child,
+    this.group = false,
   });
 
   final int chatId;
   final Widget child;
+  final bool group;
 
   @override
   State<ActivitySubtitle> createState() => _ActivitySubtitleState();
 }
 
 class _ActivitySubtitleState extends State<ActivitySubtitle> {
-  ChatActivity _lastActivity = ChatActivity.typing;
+  String _lastLabel = ChatActivity.typing.label.toLowerCase();
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return ValueListenableBuilder<ChatActivity?>(
+    return ValueListenableBuilder<ChatActivitySnapshot?>(
       valueListenable: ChatActivityStore.instance.listenable(widget.chatId),
       child: widget.child,
       builder: (context, activity, base) {
-        if (activity != null) _lastActivity = activity;
+        if (activity != null) {
+          final named = chatActivityLabel(activity, withNames: widget.group);
+          _lastLabel = widget.group && named != activity.label
+              ? named
+              : named.toLowerCase();
+        }
         return AnimatedTextSwap(
           showAlternate: activity != null,
           alternate: Text(
-            _lastActivity.label.toLowerCase(),
+            _lastLabel,
             style: TextStyle(
               color: cs.primary,
               fontSize: 14,

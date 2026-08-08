@@ -206,6 +206,18 @@ abstract class AppLocalizations {
   /// **'Port'**
   String get serverPortLabel;
 
+  /// No description provided for @serverTrustMincifryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust the Минцифры CA'**
+  String get serverTrustMincifryTitle;
+
+  /// No description provided for @serverTrustMincifrySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Required for api2.oneme.ru: its certificate chains to the Russian Trusted Root CA, which is absent from the standard trust store. The root is bundled with the app; other hosts keep using the usual roots.'**
+  String get serverTrustMincifrySubtitle;
+
   /// No description provided for @serverApply.
   ///
   /// In en, this message translates to:
@@ -1640,6 +1652,18 @@ abstract class AppLocalizations {
   /// **'G-FrostBlur'**
   String get appearanceNavPillFrost;
 
+  /// No description provided for @playbackPillAt.
+  ///
+  /// In en, this message translates to:
+  /// **'at'**
+  String get playbackPillAt;
+
+  /// No description provided for @playbackPillYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get playbackPillYou;
+
   /// No description provided for @appearanceGradientTitle.
   ///
   /// In en, this message translates to:
@@ -1651,6 +1675,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Depth and highlights in Glossy capsules'**
   String get appearanceGradientSubtitle;
+
+  /// No description provided for @appearanceSpectrumTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Spectrum background'**
+  String get appearanceSpectrumTitle;
+
+  /// No description provided for @appearanceSpectrumSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Experimental — living bars beneath the interface'**
+  String get appearanceSpectrumSubtitle;
 
   /// No description provided for @appearanceAccentColorTitle.
   ///
@@ -2348,6 +2384,12 @@ abstract class AppLocalizations {
   /// **'Call'**
   String get contactProfileActionCall;
 
+  /// No description provided for @contactProfileActionAddContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to contacts'**
+  String get contactProfileActionAddContact;
+
   /// No description provided for @contactProfileInfoPhone.
   ///
   /// In en, this message translates to:
@@ -2689,6 +2731,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Leave'**
   String get chatInfoActionLeave;
+
+  /// No description provided for @chatInfoActionMuted.
+  ///
+  /// In en, this message translates to:
+  /// **'Muted'**
+  String get chatInfoActionMuted;
+
+  /// No description provided for @chatInfoNotificationsOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications on'**
+  String get chatInfoNotificationsOn;
+
+  /// No description provided for @chatInfoNotificationsOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications off'**
+  String get chatInfoNotificationsOff;
+
+  /// No description provided for @chatInfoMenuBlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Block'**
+  String get chatInfoMenuBlock;
+
+  /// No description provided for @chatInfoMenuUnblock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock'**
+  String get chatInfoMenuUnblock;
+
+  /// No description provided for @chatInfoMenuDeleteChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete chat'**
+  String get chatInfoMenuDeleteChat;
+
+  /// No description provided for @chatInfoMenuClearHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear history'**
+  String get chatInfoMenuClearHistory;
+
+  /// No description provided for @chatInfoClearHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear history'**
+  String get chatInfoClearHistoryTitle;
+
+  /// No description provided for @chatInfoClearHistoryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'All messages in this chat will be deleted permanently.'**
+  String get chatInfoClearHistoryMessage;
+
+  /// No description provided for @chatInfoClearHistoryForAll.
+  ///
+  /// In en, this message translates to:
+  /// **'For everyone'**
+  String get chatInfoClearHistoryForAll;
+
+  /// No description provided for @chatInfoClearHistoryConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get chatInfoClearHistoryConfirm;
+
+  /// No description provided for @chatInfoClearHistoryDone.
+  ///
+  /// In en, this message translates to:
+  /// **'History cleared'**
+  String get chatInfoClearHistoryDone;
+
+  /// No description provided for @chatInfoDeleteChatTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete chat'**
+  String get chatInfoDeleteChatTitle;
+
+  /// No description provided for @chatInfoDeleteChatMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The chat will be deleted together with the whole conversation.'**
+  String get chatInfoDeleteChatMessage;
+
+  /// No description provided for @chatInfoDeleteChatConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get chatInfoDeleteChatConfirm;
+
+  /// No description provided for @chatInfoLeaveGroupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave group'**
+  String get chatInfoLeaveGroupTitle;
+
+  /// No description provided for @chatInfoLeaveGroupMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You will no longer receive messages from this group.'**
+  String get chatInfoLeaveGroupMessage;
+
+  /// No description provided for @chatInfoLeaveChannelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave channel'**
+  String get chatInfoLeaveChannelTitle;
+
+  /// No description provided for @chatInfoLeaveChannelMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You will no longer receive posts from this channel.'**
+  String get chatInfoLeaveChannelMessage;
+
+  /// No description provided for @chatInfoLeaveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get chatInfoLeaveConfirm;
+
+  /// No description provided for @chatInfoLeaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not leave the chat'**
+  String get chatInfoLeaveFailed;
+
+  /// No description provided for @chatInfoCallConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a call'**
+  String get chatInfoCallConfirmTitle;
+
+  /// No description provided for @chatInfoCallConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Call {name}?'**
+  String chatInfoCallConfirmMessage(String name);
+
+  /// No description provided for @chatInfoConfirmYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get chatInfoConfirmYes;
+
+  /// No description provided for @chatInfoConfirmNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get chatInfoConfirmNo;
+
+  /// No description provided for @chatInfoCallFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start the call'**
+  String get chatInfoCallFailed;
+
+  /// No description provided for @chatInfoBlockConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Block'**
+  String get chatInfoBlockConfirmTitle;
+
+  /// No description provided for @chatInfoBlockConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to block {name}?'**
+  String chatInfoBlockConfirmMessage(String name);
+
+  /// No description provided for @chatInfoBlockDone.
+  ///
+  /// In en, this message translates to:
+  /// **'User blocked'**
+  String get chatInfoBlockDone;
+
+  /// No description provided for @chatInfoUnblockDone.
+  ///
+  /// In en, this message translates to:
+  /// **'User unblocked'**
+  String get chatInfoUnblockDone;
+
+  /// No description provided for @chatInfoBlockFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not change the block state'**
+  String get chatInfoBlockFailed;
+
+  /// No description provided for @chatInfoComplaintTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get chatInfoComplaintTitle;
+
+  /// No description provided for @chatInfoComplaintSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a reason for the report'**
+  String get chatInfoComplaintSubtitle;
+
+  /// No description provided for @chatInfoComplaintSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get chatInfoComplaintSend;
+
+  /// No description provided for @chatInfoComplaintClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get chatInfoComplaintClose;
+
+  /// No description provided for @chatInfoComplaintEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the report reasons'**
+  String get chatInfoComplaintEmpty;
+
+  /// No description provided for @chatInfoComplaintSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Report sent'**
+  String get chatInfoComplaintSent;
+
+  /// No description provided for @chatInfoComplaintFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the report'**
+  String get chatInfoComplaintFailed;
+
+  /// No description provided for @chatInfoActionCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get chatInfoActionCancel;
 
   /// No description provided for @chatInfoBio.
   ///
@@ -4250,6 +4526,18 @@ abstract class AppLocalizations {
   /// **'Open profile'**
   String get contactBubbleOpenProfile;
 
+  /// No description provided for @miniAppOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get miniAppOpen;
+
+  /// No description provided for @miniAppFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open the app'**
+  String get miniAppFailed;
+
   /// No description provided for @editContactMenu.
   ///
   /// In en, this message translates to:
@@ -4405,6 +4693,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Download history cleared'**
   String get downloadsHistoryCleared;
+
+  /// No description provided for @uploadNotificationPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Photo} other{{count} photos}}'**
+  String uploadNotificationPhotos(int count);
+
+  /// No description provided for @uploadNotificationVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get uploadNotificationVideo;
+
+  /// No description provided for @uploadNotificationFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get uploadNotificationFile;
+
+  /// No description provided for @uploadNotificationMultiple.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other{Sending {count} files}}'**
+  String uploadNotificationMultiple(int count);
+
+  /// No description provided for @uploadNotificationPreparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing…'**
+  String get uploadNotificationPreparing;
+
+  /// No description provided for @uploadSpeedBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} B/s'**
+  String uploadSpeedBytes(String value);
+
+  /// No description provided for @uploadSpeedKb.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} KB/s'**
+  String uploadSpeedKb(String value);
+
+  /// No description provided for @uploadSpeedMb.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} MB/s'**
+  String uploadSpeedMb(String value);
 }
 
 class _AppLocalizationsDelegate

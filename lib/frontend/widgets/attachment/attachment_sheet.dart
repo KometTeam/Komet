@@ -160,6 +160,10 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       _thumbKeys.putIfAbsent(id, () => GlobalKey<_ThumbnailState>());
 
   void _openPreview(GalleryItem item) {
+    if (item.isVideo) {
+      _toggleSelection(item);
+      return;
+    }
     final thumbKey = _thumbKey(item.id);
     final hero = PhotoHeroController(
       origin: () => photoHeroRect(thumbKey),
@@ -793,7 +797,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                           backgroundColor: liquid
                               ? null
                               : (frost
-                                    ? AppFrost.navPillTint(cs)
+                                    ? AppFrost.glassTint(cs)
                                     : _composerColor(cs)),
                           borderColor: _composerBorderColor(cs),
                         );
@@ -1089,7 +1093,7 @@ class _ThumbnailState extends State<_Thumbnail> {
   }
 
   void _resolveProvider() {
-    final file = widget.editedFile ?? widget.item.localFile;
+    final file = widget.editedFile ?? (widget.item.isVideo ? null : widget.item.localFile);
     if (file != null) {
       _provider = ResizeImage(
         FileImage(file),
@@ -1102,7 +1106,7 @@ class _ThumbnailState extends State<_Thumbnail> {
     final id = widget.item.id;
     widget.item.thumbnail(_pixelSize).then((data) {
       if (!mounted || data == null || widget.item.id != id) return;
-      if (widget.editedFile != null || widget.item.localFile != null) return;
+      if (widget.editedFile != null) return;
       setState(() => _provider = MemoryImage(data));
     });
   }
@@ -1119,5 +1123,16 @@ class _ThumbnailState extends State<_Thumbnail> {
     );
   }
 
-  Widget _placeholder() => ColoredBox(color: widget.cs.surfaceContainerHighest);
+  Widget _placeholder() => ColoredBox(
+    color: widget.cs.surfaceContainerHighest,
+    child: widget.item.isVideo
+        ? Center(
+            child: Icon(
+              Symbols.movie,
+              size: 28,
+              color: widget.cs.onSurfaceVariant,
+            ),
+          )
+        : null,
+  );
 }
