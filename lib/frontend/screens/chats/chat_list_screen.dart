@@ -22,7 +22,6 @@ import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
 import '../../widgets/springy_tap.dart';
-import '../../widgets/formatted_message_text.dart';
 import '../../widgets/informer_banner_tile.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/download_history.dart';
@@ -30,6 +29,7 @@ import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/text_format.dart';
 import '../../../core/utils/update_checker.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../models/chat_preview_media.dart';
 import '../../../models/informer_banner.dart';
 
 import '../calls/calls_tab.dart';
@@ -40,6 +40,7 @@ import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/account_switcher_overlay.dart';
 import 'chat/view/chat_list_shimmer.dart';
 import 'chat/view/chat_list_tile.dart';
+import 'chat/view/chat_preview_line.dart';
 import '../../widgets/connection_status.dart';
 import '../../../backend/api.dart';
 import '../../../core/protocol/opcode_map.dart';
@@ -1888,6 +1889,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                         previewCipherText: isPlaceholder
                             ? null
                             : chat.lastMsgTextOneLine,
+                        previewMedia: isPlaceholder ? null : chat.lastMsgMedia,
+                        titleIcon: chatKindIcon(
+                          'DIALOG',
+                          isBot: _isBotDialog(secondId, chat),
+                        ),
                         hasMiniApp: _hasMiniApp(secondId, chat),
                       ),
                     );
@@ -1897,42 +1903,22 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ? ContactCache.get(chat.lastMsgSenderId!)
                         : null;
 
-                    String fullMsg = "";
-                    String senderPrefix = "";
-                    List<FormatRange> messageRanges = const [];
-                    if (isPlaceholder) {
-                      fullMsg = 'зайдите в чат для подгрузки';
-                    } else {
-                      var prefixLen = 0;
-                      if (sender?.isNotEmpty == true && chat.id != 0) {
-                        final prefix = "$sender: ";
-                        senderPrefix = prefix;
-                        fullMsg += prefix;
-                        prefixLen = prefix.length;
-                      }
-                      if (chat.lastMsgText?.isNotEmpty == true) {
-                        fullMsg += chat.lastMsgText ?? "";
-                        final ranges = chat.lastMsgFormatRanges;
-                        messageRanges = prefixLen == 0
-                            ? ranges
-                            : [
-                                for (final r in ranges)
-                                  FormatRange(
-                                    format: r.format,
-                                    start: r.start + prefixLen,
-                                    length: r.length,
-                                    attributes: r.attributes,
-                                  ),
-                              ];
-                      }
-                    }
+                    final senderPrefix =
+                        !isPlaceholder &&
+                            sender?.isNotEmpty == true &&
+                            chat.id != 0
+                        ? "$sender: "
+                        : "";
+                    final body = isPlaceholder
+                        ? 'зайдите в чат для подгрузки'
+                        : (chat.lastMsgTextOneLine ?? '');
 
                     return _animateChatTile(
                       chat.id.toString(),
                       _buildChatItem(
                         chat.id.toString(),
                         chat.id == 0 ? "Избранное" : chat.title ?? "Чат",
-                        fullMsg,
+                        body,
                         _formatTime(chat.lastMsgTime),
                         (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
                             ? chat.iconUrl!
@@ -1947,12 +1933,18 @@ class _ChatListScreenState extends State<ChatListScreen>
                         draft: chat.id == 0 ? null : _draftFor(chat.id),
                         ownStatus: _ownStatusFor(chat, isPlaceholder),
                         ownRead: chat.lastMsgReadByOthers,
-                        messageRanges: messageRanges,
+                        messageRanges: isPlaceholder
+                            ? const []
+                            : chat.lastMsgFormatRanges,
                         previewMessageId: isPlaceholder ? null : chat.lastMsgId,
                         previewPrefix: senderPrefix,
                         previewCipherText: isPlaceholder
                             ? null
                             : chat.lastMsgText,
+                        previewMedia: isPlaceholder ? null : chat.lastMsgMedia,
+                        titleIcon: chat.id == 0
+                            ? null
+                            : chatKindIcon(chat.type, isBot: false),
                       ),
                     );
                   }
@@ -2729,8 +2721,10 @@ class _ChatListScreenState extends State<ChatListScreen>
     String message,
     List<FormatRange> messageRanges,
     String? draft,
-    bool messageItalic,
-  ) {
+    bool messageItalic, {
+    String prefix = '',
+    ChatPreviewMedia? media,
+  }) {
     if (draft != null) {
       return Text.rich(
         TextSpan(
@@ -2755,29 +2749,18 @@ class _ChatListScreenState extends State<ChatListScreen>
         overflow: TextOverflow.ellipsis,
       );
     }
-    final previewStyle = TextStyle(
-      color: cs.outline,
-      fontSize: 14,
-      fontWeight: FontWeight.w400,
-      fontStyle: messageItalic ? FontStyle.italic : FontStyle.normal,
-      height: 1.2,
-    );
-    if (messageRanges.isEmpty) {
-      return Text(
-        message,
-        style: previewStyle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-    return Text.rich(
-      FormattedMessageText.buildInlineSpan(
-        message,
-        messageRanges,
-        previewStyle,
+    return ChatPreviewLine(
+      prefix: prefix,
+      text: message,
+      ranges: messageRanges,
+      media: media,
+      italic: messageItalic,
+      style: TextStyle(
+        color: cs.outline,
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        height: 1.2,
       ),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
     );
   }
 
@@ -2824,6 +2807,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     int? previewMessageId,
     String previewPrefix = '',
     String? previewCipherText,
+    ChatPreviewMedia? previewMedia,
+    IconData? titleIcon,
     bool hasMiniApp = false,
   }) {
     final cs = Theme.of(context).colorScheme;
@@ -2853,25 +2838,36 @@ class _ChatListScreenState extends State<ChatListScreen>
                 messageRanges,
                 draft,
                 messageItalic,
+                prefix: previewPrefix,
+                media: previewMedia,
               ),
               MessageDecryptionState.wrongKey => _buildPreviewLine(
                 cs,
-                '$previewPrefix'
                 'неверный ключ',
                 const [],
                 draft,
                 true,
+                prefix: previewPrefix,
               ),
               MessageDecryptionState.decrypted => _buildPreviewLine(
                 cs,
-                '$previewPrefix${decryption!.plaintext}',
+                decryption!.plaintext ?? '',
                 const [],
                 draft,
                 messageItalic,
+                prefix: previewPrefix,
               ),
             },
           )
-        : _buildPreviewLine(cs, message, messageRanges, draft, messageItalic);
+        : _buildPreviewLine(
+            cs,
+            message,
+            messageRanges,
+            draft,
+            messageItalic,
+            prefix: previewPrefix,
+            media: previewMedia,
+          );
 
     final storyOwnerId = chatType == 'DIALOG'
         ? presenceUserId
@@ -3041,6 +3037,16 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    if (titleIcon != null) ...[
+                                      Icon(
+                                        titleIcon,
+                                        color: cs.outline,
+                                        size: 15,
+                                        weight: 500,
+                                        fill: 1,
+                                      ),
+                                      const SizedBox(width: 4),
+                                    ],
                                     Flexible(
                                       child: Text(
                                         name,
@@ -3149,6 +3155,12 @@ class _ChatListScreenState extends State<ChatListScreen>
         ),
       ),
     );
+  }
+
+  bool _isBotDialog(int contactId, CachedChat chat) {
+    if (contactId == 0 || contactId == _profile?.id) return false;
+    if (ContactCache.getOptions(contactId)?.contains('BOT') == true) return true;
+    return chat.options.contains('BOT');
   }
 
   bool _hasMiniApp(int contactId, CachedChat chat) {

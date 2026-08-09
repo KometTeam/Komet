@@ -58,6 +58,7 @@ CachedChat? parseChatRow(
       lastMsgTime: lastMessage.time,
       lastMsgText: lastMessage.text,
       lastMsgElements: lastMessage.elements,
+      lastMsgPreview: lastMessage.preview,
       lastMsgSenderId: lastMessage.senderId,
       unreadCount: (chat['newMessages'] as int?) ?? 0,
       lastEventTime: (chat['lastEventTime'] as int?) ?? 0,
@@ -125,16 +126,31 @@ CachedChat? parseChatRow(
   );
 }
 
-({int? id, int? time, String? text, String? elements, int? senderId})
+({
+  int? id,
+  int? time,
+  String? text,
+  String? elements,
+  String? preview,
+  int? senderId,
+})
 _resolveLastMessage(dynamic lastMsg) {
   if (lastMsg is! Map) {
-    return (id: null, time: null, text: null, elements: null, senderId: null);
+    return (
+      id: null,
+      time: null,
+      text: null,
+      elements: null,
+      preview: null,
+      senderId: null,
+    );
   }
   return (
     id: lastMsg['id'] as int?,
     time: lastMsg['time'] as int?,
     text: messagePreviewText(lastMsg),
     elements: messagePreviewElements(lastMsg),
+    preview: messagePreviewMedia(lastMsg),
     senderId: lastMsg['sender'] as int?,
   );
 }
@@ -308,6 +324,7 @@ bool sameChatContent(CachedChat a, CachedChat b) {
   if (a.lastMsgTime != b.lastMsgTime) return false;
   if (a.lastMsgText != b.lastMsgText) return false;
   if (a.lastMsgElements != b.lastMsgElements) return false;
+  if (a.lastMsgPreview != b.lastMsgPreview) return false;
   if (a.lastMsgSenderId != b.lastMsgSenderId) return false;
   if (a.unreadCount != b.unreadCount) return false;
   if (a.lastEventTime != b.lastEventTime) return false;

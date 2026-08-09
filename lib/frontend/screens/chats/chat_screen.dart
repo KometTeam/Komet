@@ -299,6 +299,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _keyboardBeforeStickers = false;
   final ScrollController _scrollController = ScrollController();
   bool _userDidScroll = false;
+  int _userGestureEpoch = 0;
   String? _pinnedMessageId;
   double _pinnedAlignment = 0;
   int? _unreadAnchorTime;
@@ -1638,35 +1639,57 @@ class _ChatScreenState extends State<ChatScreen>
   void _maybeFillGap() {
     final controller = _chatController;
     if (!controller.hasGap || controller.loadingGap) return;
+    final oldestRendered = _oldestRenderedMessageTime();
     for (final gap in controller.gaps) {
-      final box = _keyForMessage(gap.edgeId).currentContext?.findRenderObject();
-      if (box is RenderBox && box.attached) {
-        unawaited(_fillGapForward(gap));
-        return;
+      if (!ChatController.gapFillLeavesViewportInPlace(gap, oldestRendered)) {
+        continue;
       }
+      unawaited(_fillGapForward(gap));
+      return;
     }
   }
 
+  int? _oldestRenderedMessageTime() {
+    for (final message in _messages) {
+      final box = _messageKeys[message.id]?.currentContext?.findRenderObject();
+      if (box is RenderBox && box.attached) return message.time;
+    }
+    return null;
+  }
+
   Future<void> _fillGapForward(HistoryGap gap) async {
-    final edgeId = gap.edgeId;
-    final beforeDy = _messageOffsetInList(edgeId);
-    final added = await _chatController.fillGapForward(gap);
+    String? anchorId;
+    double? anchorAt;
+    double? anchorAlignment;
+    final added = await _chatController.fillGapForward(
+      gap,
+      beforeApply: () {
+        final id = _viewportAnchorId();
+        anchorId = id;
+        if (id == null) return;
+        anchorAt = _messageContentOffset(id);
+        anchorAlignment = _messageAlignmentInList(id);
+      },
+    );
     if (!mounted || added == 0) return;
 
     _syncReactionNotifiersFromMessages();
     _bumpMessages();
     await WidgetsBinding.instance.endOfFrame;
-    if (!mounted || !_scrollController.hasClients) return;
+    if (!mounted) return;
 
-    final afterDy = _messageOffsetInList(edgeId);
-    if (beforeDy != null && afterDy != null) {
-      final delta = beforeDy - afterDy;
-      if (delta.abs() > 0.5) {
-        final pos = _scrollController.position;
-        _scrollController.jumpTo(
-          (pos.pixels + delta).clamp(pos.minScrollExtent, pos.maxScrollExtent),
-        );
-      }
+    final id = anchorId;
+    final at = anchorAt;
+    final alignment = anchorAlignment;
+    if (id != null && at != null && !_restoreContentOffset(id, at)) {
+      _historyAutoloadSuppressCount++;
+      _alignLoadedMessage(
+        id,
+        alignment ?? 0,
+        0,
+        epoch: _userGestureEpoch,
+        onSettled: () => _historyAutoloadSuppressCount--,
+      );
     }
     _loadForwardedSenderNames();
     _loadGroupSenderNames();
@@ -1689,36 +1712,28 @@ class _ChatScreenState extends State<ChatScreen>
     final listBox = _listKey.currentContext?.findRenderObject();
     if (listBox is! RenderBox || !listBox.attached) return null;
     final height = listBox.size.height;
+    String? newest;
     for (final message in _messages) {
       final box = _messageKeys[message.id]?.currentContext?.findRenderObject();
       if (box is! RenderBox || !box.attached) continue;
       final dy = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
-      if (dy >= 0 && dy <= height) return message.id;
+      if (dy >= 0 && dy <= height) newest = message.id;
     }
-    return null;
+    return newest;
   }
 
   Future<void> _holdScrollAfterAppend(
     String? anchorId,
-    double? beforeDy,
+    double? anchorAt,
   ) async {
-    if (anchorId == null || beforeDy == null) return;
+    if (anchorId == null || anchorAt == null) return;
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !_scrollController.hasClients) return;
-
-    final afterDy = _messageOffsetInList(anchorId);
-    if (afterDy == null) return;
-    final delta = beforeDy - afterDy;
-    if (delta.abs() <= 0.5) return;
-
-    final pos = _scrollController.position;
-    if (pos.userScrollDirection != ScrollDirection.idle) return;
-    final target = (pos.pixels + delta).clamp(
-      pos.minScrollExtent,
-      pos.maxScrollExtent,
-    );
-    if ((target - pos.pixels).abs() <= 0.5) return;
-    _scrollController.jumpTo(target);
+    if (_scrollController.position.userScrollDirection !=
+        ScrollDirection.idle) {
+      return;
+    }
+    _restoreContentOffset(anchorId, anchorAt);
   }
 
   double? _messageOffsetInList(String messageId) {
@@ -1728,6 +1743,37 @@ class _ChatScreenState extends State<ChatScreen>
       return null;
     }
     return box.localToGlobal(Offset.zero, ancestor: listBox).dy;
+  }
+
+  double? _messageContentOffset(String messageId) {
+    if (!_scrollController.hasClients) return null;
+    final dy = _messageOffsetInList(messageId);
+    if (dy == null) return null;
+    return dy - _scrollController.position.pixels;
+  }
+
+  double? _messageAlignmentInList(String messageId) {
+    final listBox = _listKey.currentContext?.findRenderObject();
+    if (listBox is! RenderBox || listBox.size.height <= 0) return null;
+    final dy = _messageOffsetInList(messageId);
+    if (dy == null) return null;
+    return (dy / listBox.size.height).clamp(0.0, 1.0);
+  }
+
+  bool _restoreContentOffset(String messageId, double before) {
+    if (!_scrollController.hasClients) return false;
+    final after = _messageContentOffset(messageId);
+    if (after == null) return false;
+    final delta = before - after;
+    if (delta.abs() <= 0.5) return true;
+    final pos = _scrollController.position;
+    final target = (pos.pixels + delta).clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    );
+    if ((target - pos.pixels).abs() <= 0.5) return true;
+    _scrollController.jumpTo(target);
+    return true;
   }
 
   Future<void> _loadMessageWindow(String messageId, int targetTime) async {
@@ -1972,7 +2018,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (_messages.any((m) => m.id == comment.id)) return;
     final nearBottom = _isNearListBottom();
     final anchorId = nearBottom ? null : _viewportAnchorId();
-    final anchorDy = anchorId == null ? null : _messageOffsetInList(anchorId);
+    final anchorAt = anchorId == null ? null : _messageContentOffset(anchorId);
     if (!nearBottom) _retainOffsetForNextLayout();
     _messages.add(comment);
     _syncReactionNotifiersFromMessages();
@@ -1982,7 +2028,7 @@ class _ChatScreenState extends State<ChatScreen>
       _scrollToBottom();
     } else {
       _noteMissedMessage();
-      unawaited(_holdScrollAfterAppend(anchorId, anchorDy));
+      unawaited(_holdScrollAfterAppend(anchorId, anchorAt));
     }
   }
 
@@ -3010,9 +3056,9 @@ class _ChatScreenState extends State<ChatScreen>
         if (_messages.any((m) => m.id == message.id)) return;
         final nearBottom = _isNearBottom();
         final anchorId = nearBottom ? null : _viewportAnchorId();
-        final anchorDy = anchorId == null
+        final anchorAt = anchorId == null
             ? null
-            : _messageOffsetInList(anchorId);
+            : _messageContentOffset(anchorId);
         if (!nearBottom) _retainOffsetForNextLayout();
         _lastSentId = message.id;
         _messages.add(message);
@@ -3024,7 +3070,7 @@ class _ChatScreenState extends State<ChatScreen>
           _scheduleReadMarker();
         } else {
           _noteMissedMessage();
-          unawaited(_holdScrollAfterAppend(anchorId, anchorDy));
+          unawaited(_holdScrollAfterAppend(anchorId, anchorAt));
           _reapplyPinIfNeeded();
         }
         _prank.checkTrigger(message);
@@ -4797,11 +4843,13 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted || !_scrollController.hasClients) return;
     if (_messages.indexWhere((m) => m.id == id) == -1) return;
 
+    final epoch = _userGestureEpoch;
     _historyAutoloadSuppressCount++;
     try {
       var stable = 0;
       for (var iter = 0; iter < 120; iter++) {
         if (!mounted || !_scrollController.hasClients) return;
+        if (_userGestureEpoch != epoch) return;
         final listObj = _listKey.currentContext?.findRenderObject();
         final boxObj = _keyForMessage(id).currentContext?.findRenderObject();
         final p = _scrollController.position;
@@ -4986,9 +5034,12 @@ class _ChatScreenState extends State<ChatScreen>
     double alignment,
     int attempt, {
     int frames = 0,
+    int? epoch,
     VoidCallback? onSettled,
   }) {
-    if (!mounted || !_scrollController.hasClients) {
+    if (!mounted ||
+        !_scrollController.hasClients ||
+        (epoch != null && epoch != _userGestureEpoch)) {
       onSettled?.call();
       return;
     }
@@ -5006,6 +5057,7 @@ class _ChatScreenState extends State<ChatScreen>
           alignment,
           moved ? 0 : attempt + 1,
           frames: frames + 1,
+          epoch: epoch,
           onSettled: onSettled,
         ),
       );
@@ -5038,6 +5090,7 @@ class _ChatScreenState extends State<ChatScreen>
         alignment,
         attempt + 1,
         frames: frames + 1,
+        epoch: epoch,
         onSettled: onSettled,
       ),
     );
@@ -5575,9 +5628,14 @@ class _ChatScreenState extends State<ChatScreen>
       children: [
         Opacity(
           opacity: showShimmer ? 0.0 : 1.0,
-          child: NotificationListener<ScrollEndNotification>(
-            onNotification: (_) {
-              _updateReadMarker();
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollStartNotification &&
+                  notification.dragDetails != null) {
+                _userGestureEpoch++;
+              } else if (notification is ScrollEndNotification) {
+                _updateReadMarker();
+              }
               return false;
             },
             child: _buildMessagesList(),

@@ -1,54 +1,119 @@
 import 'dart:convert';
 
+import '../../models/attachment.dart';
+import '../../models/chat_preview_media.dart';
+
+const int _maxPreviewThumbs = 3;
+const int _maxThumbLength = 20000;
+
 String? attachPreviewLabel(dynamic attaches) {
+  final parts = _attachPreviewParts(attaches);
+  if (parts == null) return null;
+  final detail = parts.detail;
+  return detail == null ? parts.label : '${parts.label}: $detail';
+}
+
+({String label, String? detail})? _attachPreviewParts(dynamic attaches) {
   final first = _firstPreviewAttach(attaches);
   if (first == null) return null;
   final type = (first['_type'] as String? ?? '').toUpperCase();
   switch (type) {
     case 'PHOTO':
-      return 'Фото';
+      return (
+        label: _mediaAttachCount(attaches) > 1 ? 'Изображения' : 'Изображение',
+        detail: null,
+      );
     case 'VIDEO':
-      return _isVideoNote(first) ? 'Видео-сообщение' : 'Видео';
+      if (_isVideoNote(first)) return (label: 'Видео-сообщение', detail: null);
+      return (label: 'Видео', detail: null);
     case 'AUDIO':
-      return 'Голосовое сообщение';
+      return (label: 'Голосовое сообщение', detail: null);
     case 'FILE':
-      final name = first['name']?.toString();
-      return name != null && name.isNotEmpty ? 'Файл: $name' : 'Файл';
+      return (label: 'Файл', detail: _nonEmpty(first['name']));
     case 'STICKER':
-      return 'Стикер';
+      return (label: 'Стикер', detail: null);
     case 'SHARE':
-      final title = first['title']?.toString();
-      return title != null && title.isNotEmpty ? 'Ссылка: $title' : 'Ссылка';
+      return (label: 'Ссылка', detail: _nonEmpty(first['title']));
     case 'POLL':
-      final title = first['title']?.toString();
-      return title != null && title.isNotEmpty ? 'Опрос: $title' : 'Опрос';
+      return (label: 'Опрос', detail: _nonEmpty(first['title']));
     case 'LOCATION':
-      return 'Геопозиция';
+      return (label: 'Геопозиция', detail: null);
     case 'CONTACT':
-      return 'Контакт';
+      return (label: 'Контакт', detail: null);
     case 'CONTROL':
-      return _controlPreviewLabel(first);
+      final label = _controlPreviewLabel(first);
+      return label == null ? null : (label: label, detail: null);
     case 'INLINE_KEYBOARD':
       return null;
     case 'CALL':
-      final video = first['callType']?.toString().toUpperCase() == 'VIDEO';
-      final dur = (first['duration'] as num?)?.toInt() ?? 0;
-      final hangup = first['hangupType']?.toString();
-      final failed =
-          dur == 0 ||
-          hangup == 'CANCELED' ||
-          hangup == 'REJECTED' ||
-          hangup == 'MISSED';
-      if (first['joinLink'] != null) {
-        return video ? 'Групповой видеозвонок' : 'Групповой звонок';
-      }
-      if (failed) {
-        return video ? 'Пропущенный видеозвонок' : 'Пропущенный звонок';
-      }
-      return video ? 'Видеозвонок' : 'Звонок';
+      return (label: _callPreviewLabel(first), detail: null);
     default:
-      return 'Вложение';
+      return (label: 'Вложение', detail: null);
   }
+}
+
+ChatPreviewKind? _attachPreviewKind(Map attach) {
+  switch ((attach['_type'] as String? ?? '').toUpperCase()) {
+    case 'PHOTO':
+      return ChatPreviewKind.photo;
+    case 'VIDEO':
+      return _isVideoNote(attach)
+          ? ChatPreviewKind.videoNote
+          : ChatPreviewKind.video;
+    case 'AUDIO':
+      return ChatPreviewKind.audio;
+    case 'FILE':
+      return ChatPreviewKind.file;
+    case 'STICKER':
+      return ChatPreviewKind.sticker;
+    case 'SHARE':
+      return ChatPreviewKind.share;
+    case 'POLL':
+      return ChatPreviewKind.poll;
+    case 'LOCATION':
+      return ChatPreviewKind.location;
+    case 'CONTACT':
+      return ChatPreviewKind.contact;
+    case 'CONTROL':
+      return ChatPreviewKind.control;
+    case 'INLINE_KEYBOARD':
+      return null;
+    case 'CALL':
+      final video = attach['callType']?.toString().toUpperCase() == 'VIDEO';
+      if (_isFailedCall(attach)) {
+        return video
+            ? ChatPreviewKind.missedVideoCall
+            : ChatPreviewKind.missedCall;
+      }
+      return video ? ChatPreviewKind.videoCall : ChatPreviewKind.call;
+    default:
+      return ChatPreviewKind.other;
+  }
+}
+
+String _callPreviewLabel(Map attach) {
+  final video = attach['callType']?.toString().toUpperCase() == 'VIDEO';
+  if (attach['joinLink'] != null) {
+    return video ? 'Групповой видеозвонок' : 'Групповой звонок';
+  }
+  if (_isFailedCall(attach)) {
+    return video ? 'Пропущенный видеозвонок' : 'Пропущенный звонок';
+  }
+  return video ? 'Видеозвонок' : 'Звонок';
+}
+
+bool _isFailedCall(Map attach) {
+  final duration = (attach['duration'] as num?)?.toInt() ?? 0;
+  final hangup = attach['hangupType']?.toString();
+  return duration == 0 ||
+      hangup == 'CANCELED' ||
+      hangup == 'REJECTED' ||
+      hangup == 'MISSED';
+}
+
+String? _nonEmpty(dynamic raw) {
+  final value = raw?.toString();
+  return value != null && value.isNotEmpty ? value : null;
 }
 
 Map? _firstPreviewAttach(dynamic attaches) {
@@ -60,6 +125,16 @@ Map? _firstPreviewAttach(dynamic attaches) {
     return attach;
   }
   return null;
+}
+
+int _mediaAttachCount(dynamic attaches) {
+  if (attaches is! List) return 0;
+  var count = 0;
+  for (final attach in attaches.whereType<Map>()) {
+    final type = (attach['_type'] as String? ?? '').toUpperCase();
+    if (type == 'PHOTO' || (type == 'VIDEO' && !_isVideoNote(attach))) count++;
+  }
+  return count;
 }
 
 bool _isVideoNote(Map attach) {
@@ -95,15 +170,70 @@ String? _controlPreviewLabel(Map c) {
 }
 
 String? messagePreviewText(Map msg) {
-  final link = msg['link'];
-  if (link is Map && link['type']?.toString().toUpperCase() == 'FORWARD') {
-    final original = link['message'];
+  final original = _forwardOrigin(msg);
+  if (original != null) {
     final inner = original is Map ? _bodyPreviewText(original) : null;
     return inner != null && inner.isNotEmpty
         ? '↪ $inner'
         : '↪ Пересланное сообщение';
   }
   return _bodyPreviewText(msg);
+}
+
+String? messagePreviewMedia(Map msg) {
+  final origin = _forwardOrigin(msg);
+  final body = origin ?? msg;
+  if (body is! Map) return null;
+  final first = _firstPreviewAttach(body['attaches']);
+  if (first == null) return null;
+  final kind = _attachPreviewKind(first);
+  if (kind == null) return null;
+
+  final text = body['text']?.toString();
+  final captioned = text != null && text.isNotEmpty;
+  final parts = captioned ? null : _attachPreviewParts(body['attaches']);
+  final label = parts == null
+      ? null
+      : (origin == null ? parts.label : '↪ ${parts.label}');
+
+  return ChatPreviewMedia(
+    kind: kind,
+    thumbs: _previewThumbs(body['attaches']),
+    label: label,
+    detail: parts?.detail,
+  ).encode();
+}
+
+dynamic _forwardOrigin(Map msg) {
+  final link = msg['link'];
+  if (link is! Map) return null;
+  if (link['type']?.toString().toUpperCase() != 'FORWARD') return null;
+  return link['message'];
+}
+
+List<ChatPreviewThumb> _previewThumbs(dynamic attaches) {
+  if (attaches is! List) return const [];
+  final thumbs = <ChatPreviewThumb>[];
+  for (final attach in attaches.whereType<Map>()) {
+    if (thumbs.length >= _maxPreviewThumbs) break;
+    final type = (attach['_type'] as String? ?? '').toUpperCase();
+    final isVideo = type == 'VIDEO';
+    if (type != 'PHOTO' && !isVideo) continue;
+    final source = _thumbSource(attach, isVideo);
+    if (source == null) continue;
+    thumbs.add(ChatPreviewThumb(source: source, video: isVideo));
+  }
+  return thumbs;
+}
+
+String? _thumbSource(Map attach, bool isVideo) {
+  final data = decodeAttachPreview(attach['previewData']);
+  if (data != null && data.length <= _maxThumbLength) return data;
+  final url = isVideo
+      ? _nonEmpty(attach['thumbnail'])
+      : _nonEmpty(attach['baseUrl']);
+  if (url != null && url.startsWith('http')) return url;
+  return null;
 }
 
 ({String? text, bool isPreview}) pinnedMessagePreview(Map msg) {

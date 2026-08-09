@@ -45,6 +45,11 @@ class ChatController extends ChangeNotifier {
 
   bool get hasGap => gaps.isNotEmpty;
 
+  static bool gapFillLeavesViewportInPlace(
+    HistoryGap gap,
+    int? oldestRenderedTime,
+  ) => oldestRenderedTime != null && oldestRenderedTime >= gap.tailTime;
+
   bool Function() isMounted = () => true;
 
   void bump() {
@@ -219,7 +224,10 @@ class ChatController extends ChangeNotifier {
     if (gaps.isEmpty) persistSessionCache();
   }
 
-  Future<int> fillGapForward(HistoryGap gap) async {
+  Future<int> fillGapForward(
+    HistoryGap gap, {
+    void Function()? beforeApply,
+  }) async {
     if (loadingGap || myId == 0 || !gaps.contains(gap)) return 0;
     if (gap.edgeTime <= 0 || gap.tailTime <= gap.edgeTime) {
       _closeGap(gap);
@@ -255,7 +263,10 @@ class ChatController extends ChangeNotifier {
         );
         if (!isMounted()) return 0;
         if (refreshed.length <= slice.length) {
-          if (refreshed.isNotEmpty) mergeMessages(refreshed);
+          if (refreshed.isNotEmpty) {
+            beforeApply?.call();
+            mergeMessages(refreshed);
+          }
           _closeGap(gap);
           return refreshed.length;
         }
@@ -267,6 +278,7 @@ class ChatController extends ChangeNotifier {
         return 0;
       }
 
+      beforeApply?.call();
       mergeMessages(slice);
 
       var edge = slice.first;

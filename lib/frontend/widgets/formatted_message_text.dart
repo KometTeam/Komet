@@ -46,24 +46,66 @@ class FormattedMessageText extends StatefulWidget {
     List<FormatRange> ranges,
     TextStyle style, {
     Color? mentionColor,
+  }) => TextSpan(
+    style: style,
+    children: buildInlineChildren(
+      text,
+      ranges,
+      style,
+      mentionColor: mentionColor,
+    ),
+  );
+
+  static List<InlineSpan> buildInlineChildren(
+    String text,
+    List<FormatRange> ranges,
+    TextStyle style, {
+    Color? mentionColor,
   }) {
     final quoteColor = style.color?.withValues(alpha: 0.85);
-    final segments = segmentizeFormats(text, ranges);
-    return TextSpan(
-      style: style,
-      children: [
-        for (final segment in segments)
-          TextSpan(
-            text: text.substring(segment.start, segment.end),
-            style: applyTextFormats(
-              style,
-              segment.formats,
-              quoteColor: quoteColor,
-              mentionColor: mentionColor,
+    final fontSize = style.fontSize ?? 16;
+    final spans = <InlineSpan>[];
+    for (final segment in segmentizeFormats(text, ranges)) {
+      final content = text.substring(segment.start, segment.end);
+      final animojiUrl = segment.animojiUrl;
+      if (animojiUrl != null) {
+        final box = fontSize * 1.35;
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: SizedBox(
+              width: box,
+              height: box,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Text(content, style: style.copyWith(fontSize: fontSize)),
+                  LottieImage(
+                    lottieUrl: animojiUrl,
+                    size: box,
+                    memCacheWidth: 96,
+                    shimmer: false,
+                  ),
+                ],
+              ),
             ),
           ),
-      ],
-    );
+        );
+        continue;
+      }
+      spans.add(
+        TextSpan(
+          text: content,
+          style: applyTextFormats(
+            style,
+            segment.formats,
+            quoteColor: quoteColor,
+            mentionColor: mentionColor,
+          ),
+        ),
+      );
+    }
+    return spans;
   }
 
   @override
