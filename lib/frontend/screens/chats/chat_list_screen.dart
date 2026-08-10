@@ -10,6 +10,8 @@ import 'chat_screen.dart';
 import 'search_screen.dart';
 import 'create_channel_flow.dart';
 import 'create_group_flow.dart';
+import 'folder_action_sheet.dart';
+import 'folder_edit_sheet.dart';
 import '../contacts/add_contact_sheet.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../../core/crypto/message_decryption_cache.dart';
@@ -649,6 +651,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     KometSettings.hideAllChatsFolder.addListener(_requestReload);
     KometSettings.showHiddenChats.addListener(_requestReload);
     ContactsModule.revision.addListener(_requestReload);
+    FoldersModule.revision.addListener(_requestReload);
     bannersModule.activeBanner.addListener(_onActiveInformerChanged);
     _maybeLoadStories();
     _typingSub = api.pushStream
@@ -856,12 +859,9 @@ class _ChatListScreenState extends State<ChatListScreen>
         p.id,
       )).map((c) => c.id).toSet();
 
-      final allChatsFolder = ChatFolder(
-        id: 'all.chat.folder',
+      const allChatsFolder = ChatFolder(
+        id: FoldersModule.allChatsFolderId,
         title: 'Все чаты',
-        filters: [],
-        hideEmpty: false,
-        widgets: [],
       );
 
       if (widget.archiveMode) {
@@ -1318,6 +1318,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     KometSettings.hideAllChatsFolder.removeListener(_requestReload);
     KometSettings.showHiddenChats.removeListener(_requestReload);
     ContactsModule.revision.removeListener(_requestReload);
+    FoldersModule.revision.removeListener(_requestReload);
     bannersModule.activeBanner.removeListener(_onActiveInformerChanged);
     _loginSub?.cancel();
     _stateSub?.cancel();
@@ -1724,10 +1725,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               children: [
                                 for (var i = 0; i < _folders.length; i++) ...[
                                   if (i > 0) const SizedBox(width: 8),
-                                  _buildFolderChip(
-                                    _folderChipLabel(_folders[i]),
-                                    folderId: _folders[i].id,
-                                  ),
+                                  _buildFolderChip(_folders[i]),
                                 ],
                               ],
                             );
@@ -1742,10 +1740,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                   for (var i = 0; i < _folders.length; i++) ...[
                                     if (i > 0) const SizedBox(width: 8),
                                     Expanded(
-                                      child: _buildFolderChip(
-                                        _folderChipLabel(_folders[i]),
-                                        folderId: _folders[i].id,
-                                      ),
+                                      child: _buildFolderChip(_folders[i]),
                                     ),
                                   ],
                                 ],
@@ -2648,11 +2643,16 @@ class _ChatListScreenState extends State<ChatListScreen>
     return true;
   }
 
-  Widget _buildFolderChip(String title, {required String folderId}) {
+  Widget _buildFolderChip(ChatFolder folder) {
     final cs = Theme.of(context).colorScheme;
+    final folderId = folder.id;
     final isSelected = _selectedFolderId == folderId;
     return GestureDetector(
       onTap: () => _selectFolder(folderId),
+      onLongPress: () {
+        Haptics.medium();
+        showFolderActionSheet(context, folder: folder);
+      },
       child: GlossyPill(
         color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(50),
@@ -2660,7 +2660,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         depth: 4,
         child: Center(
           child: Text(
-            title,
+            _folderChipLabel(folder),
             textAlign: TextAlign.center,
             style: TextStyle(
               color: isSelected ? cs.onPrimaryContainer : cs.primary,
@@ -3159,7 +3159,8 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   bool _isBotDialog(int contactId, CachedChat chat) {
     if (contactId == 0 || contactId == _profile?.id) return false;
-    if (ContactCache.getOptions(contactId)?.contains('BOT') == true) return true;
+    if (ContactCache.getOptions(contactId)?.contains('BOT') == true)
+      return true;
     return chat.options.contains('BOT');
   }
 
@@ -3270,6 +3271,15 @@ class _ChatListScreenState extends State<ChatListScreen>
           onTap: () {
             _toggleFab();
             showAddContactSheet(context);
+          },
+        ),
+        const SizedBox(height: 4),
+        _buildFabMenuItem(
+          Symbols.create_new_folder,
+          'Создать папку',
+          onTap: () {
+            _toggleFab();
+            showFolderEditSheet(context);
           },
         ),
       ],

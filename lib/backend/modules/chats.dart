@@ -1719,7 +1719,7 @@ class ChatsModule {
             : folders.first,
       );
 
-      final favorites = List<int>.from(allFolder.favorites ?? const []);
+      final favorites = List<int>.from(allFolder.favorites);
       if (pin) {
         for (final id in chatIds) {
           if (!favorites.contains(id)) favorites.add(id);
@@ -1771,7 +1771,7 @@ class ChatsModule {
         FoldersModule.isAllChatsFolder,
         orElse: () => folders.first,
       );
-      final favorites = allFolder.favorites ?? const <int>[];
+      final favorites = allFolder.favorites;
       final favIndexById = <int, int>{};
       for (var i = 0; i < favorites.length; i++) {
         favIndexById[favorites[i]] = i + 1;

@@ -377,20 +377,18 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
           child: Row(
             children: [
               Expanded(
-                child: _SheetButton(
+                child: SheetButton(
                   label: 'Отменить',
                   filled: false,
                   onTap: () => Navigator.pop(context),
-                  cs: cs,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _SheetButton(
+                child: SheetButton(
                   label: 'Далее',
                   filled: true,
                   onTap: () => setState(() => _step = _Step.groupDetails),
-                  cs: cs,
                 ),
               ),
             ],
@@ -482,20 +480,18 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
           child: Row(
             children: [
               Expanded(
-                child: _SheetButton(
+                child: SheetButton(
                   label: 'Отменить',
                   filled: false,
                   onTap: _creating ? null : () => Navigator.pop(context),
-                  cs: cs,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _SheetButton(
+                child: SheetButton(
                   label: _creating ? 'Создаю...' : 'Создать',
                   filled: true,
                   onTap: canCreate ? _create : null,
-                  cs: cs,
                 ),
               ),
             ],
@@ -547,49 +543,6 @@ class _SelectedChip extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetButton extends StatelessWidget {
-  final String label;
-  final bool filled;
-  final VoidCallback? onTap;
-  final ColorScheme cs;
-  const _SheetButton({
-    required this.label,
-    required this.filled,
-    required this.onTap,
-    required this.cs,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 44,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: filled
-              ? (disabled ? cs.primary.withValues(alpha: 0.4) : cs.primary)
-              : cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: filled
-                ? cs.onPrimary
-                : (disabled
-                      ? cs.onSurface.withValues(alpha: 0.4)
-                      : cs.onSurface),
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
         ),
       ),
     );

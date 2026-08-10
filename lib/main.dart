@@ -58,6 +58,7 @@ import 'backend/modules/chats.dart';
 import 'backend/modules/comments.dart';
 import 'backend/modules/contacts.dart';
 import 'backend/modules/file_uploader.dart';
+import 'backend/modules/folders.dart';
 import 'backend/modules/messages.dart';
 import 'backend/modules/outbox.dart';
 import 'backend/modules/polls.dart';
@@ -193,6 +194,7 @@ void main(List<String> args) async {
   }
   attachInfoCacheApi(api);
   chats.attachGlobalPushHandlers(api);
+  FoldersModule.attachGlobalPushHandlers(api);
   commentsModule.attachPushHandlers(api);
   storiesModule.attach();
   unawaited(storiesModule.loadCache());

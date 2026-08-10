@@ -1,83 +1,205 @@
+class FolderFilter {
+  static const int unread = 0;
+  static const int read = 1;
+  static const int channel = 2;
+  static const int chat = 3;
+  static const int dialog = 4;
+  static const int owner = 5;
+  static const int admin = 6;
+  static const int muted = 7;
+  static const int contact = 8;
+  static const int notContact = 9;
+  static const int bot = 10;
+  static const int notMuted = 11;
+  static const int markedUnread = 12;
+  static const int org = 13;
+
+  static const Set<int> chatTypes = {
+    contact,
+    notContact,
+    chat,
+    channel,
+    bot,
+    dialog,
+    org,
+  };
+
+  static const Set<int> roles = {owner, admin};
+
+  static const Set<int> showOnly = {
+    unread,
+    read,
+    muted,
+    notMuted,
+    markedUnread,
+  };
+
+  static const Map<String, int> _byName = {
+    'UNREAD': unread,
+    'READ': read,
+    'CHANNEL': channel,
+    'CHAT': chat,
+    'GROUP': chat,
+    'DIALOG': dialog,
+    'OWNER': owner,
+    'ADMIN': admin,
+    'MUTED': muted,
+    'CONTACT': contact,
+    'NOT_CONTACT': notContact,
+    'BOT': bot,
+    'NOT_MUTED': notMuted,
+    'MARKED_UNREAD': markedUnread,
+    'ORG': org,
+  };
+
+  static int? parse(dynamic raw) {
+    if (raw is int) return raw;
+    if (raw is String) return int.tryParse(raw) ?? _byName[raw];
+    return null;
+  }
+}
+
+class FolderOption {
+  static const int hideEmpty = 0;
+  static const int noDelete = 1;
+  static const int noTitleEdit = 2;
+  static const int noFiltersEdit = 3;
+  static const int chatSuggest = 4;
+
+  static const Map<String, int> _byName = {
+    'HIDE_EMPTY': hideEmpty,
+    'NO_DELETE': noDelete,
+    'NO_TITLE_EDIT': noTitleEdit,
+    'NO_FILTERS_EDIT': noFiltersEdit,
+    'CHAT_SUGGEST': chatSuggest,
+  };
+
+  static int? parse(dynamic raw) {
+    if (raw is int) return raw;
+    if (raw is String) return int.tryParse(raw) ?? _byName[raw];
+    return null;
+  }
+}
+
 class ChatFolder {
   final String id;
   final String title;
   final String? emoji;
-  final List<int>? include;
-  final List<dynamic> filters;
-  final bool hideEmpty;
+  final List<int> include;
+  final List<int> filters;
+  final List<int> options;
+  final List<int> favorites;
   final List<ChatFolderWidget> widgets;
-  final List<int>? favorites;
   final Map<String, dynamic>? filterSubjects;
-  final List<int>? options;
+  final int updateTime;
+  final int? sourceId;
 
-  ChatFolder({
+  const ChatFolder({
     required this.id,
     required this.title,
     this.emoji,
-    this.include,
-    required this.filters,
-    required this.hideEmpty,
-    required this.widgets,
-    this.favorites,
+    this.include = const [],
+    this.filters = const [],
+    this.options = const [],
+    this.favorites = const [],
+    this.widgets = const [],
     this.filterSubjects,
-    this.options,
+    this.updateTime = 0,
+    this.sourceId,
   });
 
-  static List<int>? _parseIntList(dynamic raw) {
-    return (raw as List<dynamic>?)?.map((e) {
-      if (e is int) return e;
-      if (e is String) return int.tryParse(e) ?? 0;
-      return 0;
-    }).toList();
+  bool get hideEmpty => options.contains(FolderOption.hideEmpty);
+
+  bool get canDelete => !options.contains(FolderOption.noDelete);
+
+  bool get canEditTitle => !options.contains(FolderOption.noTitleEdit);
+
+  bool get canEditFilters => !options.contains(FolderOption.noFiltersEdit);
+
+  static List<int> _parseIds(dynamic raw) {
+    if (raw is! List) return <int>[];
+    return raw
+        .map((e) {
+          if (e is int) return e;
+          if (e is String) return int.tryParse(e);
+          return null;
+        })
+        .whereType<int>()
+        .toList();
+  }
+
+  static List<int> _parseCodes(dynamic raw, int? Function(dynamic) parse) {
+    if (raw is! List) return <int>[];
+    return raw.map(parse).whereType<int>().toList();
+  }
+
+  static Map<String, dynamic>? _parseMap(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return null;
   }
 
   factory ChatFolder.fromJson(Map<String, dynamic> json) {
+    final options = _parseCodes(json['options'], FolderOption.parse);
+    if (json['hideEmpty'] == true &&
+        !options.contains(FolderOption.hideEmpty)) {
+      options.add(FolderOption.hideEmpty);
+    }
     return ChatFolder(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
       emoji: json['emoji']?.toString(),
-      include: _parseIntList(json['include']),
-      filters:
-          (json['filters'] as List<dynamic>?)?.map((e) {
-            if (e is int) return e;
-            if (e is String) return int.tryParse(e) ?? e;
-            return e;
-          }).toList() ??
-          [],
-      hideEmpty: json['hideEmpty'] ?? false,
+      include: _parseIds(json['include']),
+      filters: _parseCodes(json['filters'], FolderFilter.parse),
+      options: options,
+      favorites: _parseIds(json['favorites']),
       widgets:
-          (json['widgets'] as List<dynamic>?)?.map((w) {
-            if (w is Map<String, dynamic>) {
-              return ChatFolderWidget.fromJson(w);
-            }
-            return ChatFolderWidget.fromJson(
-              Map<String, dynamic>.from(w as Map),
-            );
-          }).toList() ??
-          [],
-      favorites: _parseIntList(json['favorites']),
-      filterSubjects: json['filterSubjects'] is Map<String, dynamic>
-          ? json['filterSubjects'] as Map<String, dynamic>
-          : (json['filterSubjects'] is Map
-                ? Map<String, dynamic>.from(
-                    (json['filterSubjects'] as Map).cast<dynamic, dynamic>(),
-                  )
-                : null),
-      options: _parseIntList(json['options']),
+          (json['widgets'] as List<dynamic>?)
+              ?.map(_parseMap)
+              .whereType<Map<String, dynamic>>()
+              .map(ChatFolderWidget.fromJson)
+              .toList() ??
+          const [],
+      filterSubjects: _parseMap(json['filterSubjects']),
+      updateTime: json['updateTime'] is int ? json['updateTime'] as int : 0,
+      sourceId: json['sourceId'] is int ? json['sourceId'] as int : null,
     );
   }
+
+  ChatFolder copyWith({
+    String? title,
+    String? emoji,
+    List<int>? include,
+    List<int>? filters,
+    List<int>? options,
+    List<int>? favorites,
+    int? updateTime,
+  }) => ChatFolder(
+    id: id,
+    title: title ?? this.title,
+    emoji: emoji ?? this.emoji,
+    include: include ?? this.include,
+    filters: filters ?? this.filters,
+    options: options ?? this.options,
+    favorites: favorites ?? this.favorites,
+    widgets: widgets,
+    filterSubjects: filterSubjects,
+    updateTime: updateTime ?? this.updateTime,
+    sourceId: sourceId,
+  );
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
     if (emoji != null) 'emoji': emoji,
-    if (include != null) 'include': include,
+    'include': include,
     'filters': filters,
-    'hideEmpty': hideEmpty,
+    'options': options,
+    'favorites': favorites,
     'widgets': widgets.map((w) => w.toJson()).toList(),
-    if (favorites != null) 'favorites': favorites,
     if (filterSubjects != null) 'filterSubjects': filterSubjects,
-    if (options != null) 'options': options,
+    'updateTime': updateTime,
+    if (sourceId != null) 'sourceId': sourceId,
   };
 }
 
