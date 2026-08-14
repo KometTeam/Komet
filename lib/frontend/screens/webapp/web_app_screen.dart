@@ -26,6 +26,7 @@ class WebAppScreen extends StatefulWidget {
   onLoadStart;
   final Future<WebAppLaunch> Function(String url)? onExternalCallback;
   final bool closeAfterExternalCallback;
+  final bool preferSystemUserAgent;
   final Future<NavigationActionPolicy?> Function(
     InAppWebViewController controller,
     NavigationAction navigationAction,
@@ -43,6 +44,7 @@ class WebAppScreen extends StatefulWidget {
     this.onLoadStart,
     this.onExternalCallback,
     this.closeAfterExternalCallback = false,
+    this.preferSystemUserAgent = false,
     this.shouldOverrideUrlLoading,
   });
 
@@ -71,10 +73,20 @@ class _WebAppScreenState extends State<WebAppScreen> {
     try {
       // Тот же UA, что уходит в sessionInit (из handshake-устройства ядра),
       // чтобы веб-аппы видели нативный клиент; фолбэк — браузерный UA спуфа.
-      _userAgent =
-          api.session?.userAgent() ??
-          await SpoofingService.getWebViewUserAgent() ??
-          '';
+      // Для веб-аппов с внешней авторизацией (Госуслуги/ЕСИА) клиентский UA
+      // ядра отбраковывается антифродом — там нужен UA настоящего WebView.
+      _userAgent = '';
+      if (widget.preferSystemUserAgent) {
+        try {
+          _userAgent = await InAppWebViewController.getDefaultUserAgent();
+        } catch (_) {}
+      }
+      if (_userAgent.isEmpty) {
+        _userAgent =
+            api.session?.userAgent() ??
+            await SpoofingService.getWebViewUserAgent() ??
+            '';
+      }
       final launch = await widget.loader();
       if (!mounted) return;
       setState(() => _launch = launch);

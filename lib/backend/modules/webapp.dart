@@ -20,8 +20,9 @@ bool hasMiniAppOption(Set<String>? options) =>
 
 class WebAppLaunch {
   final String url;
+  final String? queryId;
 
-  const WebAppLaunch({required this.url});
+  const WebAppLaunch({required this.url, this.queryId});
 }
 
 class ExternalCallbackResult {
@@ -64,6 +65,10 @@ class WebAppModule {
 
   WebAppModule(this._api);
 
+  /// device_id сессии (опкод 6 sessionInit, с учётом спуфинга) — тот же id,
+  /// к которому сервер привязывает Цифровой ID.
+  String? get sessionDeviceId => _api.deviceId;
+
   Future<WebAppLaunch> fetchLaunch(
     int botId, {
     String? startParam,
@@ -72,9 +77,11 @@ class WebAppModule {
     if (_api.state != SessionState.online) {
       throw const WebAppUnavailable('Нет соединения с сервером');
     }
+    final normalizedStartParam =
+        (startParam != null && startParam.trim().isNotEmpty) ? startParam : null;
     final packet = await _api.sendRequest(Opcode.webAppInitData, {
       'botId': botId,
-      'startParam': ?startParam,
+      'startParam': ?normalizedStartParam,
       'chatId': ?chatId,
     });
     if (!packet.isOk) {
@@ -85,7 +92,8 @@ class WebAppModule {
     if (url == null || url.isEmpty) {
       throw const WebAppUnavailable('Сервер не вернул адрес приложения');
     }
-    return WebAppLaunch(url: url);
+    final queryId = (data is Map) ? data['query_id']?.toString() : null;
+    return WebAppLaunch(url: url, queryId: queryId);
   }
 
   Future<WebAppLaunch> fetchSferum() async {

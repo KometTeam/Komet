@@ -1,10 +1,14 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../backend/api.dart';
 import '../../frontend/debug/log_export.dart';
+import '../../frontend/screens/digital_id/digital_id_web_screen.dart';
+import '../../frontend/widgets/custom_notification.dart';
 import '../../frontend/widgets/max_link_handler.dart';
+import '../../frontend/widgets/swipe_route.dart';
 import '../../main.dart';
 import 'desktop_url_scheme.dart';
 import 'max_link.dart';
@@ -19,6 +23,9 @@ class DeepLinkService {
   StreamSubscription<SessionState>? _stateSub;
   String? _pending;
   bool _pendingLogExport = false;
+  String? _pendingExternalCallback;
+  String? _lastExternalCallback;
+  Timer? _externalCallbackRetry;
   Timer? _logExportRetry;
   bool _ready = false;
   bool _started = false;
@@ -51,6 +58,14 @@ class DeepLinkService {
       _flushPending();
       return;
     }
+    if (_isExternalCallback(uri)) {
+      final callbackUrl = uri.toString();
+      if (callbackUrl == _lastExternalCallback) return;
+      _lastExternalCallback = callbackUrl;
+      _pendingExternalCallback = callbackUrl;
+      _flushPending();
+      return;
+    }
     final url = _normalize(uri);
     if (url == null) return;
     _pending = url;
@@ -72,6 +87,19 @@ class DeepLinkService {
       }
     }
 
+    if (_pendingExternalCallback != null) {
+      if (context == null || api.state != SessionState.online) {
+        _externalCallbackRetry ??= Timer(const Duration(milliseconds: 300), () {
+          _externalCallbackRetry = null;
+          _flushPending();
+        });
+      } else {
+        final url = _pendingExternalCallback!;
+        _pendingExternalCallback = null;
+        _handleExternalCallback(context, url);
+      }
+    }
+
     if (!_ready || context == null) return;
     final pending = _pending;
     if (pending == null) return;
@@ -79,6 +107,29 @@ class DeepLinkService {
     if (needsConnection && api.state != SessionState.online) return;
     _pending = null;
     tryHandleMaxLink(context, pending);
+  }
+
+  bool _isExternalCallback(Uri uri) {
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'https' && scheme != 'http' && scheme != 'max') return false;
+    final host = uri.host.toLowerCase();
+    if (host != 'max.ru' && host != 'www.max.ru') return false;
+    return uri.queryParameters['externalCallback'] == '1';
+  }
+
+  Future<void> _handleExternalCallback(BuildContext context, String url) async {
+    try {
+      final launch = await webAppModule.handleExternalCallback(url);
+      if (!context.mounted) return;
+      await pushSwipeable(
+        context,
+        (_) => DigitalIdWebScreen(initialLaunch: launch),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        showCustomNotification(context, 'Не удалось завершить Цифровой ID: $e');
+      }
+    }
   }
 
   bool _isLogExportLink(Uri uri) {
