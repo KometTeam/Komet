@@ -195,6 +195,7 @@ void main(List<String> args) async {
   attachInfoCacheApi(api);
   chats.attachGlobalPushHandlers(api);
   FoldersModule.attachGlobalPushHandlers(api);
+  TranscriptionPushHandler.attach(api);
   commentsModule.attachPushHandlers(api);
   storiesModule.attach();
   unawaited(storiesModule.loadCache());
@@ -595,6 +596,9 @@ class KometAppState extends State<KometApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     CallController.instance.appResumed = state == AppLifecycleState.resumed;
+    if (state == AppLifecycleState.inactive && CallController.instance.isBusy) {
+      unawaited(CallBridge.instance.ensureOngoing());
+    }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
@@ -999,10 +1003,11 @@ class KometAppState extends State<KometApp>
                   child: child ?? const SizedBox.shrink(),
                   builder: (context, scale, appChild) {
                     Widget scaledChild = appChild!;
-                    if ((scale - 1.0).abs() > 0.001) {
+                    final effective = AppFonts.effectiveScale(_fontId, scale);
+                    if ((effective - 1.0).abs() > 0.001) {
                       scaledChild = MediaQuery.withClampedTextScaling(
-                        minScaleFactor: scale,
-                        maxScaleFactor: scale,
+                        minScaleFactor: effective,
+                        maxScaleFactor: effective,
                         child: scaledChild,
                       );
                     }

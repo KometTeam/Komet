@@ -149,16 +149,92 @@ class TranscriptionResult {
 
 class TranscriptionCache {
   static final Map<String, TranscriptionResult> _cache = {};
+  static final Map<String, Set<VoidCallback>> _listeners = {};
+  static final Set<String> _expanded = {};
 
-  static void put(String messageId, TranscriptionResult result) {
+  static void put(
+    String messageId,
+    TranscriptionResult result, {
+    bool expanded = false,
+  }) {
     _cache[messageId] = result;
+    if (expanded) _expanded.add(messageId);
+    final listeners = _listeners[messageId];
+    if (listeners == null) return;
+    for (final listener in listeners.toList()) {
+      listener();
+    }
   }
 
   static TranscriptionResult? get(String messageId) => _cache[messageId];
 
   static bool has(String messageId) => _cache.containsKey(messageId);
 
-  static void clear() => _cache.clear();
+  static bool isExpanded(String messageId) => _expanded.contains(messageId);
+
+  static void setExpanded(String messageId, bool value) {
+    if (value) {
+      _expanded.add(messageId);
+    } else {
+      _expanded.remove(messageId);
+    }
+  }
+
+  static void listen(String messageId, VoidCallback listener) {
+    _listeners.putIfAbsent(messageId, () => <VoidCallback>{}).add(listener);
+  }
+
+  static void unlisten(String messageId, VoidCallback listener) {
+    final listeners = _listeners[messageId];
+    if (listeners == null) return;
+    listeners.remove(listener);
+    if (listeners.isEmpty) _listeners.remove(messageId);
+  }
+
+  static void clear() {
+    _cache.clear();
+    _expanded.clear();
+  }
+}
+
+class TranscriptionPushHandler {
+  static StreamSubscription<Packet>? _sub;
+
+  static void attach(Api api) {
+    _sub?.cancel();
+    _sub = api.pushStream
+        .where((p) => p.opcode == Opcode.transcriptionResult)
+        .listen(_onPush);
+  }
+
+  static void _onPush(Packet packet) {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final source = payload['message'] is Map
+        ? payload['message'] as Map
+        : payload;
+
+    final messageId = (source['messageId'] ?? source['msgId'])?.toString();
+    if (messageId == null || messageId.isEmpty) return;
+
+    final status = source['transcriptionStatus'] as int? ?? 1;
+    final rawText = source['transcription'] as String?;
+    if (status != 1) return;
+
+    TranscriptionCache.put(
+      messageId,
+      TranscriptionResult(
+        status: 1,
+        text: (rawText == null || rawText.isEmpty)
+            ? 'не удалось распознать текст'
+            : rawText,
+        messageId: messageId,
+        chatId: source['chatId'] as int?,
+        mediaId: source['mediaId'] as int?,
+      ),
+      expanded: true,
+    );
+  }
 }
 
 class FileHistoryEntry {

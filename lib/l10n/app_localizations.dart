@@ -5023,6 +5023,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{value} MB/s'**
   String uploadSpeedMb(String value);
+
+  /// No description provided for @savedMessagesEmptyPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Save something here'**
+  String get savedMessagesEmptyPreview;
+
+  /// No description provided for @proxyCurrentState.
+  ///
+  /// In en, this message translates to:
+  /// **'Currently: {value}'**
+  String proxyCurrentState(String value);
+
+  /// No description provided for @blacklistEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody is blocked'**
+  String get blacklistEmpty;
+
+  /// No description provided for @blacklistLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load the blacklist'**
+  String get blacklistLoadError;
 }
 
 class _AppLocalizationsDelegate

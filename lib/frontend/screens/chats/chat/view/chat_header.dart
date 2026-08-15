@@ -406,7 +406,10 @@ class ChatHeaderRow extends StatelessWidget {
     );
   }
 
-  int get _storyOwnerId => chatType == 'DIALOG' ? chatId ^ myId : chatId;
+  bool get _isSavedMessages => chatId == 0;
+
+  int get _storyOwnerId =>
+      chatType == 'DIALOG' ? (_isSavedMessages ? 0 : chatId ^ myId) : chatId;
 
   Widget _heroAvatar(
     double size,
@@ -469,7 +472,8 @@ class ChatHeaderRow extends StatelessWidget {
 
   Widget _withOnlineDot(ColorScheme cs, Widget avatar, {double dotSize = 12}) {
     final otherId = chatId ^ myId;
-    final showDot = chatType == 'DIALOG' && myId != 0 && otherId > 0;
+    final showDot =
+        chatType == 'DIALOG' && myId != 0 && otherId > 0 && !_isSavedMessages;
     return Stack(
       clipBehavior: Clip.none,
       children: [

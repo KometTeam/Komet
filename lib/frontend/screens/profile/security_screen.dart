@@ -14,6 +14,7 @@ import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
+import 'blacklist_screen.dart';
 import 'password_entry_screen.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
@@ -780,6 +781,20 @@ class _SecurityScreenState extends State<SecurityScreen>
     );
   }
 
+  Future<void> _openBlacklist() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlacklistScreen(initialContacts: _blockedContacts),
+      ),
+    );
+    if (!mounted) return;
+    try {
+      final contacts = await accountModule.getBlockedContacts();
+      if (mounted) setState(() => _blockedContacts = contacts);
+    } catch (_) {}
+  }
+
   Widget _buildBlacklistSection(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
     final count = _blockedContacts.length;
@@ -790,10 +805,7 @@ class _SecurityScreenState extends State<SecurityScreen>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => showCustomNotification(
-            context,
-            l10n.securityBlacklistNotification('$count'),
-          ),
+          onTap: _openBlacklist,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),

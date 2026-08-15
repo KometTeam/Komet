@@ -94,6 +94,8 @@ import '../downloads_screen.dart';
 import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
 
+const String _savedWelcomeKey = 'welcome.saved.dialog.message';
+
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
   final bool Function() allowPullOverscrollTop;
@@ -1894,6 +1896,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                     );
                   } else {
                     final isPlaceholder = chat.isLastMsgDeleted;
+                    final isSavedWelcome =
+                        chat.id == 0 && chat.lastMsgText == _savedWelcomeKey;
                     final sender = chat.lastMsgSenderId != null
                         ? ContactCache.get(chat.lastMsgSenderId!)
                         : null;
@@ -1906,6 +1910,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                         : "";
                     final body = isPlaceholder
                         ? 'зайдите в чат для подгрузки'
+                        : isSavedWelcome
+                        ? AppLocalizations.of(
+                            context,
+                          )!.savedMessagesEmptyPreview
                         : (chat.lastMsgTextOneLine ?? '');
 
                     return _animateChatTile(
@@ -1924,16 +1932,16 @@ class _ChatListScreenState extends State<ChatListScreen>
                         isVerified: chat.isOfficial,
                         isPinned: isPinned,
                         chatType: chat.type,
-                        messageItalic: isPlaceholder,
+                        messageItalic: isPlaceholder || isSavedWelcome,
                         draft: chat.id == 0 ? null : _draftFor(chat.id),
                         ownStatus: _ownStatusFor(chat, isPlaceholder),
                         ownRead: chat.lastMsgReadByOthers,
-                        messageRanges: isPlaceholder
+                        messageRanges: isPlaceholder || isSavedWelcome
                             ? const []
                             : chat.lastMsgFormatRanges,
                         previewMessageId: isPlaceholder ? null : chat.lastMsgId,
                         previewPrefix: senderPrefix,
-                        previewCipherText: isPlaceholder
+                        previewCipherText: isPlaceholder || isSavedWelcome
                             ? null
                             : chat.lastMsgText,
                         previewMedia: isPlaceholder ? null : chat.lastMsgMedia,

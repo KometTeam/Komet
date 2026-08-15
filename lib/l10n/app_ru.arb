@@ -894,5 +894,16 @@
         "type": "String"
       }
     }
-  }
+  },
+  "savedMessagesEmptyPreview": "Сохраните что-нибудь",
+  "proxyCurrentState": "Сейчас: {value}",
+  "@proxyCurrentState": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "blacklistEmpty": "Никто не заблокирован",
+  "blacklistLoadError": "Не удалось загрузить чёрный список"
 }

@@ -9,6 +9,7 @@ class DeviceContactsService {
   DeviceContactsService._();
 
   static const _grantedKey = 'phonebook_granted';
+  static const _deniedKey = 'phonebook_denied';
 
   static final Map<String, String> _byLast10 = {};
   static bool _loaded = false;
@@ -41,12 +42,17 @@ class DeviceContactsService {
     await _readBook();
   }
 
-  static Future<bool> ensureLoadedInteractive() async {
+  static Future<bool> ensureLoadedInteractive({bool force = false}) async {
     if (_loaded || !_supported) return false;
     if (!AppPhonebookNames.current.value) return false;
-    final granted = await FlutterContacts.requestPermission(readonly: true);
-    if (!granted) return false;
     final prefs = await SharedPreferences.getInstance();
+    if (!force && prefs.getBool(_deniedKey) == true) return false;
+    final granted = await FlutterContacts.requestPermission(readonly: true);
+    if (!granted) {
+      await prefs.setBool(_deniedKey, true);
+      return false;
+    }
+    await prefs.remove(_deniedKey);
     await prefs.setBool(_grantedKey, true);
     return _readBook();
   }
@@ -54,14 +60,12 @@ class DeviceContactsService {
   static Future<bool> reload() async {
     _loaded = false;
     _byLast10.clear();
-    return ensureLoadedInteractive();
+    return ensureLoadedInteractive(force: true);
   }
 
   static Future<bool> _readBook() async {
     try {
-      final contacts = await FlutterContacts.getContacts(
-        withProperties: true,
-      );
+      final contacts = await FlutterContacts.getContacts(withProperties: true);
       _byLast10.clear();
       for (final contact in contacts) {
         final name = contact.displayName.trim();

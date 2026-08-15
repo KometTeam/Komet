@@ -2635,4 +2635,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String uploadSpeedMb(String value) {
     return '$value MB/s';
   }
+
+  @override
+  String get savedMessagesEmptyPreview => 'Save something here';
+
+  @override
+  String proxyCurrentState(String value) {
+    return 'Currently: $value';
+  }
+
+  @override
+  String get blacklistEmpty => 'Nobody is blocked';
+
+  @override
+  String get blacklistLoadError => 'Failed to load the blacklist';
 }

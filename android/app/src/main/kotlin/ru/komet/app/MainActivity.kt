@@ -312,6 +312,11 @@ class MainActivity : FlutterActivity() {
                     CallForegroundService.start(applicationContext, caller)
                     result.success(null)
                 }
+                "ensureOngoing" -> {
+                    val caller = call.argument<String>("caller") ?: "Звонок"
+                    CallForegroundService.start(applicationContext, caller)
+                    result.success(null)
+                }
                 "setScreenShare" -> {
                     val enabled = call.argument<Boolean>("enabled") ?: false
                     val caller = call.argument<String>("caller") ?: "Звонок"

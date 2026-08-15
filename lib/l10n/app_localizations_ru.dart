@@ -2649,4 +2649,18 @@ class AppLocalizationsRu extends AppLocalizations {
   String uploadSpeedMb(String value) {
     return '$value МБ/с';
   }
+
+  @override
+  String get savedMessagesEmptyPreview => 'Сохраните что-нибудь';
+
+  @override
+  String proxyCurrentState(String value) {
+    return 'Сейчас: $value';
+  }
+
+  @override
+  String get blacklistEmpty => 'Никто не заблокирован';
+
+  @override
+  String get blacklistLoadError => 'Не удалось загрузить чёрный список';
 }

@@ -1150,5 +1150,16 @@
         "type": "String"
       }
     }
-  }
+  },
+  "savedMessagesEmptyPreview": "Save something here",
+  "proxyCurrentState": "Currently: {value}",
+  "@proxyCurrentState": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "blacklistEmpty": "Nobody is blocked",
+  "blacklistLoadError": "Failed to load the blacklist"
 }

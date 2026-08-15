@@ -172,6 +172,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   double _headerDelta = 0;
   bool _expandArmed = false;
+  bool _headerDragging = false;
   bool _headerEverExpanded = false;
 
   @override
@@ -648,11 +649,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   bool _onHeaderScrollNotification(ScrollNotification n, double delta) {
     if (n.depth != 0) return false;
     if (n is ScrollStartNotification) {
+      _headerDragging = n.dragDetails != null;
       if (n.dragDetails != null) {
         _expandArmed = delta > 0 && n.metrics.pixels <= delta + 8;
       }
     } else if (n is ScrollEndNotification) {
-      _snapHeader(delta);
+      if (_headerDragging) {
+        _headerDragging = false;
+        _snapHeader(delta);
+      }
     }
     return false;
   }
@@ -660,12 +665,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   void _snapHeader(double delta) {
     final c = _bodyScrollController;
     if (c == null || !c.hasClients || delta <= 0) return;
+    final collapsed = math.min(delta, c.position.maxScrollExtent);
     final offset = c.offset;
-    if (offset <= 0 || offset >= delta) return;
-    final target = (offset < delta / 2 ? 0.0 : delta).clamp(
-      0.0,
-      c.position.maxScrollExtent,
-    );
+    if (offset <= 0 || offset >= collapsed) return;
+    final target = offset < collapsed / 2 ? 0.0 : collapsed;
     if ((target - offset).abs() < 1) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !c.hasClients) return;

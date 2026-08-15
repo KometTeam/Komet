@@ -59,6 +59,8 @@ class VoiceMessageBubble extends StatefulWidget {
   State<VoiceMessageBubble> createState() => _VoiceMessageBubbleState();
 }
 
+const double _transcriptionMaxHeight = 132;
+
 class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   bool _transcriptionVisible = false;
   String? _transcriptionText;
@@ -82,13 +84,37 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       fallbackDuration: Duration(seconds: widget.duration),
     );
     _audio.failure.addListener(_onFailure);
+    TranscriptionCache.listen(_sourceMessageId, _onTranscriptionPush);
+    _adoptCachedTranscription();
   }
 
   @override
   void dispose() {
+    TranscriptionCache.unlisten(_sourceMessageId, _onTranscriptionPush);
     _audio.failure.removeListener(_onFailure);
     MediaPlayback.instance.releaseVoice(_audio);
     super.dispose();
+  }
+
+  void _adoptCachedTranscription() {
+    final cached = TranscriptionCache.get(_sourceMessageId);
+    if (cached == null || cached.status != 1) return;
+    _transcriptionText = cached.text ?? 'не удалось распознать текст';
+    _transcriptionVisible = TranscriptionCache.isExpanded(_sourceMessageId);
+  }
+
+  void _onTranscriptionPush() {
+    if (!mounted) return;
+    setState(() {
+      _transcriptionLoading = false;
+      _adoptCachedTranscription();
+    });
+  }
+
+  void _showTranscription(String text) {
+    _transcriptionText = text;
+    _transcriptionVisible = true;
+    TranscriptionCache.setExpanded(_sourceMessageId, true);
   }
 
   String get _cacheName => '${widget.audioId ?? _sourceMessageId}.ogg';
@@ -359,15 +385,21 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                   curve: Curves.easeOut,
                   alignment: Alignment.topLeft,
                   child: _transcriptionVisible
-                      ? Text(
-                          _transcriptionText ?? '',
-                          style: TextStyle(
-                            color: widget.textColor.withValues(alpha: 0.8),
-                            fontSize: 12,
-                            height: 1.3,
+                      ? ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxHeight: _transcriptionMaxHeight,
                           ),
-                          maxLines: 10,
-                          overflow: TextOverflow.ellipsis,
+                          child: SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: Text(
+                              _transcriptionText ?? '',
+                              style: TextStyle(
+                                color: widget.textColor.withValues(alpha: 0.8),
+                                fontSize: 12,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
                         )
                       : const SizedBox.shrink(),
                 ),
@@ -438,16 +470,16 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     if (_transcriptionVisible && _transcriptionText != null) {
       setState(() {
         _transcriptionVisible = false;
+        TranscriptionCache.setExpanded(_sourceMessageId, false);
       });
       return;
     }
 
     if (TranscriptionCache.has(_sourceMessageId)) {
       final cached = TranscriptionCache.get(_sourceMessageId)!;
-      setState(() {
-        _transcriptionText = cached.text ?? 'не удалось распознать текст';
-        _transcriptionVisible = true;
-      });
+      setState(
+        () => _showTranscription(cached.text ?? 'не удалось распознать текст'),
+      );
       return;
     }
 
@@ -468,13 +500,13 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       setState(() {
         _transcriptionLoading = false;
         if (result.status == 1) {
-          _transcriptionText = (result.text == null || result.text!.isEmpty)
-              ? 'не удалось распознать текст'
-              : result.text;
-          _transcriptionVisible = true;
+          _showTranscription(
+            (result.text == null || result.text!.isEmpty)
+                ? 'не удалось распознать текст'
+                : result.text!,
+          );
         } else if (result.status == 0) {
-          _transcriptionText = 'транскрибация...';
-          _transcriptionVisible = true;
+          _showTranscription('транскрибация...');
         }
       });
     } catch (e) {
@@ -482,8 +514,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       if (!mounted) return;
       setState(() {
         _transcriptionLoading = false;
-        _transcriptionText = 'ошибка транскрибации';
-        _transcriptionVisible = true;
+        _showTranscription('ошибка транскрибации');
       });
     }
   }

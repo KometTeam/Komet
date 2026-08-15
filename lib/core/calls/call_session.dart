@@ -78,6 +78,7 @@ class CallSession {
   int _peerDeviceIdx = 0;
 
   bool _muted = false;
+  bool _speakerOn = false;
   bool _accepted = false;
   bool _peerMuted = false;
   bool _peerVideo = false;
@@ -207,6 +208,7 @@ class CallSession {
   bool get peerIsKomet => _peerIsKomet;
 
   bool get isMuted => _muted;
+  bool get isSpeaker => _speakerOn;
   bool get peerMuted => _peerMuted;
   bool get peerVideo => _peerVideo;
   bool get mediaConnected => _mediaConnected;
@@ -857,6 +859,7 @@ class CallSession {
           if (role == CallRole.joiner || _topology == 'SERVER') {
             _setState(CallSessionState.active);
           }
+          unawaited(applyAudioRoute());
           unawaited(_resolvePath());
           unawaited(_collectReceivers());
         }
@@ -874,6 +877,7 @@ class CallSession {
   }
 
   Future<void> _addLocalMedia(RTCPeerConnection pc) async {
+    await _prepareAudioSession();
     _localStream = await navigator.mediaDevices.getUserMedia({
       'audio': true,
       'video': _wantVideo,
@@ -881,7 +885,42 @@ class CallSession {
     for (final track in _localStream!.getTracks()) {
       await pc.addTrack(track, _localStream!);
     }
+    await applyAudioRoute();
   }
+
+  Future<void> setSpeaker(bool on) async {
+    if (_speakerOn == on) return;
+    _speakerOn = on;
+    await applyAudioRoute();
+    _notifyInfo();
+  }
+
+  Future<void> _prepareAudioSession() async {
+    if (!_canRouteAudio) return;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        await Helper.setAndroidAudioConfiguration(
+          AndroidAudioConfiguration.communication,
+        );
+      } catch (e) {
+        logger.w('[call] setAndroidAudioConfiguration: $e');
+      }
+    }
+    await applyAudioRoute();
+  }
+
+  Future<void> applyAudioRoute() async {
+    if (!_canRouteAudio) return;
+    try {
+      await Helper.setSpeakerphoneOn(_speakerOn);
+    } catch (e) {
+      logger.w('[call] setSpeakerphoneOn($_speakerOn) недоступен: $e');
+    }
+  }
+
+  static bool get _canRouteAudio =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 
   Future<void> _openSfuChannels(RTCPeerConnection pc) async {
     await _closeSfuChannels();

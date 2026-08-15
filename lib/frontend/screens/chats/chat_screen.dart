@@ -3247,6 +3247,7 @@ class _ChatScreenState extends State<ChatScreen>
                             showCall:
                                 !_commentsMode &&
                                 widget.chatType == 'DIALOG' &&
+                                widget.chatId != 0 &&
                                 !_peerIsBot,
                             onClose: widget.onClose,
                             onOpenInfo: _commentsMode ? () {} : _openChatInfo,
@@ -4137,6 +4138,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   int? _resolveOtherId() {
     if (widget.chatType != 'DIALOG' || _myId == 0) return null;
+    if (widget.chatId == 0) return null;
     final id = widget.chatId ^ _myId;
     return id > 0 ? id : null;
   }

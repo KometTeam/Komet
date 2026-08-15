@@ -22,6 +22,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   ProxyType _selectedType = ProxyType.none;
+  ProxySettings _applied = const ProxySettings();
   bool _busy = false;
 
   @override
@@ -34,6 +35,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
     final settings = await ProxyConfig.load();
     if (!mounted) return;
     setState(() {
+      _applied = settings;
       _selectedType = settings.type;
       _hostController.text = settings.host;
       _portController.text = '${settings.port}';
@@ -58,18 +60,18 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
     try {
       final username = _usernameController.text.trim();
       final password = _passwordController.text.trim();
-      await ProxyConfig.save(
-        ProxySettings(
-          type: _selectedType,
-          host: host,
-          port: port,
-          username: username.isNotEmpty ? username : null,
-          password: password.isNotEmpty ? password : null,
-        ),
+      final settings = ProxySettings(
+        type: _selectedType,
+        host: host,
+        port: port,
+        username: username.isNotEmpty ? username : null,
+        password: password.isNotEmpty ? password : null,
       );
+      await ProxyConfig.save(settings);
       await api.disconnect();
       await api.connect();
       if (!mounted) return;
+      setState(() => _applied = settings);
       if (api.state == SessionState.online) {
         showCustomNotification(context, l10n.proxySettingsSaved);
       } else {
@@ -84,7 +86,10 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
     setState(() => _busy = true);
     try {
       await ProxyConfig.clear();
-      setState(() => _selectedType = ProxyType.none);
+      setState(() {
+        _selectedType = ProxyType.none;
+        _applied = const ProxySettings();
+      });
       await api.disconnect();
       await api.connect();
       if (!mounted) return;
@@ -133,6 +138,11 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.proxyCurrentState(_appliedLabel(l10n)),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
               const SizedBox(height: 20),
 
@@ -191,7 +201,9 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
 
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: _busy ? null : () => _apply(l10n),
+                onPressed: (_busy || !(isActive || _applied.isEnabled))
+                    ? null
+                    : () => _apply(l10n),
                 child: Text(isActive ? l10n.proxyApply : l10n.proxyDisable),
               ),
             ],
@@ -199,6 +211,14 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
         ),
       ),
     );
+  }
+
+  String _appliedLabel(AppLocalizations l10n) {
+    if (!_applied.isEnabled) return l10n.proxyTypeNone;
+    final type = _applied.type == ProxyType.socks5
+        ? l10n.proxyTypeSocks5
+        : l10n.proxyTypeHttp;
+    return '$type · ${_applied.host}:${_applied.port}';
   }
 
   Widget _buildTypeSelector(ColorScheme cs, AppLocalizations l10n) {

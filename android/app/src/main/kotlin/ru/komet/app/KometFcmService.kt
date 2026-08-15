@@ -188,6 +188,7 @@ class KometNotifier(private val ctx: Context) {
             .setWhen(ts)
             .setShowWhen(true)
             .setNumber(entries.size)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
             .setContentTitle("Komet")
             .setContentText(boldLine(senderName, text))
             .setStyle(inbox)
@@ -250,6 +251,8 @@ class KometNotifier(private val ctx: Context) {
                 .setIntent(intent)
                 .setPerson(person)
                 .setIcon(person.icon)
+                .setCategories(setOf(ShortcutInfoCompat.SHORTCUT_CATEGORY_CONVERSATION))
+                .setLocusId(LocusIdCompat(id))
                 .build()
             ShortcutManagerCompat.pushDynamicShortcut(ctx, shortcut)
         } catch (e: Exception) {

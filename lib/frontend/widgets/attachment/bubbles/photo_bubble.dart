@@ -55,6 +55,8 @@ class PhotoBubble extends StatelessWidget {
       );
     } else if (count == 2) {
       photosWidget = _buildTwoPhotos(ctx, photos[0], photos[1]);
+    } else if (count == 3) {
+      photosWidget = _buildThreePhotos(ctx, photos);
     } else {
       photosWidget = _buildPhotoGrid(ctx, photos);
     }
@@ -307,6 +309,39 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
+  Widget _buildThreePhotos(BubbleContext ctx, List<PhotoAttachment> photos) {
+    final matchTop =
+        ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleTop;
+    final matchBottom =
+        ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleBottom;
+
+    return ClipRRect(
+      borderRadius: _multiPhotoCornerRadius(
+        matchTop: matchTop,
+        matchBottom: matchBottom,
+        isMe: ctx.isMe,
+      ),
+      child: AspectRatio(
+        aspectRatio: 3 / 2,
+        child: Row(
+          children: [
+            Expanded(flex: 2, child: _buildFillTile(ctx, photos[0], 0)),
+            const SizedBox(width: 2),
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(child: _buildFillTile(ctx, photos[1], 1)),
+                  const SizedBox(height: 2),
+                  Expanded(child: _buildFillTile(ctx, photos[2], 2)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPhotoGrid(BubbleContext ctx, List<PhotoAttachment> photos) {
     final displayCount = photos.length > 4 ? 4 : photos.length;
     final remaining = photos.length - 4;
@@ -361,30 +396,30 @@ class PhotoBubble extends StatelessWidget {
     return _buildPhotoTile(ctx, photos[index], index);
   }
 
-  Widget _buildPhotoTile(BubbleContext ctx, PhotoAttachment photo, int index) {
+  Widget _buildPhotoTile(BubbleContext ctx, PhotoAttachment photo, int index) =>
+      AspectRatio(aspectRatio: 1, child: _buildFillTile(ctx, photo, index));
+
+  Widget _buildFillTile(BubbleContext ctx, PhotoAttachment photo, int index) {
     final cachePx =
         (BubbleContext.photoMaxSize /
                 2 *
                 MediaQuery.of(ctx.context).devicePixelRatio)
             .round();
-    return AspectRatio(
-      aspectRatio: 1,
-      child: Stack(
-        children: [
-          _buildPhotoImage(
-            ctx,
-            photo,
-            double.infinity,
-            double.infinity,
-            memWidth: cachePx,
-            memHeight: cachePx,
-          ),
-          if (ctx.uploadProgress != null)
-            _buildUploadOverlay(ctx.uploadProgress!, index),
-          if (ctx.uploadProgress == null)
-            _buildTileTapTarget(ctx, index, cachePx),
-        ],
-      ),
+    return Stack(
+      children: [
+        _buildPhotoImage(
+          ctx,
+          photo,
+          double.infinity,
+          double.infinity,
+          memWidth: cachePx,
+          memHeight: cachePx,
+        ),
+        if (ctx.uploadProgress != null)
+          _buildUploadOverlay(ctx.uploadProgress!, index),
+        if (ctx.uploadProgress == null)
+          _buildTileTapTarget(ctx, index, cachePx),
+      ],
     );
   }
 

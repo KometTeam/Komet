@@ -78,6 +78,15 @@ class CallBridge {
     }
   }
 
+  Future<void> ensureOngoing({String? caller}) async {
+    if (!_android) return;
+    try {
+      await _method.invokeMethod<void>('ensureOngoing', {'caller': caller});
+    } catch (e) {
+      logger.w('CallBridge.ensureOngoing: $e');
+    }
+  }
+
   Future<void> setScreenShare(bool enabled, {String? caller}) async {
     if (!_android) return;
     try {

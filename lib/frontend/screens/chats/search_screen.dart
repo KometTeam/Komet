@@ -145,6 +145,33 @@ class _SearchScreenState extends State<SearchScreen> {
     return ContactCache.get(result.id) ?? result.name ?? 'User #${result.id}';
   }
 
+  ({String name, String? avatar, String type}) _chatIdentity(
+    int chatId,
+    String? type,
+    String? title,
+    String? iconUrl,
+  ) {
+    final fallbackType = type ?? 'CHAT';
+    if (chatId == 0) {
+      return (name: 'Избранное', avatar: iconUrl, type: fallbackType);
+    }
+    final me = _accountId ?? 0;
+    final peer = me == 0 ? 0 : chatId ^ me;
+    if ((type != null && type != 'DIALOG') || peer <= 0) {
+      return (name: title ?? '', avatar: iconUrl, type: fallbackType);
+    }
+    final cachedName = ContactCache.get(peer);
+    final cachedAvatar = ContactCache.getAvatar(peer);
+    final known = cachedName != null && cachedName.isNotEmpty;
+    return (
+      name: known ? cachedName : (title ?? ''),
+      avatar: (cachedAvatar != null && cachedAvatar.isNotEmpty)
+          ? cachedAvatar
+          : iconUrl,
+      type: known ? 'DIALOG' : fallbackType,
+    );
+  }
+
   void _openChat(int chatId, String name, String? avatarUrl, String type) {
     pushSwipeable(
       context,
@@ -273,17 +300,7 @@ class _SearchScreenState extends State<SearchScreen> {
         ],
         if (_chats.isNotEmpty) ...[
           _sectionHeader(cs, 'Чаты'),
-          for (final row in _chats)
-            _ResultTile(
-              name: (row['title'] as String?) ?? '',
-              imageUrl: row['icon_url'] as String?,
-              onTap: () => _openChat(
-                row['id'] as int,
-                (row['title'] as String?) ?? '',
-                row['icon_url'] as String?,
-                (row['type'] as String?) ?? 'CHAT',
-              ),
-            ),
+          for (final row in _chats) _localChatTile(row),
         ],
         if (_messages.isNotEmpty) ...[
           _sectionHeader(cs, 'Сообщения'),
@@ -305,16 +322,36 @@ class _SearchScreenState extends State<SearchScreen> {
     onTap: () => _openChat(hit.id, hit.title ?? '', hit.avatarUrl, hit.type),
   );
 
+  Widget _localChatTile(Map<String, dynamic> row) {
+    final chatId = row['id'] as int;
+    final identity = _chatIdentity(
+      chatId,
+      (row['type'] as String?) ?? 'CHAT',
+      row['title'] as String?,
+      row['icon_url'] as String?,
+    );
+    return _ResultTile(
+      name: identity.name,
+      imageUrl: identity.avatar,
+      onTap: () =>
+          _openChat(chatId, identity.name, identity.avatar, identity.type),
+    );
+  }
+
   Widget _messageTile(MessageSearchHit hit) {
     final meta = _msgChatMeta[hit.chatId];
-    final title = (meta?['title'] as String?) ?? 'Чат';
-    final icon = meta?['icon_url'] as String?;
-    final type = (meta?['type'] as String?) ?? 'CHAT';
+    final identity = _chatIdentity(
+      hit.chatId,
+      meta?['type'] as String?,
+      meta?['title'] as String?,
+      meta?['icon_url'] as String?,
+    );
+    final name = identity.name.isEmpty ? 'Чат' : identity.name;
     return _ResultTile(
-      name: title,
-      imageUrl: icon,
+      name: name,
+      imageUrl: identity.avatar,
       subtitle: hit.text?.trim(),
-      onTap: () => _openChat(hit.chatId, title, icon, type),
+      onTap: () => _openChat(hit.chatId, name, identity.avatar, identity.type),
     );
   }
 

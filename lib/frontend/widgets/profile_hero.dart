@@ -33,9 +33,12 @@ class ProfileHeroAvatar extends StatelessWidget {
     final from = _AvatarHeroChild.of(fromHeroContext);
     final to = _AvatarHeroChild.of(toHeroContext);
     final sharpest = from.size >= to.size ? from : to;
-    return FittedBox(
-      fit: BoxFit.fill,
-      child: SizedBox.square(dimension: sharpest.size, child: sharpest.child),
+    return Material(
+      type: MaterialType.transparency,
+      child: FittedBox(
+        fit: BoxFit.fill,
+        child: SizedBox.square(dimension: sharpest.size, child: sharpest.child),
+      ),
     );
   }
 }
