@@ -11,6 +11,7 @@ import '../../main.dart';
 import '../screens/chats/chat_list_screen.dart';
 import '../screens/chats/chat_screen.dart';
 import '../screens/contacts/open_contact_profile.dart';
+import '../screens/webapp/web_app_bridge.dart';
 import '../screens/webapp/web_app_screen.dart';
 import 'custom_notification.dart';
 import 'sticker_pack_sheet.dart';
@@ -137,6 +138,7 @@ Future<bool> openWebAppForBot(
     context,
     (_) => WebAppScreen(
       title: title,
+      entryPoint: WebAppEntryPoint.url,
       loader: () => webAppModule.fetchLaunch(
         botId,
         startParam: startParam,

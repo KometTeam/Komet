@@ -221,7 +221,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 21,
+      version: 22,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -349,6 +349,10 @@ class AppDatabase {
             'TEXT',
           );
         }
+        if (oldVersion < 22) {
+          await db.execute(_webAppStorageSchema);
+          await db.execute(_webAppBiometrySchema);
+        }
       },
     );
   }
@@ -375,6 +379,8 @@ class AppDatabase {
     await db.execute(_contactsSchema);
     await db.execute(_messagesSchema);
     await db.execute(_chatParticipantsSchema);
+    await db.execute(_webAppStorageSchema);
+    await db.execute(_webAppBiometrySchema);
     await _createIndexes(db);
     await _createChatParticipantsIndex(db);
   }
@@ -535,6 +541,26 @@ class AppDatabase {
     )
   ''';
 
+  static const _webAppStorageSchema = '''
+    CREATE TABLE webapp_storage (
+      account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      bot_id     INTEGER NOT NULL,
+      key        TEXT    NOT NULL,
+      value      TEXT    NOT NULL,
+      PRIMARY KEY (account_id, bot_id, key)
+    )
+  ''';
+
+  static const _webAppBiometrySchema = '''
+    CREATE TABLE webapp_biometry (
+      account_id       INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      bot_id           INTEGER NOT NULL,
+      access_requested INTEGER NOT NULL DEFAULT 0,
+      access_granted   INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (account_id, bot_id)
+    )
+  ''';
+
   static Future<void> saveProfile(
     ProfileData profile, {
     bool isActive = true,
@@ -632,6 +658,104 @@ class AppDatabase {
     return {
       for (final row in rows) row['key'] as String: row['value'] as String,
     };
+  }
+
+  static Future<void> saveWebAppValue(
+    int accountId,
+    int botId,
+    String key,
+    String value,
+  ) async {
+    final db = await _instance;
+    await db.insert('webapp_storage', {
+      'account_id': accountId,
+      'bot_id': botId,
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<String?> getWebAppValue(
+    int accountId,
+    int botId,
+    String key,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'webapp_storage',
+      where: 'account_id = ? AND bot_id = ? AND key = ?',
+      whereArgs: [accountId, botId, key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['value'] as String;
+  }
+
+  static Future<void> removeWebAppValue(
+    int accountId,
+    int botId,
+    String key,
+  ) async {
+    final db = await _instance;
+    await db.delete(
+      'webapp_storage',
+      where: 'account_id = ? AND bot_id = ? AND key = ?',
+      whereArgs: [accountId, botId, key],
+    );
+  }
+
+  static Future<void> clearWebAppValues(int accountId, int botId) async {
+    final db = await _instance;
+    await db.delete(
+      'webapp_storage',
+      where: 'account_id = ? AND bot_id = ?',
+      whereArgs: [accountId, botId],
+    );
+  }
+
+  static Future<int> countWebAppValues(int accountId, int botId) async {
+    final db = await _instance;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS total FROM webapp_storage '
+      'WHERE account_id = ? AND bot_id = ?',
+      [accountId, botId],
+    );
+    if (rows.isEmpty) return 0;
+    return (rows.first['total'] as num?)?.toInt() ?? 0;
+  }
+
+  static Future<(bool, bool)> getWebAppBiometryAccess(
+    int accountId,
+    int botId,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'webapp_biometry',
+      where: 'account_id = ? AND bot_id = ?',
+      whereArgs: [accountId, botId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return (false, false);
+    final row = rows.first;
+    return (
+      (row['access_requested'] as int? ?? 0) != 0,
+      (row['access_granted'] as int? ?? 0) != 0,
+    );
+  }
+
+  static Future<void> setWebAppBiometryAccess(
+    int accountId,
+    int botId, {
+    required bool requested,
+    required bool granted,
+  }) async {
+    final db = await _instance;
+    await db.insert('webapp_biometry', {
+      'account_id': accountId,
+      'bot_id': botId,
+      'access_requested': requested ? 1 : 0,
+      'access_granted': granted ? 1 : 0,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<void> savePrivacyConfig(

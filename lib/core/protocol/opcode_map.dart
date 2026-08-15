@@ -29,6 +29,7 @@ abstract class Opcode {
   static const int authLoginRestorePassword = 101; // Восстановление пароля
   static const int auth2faDetails = 104; // Детали 2FA
   static const int externalCallback = 105; // Внешний коллбэк
+  static const int phoneWebappShare = 106;
   static const int authValidatePassword = 107; // Валидация пароля
   static const int authValidateHint = 108; // Валидация подсказки пароля
   static const int authVerifyEmail = 109; // Верификация email
@@ -246,6 +247,7 @@ abstract class Opcode {
     authLoginRestorePassword: 'AUTH_LOGIN_RESTORE_PASSWORD',
     auth2faDetails: 'AUTH_2FA_DETAILS',
     externalCallback: 'EXTERNAL_CALLBACK',
+    phoneWebappShare: 'PHONE_WEBAPP_SHARE',
     authValidatePassword: 'AUTH_VALIDATE_PASSWORD',
     authValidateHint: 'AUTH_VALIDATE_HINT',
     authVerifyEmail: 'AUTH_VERIFY_EMAIL',

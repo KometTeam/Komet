@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../backend/modules/messages.dart';
+import '../screens/webapp/web_app_bridge.dart';
 import '../screens/webapp/web_app_screen.dart';
 import '../../core/config/app_bubble_behavior.dart';
 import '../../core/config/app_bubble_shape.dart';
@@ -1444,6 +1445,7 @@ class MessageBubble extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => WebAppScreen(
           title: button.text,
+          entryPoint: WebAppEntryPoint.inlineButton,
           loader: () => webAppModule.fetchLaunch(
             botId,
             startParam: startParam,

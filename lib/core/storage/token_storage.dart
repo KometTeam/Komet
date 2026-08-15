@@ -22,6 +22,11 @@ class TokenStorage {
     await _secure.delete(key: key);
   }
 
+  static Future<List<String>> secureKeysWithPrefix(String prefix) async {
+    final all = await _secure.readAll();
+    return all.keys.where((key) => key.startsWith(prefix)).toList();
+  }
+
   static Future<void> saveToken(String token, int accountId) async {
     await _secure.write(key: '$_tokenPrefix$accountId', value: token);
   }

@@ -7,6 +7,7 @@ import '../../../core/utils/webview_support.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show webAppModule;
 import '../../widgets/custom_notification.dart';
+import 'web_app_bridge.dart';
 import 'web_app_screen.dart';
 
 Future<void> openMiniApp(
@@ -14,6 +15,7 @@ Future<void> openMiniApp(
   required int botId,
   required String title,
   int? chatId,
+  String entryPoint = WebAppEntryPoint.webApp,
 }) async {
   if (botId <= 0) return;
   Haptics.tap();
@@ -23,6 +25,7 @@ Future<void> openMiniApp(
       MaterialPageRoute(
         builder: (_) => WebAppScreen(
           title: title,
+          entryPoint: entryPoint,
           loader: () => webAppModule.fetchLaunch(botId, chatId: chatId),
         ),
       ),

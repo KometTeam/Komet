@@ -33,6 +33,7 @@ import '../../../core/config/app_digital_id_mode.dart';
 import '../../../core/utils/webview_support.dart';
 import '../digital_id/digital_id_screen.dart';
 import '../digital_id/digital_id_web_screen.dart';
+import '../webapp/web_app_bridge.dart';
 import '../webapp/web_app_screen.dart';
 import 'cloud_storage_screen.dart';
 import 'customization_section.dart';
@@ -428,6 +429,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                                   MaterialPageRoute(
                                     builder: (context) => WebAppScreen(
                                       title: 'Сферум',
+                                      entryPoint: WebAppEntryPoint.settings,
                                       loader: () => webAppModule.fetchSferum(),
                                     ),
                                   ),
