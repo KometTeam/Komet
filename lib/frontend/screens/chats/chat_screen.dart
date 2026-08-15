@@ -2812,21 +2812,22 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _startEditMessage(CachedMessage message) async {
     final cs = Theme.of(context).colorScheme;
 
-    final content = await showModalBottomSheet<
-      ({String text, List<Map<String, dynamic>> elements})
-    >(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => _EditMessageSheet(
-        text: message.text ?? '',
-        formatRanges: message.formatRanges,
-        contextMenuBuilder: _formatContextMenu,
-      ),
-    );
+    final content =
+        await showModalBottomSheet<
+          ({String text, List<Map<String, dynamic>> elements})
+        >(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: cs.surfaceContainerHigh,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          builder: (sheetContext) => _EditMessageSheet(
+            text: message.text ?? '',
+            formatRanges: message.formatRanges,
+            contextMenuBuilder: _formatContextMenu,
+          ),
+        );
 
     if (content == null || !mounted) return;
 
@@ -7621,7 +7622,8 @@ class _EditMessageSheetState extends State<_EditMessageSheet> {
           ),
           const SizedBox(height: 20),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(_controller.buildContent()),
+            onPressed: () =>
+                Navigator.of(context).pop(_controller.buildContent()),
             child: const Text('Сохранить'),
           ),
         ],

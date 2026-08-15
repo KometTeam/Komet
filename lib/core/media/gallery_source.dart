@@ -32,35 +32,6 @@ class PickedPhoto {
   const PickedPhoto({required this.item, this.editedFile});
 }
 
-class CameraGalleryItem implements GalleryItem {
-  final File file;
-  (int, int)? _dimensions;
-
-  CameraGalleryItem(this.file);
-
-  @override
-  String get id => file.path;
-
-  @override
-  bool get isVideo => false;
-
-  @override
-  Duration? get duration => null;
-
-  @override
-  File? get localFile => file;
-
-  @override
-  Future<Uint8List?> thumbnail(int size) => file.readAsBytes();
-
-  @override
-  Future<File?> originFile() async => file;
-
-  @override
-  Future<(int, int)?> dimensions() async =>
-      _dimensions ??= await imageFileDimensions(file);
-}
-
 Future<(int, int)?> imageFileDimensions(File file) async {
   ui.ImmutableBuffer? buffer;
   ui.ImageDescriptor? descriptor;
@@ -197,7 +168,6 @@ bool isVideoPath(String path) =>
     kGalleryVideoExtensions.contains(_fileExtension(path));
 
 class _DesktopGallerySource implements GallerySource {
-
   @override
   Future<GalleryPermission> ensurePermission() async =>
       GalleryPermission.granted;

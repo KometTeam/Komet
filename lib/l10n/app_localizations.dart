@@ -4268,12 +4268,6 @@ abstract class AppLocalizations {
   /// **'Poll'**
   String get attachSheetPoll;
 
-  /// No description provided for @attachSheetCameraComingSoon.
-  ///
-  /// In en, this message translates to:
-  /// **'Camera is coming soon'**
-  String get attachSheetCameraComingSoon;
-
   /// No description provided for @attachSheetCameraError.
   ///
   /// In en, this message translates to:

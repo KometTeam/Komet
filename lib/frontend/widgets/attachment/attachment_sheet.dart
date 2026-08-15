@@ -212,7 +212,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       return;
     }
     if (shot == null || !mounted) return;
-    _openPreview(CameraGalleryItem(File(shot.path)));
+    _openPreview(GalleryItem.fromFile(File(shot.path)));
   }
 
   void _sendSelection({GalleryItem? fallback}) {
@@ -937,7 +937,6 @@ class _CameraTileState extends State<_CameraTile> with WidgetsBindingObserver {
       }
       setState(() => _controller = controller);
     } catch (_) {
-      // keep the fallback tile
     } finally {
       _starting = false;
     }
