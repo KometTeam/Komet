@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../backend/modules/messages.dart' show ContactCache;
 import '../../core/utils/link_opener.dart';
@@ -251,31 +252,27 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
     final segments = segmentizeFormats(widget.text, ranges);
     final cs = Theme.of(context).colorScheme;
     final baseColor = widget.style.color ?? cs.onSurface;
-    final barColor = baseColor.withValues(alpha: 0.4);
     final quoteColor = baseColor.withValues(alpha: 0.85);
     final mentionColor = mentionTextColor(cs);
 
-    final spans = <InlineSpan>[];
-    var prevQuote = false;
+    final blocks = <_TextBlock>[];
+    var spans = <InlineSpan>[];
+    var blockIsQuote = false;
+
+    void closeBlock() {
+      _trimBlockEdges(spans);
+      if (spans.isNotEmpty) {
+        blocks.add(_TextBlock(quote: blockIsQuote, spans: spans));
+      }
+      spans = <InlineSpan>[];
+    }
+
     for (final segment in segments) {
       final isQuote = segment.formats.contains(TextFormat.quote);
-      if (isQuote && !prevQuote) {
-        spans.add(
-          WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: Container(
-              width: 3,
-              height: (widget.style.fontSize ?? 16) * 1.15,
-              margin: const EdgeInsets.only(right: 6, left: 1),
-              decoration: BoxDecoration(
-                color: barColor,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-        );
+      if (isQuote != blockIsQuote) {
+        closeBlock();
+        blockIsQuote = isQuote;
       }
-      prevQuote = isQuote;
 
       final style = applyTextFormats(
         widget.style,
@@ -375,11 +372,115 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
       }
     }
 
-    return Text.rich(
-      TextSpan(style: widget.style, children: spans),
-      textAlign: widget.textAlign,
-      maxLines: widget.maxLines,
-      overflow: widget.overflow ?? TextOverflow.clip,
+    closeBlock();
+
+    if (blocks.length == 1 && !blocks.first.quote) {
+      return _paragraph(blocks.first.spans);
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < blocks.length; i++) ...[
+          if (i > 0) const SizedBox(height: 4),
+          blocks[i].quote
+              ? _quoteBlock(blocks[i].spans, baseColor)
+              : _paragraph(blocks[i].spans),
+        ],
+      ],
+    );
+  }
+
+  Widget _paragraph(List<InlineSpan> spans) => Text.rich(
+    TextSpan(style: widget.style, children: spans),
+    textAlign: widget.textAlign,
+    maxLines: widget.maxLines,
+    overflow: widget.overflow ?? TextOverflow.clip,
+  );
+
+  Widget _quoteBlock(List<InlineSpan> spans, Color baseColor) {
+    final glyphSize = (widget.style.fontSize ?? 16) * 0.85;
+    return Container(
+      decoration: BoxDecoration(
+        color: baseColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.fromLTRB(9, 5, 9, 6),
+      child: Stack(
+        children: [
+          Padding(
+            padding: EdgeInsets.only(right: glyphSize + 2),
+            child: _paragraph(spans),
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: Icon(
+              Symbols.format_quote,
+              size: glyphSize,
+              fill: 1,
+              color: baseColor.withValues(alpha: 0.55),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
+
+class _TextBlock {
+  final bool quote;
+  final List<InlineSpan> spans;
+
+  const _TextBlock({required this.quote, required this.spans});
+}
+
+void _trimBlockEdges(List<InlineSpan> spans) {
+  while (spans.isNotEmpty) {
+    final trimmed = _withText(
+      spans.first,
+      (t) => t.replaceFirst(_leadingNewlines, ''),
+    );
+    if (trimmed == null) break;
+    if (_isEmptyText(trimmed)) {
+      spans.removeAt(0);
+      continue;
+    }
+    spans[0] = trimmed;
+    break;
+  }
+  while (spans.isNotEmpty) {
+    final trimmed = _withText(
+      spans.last,
+      (t) => t.replaceFirst(_trailingNewlines, ''),
+    );
+    if (trimmed == null) break;
+    if (_isEmptyText(trimmed)) {
+      spans.removeLast();
+      continue;
+    }
+    spans[spans.length - 1] = trimmed;
+    break;
+  }
+}
+
+final RegExp _leadingNewlines = RegExp(r'^\n+');
+final RegExp _trailingNewlines = RegExp(r'\n+$');
+
+InlineSpan? _withText(InlineSpan span, String Function(String) transform) {
+  if (span is! TextSpan) return null;
+  final text = span.text;
+  if (text == null) return null;
+  final next = transform(text);
+  if (next == text) return span;
+  return TextSpan(
+    text: next,
+    style: span.style,
+    recognizer: span.recognizer,
+    children: span.children,
+  );
+}
+
+bool _isEmptyText(InlineSpan span) =>
+    span is TextSpan && (span.text?.isEmpty ?? false) && span.children == null;

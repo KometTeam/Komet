@@ -235,6 +235,7 @@ TextStyle applyTextFormats(
   Set<TextFormat> formats, {
   Color? quoteColor,
   Color? mentionColor,
+  Paint? quoteBackground,
 }) {
   if (formats.isEmpty) return base;
 
@@ -247,9 +248,9 @@ TextStyle applyTextFormats(
     decorations.add(TextDecoration.lineThrough);
   }
 
-  final isItalic = formats.contains(TextFormat.emphasized) ||
-      formats.contains(TextFormat.quote);
+  final isItalic = formats.contains(TextFormat.emphasized);
 
+  final isQuote = formats.contains(TextFormat.quote);
   final isMention = formats.contains(TextFormat.userMention);
   final isHeading = formats.contains(TextFormat.heading);
 
@@ -260,9 +261,8 @@ TextStyle applyTextFormats(
         : null,
     fontStyle: isItalic ? FontStyle.italic : null,
     fontFamily: formats.contains(TextFormat.monospaced) ? 'monospace' : null,
-    color: isMention
-        ? mentionColor
-        : (formats.contains(TextFormat.quote) ? quoteColor : null),
+    background: isQuote ? quoteBackground : null,
+    color: isMention ? mentionColor : (isQuote ? quoteColor : null),
     decoration: decorations.isEmpty
         ? null
         : TextDecoration.combine(decorations),

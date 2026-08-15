@@ -37,6 +37,7 @@ void showPhoneEntityMenu(
   showChatMenu(
     context: context,
     anchorRect: Rect.fromLTWH(at.dx, at.dy, 0, 0),
+    compact: true,
     header: _PhoneOwnerHeader(phone: phone),
     items: [
       ChatMenuItem(
@@ -62,6 +63,7 @@ void showCardEntityMenu(
   showChatMenu(
     context: context,
     anchorRect: Rect.fromLTWH(at.dx, at.dy, 0, 0),
+    compact: true,
     items: [
       ChatMenuItem(
         icon: Symbols.content_copy,
@@ -95,19 +97,19 @@ class _CardFooter extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final title = cardBrandTitle(digits);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 11),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             cardMask(digits),
-            style: TextStyle(color: cs.onSurface, fontSize: 15),
+            style: TextStyle(color: cs.onSurface, fontSize: 14),
           ),
           if (title != null) ...[
             const SizedBox(height: 2),
             Text(
               title,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
             ),
           ],
         ],
@@ -160,7 +162,7 @@ class _PhoneOwnerHeaderState extends State<_PhoneOwnerHeader> {
               : _OwnerRow(found: found, phone: widget.phone);
         }
         return Padding(
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+          padding: const EdgeInsets.fromLTRB(14, 11, 14, 10),
           child: content,
         );
       },
@@ -199,7 +201,7 @@ class _OwnerRow extends StatelessWidget {
               ),
               Text(
                 phone,
-                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
               ),
             ],
           ),

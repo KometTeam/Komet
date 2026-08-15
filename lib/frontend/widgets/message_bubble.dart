@@ -21,6 +21,7 @@ import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
 import 'formatted_message_text.dart';
+import 'text_entity_actions.dart';
 import 'sending_clock_icon.dart';
 import 'photo_viewer.dart';
 import 'selectable_message_text.dart';
@@ -58,20 +59,173 @@ class ReactionAnimationEvent {
 
 typedef ReactionAnimojiResolver = Animoji? Function(String emoji);
 
-class _ZeroIntrinsicWidth extends SingleChildRenderObjectWidget {
-  const _ZeroIntrinsicWidth({required Widget super.child});
+class _TextWithMeta extends MultiChildRenderObjectWidget {
+  _TextWithMeta({required Widget text, required Widget meta})
+    : super(children: [text, meta]);
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderZeroIntrinsicWidth();
+      _RenderTextWithMeta();
 }
 
-class _RenderZeroIntrinsicWidth extends RenderProxyBox {
-  @override
-  double computeMinIntrinsicWidth(double height) => 0;
+class _TextWithMetaParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderTextWithMeta extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _TextWithMetaParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _TextWithMetaParentData> {
+  static const double _gap = 8;
+  static const double _baselineNudge = 2;
+
+  RenderBox get _text => firstChild!;
+  RenderBox get _meta => lastChild!;
 
   @override
-  double computeMaxIntrinsicWidth(double height) => 0;
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _TextWithMetaParentData) {
+      child.parentData = _TextWithMetaParentData();
+    }
+  }
+
+  RenderParagraph? _soleParagraph() {
+    RenderParagraph? found;
+    var seen = 0;
+    void visit(RenderObject node) {
+      if (node is RenderParagraph) {
+        found = node;
+        seen++;
+        return;
+      }
+      node.visitChildren(visit);
+    }
+
+    _text.visitChildren(visit);
+    if (_text is RenderParagraph) {
+      found = _text as RenderParagraph;
+      seen = 1;
+    }
+    return seen == 1 ? found : null;
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) =>
+      _text.getMinIntrinsicWidth(height);
+
+  @override
+  double computeMaxIntrinsicWidth(double height) =>
+      _text.getMaxIntrinsicWidth(height) +
+      _gap +
+      _meta.getMaxIntrinsicWidth(height);
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      _text.getMinIntrinsicHeight(width);
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      _text.getMaxIntrinsicHeight(width) + _meta.getMaxIntrinsicHeight(width);
+
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) =>
+      BaselineOffset(_text.getDistanceToActualBaseline(baseline)).offset;
+
+  @override
+  void performLayout() {
+    _meta.layout(const BoxConstraints(), parentUsesSize: true);
+    final metaSize = _meta.size;
+
+    _text.layout(constraints.loosen(), parentUsesSize: true);
+    final textSize = _text.size;
+
+    final paragraph = _soleParagraph();
+    final needed = _gap + metaSize.width;
+
+    double width;
+    double height;
+    var metaOnOwnLine = false;
+
+    if (paragraph != null) {
+      final length = paragraph.text.toPlainText().length;
+      final caret = paragraph.getOffsetForCaret(
+        TextPosition(offset: length),
+        Rect.zero,
+      );
+      final lastLine = caret.dx;
+      final singleLine = caret.dy < 0.5;
+      if (lastLine + needed <= textSize.width) {
+        width = textSize.width;
+        height = textSize.height;
+      } else if (singleLine) {
+        width = lastLine + needed;
+        height = textSize.height;
+      } else {
+        width = textSize.width;
+        height = textSize.height + metaSize.height;
+        metaOnOwnLine = true;
+      }
+    } else {
+      width = math.max(textSize.width, metaSize.width);
+      height = textSize.height + metaSize.height;
+      metaOnOwnLine = true;
+    }
+
+    size = constraints.constrain(Size(width, height));
+
+    (_text.parentData! as _TextWithMetaParentData).offset = Offset.zero;
+    (_meta.parentData! as _TextWithMetaParentData).offset = Offset(
+      math.max(0, size.width - metaSize.width),
+      metaOnOwnLine
+          ? size.height - metaSize.height
+          : size.height - metaSize.height - _baselineNudge,
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
+}
+
+class _CapIntrinsicWidth extends SingleChildRenderObjectWidget {
+  final double cap;
+
+  const _CapIntrinsicWidth({required this.cap, required Widget super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderCapIntrinsicWidth(cap);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderCapIntrinsicWidth renderObject,
+  ) {
+    renderObject.cap = cap;
+  }
+}
+
+class _RenderCapIntrinsicWidth extends RenderProxyBox {
+  _RenderCapIntrinsicWidth(this._cap);
+
+  double _cap;
+  set cap(double value) {
+    if (value == _cap) return;
+    _cap = value;
+    markNeedsLayout();
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) =>
+      math.min(super.computeMinIntrinsicWidth(height), _cap);
+
+  @override
+  double computeMaxIntrinsicWidth(double height) =>
+      math.min(super.computeMaxIntrinsicWidth(height), _cap);
 }
 
 class _HeaderAboveMatchWidth extends MultiChildRenderObjectWidget {
@@ -83,7 +237,8 @@ class _HeaderAboveMatchWidth extends MultiChildRenderObjectWidget {
       _RenderHeaderAboveMatchWidth();
 }
 
-class _HeaderAboveMatchWidthParentData extends ContainerBoxParentData<RenderBox> {}
+class _HeaderAboveMatchWidthParentData
+    extends ContainerBoxParentData<RenderBox> {}
 
 class _RenderHeaderAboveMatchWidth extends RenderBox
     with
@@ -493,6 +648,7 @@ class MessageBubble extends StatelessWidget {
   final String? senderNameOverride;
   final String? senderAvatarOverride;
   final ValueListenable<({String id, Offset pos})?>? textSelection;
+  final ValueListenable<Offset?>? textSelectionDrag;
   final VoidCallback? onExitTextSelection;
   final String? commentsLabel;
   final VoidCallback? onCommentsTap;
@@ -523,6 +679,7 @@ class MessageBubble extends StatelessWidget {
     this.senderNameOverride,
     this.senderAvatarOverride,
     this.textSelection,
+    this.textSelectionDrag,
     this.onExitTextSelection,
     this.commentsLabel,
     this.onCommentsTap,
@@ -574,12 +731,9 @@ class MessageBubble extends StatelessWidget {
   }
 
   bool get _showsSenderName =>
-      !isMe &&
-      chatType == "CHAT" &&
-      prevMessage?.senderId != message.senderId;
+      !isMe && chatType == "CHAT" && prevMessage?.senderId != message.senderId;
 
-  bool get _stretchesTextRow =>
-      message.replyInfo != null || _showsSenderName;
+  bool get _stretchesTextRow => message.replyInfo != null || _showsSenderName;
 
   BubbleShape _computeShape() {
     if (message.isControl) return BubbleShape.singleMiddle;
@@ -749,6 +903,8 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  static const double _replyWidthShare = 0.75;
+
   static const List<Color> _senderPalette = [
     Color(0xFFE57373),
     Color(0xFF64B5F6),
@@ -794,7 +950,8 @@ class MessageBubble extends StatelessWidget {
   Widget _buildLeadingAvatar(ColorScheme cs) {
     final senderAvatar =
         senderAvatarOverride ?? ContactCache.getAvatar(message.senderId);
-    final displaySender = senderNameOverride ?? ContactCache.get(message.senderId);
+    final displaySender =
+        senderNameOverride ?? ContactCache.get(message.senderId);
     final Widget avatar;
     if (senderAvatar != null && senderAvatar.isNotEmpty) {
       avatar = CircleAvatar(
@@ -887,15 +1044,17 @@ class MessageBubble extends StatelessWidget {
     final maxBubbleWidth = isVideoNote
         ? math.min(screenWidth - 24, 560.0)
         : math.min(screenWidth * 0.75, 560.0);
-    final noBubbleBackground = isVideoNote || _isSticker || jumboAnimoji != null;
+    final noBubbleBackground =
+        isVideoNote || _isSticker || jumboAnimoji != null;
     final bubbleColor = noBubbleBackground
         ? Colors.transparent
         : (isMe ? cs.primaryContainer : cs.surfaceContainerHighest);
 
-    BubbleContext makeCtx() => BubbleContext(
+    BubbleContext makeCtx({bool metaInFooter = false}) => BubbleContext(
       context: context,
       cs: cs,
       text: textColor,
+      metaInFooter: metaInFooter,
       shape: shape,
       contentType: contentType,
       hasPhotoWithCaption: hasPhotoCap,
@@ -913,15 +1072,8 @@ class MessageBubble extends StatelessWidget {
       onStickerTap: onStickerTap,
       onForwardedSourceTap: onForwardedSourceTap,
       reactionInfo: _resolveReactionInfo(),
+      selectable: _wrapSelectable,
     );
-
-    final Widget bubbleContent =
-        reactionsListenable != null && contentType == MessageType.text
-        ? ValueListenableBuilder<Map<String, dynamic>?>(
-            valueListenable: reactionsListenable!,
-            builder: (context, _, _) => _buildContent(makeCtx()),
-          )
-        : _buildContent(makeCtx());
 
     final reactionsInside = contentType != MessageType.text;
 
@@ -933,20 +1085,19 @@ class MessageBubble extends StatelessWidget {
         : padding;
 
     final Widget contentWithReactions = reactionsInside
-        ? Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              bubbleContent,
-              _reactionsBar(
-                cs,
-                inset: padding == EdgeInsets.zero
-                    ? const EdgeInsets.fromLTRB(8, 4, 8, 6)
-                    : const EdgeInsets.only(top: 4),
-              ),
-            ],
+        ? _contentWithReactionsFooter(
+            cs,
+            makeCtx,
+            inset: padding == EdgeInsets.zero
+                ? const EdgeInsets.fromLTRB(8, 4, 8, 6)
+                : const EdgeInsets.only(top: 4),
           )
-        : bubbleContent;
+        : reactionsListenable != null
+        ? ValueListenableBuilder<Map<String, dynamic>?>(
+            valueListenable: reactionsListenable!,
+            builder: (context, _, _) => _buildContent(makeCtx()),
+          )
+        : _buildContent(makeCtx());
 
     final Widget? senderHeader = showSenderName
         ? _buildSenderHeader(cs, padding == EdgeInsets.zero)
@@ -967,7 +1118,8 @@ class MessageBubble extends StatelessWidget {
                     child: senderHeader,
                   ),
                 if (reply != null) ...[
-                  _ZeroIntrinsicWidth(
+                  _CapIntrinsicWidth(
+                    cap: maxBubbleWidth * _replyWidthShare,
                     child: _buildReplyQuote(context, cs, textColor, reply),
                   ),
                   const SizedBox(height: 4),
@@ -1084,10 +1236,7 @@ class MessageBubble extends StatelessWidget {
               color: cs.onSurfaceVariant.withValues(alpha: 0.18),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 11,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               child: Row(
                 children: [
                   Icon(Symbols.mode_comment, size: 19, color: accent),
@@ -1162,37 +1311,53 @@ class MessageBubble extends StatelessWidget {
       'OPEN_APP' => Symbols.chevron_right,
       _ => null,
     };
+    final isClipboard = button.type == 'CLIPBOARD';
     return Material(
       color: cs.primary.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _onInlineButtonTap(context, keyboard, button),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  button.text,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: cs.primary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+        child: Stack(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(isClipboard ? 26 : 12, 10, 12, 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      button.text,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
+                  if (trailingIcon != null) ...[
+                    const SizedBox(width: 4),
+                    Icon(trailingIcon, size: 16, color: cs.primary),
+                  ],
+                ],
+              ),
+            ),
+            if (isClipboard)
+              Positioned(
+                top: 6,
+                right: 8,
+                child: Icon(
+                  Symbols.content_copy,
+                  size: 15,
+                  weight: 500,
+                  color: cs.primary.withValues(alpha: 0.85),
                 ),
               ),
-              if (trailingIcon != null) ...[
-                const SizedBox(width: 4),
-                Icon(trailingIcon, size: 16, color: cs.primary),
-              ],
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -1212,6 +1377,11 @@ class MessageBubble extends StatelessWidget {
         return;
       case 'OPEN_APP':
         await _openMiniApp(context, button);
+        return;
+      case 'CLIPBOARD':
+        final payload = button.payload;
+        if (payload == null || payload.isEmpty) return;
+        await copyTextEntity(context, payload, 'Скопировано');
         return;
       default:
         final callbackId = keyboard.callbackId;
@@ -1300,17 +1470,70 @@ class MessageBubble extends StatelessWidget {
     return info != null && info.counters.isNotEmpty;
   }
 
-  Widget _reactionsBar(ColorScheme cs, {required EdgeInsets inset}) {
+  Widget _contentWithReactionsFooter(
+    ColorScheme cs,
+    BubbleContext Function({bool metaInFooter}) makeCtx, {
+    required EdgeInsets inset,
+  }) {
     final listenable = reactionsListenable;
     if (listenable != null) {
       return ValueListenableBuilder<Map<String, dynamic>?>(
         valueListenable: listenable,
         builder: (context, info, _) =>
-            _buildReactionsBarFor(cs, info, inset: inset),
+            _reactionsFooterLayout(cs, makeCtx, info, inset: inset),
       );
     }
     final info = message.payload?['reactionInfo'];
-    return _buildReactionsBarFor(cs, info is Map ? info : null, inset: inset);
+    return _reactionsFooterLayout(
+      cs,
+      makeCtx,
+      info is Map ? info : null,
+      inset: inset,
+    );
+  }
+
+  Widget _reactionsFooterLayout(
+    ColorScheme cs,
+    BubbleContext Function({bool metaInFooter}) makeCtx,
+    Map? info, {
+    required EdgeInsets inset,
+  }) {
+    final chips = _buildReactionChipsFor(cs, ReactionInfo.fromMap(info));
+    if (chips.isEmpty) return _buildContent(makeCtx());
+
+    final carriesMeta =
+        _contentType == MessageType.attachment ||
+        _contentType == MessageType.voice;
+    final ctx = makeCtx(metaInFooter: carriesMeta);
+
+    return IntrinsicWidth(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildContent(ctx),
+          Padding(
+            padding: inset,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: _ReactionsWrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: chips,
+                  ),
+                ),
+                if (carriesMeta) ...[
+                  const SizedBox(width: 8),
+                  ctx.footerMeta(),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildContent(BubbleContext ctx) {
@@ -1541,6 +1764,7 @@ class MessageBubble extends StatelessWidget {
         if (req == null || req.id != message.id) return child!;
         return SelectableMessageText(
           initialGlobalPosition: req.pos,
+          dragPosition: textSelectionDrag,
           onExit: onExitTextSelection ?? () {},
           child: child!,
         );
@@ -1578,8 +1802,9 @@ class MessageBubble extends StatelessWidget {
     );
     final hasReactions = reactionChips.isNotEmpty;
 
-    final activeFontFamily =
-        Theme.of(ctx.context).textTheme.bodyLarge?.fontFamily;
+    final activeFontFamily = Theme.of(
+      ctx.context,
+    ).textTheme.bodyLarge?.fontFamily;
     final textStyle = TextStyle(
       color: ctx.text,
       fontSize: 16,
@@ -1591,6 +1816,24 @@ class MessageBubble extends StatelessWidget {
     );
     final ranges = message.formatRanges;
     final decryptedText = decryption?.plaintext;
+
+    final metaRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (decryption?.isDecrypted ?? false) ...[
+          Icon(Symbols.lock, size: 11, weight: 700, fill: 1, color: ctx.dim),
+          const SizedBox(width: 3),
+        ],
+        Text(
+          message.status == 'EDITED' ? '${ctx.clockText} ред.' : ctx.clockText,
+          style: TextStyle(color: ctx.dim, fontSize: 10),
+        ),
+        if (isMe) ...[const SizedBox(width: 4), ctx.statusIcon()],
+        if (message.deleted) ...[const SizedBox(width: 4), ctx.deletedIcon()],
+      ],
+    );
+
     final Widget textWidget;
     if (decryption?.state == MessageDecryptionState.wrongKey) {
       textWidget = _wrapSelectable(
@@ -1618,20 +1861,6 @@ class MessageBubble extends StatelessWidget {
       textWidget = _wrapSelectable(Text(message.text ?? '', style: textStyle));
     }
 
-    final metaWidget = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (decryption?.isDecrypted ?? false) ...[
-          Icon(Symbols.lock, size: 11, weight: 700, fill: 1, color: ctx.dim),
-          const SizedBox(width: 3),
-        ],
-        Text(
-          message.status == 'EDITED' ? '${ctx.clockText} ред.' : ctx.clockText,
-          style: TextStyle(color: ctx.dim, fontSize: 10),
-        ),
-      ],
-    );
-
     if (hasReactions) {
       return IntrinsicWidth(
         child: Column(
@@ -1652,13 +1881,8 @@ class MessageBubble extends StatelessWidget {
                 const SizedBox(width: 8),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 2),
-                  child: metaWidget,
+                  child: metaRow,
                 ),
-                if (isMe) ...[const SizedBox(width: 4), ctx.statusIcon()],
-                if (message.deleted) ...[
-                  const SizedBox(width: 4),
-                  ctx.deletedIcon(),
-                ],
               ],
             ),
           ],
@@ -1666,30 +1890,7 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            _stretchesTextRow
-                ? Expanded(child: textWidget)
-                : Flexible(child: textWidget),
-            const SizedBox(width: 8),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: metaWidget,
-            ),
-            if (isMe) ...[const SizedBox(width: 4), ctx.statusIcon()],
-            if (message.deleted) ...[
-              const SizedBox(width: 4),
-              ctx.deletedIcon(),
-            ],
-          ],
-        ),
-      ],
-    );
+    return _TextWithMeta(text: textWidget, meta: metaRow);
   }
 
   Widget _buildReplyQuote(
@@ -1698,7 +1899,7 @@ class MessageBubble extends StatelessWidget {
     Color textColor,
     ReplyInfo reply,
   ) {
-    final accent = isMe ? cs.onPrimaryContainer : cs.primary;
+    final accent = _senderColor(reply.senderId);
     final name = reply.senderId == myId
         ? 'Вы'
         : (ContactCache.get(reply.senderId) ?? 'Сообщение');
@@ -1806,7 +2007,7 @@ class MessageBubble extends StatelessWidget {
         ),
         if (hasOrigText) ...[
           const SizedBox(height: 2),
-          _wrapSelectable(forwardedCtx.caption()),
+          forwardedCtx.caption(),
         ] else ...[
           const SizedBox(height: 2),
           _wrapSelectable(

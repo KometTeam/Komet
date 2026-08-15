@@ -8,11 +8,13 @@ import 'package:komet/models/attachment.dart';
 const int _me = 1;
 const int _peer = 7;
 const double _photoWidth = 180;
+const double _maxBubbleWidth = 324;
 
 CachedMessage _message({
   required String text,
   bool withReply = false,
   int senderId = _peer,
+  String replyText = 'Пётр Синицын написал очень длинный ответ',
 }) => CachedMessage(
   id: '1',
   accountId: _me,
@@ -28,7 +30,7 @@ CachedMessage _message({
             'message': {
               'id': '9',
               'sender': _me,
-              'text': 'Пётр Синицын написал очень длинный ответ',
+              'text': replyText,
               'time': 0,
               'attaches': [],
             },
@@ -111,13 +113,17 @@ Future<void> _pumpColumn(
 Rect _bubbleRect(WidgetTester tester, int index, String text) {
   final label = find.descendant(
     of: find.byKey(ValueKey('bubble$index')),
-    matching: find.text(text),
+    matching: find.textContaining(text, findRichText: true),
   );
   final box = find.ancestor(of: label, matching: find.byType(Container)).first;
   return tester.getTopLeft(box) & tester.getSize(box);
 }
 
-Future<void> _pumpBubble(WidgetTester tester, CachedMessage message) async {
+Future<void> _pumpBubble(
+  WidgetTester tester,
+  CachedMessage message, {
+  String chatType = 'CHAT',
+}) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.5;
   addTearDown(tester.view.reset);
@@ -134,7 +140,7 @@ Future<void> _pumpBubble(WidgetTester tester, CachedMessage message) async {
             message: message,
             isMe: false,
             myId: _me,
-            chatType: 'CHAT',
+            chatType: chatType,
           ),
         ),
       ),
@@ -149,6 +155,16 @@ Rect _rectOf(WidgetTester tester, Finder finder) {
   return topLeft & size;
 }
 
+Rect _clockRect(WidgetTester tester) {
+  var rect = Rect.zero;
+  for (final element in find.textContaining('05:46').evaluate()) {
+    final box = element.renderObject! as RenderBox;
+    final candidate = box.localToGlobal(Offset.zero) & box.size;
+    if (candidate.right > rect.right) rect = candidate;
+  }
+  return rect;
+}
+
 void main() {
   setUp(() => ContactCache.put(_peer, 'Пётр Синицын'));
 
@@ -158,17 +174,23 @@ void main() {
     await _pumpBubble(tester, _message(text: 'нет'));
 
     final header = _rectOf(tester, find.text('Пётр Синицын'));
-    final clock = _rectOf(tester, find.textContaining('05:46'));
-    final body = _rectOf(tester, find.text('нет'));
+    final clock = _clockRect(tester);
+    final body = _rectOf(
+      tester,
+      find.textContaining('нет', findRichText: true),
+    );
 
-    expect(header.width, greaterThan(body.width + clock.width));
+    expect(header.width, greaterThan(body.width));
     expect(clock.right, closeTo(header.right, 1));
   });
 
-  testWidgets('the reply quote fills the width the sender name opened up', (
+  testWidgets('a short reply quote fills the width the sender name opened up', (
     tester,
   ) async {
-    await _pumpBubble(tester, _message(text: 'нет', withReply: true));
+    await _pumpBubble(
+      tester,
+      _message(text: 'нет', withReply: true, replyText: 'ок'),
+    );
 
     final header = _rectOf(tester, find.text('Пётр Синицын'));
     final label = _rectOf(tester, find.text('Вы'));
@@ -178,11 +200,34 @@ void main() {
           .ancestor(of: find.text('Вы'), matching: find.byType(Container))
           .first,
     );
-    final clock = _rectOf(tester, find.textContaining('05:46'));
+    final clock = _clockRect(tester);
 
     expect(quote.right, greaterThan(label.right));
     expect(quote.right, closeTo(header.right, 1));
     expect(clock.right, closeTo(header.right, 1));
+  });
+
+  testWidgets('a long reply quote widens the bubble past its own text', (
+    tester,
+  ) async {
+    await _pumpBubble(tester, _message(text: 'т'));
+    final withoutReply = _clockRect(tester).right;
+
+    await _pumpBubble(tester, _message(text: 'т', withReply: true));
+
+    final header = _rectOf(tester, find.text('Пётр Синицын'));
+    final quote = _rectOf(
+      tester,
+      find
+          .ancestor(of: find.text('Вы'), matching: find.byType(Container))
+          .first,
+    );
+    final clock = _clockRect(tester);
+
+    expect(clock.right, greaterThan(withoutReply + 40));
+    expect(quote.right, greaterThan(header.right));
+    expect(clock.right, closeTo(quote.right, 1));
+    expect(quote.width, lessThanOrEqualTo(_maxBubbleWidth * 0.75 + 1));
   });
 
   testWidgets('grouped bubbles keep the same gap with and without avatars', (
@@ -226,7 +271,10 @@ void main() {
           .ancestor(of: find.text('Вы'), matching: find.byType(Container))
           .first,
     );
-    final caption = _rectOf(tester, find.text('Вот те раз, не может быть'));
+    final caption = _rectOf(
+      tester,
+      find.textContaining('Вот те раз', findRichText: true),
+    );
 
     expect(quote.width, closeTo(_photoWidth - 16, 1));
     expect(quote.left, greaterThan(0));
@@ -238,9 +286,29 @@ void main() {
   ) async {
     await _pumpBubble(tester, _message(text: 'нет', senderId: 404));
 
-    final clock = _rectOf(tester, find.textContaining('05:46'));
-    final body = _rectOf(tester, find.text('нет'));
+    final clock = _clockRect(tester);
+    final body = _rectOf(
+      tester,
+      find.textContaining('нет', findRichText: true),
+    );
 
     expect(clock.left, closeTo(body.right + 8, 1));
+    expect(clock.center.dy, closeTo(body.center.dy, 4));
+  });
+
+  testWidgets('the clock drops below wrapped text instead of widening it', (
+    tester,
+  ) async {
+    await _pumpBubble(
+      tester,
+      _message(text: '${'ф' * 14}\n${'ф' * 14}', senderId: 404),
+      chatType: 'DIALOG',
+    );
+
+    final clock = _clockRect(tester);
+    final body = _rectOf(tester, find.textContaining('ф', findRichText: true));
+
+    expect(clock.top, greaterThanOrEqualTo(body.bottom - 2));
+    expect(clock.right, lessThanOrEqualTo(body.right + 1));
   });
 }

@@ -92,6 +92,8 @@ class BubbleContext {
   final void Function(StickerAttachment sticker)? onStickerTap;
   final ForwardedSourceTap? onForwardedSourceTap;
   final BubblePresentation? presentation;
+  final bool metaInFooter;
+  final Widget Function(Widget)? selectable;
 
   BubbleContext({
     required this.context,
@@ -115,6 +117,8 @@ class BubbleContext {
     this.onForwardedSourceTap,
     this.reactionInfo,
     this.presentation,
+    this.metaInFooter = false,
+    this.selectable,
   }) : dim = text.withValues(alpha: 0.7);
 
   String? get contentText =>
@@ -149,6 +153,8 @@ class BubbleContext {
     onForwardedSourceTap: onForwardedSourceTap,
     reactionInfo: reactionInfo,
     presentation: value,
+    metaInFooter: metaInFooter,
+    selectable: selectable,
   );
 
   String get clockText {
@@ -169,17 +175,25 @@ class BubbleContext {
     final style = TextStyle(color: text, fontSize: 16, height: 1.3);
     final captionText = contentText;
     final ranges = contentFormatRanges;
+    final Widget body;
     if (FormattedMessageText.isFormatted(captionText, ranges)) {
-      return FormattedMessageText(
+      body = FormattedMessageText(
         text: captionText!,
         ranges: ranges,
         style: style,
       );
+    } else {
+      body = Text(captionText ?? '', style: style);
     }
-    return Text(captionText ?? '', style: style);
+    final wrap = selectable;
+    return wrap == null ? body : wrap(body);
   }
 
-  Widget meta() {
+  Widget meta() => metaInFooter ? const SizedBox.shrink() : _metaRow();
+
+  Widget footerMeta() => _metaRow();
+
+  Widget _metaRow() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Row(
@@ -195,6 +209,8 @@ class BubbleContext {
   }
 
   Widget compactTime() {
+    if (metaInFooter) return const SizedBox.shrink();
+
     final bgColor = isMe
         ? Colors.black.withValues(alpha: 0.4)
         : Colors.black.withValues(alpha: 0.5);

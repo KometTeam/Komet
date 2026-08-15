@@ -635,6 +635,7 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<bool> _animojiHold = ValueNotifier(true);
 
   final ValueNotifier<Set<String>> _selectedIds = ValueNotifier(const {});
+  final ValueNotifier<Offset?> _textSelectionDrag = ValueNotifier(null);
   final ValueNotifier<({String id, Offset pos})?> _textSelection =
       ValueNotifier(null);
   late final AnimationController _selectionAnim;
@@ -683,7 +684,6 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.addListener(_maybeLoadMoreHistory);
     _scrollController.addListener(_recordScrollPixels);
     _scrollController.addListener(_scheduleReadMarker);
-    _scrollController.addListener(_exitTextSelectionOnScroll);
     _scrollController.addListener(_updateScrollDownVisible);
     MediaPlayback.instance.enterChat(widget.chatId);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
@@ -2107,7 +2107,6 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.removeListener(_maybeLoadMoreHistory);
     _scrollController.removeListener(_recordScrollPixels);
     _scrollController.removeListener(_scheduleReadMarker);
-    _scrollController.removeListener(_exitTextSelectionOnScroll);
     _scrollController.removeListener(_updateScrollDownVisible);
     _readMarkTimer?.cancel();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
@@ -2172,6 +2171,7 @@ class _ChatScreenState extends State<ChatScreen>
     _search.dispose();
     _selectedIds.dispose();
     _textSelection.dispose();
+    _textSelectionDrag.dispose();
     _messageController.dispose();
     _messageFocusNode.dispose();
     _stickers.dispose();
@@ -2352,6 +2352,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _startTextSelection(CachedMessage message, Offset globalPosition) {
     if (message.isControl || message.selectableText == null) return;
+    _textSelectionDrag.value = null;
     _textSelection.value = (id: message.id, pos: globalPosition);
   }
 
@@ -2360,15 +2361,6 @@ class _ChatScreenState extends State<ChatScreen>
     if (current == null) return;
     if (onlyId != null && current.id != onlyId) return;
     _textSelection.value = null;
-  }
-
-  void _exitTextSelectionOnScroll() {
-    if (_textSelection.value == null) return;
-    if (!_scrollController.hasClients) return;
-    if (_scrollController.position.userScrollDirection !=
-        ScrollDirection.idle) {
-      _exitTextSelection();
-    }
   }
 
   void _syncSelectionAnim() {
@@ -5754,6 +5746,7 @@ class _ChatScreenState extends State<ChatScreen>
                                     ? widget.imageUrl
                                     : null,
                                 textSelection: _textSelection,
+                                textSelectionDrag: _textSelectionDrag,
                                 onExitTextSelection: _exitTextSelection,
                                 commentsLabel: isChannelPost
                                     ? _commentsLabelFor(message.id)
@@ -5780,6 +5773,8 @@ class _ChatScreenState extends State<ChatScreen>
                                     _enterSelection(message),
                                 onStartTextSelection: (pos) =>
                                     _startTextSelection(message, pos),
+                                onDragTextSelection: (pos) =>
+                                    _textSelectionDrag.value = pos,
                                 onDelete: () =>
                                     _confirmDeleteMessage(message.id, isMe),
                                 onEdit: _canEditMessage(message)
@@ -7103,6 +7098,7 @@ class _SelectableMessageRow extends StatefulWidget {
   final VoidCallback onToggleSelection;
   final VoidCallback onEnterSelection;
   final void Function(Offset globalPosition) onStartTextSelection;
+  final void Function(Offset? globalPosition) onDragTextSelection;
   final VoidCallback onDelete;
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
@@ -7128,6 +7124,7 @@ class _SelectableMessageRow extends StatefulWidget {
     required this.onToggleSelection,
     required this.onEnterSelection,
     required this.onStartTextSelection,
+    required this.onDragTextSelection,
     required this.onDelete,
     this.onEdit,
     this.onReply,
@@ -7299,7 +7296,21 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
     });
   }
 
+  bool _textSelectionPress = false;
+
+  void _handleLongPressMove(Offset globalPosition) {
+    if (!_textSelectionPress) return;
+    widget.onDragTextSelection(globalPosition);
+  }
+
+  void _handleLongPressEnd() {
+    if (!_textSelectionPress) return;
+    _textSelectionPress = false;
+    widget.onDragTextSelection(null);
+  }
+
   void _handleLongPressStart(Offset globalPosition) {
+    _textSelectionPress = false;
     if (!widget.isSelectionActive()) {
       widget.onEnterSelection();
       return;
@@ -7307,6 +7318,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
     final selected = widget.selectedIds.value.contains(widget.message.id);
     final hasText = widget.message.selectableText != null;
     if (selected && hasText && !widget.message.isControl) {
+      _textSelectionPress = true;
       widget.onStartTextSelection(globalPosition);
     } else {
       widget.onToggleSelection();
@@ -7355,6 +7367,10 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
               onTapDown: (d) => _lastTapDown = d.globalPosition,
               onTap: _handleTap,
               onLongPressStart: (d) => _handleLongPressStart(d.globalPosition),
+              onLongPressMoveUpdate: (d) =>
+                  _handleLongPressMove(d.globalPosition),
+              onLongPressEnd: (_) => _handleLongPressEnd(),
+              onLongPressCancel: _handleLongPressEnd,
               onSecondaryTapDown: active ? null : _onSecondaryTapDown,
               child: ColoredBox(
                 color: isSelected
