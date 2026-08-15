@@ -1,9 +1,6 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
-#ifdef GDK_WINDOWING_X11
-#include <gdk/gdkx.h>
-#endif
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -13,6 +10,32 @@ struct _MyApplication {
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+static gboolean desktop_uses_gtk_header_bar() {
+  const gchar* desktops = g_getenv("XDG_CURRENT_DESKTOP");
+  if (desktops == nullptr || *desktops == '\0') {
+    desktops = g_getenv("DESKTOP_SESSION");
+  }
+
+  if (desktops == nullptr) {
+    return FALSE;
+  }
+
+  g_auto(GStrv) values = g_strsplit(desktops, ":", -1);
+  for (gchar** value = values; *value != nullptr; value++) {
+    if (g_ascii_strcasecmp(*value, "unity") == 0 ||
+        g_ascii_strcasecmp(*value, "gnome") == 0 ||
+        g_ascii_strncasecmp(*value, "gnome-", 6) == 0) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+void my_application_configure_windowing() {
+  g_setenv("GTK_CSD", desktop_uses_gtk_header_bar() ? "1" : "0", TRUE);
+}
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
@@ -25,24 +48,7 @@ static void my_application_activate(GApplication* application) {
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
-  // Use a header bar when running in GNOME as this is the common style used
-  // by applications and is the setup most users will be using (e.g. Ubuntu
-  // desktop).
-  // If running on X and not using GNOME then just use a traditional title bar
-  // in case the window manager does more exotic layout, e.g. tiling.
-  // If running on Wayland assume the header bar will work (may need changing
-  // if future cases occur).
-  gboolean use_header_bar = TRUE;
-#ifdef GDK_WINDOWING_X11
-  GdkScreen* screen = gtk_window_get_screen(window);
-  if (GDK_IS_X11_SCREEN(screen)) {
-    const gchar* wm_name = gdk_x11_screen_get_window_manager_name(screen);
-    if (g_strcmp0(wm_name, "GNOME Shell") != 0) {
-      use_header_bar = FALSE;
-    }
-  }
-#endif
-  if (use_header_bar) {
+  if (desktop_uses_gtk_header_bar()) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
     gtk_header_bar_set_title(header_bar, "Komet");
