@@ -2302,6 +2302,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get attachSheetCamera => 'Камера';
 
   @override
+  String get attachSheetCameraAllow => 'Разрешите камеру';
+
+  @override
   String get photoEditorApplyFailed => 'Не удалось применить';
 
   @override

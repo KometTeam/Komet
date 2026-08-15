@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/core/config/app_frost.dart';
@@ -882,6 +883,8 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   }
 }
 
+enum _CameraAccess { unknown, granted, denied }
+
 class _CameraTile extends StatefulWidget {
   final VoidCallback onTap;
   final ColorScheme cs;
@@ -893,30 +896,59 @@ class _CameraTile extends StatefulWidget {
 }
 
 class _CameraTileState extends State<_CameraTile> with WidgetsBindingObserver {
+  static const String _askedKey = 'komet_camera_permission_asked';
+
   CameraController? _controller;
   bool _starting = false;
+  _CameraAccess _access = _CameraAccess.unknown;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _maybeStartPreview();
+    _resolveAccess();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _maybeStartPreview();
+      _resolveAccess();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       _stopPreview();
     }
   }
 
-  Future<void> _maybeStartPreview() async {
-    if (_starting || _controller != null) return;
+  Future<void> _resolveAccess() async {
     if (!(Platform.isAndroid || Platform.isIOS)) return;
-    if (!await Permission.camera.status.isGranted) return;
+
+    var status = await Permission.camera.status;
+    if (status.isDenied) {
+      final prefs = await SharedPreferences.getInstance();
+      if (!(prefs.getBool(_askedKey) ?? false)) {
+        await prefs.setBool(_askedKey, true);
+        status = await Permission.camera.request();
+      }
+    }
+    if (!mounted) return;
+
+    final granted = status.isGranted;
+    setState(
+      () => _access = granted ? _CameraAccess.granted : _CameraAccess.denied,
+    );
+    if (granted) _startPreview();
+  }
+
+  void _onTap() {
+    if (_access == _CameraAccess.denied) {
+      openAppSettings();
+      return;
+    }
+    widget.onTap();
+  }
+
+  Future<void> _startPreview() async {
+    if (_starting || _controller != null) return;
     _starting = true;
     try {
       final cameras = await availableCameras();
@@ -962,9 +994,11 @@ class _CameraTileState extends State<_CameraTile> with WidgetsBindingObserver {
     final cs = widget.cs;
     final controller = _controller;
     final hasPreview = controller != null && controller.value.isInitialized;
+    final denied = _access == _CameraAccess.denied;
+    final l10n = AppLocalizations.of(context)!;
 
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: _onTap,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -997,14 +1031,19 @@ class _CameraTileState extends State<_CameraTile> with WidgetsBindingObserver {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          Symbols.photo_camera,
+                          denied
+                              ? Symbols.no_photography
+                              : Symbols.photo_camera,
                           size: 34,
                           color: cs.onSurface,
                           weight: 400,
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          AppLocalizations.of(context)!.attachSheetCamera,
+                          denied
+                              ? l10n.attachSheetCameraAllow
+                              : l10n.attachSheetCamera,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             color: cs.onSurfaceVariant,
                             fontSize: 12,

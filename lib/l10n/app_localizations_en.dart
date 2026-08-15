@@ -2288,6 +2288,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachSheetCamera => 'Camera';
 
   @override
+  String get attachSheetCameraAllow => 'Allow camera';
+
+  @override
   String get photoEditorApplyFailed => 'Couldn\'t apply';
 
   @override

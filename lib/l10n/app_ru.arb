@@ -742,6 +742,7 @@
   "attachSheetSettings": "Настройки",
   "attachSheetAddCaptionHint": "Добавить подпись...",
   "attachSheetCamera": "Камера",
+  "attachSheetCameraAllow": "Разрешите камеру",
   "photoEditorApplyFailed": "Не удалось применить",
   "photoEditorFlipTooltip": "Отразить",
   "photoEditorRotateTooltip": "Повернуть",

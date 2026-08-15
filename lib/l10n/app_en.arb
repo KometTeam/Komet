@@ -977,6 +977,7 @@
   "attachSheetSettings": "Settings",
   "attachSheetAddCaptionHint": "Add a caption...",
   "attachSheetCamera": "Camera",
+  "attachSheetCameraAllow": "Allow camera",
   "photoEditorApplyFailed": "Couldn't apply",
   "photoEditorFlipTooltip": "Flip",
   "photoEditorRotateTooltip": "Rotate",

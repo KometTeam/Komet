@@ -4400,6 +4400,12 @@ abstract class AppLocalizations {
   /// **'Camera'**
   String get attachSheetCamera;
 
+  /// No description provided for @attachSheetCameraAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow camera'**
+  String get attachSheetCameraAllow;
+
   /// No description provided for @photoEditorApplyFailed.
   ///
   /// In en, this message translates to:
