@@ -1322,10 +1322,12 @@ class MessageBubble extends StatelessWidget {
         child: Stack(
           children: [
             Padding(
-              padding: EdgeInsets.fromLTRB(isClipboard ? 26 : 12, 10, 12, 10),
+              padding: EdgeInsets.symmetric(
+                horizontal: isClipboard ? 26 : 12,
+                vertical: 10,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Flexible(
                     child: Text(
