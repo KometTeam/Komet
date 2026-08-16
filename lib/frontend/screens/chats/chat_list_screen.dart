@@ -612,7 +612,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
-    )..repeat();
+    );
+    _syncShimmer();
 
     _storiesRevealController =
         AnimationController(
@@ -631,6 +632,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         setState(() {
           _sessionState = state;
         });
+        _syncShimmer();
         if (state == SessionState.online) {
           _requestReload();
           _maybeLoadStories();
@@ -836,6 +838,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           _foldersListKnown = null;
           _isInitialLoading = false;
         });
+        _syncShimmer();
       }
       return;
     }
@@ -928,6 +931,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           }
           _isInitialLoading = false;
         });
+        _syncShimmer();
         _prefetchContactsForChats(loadedChats);
         if (widget.archiveMode) {
           if (filteredChats.isNotEmpty) {
@@ -953,6 +957,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           _foldersListKnown = null;
           _isInitialLoading = false;
         });
+        _syncShimmer();
       }
     } finally {
       if (mounted) {
@@ -968,6 +973,16 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (_profile == null) return false;
     if (_foldersListKnown != false) return false;
     return _sessionState != SessionState.disconnected;
+  }
+
+  void _syncShimmer() {
+    final needed = _isInitialLoading || _showFoldersShimmer;
+    if (needed == _shimmerController.isAnimating) return;
+    if (needed) {
+      _shimmerController.repeat();
+    } else {
+      _shimmerController.stop();
+    }
   }
 
   int get _folderPageCount => _folders.isEmpty ? 1 : _folders.length;

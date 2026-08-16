@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -320,9 +319,6 @@ class _SpectrumPalette {
 
   bool uniform = true;
   bool _targetUniform = true;
-  ui.Shader? _shader;
-  double _shaderLeft = double.nan;
-  double _shaderRight = double.nan;
 
   static void _writeUniform(Float32List channels, Color color) {
     for (var i = 0; i < channels.length; i += 3) {
@@ -418,21 +414,21 @@ class _SpectrumPalette {
       );
     }
     uniform = false;
-    _shader = null;
   }
 
-  ui.Shader shaderFor(double left, double right) {
-    final cached = _shader;
-    if (cached != null && _shaderLeft == left && _shaderRight == right) {
-      return cached;
-    }
-    _shaderLeft = left;
-    _shaderRight = right;
-    return _shader = ui.Gradient.linear(
-      Offset(left, 0),
-      Offset(right, 0),
-      colors,
-      _stops,
+  Color sampleAt(double t) {
+    if (t <= 0) return colors.first;
+    if (t >= 1) return colors.last;
+    final scaled = t * (stopCount - 1);
+    final lower = scaled.floor();
+    final fraction = scaled - lower;
+    final a = lower * 3;
+    final b = a + 3;
+    return Color.from(
+      alpha: 1,
+      red: _current[a] + (_current[b] - _current[a]) * fraction,
+      green: _current[a + 1] + (_current[b + 1] - _current[a + 1]) * fraction,
+      blue: _current[a + 2] + (_current[b + 2] - _current[a + 2]) * fraction,
     );
   }
 }
@@ -463,17 +459,21 @@ class _SpectrumPainter extends CustomPainter {
 
     final maxHeight = size.height * SpectrumTuning.heightFraction;
     final baseline = size.height;
+    final uniform = palette.uniform;
+    final span = zoneRight - zoneLeft;
     final paint = Paint();
-    if (palette.uniform) {
-      paint.color = palette.colors.first;
-    } else {
-      paint.shader = palette.shaderFor(zoneLeft, zoneRight);
-    }
+    if (uniform) paint.color = palette.colors.first;
 
     for (var i = 0; i < heights.length; i++) {
       final height = heights[i] * maxHeight;
       if (height < _minVisibleHeight) continue;
       final left = leftInset + pitch * i;
+      if (!uniform) {
+        final center = left + SpectrumTuning.barWidth / 2;
+        paint.color = palette.sampleAt(
+          span <= 0 ? 0 : (center - zoneLeft) / span,
+        );
+      }
       canvas.drawRect(
         Rect.fromLTRB(
           left,

@@ -392,8 +392,13 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
                   color: cs.onSurfaceVariant,
                   size: 20,
                 ),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 48,
+                  minHeight: 0,
+                ),
                 isDense: true,
                 border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
