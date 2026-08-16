@@ -906,5 +906,13 @@
     }
   },
   "blacklistEmpty": "Никто не заблокирован",
-  "blacklistLoadError": "Не удалось загрузить чёрный список"
+  "blacklistLoadError": "Не удалось загрузить чёрный список",
+  "videoEditorQualityLow": "Небольшой размер",
+  "videoEditorQualityHigh": "Высокое качество",
+  "videoEditorCaptionHint": "Добавить подпись...",
+  "videoEditorMuteTooltip": "Отправить без звука",
+  "videoEditorProcessing": "Обработка видео…",
+  "videoEditorExportFailed": "Не удалось обработать видео",
+  "videoEditorFrameFailed": "Не удалось получить кадр",
+  "videoEditorQualityTooltip": "Качество"
 }

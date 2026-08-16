@@ -2652,4 +2652,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get blacklistLoadError => 'Failed to load the blacklist';
+
+  @override
+  String get videoEditorQualityLow => 'Small size';
+
+  @override
+  String get videoEditorQualityHigh => 'High quality';
+
+  @override
+  String get videoEditorCaptionHint => 'Add a caption...';
+
+  @override
+  String get videoEditorMuteTooltip => 'Send without sound';
+
+  @override
+  String get videoEditorProcessing => 'Processing video…';
+
+  @override
+  String get videoEditorExportFailed => 'Failed to process the video';
+
+  @override
+  String get videoEditorFrameFailed => 'Failed to grab a frame';
+
+  @override
+  String get videoEditorQualityTooltip => 'Quality';
 }

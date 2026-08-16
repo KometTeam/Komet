@@ -5053,6 +5053,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to load the blacklist'**
   String get blacklistLoadError;
+
+  /// No description provided for @videoEditorQualityLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Small size'**
+  String get videoEditorQualityLow;
+
+  /// No description provided for @videoEditorQualityHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'High quality'**
+  String get videoEditorQualityHigh;
+
+  /// No description provided for @videoEditorCaptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a caption...'**
+  String get videoEditorCaptionHint;
+
+  /// No description provided for @videoEditorMuteTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Send without sound'**
+  String get videoEditorMuteTooltip;
+
+  /// No description provided for @videoEditorProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing video…'**
+  String get videoEditorProcessing;
+
+  /// No description provided for @videoEditorExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to process the video'**
+  String get videoEditorExportFailed;
+
+  /// No description provided for @videoEditorFrameFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to grab a frame'**
+  String get videoEditorFrameFailed;
+
+  /// No description provided for @videoEditorQualityTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Quality'**
+  String get videoEditorQualityTooltip;
 }
 
 class _AppLocalizationsDelegate

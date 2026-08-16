@@ -17,6 +17,7 @@ import 'package:komet/backend/modules/webapp.dart';
 import 'package:komet/frontend/screens/webapp/open_mini_app.dart';
 import 'package:komet/frontend/widgets/sending_clock_icon.dart';
 import 'package:komet/core/media/desktop_video_probe.dart';
+import 'package:komet/core/media/video_transcoder.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -6312,17 +6313,33 @@ class _ChatScreenState extends State<ChatScreen>
         await video.item.originFile();
     if (file == null || !mounted) return;
 
+    final edited = video.editedFile;
     var durationMs = video.item.duration?.inMilliseconds;
+    var dims = await video.item.dimensions();
+    Uint8List? thumbBytes;
+    if (edited != null) {
+      final info = await VideoTranscoder.probe(edited.path);
+      if (info != null) {
+        if (info.durationMs > 0) durationMs = info.durationMs;
+        if (info.width > 0 && info.height > 0) dims = (info.width, info.height);
+      }
+      final frames = await VideoTranscoder.frames(
+        edited.path,
+        const [0],
+        size: 512,
+      );
+      if (frames.isNotEmpty) thumbBytes = frames.first;
+    }
     if (durationMs == null && DesktopVideoProbe.supported) {
       durationMs = (await DesktopVideoProbe.duration(
         file.path,
       ))?.inMilliseconds;
     }
-    final dims = await video.item.dimensions();
-    Uint8List? thumbBytes;
-    try {
-      thumbBytes = await video.item.thumbnail(512);
-    } catch (_) {}
+    if (thumbBytes == null) {
+      try {
+        thumbBytes = await video.item.thumbnail(512);
+      } catch (_) {}
+    }
     if (!mounted) return;
     final thumbData = thumbBytes == null || thumbBytes.isEmpty
         ? null

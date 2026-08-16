@@ -1162,5 +1162,13 @@
     }
   },
   "blacklistEmpty": "Nobody is blocked",
-  "blacklistLoadError": "Failed to load the blacklist"
+  "blacklistLoadError": "Failed to load the blacklist",
+  "videoEditorQualityLow": "Small size",
+  "videoEditorQualityHigh": "High quality",
+  "videoEditorCaptionHint": "Add a caption...",
+  "videoEditorMuteTooltip": "Send without sound",
+  "videoEditorProcessing": "Processing video…",
+  "videoEditorExportFailed": "Failed to process the video",
+  "videoEditorFrameFailed": "Failed to grab a frame",
+  "videoEditorQualityTooltip": "Quality"
 }

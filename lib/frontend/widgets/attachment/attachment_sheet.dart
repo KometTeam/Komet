@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
@@ -13,11 +14,14 @@ import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_nav_pill_style.dart';
 import 'package:komet/core/config/app_visual_style.dart';
 import 'package:komet/core/media/gallery_source.dart';
+import 'package:komet/core/media/video_transcoder.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/widgets/attachment/contact_picker_page.dart';
 import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
 import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/attachment/photo_hero.dart';
+import 'package:komet/frontend/widgets/attachment/video_edit.dart';
+import 'package:komet/frontend/widgets/attachment/video_preview_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
@@ -91,6 +95,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   final ValueNotifier<Set<String>> _selected = ValueNotifier(<String>{});
   final Map<String, GlobalKey<_ThumbnailState>> _thumbKeys = {};
   final Map<String, PhotoEditState> _edits = {};
+  final Map<String, VideoEditState> _videoEdits = {};
+  bool _videoEditorReady = false;
+  bool _exporting = false;
   final Set<String> _tempFiles = {};
   final Set<String> _sentFiles = {};
   final TextEditingController _captionCtrl = TextEditingController();
@@ -116,6 +123,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     } else {
       _loadGallery();
     }
+    VideoTranscoder.ensureAvailable().then((ready) {
+      if (mounted && ready) setState(() => _videoEditorReady = true);
+    });
   }
 
   @override
@@ -164,15 +174,35 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       _thumbKeys.putIfAbsent(id, () => GlobalKey<_ThumbnailState>());
 
   void _openPreview(GalleryItem item) {
-    if (item.isVideo) {
-      _toggleSelection(item);
-      return;
-    }
     final thumbKey = _thumbKey(item.id);
     final hero = PhotoHeroController(
       origin: () => photoHeroRect(thumbKey),
       image: thumbKey.currentState?.provider,
     );
+    if (item.isVideo) {
+      final edit = _videoEdits.putIfAbsent(item.id, VideoEditState.new);
+      Navigator.of(context).push(
+        PhotoHeroRoute<void>(
+          hero: hero,
+          builder: (_) => VideoPreviewScreen(
+            item: item,
+            hero: hero,
+            title: widget.title,
+            selectedIds: _selected,
+            editable: _videoEditorReady,
+            edit: edit,
+            onToggleSelection: () => _toggleSelection(item),
+            onSend: () => _sendSelection(fallback: item),
+            onEditChanged: () {
+              if (mounted) setState(() {});
+            },
+            initialCaption: _captionCtrl.text,
+            onCaptionChanged: (text) => _captionCtrl.text = text,
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).push(
       PhotoHeroRoute<void>(
         hero: hero,
@@ -216,13 +246,114 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     _openPreview(GalleryItem.fromFile(File(shot.path)));
   }
 
-  void _sendSelection({GalleryItem? fallback}) {
+  Future<bool> _exportVideos(List<GalleryItem> chosen) async {
+    final jobs = <(GalleryItem, VideoEditState)>[];
+    for (final item in chosen) {
+      if (!item.isVideo) continue;
+      final edit = _videoEdits[item.id];
+      if (edit != null && edit.hasEdits) jobs.add((item, edit));
+    }
+    if (jobs.isEmpty) return true;
+
+    final progress = ValueNotifier<double>(0);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var cancelled = false;
+    setState(() => _exporting = true);
+    unawaited(
+      showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        pageBuilder: (_, _, _) => _ExportProgress(
+          progress: progress,
+          onCancel: () {
+            cancelled = true;
+            VideoTranscoder.cancel();
+          },
+        ),
+      ),
+    );
+
+    var ok = true;
+    for (final (item, edit) in jobs) {
+      final file = item.localFile ?? await item.originFile();
+      if (file == null) {
+        ok = false;
+        break;
+      }
+      final info = await VideoTranscoder.probe(file.path);
+      var source = info != null && info.width > 0 && info.height > 0
+          ? Size(info.width.toDouble(), info.height.toDouble())
+          : Size.zero;
+      if (source.isEmpty) {
+        final dims = await item.dimensions();
+        if (dims == null) {
+          ok = false;
+          break;
+        }
+        source = Size(dims.$1.toDouble(), dims.$2.toDouble());
+      }
+      final signature = edit.signature(source);
+      if (edit.exported != null && edit.exportedSignature == signature) {
+        continue;
+      }
+      progress.value = 0;
+      final spec = await buildVideoExportSpec(
+        edit,
+        file.path,
+        source,
+        info?.fps ?? 30,
+      );
+      if (spec == null) {
+        ok = false;
+        break;
+      }
+      final done = await VideoTranscoder.export(
+        spec,
+        onProgress: (value) => progress.value = value,
+      );
+      final overlay = spec.overlayPath;
+      if (overlay != null) {
+        File(overlay).delete().then((_) {}, onError: (_) {});
+      }
+      if (!done) {
+        ok = false;
+        break;
+      }
+      edit.exported = File(spec.output);
+      edit.exportedSignature = signature;
+      _tempFiles.add(spec.output);
+    }
+
+    progress.dispose();
+    navigator.pop();
+    if (!mounted) return false;
+    setState(() => _exporting = false);
+    if (!ok && !cancelled) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.videoEditorExportFailed,
+      );
+    }
+    return ok;
+  }
+
+  Future<void> _sendSelection({GalleryItem? fallback}) async {
+    if (_exporting) return;
     final ids = _selected.value;
     var chosen = _items.where((it) => ids.contains(it.id)).toList();
     if (chosen.isEmpty && fallback != null) chosen = [fallback];
     if (chosen.isEmpty) return;
+    if (!await _exportVideos(chosen) || !mounted) return;
     final picked = chosen
-        .map((it) => PickedPhoto(item: it, editedFile: _edits[it.id]?.working))
+        .map(
+          (it) => PickedPhoto(
+            item: it,
+            editedFile: it.isVideo
+                ? _videoEdits[it.id]?.exported
+                : _edits[it.id]?.working,
+          ),
+        )
         .toList();
     final callback = widget.onSend;
     if (callback != null) {
@@ -1307,4 +1438,52 @@ class _ThumbnailState extends State<_Thumbnail> {
           )
         : null,
   );
+}
+
+class _ExportProgress extends StatelessWidget {
+  final ValueListenable<double> progress;
+  final VoidCallback onCancel;
+
+  const _ExportProgress({required this.progress, required this.onCancel});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return Center(
+      child: Material(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ValueListenableBuilder<double>(
+                valueListenable: progress,
+                builder: (context, value, _) => SizedBox(
+                  width: 46,
+                  height: 46,
+                  child: CircularProgressIndicator(
+                    value: value <= 0 ? null : value,
+                    strokeWidth: 3,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                l10n.videoEditorProcessing,
+                style: TextStyle(color: cs.onSurface, fontSize: 15),
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: onCancel,
+                child: Text(l10n.photoEditorCancel),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

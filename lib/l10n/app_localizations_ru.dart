@@ -2666,4 +2666,28 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get blacklistLoadError => 'Не удалось загрузить чёрный список';
+
+  @override
+  String get videoEditorQualityLow => 'Небольшой размер';
+
+  @override
+  String get videoEditorQualityHigh => 'Высокое качество';
+
+  @override
+  String get videoEditorCaptionHint => 'Добавить подпись...';
+
+  @override
+  String get videoEditorMuteTooltip => 'Отправить без звука';
+
+  @override
+  String get videoEditorProcessing => 'Обработка видео…';
+
+  @override
+  String get videoEditorExportFailed => 'Не удалось обработать видео';
+
+  @override
+  String get videoEditorFrameFailed => 'Не удалось получить кадр';
+
+  @override
+  String get videoEditorQualityTooltip => 'Качество';
 }

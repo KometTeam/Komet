@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 typedef PhotoHeroOrigin = Rect? Function();
@@ -19,6 +21,9 @@ Rect? _globalRect(RenderObject? object) {
     Offset.zero & size,
   );
 }
+
+Rect inscribeRect(Size source, Rect box, {bool cover = false}) =>
+    _inscribe(source, box, cover: cover);
 
 Rect _inscribe(Size source, Rect box, {required bool cover}) {
   if (source.isEmpty || box.isEmpty) return box;
@@ -67,13 +72,12 @@ class PhotoHeroRoute<T> extends PageRouteBuilder<T> {
         reverseTransitionDuration: const Duration(milliseconds: 280),
         pageBuilder: (context, animation, secondaryAnimation) =>
             PhotoHeroScope(controller: hero, child: builder(context)),
-        transitionsBuilder:
-            (context, animation, secondaryAnimation, child) =>
-                _PhotoHeroTransition(
-                  controller: hero,
-                  animation: animation,
-                  child: child,
-                ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            _PhotoHeroTransition(
+              controller: hero,
+              animation: animation,
+              child: child,
+            ),
       );
 
   final PhotoHeroController hero;
@@ -108,19 +112,64 @@ class PhotoHeroTarget extends StatelessWidget {
   final Widget child;
 
   @override
+  Widget build(BuildContext context) =>
+      PhotoHeroAnchor(child: PhotoHeroFade(child: child));
+}
+
+class PhotoHeroAnchor extends StatelessWidget {
+  const PhotoHeroAnchor({super.key, required this.child});
+
+  final Widget child;
+
+  @override
   Widget build(BuildContext context) {
     final controller = PhotoHeroScope.maybeOf(context);
     if (controller == null) return child;
-    return KeyedSubtree(
-      key: controller.areaKey,
-      child: ValueListenableBuilder<bool>(
-        valueListenable: controller.flying,
-        child: child,
-        builder: (context, flying, child) =>
-            flying ? Opacity(opacity: 0, child: child) : child!,
-      ),
+    return KeyedSubtree(key: controller.areaKey, child: child);
+  }
+}
+
+class PhotoHeroFade extends StatelessWidget {
+  const PhotoHeroFade({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = PhotoHeroScope.maybeOf(context);
+    if (controller == null) return child;
+    return ValueListenableBuilder<bool>(
+      valueListenable: controller.flying,
+      child: child,
+      builder: (context, flying, child) =>
+          flying ? Opacity(opacity: 0, child: child) : child!,
     );
   }
+}
+
+class RawImageProvider extends ImageProvider<RawImageProvider> {
+  const RawImageProvider(this.image);
+
+  final ui.Image image;
+
+  @override
+  Future<RawImageProvider> obtainKey(ImageConfiguration configuration) =>
+      SynchronousFuture<RawImageProvider>(this);
+
+  @override
+  ImageStreamCompleter loadImage(
+    RawImageProvider key,
+    ImageDecoderCallback decode,
+  ) => OneFrameImageStreamCompleter(
+    SynchronousFuture<ImageInfo>(ImageInfo(image: image.clone())),
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is RawImageProvider && identical(other.image, image);
+
+  @override
+  int get hashCode => identityHashCode(image);
 }
 
 class _PhotoHeroTransition extends StatefulWidget {

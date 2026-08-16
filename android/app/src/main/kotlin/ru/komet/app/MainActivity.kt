@@ -291,6 +291,32 @@ class MainActivity : FlutterActivity() {
                         cropSquare(input, output, size, result)
                     }
                 }
+                "probe" -> {
+                    val input = call.argument<String>("input")
+                    if (input == null) {
+                        result.error("BAD_ARGS", "input required", null)
+                    } else {
+                        probeVideo(input, result)
+                    }
+                }
+                "frames" -> {
+                    val input = call.argument<String>("input")
+                    val times = call.argument<List<Int>>("times")
+                    if (input == null || times == null) {
+                        result.error("BAD_ARGS", "input/times required", null)
+                    } else {
+                        videoFrames(
+                            input,
+                            times,
+                            call.argument<Int>("size") ?: 256,
+                            call.argument<Boolean>("precise") == true,
+                            result,
+                        )
+                    }
+                }
+                "edit" -> editVideo(call, result)
+                "editProgress" -> editVideoProgress(result)
+                "editCancel" -> editVideoCancel(result)
                 else -> result.notImplemented()
             }
         }
@@ -501,6 +527,31 @@ class MainActivity : FlutterActivity() {
             result.error("TRANSCODE_FAILED", e.message, null)
         }
     }
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun probeVideo(input: String, result: MethodChannel.Result) =
+        VideoEditor.probe(input, result)
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun videoFrames(
+        input: String,
+        times: List<Int>,
+        size: Int,
+        precise: Boolean,
+        result: MethodChannel.Result,
+    ) = VideoEditor.frames(input, times, size, precise, result)
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun editVideo(call: MethodCall, result: MethodChannel.Result) =
+        VideoEditor.edit(this, call, result)
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun editVideoProgress(result: MethodChannel.Result) =
+        VideoEditor.progress(result)
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun editVideoCancel(result: MethodChannel.Result) =
+        VideoEditor.cancel(result)
 
     private fun nfcStatus(): Map<String, Any> {
         val adapter = nfcAdapter
