@@ -41,6 +41,7 @@ import '../../../core/media/rlottie/rlottie.dart';
 import '../calls/call_screen.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
+import '../../../core/push/notification_bridge.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_activity_store.dart';
@@ -667,6 +668,9 @@ class _ChatScreenState extends State<ChatScreen>
     _chatController.isMounted = () => mounted;
     if (!_commentsMode) ChatScreen._open.add(this);
     unawaited(PushService.clearChatNotification(widget.chatId));
+    if (!_commentsMode) {
+      unawaited(NotificationBridge.instance.setActiveChat(widget.chatId));
+    }
     unawaited(
       animojiModule
           .ensureLoaded()
@@ -2093,6 +2097,9 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void dispose() {
     ChatScreen._open.remove(this);
+    if (!_commentsMode) {
+      unawaited(NotificationBridge.instance.clearActiveChat(widget.chatId));
+    }
     _chatController.persistSessionCache();
     if (_previewChat) {
       unawaited(chats.subscribeChat(api, widget.chatId, subscribe: false));

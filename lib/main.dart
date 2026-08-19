@@ -73,6 +73,7 @@ import 'core/calls/call_bridge.dart';
 import 'core/calls/call_controller.dart';
 import 'core/links/deep_link_service.dart';
 import 'frontend/screens/calls/call_screen.dart';
+import 'core/push/notification_bridge.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/transport/tls_config.dart';
@@ -419,6 +420,7 @@ class KometAppState extends State<KometApp>
     _loginStatusSub = accountModule.loginStatusStream.listen((status) async {
       if (status == LoginStatus.success) {
         DeepLinkService.instance.markReady();
+        NotificationBridge.instance.markReady();
         unawaited(_refreshWallpaperSeed());
         CallController.instance.init(api);
         OutboxService.instance.init(api, messagesModule);
@@ -437,8 +439,10 @@ class KometAppState extends State<KometApp>
     );
     CallController.instance.appResumed = true;
     CallBridge.instance.init();
+    NotificationBridge.instance.init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       CallBridge.instance.checkInitialCall();
+      unawaited(NotificationBridge.instance.checkInitialChat());
     });
 
     _sessionExpiredSub = api.sessionExpiredStream.listen((
@@ -609,6 +613,7 @@ class KometAppState extends State<KometApp>
     api.wakeUp();
     SelfCheckService.instance.resume();
     CallBridge.instance.checkInitialCall();
+    unawaited(NotificationBridge.instance.checkInitialChat());
     if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
     _rescheduleSwitch();
     final next = _effectiveThemeMode;

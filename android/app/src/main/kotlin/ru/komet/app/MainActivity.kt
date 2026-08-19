@@ -76,6 +76,7 @@ class MainActivity : FlutterActivity() {
     @Volatile private var exchangingEmitted = false
 
     private var pendingCall: Map<String, Any?>? = null
+    private var pendingChat: Long = 0L
 
     private companion object {
         const val LOG_TAG = "VpnBypass"
@@ -401,12 +402,49 @@ class MainActivity : FlutterActivity() {
                 CallEvents.sink = null
             }
         })
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/notifications",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "consumeInitialChat" -> {
+                    stashChatOpen(intent, emit = false)
+                    val chatId = pendingChat
+                    pendingChat = 0L
+                    result.success(if (chatId > 0L) chatId else null)
+                }
+                "setActiveChat" -> {
+                    ChatNotifications.activeChatId = longArg(call.argument<Any>("chatId"))
+                    result.success(null)
+                }
+                "clearActiveChat" -> {
+                    ChatNotifications.activeChatId = 0L
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/notification_events",
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                ChatNotifications.sink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                ChatNotifications.sink = null
+            }
+        })
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (intent?.hasExtra(CallConst.EXTRA_CALL) == true) applyCallWindowFlags()
         super.onCreate(savedInstanceState)
         intent?.let { if (it.hasExtra(CallConst.EXTRA_CALL)) stashCall(it, emit = false) }
+        stashChatOpen(intent, emit = false)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -415,6 +453,19 @@ class MainActivity : FlutterActivity() {
         if (intent.hasExtra(CallConst.EXTRA_CALL)) {
             applyCallWindowFlags()
             stashCall(intent, emit = true)
+        }
+        stashChatOpen(intent, emit = true)
+    }
+
+    private fun stashChatOpen(source: Intent?, emit: Boolean) {
+        val chatId = ChatNotifications.chatIdFrom(source)
+        if (chatId == 0L) return
+        source?.removeExtra(ChatNotifications.EXTRA_CHAT)
+        val sink = ChatNotifications.sink
+        if (emit && sink != null) {
+            sink.success(chatId)
+        } else {
+            pendingChat = chatId
         }
     }
 
@@ -793,6 +844,7 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         AppState.resumed = true
+        stashChatOpen(intent, emit = true)
     }
 
     override fun onPause() {

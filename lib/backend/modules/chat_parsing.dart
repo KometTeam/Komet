@@ -40,6 +40,11 @@ CachedChat? parseChatRow(
       existing,
     );
     final lastMessage = _resolveLastMessage(chat['lastMessage']);
+    final previous = existing[id];
+    final sameLastMessage =
+        previous != null &&
+        lastMessage.id != null &&
+        previous.lastMsgId == lastMessage.id;
     final muteFav = _resolveMuteAndFavorite(chatsConfig, id, existing);
     final presence = _resolvePresence(type, otherId, presenceMap);
     final adminsOwner = _resolveAdmins(chat);
@@ -59,7 +64,10 @@ CachedChat? parseChatRow(
       lastMsgText: lastMessage.text,
       lastMsgElements: lastMessage.elements,
       lastMsgPreview: lastMessage.preview,
-      lastMsgSenderId: lastMessage.senderId,
+      lastMsgSenderId:
+          lastMessage.senderId ??
+          (sameLastMessage ? previous.lastMsgSenderId : null),
+      lastMsgStatus: sameLastMessage ? previous.lastMsgStatus : null,
       unreadCount: (chat['newMessages'] as int?) ?? 0,
       lastEventTime: (chat['lastEventTime'] as int?) ?? 0,
       cachedAt: cachedAt,
@@ -146,13 +154,20 @@ _resolveLastMessage(dynamic lastMsg) {
     );
   }
   return (
-    id: lastMsg['id'] as int?,
-    time: lastMsg['time'] as int?,
+    id: _asIntOrNull(lastMsg['id']),
+    time: _asIntOrNull(lastMsg['time']),
     text: messagePreviewText(lastMsg),
     elements: messagePreviewElements(lastMsg),
     preview: messagePreviewMedia(lastMsg),
-    senderId: lastMsg['sender'] as int?,
+    senderId: _asIntOrNull(lastMsg['sender']),
   );
+}
+
+int? _asIntOrNull(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value);
+  return null;
 }
 
 ({int? id, String? text, int? time, bool isPreview}) _resolvePinnedMessage(

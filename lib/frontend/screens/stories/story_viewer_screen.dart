@@ -10,30 +10,15 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/utils/haptics.dart';
-import '../../../main.dart' show animojiModule, storiesModule;
+import '../../../main.dart' show storiesModule;
 import '../../../models/story.dart';
-import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
-import '../../widgets/liquid_glass.dart';
-import '../../widgets/lottie_image.dart';
 import '../../widgets/small_spinner.dart';
 import 'story_owner_info.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_fonts.dart';
 
-const _quickReactions = ['❤️', '🔥', '😍', '👏', '😂', '😮'];
 const Duration _photoDuration = Duration(seconds: 5);
-
-class _ReactionItem {
-  final String emoji;
-  final String? lottieUrl;
-  final String? iconUrl;
-
-  const _ReactionItem(this.emoji, {this.lottieUrl, this.iconUrl});
-
-  bool get animated =>
-      (lottieUrl?.isNotEmpty ?? false) || (iconUrl?.isNotEmpty ?? false);
-}
 
 Offset? storyOriginOf(BuildContext context) {
   final box = context.findRenderObject() as RenderBox?;
@@ -146,13 +131,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   bool _dragging = false;
   static const double _dismissThreshold = 120;
 
-  final List<_Burst> _bursts = [];
-  int _burstSeq = 0;
-
-  List<_ReactionItem> _reactions = _quickReactions
-      .map((e) => _ReactionItem(e))
-      .toList();
-
   VideoPlayerController? _video;
 
   StoryPreview get _owner => widget.previews[_ownerIndex];
@@ -176,23 +154,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         if (s == AnimationStatus.completed) _advance();
       });
     _loadOwner(_ownerIndex, autostart: true);
-    unawaited(_loadReactions());
-  }
-
-  Future<void> _loadReactions() async {
-    try {
-      await animojiModule.ensureLoaded();
-    } catch (_) {
-      return;
-    }
-    final quick = animojiModule.quickAnimojis;
-    if (!mounted || quick.isEmpty) return;
-    setState(() {
-      _reactions = [
-        for (final a in quick)
-          _ReactionItem(a.emoji, lottieUrl: a.lottieUrl, iconUrl: a.iconUrl),
-      ];
-    });
   }
 
   @override
@@ -360,41 +321,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     }
   }
 
-  void _spawnBurst(_ReactionItem item, Alignment from) {
-    final id = _burstSeq++;
-    setState(() => _bursts.add(_Burst(id, item, from)));
-  }
-
-  void _removeBurst(int id) {
-    if (!mounted) return;
-    setState(() => _bursts.removeWhere((b) => b.id == id));
-  }
-
-  Future<void> _toggleReaction(_ReactionItem item) async {
-    final story = _currentStory;
-    if (story == null || story.id == 0) return;
-    final isSame = story.reaction?.id == item.emoji;
-    if (!isSame) {
-      Haptics.medium();
-      _spawnBurst(item, const Alignment(0, 0.55));
-      final animoji = animojiModule.findByEmoji(item.emoji);
-      if (animoji != null) unawaited(animojiModule.noteUsed(animoji));
-    } else {
-      Haptics.tap();
-    }
-    final ok = await storiesModule.react(
-      story.owner,
-      story.id,
-      isSame ? null : StoryReaction(id: item.emoji),
-    );
-    if (!mounted) return;
-    if (ok) {
-      setState(() {});
-    } else {
-      showCustomNotification(context, 'Не удалось отправить реакцию');
-    }
-  }
-
   void _onDragStart(DragStartDetails _) {
     _dragging = true;
     _setPaused(true);
@@ -479,13 +405,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
               );
             },
           ),
-          for (final burst in _bursts)
-            _FloatingReaction(
-              key: ValueKey(burst.id),
-              item: burst.item,
-              alignment: burst.from,
-              onDone: () => _removeBurst(burst.id),
-            ),
         ],
       ),
     );
@@ -545,7 +464,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 _buildProgressBars(stories.length),
                 _buildHeader(),
                 const Spacer(),
-                if (story != null) _buildReactionBar(story),
               ],
             ),
           ),
@@ -645,51 +563,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
               onTap: () => Navigator.of(context).maybePop(),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReactionBar(Story story) {
-    final current = story.reaction?.id;
-    return Container(
-      padding: const EdgeInsets.only(bottom: 6),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [Colors.black54, Colors.transparent],
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Center(
-            child: GlassSurface(
-              borderRadius: BorderRadius.circular(30),
-              frostTint: Colors.white.withValues(alpha: 0.12),
-              frostSigma: 14,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final item in _reactions)
-                      _ReactionButton(
-                        item: item,
-                        selected: current == item.emoji,
-                        onTap: () => _toggleReaction(item),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         ),
       ),
     );
@@ -796,77 +669,6 @@ class _SegmentBar extends StatelessWidget {
   }
 }
 
-// ─── Reaction emoji button ────────────────────────────────────────────────
-class _ReactionButton extends StatefulWidget {
-  final _ReactionItem item;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ReactionButton({
-    required this.item,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  State<_ReactionButton> createState() => _ReactionButtonState();
-}
-
-class _ReactionButtonState extends State<_ReactionButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 260),
-    lowerBound: 0.0,
-    upperBound: 1.0,
-    value: 1.0,
-  );
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  void _onTap() {
-    _c.forward(from: 0.0);
-    widget.onTap();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (context, _) {
-          final pop = 1.0 + math.sin(_c.value * math.pi) * 0.4;
-          final scale = (widget.selected ? 1.15 : 1.0) * pop;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Transform.scale(
-              scale: scale,
-              child: widget.item.animated
-                  ? LottieImage(
-                      lottieUrl: widget.item.lottieUrl,
-                      url: widget.item.iconUrl,
-                      size: 30,
-                      shimmer: false,
-                      memCacheWidth: 90,
-                    )
-                  : Text(
-                      widget.item.emoji,
-                      style: const TextStyle(fontSize: 28),
-                    ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
 // ─── Round icon button (close) ────────────────────────────────────────────
 class _RoundIconButton extends StatelessWidget {
   final IconData icon;
@@ -914,93 +716,6 @@ class _TopScrim extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ─── Floating reaction burst ──────────────────────────────────────────────
-class _Burst {
-  final int id;
-  final _ReactionItem item;
-  final Alignment from;
-  const _Burst(this.id, this.item, this.from);
-}
-
-class _FloatingReaction extends StatefulWidget {
-  final _ReactionItem item;
-  final Alignment alignment;
-  final VoidCallback onDone;
-
-  const _FloatingReaction({
-    super.key,
-    required this.item,
-    required this.alignment,
-    required this.onDone,
-  });
-
-  @override
-  State<_FloatingReaction> createState() => _FloatingReactionState();
-}
-
-class _FloatingReactionState extends State<_FloatingReaction>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  );
-  late final double _drift = (widget.item.emoji.hashCode % 40 - 20).toDouble();
-
-  @override
-  void initState() {
-    super.initState();
-    _c.forward().whenComplete(widget.onDone);
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (context, _) {
-          final t = _c.value;
-          final rise = -160.0 * Curves.easeOut.transform(t);
-          final scale = t < 0.3
-              ? Curves.easeOutBack.transform(t / 0.3) * 1.2
-              : 1.2 - 0.2 * ((t - 0.3) / 0.7);
-          final opacity = t < 0.7 ? 1.0 : 1.0 - (t - 0.7) / 0.3;
-          return Align(
-            alignment: widget.alignment,
-            child: Transform.translate(
-              offset: Offset(_drift * t, rise),
-              child: Opacity(
-                opacity: opacity.clamp(0.0, 1.0),
-                child: Transform.scale(
-                  scale: scale,
-                  child: widget.item.animated
-                      ? LottieImage(
-                          lottieUrl: widget.item.lottieUrl,
-                          url: widget.item.iconUrl,
-                          size: 64,
-                          shimmer: false,
-                          repeat: false,
-                          memCacheWidth: 192,
-                        )
-                      : Text(
-                          widget.item.emoji,
-                          style: const TextStyle(fontSize: 64),
-                        ),
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }

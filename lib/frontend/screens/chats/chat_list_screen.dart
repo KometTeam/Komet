@@ -52,6 +52,7 @@ import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_spectrum_background.dart';
 import '../../../core/config/app_nav_pill_style.dart';
+import '../../../core/cache/info_cache.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../core/config/app_colors.dart';
@@ -933,6 +934,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         });
         _syncShimmer();
         _prefetchContactsForChats(loadedChats);
+        unawaited(_prefetchPresenceForChats(loadedChats));
         if (widget.archiveMode) {
           if (filteredChats.isNotEmpty) {
             _archiveHadChats = true;
@@ -1007,20 +1009,42 @@ class _ChatListScreenState extends State<ChatListScreen>
     return 0;
   }
 
-  Future<void> _prefetchContactsForChats(List<CachedChat> chats) async {
+  bool _presencePrefetchRunning = false;
+
+  Set<int> _dialogPeerIds(List<CachedChat> chats) {
     final myId = _profile?.id;
     final ids = <int>{};
     for (final chat in chats) {
-      if (chat.type == 'DIALOG' && chat.id != 0) {
-        for (final entry in chat.participants.entries) {
-          if (entry.key != myId) {
-            ids.add(entry.key);
-            break;
-          }
+      if (chat.type != 'DIALOG' || chat.id == 0) continue;
+      for (final entry in chat.participants.entries) {
+        if (entry.key != myId) {
+          ids.add(entry.key);
+          break;
         }
       }
+    }
+    return ids;
+  }
+
+  Future<void> _prefetchPresenceForChats(List<CachedChat> chats) async {
+    if (_presencePrefetchRunning) return;
+    if (_sessionState != SessionState.online) return;
+    final ids = _dialogPeerIds(chats);
+    if (ids.isEmpty) return;
+    _presencePrefetchRunning = true;
+    try {
+      await PresenceFetch.ensureFor(ids);
+    } finally {
+      _presencePrefetchRunning = false;
+    }
+  }
+
+  Future<void> _prefetchContactsForChats(List<CachedChat> chats) async {
+    final myId = _profile?.id;
+    final ids = _dialogPeerIds(chats);
+    for (final chat in chats) {
       final senderId = chat.lastMsgSenderId;
-      if (senderId != null) ids.add(senderId);
+      if (senderId != null && senderId != myId) ids.add(senderId);
     }
     ids.removeWhere((id) => ContactCache.get(id) != null);
     ids.removeAll(_inflightContactIds);

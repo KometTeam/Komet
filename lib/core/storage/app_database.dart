@@ -847,6 +847,25 @@ class AppDatabase {
     }
   }
 
+  static Future<void> repairLastMessageSenders(int accountId) async {
+    try {
+      final db = await _instance;
+      await db.rawUpdate(
+        'UPDATE chats_cache SET last_msg_sender = ('
+        '  SELECT m.sender_id FROM messages m'
+        '  WHERE m.account_id = chats_cache.account_id'
+        '    AND m.chat_id = chats_cache.id'
+        '    AND m.id = CAST(chats_cache.last_msg_id AS TEXT)'
+        ') '
+        'WHERE account_id = ? AND last_msg_sender IS NULL '
+        'AND last_msg_id IS NOT NULL',
+        [accountId],
+      );
+    } catch (e) {
+      logger.w('Не удалось восстановить отправителей последних сообщений: $e');
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> loadChat(
     int accountId,
     int chatId,

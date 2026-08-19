@@ -74,6 +74,13 @@ class KometNotifier(private val ctx: Context) {
 
     private fun showMessage(data: Map<String, String>) {
         val chatId = data["mc"]?.toLongOrNull() ?: return
+        val notifId = (chatId and 0x7fffffff).toInt()
+        if (ChatNotifications.isDisplayed(chatId)) {
+            manager().cancel(notifId)
+            clearHistory(chatId)
+            rebuildSummary(notifId)
+            return
+        }
         val senderId = data["suid"] ?: ""
         val senderName = data["userName"] ?: data["title"] ?: "MAX"
         val chatTitle = data["title"] ?: senderName
@@ -81,7 +88,6 @@ class KometNotifier(private val ctx: Context) {
         val ts = data["ctime"]?.toLongOrNull() ?: data["ttime"]?.toLongOrNull()
             ?: System.currentTimeMillis()
         val isGroup = chatTitle != senderName
-        val notifId = (chatId and 0x7fffffff).toInt()
 
         ensureChannel()
 
@@ -135,12 +141,11 @@ class KometNotifier(private val ctx: Context) {
         }
 
         manager().notify(notifId, builder.build())
-        updateSummary(notifId, chatId, senderName, text, ts, active)
+        updateSummary(notifId, senderName, text, ts, active)
     }
 
     private fun updateSummary(
         notifId: Int,
-        chatId: Long,
         senderName: String,
         text: String,
         ts: Long,
@@ -153,27 +158,50 @@ class KometNotifier(private val ctx: Context) {
             val k = keys.next()
             val id = k.toIntOrNull() ?: continue
             if (id == notifId) continue
-            if (activeBefore.contains(id)) kept.put(k, reg.getJSONObject(k))
+            val entry = reg.optJSONObject(k) ?: continue
+            if (activeBefore.contains(id)) kept.put(k, entry)
         }
         kept.put(
             notifId.toString(),
             JSONObject().put("n", senderName).put("t", text).put("ts", ts),
         )
         saveRegistry(kept)
+        publishSummary(entriesOf(kept))
+    }
 
-        if (kept.length() < 2) {
-            manager().cancel(SUMMARY_ID)
-            return
+    private fun rebuildSummary(dismissedId: Int) {
+        val active = activeIds()
+        val reg = loadRegistry()
+        val kept = JSONObject()
+        val keys = reg.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            val id = k.toIntOrNull() ?: continue
+            if (id == dismissedId) continue
+            val entry = reg.optJSONObject(k) ?: continue
+            if (active.contains(id)) kept.put(k, entry)
         }
+        saveRegistry(kept)
+        publishSummary(entriesOf(kept))
+    }
 
+    private fun entriesOf(reg: JSONObject): List<Triple<String, String, Long>> {
         val entries = ArrayList<Triple<String, String, Long>>()
-        val kk = kept.keys()
-        while (kk.hasNext()) {
-            val k = kk.next()
-            val o = kept.getJSONObject(k)
+        val keys = reg.keys()
+        while (keys.hasNext()) {
+            val o = reg.optJSONObject(keys.next()) ?: continue
             entries.add(Triple(o.optString("n"), o.optString("t"), o.optLong("ts")))
         }
         entries.sortByDescending { it.third }
+        return entries
+    }
+
+    private fun publishSummary(entries: List<Triple<String, String, Long>>) {
+        if (entries.size < 2) {
+            manager().cancel(SUMMARY_ID)
+            return
+        }
+        val newest = entries.first()
 
         val inbox = NotificationCompat.InboxStyle()
         for (e in entries.take(6)) inbox.addLine(boldLine(e.first, e.second))
@@ -185,12 +213,12 @@ class KometNotifier(private val ctx: Context) {
             .setGroup(GROUP_KEY)
             .setGroupSummary(true)
             .setAutoCancel(true)
-            .setWhen(ts)
+            .setWhen(newest.third)
             .setShowWhen(true)
             .setNumber(entries.size)
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
             .setContentTitle("Komet")
-            .setContentText(boldLine(senderName, text))
+            .setContentText(boldLine(newest.first, newest.second))
             .setStyle(inbox)
             .build()
         manager().notify(SUMMARY_ID, summary)
@@ -240,11 +268,7 @@ class KometNotifier(private val ctx: Context) {
 
     private fun publishShortcut(id: String, chatId: Long, title: String, person: Person) {
         try {
-            val intent = (ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
-                ?: Intent(Intent.ACTION_VIEW)).apply {
-                action = Intent.ACTION_VIEW
-                putExtra("komet_chat", chatId)
-            }
+            val intent = chatIntent(chatId).setAction(Intent.ACTION_VIEW)
             val shortcut = ShortcutInfoCompat.Builder(ctx, id)
                 .setShortLabel(title)
                 .setLongLived(true)
@@ -260,12 +284,26 @@ class KometNotifier(private val ctx: Context) {
         }
     }
 
-    private fun openIntent(notifId: Int, chatId: Long): PendingIntent? {
-        val launch = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName) ?: return null
-        launch.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        launch.putExtra("komet_chat", chatId)
+    private fun chatIntent(chatId: Long): Intent {
+        val launcher = ctx.packageManager
+            .getLaunchIntentForPackage(ctx.packageName)?.component
+        val intent = if (launcher != null) {
+            Intent().setComponent(launcher)
+        } else {
+            Intent(ctx, MainActivity::class.java)
+        }
+        intent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP,
+        )
+        intent.putExtra(ChatNotifications.EXTRA_CHAT, chatId)
+        return intent
+    }
+
+    private fun openIntent(notifId: Int, chatId: Long): PendingIntent {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        return PendingIntent.getActivity(ctx, notifId, launch, flags)
+        return PendingIntent.getActivity(ctx, notifId, chatIntent(chatId), flags)
     }
 
     private fun activeIds(): Set<Int> = try {

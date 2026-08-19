@@ -1388,11 +1388,16 @@ class ChatsModule {
     }
   }
 
+  final Set<int> _repairedSenders = {};
+
   Future<List<CachedChat>> getChats(
     int accountId, {
     bool includeHidden = false,
   }) async {
     try {
+      if (_repairedSenders.add(accountId)) {
+        await AppDatabase.repairLastMessageSenders(accountId);
+      }
       final rows = await AppDatabase.loadChats(
         accountId,
         includeHidden: includeHidden,

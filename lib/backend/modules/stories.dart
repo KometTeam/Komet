@@ -396,44 +396,6 @@ class StoriesModule {
     unawaited(_persistPreviews());
   }
 
-  /// Поставить ([reaction] != null) или снять (null) реакцию на историю.
-  Future<bool> react(
-    StoryOwner owner,
-    int storyId,
-    StoryReaction? reaction,
-  ) async {
-    if (_api.state != SessionState.online) return false;
-    try {
-      final ok = await _api.sendRequestOk(Opcode.storiesReact, {
-        'owner': owner.toMap(),
-        'storyId': storyId,
-        if (reaction != null) 'reaction': reaction.toMap(),
-      });
-      if (ok) _applyReactionLocally(owner.ownerId, storyId, reaction);
-      return ok;
-    } catch (e) {
-      logger.w('StoriesModule.react: $e');
-      return false;
-    }
-  }
-
-  void _applyReactionLocally(
-    int ownerId,
-    int storyId,
-    StoryReaction? reaction,
-  ) {
-    final stories = _peerStories[ownerId];
-    if (stories == null) return;
-    final idx = stories.indexWhere((s) => s.id == storyId);
-    if (idx < 0) return;
-    stories[idx] = stories[idx].copyWith(
-      reaction: reaction,
-      clearReaction: reaction == null,
-    );
-    _bump();
-    unawaited(_persistPeers());
-  }
-
   /// Публикация фото-истории. [photoToken] — токен уже загруженного фото.
   /// [settings]: 1 = видно всем, 2 = только контактам. [expiration] — TTL, мс.
   /// Бросает [PacketError]/[TimeoutException] при ошибке сервера — чтобы UI
