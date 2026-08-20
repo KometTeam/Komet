@@ -69,12 +69,34 @@ target 'Runner' do
   end
 end
 
-# libopus already ships with ogg_opus_player as a static xcframework. Nothing in
-# the app references its encoder entry points, so the linker would drop them and
+# libopus ships with ogg_opus_player as a static xcframework. Nothing in the app
+# references its encoder entry points, so the linker would drop them and
 # `DynamicLibrary.process()` (OpusOggEncoder) would find nothing. Force-loading
 # the slice keeps the whole library, which is what voice-message encoding needs.
-OPUS_FORCE_LOAD =
-  '-force_load "${PODS_XCFRAMEWORKS_BUILD_DIR}/ogg_opus_player/libopus.a"'.freeze
+#
+# The slice is referenced in the plugin source tree rather than through
+# `PODS_XCFRAMEWORKS_BUILD_DIR`: with `use_frameworks!` CocoaPods copies vendored
+# xcframeworks into the pod target's own build dir, so for Runner that variable
+# expands to a file nothing ever produces and Xcode fails on the missing input.
+OPUS_XCFRAMEWORK = 'ogg_opus_player/darwin/Frameworks/libopus.xcframework'.freeze
+OPUS_LIB_VAR = 'KOMET_OPUS_LIB'.freeze
+OPUS_FORCE_LOAD = %(-force_load "$(#{OPUS_LIB_VAR})").freeze
+OPUS_XCFRAMEWORK_DIR =
+  File.expand_path(File.join('.symlinks', 'plugins', OPUS_XCFRAMEWORK), __dir__).freeze
+
+def opus_slice(simulator)
+  slice = Dir.glob(File.join(OPUS_XCFRAMEWORK_DIR, 'ios-*')).find do |dir|
+    name = File.basename(dir)
+    next false if name.include?('maccatalyst')
+    next false unless File.exist?(File.join(dir, 'libopus.a'))
+
+    name.end_with?('-simulator') == simulator
+  end
+  kind = simulator ? 'simulator' : 'device'
+  raise "libopus.xcframework has no ios #{kind} slice in #{OPUS_XCFRAMEWORK_DIR}" if slice.nil?
+
+  File.basename(slice)
+end
 
 # permission_handler compiles every permission handler unless told otherwise;
 # the unused ones reference APIs that make App Store review ask for usage
@@ -113,6 +135,10 @@ post_install do |installer|
     end
   end
 
+  opus_xcframework = "$(SRCROOT)/.symlinks/plugins/#{OPUS_XCFRAMEWORK}"
+  opus_device_lib = "#{opus_xcframework}/#{opus_slice(false)}/libopus.a"
+  opus_simulator_lib = "#{opus_xcframework}/#{opus_slice(true)}/libopus.a"
+
   installer.aggregate_targets.each do |target|
     next unless target.name == 'Pods-Runner'
 
@@ -121,14 +147,18 @@ post_install do |installer|
       next unless File.exist?(xcconfig)
 
       contents = File.read(xcconfig)
-      next if contents.include?('ogg_opus_player/libopus.a')
+      next if contents.include?(OPUS_LIB_VAR)
+
+      contents += "\n" unless contents.end_with?("\n")
+      contents += "#{OPUS_LIB_VAR}[sdk=iphoneos*] = #{opus_device_lib}\n"
+      contents += "#{OPUS_LIB_VAR}[sdk=iphonesimulator*] = #{opus_simulator_lib}\n"
 
       if contents =~ /^OTHER_LDFLAGS = .*$/
         contents = contents.sub(/^OTHER_LDFLAGS = (.*)$/) do
           "OTHER_LDFLAGS = #{Regexp.last_match(1)} #{OPUS_FORCE_LOAD}"
         end
       else
-        contents += "\nOTHER_LDFLAGS = $(inherited) #{OPUS_FORCE_LOAD}\n"
+        contents += "OTHER_LDFLAGS = $(inherited) #{OPUS_FORCE_LOAD}\n"
       end
       File.write(xcconfig, contents)
     end
