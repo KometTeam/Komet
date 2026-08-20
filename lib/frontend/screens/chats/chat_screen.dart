@@ -58,6 +58,7 @@ import '../../../core/cache/message_session_cache.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/emoji_keyword_index.dart';
 import '../../../core/utils/logger.dart';
+import '../../../core/utils/route_settle.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/app_message_actions_style.dart';
@@ -156,12 +157,21 @@ class _FrostedPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassSurface(
-      frostTint: tint,
-      frostSigma: sigma,
-      border: border,
-      backdropKey: backdropKey,
-      child: child,
+    return Stack(
+      fit: StackFit.passthrough,
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: GlassSurface(
+            frostTint: tint,
+            frostSigma: sigma,
+            border: border,
+            backdropKey: backdropKey,
+            child: const SizedBox.expand(),
+          ),
+        ),
+        child,
+      ],
     );
   }
 }
@@ -522,6 +532,8 @@ class _ChatScreenState extends State<ChatScreen>
   Timer? _goToMessageSettleTimer;
   static const double _jumpCacheExtentPx = 800.0;
 
+  late final RouteSettle _routeSettle = RouteSettle(isMounted: () => mounted);
+
   late final ChatSearchController _search;
   late final AnimationController _searchAnim;
   final FocusNode _searchFocusNode = FocusNode();
@@ -606,11 +618,11 @@ class _ChatScreenState extends State<ChatScreen>
     if (chrome == ChatChromeStyle.liquidGlass) {
       return ChatChromeStyle.transparent;
     }
-    if (_wallpaper != null && chrome == ChatChromeStyle.none) {
-      return ChatChromeStyle.blur;
-    }
     return chrome;
   }
+
+  bool get _chromeVignette =>
+      _effectiveChrome == ChatChromeStyle.none && _wallpaper == null;
 
   final ValueNotifier<double> _composerHeight = ValueNotifier(96);
   final ValueNotifier<double> _pinnedBannerHeight = ValueNotifier(0);
@@ -969,29 +981,11 @@ class _ChatScreenState extends State<ChatScreen>
   void _onFirstFrameRendered(Duration _) {
     if (!mounted) return;
     if (widget.embedded) {
-      _kickoffHistory();
-      return;
+      _routeSettle.settleNow();
+    } else {
+      _routeSettle.bind(context);
     }
-    final anim = ModalRoute.of(context)?.animation;
-    if (anim == null || anim.status == AnimationStatus.completed) {
-      _kickoffHistory();
-      return;
-    }
-    Timer? safety;
-    void onStatus(AnimationStatus status) {
-      if (status != AnimationStatus.completed) return;
-      anim.removeStatusListener(onStatus);
-      safety?.cancel();
-      if (!mounted) return;
-      _kickoffHistory();
-    }
-
-    anim.addStatusListener(onStatus);
-    safety = Timer(const Duration(milliseconds: 400), () {
-      anim.removeStatusListener(onStatus);
-      if (!mounted) return;
-      _kickoffHistory();
-    });
+    _routeSettle.run(_kickoffHistory);
   }
 
   void _kickoffHistory() {
@@ -2192,6 +2186,7 @@ class _ChatScreenState extends State<ChatScreen>
     _highlightMessageId.dispose();
     _goToMessageSettleTimer?.cancel();
     _jumpCacheExtent.dispose();
+    _routeSettle.dispose();
     _messageKeys.clear();
     super.dispose();
   }
@@ -3113,7 +3108,7 @@ class _ChatScreenState extends State<ChatScreen>
               backdropKey: _barBackdrop,
               child: const SizedBox.expand(),
             )
-          : (chrome == ChatChromeStyle.none && !glossy)
+          : (_chromeVignette && !glossy)
           ? IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -5463,7 +5458,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _buildUnderlapBody() {
     final cs = Theme.of(context).colorScheme;
-    final vignette = _effectiveChrome == ChatChromeStyle.none;
+    final vignette = _chromeVignette;
     final bannerTop = _pinnedBannerTop();
     return Stack(
       fit: StackFit.expand,

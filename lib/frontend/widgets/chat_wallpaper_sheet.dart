@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/config/chat_wallpaper_themes.dart';
 import 'package:komet/core/config/app_colors.dart';
 import 'package:komet/core/storage/chat_wallpaper_store.dart';
+import 'chat_wallpaper_view.dart';
 import '../../core/config/app_fonts.dart';
 
 enum WallpaperPickType { none, theme, gallery }
@@ -44,20 +47,21 @@ class ChatWallpaperGalleryScreen extends StatefulWidget {
 class _ChatWallpaperGalleryScreenState
     extends State<ChatWallpaperGalleryScreen> {
   ChatWallpaperTheme? _selected;
-  bool _isImage = false;
+  bool _keepsImage = false;
 
   @override
   void initState() {
     super.initState();
     final current = widget.current;
-    _isImage = current?.isImage ?? false;
+    _keepsImage = current?.isImage ?? false;
     _selected = current == null || current.isImage
         ? null
         : chatWallpaperThemeById(current.themeId);
   }
 
   bool get _changed {
-    if (_isImage) return _selected != null;
+    if (_keepsImage) return false;
+    if (widget.current?.isImage == true) return true;
     return _selected?.id != chatWallpaperThemeById(widget.current?.themeId)?.id;
   }
 
@@ -101,6 +105,7 @@ class _ChatWallpaperGalleryScreenState
 
   Widget _preview(ColorScheme cs) {
     final theme = _selected;
+    final image = _keepsImage ? widget.current : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: ClipRRect(
@@ -110,6 +115,8 @@ class _ChatWallpaperGalleryScreenState
           children: [
             if (theme != null)
               theme.buildBackground()
+            else if (image != null)
+              ChatWallpaperView(wallpaper: image)
             else
               ColoredBox(color: cs.surfaceContainerHighest),
             const IgnorePointer(child: _PreviewScrim()),
@@ -120,7 +127,21 @@ class _ChatWallpaperGalleryScreenState
     );
   }
 
+  Widget? _currentImageTile() {
+    final current = widget.current;
+    if (current == null || !current.isImage) return null;
+    return _CurrentImageTile(
+      wallpaper: current,
+      selected: _keepsImage,
+      onTap: () => setState(() {
+        _keepsImage = true;
+        _selected = null;
+      }),
+    );
+  }
+
   Widget _panel(ColorScheme cs) {
+    final currentImage = _currentImageTile();
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
@@ -138,11 +159,12 @@ class _ChatWallpaperGalleryScreenState
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
+                  ?currentImage,
                   _NoneTile(
-                    selected: _selected == null && !_isImage,
+                    selected: _selected == null && !_keepsImage,
                     onTap: () => setState(() {
                       _selected = null;
-                      _isImage = false;
+                      _keepsImage = false;
                     }),
                   ),
                   for (final theme in kChatWallpaperThemes)
@@ -151,7 +173,7 @@ class _ChatWallpaperGalleryScreenState
                       selected: _selected?.id == theme.id,
                       onTap: () => setState(() {
                         _selected = theme;
-                        _isImage = false;
+                        _keepsImage = false;
                       }),
                     ),
                 ],
@@ -371,6 +393,32 @@ class _NoneTile extends StatelessWidget {
           child: Icon(Symbols.block, color: kDangerRed, size: 34),
         ),
       ),
+    );
+  }
+}
+
+class _CurrentImageTile extends StatelessWidget {
+  final ChatWallpaper wallpaper;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CurrentImageTile({
+    required this.wallpaper,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final path = wallpaper.imagePath;
+    return _TileFrame(
+      selected: selected,
+      onTap: onTap,
+      label: 'Ваше фото',
+      child: path == null
+          ? ColoredBox(color: cs.surfaceContainerHighest)
+          : Image.file(File(path), fit: BoxFit.cover),
     );
   }
 }

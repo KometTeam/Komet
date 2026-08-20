@@ -54,12 +54,10 @@ final class KometVideoNote: NSObject {
 
   static func requestPermission(_ result: @escaping FlutterResult) {
     AVCaptureDevice.requestAccess(for: .video) { video in
-      guard video else {
-        DispatchQueue.main.async { result(NSNumber(value: false)) }
-        return
-      }
       AVCaptureDevice.requestAccess(for: .audio) { audio in
-        DispatchQueue.main.async { result(NSNumber(value: audio)) }
+        DispatchQueue.main.async {
+          result(["camera": NSNumber(value: video), "microphone": NSNumber(value: audio)])
+        }
       }
     }
   }
@@ -71,7 +69,11 @@ final class KometVideoNote: NSObject {
 
     queue.async {
       guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
-        Self.fail(result, "NO_PERMISSION", "camera permission required")
+        Self.fail(result, "NO_CAMERA_PERMISSION", "camera permission required")
+        return
+      }
+      guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+        Self.fail(result, "NO_MIC_PERMISSION", "microphone permission required")
         return
       }
       do {
@@ -124,6 +126,10 @@ final class KometVideoNote: NSObject {
     queue.async {
       guard !self.recording else {
         DispatchQueue.main.async { result(nil) }
+        return
+      }
+      guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+        Self.fail(result, "NO_MIC_PERMISSION", "microphone permission required")
         return
       }
       do {

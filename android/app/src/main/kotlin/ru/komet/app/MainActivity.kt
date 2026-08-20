@@ -85,7 +85,7 @@ class MainActivity : FlutterActivity() {
         const val NFC_PHASE_MIN_MS = 350L
         const val NFC_PHASE_JITTER_MS = 400
         const val BLE_PERMS_REQUEST = 7711
-        const val CAMERA_PERM_REQUEST = 7712
+        const val NOTE_PERMS_REQUEST = 7712
         val NFC_READER_FLAGS = NfcAdapter.FLAG_READER_NFC_A or
             NfcAdapter.FLAG_READER_NFC_B or
             NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
@@ -243,7 +243,7 @@ class MainActivity : FlutterActivity() {
             "ru.komet.app/video_note",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
-                "permission" -> requestCameraPermission(result)
+                "permission" -> requestNotePermissions(result)
                 "init" -> {
                     val front = call.argument<Boolean>("front") ?: true
                     val size = call.argument<Int>("size") ?: 480
@@ -708,24 +708,27 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private var cameraPermResult: MethodChannel.Result? = null
+    private var notePermResult: MethodChannel.Result? = null
 
-    private fun requestCameraPermission(result: MethodChannel.Result) {
-        val granted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.CAMERA,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            result.success(true); return
+    private fun isGranted(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(this, permission) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun notePermissionState(): Map<String, Boolean> = mapOf(
+        "camera" to isGranted(Manifest.permission.CAMERA),
+        "microphone" to isGranted(Manifest.permission.RECORD_AUDIO),
+    )
+
+    private fun requestNotePermissions(result: MethodChannel.Result) {
+        val state = notePermissionState()
+        if (state.values.all { it } || notePermResult != null) {
+            result.success(state); return
         }
-        if (cameraPermResult != null) {
-            result.success(false); return
-        }
-        cameraPermResult = result
+        notePermResult = result
         ActivityCompat.requestPermissions(
             this,
-            arrayOf(Manifest.permission.CAMERA),
-            CAMERA_PERM_REQUEST,
+            arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO),
+            NOTE_PERMS_REQUEST,
         )
     }
 
@@ -735,13 +738,10 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == CAMERA_PERM_REQUEST) {
-            val pending = cameraPermResult
-            cameraPermResult = null
-            pending?.success(
-                grantResults.isNotEmpty() &&
-                    grantResults.all { it == PackageManager.PERMISSION_GRANTED },
-            )
+        if (requestCode == NOTE_PERMS_REQUEST) {
+            val pending = notePermResult
+            notePermResult = null
+            pending?.success(notePermissionState())
             return
         }
         if (requestCode != BLE_PERMS_REQUEST) return

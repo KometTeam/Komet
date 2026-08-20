@@ -22,6 +22,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_members_store.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/logger.dart';
+import '../../../core/utils/route_settle.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/chat_info.dart';
@@ -170,6 +171,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   bool _avatarHistoryBusy = false;
   bool _avatarHistoryLoaded = false;
 
+  late final RouteSettle _routeSettle = RouteSettle(isMounted: () => mounted);
+  bool _rebuildQueued = false;
+
   double _headerDelta = 0;
   bool _expandArmed = false;
   bool _headerDragging = false;
@@ -185,19 +189,42 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     _load();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _routeSettle.bind(context);
+  }
+
   int? get _memberCount => ChatMembersStore.instance.count(widget.chatId);
 
-  void _onMemberCountChanged() {
-    if (mounted) setState(() {});
-  }
+  void _onMemberCountChanged() => _loadedRebuild();
 
   void _onStoriesChanged() {
     if (!mounted) return;
-    setState(_refreshUnreadStories);
+    _loadedUpdate(_refreshUnreadStories);
+  }
+
+  void _loadedRebuild() {
+    if (_routeSettle.settled) {
+      if (mounted) setState(() {});
+      return;
+    }
+    if (_rebuildQueued) return;
+    _rebuildQueued = true;
+    _routeSettle.run(() {
+      _rebuildQueued = false;
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _loadedUpdate(VoidCallback mutation) {
+    mutation();
+    _loadedRebuild();
   }
 
   @override
   void dispose() {
+    _routeSettle.dispose();
     storiesModule.storiesChanged.removeListener(_onStoriesChanged);
     ChatMembersStore.instance
         .listenable(widget.chatId)
@@ -323,7 +350,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         unawaited(_loadAvatarHistory(_otherId!));
       }
     } else if (info == null) {
-      setState(() => _isLoading = false);
+      _loadedUpdate(() => _isLoading = false);
       return;
     } else if (widget.chatType == 'CHAT') {
       _contactIds = (await AppDatabase.loadContactIds(_myId)).toSet();
@@ -332,7 +359,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
 
     if (mounted) {
-      setState(() {
+      _loadedUpdate(() {
         _isLoading = false;
         if (_selectedTab.isEmpty && _tabs.isNotEmpty) {
           _selectedTab = _initialTabLabel() ?? _tabs.first;
@@ -344,7 +371,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   Future<void> _loadBlockedState(int peerId) async {
     final blocked = await ContactsModule.isBlocked(api, peerId);
     if (!mounted || blocked == _blocked) return;
-    setState(() => _blocked = blocked);
+    _loadedUpdate(() => _blocked = blocked);
   }
 
   String? _initialTabLabel() {
@@ -438,7 +465,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   Future<void> _fetchMembersPage({bool initial = false}) async {
     if (_membersLoading || _membersEnd) return;
     _membersLoading = true;
-    if (!initial && mounted) setState(() {});
+    if (!initial) _loadedRebuild();
 
     final page = await chats.getChatMembers(
       api,
@@ -449,7 +476,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     if (!mounted) return;
 
     if (page == null) {
-      if (!initial) setState(() {});
+      if (!initial) _loadedRebuild();
       return;
     }
 
@@ -479,7 +506,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
     _memberMarker = page.marker;
 
-    if (!initial) setState(() {});
+    if (!initial) _loadedRebuild();
   }
 
   bool _revealMoreMembers() {
@@ -555,9 +582,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     _membersLoading = false;
     _memberRenderLimit = _memberRenderChunk;
     _rebuildMembers();
-    if (mounted) setState(() {});
+    _loadedRebuild();
     await _fetchMembersPage(initial: true);
-    if (mounted) setState(() {});
+    _loadedRebuild();
   }
 
   @override

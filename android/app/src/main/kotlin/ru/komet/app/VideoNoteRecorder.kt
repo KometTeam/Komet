@@ -172,7 +172,11 @@ class VideoNoteRecorder(
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            result.error("NO_PERMISSION", "camera permission required", null)
+            result.error("NO_CAMERA_PERMISSION", "camera permission required", null)
+            return
+        }
+        if (!hasMicPermission()) {
+            result.error("NO_MIC_PERMISSION", "microphone permission required", null)
             return
         }
         try {
@@ -453,9 +457,17 @@ class VideoNoteRecorder(
         openCamera(result, entry.id())
     }
 
+    private fun hasMicPermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
     fun start(result: MethodChannel.Result) {
         if (cameraDevice == null || !glReady) {
             result.error("NOT_READY", "camera not initialized", null); return
+        }
+        if (!hasMicPermission()) {
+            result.error("NO_MIC_PERMISSION", "microphone permission required", null)
+            return
         }
         try {
             val path = File(context.cacheDir, "note_${System.nanoTime()}.mp4").absolutePath

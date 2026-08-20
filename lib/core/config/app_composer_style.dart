@@ -18,7 +18,7 @@ class AppComposerStyle {
 
   static final _setting = PersistedEnum<ComposerStyle>(
     prefKey: prefKey,
-    defaultValue: ComposerStyle.auto,
+    defaultValue: ComposerStyle.glossy,
     encode: (value) => value.name,
     decode: _parse,
   );
@@ -30,5 +30,5 @@ class AppComposerStyle {
   static Future<void> save(ComposerStyle value) => _setting.save(value);
 
   static ComposerStyle _parse(String? val) =>
-      enumFromName(ComposerStyle.values, val, ComposerStyle.auto);
+      enumFromName(ComposerStyle.values, val, ComposerStyle.glossy);
 }

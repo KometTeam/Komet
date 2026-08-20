@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show PlatformException, rootBundle;
 import 'package:lottie/lottie.dart' show AssetLottie;
 import 'package:path_provider/path_provider.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -101,11 +101,10 @@ class VideoNoteController {
       return;
     }
     if (_rec.textureId != null) return;
-    if (!await _rec.requestPermission()) {
+    final access = await _rec.requestAccess();
+    if (!access.granted) {
       _videoNoteMode.value = false;
-      if (isMounted()) {
-        showCustomNotification(contextOf(), 'Нет доступа к камере');
-      }
+      _notify(_accessMessage(access));
       return;
     }
     try {
@@ -115,9 +114,8 @@ class VideoNoteController {
         fps: AppVideoNoteFps.current.value,
       );
       if (!ok) {
-        if (isMounted()) {
-          showCustomNotification(contextOf(), 'Камера недоступна');
-        }
+        _videoNoteMode.value = false;
+        _notify('Камера недоступна');
         return;
       }
       if (!isMounted() || !_videoNoteMode.value) {
@@ -128,8 +126,32 @@ class VideoNoteController {
       _camReady.value = true;
     } catch (e) {
       logger.w('initNoteCamera: $e');
-      if (isMounted()) showCustomNotification(contextOf(), 'Камера недоступна');
+      await _disposeCamera();
+      _videoNoteMode.value = false;
+      _notify(_failureMessage(e, 'Камера недоступна'));
     }
+  }
+
+  void _notify(String message) {
+    if (isMounted()) showCustomNotification(contextOf(), message);
+  }
+
+  String _accessMessage(VideoNoteAccess access) {
+    if (!access.camera && !access.microphone) {
+      return 'Для кружков нужен доступ к камере и микрофону';
+    }
+    return access.camera ? 'Нет доступа к микрофону' : 'Нет доступа к камере';
+  }
+
+  String _failureMessage(Object error, String fallback) {
+    if (error is! PlatformException) return fallback;
+    return switch (error.code) {
+      'NO_CAMERA_PERMISSION' => 'Нет доступа к камере',
+      'NO_MIC_PERMISSION' => 'Нет доступа к микрофону',
+      'NO_CAMERA' => 'Камера недоступна',
+      'NOT_READY' => 'Камера ещё не готова',
+      _ => fallback,
+    };
   }
 
   Future<void> _disposeCamera() async {
@@ -143,14 +165,10 @@ class VideoNoteController {
     _stopRequested = false;
     if (!_stub && _rec.textureId == null) {
       await _initCamera();
-      return;
+      if (_rec.textureId == null) return;
     }
     try {
-      final ok = _stub || await _rec.start();
-      if (!ok) {
-        _isRecording.value = false;
-        return;
-      }
+      if (!_stub) await _rec.start();
       if (!isMounted()) {
         if (!_stub) await _rec.stop();
         return;
@@ -178,6 +196,7 @@ class VideoNoteController {
     } catch (e) {
       logger.w('startNoteRecording: $e');
       _isRecording.value = false;
+      _notify(_failureMessage(e, 'Не удалось начать запись кружка'));
     }
   }
 
@@ -260,20 +279,27 @@ class VideoNoteController {
       unawaited(_rec.setTorch(false));
     }
 
-    final path = _stub ? await _stubClip() : await _rec.stop();
-
     final shouldCancel =
         cancel || _cancelled || elapsed < VoiceRecordController.minMs;
+
+    String? path;
+    try {
+      path = _stub ? await _stubClip() : await _rec.stop();
+    } catch (e) {
+      logger.w('stopNoteRecording: $e');
+    }
+
     if (shouldCancel || path == null) {
       if (path != null) {
         try {
           await File(path).delete();
         } catch (_) {}
+      } else if (!shouldCancel) {
+        _notify('Не удалось сохранить кружок');
       }
       return;
     }
 
-    // Файл уже квадратный (нативная запись) — шлём как есть.
     await onRecorded(File(path), elapsed);
   }
 
