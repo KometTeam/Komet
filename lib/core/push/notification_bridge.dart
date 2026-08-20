@@ -24,16 +24,16 @@ class NotificationBridge {
   int _retriesLeft = 0;
   Timer? _retry;
 
-  bool get _android {
+  bool get _native {
     try {
-      return Platform.isAndroid;
+      return Platform.isAndroid || Platform.isIOS;
     } catch (_) {
       return false;
     }
   }
 
   void init() {
-    if (_started || !_android) return;
+    if (_started || !_native) return;
     _started = true;
     _events.receiveBroadcastStream().listen(
       _onEvent,
@@ -50,7 +50,7 @@ class NotificationBridge {
   }
 
   Future<void> checkInitialChat() async {
-    if (!_android) return;
+    if (!_native) return;
     try {
       _onEvent(await _method.invokeMethod<dynamic>('consumeInitialChat'));
     } catch (e) {
@@ -59,7 +59,7 @@ class NotificationBridge {
   }
 
   Future<void> setActiveChat(int chatId) async {
-    if (!_android || chatId <= 0) return;
+    if (!_native || chatId <= 0) return;
     if (_activeChatId == chatId) return;
     _activeChatId = chatId;
     try {
@@ -70,7 +70,7 @@ class NotificationBridge {
   }
 
   Future<void> clearActiveChat(int chatId) async {
-    if (!_android) return;
+    if (!_native) return;
     if (chatId > 0 && _activeChatId != chatId) return;
     _activeChatId = 0;
     try {

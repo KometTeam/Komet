@@ -68,23 +68,25 @@ class VideoExportSpec {
 class VideoTranscoder {
   static const _channel = MethodChannel('ru.komet.app/video');
 
+  static bool get _native => Platform.isAndroid || Platform.isIOS;
+
   static Process? _desktopProcess;
   static bool _desktopCancelled = false;
 
   static bool get supported =>
-      Platform.isAndroid || (DesktopVideoProbe.supported && _ffmpegReady);
+      _native || (DesktopVideoProbe.supported && _ffmpegReady);
 
   static bool _ffmpegReady = false;
 
   static Future<bool> ensureAvailable() async {
-    if (Platform.isAndroid) return true;
+    if (_native) return true;
     if (!DesktopVideoProbe.supported) return false;
     _ffmpegReady = await DesktopVideoProbe.toolsAvailable();
     return _ffmpegReady;
   }
 
   static Future<VideoInfo?> probe(String path) async {
-    if (Platform.isAndroid) {
+    if (_native) {
       try {
         final res = await _channel.invokeMapMethod<String, dynamic>('probe', {
           'input': path,
@@ -113,7 +115,7 @@ class VideoTranscoder {
     bool precise = false,
   }) async {
     if (timesMs.isEmpty) return const [];
-    if (Platform.isAndroid) {
+    if (_native) {
       try {
         final res = await _channel.invokeListMethod<Object?>('frames', {
           'input': path,
@@ -150,13 +152,13 @@ class VideoTranscoder {
     VideoExportSpec spec, {
     void Function(double progress)? onProgress,
   }) async {
-    if (Platform.isAndroid) return _exportAndroid(spec, onProgress);
+    if (_native) return _exportNative(spec, onProgress);
     if (!await ensureAvailable()) return false;
     return _exportFfmpeg(spec, onProgress);
   }
 
   static Future<void> cancel() async {
-    if (Platform.isAndroid) {
+    if (_native) {
       try {
         await _channel.invokeMethod<void>('editCancel');
       } catch (_) {}
@@ -166,7 +168,7 @@ class VideoTranscoder {
     _desktopProcess?.kill();
   }
 
-  static Future<bool> _exportAndroid(
+  static Future<bool> _exportNative(
     VideoExportSpec spec,
     void Function(double)? onProgress,
   ) async {
@@ -179,7 +181,7 @@ class VideoTranscoder {
             } catch (_) {}
           });
     try {
-      final ok = await _channel.invokeMethod<bool>('edit', _androidArgs(spec));
+      final ok = await _channel.invokeMethod<bool>('edit', _nativeArgs(spec));
       return ok == true;
     } catch (e) {
       logger.w('VideoTranscoder.export: $e');
@@ -189,7 +191,7 @@ class VideoTranscoder {
     }
   }
 
-  static Map<String, dynamic> _androidArgs(VideoExportSpec spec) {
+  static Map<String, dynamic> _nativeArgs(VideoExportSpec spec) {
     final crop = spec.crop;
     return {
       'input': spec.input,

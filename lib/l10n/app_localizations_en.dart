@@ -43,9 +43,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginDone => 'Done';
 
   @override
-  String get loginReadTermsNotification => 'Please read the terms of use first';
-
-  @override
   String get loginSpoofRedacted => 'Spoofing';
 
   @override
@@ -701,6 +698,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationsFkmDownloadFcm => 'Better download the FCM version.';
+
+  @override
+  String get notificationsFkmIosUnsupported =>
+      'Push notifications are not available on iOS yet.';
 
   @override
   String get notificationsTitle => 'Notifications';

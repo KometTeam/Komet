@@ -233,6 +233,9 @@ jobs:
           <dict>
             <key>platform-application</key><true/>
             <key>get-task-allow</key><true/>
+            <key>application-identifier</key><string>ru.komet.app</string>
+            <key>keychain-access-groups</key>
+            <array><string>ru.komet.app</string></array>
             <key>com.apple.private.security.no-container</key><true/>
           </dict>
           </plist>

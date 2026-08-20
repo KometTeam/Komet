@@ -164,12 +164,6 @@ abstract class AppLocalizations {
   /// **'Done'**
   String get loginDone;
 
-  /// No description provided for @loginReadTermsNotification.
-  ///
-  /// In en, this message translates to:
-  /// **'Please read the terms of use first'**
-  String get loginReadTermsNotification;
-
   /// No description provided for @loginSpoofRedacted.
   ///
   /// In en, this message translates to:
@@ -1423,6 +1417,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Better download the FCM version.'**
   String get notificationsFkmDownloadFcm;
+
+  /// No description provided for @notificationsFkmIosUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Push notifications are not available on iOS yet.'**
+  String get notificationsFkmIosUnsupported;
 
   /// No description provided for @notificationsTitle.
   ///

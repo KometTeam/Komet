@@ -43,10 +43,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loginDone => 'Готово';
 
   @override
-  String get loginReadTermsNotification =>
-      'Сначала прочитайте условия использования';
-
-  @override
   String get loginSpoofRedacted => 'Подмена данных';
 
   @override
@@ -706,6 +702,10 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get notificationsFkmDownloadFcm =>
       'Установите FCM версию с официального источника';
+
+  @override
+  String get notificationsFkmIosUnsupported =>
+      'На iOS пуш-уведомления пока недоступны';
 
   @override
   String get notificationsTitle => 'Уведомления';

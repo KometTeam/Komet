@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -85,12 +87,15 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   void _onFkmTap() {
     final l10n = AppLocalizations.of(context)!;
-    showCustomNotification(
-      context,
-      isOnemeFlavor
-          ? l10n.notificationsFkmAlreadyHasFcm
-          : l10n.notificationsFkmDownloadFcm,
-    );
+    final String message;
+    if (Platform.isIOS) {
+      message = l10n.notificationsFkmIosUnsupported;
+    } else if (isOnemeFlavor) {
+      message = l10n.notificationsFkmAlreadyHasFcm;
+    } else {
+      message = l10n.notificationsFkmDownloadFcm;
+    }
+    showCustomNotification(context, message);
   }
 
   @override

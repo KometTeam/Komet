@@ -10,6 +10,7 @@ import '../../../core/storage/webapp_storage.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/media_saver.dart';
+import '../../../core/utils/share_origin.dart';
 import '../../../main.dart' show api, messagesModule, webAppModule;
 import '../../widgets/confirm_dialog.dart';
 import '../chats/chat_list_screen.dart' show openForwardScreen;
@@ -433,7 +434,10 @@ class WebAppBridge {
       return;
     }
     try {
-      final result = await Share.share(text);
+      final result = await Share.share(
+        text,
+        sharePositionOrigin: shareOriginOf(contextResolver()),
+      );
       _send(method, {
         'requestId': ?requestId,
         'status': result.status == ShareResultStatus.dismissed

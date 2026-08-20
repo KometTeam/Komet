@@ -69,8 +69,68 @@ target 'Runner' do
   end
 end
 
+# libopus already ships with ogg_opus_player as a static xcframework. Nothing in
+# the app references its encoder entry points, so the linker would drop them and
+# `DynamicLibrary.process()` (OpusOggEncoder) would find nothing. Force-loading
+# the slice keeps the whole library, which is what voice-message encoding needs.
+OPUS_FORCE_LOAD =
+  '-force_load "${PODS_XCFRAMEWORKS_BUILD_DIR}/ogg_opus_player/libopus.a"'.freeze
+
+# permission_handler compiles every permission handler unless told otherwise;
+# the unused ones reference APIs that make App Store review ask for usage
+# descriptions the app has no reason to declare.
+PERMISSION_MACROS = %w[
+  PERMISSION_CAMERA=1
+  PERMISSION_MICROPHONE=1
+  PERMISSION_PHOTOS=1
+  PERMISSION_PHOTOS_ADD_ONLY=1
+  PERMISSION_LOCATION=1
+  PERMISSION_LOCATION_WHENINUSE=1
+  PERMISSION_CONTACTS=1
+  PERMISSION_NOTIFICATIONS=1
+  PERMISSION_LOCATION_ALWAYS=0
+  PERMISSION_MEDIA_LIBRARY=0
+  PERMISSION_EVENTS=0
+  PERMISSION_EVENTS_FULL_ACCESS=0
+  PERMISSION_REMINDERS=0
+  PERMISSION_SPEECH_RECOGNIZER=0
+  PERMISSION_SENSORS=0
+  PERMISSION_BLUETOOTH=0
+  PERMISSION_APP_TRACKING_TRANSPARENCY=0
+  PERMISSION_CRITICAL_ALERTS=0
+  PERMISSION_ASSISTANT=0
+].freeze
+
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    next unless target.name == 'permission_handler_apple'
+
+    target.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] =
+        ['$(inherited)'] + PERMISSION_MACROS
+    end
+  end
+
+  installer.aggregate_targets.each do |target|
+    next unless target.name == 'Pods-Runner'
+
+    %w[debug profile release].each do |name|
+      xcconfig = target.xcconfig_path(name)
+      next unless File.exist?(xcconfig)
+
+      contents = File.read(xcconfig)
+      next if contents.include?('ogg_opus_player/libopus.a')
+
+      if contents =~ /^OTHER_LDFLAGS = .*$/
+        contents = contents.sub(/^OTHER_LDFLAGS = (.*)$/) do
+          "OTHER_LDFLAGS = #{Regexp.last_match(1)} #{OPUS_FORCE_LOAD}"
+        end
+      else
+        contents += "\nOTHER_LDFLAGS = $(inherited) #{OPUS_FORCE_LOAD}\n"
+      end
+      File.write(xcconfig, contents)
+    end
   end
 end

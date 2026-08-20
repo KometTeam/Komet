@@ -4,17 +4,18 @@ import 'package:flutter/services.dart';
 
 import '../utils/logger.dart';
 
-/// Нативная запись видео-кружка (Android, Camera2 + MediaRecorder): пишет
-/// квадрат сразу при съёмке — как официальный клиент (по умолчанию 480×480@30,
-/// размер и fps настраиваются в дев-меню). Превью отдаётся через Flutter
-/// [Texture] по [textureId]. media3-перекод не используется (серверный
+/// Нативная запись видео-кружка: пишет квадрат сразу при съёмке — как
+/// официальный клиент (по умолчанию 480×480@30, размер и fps настраиваются
+/// в дев-меню). На Android — Camera2 + MediaRecorder, на iOS —
+/// AVCaptureSession + AVAssetWriter. Превью отдаётся через Flutter
+/// [Texture] по [textureId]. Перекодирование не используется (серверный
 /// валидатор принимает только нативно записанный MP4).
 class NativeVideoNoteRecorder {
   static const _channel = MethodChannel('ru.komet.app/video_note');
 
   int? textureId;
   bool hasFlash = false;
-  bool get isAvailable => Platform.isAndroid;
+  bool get isAvailable => Platform.isAndroid || Platform.isIOS;
 
   Future<bool> requestPermission() async {
     if (!isAvailable) return false;

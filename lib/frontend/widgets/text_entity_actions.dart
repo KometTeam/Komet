@@ -45,7 +45,8 @@ void showPhoneEntityMenu(
         label: 'Скопировать номер телефона',
         onTap: () => copyTextEntity(context, phone, 'Номер скопирован'),
       ),
-      if (defaultTargetPlatform == TargetPlatform.android)
+      if (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS)
         ChatMenuItem(
           icon: Symbols.call,
           label: 'Позвонить',

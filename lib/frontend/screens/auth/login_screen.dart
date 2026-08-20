@@ -529,10 +529,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _validateAndSubmit() {
     if (!_isTOSRead) {
-      showCustomNotification(
-        context,
-        AppLocalizations.of(context)!.loginReadTermsNotification,
-      );
+      _showTOS(context);
       return;
     }
     _showPhoneConfirmationDialog(_phoneController.text);
