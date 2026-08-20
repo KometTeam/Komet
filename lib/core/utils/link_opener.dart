@@ -6,6 +6,21 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../frontend/widgets/custom_notification.dart';
 import '../../frontend/widgets/max_link_handler.dart';
 
+const Set<String> _webViewSchemes = {
+  'http',
+  'https',
+  'about',
+  'data',
+  'blob',
+  'javascript',
+  'file',
+};
+
+bool leavesWebView(String? scheme) {
+  if (scheme == null || scheme.isEmpty) return false;
+  return !_webViewSchemes.contains(scheme.toLowerCase());
+}
+
 Future<void> openExternalUrl(BuildContext context, String url) async {
   if (await tryHandleMaxLink(context, url)) return;
   if (!context.mounted) return;

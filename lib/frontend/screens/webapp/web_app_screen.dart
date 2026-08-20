@@ -182,8 +182,13 @@ class _WebAppScreenState extends State<WebAppScreen> {
       return NavigationActionPolicy.CANCEL;
     }
     final handler = widget.shouldOverrideUrlLoading;
-    if (handler == null) return NavigationActionPolicy.ALLOW;
-    return handler(controller, action, _launch?.url);
+    if (handler != null) return handler(controller, action, _launch?.url);
+
+    if (uri != null && leavesWebView(uri.scheme)) {
+      if (mounted) await openExternalUrl(context, uri.toString());
+      return NavigationActionPolicy.CANCEL;
+    }
+    return NavigationActionPolicy.ALLOW;
   }
 
   @override
