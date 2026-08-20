@@ -8,10 +8,10 @@ class SelectionTopBar extends StatelessWidget {
   final ColorScheme cs;
   final Set<String> selected;
   final bool glossy;
-  final CachedMessage? copyMsg;
+  final List<CachedMessage> copyMsgs;
   final CachedMessage? editMsg;
   final VoidCallback onClear;
-  final void Function(CachedMessage) onCopy;
+  final void Function(List<CachedMessage>) onCopy;
   final void Function(CachedMessage) onEdit;
   final VoidCallback onDelete;
 
@@ -20,7 +20,7 @@ class SelectionTopBar extends StatelessWidget {
     required this.cs,
     required this.selected,
     required this.glossy,
-    required this.copyMsg,
+    required this.copyMsgs,
     required this.editMsg,
     required this.onClear,
     required this.onCopy,
@@ -56,10 +56,10 @@ class SelectionTopBar extends StatelessWidget {
                 ),
               ),
             ),
-            if (copyMsg != null)
+            if (copyMsgs.isNotEmpty)
               IconButton(
                 icon: Icon(Symbols.content_copy, color: cs.onSurface),
-                onPressed: () => onCopy(copyMsg!),
+                onPressed: () => onCopy(copyMsgs),
               ),
             if (editMsg != null)
               IconButton(
@@ -130,8 +130,8 @@ class SelectionTopBar extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (copyMsg != null)
-                    actionBtn(Symbols.content_copy, () => onCopy(copyMsg!)),
+                  if (copyMsgs.isNotEmpty)
+                    actionBtn(Symbols.content_copy, () => onCopy(copyMsgs)),
                   if (editMsg != null)
                     actionBtn(Symbols.edit, () => onEdit(editMsg!)),
                   actionBtn(Symbols.delete, onDelete),

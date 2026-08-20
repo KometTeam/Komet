@@ -2383,17 +2383,10 @@ class _ChatScreenState extends State<ChatScreen>
   List<CachedMessage> _selectedMessages(Set<String> ids) =>
       _messages.where((m) => ids.contains(m.id)).toList();
 
-  CachedMessage? _singleCopyableText(Set<String> ids) {
-    CachedMessage? found;
-    var textCount = 0;
-    for (final m in _messages) {
-      if (!ids.contains(m.id)) continue;
-      if ((m.text ?? '').isEmpty) continue;
-      if (++textCount > 1) return null;
-      found = m;
-    }
-    return found;
-  }
+  List<CachedMessage> _copyableSelection(Set<String> ids) => [
+    for (final m in _messages)
+      if (ids.contains(m.id) && (m.selectableText ?? '').isNotEmpty) m,
+  ];
 
   CachedMessage? _singleEditable(Set<String> ids) {
     if (ids.length != 1) return null;
@@ -2402,9 +2395,9 @@ class _ChatScreenState extends State<ChatScreen>
     return _canEditMessage(list.first) ? list.first : null;
   }
 
-  void _copySelected(CachedMessage message) {
-    final text = message.text;
-    if (text == null || text.isEmpty) return;
+  void _copySelected(List<CachedMessage> messages) {
+    if (messages.isEmpty) return;
+    final text = messages.map((m) => m.selectableText!).join('\n\n');
     Clipboard.setData(ClipboardData(text: text));
     Haptics.tap();
     showCustomNotification(context, 'Скопировано');
@@ -3223,7 +3216,7 @@ class _ChatScreenState extends State<ChatScreen>
                             cs: cs,
                             selected: selected,
                             glossy: glossy,
-                            copyMsg: _singleCopyableText(selected),
+                            copyMsgs: _copyableSelection(selected),
                             editMsg: _singleEditable(selected),
                             onClear: _clearSelection,
                             onCopy: _copySelected,
@@ -6330,11 +6323,9 @@ class _ChatScreenState extends State<ChatScreen>
         if (info.durationMs > 0) durationMs = info.durationMs;
         if (info.width > 0 && info.height > 0) dims = (info.width, info.height);
       }
-      final frames = await VideoTranscoder.frames(
-        edited.path,
-        const [0],
-        size: 512,
-      );
+      final frames = await VideoTranscoder.frames(edited.path, const [
+        0,
+      ], size: 512);
       if (frames.isNotEmpty) thumbBytes = frames.first;
     }
     if (durationMs == null && DesktopVideoProbe.supported) {
@@ -7212,6 +7203,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       tapPoint: _lastTapDown ?? rect.center,
       isMe: widget.isMe,
       messageText: widget.message.text,
+      copyText: widget.message.selectableText,
       controller: controller,
       style: AppMessageActionsStyle.current.value,
       interaction: MessageActionsInteraction.tap,
@@ -7281,6 +7273,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       tapPoint: details.globalPosition,
       isMe: widget.isMe,
       messageText: widget.message.text,
+      copyText: widget.message.selectableText,
       controller: controller,
       style: MessageActionsStyle.list,
       interaction: MessageActionsInteraction.click,
