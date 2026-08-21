@@ -11,6 +11,7 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
+import '../config/komet_settings.dart';
 import '../utils/logger.dart';
 import 'fkm_bridge.dart';
 import 'push_service.dart';
@@ -44,8 +45,12 @@ class FkmController {
     enabled.value = await FkmBridge.instance.isEnabled();
 
     _pushSub = api.pushStream
-        .where((packet) => packet.opcode == Opcode.notifMessage)
-        .listen(_onMessagePush);
+        .where(
+          (packet) =>
+              packet.opcode == Opcode.notifMessage ||
+              packet.opcode == Opcode.notifMsgDelete,
+        )
+        .listen(_onPush);
     _stateSub = api.stateStream.listen(_onSessionState);
 
     if (enabled.value) {
@@ -127,31 +132,102 @@ class FkmController {
     };
   }
 
-  Future<void> _onMessagePush(Packet packet) async {
+  Future<void> _onPush(Packet packet) async {
     if (!enabled.value) return;
     try {
-      final data = await _buildNotification(packet);
-      if (data != null) await FkmBridge.instance.showMessage(data);
+      if (packet.opcode == Opcode.notifMsgDelete) {
+        await _onDeletePush(packet);
+      } else {
+        await _onMessagePush(packet);
+      }
     } catch (e) {
-      logger.w('FKM: не удалось показать уведомление: $e');
+      logger.w('FKM: не удалось обновить уведомления: $e');
     }
   }
 
-  Future<Map<String, String>?> _buildNotification(Packet packet) async {
+  Future<void> _onMessagePush(Packet packet) async {
     final payload = packet.payload;
-    if (payload is! Map) return null;
+    if (payload is! Map) return;
 
     final chatId = payload['chatId'];
-    if (chatId is! int) return null;
+    if (chatId is! int) return;
 
     final msg = payload['message'];
-    if (msg is! Map) return null;
+    if (msg is! Map) return;
 
-    if (payload['postId'] != null || msg['postId'] != null) return null;
+    if (payload['postId'] != null || msg['postId'] != null) return;
 
-    final status = msg['status']?.toString();
-    if (status == 'REMOVED' || status == 'EDITED') return null;
+    final msgId = msg['id']?.toString();
+    switch (msg['status']?.toString()) {
+      case 'REMOVED':
+        if (msgId != null) await _removeNotification(chatId, msgId);
+        return;
+      case 'EDITED':
+        if (msgId != null) await _editNotification(chatId, msgId, msg);
+        return;
+    }
 
+    final data = await _buildNotification(chatId, msg);
+    if (data != null) await FkmBridge.instance.showMessage(data);
+  }
+
+  Future<void> _onDeletePush(Packet packet) async {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+
+    final chat = payload['chat'];
+    final chatId = (chat is Map && chat['id'] is int)
+        ? chat['id'] as int
+        : payload['chatId'];
+    if (chatId is! int) return;
+
+    final ids = payload['messageIds'];
+    if (ids is! List) return;
+    for (final raw in ids) {
+      final id = raw?.toString();
+      if (id == null || id.isEmpty) continue;
+      await _removeNotification(chatId, id);
+    }
+  }
+
+  /// Удалённое сообщение уезжает из шторки, а при включённом «показывать
+  /// удалённые сообщения» остаётся в ней зачёркнутым.
+  Future<void> _removeNotification(int chatId, String msgId) =>
+      FkmBridge.instance.removeMessage({
+        'mc': '$chatId',
+        'msgid': msgId,
+        'keep': KometSettings.viewDeleted.value ? 'true' : 'false',
+      });
+
+  Future<void> _editNotification(
+    int chatId,
+    String msgId,
+    Map<dynamic, dynamic> msg,
+  ) async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+
+    final rawConfig = await AppDatabase.getPrivacyConfig(accountId);
+    if (rawConfig != null) {
+      final config = PrivacyConfig.fromJson(rawConfig);
+      if (config.chatsPushNotification != 'ON') return;
+      if (!config.pushDetails) return;
+    }
+
+    final text = _previewText(msg);
+    if (text == _hiddenPreview) return;
+
+    await FkmBridge.instance.editMessage({
+      'mc': '$chatId',
+      'msgid': msgId,
+      'msg': text,
+    });
+  }
+
+  Future<Map<String, String>?> _buildNotification(
+    int chatId,
+    Map<dynamic, dynamic> msg,
+  ) async {
     final senderId = msg['sender'];
     if (senderId is! int) return null;
 

@@ -55,6 +55,18 @@ object FkmChannel {
 
                 "showCall" -> result.success(deliver(ctx, call, "showCall"))
 
+                "editMessage" -> result.success(
+                    update(ctx, call, "editMessage") { notifier, data ->
+                        notifier.editMessage(data)
+                    },
+                )
+
+                "removeMessage" -> result.success(
+                    update(ctx, call, "removeMessage") { notifier, data ->
+                        notifier.removeMessage(data)
+                    },
+                )
+
                 "hasNotificationPermission" ->
                     result.success(NotificationManagerCompat.from(ctx).areNotificationsEnabled())
 
@@ -108,6 +120,24 @@ object FkmChannel {
                 KometNotifier(ctx).handle(data)
                 FkmState.countDelivered(ctx)
                 FkmService.refresh(ctx)
+            } catch (e: Exception) {
+                Log.w("Fkm", "$tag failed: ${e.message}")
+            }
+        }
+        return true
+    }
+
+    // Правка и удаление ничего не «доставляют» — счётчик они не трогают.
+    private fun update(
+        ctx: Context,
+        call: MethodCall,
+        tag: String,
+        action: (KometNotifier, Map<String, String>) -> Unit,
+    ): Boolean {
+        val data = call.argument<Map<String, String>>("data") ?: return false
+        worker.execute {
+            try {
+                action(KometNotifier(ctx), data)
             } catch (e: Exception) {
                 Log.w("Fkm", "$tag failed: ${e.message}")
             }

@@ -10,4 +10,5 @@
     <string name="fkm_status_line">%1$s · %2$d delivered</string>
     <string name="fkm_explain">This notification is what keeps a background connection to the server, so messages arrive without Google push. To get rid of it, turn FKM off — with the button below, or in Settings → Notifications → FKM.</string>
     <string name="fkm_disable">Turn off</string>
+    <string name="notif_deleted_prefix">Deleted:</string>
 </resources>

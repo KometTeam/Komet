@@ -50,6 +50,12 @@ class FkmBridge {
   Future<void> showCall(Map<String, String> data) =>
       _invoke<void>('showCall', {'data': data});
 
+  Future<void> editMessage(Map<String, String> data) =>
+      _invoke<void>('editMessage', {'data': data});
+
+  Future<void> removeMessage(Map<String, String> data) =>
+      _invoke<void>('removeMessage', {'data': data});
+
   Future<bool> hasNotificationPermission() async {
     if (!isSupported) return false;
     return await _invoke<bool>('hasNotificationPermission') ?? false;
