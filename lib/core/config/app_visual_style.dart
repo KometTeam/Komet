@@ -13,7 +13,7 @@ class AppVisualStyle {
 
   static final _setting = PersistedEnum<VisualStyle>(
     prefKey: prefKey,
-    defaultValue: VisualStyle.glossy,
+    defaultValue: VisualStyle.materialYou,
     encode: _encode,
     decode: _parse,
   );
@@ -27,5 +27,5 @@ class AppVisualStyle {
   static String _encode(VisualStyle value) => value.name;
 
   static VisualStyle _parse(String? val) =>
-      enumFromName(VisualStyle.values, val, VisualStyle.glossy);
+      enumFromName(VisualStyle.values, val, VisualStyle.materialYou);
 }
