@@ -148,6 +148,36 @@ Future<void> _handleReply(String payloadJson, String text) async {
   }
 }
 
+bool _localActionsReady = false;
+
+/// Инициализация локальных уведомлений и их action-коллбэков.
+///
+/// Нужна и FCM, и FKM: без неё кнопка «Ответить» в уведомлении не доезжает
+/// до фонового изолята.
+Future<void> initLocalNotificationActions() async {
+  if (_localActionsReady) return;
+  _localActionsReady = true;
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.initialize(
+    settings: const InitializationSettings(
+      android: AndroidInitializationSettings('ic_notification'),
+    ),
+    onDidReceiveNotificationResponse: _onNotificationResponse,
+    onDidReceiveBackgroundNotificationResponse: _onNotificationResponse,
+  );
+  await plugin
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >()
+      ?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _channelId,
+          _channelName,
+          importance: Importance.high,
+        ),
+      );
+}
+
 class PushService {
   PushService._();
   static final PushService instance = PushService._();
@@ -157,9 +187,6 @@ class PushService {
     await plugin.cancel(id: chatId & 0x7fffffff);
     await _clearHistory(chatId);
   }
-
-  final FlutterLocalNotificationsPlugin _local =
-      FlutterLocalNotificationsPlugin();
 
   Api? _api;
   AccountModule? _account;
@@ -180,24 +207,7 @@ class PushService {
 
     _initialized = true;
 
-    await _local.initialize(
-      settings: const InitializationSettings(
-        android: AndroidInitializationSettings('ic_notification'),
-      ),
-      onDidReceiveNotificationResponse: _onNotificationResponse,
-      onDidReceiveBackgroundNotificationResponse: _onNotificationResponse,
-    );
-    await _local
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(
-          const AndroidNotificationChannel(
-            _channelId,
-            _channelName,
-            importance: Importance.high,
-          ),
-        );
+    await initLocalNotificationActions();
 
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission();

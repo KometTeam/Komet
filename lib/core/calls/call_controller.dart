@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../backend/api.dart';
 import '../../backend/modules/calls.dart';
 import '../protocol/opcode_map.dart';
+import '../push/fkm_controller.dart';
 import '../protocol/packet.dart';
 import '../utils/parse.dart';
 import 'call_bridge.dart';
@@ -72,7 +73,6 @@ class CallController {
 
   void _onPush(Packet packet) {
     if (packet.opcode != Opcode.notifCallStart) return;
-    if (!appResumed) return;
     final payload = packet.payload;
     if (payload is! Map) return;
 
@@ -80,6 +80,13 @@ class CallController {
     final conversationId = payload['conversationId'] as String?;
     final callerId = payload['callerId'] as int?;
     if (vcp == null || conversationId == null || callerId == null) return;
+
+    // Приложение свёрнуто — звонок показывает FKM отдельным уведомлением,
+    // приём оттуда вернётся через injectFromNative.
+    if (!appResumed) {
+      unawaited(FkmController.instance.showIncomingCall(payload));
+      return;
+    }
 
     final params = ConversationParams.decode(vcp);
     if (params == null) return;

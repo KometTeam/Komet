@@ -73,6 +73,7 @@ import 'core/calls/call_bridge.dart';
 import 'core/calls/call_controller.dart';
 import 'core/links/deep_link_service.dart';
 import 'frontend/screens/calls/call_screen.dart';
+import 'core/push/fkm_controller.dart';
 import 'core/push/notification_bridge.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
@@ -195,6 +196,7 @@ void main(List<String> args) async {
   }
   attachInfoCacheApi(api);
   chats.attachGlobalPushHandlers(api);
+  unawaited(FkmController.instance.init(api));
   FoldersModule.attachGlobalPushHandlers(api);
   TranscriptionPushHandler.attach(api);
   commentsModule.attachPushHandlers(api);

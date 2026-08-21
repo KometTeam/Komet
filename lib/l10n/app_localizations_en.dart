@@ -697,9 +697,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationsFkmAlreadyHasFcm => 'Why? You already have FCM.';
 
   @override
-  String get notificationsFkmDownloadFcm => 'Better download the FCM version.';
-
-  @override
   String get notificationsFkmIosUnsupported =>
       'Push notifications are not available on iOS yet.';
 
@@ -715,6 +712,30 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationsFkmEnableSubtitle =>
       'For FKM notifications to work, the app will need to keep a notification in the shade.';
+
+  @override
+  String get notificationsFkmUnsupported => 'FKM is Android-only';
+
+  @override
+  String get notificationsFkmBatteryAction => 'Open settings';
+
+  @override
+  String get notificationsFkmBatteryMessage =>
+      'Otherwise the system will put the background connection to sleep and notifications will be late or lost.';
+
+  @override
+  String get notificationsFkmBatteryTitle => 'Turn off battery saving?';
+
+  @override
+  String get notificationsFkmPermissionDenied =>
+      'FKM cannot work without the notification permission';
+
+  @override
+  String get notificationsFkmConfirmAction => 'Enable FKM';
+
+  @override
+  String get notificationsFkmConfirmMessage =>
+      'Notifications will arrive over the app’s own background connection, and a permanent service notification will stay in the shade. You can turn FKM off right from it.';
 
   @override
   String get notificationsMainSectionTitle => 'Notifications';

@@ -700,10 +700,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notificationsFkmAlreadyHasFcm => 'А зачем? У тебя уже FCM.';
 
   @override
-  String get notificationsFkmDownloadFcm =>
-      'Установите FCM версию с официального источника';
-
-  @override
   String get notificationsFkmIosUnsupported =>
       'На iOS пуш-уведомления пока недоступны';
 
@@ -719,6 +715,30 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get notificationsFkmEnableSubtitle =>
       'Для работы FKM уведомлений, приложению понадобится держать уведомление в шторке.';
+
+  @override
+  String get notificationsFkmUnsupported => 'FKM работает только на Android';
+
+  @override
+  String get notificationsFkmBatteryAction => 'Настроить';
+
+  @override
+  String get notificationsFkmBatteryMessage =>
+      'Иначе система усыпит фоновое соединение, и уведомления начнут опаздывать или пропадать.';
+
+  @override
+  String get notificationsFkmBatteryTitle => 'Отключить экономию батареи?';
+
+  @override
+  String get notificationsFkmPermissionDenied =>
+      'Без разрешения на уведомления FKM не заработает';
+
+  @override
+  String get notificationsFkmConfirmAction => 'Включить FKM';
+
+  @override
+  String get notificationsFkmConfirmMessage =>
+      'Уведомления начнут приходить через собственное фоновое соединение, а в шторке будет постоянно висеть уведомление сервиса. Выключить FKM можно прямо в нём.';
 
   @override
   String get notificationsMainSectionTitle => 'Уведомления';

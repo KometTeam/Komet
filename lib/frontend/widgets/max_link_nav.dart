@@ -72,16 +72,21 @@ Future<bool> openChatAtMessage(
   }
 
   final title = chat.title?.trim();
+  final peerId = (chat.type == 'DIALOG' && chatId != 0) ? chatId ^ myId : 0;
   final name = (title != null && title.isNotEmpty)
       ? title
       : (ContactCache.get(chatId ^ myId) ?? 'Чат');
+  final imageUrl =
+      (peerId > 0 ? ContactCache.getAvatar(peerId) : null) ??
+      chat.iconUrl ??
+      '';
 
   await pushSwipeable(
     context,
     (_) => ChatScreen(
       chatId: chatId,
       name: name,
-      imageUrl: chat.iconUrl ?? '',
+      imageUrl: imageUrl,
       chatType: chat.type,
       initialMessageId: messageId,
       initialMessageTime: messageTime,

@@ -30,6 +30,12 @@ class KometFcmService : FirebaseMessagingService() {
         val data = message.data
         Log.d("KometFcm", "onMessageReceived type=${data["type"]} keys=${data.keys}")
         if (data.isEmpty()) return
+        val type = data["type"]
+        FkmState.restore(applicationContext)
+        if (FkmState.enabled && type != "InboundCall" && type != "CallFinished") {
+            Log.d("KometFcm", "message push dropped: FKM handles messages")
+            return
+        }
         KometNotifier(applicationContext).handle(data)
     }
 }

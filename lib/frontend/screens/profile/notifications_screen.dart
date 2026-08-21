@@ -3,9 +3,12 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/push/fkm_bridge.dart';
+import '../../../core/push/fkm_controller.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show accountModule, isOnemeFlavor;
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
@@ -24,6 +27,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     with ReloadOnReconnect {
   bool _loading = true;
   bool _saving = false;
+  bool _fkmBusy = false;
 
   bool _allNotifications = true;
   bool _messagePreview = true;
@@ -85,17 +89,55 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     if (mounted) setState(() => _hapticsEnabled = value);
   }
 
-  void _onFkmTap() {
+  Future<void> _onFkmChanged(bool value) async {
     final l10n = AppLocalizations.of(context)!;
-    final String message;
-    if (Platform.isIOS) {
-      message = l10n.notificationsFkmIosUnsupported;
-    } else if (isOnemeFlavor) {
-      message = l10n.notificationsFkmAlreadyHasFcm;
-    } else {
-      message = l10n.notificationsFkmDownloadFcm;
+    if (!FkmController.instance.isSupported) {
+      showCustomNotification(
+        context,
+        Platform.isIOS
+            ? l10n.notificationsFkmIosUnsupported
+            : l10n.notificationsFkmUnsupported,
+      );
+      return;
     }
-    showCustomNotification(context, message);
+    if (_fkmBusy) return;
+
+    if (value && isOnemeFlavor) {
+      final confirmed = await showConfirmDialog(
+        context,
+        title: l10n.notificationsFkmAlreadyHasFcm,
+        message: l10n.notificationsFkmConfirmMessage,
+        confirmLabel: l10n.notificationsFkmConfirmAction,
+      );
+      if (!confirmed) return;
+    }
+
+    setState(() => _fkmBusy = true);
+    try {
+      final applied = await FkmController.instance.setEnabled(value);
+      if (!mounted) return;
+      if (!applied) {
+        showCustomNotification(context, l10n.notificationsFkmPermissionDenied);
+        return;
+      }
+      if (value) await _offerBatteryExemption();
+    } finally {
+      if (mounted) setState(() => _fkmBusy = false);
+    }
+  }
+
+  Future<void> _offerBatteryExemption() async {
+    if (await FkmBridge.instance.isIgnoringBatteryOptimizations()) return;
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.notificationsFkmBatteryTitle,
+      message: l10n.notificationsFkmBatteryMessage,
+      confirmLabel: l10n.notificationsFkmBatteryAction,
+    );
+    if (!confirmed) return;
+    await FkmBridge.instance.requestIgnoreBatteryOptimizations();
   }
 
   @override
@@ -124,12 +166,16 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   ),
                   SettingsCard(
                     children: [
-                      SettingsToggleTile(
-                        icon: Symbols.notifications_active,
-                        label: l10n.notificationsFkmEnableLabel,
-                        subtitle: l10n.notificationsFkmEnableSubtitle,
-                        value: false,
-                        onChanged: (_) => _onFkmTap(),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: FkmController.instance.enabled,
+                        builder: (context, fkmEnabled, _) => SettingsToggleTile(
+                          icon: Symbols.notifications_active,
+                          label: l10n.notificationsFkmEnableLabel,
+                          subtitle: l10n.notificationsFkmEnableSubtitle,
+                          value: fkmEnabled,
+                          enabled: !_fkmBusy,
+                          onChanged: _onFkmChanged,
+                        ),
                       ),
                     ],
                   ),

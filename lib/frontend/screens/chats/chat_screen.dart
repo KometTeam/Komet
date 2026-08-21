@@ -90,6 +90,7 @@ import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_composer_style.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../models/attachment.dart';
+import '../../../models/contact_info.dart';
 import '../../../models/sticker.dart';
 import '../../commands/command_registry.dart';
 import '../../commands/slash_command.dart';
@@ -842,17 +843,24 @@ class _ChatScreenState extends State<ChatScreen>
     final peerId = widget.chatId ^ _myId;
     if (peerId <= 0) return;
     final cached = ContactInfoFetch.peek(peerId);
-    if (cached != null) _applyPeerKind(cached.isBot);
+    if (cached != null) _applyPeerInfo(peerId, cached);
     final info = await ContactInfoFetch.get(peerId);
-    if (info != null) _applyPeerKind(info.isBot);
+    if (info != null) _applyPeerInfo(peerId, info);
     if ((info ?? cached)?.isBot ?? false) {
       unawaited(BotInfoFetch.get(peerId));
     }
   }
 
-  void _applyPeerKind(bool isBot) {
-    if (!mounted || _peerIsBot == isBot) return;
-    setState(() => _peerIsBot = isBot);
+  void _applyPeerInfo(int peerId, ContactInfo info) {
+    if (!mounted) return;
+    final avatar = info.avatarUrl;
+    final avatarIsNew =
+        avatar != null &&
+        avatar.isNotEmpty &&
+        ContactCache.getAvatar(peerId) != avatar;
+    if (avatarIsNew) ContactCache.putAvatar(peerId, avatar);
+    if (_peerIsBot == info.isBot && !avatarIsNew) return;
+    setState(() => _peerIsBot = info.isBot);
   }
 
   Future<void> _fastPreloadCache() async {
@@ -1202,7 +1210,7 @@ class _ChatScreenState extends State<ChatScreen>
         builder: (_) => ChatInfoScreen(
           chatId: widget.chatId,
           name: _headerName(),
-          imageUrl: widget.imageUrl,
+          imageUrl: _headerAvatarUrl(),
           chatType: widget.chatType,
           heroTag: _profileHeroTag,
           initialTab: initialTab,
@@ -3078,6 +3086,17 @@ class _ChatScreenState extends State<ChatScreen>
     if (mounted) setState(() {});
   }
 
+  String _headerAvatarUrl() {
+    if (!_commentsMode && widget.chatType == 'DIALOG') {
+      final otherId = _resolveOtherId();
+      if (otherId != null) {
+        final cached = ContactCache.getAvatar(otherId);
+        if (cached != null && cached.isNotEmpty) return cached;
+      }
+    }
+    return widget.imageUrl;
+  }
+
   String _headerName() {
     if (_commentsMode) return AppLocalizations.of(context)!.commentsTitle;
     if (widget.chatType == 'DIALOG') {
@@ -3178,7 +3197,7 @@ class _ChatScreenState extends State<ChatScreen>
                             chatId: widget.chatId,
                             heroTag: _profileHeroTag,
                             name: _headerName(),
-                            imageUrl: widget.imageUrl,
+                            imageUrl: _headerAvatarUrl(),
                             chatType: widget.chatType,
                             isOfficial: chat?.isOfficial ?? false,
                             encrypted: _encryptionEnabled,

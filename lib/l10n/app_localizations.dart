@@ -1412,12 +1412,6 @@ abstract class AppLocalizations {
   /// **'Why? You already have FCM.'**
   String get notificationsFkmAlreadyHasFcm;
 
-  /// No description provided for @notificationsFkmDownloadFcm.
-  ///
-  /// In en, this message translates to:
-  /// **'Better download the FCM version.'**
-  String get notificationsFkmDownloadFcm;
-
   /// No description provided for @notificationsFkmIosUnsupported.
   ///
   /// In en, this message translates to:
@@ -1447,6 +1441,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'For FKM notifications to work, the app will need to keep a notification in the shade.'**
   String get notificationsFkmEnableSubtitle;
+
+  /// No description provided for @notificationsFkmUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'FKM is Android-only'**
+  String get notificationsFkmUnsupported;
+
+  /// No description provided for @notificationsFkmBatteryAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get notificationsFkmBatteryAction;
+
+  /// No description provided for @notificationsFkmBatteryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Otherwise the system will put the background connection to sleep and notifications will be late or lost.'**
+  String get notificationsFkmBatteryMessage;
+
+  /// No description provided for @notificationsFkmBatteryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off battery saving?'**
+  String get notificationsFkmBatteryTitle;
+
+  /// No description provided for @notificationsFkmPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'FKM cannot work without the notification permission'**
+  String get notificationsFkmPermissionDenied;
+
+  /// No description provided for @notificationsFkmConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable FKM'**
+  String get notificationsFkmConfirmAction;
+
+  /// No description provided for @notificationsFkmConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications will arrive over the app’s own background connection, and a permanent service notification will stay in the shade. You can turn FKM off right from it.'**
+  String get notificationsFkmConfirmMessage;
 
   /// No description provided for @notificationsMainSectionTitle.
   ///

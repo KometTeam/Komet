@@ -81,7 +81,7 @@ class MainActivity : FlutterActivity() {
     private companion object {
         const val LOG_TAG = "VpnBypass"
         const val NFC_TAG = "NfcExchange"
-        const val CALL_ENGINE_ID = "komet_call_engine"
+        const val KEEP_ENGINE_ID = "komet_keep_engine"
         const val NFC_PHASE_MIN_MS = 350L
         const val NFC_PHASE_JITTER_MS = 400
         const val BLE_PERMS_REQUEST = 7711
@@ -438,6 +438,8 @@ class MainActivity : FlutterActivity() {
                 ChatNotifications.sink = null
             }
         })
+
+        FkmChannel.attach(flutterEngine, this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -738,6 +740,10 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == FkmChannel.NOTIF_PERMS_REQUEST) {
+            FkmChannel.onPermissionResult(grantResults)
+            return
+        }
         if (requestCode == NOTE_PERMS_REQUEST) {
             val pending = notePermResult
             notePermResult = null
@@ -813,30 +819,35 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // Движок переживает смерть активити, пока идёт звонок или включён FKM:
+    // в обоих случаях в фоне должно жить то же соединение, что и в UI.
+    private fun keepEngineAlive(): Boolean = CallState.inCall || FkmState.enabled
+
     override fun provideFlutterEngine(context: Context): FlutterEngine? {
         val cache = FlutterEngineCache.getInstance()
-        val cached = cache.get(CALL_ENGINE_ID)
+        val cached = cache.get(KEEP_ENGINE_ID)
         if (cached != null) {
-            if (CallState.inCall) return cached
-            cache.remove(CALL_ENGINE_ID)
+            if (keepEngineAlive()) return cached
+            cache.remove(KEEP_ENGINE_ID)
             cached.destroy()
         }
         return super.provideFlutterEngine(context)
     }
 
-    override fun shouldDestroyEngineWithHost(): Boolean = !CallState.inCall
+    override fun shouldDestroyEngineWithHost(): Boolean = !keepEngineAlive()
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        if (!CallState.inCall) {
-            FlutterEngineCache.getInstance().remove(CALL_ENGINE_ID)
+        if (!keepEngineAlive()) {
+            FlutterEngineCache.getInstance().remove(KEEP_ENGINE_ID)
+            FkmChannel.detach()
         }
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
     override fun onDestroy() {
-        if (CallState.inCall && isFinishing) {
-            Log.d("KometFcm", "task removed during call, caching engine")
-            flutterEngine?.let { FlutterEngineCache.getInstance().put(CALL_ENGINE_ID, it) }
+        if (keepEngineAlive() && isFinishing) {
+            Log.d("KometFcm", "task removed, caching engine (call=${CallState.inCall} fkm=${FkmState.enabled})")
+            flutterEngine?.let { FlutterEngineCache.getInstance().put(KEEP_ENGINE_ID, it) }
         }
         super.onDestroy()
     }
