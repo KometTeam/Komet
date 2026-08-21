@@ -1052,6 +1052,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callTooltipMinimize => 'Minimize';
 
   @override
+  String get callTooltipExpand => 'Expand';
+
+  @override
   String get callTooltipKometHub => 'Komet';
 
   @override
@@ -1098,6 +1101,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callEndButton => 'End';
+
+  @override
+  String callCameraUnavailable(Object error) {
+    return 'Camera unavailable: $error';
+  }
 
   @override
   String get callInfoClient => 'Client';

@@ -9,18 +9,19 @@ import 'package:flutter_webrtc/flutter_webrtc.dart'
         MediaStream,
         RTCVideoRenderer,
         RTCVideoValue,
-        RTCVideoView,
         RTCVideoViewObjectFit;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
+import '../../../core/calls/active_call.dart';
 import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/call_video_view.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/animated_slash_icon.dart';
@@ -133,6 +134,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    ActiveCall.instance.enterScreen();
     _dotsController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -179,6 +181,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       if (name != null && name.isNotEmpty) _name = name;
       if (avatar != null && avatar.isNotEmpty) _avatarUrl = avatar;
     });
+    _publishActiveCall();
   }
 
   Future<void> _initRenderer() async {
@@ -245,6 +248,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       _syncLocalPreview();
       _isSpeaker = session.isSpeaker;
       setState(() {});
+      _publishActiveCall();
     });
     _remoteStreamSub = session.remoteStreamStream.listen(_attachStream);
     _tileStreamSub = session.participantStreamUpdates.listen(_onTileStream);
@@ -258,6 +262,18 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _resolveParticipants();
     _syncVideo();
     _isSpeaker = session.isSpeaker;
+    _publishActiveCall();
+  }
+
+  void _publishActiveCall() {
+    final session = _session;
+    if (session == null) return;
+    ActiveCall.instance.attach(
+      session: session,
+      name: _name,
+      avatarUrl: _avatarUrl,
+      isGroup: _isGroup,
+    );
   }
 
   void _showKometBadge() {
@@ -368,12 +384,15 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   Future<void> _toggleVideo() async {
     final session = _session;
     if (session == null || _videoBusy) return;
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _videoBusy = true);
     await WidgetsBinding.instance.endOfFrame;
     try {
       await session.setVideoEnabled(!session.localVideo);
     } catch (e) {
-      if (mounted) showCustomNotification(context, 'Камера недоступна: $e');
+      if (mounted) {
+        showCustomNotification(context, l10n.callCameraUnavailable(e));
+      }
     } finally {
       _syncLocalPreview();
       if (mounted) setState(() => _videoBusy = false);
@@ -404,6 +423,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    ActiveCall.instance.leaveScreen();
     _stateSub?.cancel();
     _canceledSub?.cancel();
     _infoSub?.cancel();
@@ -528,24 +548,25 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
             border: Border.all(color: cs.outlineVariant, width: 1),
           ),
           child: _localRendererReady && _localRenderer.srcObject != null
-              ? RTCVideoView(
-                  _localRenderer,
+              ? CallVideoView(
+                  renderer: _localRenderer,
                   mirror: _session?.localScreen != true,
                   objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                  placeholder: _localPreviewIcon(cs),
                 )
-              : Center(
-                  child: Icon(
-                    _session?.localScreen == true
-                        ? Symbols.screen_share
-                        : Symbols.videocam,
-                    color: cs.onSurfaceVariant,
-                    size: 28,
-                  ),
-                ),
+              : _localPreviewIcon(cs),
         ),
       ),
     );
   }
+
+  Widget _localPreviewIcon(ColorScheme cs) => Center(
+    child: Icon(
+      _session?.localScreen == true ? Symbols.screen_share : Symbols.videocam,
+      color: cs.onSurfaceVariant,
+      size: 28,
+    ),
+  );
 
   Widget _buildGroupBody(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
@@ -764,9 +785,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          RTCVideoView(
-            renderer,
+          CallVideoView(
+            renderer: renderer,
             objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            placeholder: ColoredBox(color: cs.surfaceContainerHighest),
           ),
           Positioned(
             left: 8,
@@ -872,8 +894,8 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                         child: AspectRatio(
                           aspectRatio: ar,
                           child: RepaintBoundary(
-                            child: RTCVideoView(
-                              _remoteRenderer,
+                            child: CallVideoView(
+                              renderer: _remoteRenderer,
                               objectFit: RTCVideoViewObjectFit
                                   .RTCVideoViewObjectFitCover,
                             ),

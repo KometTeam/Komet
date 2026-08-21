@@ -2072,6 +2072,12 @@ abstract class AppLocalizations {
   /// **'Minimize'**
   String get callTooltipMinimize;
 
+  /// No description provided for @callTooltipExpand.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand'**
+  String get callTooltipExpand;
+
   /// No description provided for @callTooltipKometHub.
   ///
   /// In en, this message translates to:
@@ -2167,6 +2173,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'End'**
   String get callEndButton;
+
+  /// No description provided for @callCameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera unavailable: {error}'**
+  String callCameraUnavailable(Object error);
 
   /// No description provided for @callInfoClient.
   ///

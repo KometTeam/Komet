@@ -65,26 +65,35 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
 
   private func registerAppIcon(_ messenger: FlutterBinaryMessenger) {
     method("ru.komet.app/app_icon", messenger) { call, result in
-      guard call.method == "setAppIcon" else {
-        result(FlutterMethodNotImplemented)
-        return
-      }
-      let name = (call.arguments as? [String: Any])?["name"] as? String
-      let iconName: String? = (name == "DefaultIcon") ? nil : name
-      guard UIApplication.shared.supportsAlternateIcons else {
-        result(FlutterError(code: "UNSUPPORTED",
-                            message: "Alternate icons are not supported",
-                            details: nil))
-        return
-      }
-      UIApplication.shared.setAlternateIconName(iconName) { error in
-        if let error = error {
-          result(FlutterError(code: "APPLY_FAILED",
-                              message: error.localizedDescription,
+      switch call.method {
+      case "getAppIcon":
+        result(UIApplication.shared.alternateIconName)
+      case "setAppIcon":
+        let requested = (call.arguments as? [String: Any])?["name"] as? String
+        let iconName: String? = (requested?.isEmpty ?? true) ? nil : requested
+        guard UIApplication.shared.supportsAlternateIcons else {
+          result(FlutterError(code: "UNSUPPORTED",
+                              message: "Alternate icons are not supported",
                               details: nil))
-        } else {
-          result(nil)
+          return
         }
+        guard UIApplication.shared.alternateIconName != iconName else {
+          result(nil)
+          return
+        }
+        UIApplication.shared.setAlternateIconName(iconName) { error in
+          DispatchQueue.main.async {
+            if let error = error {
+              result(FlutterError(code: "APPLY_FAILED",
+                                  message: error.localizedDescription,
+                                  details: nil))
+            } else {
+              result(nil)
+            }
+          }
+        }
+      default:
+        result(FlutterMethodNotImplemented)
       }
     }
   }

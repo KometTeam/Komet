@@ -657,7 +657,9 @@ def pair_glyphs(from_cp, to_cp, count, fill=0.0):
 
 
 MIC = 0xE31D
+MIC_OFF = 0xE02B
 CAM = 0xE04B
+CAM_OFF = 0xE04C
 SEND = 0xE163
 VOLUME_UP = 0xE050
 VOLUME_OFF = 0xE04F
@@ -990,6 +992,18 @@ SLASH_SPECS = [
     dict(
         name='ic_volume_on_to_off',
         plain_cp=VOLUME_UP, slashed_cp=VOLUME_OFF,
+        fill=1.0,
+        scale=[(0, 100), (11, 92), (DUR, 100)],
+    ),
+    dict(
+        name='ic_mic_on_to_off',
+        plain_cp=MIC, slashed_cp=MIC_OFF,
+        fill=1.0,
+        scale=[(0, 100), (11, 92), (DUR, 100)],
+    ),
+    dict(
+        name='ic_videocam_on_to_off',
+        plain_cp=CAM, slashed_cp=CAM_OFF,
         fill=1.0,
         scale=[(0, 100), (11, 92), (DUR, 100)],
     ),

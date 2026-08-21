@@ -91,6 +91,7 @@ import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/liquid_glass.dart';
 import 'frontend/widgets/small_spinner.dart';
 import 'frontend/widgets/theme_reveal.dart';
+import 'frontend/widgets/floating_call_badge.dart';
 import 'frontend/widgets/floating_video_note.dart';
 
 final api = Api();
@@ -1032,6 +1033,9 @@ class KometAppState extends State<KometApp>
                             ),
                             const Positioned.fill(
                               child: FloatingVideoNoteLayer(),
+                            ),
+                            const Positioned.fill(
+                              child: FloatingCallBadgeLayer(),
                             ),
                             if (fpsOn) const FpsOverlayLayer(),
                           ],

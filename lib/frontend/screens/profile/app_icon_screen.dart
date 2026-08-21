@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../widgets/connection_status.dart';
 
@@ -38,7 +39,8 @@ class _AppIconScreenState extends State<AppIconScreen> {
       showCustomNotification(context, 'Иконка изменена на «${icon.title}»');
     } catch (e) {
       if (!mounted) return;
-      showCustomNotification(context, 'Не удалось сменить иконку: $e');
+      final reason = e is PlatformException ? (e.message ?? e.code) : '$e';
+      showCustomNotification(context, 'Не удалось сменить иконку: $reason');
     }
   }
 

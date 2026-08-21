@@ -5,6 +5,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../core/media/media_playback.dart';
 import '../../core/utils/haptics.dart';
+import 'draggable_floating_layer.dart';
 
 class FloatingVideoNoteLayer extends StatelessWidget {
   const FloatingVideoNoteLayer({super.key});
@@ -27,45 +28,16 @@ class FloatingVideoNoteLayer extends StatelessWidget {
   }
 }
 
-class _DraggableNote extends StatefulWidget {
+class _DraggableNote extends StatelessWidget {
   const _DraggableNote({required this.track});
 
   final VideoNoteTrack track;
 
-  @override
-  State<_DraggableNote> createState() => _DraggableNoteState();
-}
-
-class _DraggableNoteState extends State<_DraggableNote> {
   static const double _size = 96;
-  static const double _edge = 12;
-
-  static Offset? _saved;
-
-  final ValueNotifier<Offset?> _offset = ValueNotifier(null);
-
-  @override
-  void dispose() {
-    _offset.dispose();
-    super.dispose();
-  }
-
-  Offset _clamp(Offset value, Size bounds, EdgeInsets safe) {
-    final minX = _edge;
-    final maxX = math.max(minX, bounds.width - _size - _edge);
-    final minY = safe.top + _edge;
-    final maxY = math.max(minY, bounds.height - _size - safe.bottom - _edge);
-    return Offset(value.dx.clamp(minX, maxX), value.dy.clamp(minY, maxY));
-  }
-
-  Offset _initial(Size bounds, EdgeInsets safe) => Offset(
-    bounds.width - _size - _edge,
-    bounds.height - _size - safe.bottom - 96,
-  );
 
   void _toggle() {
     Haptics.tap();
-    final controller = widget.track.controller;
+    final controller = track.controller;
     if (controller.value.isPlaying) {
       controller.pause();
     } else {
@@ -73,46 +45,13 @@ class _DraggableNoteState extends State<_DraggableNote> {
     }
   }
 
-  void _drag(Offset delta, Size bounds, EdgeInsets safe) {
-    final current = _clamp(
-      _offset.value ?? _saved ?? _initial(bounds, safe),
-      bounds,
-      safe,
-    );
-    final next = _clamp(current + delta, bounds, safe);
-    _offset.value = next;
-    _saved = next;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final bounds = constraints.biggest;
-        final safe = MediaQuery.paddingOf(context);
-        return ValueListenableBuilder<Offset?>(
-          valueListenable: _offset,
-          child: RepaintBoundary(
-            child: GestureDetector(
-              onTap: _toggle,
-              onPanUpdate: (details) => _drag(details.delta, bounds, safe),
-              child: _NoteCircle(track: widget.track, size: _size),
-            ),
-          ),
-          builder: (context, offset, child) {
-            final position = _clamp(
-              offset ?? _saved ?? _initial(bounds, safe),
-              bounds,
-              safe,
-            );
-            return Stack(
-              children: [
-                Positioned(left: position.dx, top: position.dy, child: child!),
-              ],
-            );
-          },
-        );
-      },
+    return DraggableFloatingLayer(
+      storageKey: 'video_note',
+      size: const Size(_size, _size),
+      onTap: _toggle,
+      child: _NoteCircle(track: track, size: _size),
     );
   }
 }
