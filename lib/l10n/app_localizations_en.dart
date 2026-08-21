@@ -2706,4 +2706,69 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoEditorQualityTooltip => 'Quality';
+
+  @override
+  String get webPushTitle => 'Notifications on iOS';
+
+  @override
+  String get webPushIntro =>
+      'Komet has no ordinary push on iOS: Apple issues a notification token only to apps signed with a developer certificate, and a sideloaded build never gets one.\n\nThe way around it is a web app on the Home Screen. MAX\'s own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.';
+
+  @override
+  String get webPushConfirm => 'Continue';
+
+  @override
+  String get webPushPasswordExplainer =>
+      'Two-factor protection is enabled on this account.';
+
+  @override
+  String webPushPasswordHintLabel(String hint) {
+    return 'Hint: $hint';
+  }
+
+  @override
+  String get webPushPasswordHint => 'Password';
+
+  @override
+  String get webPushInstallTitle => 'Install the web app';
+
+  @override
+  String get webPushInstallBody =>
+      'Open push.komet.pw in Safari, add it to the Home Screen and launch the icon that appears. Notifications do not work from a browser tab — that is how iOS works.\n\nIn the app, allow notifications, create a subscription and tap \"Open Komet\". The subscription registers itself from there.';
+
+  @override
+  String get webPushLinkedTitle => 'Notifications connected';
+
+  @override
+  String get webPushLinkedBody =>
+      'The subscription is registered on the server. Do not delete the Home Screen icon — the notifications go with it.\n\nIf push stops arriving, open the web app and link again: Apple sometimes rotates the subscription address.';
+
+  @override
+  String get webPushOpenSite => 'Open push.komet.pw';
+
+  @override
+  String get webPushSignOut => 'Disconnect notifications';
+
+  @override
+  String get webPushLinked => 'Notifications connected';
+
+  @override
+  String webPushLinkFailed(String error) {
+    return 'Could not connect notifications: $error';
+  }
+
+  @override
+  String get webPushNotAuthorized =>
+      'Sign in under \"Notifications via PWA\" first';
+
+  @override
+  String get webPushConnect => 'Connect notifications';
+
+  @override
+  String get webPushWaitingBody =>
+      'Komet is approving the web session from this device. This usually takes a few seconds.';
+
+  @override
+  String get webPushNeedsOnline =>
+      'No connection to the server. Wait for it and try again.';
 }

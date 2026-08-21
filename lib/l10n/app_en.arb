@@ -50,7 +50,6 @@
   "codeResendSms": "Resend code via SMS",
   "codeError2faMissing": "Error: missing data for 2FA",
   "codeConfirmation2faWarning": "MAX may require 2FA on your account to sign in. If you didn't receive the code, set up 2FA from a client where you're already signed in.",
-
   "proxySettingsTitle": "Proxy",
   "proxyTypeNone": "Disabled",
   "proxyTypeSocks5": "SOCKS5",
@@ -63,7 +62,6 @@
   "proxyDisable": "Disable proxy",
   "proxySettingsSaved": "Proxy settings applied",
   "proxyInvalidHostOrPort": "Enter a valid proxy host and port (1–65535)",
-
   "spoofScreenTitle": "Session spoofing",
   "spoofEnableTitle": "Device spoofing",
   "spoofEnableSubtitleOn": "Enabled for this account",
@@ -207,7 +205,6 @@
   "chatInfoHasBots": "has bots:",
   "chatInfoBlockedCount": "blocked in group:",
   "chatInfoOfficialStatus": "official status:",
-  "chatInfoLastChanged": "last changed:",
   "chatInfoJoined": "joined:",
   "chatInfoGroupCreated": "group created:",
   "chatInfoGroupOwner": "group owner:",
@@ -375,7 +372,6 @@
   "appearancePreviewHowIsIt": "How do you like it?",
   "appearancePreviewHmm": "hmm...",
   "appearancePreviewNotBad": "Not bad at all!",
-
   "callKometDetectedNotification": "This person uses Komet! :3",
   "callStatusConnecting": "Connecting",
   "callGroupConnecting": "Connecting…",
@@ -445,7 +441,6 @@
   "callBadgeNoiseSuppression": "Noise suppression",
   "callBadgeAnimoji": "Animoji",
   "callInfoNoDataYet": "Data will appear after connecting…",
-
   "hubTitleMenu": "Komet",
   "hubChatPageTitle": "Anonymous chat",
   "hubGamesTitle": "Games",
@@ -466,7 +461,6 @@
   "hubCheckersLost": "You lost",
   "hubCheckersYourMove": "Your move",
   "hubCheckersOpponentMove": "Opponent's move…",
-
   "scheduledPickTimeTitle": "When to send",
   "scheduledEditTitle": "Edit",
   "scheduledMessageTextHint": "Message text",
@@ -485,7 +479,6 @@
   "scheduledAttachLocation": "Location",
   "scheduledAttachForwarded": "Forwarded",
   "scheduledAttachGeneric": "Attachment",
-
   "contactProfileLoadError": "Error: {error}",
   "@contactProfileLoadError": {
     "placeholders": {
@@ -510,7 +503,6 @@
   "contactProfileInfoDescription": "Description",
   "contactProfileInfoLink": "Link",
   "contactProfileInfoFlags": "Flags",
-
   "nfcPeerNameFallback": "Contact #{id}",
   "@nfcPeerNameFallback": {
     "placeholders": {
@@ -549,7 +541,6 @@
   },
   "nfcAdded": "Added",
   "nfcAddContact": "Add contact",
-
   "chatInfoTabGeneralChats": "Common chats",
   "chatInfoTabMedia": "Media",
   "chatInfoTabFiles": "Files",
@@ -747,7 +738,6 @@
   "chatInfoRowComments": "Comments",
   "chatInfoRowRkn": "Roskomnadzor approved",
   "chatInfoRowOnlyAdmin": "Admins only",
-
   "securityTitle": "Security",
   "securityLoadError": "Loading error: {error}",
   "@securityLoadError": {
@@ -801,7 +791,6 @@
       }
     }
   },
-
   "passwordEntryWrongPassword": "Wrong password",
   "passwordEntryConfirmTitle": "Confirm password",
   "passwordEntryCurrentPasswordHint": "Current password",
@@ -1178,5 +1167,37 @@
   "videoEditorProcessing": "Processing video…",
   "videoEditorExportFailed": "Failed to process the video",
   "videoEditorFrameFailed": "Failed to grab a frame",
-  "videoEditorQualityTooltip": "Quality"
+  "videoEditorQualityTooltip": "Quality",
+  "webPushTitle": "Notifications on iOS",
+  "webPushIntro": "Komet has no ordinary push on iOS: Apple issues a notification token only to apps signed with a developer certificate, and a sideloaded build never gets one.\n\nThe way around it is a web app on the Home Screen. MAX's own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.",
+  "webPushConfirm": "Continue",
+  "webPushPasswordExplainer": "Two-factor protection is enabled on this account.",
+  "webPushPasswordHintLabel": "Hint: {hint}",
+  "@webPushPasswordHintLabel": {
+    "placeholders": {
+      "hint": {
+        "type": "String"
+      }
+    }
+  },
+  "webPushPasswordHint": "Password",
+  "webPushInstallTitle": "Install the web app",
+  "webPushInstallBody": "Open push.komet.pw in Safari, add it to the Home Screen and launch the icon that appears. Notifications do not work from a browser tab — that is how iOS works.\n\nIn the app, allow notifications, create a subscription and tap \"Open Komet\". The subscription registers itself from there.",
+  "webPushLinkedTitle": "Notifications connected",
+  "webPushLinkedBody": "The subscription is registered on the server. Do not delete the Home Screen icon — the notifications go with it.\n\nIf push stops arriving, open the web app and link again: Apple sometimes rotates the subscription address.",
+  "webPushOpenSite": "Open push.komet.pw",
+  "webPushSignOut": "Disconnect notifications",
+  "webPushLinked": "Notifications connected",
+  "webPushLinkFailed": "Could not connect notifications: {error}",
+  "@webPushLinkFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "webPushNotAuthorized": "Sign in under \"Notifications via PWA\" first",
+  "webPushConnect": "Connect notifications",
+  "webPushWaitingBody": "Komet is approving the web session from this device. This usually takes a few seconds.",
+  "webPushNeedsOnline": "No connection to the server. Wait for it and try again."
 }

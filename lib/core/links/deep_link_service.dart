@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/widgets.dart';
+
+import '../../l10n/app_localizations.dart';
 
 import '../../backend/api.dart';
 import '../../frontend/debug/log_export.dart';
@@ -10,6 +13,8 @@ import '../../frontend/widgets/custom_notification.dart';
 import '../../frontend/widgets/max_link_handler.dart';
 import '../../frontend/widgets/swipe_route.dart';
 import '../../main.dart';
+import '../webpush/max_web_socket.dart';
+import '../webpush/web_push_service.dart';
 import 'desktop_url_scheme.dart';
 import 'max_link.dart';
 
@@ -24,8 +29,10 @@ class DeepLinkService {
   String? _pending;
   bool _pendingLogExport = false;
   String? _pendingExternalCallback;
+  WebPushSubscription? _pendingWebPush;
   String? _lastExternalCallback;
   Timer? _externalCallbackRetry;
+  Timer? _webPushRetry;
   Timer? _logExportRetry;
   bool _ready = false;
   bool _started = false;
@@ -55,6 +62,12 @@ class DeepLinkService {
   void _onUri(Uri uri) {
     if (_isLogExportLink(uri)) {
       _pendingLogExport = true;
+      _flushPending();
+      return;
+    }
+    final webPush = _parseWebPushLink(uri);
+    if (webPush != null) {
+      _pendingWebPush = webPush;
       _flushPending();
       return;
     }
@@ -100,6 +113,19 @@ class DeepLinkService {
       }
     }
 
+    if (_pendingWebPush != null) {
+      if (context == null) {
+        _webPushRetry ??= Timer(const Duration(milliseconds: 300), () {
+          _webPushRetry = null;
+          _flushPending();
+        });
+      } else {
+        final subscription = _pendingWebPush!;
+        _pendingWebPush = null;
+        _handleWebPush(context, subscription);
+      }
+    }
+
     if (!_ready || context == null) return;
     final pending = _pending;
     if (pending == null) return;
@@ -128,6 +154,58 @@ class DeepLinkService {
     } catch (e) {
       if (context.mounted) {
         showCustomNotification(context, 'Не удалось завершить Цифровой ID: $e');
+      }
+    }
+  }
+
+  WebPushSubscription? _parseWebPushLink(Uri uri) {
+    if (!Platform.isIOS) return null;
+    if (uri.scheme.toLowerCase() != 'komet') return null;
+
+    final segments = <String>[
+      if (uri.host.isNotEmpty) uri.host,
+      ...uri.pathSegments,
+    ].where((s) => s.isNotEmpty).toList();
+    if (segments.length != 1 || segments.first != 'webpush') return null;
+
+    final endpoint = uri.queryParameters['endpoint'] ?? '';
+    final publicKey = uri.queryParameters['p256dh'] ?? '';
+    final authKey = uri.queryParameters['auth'] ?? '';
+    if (endpoint.isEmpty || publicKey.isEmpty || authKey.isEmpty) return null;
+    if (Uri.tryParse(endpoint)?.isScheme('https') != true) return null;
+
+    return WebPushSubscription(
+      endpoint: endpoint,
+      publicKey: publicKey,
+      authKey: authKey,
+    );
+  }
+
+  Future<void> _handleWebPush(
+    BuildContext context,
+    WebPushSubscription subscription,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+
+    if (!await WebPushService.instance.isAuthorized()) {
+      if (context.mounted) {
+        showCustomNotification(context, l10n.webPushNotAuthorized);
+      }
+      return;
+    }
+
+    try {
+      await WebPushService.instance.registerSubscription(subscription);
+      if (context.mounted) {
+        showCustomNotification(context, l10n.webPushLinked);
+      }
+    } on MaxWebException catch (e) {
+      if (context.mounted) {
+        showCustomNotification(context, l10n.webPushLinkFailed(e.message));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showCustomNotification(context, l10n.webPushLinkFailed('$e'));
       }
     }
   }
@@ -176,6 +254,8 @@ class DeepLinkService {
   void dispose() {
     _logExportRetry?.cancel();
     _logExportRetry = null;
+    _webPushRetry?.cancel();
+    _webPushRetry = null;
     _sub?.cancel();
     _sub = null;
     _stateSub?.cancel();

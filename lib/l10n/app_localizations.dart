@@ -5149,6 +5149,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Quality'**
   String get videoEditorQualityTooltip;
+
+  /// No description provided for @webPushTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications on iOS'**
+  String get webPushTitle;
+
+  /// No description provided for @webPushIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet has no ordinary push on iOS: Apple issues a notification token only to apps signed with a developer certificate, and a sideloaded build never gets one.\n\nThe way around it is a web app on the Home Screen. MAX\'s own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.'**
+  String get webPushIntro;
+
+  /// No description provided for @webPushConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get webPushConfirm;
+
+  /// No description provided for @webPushPasswordExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-factor protection is enabled on this account.'**
+  String get webPushPasswordExplainer;
+
+  /// No description provided for @webPushPasswordHintLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hint: {hint}'**
+  String webPushPasswordHintLabel(String hint);
+
+  /// No description provided for @webPushPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get webPushPasswordHint;
+
+  /// No description provided for @webPushInstallTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Install the web app'**
+  String get webPushInstallTitle;
+
+  /// No description provided for @webPushInstallBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Open push.komet.pw in Safari, add it to the Home Screen and launch the icon that appears. Notifications do not work from a browser tab — that is how iOS works.\n\nIn the app, allow notifications, create a subscription and tap \"Open Komet\". The subscription registers itself from there.'**
+  String get webPushInstallBody;
+
+  /// No description provided for @webPushLinkedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications connected'**
+  String get webPushLinkedTitle;
+
+  /// No description provided for @webPushLinkedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The subscription is registered on the server. Do not delete the Home Screen icon — the notifications go with it.\n\nIf push stops arriving, open the web app and link again: Apple sometimes rotates the subscription address.'**
+  String get webPushLinkedBody;
+
+  /// No description provided for @webPushOpenSite.
+  ///
+  /// In en, this message translates to:
+  /// **'Open push.komet.pw'**
+  String get webPushOpenSite;
+
+  /// No description provided for @webPushSignOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect notifications'**
+  String get webPushSignOut;
+
+  /// No description provided for @webPushLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications connected'**
+  String get webPushLinked;
+
+  /// No description provided for @webPushLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not connect notifications: {error}'**
+  String webPushLinkFailed(String error);
+
+  /// No description provided for @webPushNotAuthorized.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in under \"Notifications via PWA\" first'**
+  String get webPushNotAuthorized;
+
+  /// No description provided for @webPushConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect notifications'**
+  String get webPushConnect;
+
+  /// No description provided for @webPushWaitingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet is approving the web session from this device. This usually takes a few seconds.'**
+  String get webPushWaitingBody;
+
+  /// No description provided for @webPushNeedsOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection to the server. Wait for it and try again.'**
+  String get webPushNeedsOnline;
 }
 
 class _AppLocalizationsDelegate

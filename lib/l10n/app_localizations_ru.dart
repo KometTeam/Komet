@@ -2718,4 +2718,69 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get videoEditorQualityTooltip => 'Качество';
+
+  @override
+  String get webPushTitle => 'Уведомления на iOS';
+
+  @override
+  String get webPushIntro =>
+      'На iOS у Комета нет обычных пушей: Apple выдаёт токен уведомлений только приложениям, подписанным сертификатом разработчика, а sideload-сборка такого не получает.\n\nОбход — веб-приложение на экране «Домой». Уведомления шлёт сам сервер MAX через Apple, а показывает их отдельная иконка.\n\nДля этого нужна веб-сессия. Комет создаст её и подтвердит сам, с этого же устройства — вводить номер и код не придётся.';
+
+  @override
+  String get webPushConfirm => 'Продолжить';
+
+  @override
+  String get webPushPasswordExplainer =>
+      'На аккаунте включена двухфакторная защита.';
+
+  @override
+  String webPushPasswordHintLabel(String hint) {
+    return 'Подсказка: $hint';
+  }
+
+  @override
+  String get webPushPasswordHint => 'Пароль';
+
+  @override
+  String get webPushInstallTitle => 'Установите приложение';
+
+  @override
+  String get webPushInstallBody =>
+      'Откройте push.komet.pw в Safari, добавьте на экран «Домой» и запустите появившуюся иконку. Из вкладки браузера уведомления не работают — так устроена iOS.\n\nВ приложении разрешите уведомления, создайте подписку и нажмите «Открыть Комет». Дальше подписка зарегистрируется сама.';
+
+  @override
+  String get webPushLinkedTitle => 'Уведомления подключены';
+
+  @override
+  String get webPushLinkedBody =>
+      'Подписка зарегистрирована на сервере. Не удаляйте иконку с экрана «Домой» — вместе с ней пропадут уведомления.\n\nЕсли пуши перестанут приходить, откройте приложение и свяжите заново: Apple иногда меняет адрес подписки.';
+
+  @override
+  String get webPushOpenSite => 'Открыть push.komet.pw';
+
+  @override
+  String get webPushSignOut => 'Отключить уведомления';
+
+  @override
+  String get webPushLinked => 'Уведомления подключены';
+
+  @override
+  String webPushLinkFailed(String error) {
+    return 'Не удалось подключить уведомления: $error';
+  }
+
+  @override
+  String get webPushNotAuthorized =>
+      'Сначала войдите в разделе «Уведомления через PWA»';
+
+  @override
+  String get webPushConnect => 'Подключить уведомления';
+
+  @override
+  String get webPushWaitingBody =>
+      'Комет подтверждает вход веб-сессии с этого устройства. Обычно занимает несколько секунд.';
+
+  @override
+  String get webPushNeedsOnline =>
+      'Нет связи с сервером. Дождитесь подключения и попробуйте снова.';
 }

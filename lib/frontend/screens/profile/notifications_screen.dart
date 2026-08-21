@@ -15,6 +15,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/small_spinner.dart';
+import 'web_push_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -89,6 +90,12 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     if (mounted) setState(() => _hapticsEnabled = value);
   }
 
+  void _openWebPush() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const WebPushScreen()),
+    );
+  }
+
   Future<void> _onFkmChanged(bool value) async {
     final l10n = AppLocalizations.of(context)!;
     if (!FkmController.instance.isSupported) {
@@ -159,6 +166,19 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                 children: [
+                  if (Platform.isIOS) ...[
+                    SettingsCard(
+                      children: [
+                        SettingsNavTile(
+                          icon: Symbols.install_mobile,
+                          label: l10n.webPushTitle,
+                          onTap: _openWebPush,
+                          isLast: true,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                   SectionHeader(
                     l10n.notificationsFkmSectionTitle,
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),

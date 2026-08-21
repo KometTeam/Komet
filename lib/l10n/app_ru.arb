@@ -50,7 +50,6 @@
   "codeResendSms": "Отправить код по SMS",
   "codeError2faMissing": "Ошибка: отсутствуют данные для 2FA",
   "codeConfirmation2faWarning": "По умолчанию код приходит в МАХ. Если код не приходит по SMS - не заходите в Komet/MAX 30 минут, и попробуйте заново.",
-
   "proxySettingsTitle": "Прокси",
   "proxyTypeNone": "Выключен",
   "proxyTypeSocks5": "SOCKS5",
@@ -63,7 +62,6 @@
   "proxyDisable": "Отключить прокси",
   "proxySettingsSaved": "Настройки прокси применены",
   "proxyInvalidHostOrPort": "Укажите корректный хост и порт прокси (1–65535)",
-
   "spoofScreenTitle": "Подмена данных сессии",
   "spoofEnableTitle": "Подмена устройства",
   "spoofEnableSubtitleOn": "Включена для этого аккаунта",
@@ -200,7 +198,6 @@
   "chatInfoHasBots": "Есть боты:",
   "chatInfoBlockedCount": "в ЧС группы:",
   "chatInfoOfficialStatus": "Официальный статус:",
-  "chatInfoLastChanged": "последнее изменение:",
   "chatInfoJoined": "Зашли в:",
   "chatInfoGroupCreated": "Группа создана в:",
   "chatInfoGroupOwner": "Создатель группы:",
@@ -333,7 +330,6 @@
   "appearancePreviewHowIsIt": "Как тебе?",
   "appearancePreviewHmm": "хм...",
   "appearancePreviewNotBad": "Вполне неплохо!",
-
   "callKometDetectedNotification": "Этот человек использует Komet! :3",
   "callStatusConnecting": "Соединение...",
   "callGroupConnecting": "Соединение...",
@@ -396,7 +392,6 @@
   "callBadgeNoiseSuppression": "Шумоподавление",
   "callBadgeAnimoji": "Анимодзи",
   "callInfoNoDataYet": "Данные появятся после соединения…",
-
   "hubTitleMenu": "Komet",
   "hubChatPageTitle": "Анонимный чат",
   "hubGamesTitle": "Игры",
@@ -417,7 +412,6 @@
   "hubCheckersLost": "Вы проиграли",
   "hubCheckersYourMove": "Ваш ход",
   "hubCheckersOpponentMove": "Ход соперника…",
-
   "scheduledPickTimeTitle": "Когда отправить",
   "scheduledEditTitle": "Изменить",
   "scheduledMessageTextHint": "Текст сообщения",
@@ -436,7 +430,6 @@
   "scheduledAttachLocation": "Геопозиция",
   "scheduledAttachForwarded": "Переслано",
   "scheduledAttachGeneric": "Вложение",
-
   "contactProfileLoadError": "Ошибка: {error}",
   "contactProfileBot": "Бот",
   "contactProfileOnline": "В сети",
@@ -454,7 +447,6 @@
   "contactProfileInfoDescription": "Описание",
   "contactProfileInfoLink": "Ссылка",
   "contactProfileInfoFlags": "Флаги",
-
   "nfcPeerNameFallback": "Контакт #{id}",
   "nfcPeerFirstNameFallback": "Контакт",
   "nfcContactAdded": "Контакт добавлен",
@@ -472,7 +464,6 @@
   "nfcPeerIdFallback": "ID {id}",
   "nfcAdded": "Добавлено",
   "nfcAddContact": "Добавить контакт",
-
   "chatInfoTabGeneralChats": "Общие чаты",
   "chatInfoTabMedia": "Медиа",
   "chatInfoTabFiles": "Файлы",
@@ -589,7 +580,6 @@
   "chatInfoRowComments": "Комментарии",
   "chatInfoRowRkn": "РКН",
   "chatInfoRowOnlyAdmin": "Только адм.",
-
   "securityTitle": "Безопасность",
   "securityLoadError": "Ошибка загрузки: {error}",
   "securitySaveError": "Ошибка сохранения: {error}",
@@ -622,7 +612,6 @@
   "securityAudioTranscription": "Транскрибация аудио",
   "securityBlacklistTitle": "Чёрный список",
   "securityBlacklistNotification": "Чёрный список: {count} контактов",
-
   "passwordEntryWrongPassword": "Неверный пароль",
   "passwordEntryConfirmTitle": "Подтвердите пароль",
   "passwordEntryCurrentPasswordHint": "Текущий пароль",
@@ -922,5 +911,37 @@
   "videoEditorProcessing": "Обработка видео…",
   "videoEditorExportFailed": "Не удалось обработать видео",
   "videoEditorFrameFailed": "Не удалось получить кадр",
-  "videoEditorQualityTooltip": "Качество"
+  "videoEditorQualityTooltip": "Качество",
+  "webPushTitle": "Уведомления на iOS",
+  "webPushIntro": "На iOS у Комета нет обычных пушей: Apple выдаёт токен уведомлений только приложениям, подписанным сертификатом разработчика, а sideload-сборка такого не получает.\n\nОбход — веб-приложение на экране «Домой». Уведомления шлёт сам сервер MAX через Apple, а показывает их отдельная иконка.\n\nДля этого нужна веб-сессия. Комет создаст её и подтвердит сам, с этого же устройства — вводить номер и код не придётся.",
+  "webPushConfirm": "Продолжить",
+  "webPushPasswordExplainer": "На аккаунте включена двухфакторная защита.",
+  "webPushPasswordHintLabel": "Подсказка: {hint}",
+  "@webPushPasswordHintLabel": {
+    "placeholders": {
+      "hint": {
+        "type": "String"
+      }
+    }
+  },
+  "webPushPasswordHint": "Пароль",
+  "webPushInstallTitle": "Установите приложение",
+  "webPushInstallBody": "Откройте push.komet.pw в Safari, добавьте на экран «Домой» и запустите появившуюся иконку. Из вкладки браузера уведомления не работают — так устроена iOS.\n\nВ приложении разрешите уведомления, создайте подписку и нажмите «Открыть Комет». Дальше подписка зарегистрируется сама.",
+  "webPushLinkedTitle": "Уведомления подключены",
+  "webPushLinkedBody": "Подписка зарегистрирована на сервере. Не удаляйте иконку с экрана «Домой» — вместе с ней пропадут уведомления.\n\nЕсли пуши перестанут приходить, откройте приложение и свяжите заново: Apple иногда меняет адрес подписки.",
+  "webPushOpenSite": "Открыть push.komet.pw",
+  "webPushSignOut": "Отключить уведомления",
+  "webPushLinked": "Уведомления подключены",
+  "webPushLinkFailed": "Не удалось подключить уведомления: {error}",
+  "@webPushLinkFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "webPushNotAuthorized": "Сначала войдите в разделе «Уведомления через PWA»",
+  "webPushConnect": "Подключить уведомления",
+  "webPushWaitingBody": "Комет подтверждает вход веб-сессии с этого устройства. Обычно занимает несколько секунд.",
+  "webPushNeedsOnline": "Нет связи с сервером. Дождитесь подключения и попробуйте снова."
 }
