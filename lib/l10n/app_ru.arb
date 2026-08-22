@@ -953,5 +953,11 @@
   "webPushNotAuthorized": "Сначала войдите в разделе «Уведомления через PWA»",
   "webPushConnect": "Подключить уведомления",
   "webPushWaitingBody": "Комет подтверждает вход веб-сессии с этого устройства. Обычно занимает несколько секунд.",
-  "webPushNeedsOnline": "Нет связи с сервером. Дождитесь подключения и попробуйте снова."
+  "webPushNeedsOnline": "Нет связи с сервером. Дождитесь подключения и попробуйте снова.",
+  "webPushSignOutConfirm": "Веб-сессия будет завершена и исчезнет из списка устройств. Чтобы вернуть уведомления, подключение придётся пройти заново.",
+  "webPushSignOutAction": "Отключить",
+  "webPushStatusService": "Сервис",
+  "webPushStatusToken": "Токен",
+  "webPushStatusLinkedAt": "Привязан",
+  "webPushStatusDevice": "Устройство"
 }

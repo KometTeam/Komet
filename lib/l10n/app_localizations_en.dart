@@ -2806,4 +2806,23 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get webPushNeedsOnline =>
       'No connection to the server. Wait for it and try again.';
+
+  @override
+  String get webPushSignOutConfirm =>
+      'The web session will be terminated and disappear from your device list. To get notifications back you will have to connect again.';
+
+  @override
+  String get webPushSignOutAction => 'Disconnect';
+
+  @override
+  String get webPushStatusService => 'Service';
+
+  @override
+  String get webPushStatusToken => 'Token';
+
+  @override
+  String get webPushStatusLinkedAt => 'Linked';
+
+  @override
+  String get webPushStatusDevice => 'Device';
 }

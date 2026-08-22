@@ -3,12 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/api.dart';
+import '../../../core/utils/format.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/link_opener.dart';
 import '../../../core/webpush/max_web_socket.dart';
 import '../../../core/webpush/web_push_service.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show accountModule, api;
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/section_header.dart';
@@ -36,19 +38,26 @@ class _WebPushScreenState extends State<WebPushScreen> {
   _Stage _stage = _Stage.loading;
   bool _busy = false;
   bool _linked = false;
+  WebPushLinkInfo? _link;
   String? _trackId;
   String? _passwordHint;
 
   @override
   void initState() {
     super.initState();
+    WebPushService.instance.changes.addListener(_onServiceChanged);
     _reload();
+  }
+
+  void _onServiceChanged() {
+    if (mounted) _reload();
   }
 
   @override
   void dispose() {
     final listener = _routeAnimationListener;
     if (listener != null) _routeAnimation?.removeStatusListener(listener);
+    WebPushService.instance.changes.removeListener(_onServiceChanged);
     _passwordController.dispose();
     _passwordFocus.dispose();
     WebPushService.instance.cancelAuth();
@@ -58,10 +67,11 @@ class _WebPushScreenState extends State<WebPushScreen> {
   Future<void> _reload() async {
     final service = WebPushService.instance;
     final authorized = await service.isAuthorized();
-    final endpoint = await service.linkedEndpoint();
+    final link = await service.linkInfo();
     if (!mounted) return;
     setState(() {
-      _linked = endpoint != null && endpoint.isNotEmpty;
+      _link = link;
+      _linked = link != null;
       _stage = authorized ? _Stage.ready : _Stage.intro;
     });
   }
@@ -152,15 +162,28 @@ class _WebPushScreenState extends State<WebPushScreen> {
     setState(() => _stage = _Stage.ready);
   }
 
-  Future<void> _signOut() => _run(() async {
-    await WebPushService.instance.signOut();
-    if (!mounted) return;
-    setState(() {
-      _linked = false;
-      _trackId = null;
-      _stage = _Stage.intro;
+  Future<void> _signOut() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.webPushSignOut,
+      message: l10n.webPushSignOutConfirm,
+      confirmLabel: l10n.webPushSignOutAction,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+
+    await _run(() async {
+      await WebPushService.instance.signOut();
+      if (!mounted) return;
+      setState(() {
+        _linked = false;
+        _link = null;
+        _trackId = null;
+        _stage = _Stage.intro;
+      });
     });
-  });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +266,10 @@ class _WebPushScreenState extends State<WebPushScreen> {
         fontSize: 14,
       ),
       _explainer(cs, _linked ? l10n.webPushLinkedBody : l10n.webPushInstallBody),
+      if (_link != null) ...[
+        const SizedBox(height: 12),
+        _linkDetails(cs, l10n, _link!),
+      ],
       const SizedBox(height: 20),
       _primary(l10n.webPushOpenSite, () {
         Haptics.tap();
@@ -262,6 +289,53 @@ class _WebPushScreenState extends State<WebPushScreen> {
       ),
     ],
   };
+
+  Widget _detailRow(ColorScheme cs, String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 104,
+          child: Text(
+            label,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 13,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _linkDetails(
+    ColorScheme cs,
+    AppLocalizations l10n,
+    WebPushLinkInfo link,
+  ) => SettingsPanel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _detailRow(cs, l10n.webPushStatusService, link.host),
+        _detailRow(cs, l10n.webPushStatusToken, link.shortEndpoint),
+        if (link.linkedAt != null)
+          _detailRow(
+            cs,
+            l10n.webPushStatusLinkedAt,
+            formatDateTimeWords(link.linkedAt!),
+          ),
+        _detailRow(cs, l10n.webPushStatusDevice, link.deviceId),
+      ],
+    ),
+  );
 
   Widget _explainer(ColorScheme cs, String text) => SettingsPanel(
     child: Text(

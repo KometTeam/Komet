@@ -5317,6 +5317,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No connection to the server. Wait for it and try again.'**
   String get webPushNeedsOnline;
+
+  /// No description provided for @webPushSignOutConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'The web session will be terminated and disappear from your device list. To get notifications back you will have to connect again.'**
+  String get webPushSignOutConfirm;
+
+  /// No description provided for @webPushSignOutAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get webPushSignOutAction;
+
+  /// No description provided for @webPushStatusService.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get webPushStatusService;
+
+  /// No description provided for @webPushStatusToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Token'**
+  String get webPushStatusToken;
+
+  /// No description provided for @webPushStatusLinkedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked'**
+  String get webPushStatusLinkedAt;
+
+  /// No description provided for @webPushStatusDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get webPushStatusDevice;
 }
 
 class _AppLocalizationsDelegate

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:ui' show PlatformDispatcher;
+
+import 'package:flutter/foundation.dart';
 
 import 'package:device_info_plus/device_info_plus.dart';
 
@@ -20,6 +21,26 @@ class WebPushSubscription {
     required this.publicKey,
     required this.authKey,
   });
+}
+
+class WebPushLinkInfo {
+  final String endpoint;
+  final DateTime? linkedAt;
+  final String deviceId;
+
+  const WebPushLinkInfo({
+    required this.endpoint,
+    required this.linkedAt,
+    required this.deviceId,
+  });
+
+  String get shortEndpoint {
+    final token = endpoint.split('/').last;
+    if (token.length <= 24) return token;
+    return '${token.substring(0, 12)}…${token.substring(token.length - 8)}';
+  }
+
+  String get host => Uri.tryParse(endpoint)?.host ?? endpoint;
 }
 
 class WebPushQrTrack {
@@ -64,6 +85,7 @@ class WebPushService {
   static const String _tokenKey = 'webpush_login_token';
   static const String _deviceIdKey = 'webpush_device_id';
   static const String _endpointKey = 'webpush_endpoint';
+  static const String _linkedAtKey = 'webpush_linked_at';
 
   static const String _appVersion = '26.8.8';
   static const Duration _defaultPoll = Duration(seconds: 5);
@@ -72,10 +94,26 @@ class WebPushService {
   MaxWebSocketSession? _authSocket;
   MaxWebDevice? _device;
 
+  final ValueNotifier<int> changes = ValueNotifier<int>(0);
+
+  void _notifyChanged() => changes.value++;
+
   Future<bool> isAuthorized() async =>
       (await TokenStorage.readSecure(_tokenKey))?.isNotEmpty ?? false;
 
   Future<String?> linkedEndpoint() => TokenStorage.readSecure(_endpointKey);
+
+  Future<WebPushLinkInfo?> linkInfo() async {
+    final endpoint = await TokenStorage.readSecure(_endpointKey);
+    if (endpoint == null || endpoint.isEmpty) return null;
+
+    final stamp = await TokenStorage.readSecure(_linkedAtKey);
+    return WebPushLinkInfo(
+      endpoint: endpoint,
+      linkedAt: stamp == null ? null : DateTime.tryParse(stamp),
+      deviceId: await deviceId(),
+    );
+  }
 
   Future<String> deviceId() async {
     final saved = await TokenStorage.readSecure(_deviceIdKey);
@@ -171,6 +209,7 @@ class WebPushService {
   Future<void> finishAuth(String loginToken) async {
     await TokenStorage.writeSecure(_tokenKey, loginToken);
     await cancelAuth();
+    _notifyChanged();
     logger.i('WebPush: WEB-сессия авторизована по QR');
   }
 
@@ -205,6 +244,11 @@ class WebPushService {
         'publicKey': subscription.publicKey,
       });
       await TokenStorage.writeSecure(_endpointKey, subscription.endpoint);
+      await TokenStorage.writeSecure(
+        _linkedAtKey,
+        DateTime.now().toIso8601String(),
+      );
+      _notifyChanged();
       logger.i('WebPush: подписка зарегистрирована');
     } finally {
       await socket.close();
@@ -213,8 +257,55 @@ class WebPushService {
 
   Future<void> signOut() async {
     await cancelAuth();
+
+    final token = await TokenStorage.readSecure(_tokenKey);
+    final endpoint = await TokenStorage.readSecure(_endpointKey);
+    if (token != null && token.isNotEmpty) {
+      try {
+        await _terminateWebSession(token, endpoint);
+      } catch (e) {
+        logger.w('WebPush: веб-сессию завершить не удалось ($e)');
+      }
+    }
+
     await TokenStorage.deleteSecure(_tokenKey);
     await TokenStorage.deleteSecure(_endpointKey);
+    await TokenStorage.deleteSecure(_linkedAtKey);
+    _notifyChanged();
+  }
+
+  Future<void> _terminateWebSession(String token, String? endpoint) async {
+    final socket = MaxWebSocketSession(device: await device());
+    try {
+      await socket.connect();
+      await socket.request(Opcode.login, <String, Object?>{
+        'token': token,
+        'chatsCount': 0,
+        'interactive': false,
+        'chatsSync': 0,
+        'contactsSync': 0,
+        'presenceSync': -1,
+        'draftsSync': 0,
+      });
+
+      if (endpoint != null && endpoint.isNotEmpty) {
+        try {
+          await socket.request(Opcode.config, <String, Object?>{
+            'subscribe': false,
+            'pushToken': endpoint,
+            'secretKey': '',
+            'publicKey': '',
+          });
+        } catch (e) {
+          logger.w('WebPush: подписку снять не удалось ($e)');
+        }
+      }
+
+      await socket.request(Opcode.logout, <String, Object?>{});
+      logger.i('WebPush: веб-сессия завершена');
+    } finally {
+      await socket.close();
+    }
   }
 
   MaxWebSocketSession _requireSocket() {

@@ -1209,5 +1209,11 @@
   "webPushNotAuthorized": "Sign in under \"Notifications via PWA\" first",
   "webPushConnect": "Connect notifications",
   "webPushWaitingBody": "Komet is approving the web session from this device. This usually takes a few seconds.",
-  "webPushNeedsOnline": "No connection to the server. Wait for it and try again."
+  "webPushNeedsOnline": "No connection to the server. Wait for it and try again.",
+  "webPushSignOutConfirm": "The web session will be terminated and disappear from your device list. To get notifications back you will have to connect again.",
+  "webPushSignOutAction": "Disconnect",
+  "webPushStatusService": "Service",
+  "webPushStatusToken": "Token",
+  "webPushStatusLinkedAt": "Linked",
+  "webPushStatusDevice": "Device"
 }

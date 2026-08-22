@@ -2818,4 +2818,23 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get webPushNeedsOnline =>
       'Нет связи с сервером. Дождитесь подключения и попробуйте снова.';
+
+  @override
+  String get webPushSignOutConfirm =>
+      'Веб-сессия будет завершена и исчезнет из списка устройств. Чтобы вернуть уведомления, подключение придётся пройти заново.';
+
+  @override
+  String get webPushSignOutAction => 'Отключить';
+
+  @override
+  String get webPushStatusService => 'Сервис';
+
+  @override
+  String get webPushStatusToken => 'Токен';
+
+  @override
+  String get webPushStatusLinkedAt => 'Привязан';
+
+  @override
+  String get webPushStatusDevice => 'Устройство';
 }
