@@ -488,7 +488,7 @@ class AccountModule {
     final data = _requireMapPayload(packet, 'checkPassword');
 
     if (data['error'] != null) {
-      throw Exception('checkPassword: неверный пароль');
+      throw const WrongPasswordException();
     }
 
     final tokenAttrs = data['tokenAttrs'];

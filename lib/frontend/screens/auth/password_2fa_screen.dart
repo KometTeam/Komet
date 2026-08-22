@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../../backend/modules/account/account_models.dart';
 import '../../../core/protocol/packet.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/custom_notification.dart';
@@ -101,10 +103,13 @@ class _Password2FAScreenState extends State<Password2FAScreen>
         _isLoading = false;
       });
 
+      final l10n = AppLocalizations.of(context)!;
       if (!passed && (isSessionStateError(e) || sessionStale)) {
         recoverStaleSession();
+      } else if (e is WrongPasswordException) {
+        showCustomNotification(context, l10n.passwordEntryWrongPassword);
       } else {
-        showCustomNotification(context, 'Неверный пароль: $e');
+        showCustomNotification(context, l10n.devicesGenericError('$e'));
       }
     }
   }

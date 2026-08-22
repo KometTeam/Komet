@@ -290,6 +290,12 @@ class WrongDeviceTokenException implements Exception {
   String toString() => 'WrongDeviceTokenException';
 }
 
+class WrongPasswordException implements Exception {
+  const WrongPasswordException();
+  @override
+  String toString() => 'WrongPasswordException';
+}
+
 class RequestCodeResult {
   final String token;
 
