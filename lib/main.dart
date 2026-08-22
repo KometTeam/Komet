@@ -26,12 +26,14 @@ import 'core/config/app_show_extra_info.dart';
 import 'core/config/app_spectrum_background.dart';
 import 'core/config/app_bubble_behavior.dart';
 import 'core/config/komet_settings.dart';
+import 'core/config/call_no_mute.dart';
 import 'core/config/debug_test.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
 import 'core/config/custom_font_service.dart';
 import 'core/config/app_message_actions_style.dart';
+import 'core/config/app_microphone.dart';
 import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
 import 'core/config/app_stories.dart';
@@ -180,6 +182,7 @@ void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await initKolibri();
   DebugTest.parse(args);
+  CallNoMute.parse(args);
   _installLogCapture();
   VideoPlayerMediaKit.ensureInitialized(
     windows: true,
@@ -226,6 +229,7 @@ void main(List<String> args) async {
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
   final swipeBackFuture = AppSwipeBackDesktop.load();
+  final microphoneFuture = AppMicrophone.load();
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
   final commandsFuture = AppCommands.load();
@@ -287,6 +291,7 @@ void main(List<String> args) async {
     themeScheduleFuture,
     messageActionsFuture,
     swipeBackFuture,
+    microphoneFuture,
     pranksFuture,
     storiesFuture,
     commandsFuture,

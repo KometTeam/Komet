@@ -1108,6 +1108,41 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get callTooltipMicrophone => 'Microphone';
+
+  @override
+  String get callMicrophoneTitle => 'Microphone';
+
+  @override
+  String get callMicrophoneSystem => 'System default';
+
+  @override
+  String get callMicrophoneEmpty => 'No microphones found';
+
+  @override
+  String get callMicrophoneRefresh => 'Refresh list';
+
+  @override
+  String get callMicrophoneMonitors => 'Monitors — system audio';
+
+  @override
+  String callMicrophoneFallback(Object index) {
+    return 'Microphone $index';
+  }
+
+  @override
+  String callMicrophoneFailed(Object error) {
+    return 'Could not switch microphone: $error';
+  }
+
+  @override
+  String get callMicStillLive => 'Still live';
+
+  @override
+  String get callNoMuteHint =>
+      '--no-mute: audio keeps going out even while the mic is off';
+
+  @override
   String get callInfoClient => 'Client';
 
   @override

@@ -2180,6 +2180,66 @@ abstract class AppLocalizations {
   /// **'Camera unavailable: {error}'**
   String callCameraUnavailable(Object error);
 
+  /// No description provided for @callTooltipMicrophone.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get callTooltipMicrophone;
+
+  /// No description provided for @callMicrophoneTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get callMicrophoneTitle;
+
+  /// No description provided for @callMicrophoneSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get callMicrophoneSystem;
+
+  /// No description provided for @callMicrophoneEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No microphones found'**
+  String get callMicrophoneEmpty;
+
+  /// No description provided for @callMicrophoneRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh list'**
+  String get callMicrophoneRefresh;
+
+  /// No description provided for @callMicrophoneMonitors.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitors — system audio'**
+  String get callMicrophoneMonitors;
+
+  /// No description provided for @callMicrophoneFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone {index}'**
+  String callMicrophoneFallback(Object index);
+
+  /// No description provided for @callMicrophoneFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not switch microphone: {error}'**
+  String callMicrophoneFailed(Object error);
+
+  /// No description provided for @callMicStillLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Still live'**
+  String get callMicStillLive;
+
+  /// No description provided for @callNoMuteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'--no-mute: audio keeps going out even while the mic is off'**
+  String get callNoMuteHint;
+
   /// No description provided for @callInfoClient.
   ///
   /// In en, this message translates to:

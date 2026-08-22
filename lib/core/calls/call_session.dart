@@ -5,12 +5,17 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import '../config/app_microphone.dart';
+import '../config/app_pulse_source.dart';
+import '../config/call_no_mute.dart';
 import '../utils/logger.dart';
 import '../utils/parse.dart';
+import 'audio_devices.dart';
 import 'call_admin.dart';
 import 'call_bridge.dart';
 import 'call_info.dart';
 import 'conversation_params.dart';
+import 'pulse_audio.dart';
 import 'sfu_data_channel.dart';
 import 'ws2_signaling.dart';
 
@@ -71,6 +76,7 @@ class CallSession {
   Ws2Signaling? _signaling;
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
+  MediaStream? _micStream;
   MediaStream? _remoteStreamRef;
 
   int? _peerId;
@@ -101,8 +107,12 @@ class CallSession {
   bool _localScreen = false;
   MediaStream? _cameraStream;
   MediaStream? _screenStream;
+  RTCRtpSender? _audioSender;
   RTCRtpSender? _videoSender;
   RTCRtpSender? _screenSender;
+  String? _micDeviceId = AppMicrophone.deviceId;
+  String? _pulseSource = AppPulseSource.name;
+  bool _monitorCapture = false;
 
   Completer<void>? _gatherDone;
   bool _gotConnection = false;
@@ -208,6 +218,9 @@ class CallSession {
   bool get peerIsKomet => _peerIsKomet;
 
   bool get isMuted => _muted;
+  bool get audioTransmitting => !_muted || CallNoMute.enabled;
+  String? get micDeviceId => _micDeviceId;
+  String? get pulseSource => _pulseSource;
   bool get isSpeaker => _speakerOn;
   bool get peerMuted => _peerMuted;
   bool get peerVideo => _peerVideo;
@@ -388,6 +401,7 @@ class CallSession {
     } catch (_) {}
     _pc = null;
 
+    _audioSender = null;
     _videoSender = null;
     _screenSender = null;
     _remoteDescSet = false;
@@ -406,6 +420,7 @@ class CallSession {
       await _localStream?.dispose();
     } catch (_) {}
     _localStream = null;
+    await _disposeMicStream();
 
     await _disposeStream(_cameraStream);
     await _disposeStream(_screenStream);
@@ -440,7 +455,7 @@ class CallSession {
     }
 
     final loud = <int>{};
-    if (!_muted && local > _speakLevelOn) loud.add(ws2Config.userId);
+    if (audioTransmitting && local > _speakLevelOn) loud.add(ws2Config.userId);
     final others = _participants.values.where((p) => !p.isSelf).toList();
     if (others.length == 1 && remote > _speakLevelOn) loud.add(others.first.id);
 
@@ -878,14 +893,157 @@ class CallSession {
 
   Future<void> _addLocalMedia(RTCPeerConnection pc) async {
     await _prepareAudioSession();
+    await _disposeMicStream();
+    try {
+      await _prepareMicRoute();
+    } catch (e) {
+      logger.w(
+        '[call][pulse] маршрут недоступен, беру устройство по умолчанию: $e',
+      );
+      await _resetMicRoute();
+    }
+    await _selectMicInsideEngine();
     _localStream = await navigator.mediaDevices.getUserMedia({
-      'audio': true,
+      'audio': AudioDevices.micConstraints(
+        _micDeviceId,
+        monitorCapture: _monitorCapture,
+      ),
       'video': _wantVideo,
     });
     for (final track in _localStream!.getTracks()) {
-      await pc.addTrack(track, _localStream!);
+      final sender = await pc.addTrack(track, _localStream!);
+      if (track.kind == 'audio') _audioSender = sender;
     }
+    _applyAudioTracks();
     await applyAudioRoute();
+  }
+
+  Future<void> _selectMicInsideEngine() async {
+    final deviceId = _micDeviceId;
+    if (deviceId == null || !AudioDevices.switchesInsideEngine) return;
+    await AudioDevices.selectInput(deviceId);
+  }
+
+  Future<void> _disposeMicStream() async {
+    final stream = _micStream;
+    _micStream = null;
+    await _disposeStream(stream);
+  }
+
+  List<MediaStreamTrack> get _audioTracks =>
+      _micStream?.getAudioTracks() ??
+      _localStream?.getAudioTracks() ??
+      const <MediaStreamTrack>[];
+
+  void _applyAudioTracks() {
+    for (final track in _audioTracks) {
+      track.enabled = audioTransmitting;
+    }
+  }
+
+  Future<void> setPulseSource(String? sourceName) async {
+    final previous = _pulseSource;
+    final next = (sourceName == null || sourceName.isEmpty) ? null : sourceName;
+    _pulseSource = next;
+    if (next == null) await _resetMicRoute();
+    try {
+      await _replaceMicTrack();
+    } catch (e) {
+      _pulseSource = previous;
+      await _resetMicRoute();
+      rethrow;
+    }
+    await AppPulseSource.save(next ?? '');
+    _notifyInfo();
+  }
+
+  Future<void> _resetMicRoute() async {
+    _pulseSource = null;
+    _monitorCapture = false;
+    _micDeviceId = AppMicrophone.deviceId;
+    await PulseAudio.closeBridge();
+  }
+
+  Future<void> _prepareMicRoute() async {
+    final wanted = _pulseSource;
+    if (!PulseAudio.supported || wanted == null) {
+      _monitorCapture = false;
+      await PulseAudio.closeBridge();
+      return;
+    }
+    final source = await PulseAudio.find(wanted);
+    if (source == null) {
+      logger.w('[call][pulse] источник $wanted пропал');
+      await _resetMicRoute();
+      return;
+    }
+    _monitorCapture = source.isMonitor;
+    if (!source.isMonitor) {
+      final direct = await AudioDevices.findDevice(source.name);
+      if (direct != null) {
+        _micDeviceId = direct;
+        await PulseAudio.closeBridge();
+        return;
+      }
+    }
+    final bridge = await PulseAudio.openBridge(source.name);
+    final device = bridge == null
+        ? null
+        : await AudioDevices.findDevice(bridge, attempts: 8);
+    if (device == null) {
+      await PulseAudio.closeBridge();
+      throw PulseRouteException(source.label);
+    }
+    _micDeviceId = device;
+  }
+
+  Future<void> setMicrophone(String? deviceId) async {
+    final next = (deviceId == null || deviceId.isEmpty) ? null : deviceId;
+    _micDeviceId = next;
+    _pulseSource = null;
+    _monitorCapture = false;
+    await AppMicrophone.save(next ?? '');
+    await AppPulseSource.save('');
+    await PulseAudio.closeBridge();
+    if (AudioDevices.switchesInsideEngine) {
+      await _selectMicInsideEngine();
+    } else {
+      await _replaceMicTrack();
+    }
+    _notifyInfo();
+  }
+
+  Future<void> _replaceMicTrack() async {
+    await _prepareMicRoute();
+    final sender = _audioSender;
+    if (sender == null) return;
+    final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+      'audio': AudioDevices.micConstraints(
+        _micDeviceId,
+        monitorCapture: _monitorCapture,
+      ),
+      'video': false,
+    });
+    final tracks = stream.getAudioTracks();
+    if (tracks.isEmpty) {
+      await _disposeStream(stream);
+      return;
+    }
+    final track = tracks.first;
+    track.enabled = audioTransmitting;
+    await sender.replaceTrack(track);
+    final previous = _micStream;
+    _micStream = stream;
+    if (previous != null) {
+      await _disposeStream(previous);
+    } else {
+      for (final old
+          in _localStream?.getAudioTracks() ?? const <MediaStreamTrack>[]) {
+        try {
+          await old.stop();
+        } catch (_) {}
+      }
+    }
   }
 
   Future<void> setSpeaker(bool on) async {
@@ -1205,6 +1363,8 @@ class CallSession {
       }
       await _localStream?.dispose();
       _localStream = null;
+      await _disposeMicStream();
+      _audioSender = null;
       _videoSender = null;
       _screenSender = null;
     }
@@ -1231,6 +1391,7 @@ class CallSession {
       await _pc?.close();
     } catch (_) {}
     _pc = null;
+    _audioSender = null;
     _videoSender = null;
     _screenSender = null;
     _remoteDescSet = false;
@@ -1953,10 +2114,7 @@ class CallSession {
 
   Future<void> _applyMuted(bool muted, {bool announce = false}) async {
     _muted = muted;
-    for (final track
-        in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
-      track.enabled = !muted;
-    }
+    _applyAudioTracks();
     _notifyInfo();
     if (announce) await _sendMediaSettings();
   }
@@ -2171,6 +2329,8 @@ class CallSession {
       await track.stop();
     }
     await _localStream?.dispose();
+    await _disposeMicStream();
+    await PulseAudio.closeBridge();
     await _disposeStream(_cameraStream);
     await _disposeStream(_screenStream);
     _cameraStream = null;

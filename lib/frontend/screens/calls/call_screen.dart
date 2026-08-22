@@ -5,11 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart'
-    show
-        MediaStream,
-        RTCVideoRenderer,
-        RTCVideoValue,
-        RTCVideoViewObjectFit;
+    show MediaStream, RTCVideoRenderer, RTCVideoValue, RTCVideoViewObjectFit;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/messages.dart' show ContactCache;
@@ -19,6 +15,7 @@ import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
 import '../../../core/config/app_colors.dart';
+import '../../../core/config/call_no_mute.dart';
 import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/call_video_view.dart';
@@ -27,6 +24,7 @@ import '../../widgets/glossy_pill.dart';
 import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
+import 'call_mic_sheet.dart';
 import 'call_participants_sheet.dart';
 import 'komet_hub.dart';
 import '../../../core/config/app_fonts.dart';
@@ -469,6 +467,16 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           avatarUrl: info?.avatar,
         );
       },
+    );
+  }
+
+  void _showMicrophones() {
+    final session = _session;
+    if (session == null) return;
+    showCallMicrophoneSheet(
+      context,
+      session: session,
+      scheme: _darkScheme(context),
     );
   }
 
@@ -1011,6 +1019,16 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   IconButton(
+                    onPressed: _showMicrophones,
+                    tooltip: l10n.callTooltipMicrophone,
+                    icon: Icon(
+                      Symbols.settings_voice,
+                      color: cs.onSurface,
+                      weight: 500,
+                      size: 26,
+                    ),
+                  ),
+                  IconButton(
                     onPressed: _showInfoSheet,
                     tooltip: l10n.callInfoTitle,
                     icon: Icon(
@@ -1295,10 +1313,13 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
             icon: Symbols.mic,
             slashedIcon: Symbols.mic_off,
             slashed: _isMuted,
-            label: _isMuted ? l10n.callUnmute : l10n.callMute,
+            label: _isMuted
+                ? (CallNoMute.enabled ? l10n.callMicStillLive : l10n.callUnmute)
+                : l10n.callMute,
             background: _isMuted ? cs.primary : cs.surfaceContainerHighest,
             foreground: _isMuted ? cs.onPrimary : cs.onSurface,
             onTap: _toggleMute,
+            onLongPress: _showMicrophones,
           ),
           _CallButton(
             icon: Symbols.call_end,
@@ -1364,6 +1385,7 @@ class _CallButton extends StatelessWidget {
   final Color background;
   final Color foreground;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool busy;
 
   const _CallButton({
@@ -1372,6 +1394,7 @@ class _CallButton extends StatelessWidget {
     required this.background,
     required this.foreground,
     required this.onTap,
+    this.onLongPress,
     this.slashedIcon,
     this.slashed = false,
     this.busy = false,
@@ -1405,6 +1428,7 @@ class _CallButton extends StatelessWidget {
             color: background,
             borderRadius: BorderRadius.circular(31),
             onTap: busy ? null : onTap,
+            onLongPress: busy ? null : onLongPress,
             depth: 9,
             child: Center(
               child: busy

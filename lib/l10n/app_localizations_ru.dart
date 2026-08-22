@@ -1110,6 +1110,41 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get callTooltipMicrophone => 'Микрофон';
+
+  @override
+  String get callMicrophoneTitle => 'Микрофон';
+
+  @override
+  String get callMicrophoneSystem => 'Системный по умолчанию';
+
+  @override
+  String get callMicrophoneEmpty => 'Микрофоны не найдены';
+
+  @override
+  String get callMicrophoneRefresh => 'Обновить список';
+
+  @override
+  String get callMicrophoneMonitors => 'Мониторы — звук системы';
+
+  @override
+  String callMicrophoneFallback(Object index) {
+    return 'Микрофон $index';
+  }
+
+  @override
+  String callMicrophoneFailed(Object error) {
+    return 'Не удалось переключить микрофон: $error';
+  }
+
+  @override
+  String get callMicStillLive => 'Всё равно слышно';
+
+  @override
+  String get callNoMuteHint =>
+      '--no-mute: звук идёт даже с выключенным микрофоном';
+
+  @override
   String get callInfoClient => 'Клиент';
 
   @override
