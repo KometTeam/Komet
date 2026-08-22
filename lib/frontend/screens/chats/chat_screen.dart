@@ -581,6 +581,9 @@ class _ChatScreenState extends State<ChatScreen>
   static const double _glossyHeaderHeight = 76.0;
   static const double _glossySearchHeight = 58.0;
   static const double _pinnedBannerLift = 6.0;
+  static const double _edgeFadeHeight = 24.0;
+  static const double _scrollDownSize = 46.0;
+  static const double _materialIconSlot = 48.0;
   static const double _unreadSeparatorHeight = 30.0;
   static const double _unreadSeparatorInset = 72.0;
   static const double _unreadAnchorFallbackAlignment = 0.3;
@@ -609,6 +612,18 @@ class _ChatScreenState extends State<ChatScreen>
 
   bool get _composerUnderlap =>
       AppChatChrome.current.value != ChatChromeStyle.color || _composerFrosted;
+
+  bool get _materialComposer =>
+      !ComposerChrome.isGlossy(AppComposerStyle.current.value);
+
+  bool get _composerPaintsSurface {
+    if (!_commentsMode &&
+        widget.chatType == 'CHANNEL' &&
+        _pendingForwards.value.isEmpty) {
+      return false;
+    }
+    return _materialComposer && !_composerFrosted;
+  }
 
   bool get _liquidChrome =>
       AppVisualStyle.current.value.glossyChrome &&
@@ -2679,6 +2694,7 @@ class _ChatScreenState extends State<ChatScreen>
                   bottomSafe: _stickers.anim.value == 0,
                   chatType: _commentsMode ? 'CHAT' : widget.chatType,
                   chrome: _effectiveChrome,
+                  vignette: _chromeVignette,
                   style: AppComposerStyle.current.value,
                   background: AppComposerBackground.current.value,
                   backdropKey: _pillBackdrop,
@@ -3116,6 +3132,11 @@ class _ChatScreenState extends State<ChatScreen>
         ? ui.lerpDouble(_glossyHeaderHeight, _glossySearchHeight, searchT)!
         : kToolbarHeight;
     final chrome = _effectiveChrome;
+    final barExtent = MediaQuery.paddingOf(context).top + height;
+    final fadeStop = ((barExtent - _edgeFadeHeight) / barExtent).clamp(
+      0.0,
+      1.0,
+    );
     return AppBar(
       backgroundColor: chrome == ChatChromeStyle.color
           ? (glossy ? Colors.transparent : cs.surfaceContainerHigh)
@@ -3139,7 +3160,7 @@ class _ChatScreenState extends State<ChatScreen>
                       cs.surface,
                       cs.surface.withValues(alpha: 0.0),
                     ],
-                    stops: const [0.0, 0.72, 1.0],
+                    stops: [0.0, fadeStop, 1.0],
                   ),
                 ),
                 child: const SizedBox.expand(),
@@ -5494,20 +5515,28 @@ class _ChatScreenState extends State<ChatScreen>
           senderAvatar: _searchSenderAvatar,
         ),
         if (vignette) ...[
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildEdgeVignette(cs, top: true),
-          ),
-          ValueListenableBuilder<double>(
-            valueListenable: _composerHeight,
-            builder: (context, height, _) => Positioned(
+          if (AppVisualStyle.current.value.glossyChrome)
+            Positioned(
+              top: 0,
               left: 0,
               right: 0,
-              bottom: 0,
-              child: _buildEdgeVignette(cs, top: false, height: height),
+              child: _buildEdgeVignette(cs, top: true),
             ),
+          ValueListenableBuilder<double>(
+            valueListenable: _composerHeight,
+            builder: (context, height, _) => _composerPaintsSurface
+                ? Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: height,
+                    child: _buildEdgeFade(cs),
+                  )
+                : Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _buildEdgeVignette(cs, top: false, height: height),
+                  ),
           ),
         ],
         Positioned(
@@ -5551,6 +5580,21 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildEdgeFade(ColorScheme cs) {
+    return IgnorePointer(
+      child: Container(
+        height: _edgeFadeHeight,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [cs.surface, cs.surface.withValues(alpha: 0.0)],
+          ),
+        ),
+      ),
     );
   }
 
@@ -5956,7 +6000,9 @@ class _ChatScreenState extends State<ChatScreen>
     return ValueListenableBuilder<double>(
       valueListenable: _composerHeight,
       builder: (context, height, child) => Positioned(
-        right: 16,
+        right: _materialComposer
+            ? (_materialIconSlot - _scrollDownSize) / 2
+            : 16,
         bottom: (_composerUnderlap ? height : 0) + 12,
         child: child!,
       ),
@@ -5971,8 +6017,8 @@ class _ChatScreenState extends State<ChatScreen>
             child: Transform.scale(
               scale: 0.82 + 0.18 * t,
               child: SizedBox(
-                width: 46,
-                height: 46,
+                width: _scrollDownSize,
+                height: _scrollDownSize,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
