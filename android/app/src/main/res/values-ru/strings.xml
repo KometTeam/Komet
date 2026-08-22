@@ -9,4 +9,5 @@
     <string name="fkm_explain">Это уведомление держит фоновое соединение с сервером, чтобы сообщения приходили без гугловых пушей. Убрать его можно, выключив FKM — кнопкой ниже или в Настройки → Уведомления → FKM.</string>
     <string name="fkm_disable">Выключить</string>
     <string name="notif_deleted_prefix">Удалено:</string>
+    <string name="share_target_label">Отправить в чат</string>
 </resources>

@@ -25,7 +25,12 @@ import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
 import '../../widgets/springy_tap.dart';
 import '../../widgets/informer_banner_tile.dart';
+import '../../../backend/modules/share_sender.dart';
+import '../../../core/utils/logger.dart';
 import '../../../core/utils/format.dart';
+import '../../../models/shared_payload.dart';
+import '../../widgets/rich_message_controller.dart';
+import 'share_composer_bar.dart';
 import '../../../core/utils/download_history.dart';
 import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/text_format.dart';
@@ -159,6 +164,7 @@ class ChatListScreen extends StatefulWidget {
   final bool forwardMode;
   final int forwardMessageCount;
   final bool archiveMode;
+  final SharedPayload? sharePayload;
 
   const ChatListScreen({
     super.key,
@@ -166,6 +172,7 @@ class ChatListScreen extends StatefulWidget {
     this.forwardMode = false,
     this.forwardMessageCount = 1,
     this.archiveMode = false,
+    this.sharePayload,
   });
 
   static _ChatListScreenState? _root;
@@ -252,7 +259,8 @@ class _ChatListScreenState extends State<ChatListScreen>
   bool _reloadQueued = false;
   bool _reloadInFlight = false;
   Timer? _settleTimer;
-  bool get _isSelectionMode => _selectedChats.isNotEmpty;
+  bool get _shareMode => widget.sharePayload != null;
+  bool get _isSelectionMode => !_shareMode && _selectedChats.isNotEmpty;
   bool? _foldersListKnown;
 
   late AnimationController _navPageAnimController;
@@ -265,6 +273,10 @@ class _ChatListScreenState extends State<ChatListScreen>
   final List<VoidCallback> _folderChatScrollListenerFns = [];
   final Set<String> _selectedChats = {};
   final Set<int> _inflightContactIds = {};
+  final Map<String, String> _selectedChatNames = {};
+  RichMessageController? _shareCaption;
+  PreparedShare? _preparedShare;
+  bool _shareSending = false;
 
   DateTime _storiesRevealLayoutSettleUntil =
       DateTime.fromMillisecondsSinceEpoch(0);
@@ -326,6 +338,107 @@ class _ChatListScreenState extends State<ChatListScreen>
 
       _shouldCollapseSearch = _isSelectionMode;
     });
+  }
+
+  void _initShare() {
+    final payload = widget.sharePayload;
+    if (payload == null) return;
+    _shareCaption = RichMessageController(
+      text: payload.isTextOnly ? (payload.text ?? '') : '',
+    );
+    unawaited(
+      PreparedShare.prepare(payload).then((prepared) {
+        if (mounted) setState(() => _preparedShare = prepared);
+      }),
+    );
+  }
+
+  void _toggleShareTarget(String chatId, String name) {
+    Haptics.selection();
+    setState(() {
+      if (_selectedChats.remove(chatId)) {
+        _selectedChatNames.remove(chatId);
+      } else {
+        _selectedChats.add(chatId);
+        _selectedChatNames[chatId] = name;
+      }
+    });
+  }
+
+  List<String> get _shareRecipientNames => [
+    for (final id in _selectedChats) _selectedChatNames[id] ?? 'Чат',
+  ];
+
+  Future<void> _sendShare(String caption) async {
+    final prepared = _preparedShare;
+    final myId = _profile?.id ?? 0;
+    if (prepared == null || myId == 0 || _selectedChats.isEmpty) return;
+    if (_shareSending) return;
+
+    final targets = <int>[];
+    for (final raw in _selectedChats) {
+      final id = int.tryParse(raw);
+      if (id != null) targets.add(id);
+    }
+    if (targets.isEmpty) return;
+
+    setState(() => _shareSending = true);
+    Haptics.send();
+
+    ShareSendResult? result;
+    try {
+      result = await ShareSender.send(
+        accountId: myId,
+        chatIds: targets,
+        share: prepared,
+        caption: caption,
+      );
+    } catch (e) {
+      logger.w('Поделиться: отправка не удалась: $e');
+    }
+
+    if (!mounted) return;
+    setState(() => _shareSending = false);
+
+    if (result == null) {
+      Haptics.error();
+      showCustomNotification(context, 'Не удалось отправить');
+      return;
+    }
+
+    final navigator = Navigator.of(context);
+    if (targets.length == 1) {
+      final chatId = targets.first;
+      final chat = _chats.where((c) => c.id == chatId).firstOrNull;
+      navigator.pop();
+      unawaited(
+        pushSwipeable(
+          navigator.context,
+          (_) => ChatScreen(
+            chatId: chatId,
+            name: _selectedChatNames[chatId.toString()] ?? chat?.title ?? 'Чат',
+            imageUrl: chat?.iconUrl ?? '',
+            chatType: chat?.type ?? 'DIALOG',
+          ),
+        ),
+      );
+      return;
+    }
+    navigator.pop();
+  }
+
+  Widget _buildShareComposer(ColorScheme cs) {
+    final prepared = _preparedShare;
+    final controller = _shareCaption;
+    if (prepared == null || controller == null) return const SizedBox.shrink();
+    if (_selectedChats.isEmpty) return const SizedBox.shrink();
+    return ShareComposerBar(
+      share: prepared,
+      controller: controller,
+      recipientNames: _shareRecipientNames,
+      sending: _shareSending,
+      onSend: _sendShare,
+    );
   }
 
   void _clearSelection() {
@@ -600,7 +713,10 @@ class _ChatListScreenState extends State<ChatListScreen>
   @override
   void initState() {
     super.initState();
-    if (!widget.forwardMode && !widget.archiveMode) ChatListScreen._root = this;
+    if (!widget.forwardMode && !widget.archiveMode && !_shareMode) {
+      ChatListScreen._root = this;
+    }
+    _initShare();
     _fabController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -1349,6 +1465,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   @override
   void dispose() {
     if (ChatListScreen._root == this) ChatListScreen._root = null;
+    _shareCaption?.dispose();
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
     chats.chatsChanged.removeListener(_onChatsChanged);
@@ -1574,7 +1691,27 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 Expanded(
                                   child: Row(
                                     children: [
+                                      if (_shareMode)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 4,
+                                          ),
+                                          child: IconButton(
+                                            key: const ValueKey('share-back'),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            icon: Icon(
+                                              Symbols.arrow_back,
+                                              color: cs.onSurface,
+                                              weight: 500,
+                                            ),
+                                            onPressed: () => Navigator.of(
+                                              context,
+                                            ).maybePop(),
+                                          ),
+                                        ),
                                       if (AppStories.current.value &&
+                                          !_shareMode &&
                                           _pullRatio < 0.8 &&
                                           storiesModule.hasAny)
                                         Opacity(
@@ -1612,10 +1749,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         ),
                                       Flexible(
                                         child: Text(
-                                          connectionStatusLabel(
-                                                _sessionState,
-                                              ) ??
-                                              (_profile?.firstName ?? 'Чат'),
+                                          _shareMode &&
+                                                  _selectedChats.isNotEmpty
+                                              ? '${_selectedChats.length} '
+                                                    '${pluralRu(_selectedChats.length, 'получатель', 'получателя', 'получателей')}'
+                                              : connectionStatusLabel(
+                                                      _sessionState,
+                                                    ) ??
+                                                    (_profile?.firstName ??
+                                                        'Чат'),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -1634,7 +1776,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     if (!widget.forwardMode &&
-                                        !widget.archiveMode)
+                                        !widget.archiveMode &&
+                                        !_shareMode)
                                       IconButton(
                                         key: const ValueKey('downloads-button'),
                                         tooltip: AppLocalizations.of(
@@ -1691,7 +1834,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                             padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onTap: widget.forwardMode ? null : _openSearch,
+                              onTap: (widget.forwardMode || _shareMode)
+                                  ? null
+                                  : _openSearch,
                               child: GlossyPill(
                                 color: cs.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(50),
@@ -2186,6 +2331,14 @@ class _ChatListScreenState extends State<ChatListScreen>
           builder: (context, constraints) {
             if (widget.forwardMode) {
               return _getChatsBody();
+            }
+            if (_shareMode) {
+              return Column(
+                children: [
+                  Expanded(child: _getChatsBody()),
+                  _buildShareComposer(cs),
+                ],
+              );
             }
             final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
             final pageW = constraints.maxWidth;
@@ -2981,6 +3134,10 @@ class _ChatListScreenState extends State<ChatListScreen>
             );
             return;
           }
+          if (_shareMode) {
+            _toggleShareTarget(id, name);
+            return;
+          }
           if (_isSelectionMode) {
             _toggleSelection(id);
             return;
@@ -3018,7 +3175,9 @@ class _ChatListScreenState extends State<ChatListScreen>
             );
           }
         },
-        onLongPress: widget.forwardMode ? null : () => _toggleSelection(id),
+        onLongPress: (widget.forwardMode || _shareMode)
+            ? null
+            : () => _toggleSelection(id),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           color: isSelected

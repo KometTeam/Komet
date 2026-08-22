@@ -77,9 +77,14 @@ class MainActivity : FlutterActivity() {
 
     private var pendingCall: Map<String, Any?>? = null
     private var pendingChat: Long = 0L
+    private var pendingShare: Map<String, Any?>? = null
+    private var pendingShareTask: java.util.concurrent.Future<Map<String, Any?>?>? = null
+    private val shareExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val shareHandler = Handler(Looper.getMainLooper())
 
     private companion object {
         const val LOG_TAG = "VpnBypass"
+        const val SHARE_TAG = "ShareIntake"
         const val NFC_TAG = "NfcExchange"
         const val KEEP_ENGINE_ID = "komet_keep_engine"
         const val NFC_PHASE_MIN_MS = 350L
@@ -439,6 +444,54 @@ class MainActivity : FlutterActivity() {
             }
         })
 
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/share",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "consumeInitialShare" -> {
+                    stashShare(intent, emit = false)
+                    val ready = pendingShare
+                    val task = pendingShareTask
+                    if (ready != null) {
+                        pendingShare = null
+                        result.success(ready)
+                    } else if (task != null) {
+                        pendingShareTask = null
+                        shareExecutor.execute {
+                            val payload = try {
+                                task.get()
+                            } catch (e: Exception) {
+                                Log.w(SHARE_TAG, "materialize failed: $e")
+                                null
+                            }
+                            shareHandler.post { result.success(payload) }
+                        }
+                    } else {
+                        result.success(null)
+                    }
+                }
+                "clearCache" -> {
+                    ShareIntake.clearCache(applicationContext)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/share_events",
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                ShareIntake.sink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                ShareIntake.sink = null
+            }
+        })
+
         FkmChannel.attach(flutterEngine, this)
     }
 
@@ -447,6 +500,7 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
         intent?.let { if (it.hasExtra(CallConst.EXTRA_CALL)) stashCall(it, emit = false) }
         stashChatOpen(intent, emit = false)
+        stashShare(intent, emit = false)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -457,6 +511,7 @@ class MainActivity : FlutterActivity() {
             stashCall(intent, emit = true)
         }
         stashChatOpen(intent, emit = true)
+        stashShare(intent, emit = true)
     }
 
     private fun stashChatOpen(source: Intent?, emit: Boolean) {
@@ -468,6 +523,34 @@ class MainActivity : FlutterActivity() {
             sink.success(chatId)
         } else {
             pendingChat = chatId
+        }
+    }
+
+    private fun stashShare(source: Intent?, emit: Boolean) {
+        if (!ShareIntake.isShare(source)) return
+        val intent = source ?: return
+        val snapshot = ShareIntake.snapshot(intent) ?: return
+        intent.action = Intent.ACTION_MAIN
+        intent.removeExtra(Intent.EXTRA_STREAM)
+        intent.removeExtra(Intent.EXTRA_TEXT)
+        val task = shareExecutor.submit<Map<String, Any?>?> {
+            ShareIntake.materialize(applicationContext, snapshot)
+        }
+        if (!emit) {
+            pendingShareTask = task
+            return
+        }
+        shareExecutor.execute {
+            val payload = try {
+                task.get()
+            } catch (e: Exception) {
+                Log.w(SHARE_TAG, "materialize failed: $e")
+                null
+            } ?: return@execute
+            shareHandler.post {
+                val sink = ShareIntake.sink
+                if (sink != null) sink.success(payload) else pendingShare = payload
+            }
         }
     }
 
@@ -845,6 +928,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        shareExecutor.shutdown()
         if (keepEngineAlive() && isFinishing) {
             Log.d("KometFcm", "task removed, caching engine (call=${CallState.inCall} fkm=${FkmState.enabled})")
             flutterEngine?.let { FlutterEngineCache.getInstance().put(KEEP_ENGINE_ID, it) }
