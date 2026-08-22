@@ -59,6 +59,8 @@ class DeepLinkService {
     _flushPending();
   }
 
+  void handle(Uri uri) => _onUri(uri);
+
   void _onUri(Uri uri) {
     if (_isLogExportLink(uri)) {
       _pendingLogExport = true;

@@ -3,6 +3,8 @@ import 'dart:io' show Platform;
 import 'package:flutter/widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../links/deep_link_service.dart';
+
 import '../../frontend/widgets/custom_notification.dart';
 import '../../frontend/widgets/max_link_handler.dart';
 
@@ -21,7 +23,15 @@ bool leavesWebView(String? scheme) {
   return !_webViewSchemes.contains(scheme.toLowerCase());
 }
 
+const Set<String> _appSchemes = {'komet', 'max'};
+
 Future<void> openExternalUrl(BuildContext context, String url) async {
+  final appUri = Uri.tryParse(url.trim());
+  if (appUri != null && _appSchemes.contains(appUri.scheme.toLowerCase())) {
+    DeepLinkService.instance.handle(appUri);
+    return;
+  }
+
   if (await tryHandleMaxLink(context, url)) return;
   if (!context.mounted) return;
 
