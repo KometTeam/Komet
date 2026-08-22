@@ -221,7 +221,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 22,
+      version: 23,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -353,6 +353,14 @@ class AppDatabase {
           await db.execute(_webAppStorageSchema);
           await db.execute(_webAppBiometrySchema);
         }
+        if (oldVersion < 23) {
+          await _addColumnIfMissing(
+            db,
+            'contacts',
+            'account_status',
+            'INTEGER NOT NULL DEFAULT 0',
+          );
+        }
       },
     );
   }
@@ -465,7 +473,8 @@ class AppDatabase {
       base_url     TEXT,
       base_raw_url TEXT,
       update_time  INTEGER NOT NULL DEFAULT 0,
-      options      TEXT
+      options      TEXT,
+      account_status INTEGER NOT NULL DEFAULT 0
     )
   ''';
 
@@ -798,6 +807,7 @@ class AppDatabase {
   static Future<void> close() async {
     await _db?.close();
     _db = null;
+    _initCompleter = null;
   }
 
   // Chats cache
@@ -1045,11 +1055,16 @@ class AppDatabase {
     await batch.commit(noResult: true);
   }
 
-  static Future<List<Map<String, dynamic>>> loadContacts(int accountId) async {
+  static Future<List<Map<String, dynamic>>> loadContacts(
+    int accountId, {
+    bool includeDeleted = false,
+  }) async {
     final db = await _instance;
     return db.query(
       'contacts',
-      where: 'account_id = ?',
+      where: includeDeleted
+          ? 'account_id = ?'
+          : 'account_id = ? AND account_status = 0',
       whereArgs: [accountId],
     );
   }

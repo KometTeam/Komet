@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/media/media_playback.dart';
+import '../../core/media/video_note_frame.dart';
 import '../../core/utils/haptics.dart';
 import 'draggable_floating_layer.dart';
 
@@ -65,7 +66,7 @@ class _NoteCircle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final frame = track.controller.value.size;
+    final frame = videoNoteFrameSize(track.controller.value.size, size);
     return SizedBox(
       width: size,
       height: size,
@@ -81,8 +82,8 @@ class _NoteCircle extends StatelessWidget {
                     fit: BoxFit.cover,
                     clipBehavior: Clip.hardEdge,
                     child: SizedBox(
-                      width: frame.width <= 0 ? size : frame.width,
-                      height: frame.height <= 0 ? size : frame.height,
+                      width: frame.width,
+                      height: frame.height,
                       child: VideoPlayer(track.controller),
                     ),
                   ),

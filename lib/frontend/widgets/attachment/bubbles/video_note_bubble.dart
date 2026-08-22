@@ -11,6 +11,7 @@ import 'package:video_player/video_player.dart';
 import 'package:komet/main.dart';
 
 import '../../../../core/media/media_playback.dart';
+import '../../../../core/media/video_note_frame.dart';
 import '../../../../core/media/video_note_preloader.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
@@ -65,6 +66,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   late final AnimationController _expand;
   final ValueNotifier<double> _ringProgress = ValueNotifier(0);
   Uint8List? _preview;
+  Size _frameSize = Size.zero;
   VideoPlayerController? _controller;
   VideoPlayerController? _local;
   Future<void>? _initializing;
@@ -195,8 +197,11 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
           ? (value.position.inMilliseconds / total).clamp(0.0, 1.0)
           : 0.0;
     }
-    if (value.isPlaying != _playing) {
-      setState(() => _playing = value.isPlaying);
+    if (value.size != _frameSize || value.isPlaying != _playing) {
+      setState(() {
+        _frameSize = value.size;
+        _playing = value.isPlaying;
+      });
     }
   }
 
@@ -239,7 +244,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
       _controller = live;
       live.addListener(_onTick);
       _PreviewPool.pin(this);
-      if (mounted) setState(() {});
+      if (mounted) setState(() => _frameSize = live.value.size);
       return live;
     }
     final running = _initializing;
@@ -272,7 +277,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     await controller.seekTo(Duration.zero);
     controller.addListener(_onTick);
     _PreviewPool.register(this);
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _frameSize = controller.value.size);
     return controller;
   }
 
@@ -283,7 +288,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     _controller = null;
     controller.removeListener(_onTick);
     MediaPlayback.instance.releaseVideoNote(controller);
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _frameSize = Size.zero);
   }
 
   Future<void> _toggle() async {
@@ -471,9 +476,14 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
                         ? _videoSurface(
                             _controller!,
                             const ValueKey('note-video'),
+                            size,
                           )
                         : local != null && local.value.isInitialized
-                        ? _videoSurface(local, const ValueKey('note-local'))
+                        ? _videoSurface(
+                            local,
+                            const ValueKey('note-local'),
+                            size,
+                          )
                         : _buildPoster(preview),
                   ),
                 ),
@@ -559,15 +569,20 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     );
   }
 
-  Widget _videoSurface(VideoPlayerController controller, Key key) {
+  Widget _videoSurface(
+    VideoPlayerController controller,
+    Key key,
+    double fallback,
+  ) {
+    final frame = videoNoteFrameSize(controller.value.size, fallback);
     return SizedBox.expand(
       key: key,
       child: FittedBox(
         fit: BoxFit.cover,
         clipBehavior: Clip.hardEdge,
         child: SizedBox(
-          width: controller.value.size.width,
-          height: controller.value.size.height,
+          width: frame.width,
+          height: frame.height,
           child: VideoPlayer(controller),
         ),
       ),

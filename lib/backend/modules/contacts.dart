@@ -21,6 +21,7 @@ class CachedContact {
   final String? baseRawUrl;
   final int updateTime;
   final Set<String> options;
+  final int accountStatus;
 
   const CachedContact({
     required this.id,
@@ -33,12 +34,14 @@ class CachedContact {
     this.baseRawUrl,
     required this.updateTime,
     this.options = const {},
+    this.accountStatus = 0,
   });
 
   bool get isOfficial => options.contains('OFFICIAL');
   bool get isBot => options.contains('BOT');
   bool get isServiceAccount => options.contains('SERVICE_ACCOUNT');
   bool get isVerified => isOfficial;
+  bool get isDeleted => accountStatus != 0;
 
   factory CachedContact.fromDbRow(Map<String, dynamic> row) => CachedContact(
     id: row['id'] as int,
@@ -51,6 +54,7 @@ class CachedContact {
     baseRawUrl: row['base_raw_url'] as String?,
     updateTime: row['update_time'] as int,
     options: _decodeOptions(row['options']),
+    accountStatus: (row['account_status'] as int?) ?? 0,
   );
 
   static Set<String> _decodeOptions(dynamic raw) {
@@ -183,6 +187,7 @@ class ContactsModule {
             'base_raw_url': null,
             'update_time': 0,
             'options': null,
+            'account_status': 0,
           };
 
     if (row == null) return null;
@@ -397,7 +402,14 @@ class ContactsModule {
     int accountId,
   ) async {
     final contacts = data['contacts'];
-    if (contacts is! List || contacts.isEmpty) return;
+    if (contacts is! List) {
+      logger.i('Контакты: сервер не прислал список (акк $accountId)');
+      return;
+    }
+    if (contacts.isEmpty) {
+      logger.i('Контакты: сервер прислал пустой список (акк $accountId)');
+      return;
+    }
 
     final rows = <Map<String, dynamic>>[];
     for (final raw in contacts.whereType<Map>()) {
@@ -492,8 +504,14 @@ class ContactsModule {
     return photos;
   }
 
-  static Future<List<CachedContact>> getContacts(int accountId) async {
-    final rows = await AppDatabase.loadContacts(accountId);
+  static Future<List<CachedContact>> getContacts(
+    int accountId, {
+    bool includeDeleted = false,
+  }) async {
+    final rows = await AppDatabase.loadContacts(
+      accountId,
+      includeDeleted: includeDeleted,
+    );
     return rows.map(CachedContact.fromDbRow).toList();
   }
 
@@ -571,7 +589,7 @@ class ContactsModule {
   /// Прогревает in-memory ContactCache из локальных контактов.
   /// Нужно вызывать на cold start: иначе кэш пуст до следующего логина.
   static Future<void> primeCacheFromDb(int accountId) async {
-    final contacts = await getContacts(accountId);
+    final contacts = await getContacts(accountId, includeDeleted: true);
     for (final c in contacts) {
       ContactCache.putPhone(c.id, c.phone);
       final fullName = (c.lastName != null && c.lastName!.isNotEmpty)
@@ -632,6 +650,7 @@ class ContactsModule {
       'base_raw_url': contact['baseRawUrl'] as String?,
       'update_time': (contact['updateTime'] as int?) ?? 0,
       'options': optionsStr,
+      'account_status': (contact['accountStatus'] as int?) ?? 0,
     };
   }
 }

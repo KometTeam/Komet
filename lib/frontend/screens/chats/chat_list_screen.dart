@@ -863,6 +863,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       final foldersKnown = await FoldersModule.hasReceivedFoldersList(p.id);
       final contactIds = (await ContactsModule.getContacts(
         p.id,
+        includeDeleted: true,
       )).map((c) => c.id).toSet();
 
       const allChatsFolder = ChatFolder(
