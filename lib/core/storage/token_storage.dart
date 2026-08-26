@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -7,12 +8,31 @@ class TokenStorage {
 
   static const _secure = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+      synchronizable: false,
+    ),
     mOptions: MacOsOptions(usesDataProtectionKeychain: false),
   );
 
-  static Future<void> writeSecure(String key, String value) async {
-    await _secure.write(key: key, value: value);
+  static const int _duplicateKeychainItem = -25299;
+
+  static bool _isDuplicateItem(PlatformException error) =>
+      error.details == _duplicateKeychainItem ||
+      (error.message?.contains('$_duplicateKeychainItem') ?? false);
+
+  static Future<void> _write(String key, String value) async {
+    try {
+      await _secure.write(key: key, value: value);
+    } on PlatformException catch (e) {
+      if (!_isDuplicateItem(e)) rethrow;
+      await _secure.delete(key: key);
+      await _secure.write(key: key, value: value);
+    }
   }
+
+  static Future<void> writeSecure(String key, String value) =>
+      _write(key, value);
 
   static Future<String?> readSecure(String key) async {
     return _secure.read(key: key);
@@ -22,9 +42,13 @@ class TokenStorage {
     await _secure.delete(key: key);
   }
 
-  static Future<void> saveToken(String token, int accountId) async {
-    await _secure.write(key: '$_tokenPrefix$accountId', value: token);
+  static Future<List<String>> secureKeysWithPrefix(String prefix) async {
+    final all = await _secure.readAll();
+    return all.keys.where((key) => key.startsWith(prefix)).toList();
   }
+
+  static Future<void> saveToken(String token, int accountId) =>
+      _write('$_tokenPrefix$accountId', token);
 
   static Future<String?> readToken(int accountId) async {
     final key = '$_tokenPrefix$accountId';
@@ -34,7 +58,7 @@ class TokenStorage {
     final prefs = await SharedPreferences.getInstance();
     final legacy = prefs.getString(key);
     if (legacy != null) {
-      await _secure.write(key: key, value: legacy);
+      await _write(key, legacy);
       await prefs.remove(key);
       return legacy;
     }

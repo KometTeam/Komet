@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -21,31 +22,60 @@ class PhotoBubble extends StatelessWidget {
 
   final BubbleContext ctx;
   final List<PhotoAttachment> photos;
-  final Widget? caption;
   final bool hasContentAbove;
 
   const PhotoBubble({
     super.key,
     required this.ctx,
     required this.photos,
-    this.caption,
     this.hasContentAbove = false,
   });
 
   static double layoutWidth(List<PhotoAttachment> photos) {
     if (photos.length != 1) return BubbleContext.photoMaxSize;
-    return (photos.single.width?.toDouble() ?? 200).clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
+    return _displaySize(photos.single).width;
+  }
+
+  static Size _displaySize(PhotoAttachment photo) {
+    final width = photo.width?.toDouble() ?? 200;
+    final height = photo.height?.toDouble() ?? 200;
+
+    final downScale = math.min(
+      1.0,
+      math.min(
+        BubbleContext.photoMaxSize / width,
+        BubbleContext.photoMaxSize / height,
+      ),
+    );
+    var displayWidth = width * downScale;
+    var displayHeight = height * downScale;
+
+    final upScale = math.max(
+      1.0,
+      math.max(
+        BubbleContext.photoMinSize / displayWidth,
+        BubbleContext.photoMinSize / displayHeight,
+      ),
+    );
+    displayWidth *= upScale;
+    displayHeight *= upScale;
+
+    return Size(
+      displayWidth.clamp(
+        BubbleContext.photoMinSize,
+        BubbleContext.photoMaxSize,
+      ),
+      displayHeight.clamp(
+        BubbleContext.photoMinSize,
+        BubbleContext.photoMaxSize,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final message = ctx.message;
-    final hasMessageCaption = message.text != null && message.text!.isNotEmpty;
-    final resolvedCaption =
-        caption ?? (hasMessageCaption ? ctx.caption() : null);
+    final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
+    final resolvedCaption = hasMessageCaption ? ctx.caption() : null;
     final hasCaption = resolvedCaption != null;
     final count = photos.length;
 
@@ -59,6 +89,8 @@ class PhotoBubble extends StatelessWidget {
       );
     } else if (count == 2) {
       photosWidget = _buildTwoPhotos(ctx, photos[0], photos[1]);
+    } else if (count == 3) {
+      photosWidget = _buildThreePhotos(ctx, photos);
     } else {
       photosWidget = _buildPhotoGrid(ctx, photos);
     }
@@ -88,6 +120,7 @@ class PhotoBubble extends StatelessWidget {
               padding: const EdgeInsets.only(
                 left: BubbleContext.captionPaddingHorizontal,
                 right: BubbleContext.captionPaddingRight,
+                top: BubbleContext.captionPaddingTop,
                 bottom: 6,
               ),
               child: Row(
@@ -112,6 +145,7 @@ class PhotoBubble extends StatelessWidget {
           padding: const EdgeInsets.only(
             left: BubbleContext.captionPaddingHorizontal,
             right: BubbleContext.captionPaddingRight,
+            top: BubbleContext.captionPaddingTop,
             bottom: 6,
           ),
           child: Row(
@@ -132,17 +166,9 @@ class PhotoBubble extends StatelessWidget {
     required bool hasCaption,
     required bool hasContentAbove,
   }) {
-    final width = photo.width?.toDouble() ?? 200;
-    final height = photo.height?.toDouble() ?? 200;
-
-    final constrainedWidth = width.clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
-    );
-    final constrainedHeight = height.clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
-    );
+    final size = _displaySize(photo);
+    final constrainedWidth = size.width;
+    final constrainedHeight = size.height;
     final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
 
     final matchTop = hasCaption && !hasContentAbove;
@@ -311,6 +337,39 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
+  Widget _buildThreePhotos(BubbleContext ctx, List<PhotoAttachment> photos) {
+    final matchTop =
+        ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleTop;
+    final matchBottom =
+        ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleBottom;
+
+    return ClipRRect(
+      borderRadius: _multiPhotoCornerRadius(
+        matchTop: matchTop,
+        matchBottom: matchBottom,
+        isMe: ctx.isMe,
+      ),
+      child: AspectRatio(
+        aspectRatio: 3 / 2,
+        child: Row(
+          children: [
+            Expanded(flex: 2, child: _buildFillTile(ctx, photos[0], 0)),
+            const SizedBox(width: 2),
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(child: _buildFillTile(ctx, photos[1], 1)),
+                  const SizedBox(height: 2),
+                  Expanded(child: _buildFillTile(ctx, photos[2], 2)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPhotoGrid(BubbleContext ctx, List<PhotoAttachment> photos) {
     final displayCount = photos.length > 4 ? 4 : photos.length;
     final remaining = photos.length - 4;
@@ -365,30 +424,30 @@ class PhotoBubble extends StatelessWidget {
     return _buildPhotoTile(ctx, photos[index], index);
   }
 
-  Widget _buildPhotoTile(BubbleContext ctx, PhotoAttachment photo, int index) {
+  Widget _buildPhotoTile(BubbleContext ctx, PhotoAttachment photo, int index) =>
+      AspectRatio(aspectRatio: 1, child: _buildFillTile(ctx, photo, index));
+
+  Widget _buildFillTile(BubbleContext ctx, PhotoAttachment photo, int index) {
     final cachePx =
         (BubbleContext.photoMaxSize /
                 2 *
                 MediaQuery.of(ctx.context).devicePixelRatio)
             .round();
-    return AspectRatio(
-      aspectRatio: 1,
-      child: Stack(
-        children: [
-          _buildPhotoImage(
-            ctx,
-            photo,
-            double.infinity,
-            double.infinity,
-            memWidth: cachePx,
-            memHeight: cachePx,
-          ),
-          if (ctx.uploadProgress != null)
-            _buildUploadOverlay(ctx.uploadProgress!, index),
-          if (ctx.uploadProgress == null)
-            _buildTileTapTarget(ctx, index, cachePx),
-        ],
-      ),
+    return Stack(
+      children: [
+        _buildPhotoImage(
+          ctx,
+          photo,
+          double.infinity,
+          double.infinity,
+          memWidth: cachePx,
+          memHeight: cachePx,
+        ),
+        if (ctx.uploadProgress != null)
+          _buildUploadOverlay(ctx.uploadProgress!, index),
+        if (ctx.uploadProgress == null)
+          _buildTileTapTarget(ctx, index, cachePx),
+      ],
     );
   }
 

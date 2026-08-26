@@ -17,6 +17,7 @@ import 'package:komet/backend/modules/webapp.dart';
 import 'package:komet/frontend/screens/webapp/open_mini_app.dart';
 import 'package:komet/frontend/widgets/sending_clock_icon.dart';
 import 'package:komet/core/media/desktop_video_probe.dart';
+import 'package:komet/core/media/video_transcoder.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -40,6 +41,7 @@ import '../../../core/media/rlottie/rlottie.dart';
 import '../calls/call_screen.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
+import '../../../core/push/notification_bridge.dart';
 import '../../../core/push/push_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_activity_store.dart';
@@ -56,6 +58,7 @@ import '../../../core/cache/message_session_cache.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/emoji_keyword_index.dart';
 import '../../../core/utils/logger.dart';
+import '../../../core/utils/route_settle.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/app_message_actions_style.dart';
@@ -87,6 +90,7 @@ import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_composer_style.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../models/attachment.dart';
+import '../../../models/contact_info.dart';
 import '../../../models/sticker.dart';
 import '../../commands/command_registry.dart';
 import '../../commands/slash_command.dart';
@@ -118,6 +122,8 @@ import 'chat/retain_offset_physics.dart';
 import 'profile_action_sheets.dart';
 import '../../../core/media/media_playback.dart';
 import '../../widgets/media_playback_pill.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 
 class _DateSeparatorItem {
   final DateTime date;
@@ -152,12 +158,21 @@ class _FrostedPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassSurface(
-      frostTint: tint,
-      frostSigma: sigma,
-      border: border,
-      backdropKey: backdropKey,
-      child: child,
+    return Stack(
+      fit: StackFit.passthrough,
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: GlassSurface(
+            frostTint: tint,
+            frostSigma: sigma,
+            border: border,
+            backdropKey: backdropKey,
+            child: const SizedBox.expand(),
+          ),
+        ),
+        child,
+      ],
     );
   }
 }
@@ -297,6 +312,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _keyboardBeforeStickers = false;
   final ScrollController _scrollController = ScrollController();
   bool _userDidScroll = false;
+  int _userGestureEpoch = 0;
   String? _pinnedMessageId;
   double _pinnedAlignment = 0;
   int? _unreadAnchorTime;
@@ -517,6 +533,8 @@ class _ChatScreenState extends State<ChatScreen>
   Timer? _goToMessageSettleTimer;
   static const double _jumpCacheExtentPx = 800.0;
 
+  late final RouteSettle _routeSettle = RouteSettle(isMounted: () => mounted);
+
   late final ChatSearchController _search;
   late final AnimationController _searchAnim;
   final FocusNode _searchFocusNode = FocusNode();
@@ -563,6 +581,9 @@ class _ChatScreenState extends State<ChatScreen>
   static const double _glossyHeaderHeight = 76.0;
   static const double _glossySearchHeight = 58.0;
   static const double _pinnedBannerLift = 6.0;
+  static const double _edgeFadeHeight = 24.0;
+  static const double _scrollDownSize = 46.0;
+  static const double _materialIconSlot = 48.0;
   static const double _unreadSeparatorHeight = 30.0;
   static const double _unreadSeparatorInset = 72.0;
   static const double _unreadAnchorFallbackAlignment = 0.3;
@@ -592,18 +613,32 @@ class _ChatScreenState extends State<ChatScreen>
   bool get _composerUnderlap =>
       AppChatChrome.current.value != ChatChromeStyle.color || _composerFrosted;
 
+  bool get _materialComposer =>
+      !ComposerChrome.isGlossy(AppComposerStyle.current.value);
+
+  bool get _composerPaintsSurface {
+    if (!_commentsMode &&
+        widget.chatType == 'CHANNEL' &&
+        _pendingForwards.value.isEmpty) {
+      return false;
+    }
+    return _materialComposer && !_composerFrosted;
+  }
+
   bool get _liquidChrome =>
       AppVisualStyle.current.value.glossyChrome &&
       ChatChromeMaterial.isLiquid(AppChatChrome.current.value);
 
   ChatChromeStyle get _effectiveChrome {
     final chrome = AppChatChrome.current.value;
-    if (chrome == ChatChromeStyle.liquidGlass) return ChatChromeStyle.transparent;
-    if (_wallpaper != null && chrome == ChatChromeStyle.none) {
-      return ChatChromeStyle.blur;
+    if (chrome == ChatChromeStyle.liquidGlass) {
+      return ChatChromeStyle.transparent;
     }
     return chrome;
   }
+
+  bool get _chromeVignette =>
+      _effectiveChrome == ChatChromeStyle.none && _wallpaper == null;
 
   final ValueNotifier<double> _composerHeight = ValueNotifier(96);
   final ValueNotifier<double> _pinnedBannerHeight = ValueNotifier(0);
@@ -630,6 +665,7 @@ class _ChatScreenState extends State<ChatScreen>
   final ValueNotifier<bool> _animojiHold = ValueNotifier(true);
 
   final ValueNotifier<Set<String>> _selectedIds = ValueNotifier(const {});
+  final ValueNotifier<Offset?> _textSelectionDrag = ValueNotifier(null);
   final ValueNotifier<({String id, Offset pos})?> _textSelection =
       ValueNotifier(null);
   late final AnimationController _selectionAnim;
@@ -660,6 +696,9 @@ class _ChatScreenState extends State<ChatScreen>
     _chatController.isMounted = () => mounted;
     if (!_commentsMode) ChatScreen._open.add(this);
     unawaited(PushService.clearChatNotification(widget.chatId));
+    if (!_commentsMode) {
+      unawaited(NotificationBridge.instance.setActiveChat(widget.chatId));
+    }
     unawaited(
       animojiModule
           .ensureLoaded()
@@ -678,7 +717,6 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.addListener(_maybeLoadMoreHistory);
     _scrollController.addListener(_recordScrollPixels);
     _scrollController.addListener(_scheduleReadMarker);
-    _scrollController.addListener(_exitTextSelectionOnScroll);
     _scrollController.addListener(_updateScrollDownVisible);
     MediaPlayback.instance.enterChat(widget.chatId);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
@@ -820,17 +858,24 @@ class _ChatScreenState extends State<ChatScreen>
     final peerId = widget.chatId ^ _myId;
     if (peerId <= 0) return;
     final cached = ContactInfoFetch.peek(peerId);
-    if (cached != null) _applyPeerKind(cached.isBot);
+    if (cached != null) _applyPeerInfo(peerId, cached);
     final info = await ContactInfoFetch.get(peerId);
-    if (info != null) _applyPeerKind(info.isBot);
+    if (info != null) _applyPeerInfo(peerId, info);
     if ((info ?? cached)?.isBot ?? false) {
       unawaited(BotInfoFetch.get(peerId));
     }
   }
 
-  void _applyPeerKind(bool isBot) {
-    if (!mounted || _peerIsBot == isBot) return;
-    setState(() => _peerIsBot = isBot);
+  void _applyPeerInfo(int peerId, ContactInfo info) {
+    if (!mounted) return;
+    final avatar = info.avatarUrl;
+    final avatarIsNew =
+        avatar != null &&
+        avatar.isNotEmpty &&
+        ContactCache.getAvatar(peerId) != avatar;
+    if (avatarIsNew) ContactCache.putAvatar(peerId, avatar);
+    if (_peerIsBot == info.isBot && !avatarIsNew) return;
+    setState(() => _peerIsBot = info.isBot);
   }
 
   Future<void> _fastPreloadCache() async {
@@ -959,29 +1004,11 @@ class _ChatScreenState extends State<ChatScreen>
   void _onFirstFrameRendered(Duration _) {
     if (!mounted) return;
     if (widget.embedded) {
-      _kickoffHistory();
-      return;
+      _routeSettle.settleNow();
+    } else {
+      _routeSettle.bind(context);
     }
-    final anim = ModalRoute.of(context)?.animation;
-    if (anim == null || anim.status == AnimationStatus.completed) {
-      _kickoffHistory();
-      return;
-    }
-    Timer? safety;
-    void onStatus(AnimationStatus status) {
-      if (status != AnimationStatus.completed) return;
-      anim.removeStatusListener(onStatus);
-      safety?.cancel();
-      if (!mounted) return;
-      _kickoffHistory();
-    }
-
-    anim.addStatusListener(onStatus);
-    safety = Timer(const Duration(milliseconds: 400), () {
-      anim.removeStatusListener(onStatus);
-      if (!mounted) return;
-      _kickoffHistory();
-    });
+    _routeSettle.run(_kickoffHistory);
   }
 
   void _kickoffHistory() {
@@ -1198,7 +1225,7 @@ class _ChatScreenState extends State<ChatScreen>
         builder: (_) => ChatInfoScreen(
           chatId: widget.chatId,
           name: _headerName(),
-          imageUrl: widget.imageUrl,
+          imageUrl: _headerAvatarUrl(),
           chatType: widget.chatType,
           heroTag: _profileHeroTag,
           initialTab: initialTab,
@@ -1612,7 +1639,9 @@ class _ChatScreenState extends State<ChatScreen>
     if (_historyAutoloadSuppressed) return;
     if (_isLoading) return;
     if (_commentsMode) {
-      if (_commentsLoadingMore || !_commentsHasMore || _messages.isEmpty) return;
+      if (_commentsLoadingMore || !_commentsHasMore || _messages.isEmpty) {
+        return;
+      }
       final pos = _scrollController.position;
       if (pos.pixels - pos.minScrollExtent <= _historyPrefetchExtent) {
         unawaited(_loadMoreComments());
@@ -1632,35 +1661,57 @@ class _ChatScreenState extends State<ChatScreen>
   void _maybeFillGap() {
     final controller = _chatController;
     if (!controller.hasGap || controller.loadingGap) return;
+    final oldestRendered = _oldestRenderedMessageTime();
     for (final gap in controller.gaps) {
-      final box = _keyForMessage(gap.edgeId).currentContext?.findRenderObject();
-      if (box is RenderBox && box.attached) {
-        unawaited(_fillGapForward(gap));
-        return;
+      if (!ChatController.gapFillLeavesViewportInPlace(gap, oldestRendered)) {
+        continue;
       }
+      unawaited(_fillGapForward(gap));
+      return;
     }
   }
 
+  int? _oldestRenderedMessageTime() {
+    for (final message in _messages) {
+      final box = _messageKeys[message.id]?.currentContext?.findRenderObject();
+      if (box is RenderBox && box.attached) return message.time;
+    }
+    return null;
+  }
+
   Future<void> _fillGapForward(HistoryGap gap) async {
-    final edgeId = gap.edgeId;
-    final beforeDy = _messageOffsetInList(edgeId);
-    final added = await _chatController.fillGapForward(gap);
+    String? anchorId;
+    double? anchorAt;
+    double? anchorAlignment;
+    final added = await _chatController.fillGapForward(
+      gap,
+      beforeApply: () {
+        final id = _viewportAnchorId();
+        anchorId = id;
+        if (id == null) return;
+        anchorAt = _messageContentOffset(id);
+        anchorAlignment = _messageAlignmentInList(id);
+      },
+    );
     if (!mounted || added == 0) return;
 
     _syncReactionNotifiersFromMessages();
     _bumpMessages();
     await WidgetsBinding.instance.endOfFrame;
-    if (!mounted || !_scrollController.hasClients) return;
+    if (!mounted) return;
 
-    final afterDy = _messageOffsetInList(edgeId);
-    if (beforeDy != null && afterDy != null) {
-      final delta = beforeDy - afterDy;
-      if (delta.abs() > 0.5) {
-        final pos = _scrollController.position;
-        _scrollController.jumpTo(
-          (pos.pixels + delta).clamp(pos.minScrollExtent, pos.maxScrollExtent),
-        );
-      }
+    final id = anchorId;
+    final at = anchorAt;
+    final alignment = anchorAlignment;
+    if (id != null && at != null && !_restoreContentOffset(id, at)) {
+      _historyAutoloadSuppressCount++;
+      _alignLoadedMessage(
+        id,
+        alignment ?? 0,
+        0,
+        epoch: _userGestureEpoch,
+        onSettled: () => _historyAutoloadSuppressCount--,
+      );
     }
     _loadForwardedSenderNames();
     _loadGroupSenderNames();
@@ -1683,33 +1734,28 @@ class _ChatScreenState extends State<ChatScreen>
     final listBox = _listKey.currentContext?.findRenderObject();
     if (listBox is! RenderBox || !listBox.attached) return null;
     final height = listBox.size.height;
+    String? newest;
     for (final message in _messages) {
       final box = _messageKeys[message.id]?.currentContext?.findRenderObject();
       if (box is! RenderBox || !box.attached) continue;
       final dy = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
-      if (dy >= 0 && dy <= height) return message.id;
+      if (dy >= 0 && dy <= height) newest = message.id;
     }
-    return null;
+    return newest;
   }
 
-  Future<void> _holdScrollAfterAppend(String? anchorId, double? beforeDy) async {
-    if (anchorId == null || beforeDy == null) return;
+  Future<void> _holdScrollAfterAppend(
+    String? anchorId,
+    double? anchorAt,
+  ) async {
+    if (anchorId == null || anchorAt == null) return;
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted || !_scrollController.hasClients) return;
-
-    final afterDy = _messageOffsetInList(anchorId);
-    if (afterDy == null) return;
-    final delta = beforeDy - afterDy;
-    if (delta.abs() <= 0.5) return;
-
-    final pos = _scrollController.position;
-    if (pos.userScrollDirection != ScrollDirection.idle) return;
-    final target = (pos.pixels + delta).clamp(
-      pos.minScrollExtent,
-      pos.maxScrollExtent,
-    );
-    if ((target - pos.pixels).abs() <= 0.5) return;
-    _scrollController.jumpTo(target);
+    if (_scrollController.position.userScrollDirection !=
+        ScrollDirection.idle) {
+      return;
+    }
+    _restoreContentOffset(anchorId, anchorAt);
   }
 
   double? _messageOffsetInList(String messageId) {
@@ -1719,6 +1765,37 @@ class _ChatScreenState extends State<ChatScreen>
       return null;
     }
     return box.localToGlobal(Offset.zero, ancestor: listBox).dy;
+  }
+
+  double? _messageContentOffset(String messageId) {
+    if (!_scrollController.hasClients) return null;
+    final dy = _messageOffsetInList(messageId);
+    if (dy == null) return null;
+    return dy - _scrollController.position.pixels;
+  }
+
+  double? _messageAlignmentInList(String messageId) {
+    final listBox = _listKey.currentContext?.findRenderObject();
+    if (listBox is! RenderBox || listBox.size.height <= 0) return null;
+    final dy = _messageOffsetInList(messageId);
+    if (dy == null) return null;
+    return (dy / listBox.size.height).clamp(0.0, 1.0);
+  }
+
+  bool _restoreContentOffset(String messageId, double before) {
+    if (!_scrollController.hasClients) return false;
+    final after = _messageContentOffset(messageId);
+    if (after == null) return false;
+    final delta = before - after;
+    if (delta.abs() <= 0.5) return true;
+    final pos = _scrollController.position;
+    final target = (pos.pixels + delta).clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    );
+    if ((target - pos.pixels).abs() <= 0.5) return true;
+    _scrollController.jumpTo(target);
+    return true;
   }
 
   Future<void> _loadMessageWindow(String messageId, int targetTime) async {
@@ -1963,7 +2040,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (_messages.any((m) => m.id == comment.id)) return;
     final nearBottom = _isNearListBottom();
     final anchorId = nearBottom ? null : _viewportAnchorId();
-    final anchorDy = anchorId == null ? null : _messageOffsetInList(anchorId);
+    final anchorAt = anchorId == null ? null : _messageContentOffset(anchorId);
     if (!nearBottom) _retainOffsetForNextLayout();
     _messages.add(comment);
     _syncReactionNotifiersFromMessages();
@@ -1973,7 +2050,7 @@ class _ChatScreenState extends State<ChatScreen>
       _scrollToBottom();
     } else {
       _noteMissedMessage();
-      unawaited(_holdScrollAfterAppend(anchorId, anchorDy));
+      unawaited(_holdScrollAfterAppend(anchorId, anchorAt));
     }
   }
 
@@ -2011,15 +2088,16 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
       if (_voiceRec.isRecording.value) {
         unawaited(_voiceRec.stop(cancel: true));
       }
       if (_note.isRecording.value) {
         unawaited(_note.stop(cancel: true));
       }
-      _saveDraft();
     }
+    if (state != AppLifecycleState.resumed) _saveDraft();
     super.didChangeAppLifecycleState(state);
   }
 
@@ -2037,6 +2115,9 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void dispose() {
     ChatScreen._open.remove(this);
+    if (!_commentsMode) {
+      unawaited(NotificationBridge.instance.clearActiveChat(widget.chatId));
+    }
     _chatController.persistSessionCache();
     if (_previewChat) {
       unawaited(chats.subscribeChat(api, widget.chatId, subscribe: false));
@@ -2052,7 +2133,6 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.removeListener(_maybeLoadMoreHistory);
     _scrollController.removeListener(_recordScrollPixels);
     _scrollController.removeListener(_scheduleReadMarker);
-    _scrollController.removeListener(_exitTextSelectionOnScroll);
     _scrollController.removeListener(_updateScrollDownVisible);
     _readMarkTimer?.cancel();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
@@ -2117,6 +2197,7 @@ class _ChatScreenState extends State<ChatScreen>
     _search.dispose();
     _selectedIds.dispose();
     _textSelection.dispose();
+    _textSelectionDrag.dispose();
     _messageController.dispose();
     _messageFocusNode.dispose();
     _stickers.dispose();
@@ -2129,6 +2210,7 @@ class _ChatScreenState extends State<ChatScreen>
     _highlightMessageId.dispose();
     _goToMessageSettleTimer?.cancel();
     _jumpCacheExtent.dispose();
+    _routeSettle.dispose();
     _messageKeys.clear();
     super.dispose();
   }
@@ -2218,7 +2300,11 @@ class _ChatScreenState extends State<ChatScreen>
 
   String? _effectiveStatus(CachedMessage msg) {
     if (msg.senderId != _myId) return null;
-    if (msg.status == 'sending' || msg.status == 'error') return msg.status;
+    if (msg.status == 'sending' ||
+        msg.status == 'pending' ||
+        msg.status == 'error') {
+      return msg.status;
+    }
     return 'sent';
   }
 
@@ -2293,6 +2379,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _startTextSelection(CachedMessage message, Offset globalPosition) {
     if (message.isControl || message.selectableText == null) return;
+    _textSelectionDrag.value = null;
     _textSelection.value = (id: message.id, pos: globalPosition);
   }
 
@@ -2301,15 +2388,6 @@ class _ChatScreenState extends State<ChatScreen>
     if (current == null) return;
     if (onlyId != null && current.id != onlyId) return;
     _textSelection.value = null;
-  }
-
-  void _exitTextSelectionOnScroll() {
-    if (_textSelection.value == null) return;
-    if (!_scrollController.hasClients) return;
-    if (_scrollController.position.userScrollDirection !=
-        ScrollDirection.idle) {
-      _exitTextSelection();
-    }
   }
 
   void _syncSelectionAnim() {
@@ -2324,17 +2402,10 @@ class _ChatScreenState extends State<ChatScreen>
   List<CachedMessage> _selectedMessages(Set<String> ids) =>
       _messages.where((m) => ids.contains(m.id)).toList();
 
-  CachedMessage? _singleCopyableText(Set<String> ids) {
-    CachedMessage? found;
-    var textCount = 0;
-    for (final m in _messages) {
-      if (!ids.contains(m.id)) continue;
-      if ((m.text ?? '').isEmpty) continue;
-      if (++textCount > 1) return null;
-      found = m;
-    }
-    return found;
-  }
+  List<CachedMessage> _copyableSelection(Set<String> ids) => [
+    for (final m in _messages)
+      if (ids.contains(m.id) && (m.selectableText ?? '').isNotEmpty) m,
+  ];
 
   CachedMessage? _singleEditable(Set<String> ids) {
     if (ids.length != 1) return null;
@@ -2343,9 +2414,9 @@ class _ChatScreenState extends State<ChatScreen>
     return _canEditMessage(list.first) ? list.first : null;
   }
 
-  void _copySelected(CachedMessage message) {
-    final text = message.text;
-    if (text == null || text.isEmpty) return;
+  void _copySelected(List<CachedMessage> messages) {
+    if (messages.isEmpty) return;
+    final text = messages.map((m) => m.selectableText!).join('\n\n');
     Clipboard.setData(ClipboardData(text: text));
     Haptics.tap();
     showCustomNotification(context, 'Скопировано');
@@ -2624,6 +2695,7 @@ class _ChatScreenState extends State<ChatScreen>
                   bottomSafe: _stickers.anim.value == 0,
                   chatType: _commentsMode ? 'CHAT' : widget.chatType,
                   chrome: _effectiveChrome,
+                  vignette: _chromeVignette,
                   style: AppComposerStyle.current.value,
                   background: AppComposerBackground.current.value,
                   backdropKey: _pillBackdrop,
@@ -2692,6 +2764,7 @@ class _ChatScreenState extends State<ChatScreen>
               selected: selected,
               onReply: _replySelected,
               onForward: _forwardSelected,
+              allowForward: !(chat?.forwardDisabled ?? false),
             ),
           ),
         ),
@@ -2699,7 +2772,7 @@ class _ChatScreenState extends State<ChatScreen>
     );
     Widget wrapChrome(Widget child) {
       if (_composerFrosted) {
-        if (AppComposerStyle.current.value != ComposerStyle.materialYou) {
+        if (ComposerChrome.isGlossy(AppComposerStyle.current.value)) {
           return child;
         }
         return _FrostedPanel(
@@ -2751,75 +2824,29 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _startEditMessage(CachedMessage message) async {
     final cs = Theme.of(context).colorScheme;
-    final controller = RichMessageController(text: message.text ?? '')
-      ..setFormatRanges(message.formatRanges);
 
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: cs.surfaceContainerHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Изменить сообщение',
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                fontFamily: 'Outfit',
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              minLines: 1,
-              maxLines: 6,
-              style: TextStyle(color: cs.onSurface),
-              contextMenuBuilder: (ctx, state) =>
-                  _formatContextMenu(controller, ctx, state),
-              decoration: InputDecoration(
-                hintText: 'Текст сообщения',
-                filled: true,
-                fillColor: cs.surfaceContainerHighest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: () => Navigator.of(sheetContext).pop(true),
-              child: const Text('Сохранить'),
-            ),
-          ],
-        ),
-      ),
-    );
+    final content =
+        await showModalBottomSheet<
+          ({String text, List<Map<String, dynamic>> elements})
+        >(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: cs.surfaceContainerHigh,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          builder: (sheetContext) => _EditMessageSheet(
+            text: message.text ?? '',
+            formatRanges: message.formatRanges,
+            contextMenuBuilder: _formatContextMenu,
+          ),
+        );
 
-    if (saved != true || !mounted) {
-      controller.dispose();
-      return;
-    }
+    if (content == null || !mounted) return;
 
-    final content = controller.buildContent();
     final rawText = content.text;
     final newText = rawText.trim();
     final elements = _trimmedElements(content.elements, rawText, newText);
-    controller.dispose();
 
     final oldElements = serializeFormatElements(
       message.formatRanges.where((r) => composerFormats.contains(r.format)),
@@ -2927,6 +2954,7 @@ class _ChatScreenState extends State<ChatScreen>
           builder: (ctx, setLocalState) {
             return AlertDialog(
               backgroundColor: cs.surfaceContainerHigh,
+              shape: AppShape.dialogBorder,
               title: const Text('Удалить сообщение'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2995,9 +3023,9 @@ class _ChatScreenState extends State<ChatScreen>
         if (_messages.any((m) => m.id == message.id)) return;
         final nearBottom = _isNearBottom();
         final anchorId = nearBottom ? null : _viewportAnchorId();
-        final anchorDy = anchorId == null
+        final anchorAt = anchorId == null
             ? null
-            : _messageOffsetInList(anchorId);
+            : _messageContentOffset(anchorId);
         if (!nearBottom) _retainOffsetForNextLayout();
         _lastSentId = message.id;
         _messages.add(message);
@@ -3009,7 +3037,7 @@ class _ChatScreenState extends State<ChatScreen>
           _scheduleReadMarker();
         } else {
           _noteMissedMessage();
-          unawaited(_holdScrollAfterAppend(anchorId, anchorDy));
+          unawaited(_holdScrollAfterAppend(anchorId, anchorAt));
           _reapplyPinIfNeeded();
         }
         _prank.checkTrigger(message);
@@ -3075,6 +3103,17 @@ class _ChatScreenState extends State<ChatScreen>
     if (mounted) setState(() {});
   }
 
+  String _headerAvatarUrl() {
+    if (!_commentsMode && widget.chatType == 'DIALOG') {
+      final otherId = _resolveOtherId();
+      if (otherId != null) {
+        final cached = ContactCache.getAvatar(otherId);
+        if (cached != null && cached.isNotEmpty) return cached;
+      }
+    }
+    return widget.imageUrl;
+  }
+
   String _headerName() {
     if (_commentsMode) return AppLocalizations.of(context)!.commentsTitle;
     if (widget.chatType == 'DIALOG') {
@@ -3094,6 +3133,11 @@ class _ChatScreenState extends State<ChatScreen>
         ? ui.lerpDouble(_glossyHeaderHeight, _glossySearchHeight, searchT)!
         : kToolbarHeight;
     final chrome = _effectiveChrome;
+    final barExtent = MediaQuery.paddingOf(context).top + height;
+    final fadeStop = ((barExtent - _edgeFadeHeight) / barExtent).clamp(
+      0.0,
+      1.0,
+    );
     return AppBar(
       backgroundColor: chrome == ChatChromeStyle.color
           ? (glossy ? Colors.transparent : cs.surfaceContainerHigh)
@@ -3105,7 +3149,7 @@ class _ChatScreenState extends State<ChatScreen>
               backdropKey: _barBackdrop,
               child: const SizedBox.expand(),
             )
-          : (chrome == ChatChromeStyle.none && !glossy)
+          : (_chromeVignette && !glossy)
           ? IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -3117,7 +3161,7 @@ class _ChatScreenState extends State<ChatScreen>
                       cs.surface,
                       cs.surface.withValues(alpha: 0.0),
                     ],
-                    stops: const [0.0, 0.72, 1.0],
+                    stops: [0.0, fadeStop, 1.0],
                   ),
                 ),
                 child: const SizedBox.expand(),
@@ -3175,7 +3219,7 @@ class _ChatScreenState extends State<ChatScreen>
                             chatId: widget.chatId,
                             heroTag: _profileHeroTag,
                             name: _headerName(),
-                            imageUrl: widget.imageUrl,
+                            imageUrl: _headerAvatarUrl(),
                             chatType: widget.chatType,
                             isOfficial: chat?.isOfficial ?? false,
                             encrypted: _encryptionEnabled,
@@ -3183,8 +3227,10 @@ class _ChatScreenState extends State<ChatScreen>
                             headerStatus: _headerStatusNotifier,
                             scheduledCount: _scheduledCount,
                             otherUnread: _otherUnread,
-                            showCall: !_commentsMode &&
+                            showCall:
+                                !_commentsMode &&
                                 widget.chatType == 'DIALOG' &&
+                                widget.chatId != 0 &&
                                 !_peerIsBot,
                             onClose: widget.onClose,
                             onOpenInfo: _commentsMode ? () {} : _openChatInfo,
@@ -3206,7 +3252,7 @@ class _ChatScreenState extends State<ChatScreen>
                             cs: cs,
                             selected: selected,
                             glossy: glossy,
-                            copyMsg: _singleCopyableText(selected),
+                            copyMsgs: _copyableSelection(selected),
                             editMsg: _singleEditable(selected),
                             onClear: _clearSelection,
                             onCopy: _copySelected,
@@ -3868,6 +3914,16 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
+    if (chat?.confirmBeforeSend ?? false) {
+      final l10n = AppLocalizations.of(context)!;
+      final confirmed = await showConfirmDialog(
+        context,
+        message: l10n.chatSendConfirmMessage,
+        confirmLabel: l10n.chatSendConfirmAction,
+      );
+      if (!confirmed || !mounted) return;
+    }
+
     final wireText = await _encryptOutgoing(text);
     if (wireText == null || !mounted) return;
     final encrypted = wireText != text;
@@ -4028,6 +4084,9 @@ class _ChatScreenState extends State<ChatScreen>
         }
         return;
       }
+      final failed = isPermanentSendFailure(e);
+      final status = failed ? 'error' : 'pending';
+      if (failed) logger.w('Отправка отклонена сервером: $e');
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
         final queued = CachedMessage(
@@ -4037,7 +4096,7 @@ class _ChatScreenState extends State<ChatScreen>
           senderId: _myId,
           text: text,
           time: now,
-          status: 'pending',
+          status: status,
           payload: composedPayload,
         );
         _messages[index] = queued;
@@ -4051,7 +4110,7 @@ class _ChatScreenState extends State<ChatScreen>
               messageId: tempId,
               time: now,
               text: text,
-              status: 'pending',
+              status: status,
               elements: elements,
             ),
           );
@@ -4062,6 +4121,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   int? _resolveOtherId() {
     if (widget.chatType != 'DIALOG' || _myId == 0) return null;
+    if (widget.chatId == 0) return null;
     final id = widget.chatId ^ _myId;
     return id > 0 ? id : null;
   }
@@ -4768,11 +4828,13 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted || !_scrollController.hasClients) return;
     if (_messages.indexWhere((m) => m.id == id) == -1) return;
 
+    final epoch = _userGestureEpoch;
     _historyAutoloadSuppressCount++;
     try {
       var stable = 0;
       for (var iter = 0; iter < 120; iter++) {
         if (!mounted || !_scrollController.hasClients) return;
+        if (_userGestureEpoch != epoch) return;
         final listObj = _listKey.currentContext?.findRenderObject();
         final boxObj = _keyForMessage(id).currentContext?.findRenderObject();
         final p = _scrollController.position;
@@ -4957,9 +5019,12 @@ class _ChatScreenState extends State<ChatScreen>
     double alignment,
     int attempt, {
     int frames = 0,
+    int? epoch,
     VoidCallback? onSettled,
   }) {
-    if (!mounted || !_scrollController.hasClients) {
+    if (!mounted ||
+        !_scrollController.hasClients ||
+        (epoch != null && epoch != _userGestureEpoch)) {
       onSettled?.call();
       return;
     }
@@ -4977,6 +5042,7 @@ class _ChatScreenState extends State<ChatScreen>
           alignment,
           moved ? 0 : attempt + 1,
           frames: frames + 1,
+          epoch: epoch,
           onSettled: onSettled,
         ),
       );
@@ -5009,6 +5075,7 @@ class _ChatScreenState extends State<ChatScreen>
         alignment,
         attempt + 1,
         frames: frames + 1,
+        epoch: epoch,
         onSettled: onSettled,
       ),
     );
@@ -5432,7 +5499,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _buildUnderlapBody() {
     final cs = Theme.of(context).colorScheme;
-    final vignette = _effectiveChrome == ChatChromeStyle.none;
+    final vignette = _chromeVignette;
     final bannerTop = _pinnedBannerTop();
     return Stack(
       fit: StackFit.expand,
@@ -5449,20 +5516,28 @@ class _ChatScreenState extends State<ChatScreen>
           senderAvatar: _searchSenderAvatar,
         ),
         if (vignette) ...[
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildEdgeVignette(cs, top: true),
-          ),
-          ValueListenableBuilder<double>(
-            valueListenable: _composerHeight,
-            builder: (context, height, _) => Positioned(
+          if (AppVisualStyle.current.value.glossyChrome)
+            Positioned(
+              top: 0,
               left: 0,
               right: 0,
-              bottom: 0,
-              child: _buildEdgeVignette(cs, top: false, height: height),
+              child: _buildEdgeVignette(cs, top: true),
             ),
+          ValueListenableBuilder<double>(
+            valueListenable: _composerHeight,
+            builder: (context, height, _) => _composerPaintsSurface
+                ? Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: height,
+                    child: _buildEdgeFade(cs),
+                  )
+                : Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _buildEdgeVignette(cs, top: false, height: height),
+                  ),
           ),
         ],
         Positioned(
@@ -5509,6 +5584,21 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  Widget _buildEdgeFade(ColorScheme cs) {
+    return IgnorePointer(
+      child: Container(
+        height: _edgeFadeHeight,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [cs.surface, cs.surface.withValues(alpha: 0.0)],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildEdgeVignette(
     ColorScheme cs, {
     required bool top,
@@ -5546,9 +5636,14 @@ class _ChatScreenState extends State<ChatScreen>
       children: [
         Opacity(
           opacity: showShimmer ? 0.0 : 1.0,
-          child: NotificationListener<ScrollEndNotification>(
-            onNotification: (_) {
-              _updateReadMarker();
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification is ScrollStartNotification &&
+                  notification.dragDetails != null) {
+                _userGestureEpoch++;
+              } else if (notification is ScrollEndNotification) {
+                _updateReadMarker();
+              }
               return false;
             },
             child: _buildMessagesList(),
@@ -5586,9 +5681,7 @@ class _ChatScreenState extends State<ChatScreen>
     final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(
-        child: SmallSpinner(size: 22, color: cs.onSurfaceVariant),
-      ),
+      child: Center(child: SmallSpinner(size: 22, color: cs.onSurfaceVariant)),
     );
   }
 
@@ -5670,7 +5763,8 @@ class _ChatScreenState extends State<ChatScreen>
 
                               final bool isChannelPost =
                                   !_commentsMode &&
-                                  (chat?.type ?? widget.chatType) == 'CHANNEL' &&
+                                  (chat?.type ?? widget.chatType) ==
+                                      'CHANNEL' &&
                                   !message.isControl;
                               final bool isCommentedPost =
                                   _commentsMode &&
@@ -5712,6 +5806,7 @@ class _ChatScreenState extends State<ChatScreen>
                                     ? widget.imageUrl
                                     : null,
                                 textSelection: _textSelection,
+                                textSelectionDrag: _textSelectionDrag,
                                 onExitTextSelection: _exitTextSelection,
                                 commentsLabel: isChannelPost
                                     ? _commentsLabelFor(message.id)
@@ -5738,6 +5833,8 @@ class _ChatScreenState extends State<ChatScreen>
                                     _enterSelection(message),
                                 onStartTextSelection: (pos) =>
                                     _startTextSelection(message, pos),
+                                onDragTextSelection: (pos) =>
+                                    _textSelectionDrag.value = pos,
                                 onDelete: () =>
                                     _confirmDeleteMessage(message.id, isMe),
                                 onEdit: _canEditMessage(message)
@@ -5746,9 +5843,12 @@ class _ChatScreenState extends State<ChatScreen>
                                 onReply: message.isControl
                                     ? null
                                     : () => _startReply(message),
-                                onForward: message.isControl
+                                onForward:
+                                    message.isControl ||
+                                        (chat?.forwardDisabled ?? false)
                                     ? null
                                     : () => _forwardMessages([message]),
+                                allowCopy: !(chat?.copyDisabled ?? false),
                                 onMarkUnread: message.isControl
                                     ? null
                                     : () => _markMessageUnread(message),
@@ -5901,7 +6001,9 @@ class _ChatScreenState extends State<ChatScreen>
     return ValueListenableBuilder<double>(
       valueListenable: _composerHeight,
       builder: (context, height, child) => Positioned(
-        right: 16,
+        right: _materialComposer
+            ? (_materialIconSlot - _scrollDownSize) / 2
+            : 16,
         bottom: (_composerUnderlap ? height : 0) + 12,
         child: child!,
       ),
@@ -5916,8 +6018,8 @@ class _ChatScreenState extends State<ChatScreen>
             child: Transform.scale(
               scale: 0.82 + 0.18 * t,
               child: SizedBox(
-                width: 46,
-                height: 46,
+                width: _scrollDownSize,
+                height: _scrollDownSize,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -6135,7 +6237,10 @@ class _ChatScreenState extends State<ChatScreen>
       FileAttachment(fileId: fileId),
     ).id;
     try {
-      final realId = await messagesModule.sendFileMessage(widget.chatId, fileId);
+      final realId = await messagesModule.sendFileMessage(
+        widget.chatId,
+        fileId,
+      );
       final ok = realId != null;
       if (!mounted) return ok;
       if (ok) {
@@ -6269,15 +6374,31 @@ class _ChatScreenState extends State<ChatScreen>
         await video.item.originFile();
     if (file == null || !mounted) return;
 
+    final edited = video.editedFile;
     var durationMs = video.item.duration?.inMilliseconds;
-    if (durationMs == null && DesktopVideoProbe.supported) {
-      durationMs = (await DesktopVideoProbe.duration(file.path))?.inMilliseconds;
-    }
-    final dims = await video.item.dimensions();
+    var dims = await video.item.dimensions();
     Uint8List? thumbBytes;
-    try {
-      thumbBytes = await video.item.thumbnail(512);
-    } catch (_) {}
+    if (edited != null) {
+      final info = await VideoTranscoder.probe(edited.path);
+      if (info != null) {
+        if (info.durationMs > 0) durationMs = info.durationMs;
+        if (info.width > 0 && info.height > 0) dims = (info.width, info.height);
+      }
+      final frames = await VideoTranscoder.frames(edited.path, const [
+        0,
+      ], size: 512);
+      if (frames.isNotEmpty) thumbBytes = frames.first;
+    }
+    if (durationMs == null && DesktopVideoProbe.supported) {
+      durationMs = (await DesktopVideoProbe.duration(
+        file.path,
+      ))?.inMilliseconds;
+    }
+    if (thumbBytes == null) {
+      try {
+        thumbBytes = await video.item.thumbnail(512);
+      } catch (_) {}
+    }
     if (!mounted) return;
     final thumbData = thumbBytes == null || thumbBytes.isEmpty
         ? null
@@ -6949,9 +7070,7 @@ class _PinnedMessageBanner extends StatelessWidget {
     if (frosted) {
       return GlassSurface(
         liquid: liquid,
-        borderRadius: floating
-            ? BorderRadius.circular(16)
-            : BorderRadius.zero,
+        borderRadius: floating ? BorderRadius.circular(16) : BorderRadius.zero,
         frostTint: Colors.transparent,
         border: floating ? null : bottomBorder,
         backdropKey: backdropKey,
@@ -7055,10 +7174,12 @@ class _SelectableMessageRow extends StatefulWidget {
   final VoidCallback onToggleSelection;
   final VoidCallback onEnterSelection;
   final void Function(Offset globalPosition) onStartTextSelection;
+  final void Function(Offset? globalPosition) onDragTextSelection;
   final VoidCallback onDelete;
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
+  final bool allowCopy;
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
   final bool Function() isPinned;
@@ -7079,10 +7200,12 @@ class _SelectableMessageRow extends StatefulWidget {
     required this.onToggleSelection,
     required this.onEnterSelection,
     required this.onStartTextSelection,
+    required this.onDragTextSelection,
     required this.onDelete,
     this.onEdit,
     this.onReply,
     this.onForward,
+    this.allowCopy = true,
     this.onMarkUnread,
     this.onPin,
     required this.isPinned,
@@ -7141,6 +7264,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       tapPoint: _lastTapDown ?? rect.center,
       isMe: widget.isMe,
       messageText: widget.message.text,
+      copyText: widget.message.selectableText,
       controller: controller,
       style: AppMessageActionsStyle.current.value,
       interaction: MessageActionsInteraction.tap,
@@ -7153,6 +7277,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onEdit: widget.onEdit,
       onReply: widget.onReply,
       onForward: widget.onForward,
+      allowCopy: widget.allowCopy,
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
       isPinned: _isPinnedNow(),
@@ -7209,6 +7334,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       tapPoint: details.globalPosition,
       isMe: widget.isMe,
       messageText: widget.message.text,
+      copyText: widget.message.selectableText,
       controller: controller,
       style: MessageActionsStyle.list,
       interaction: MessageActionsInteraction.click,
@@ -7221,6 +7347,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
       onEdit: widget.onEdit,
       onReply: widget.onReply,
       onForward: widget.onForward,
+      allowCopy: widget.allowCopy,
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
       isPinned: _isPinnedNow(),
@@ -7247,7 +7374,21 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
     });
   }
 
+  bool _textSelectionPress = false;
+
+  void _handleLongPressMove(Offset globalPosition) {
+    if (!_textSelectionPress) return;
+    widget.onDragTextSelection(globalPosition);
+  }
+
+  void _handleLongPressEnd() {
+    if (!_textSelectionPress) return;
+    _textSelectionPress = false;
+    widget.onDragTextSelection(null);
+  }
+
   void _handleLongPressStart(Offset globalPosition) {
+    _textSelectionPress = false;
     if (!widget.isSelectionActive()) {
       widget.onEnterSelection();
       return;
@@ -7255,6 +7396,7 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
     final selected = widget.selectedIds.value.contains(widget.message.id);
     final hasText = widget.message.selectableText != null;
     if (selected && hasText && !widget.message.isControl) {
+      _textSelectionPress = true;
       widget.onStartTextSelection(globalPosition);
     } else {
       widget.onToggleSelection();
@@ -7303,6 +7445,10 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
               onTapDown: (d) => _lastTapDown = d.globalPosition,
               onTap: _handleTap,
               onLongPressStart: (d) => _handleLongPressStart(d.globalPosition),
+              onLongPressMoveUpdate: (d) =>
+                  _handleLongPressMove(d.globalPosition),
+              onLongPressEnd: (_) => _handleLongPressEnd(),
+              onLongPressCancel: _handleLongPressEnd,
               onSecondaryTapDown: active ? null : _onSecondaryTapDown,
               child: ColoredBox(
                 color: isSelected
@@ -7485,6 +7631,97 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     return ValueListenableBuilder<int>(
       valueListenable: widget.host._messagesRev,
       builder: (context, _, _) => widget.host._buildMessagesListContent(),
+    );
+  }
+}
+
+class _EditMessageSheet extends StatefulWidget {
+  final String text;
+  final Iterable<FormatRange> formatRanges;
+  final Widget Function(
+    RichMessageController controller,
+    BuildContext context,
+    EditableTextState editableState,
+  )
+  contextMenuBuilder;
+
+  const _EditMessageSheet({
+    required this.text,
+    required this.formatRanges,
+    required this.contextMenuBuilder,
+  });
+
+  @override
+  State<_EditMessageSheet> createState() => _EditMessageSheetState();
+}
+
+class _EditMessageSheetState extends State<_EditMessageSheet> {
+  late final RichMessageController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = RichMessageController(text: widget.text)
+      ..setFormatRanges(widget.formatRanges);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Изменить сообщение',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              fontFamily: displayFontOf(context),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            minLines: 1,
+            maxLines: 6,
+            textCapitalization: TextCapitalization.sentences,
+            style: TextStyle(color: cs.onSurface),
+            contextMenuBuilder: (ctx, state) =>
+                widget.contextMenuBuilder(_controller, ctx, state),
+            decoration: InputDecoration(
+              hintText: 'Текст сообщения',
+              filled: true,
+              fillColor: cs.surfaceContainerHighest,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(_controller.buildContent()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
     );
   }
 }

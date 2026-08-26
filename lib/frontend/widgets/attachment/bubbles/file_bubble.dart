@@ -90,7 +90,7 @@ class FileBubble extends StatelessWidget {
                       ),
               ),
               const SizedBox(width: 10),
-              Flexible(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,

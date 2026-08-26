@@ -1,14 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart' show api, accountModule;
 import '../../../backend/modules/account.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/calls/call_controller.dart';
-import '../../../core/calls/call_session.dart';
 import '../../../backend/modules/calls.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
@@ -19,7 +17,10 @@ import '../../widgets/small_spinner.dart';
 import '../../widgets/prompt_dialog.dart';
 import '../../widgets/call_link_handler.dart';
 import '../../widgets/spectrum_tint.dart';
+import '../../../l10n/app_localizations.dart';
+import 'call_link_sheet.dart';
 import 'call_screen.dart';
+import '../../../core/config/app_fonts.dart';
 
 class CallsTab extends StatefulWidget {
   const CallsTab({super.key});
@@ -380,34 +381,36 @@ class _CallsTabState extends State<CallsTab>
       return;
     }
 
-    final navigator = Navigator.of(context);
-    ({CallSession session, String? joinLink}) created;
+    final l10n = AppLocalizations.of(context)!;
+    CreatedCall created;
     try {
-      created = await controller.createGroupCall();
+      created = await controller.createConference();
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Не удалось создать звонок: $e');
+        showCustomNotification(context, '${l10n.callLinkCreateFailed}: $e');
       }
       return;
     }
     if (!mounted) return;
 
-    final link = created.joinLink;
-    if (link != null) {
-      await Clipboard.setData(ClipboardData(text: link));
-      if (!mounted) return;
-      showCustomNotification(context, 'Ссылка на звонок скопирована');
-    }
+    final start = await showCreatedCallSheet(context, call: created);
+    if (!start || !mounted) return;
 
-    await navigator.push(
-      MaterialPageRoute(
-        builder: (_) => CallScreen(
-          name: 'Групповой звонок',
-          session: created.session,
-          isGroup: true,
+    final navigator = Navigator.of(context);
+    final name = created.callName ?? l10n.callLinkGroupCall;
+    try {
+      final session = await controller.joinByLink(created.joinToken);
+      if (!mounted) return;
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (_) =>
+              CallScreen(name: name, session: session, isGroup: true),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showCustomNotification(context, 'Не удалось начать звонок: $e');
+    }
   }
 
   Future<void> _joinGroupCall() async {
@@ -488,7 +491,7 @@ class _CallsTabState extends State<CallsTab>
                       color: cs.onSurface,
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
-                      fontFamily: 'Outfit',
+                      fontFamily: displayFontOf(context),
                     ),
                   ),
                   const ConnectionStatusLine(),

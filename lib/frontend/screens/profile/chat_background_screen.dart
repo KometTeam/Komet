@@ -8,6 +8,8 @@ import '../../widgets/chat_wallpaper_sheet.dart';
 import '../../widgets/chat_wallpaper_view.dart';
 import '../../widgets/custom_notification.dart';
 import '../chats/chat_wallpaper_preview_screen.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 
 class ChatBackgroundScreen extends StatefulWidget {
   const ChatBackgroundScreen({super.key});
@@ -33,8 +35,10 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
     if (!mounted) return;
     setState(() {
       _accountId = profile?.id ?? 0;
-      _wallpaper = ChatWallpaperStore.instance
-          .get(_accountId, kGlobalWallpaperChatId);
+      _wallpaper = ChatWallpaperStore.instance.get(
+        _accountId,
+        kGlobalWallpaperChatId,
+      );
       _ready = true;
     });
   }
@@ -42,8 +46,10 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
   void _refresh() {
     if (!mounted) return;
     setState(() {
-      _wallpaper = ChatWallpaperStore.instance
-          .get(_accountId, kGlobalWallpaperChatId);
+      _wallpaper = ChatWallpaperStore.instance.get(
+        _accountId,
+        kGlobalWallpaperChatId,
+      );
     });
   }
 
@@ -109,12 +115,12 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
       appBar: AppBar(
         backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
+        title: Text(
           'Фон чатов',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w700,
-            fontFamily: 'Outfit',
+            fontFamily: displayFontOf(context),
           ),
         ),
       ),
@@ -134,7 +140,7 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppShape.cardRadius,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -222,7 +228,7 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
                     color: cs.onPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    fontFamily: 'Outfit',
+                    fontFamily: displayFontOf(context),
                   ),
                 ),
               ),
@@ -250,6 +256,7 @@ class _SampleBubbles extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _bubble(
+              context,
               text: 'Единый фон для всех чатов',
               color: cs.surfaceContainerHighest.withValues(alpha: 0.94),
               textColor: cs.onSurface,
@@ -257,6 +264,7 @@ class _SampleBubbles extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             _bubble(
+              context,
               text: 'Красиво ✨',
               color: cs.primary,
               textColor: cs.onPrimary,
@@ -268,7 +276,8 @@ class _SampleBubbles extends StatelessWidget {
     );
   }
 
-  Widget _bubble({
+  Widget _bubble(
+    BuildContext context, {
     required String text,
     required Color color,
     required Color textColor,
@@ -289,7 +298,7 @@ class _SampleBubbles extends StatelessWidget {
             style: TextStyle(
               color: textColor,
               fontSize: 15,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
         ),

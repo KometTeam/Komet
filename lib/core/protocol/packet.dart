@@ -50,6 +50,12 @@ class SessionExpiredException extends PacketError {
   const SessionExpiredException(super.message);
 }
 
+bool isPermanentSendFailure(Object error) {
+  if (error is! PacketError) return false;
+  if (error is SessionExpiredException) return false;
+  return !(error.errorKey?.contains('not.ready') ?? false);
+}
+
 String messageFromErrorPayload(dynamic payload) {
   if (payload is Map) {
     final msg = payload['message'];

@@ -112,7 +112,10 @@ class ContactInfoFetch {
   static void clear() => _cache.clear();
 
   static void putContact(int id, Map<dynamic, dynamic> contact) {
-    _cache.putValue(id, ContactInfo.fromMap(Map<String, dynamic>.from(contact)));
+    _cache.putValue(
+      id,
+      ContactInfo.fromMap(Map<String, dynamic>.from(contact)),
+    );
   }
 
   static Future<Map<int, ContactInfo>> getMany(
@@ -243,17 +246,41 @@ class PresenceFetch {
     if (missing.isNotEmpty) {
       final fetched = await _fetchBatch(missing);
       final now = DateTime.now();
+      var changed = false;
       for (final id in missing) {
         final value = fetched[id];
         if (value != null) {
           _cache.putValue(id, value, at: now);
+          _live[id] = value;
           result[id] = value;
+          changed = true;
         } else {
           _cache.markFailed(id, at: now);
         }
       }
+      if (changed) revision.value++;
     }
     return result;
+  }
+
+  static const _batchSize = 100;
+
+  static Future<void> ensureFor(Iterable<int> ids) async {
+    final wanted = <int>{};
+    for (final id in ids) {
+      if (id <= 0) continue;
+      if (_cache.peek(id) != null) continue;
+      wanted.add(id);
+    }
+    if (wanted.isEmpty) return;
+    final list = wanted.toList();
+    for (var i = 0; i < list.length; i += _batchSize) {
+      final chunk = list.sublist(
+        i,
+        i + _batchSize > list.length ? list.length : i + _batchSize,
+      );
+      await getMany(chunk);
+    }
   }
 
   static Future<Map<int, Map<String, dynamic>>> _fetchBatch(

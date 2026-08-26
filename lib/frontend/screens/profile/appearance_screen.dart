@@ -19,8 +19,9 @@ import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
-import '../../widgets/glossy_pill.dart';
 import '../../widgets/liquid_glass.dart';
+import '../../widgets/settings_card.dart';
+import '../../../core/config/app_shape.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({super.key});
@@ -141,7 +142,9 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
 void _applyVisualStyle(VisualStyle style) {
   AppVisualStyle.save(style);
   if (style == VisualStyle.liquidGlass) {
-    AppNavPillStyle.save(NavPillStyle.liquidGlass);
+    if (AppNavPillStyle.current.value != NavPillStyle.auto) {
+      AppNavPillStyle.save(NavPillStyle.liquidGlass);
+    }
     AppComposerBackground.save(ComposerBackground.liquidGlass);
     AppChatChrome.save(ChatChromeStyle.liquidGlass);
     return;
@@ -164,11 +167,7 @@ class _VisualStyleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      depth: 6,
+    return SettingsPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -233,11 +232,7 @@ class _ChatChromeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      depth: 6,
+    return SettingsPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -314,11 +309,7 @@ class _ComposerBarCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      depth: 6,
+    return SettingsPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -339,24 +330,32 @@ class _ComposerBarCard extends StatelessWidget {
           ValueListenableBuilder<ComposerStyle>(
             valueListenable: AppComposerStyle.current,
             builder: (context, current, _) {
-              return SegmentedButton<ComposerStyle>(
-                segments: [
-                  ButtonSegment(
-                    value: ComposerStyle.glossy,
-                    label: Text(l10n.appearanceVisualStyleGlossy),
-                  ),
-                  ButtonSegment(
-                    value: ComposerStyle.materialYou,
-                    label: Text(l10n.appearanceVisualStyleMaterialYou),
-                  ),
-                ],
-                selected: {current},
-                onSelectionChanged: (set) {
-                  if (set.isNotEmpty) {
-                    Haptics.selection();
-                    AppComposerStyle.save(set.first);
-                  }
-                },
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SegmentedButton<ComposerStyle>(
+                  showSelectedIcon: false,
+                  segments: [
+                    ButtonSegment(
+                      value: ComposerStyle.auto,
+                      label: Text(l10n.appearanceStyleAuto),
+                    ),
+                    ButtonSegment(
+                      value: ComposerStyle.glossy,
+                      label: Text(l10n.appearanceVisualStyleGlossy),
+                    ),
+                    ButtonSegment(
+                      value: ComposerStyle.materialYou,
+                      label: Text(l10n.appearanceVisualStyleMaterialYou),
+                    ),
+                  ],
+                  selected: {current},
+                  onSelectionChanged: (set) {
+                    if (set.isNotEmpty) {
+                      Haptics.selection();
+                      AppComposerStyle.save(set.first);
+                    }
+                  },
+                ),
               );
             },
           ),
@@ -409,11 +408,7 @@ class _NavPillStyleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      depth: 6,
+    return SettingsPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -439,30 +434,37 @@ class _NavPillStyleCard extends StatelessWidget {
                       !LiquidGlass.isSupported
                   ? NavPillStyle.frostBlur
                   : current;
-              return SegmentedButton<NavPillStyle>(
-                showSelectedIcon: false,
-                segments: [
-                  ButtonSegment(
-                    value: NavPillStyle.glossy,
-                    label: Text(l10n.appearanceNavPillGlossy),
-                  ),
-                  ButtonSegment(
-                    value: NavPillStyle.frostBlur,
-                    label: Text(l10n.appearanceNavPillFrost),
-                  ),
-                  if (LiquidGlass.isSupported)
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SegmentedButton<NavPillStyle>(
+                  showSelectedIcon: false,
+                  segments: [
                     ButtonSegment(
-                      value: NavPillStyle.liquidGlass,
-                      label: Text(l10n.appearanceGlassMaterial),
+                      value: NavPillStyle.auto,
+                      label: Text(l10n.appearanceStyleAuto),
                     ),
-                ],
-                selected: {selectable},
-                onSelectionChanged: (set) {
-                  if (set.isNotEmpty) {
-                    Haptics.selection();
-                    AppNavPillStyle.save(set.first);
-                  }
-                },
+                    ButtonSegment(
+                      value: NavPillStyle.glossy,
+                      label: Text(l10n.appearanceNavPillGlossy),
+                    ),
+                    ButtonSegment(
+                      value: NavPillStyle.frostBlur,
+                      label: Text(l10n.appearanceNavPillFrost),
+                    ),
+                    if (LiquidGlass.isSupported)
+                      ButtonSegment(
+                        value: NavPillStyle.liquidGlass,
+                        label: Text(l10n.appearanceGlassMaterial),
+                      ),
+                  ],
+                  selected: {selectable},
+                  onSelectionChanged: (set) {
+                    if (set.isNotEmpty) {
+                      Haptics.selection();
+                      AppNavPillStyle.save(set.first);
+                    }
+                  },
+                ),
               );
             },
           ),
@@ -479,11 +481,8 @@ class _GradientToggleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
+    return SettingsPanel(
       padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
-      depth: 6,
       child: Row(
         children: [
           Icon(Symbols.blur_on, color: cs.onSurface, size: 24, weight: 500),
@@ -531,11 +530,8 @@ class _SpectrumToggleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
+    return SettingsPanel(
       padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
-      depth: 6,
       child: Row(
         children: [
           Icon(Symbols.graphic_eq, color: cs.onSurface, size: 24, weight: 500),
@@ -675,11 +671,9 @@ class _ChatPreview extends StatelessWidget {
       builder: (context, _) {
         final style = AppBubbleShape.current.value;
         final behavior = AppBubbleBehavior.current.value;
-        return GlossyPill(
+        return SettingsPanel(
           color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          depth: 6,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -781,10 +775,7 @@ class _ColorPickerCard extends StatelessWidget {
   ) {
     final swatchColor = sys ? cs.primary : col;
 
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
-      depth: 6,
+    return SettingsPanel(
       child: Column(
         children: [
           InkWell(
@@ -863,9 +854,7 @@ class _ColorPickerCard extends StatelessWidget {
                           child: FilledButton.tonal(
                             onPressed: sys ? null : onReset,
                             style: FilledButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
+                              shape: AppShape.buttonBorder,
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -906,11 +895,7 @@ class _BubbleShapeCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
 
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      depth: 6,
+    return SettingsPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -967,11 +952,7 @@ class _BubbleBehaviorCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
 
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      depth: 6,
+    return SettingsPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

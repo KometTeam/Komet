@@ -11,7 +11,6 @@
   "loginConfirmPhoneTitle": "Is this the correct number?",
   "loginEdit": "Change",
   "loginDone": "Done",
-  "loginReadTermsNotification": "Please read the terms of use first",
   "loginSpoofRedacted": "Spoofing",
   "loginProxy": "Proxy",
   "loginChangeServer": "Change server",
@@ -51,7 +50,6 @@
   "codeResendSms": "Resend code via SMS",
   "codeError2faMissing": "Error: missing data for 2FA",
   "codeConfirmation2faWarning": "MAX may require 2FA on your account to sign in. If you didn't receive the code, set up 2FA from a client where you're already signed in.",
-
   "proxySettingsTitle": "Proxy",
   "proxyTypeNone": "Disabled",
   "proxyTypeSocks5": "SOCKS5",
@@ -64,7 +62,6 @@
   "proxyDisable": "Disable proxy",
   "proxySettingsSaved": "Proxy settings applied",
   "proxyInvalidHostOrPort": "Enter a valid proxy host and port (1–65535)",
-
   "spoofScreenTitle": "Session spoofing",
   "spoofEnableTitle": "Device spoofing",
   "spoofEnableSubtitleOn": "Enabled for this account",
@@ -123,8 +120,12 @@
   "profileMenuSpoof": "Spoofing",
   "infoTitle": "Info",
   "infoAccountSection": "Account",
+  "infoPacketSection": "Login packet",
+  "infoChatsSection": "Chats in login packet",
+  "infoChatSettingsSection": "Per-chat settings",
   "infoServerSection": "Server",
   "infoUserSection": "User",
+  "infoExperimentsSection": "Experiments",
   "infoYMapSection": "Y-Map",
   "infoFileUploadTypes": "file-upload-unsupported-types",
   "infoWhiteListLinks": "white-list-links",
@@ -133,7 +134,30 @@
   "infoVideoChatHistory": "videoChatHistory",
   "infoUpdateTime": "updateTime",
   "infoId": "id",
+  "infoPhone": "phone",
+  "infoPhotoId": "photoId",
+  "infoAccountStatus": "accountStatus",
+  "infoContactOptions": "contact options",
+  "infoProfileOptions": "profile options",
+  "infoNames": "names",
+  "infoBaseUrl": "baseUrl",
+  "infoBaseRawUrl": "baseRawUrl",
   "infoChatMarker": "chatMarker",
+  "infoServerTime": "server time",
+  "infoUpdates": "updates",
+  "infoMessagesCount": "messages in packet",
+  "infoContactsCount": "contacts in packet",
+  "infoPresenceCount": "presence records",
+  "infoConfigHash": "config hash",
+  "infoChatsCount": "chats loaded",
+  "infoChatsActive": "active",
+  "infoChatsHidden": "hidden",
+  "infoChatsDialogs": "dialogs",
+  "infoChatsGroups": "groups",
+  "infoChatsChannels": "channels",
+  "infoChatsUnread": "unread chats",
+  "infoChatsNewMessages": "new messages",
+  "infoChatsMessages": "messages in loaded chats",
   "infoAccountRemovalEnabled": "account-removal-enabled",
   "infoImageSize": "image-size",
   "infoGce": "gce",
@@ -181,7 +205,6 @@
   "chatInfoHasBots": "has bots:",
   "chatInfoBlockedCount": "blocked in group:",
   "chatInfoOfficialStatus": "official status:",
-  "chatInfoLastChanged": "last changed:",
   "chatInfoJoined": "joined:",
   "chatInfoGroupCreated": "group created:",
   "chatInfoGroupOwner": "group owner:",
@@ -231,11 +254,18 @@
     }
   },
   "notificationsFkmAlreadyHasFcm": "Why? You already have FCM.",
-  "notificationsFkmDownloadFcm": "Better download the FCM version.",
+  "notificationsFkmIosUnsupported": "Push notifications are not available on iOS yet.",
   "notificationsTitle": "Notifications",
   "notificationsFkmSectionTitle": "FKM",
   "notificationsFkmEnableLabel": "Enable notifications",
   "notificationsFkmEnableSubtitle": "For FKM notifications to work, the app will need to keep a notification in the shade.",
+  "notificationsFkmUnsupported": "FKM is Android-only",
+  "notificationsFkmBatteryAction": "Open settings",
+  "notificationsFkmBatteryMessage": "Otherwise the system will put the background connection to sleep and notifications will be late or lost.",
+  "notificationsFkmBatteryTitle": "Turn off battery saving?",
+  "notificationsFkmPermissionDenied": "FKM cannot work without the notification permission",
+  "notificationsFkmConfirmAction": "Enable FKM",
+  "notificationsFkmConfirmMessage": "Notifications will arrive over the app’s own background connection, and a permanent service notification will stay in the shade. You can turn FKM off right from it.",
   "notificationsMainSectionTitle": "Notifications",
   "notificationsAllLabel": "All notifications",
   "notificationsNewSectionTitle": "New notifications",
@@ -300,6 +330,7 @@
   "appearanceTitle": "Appearance",
   "appearanceVisualStyleTitle": "Visual style",
   "appearanceVisualStyleSubtitle": "Material You or dimensional Glossy capsules",
+  "appearanceStyleAuto": "Match theme",
   "appearanceVisualStyleMaterialYou": "Material You",
   "appearanceVisualStyleGlossy": "Glossy",
   "appearanceVisualStyleLiquidGlass": "Liquid Glass",
@@ -341,14 +372,20 @@
   "appearancePreviewHowIsIt": "How do you like it?",
   "appearancePreviewHmm": "hmm...",
   "appearancePreviewNotBad": "Not bad at all!",
-
   "callKometDetectedNotification": "This person uses Komet! :3",
   "callStatusConnecting": "Connecting",
   "callGroupConnecting": "Connecting…",
   "callGroupWaitingParticipants": "Waiting for participants…",
+  "callLinkGroupCall": "Group call",
+  "callLinkSendInMax": "Send in MAX",
+  "callLinkStart": "Start call",
+  "callLinkSent": "Link sent",
+  "callLinkSendFailed": "Couldn't send the link",
+  "callLinkCreateFailed": "Couldn't create the call",
   "callParticipantYou": "You",
   "callParticipantFallback": "Participant",
   "callTooltipMinimize": "Minimize",
+  "callTooltipExpand": "Expand",
   "callTooltipKometHub": "Komet",
   "callInfoTitle": "About call",
   "callPeerMicOff": "Microphone off",
@@ -365,6 +402,17 @@
   "callUnmute": "Unmute",
   "callMute": "Mute",
   "callEndButton": "End",
+  "callCameraUnavailable": "Camera unavailable: {error}",
+  "callTooltipMicrophone": "Microphone",
+  "callMicrophoneTitle": "Microphone",
+  "callMicrophoneSystem": "System default",
+  "callMicrophoneEmpty": "No microphones found",
+  "callMicrophoneRefresh": "Refresh list",
+  "callMicrophoneMonitors": "Monitors — system audio",
+  "callMicrophoneFallback": "Microphone {index}",
+  "callMicrophoneFailed": "Could not switch microphone: {error}",
+  "callMicStillLive": "Still live",
+  "callNoMuteHint": "--no-mute: audio keeps going out even while the mic is off",
   "callInfoClient": "Client",
   "callInfoPlatform": "Platform",
   "callInfoCountry": "Country",
@@ -403,7 +451,6 @@
   "callBadgeNoiseSuppression": "Noise suppression",
   "callBadgeAnimoji": "Animoji",
   "callInfoNoDataYet": "Data will appear after connecting…",
-
   "hubTitleMenu": "Komet",
   "hubChatPageTitle": "Anonymous chat",
   "hubGamesTitle": "Games",
@@ -424,7 +471,6 @@
   "hubCheckersLost": "You lost",
   "hubCheckersYourMove": "Your move",
   "hubCheckersOpponentMove": "Opponent's move…",
-
   "scheduledPickTimeTitle": "When to send",
   "scheduledEditTitle": "Edit",
   "scheduledMessageTextHint": "Message text",
@@ -443,7 +489,6 @@
   "scheduledAttachLocation": "Location",
   "scheduledAttachForwarded": "Forwarded",
   "scheduledAttachGeneric": "Attachment",
-
   "contactProfileLoadError": "Error: {error}",
   "@contactProfileLoadError": {
     "placeholders": {
@@ -468,7 +513,6 @@
   "contactProfileInfoDescription": "Description",
   "contactProfileInfoLink": "Link",
   "contactProfileInfoFlags": "Flags",
-
   "nfcPeerNameFallback": "Contact #{id}",
   "@nfcPeerNameFallback": {
     "placeholders": {
@@ -507,7 +551,6 @@
   },
   "nfcAdded": "Added",
   "nfcAddContact": "Add contact",
-
   "chatInfoTabGeneralChats": "Common chats",
   "chatInfoTabMedia": "Media",
   "chatInfoTabFiles": "Files",
@@ -677,6 +720,17 @@
   "chatInfoNoData": "No data",
   "chatInfoHideExtra": "Hide",
   "chatInfoShowMoreExtra": "Details",
+  "chatSendConfirmMessage": "Send this message to the chat?",
+  "chatSendConfirmAction": "Send",
+  "chatInfoRowDisableForward": "Forwarding disabled",
+  "chatInfoRowCopyDisabled": "Copying disabled",
+  "chatInfoRowOnlyAdminCall": "Admins can call",
+  "chatInfoRowAllCanPin": "Anyone can pin",
+  "chatInfoRowMembersSeeLink": "Members see the link",
+  "chatInfoRowConfirmBeforeSend": "Confirm before sending",
+  "chatInfoRowOnlyOwnerIconTitle": "Owner edits title and icon",
+  "chatInfoRowPromotedDisabled": "Promoted content off",
+  "chatInfoRowUserId": "User ID",
   "chatInfoRowId": "Chat ID",
   "chatInfoRowCreated": "Created",
   "chatInfoRowModified": "Modified",
@@ -694,7 +748,6 @@
   "chatInfoRowComments": "Comments",
   "chatInfoRowRkn": "Roskomnadzor approved",
   "chatInfoRowOnlyAdmin": "Admins only",
-
   "securityTitle": "Security",
   "securityLoadError": "Loading error: {error}",
   "@securityLoadError": {
@@ -748,7 +801,6 @@
       }
     }
   },
-
   "passwordEntryWrongPassword": "Wrong password",
   "passwordEntryConfirmTitle": "Confirm password",
   "passwordEntryCurrentPasswordHint": "Current password",
@@ -910,7 +962,7 @@
   "digitalIdDocChildOms": "Child's health insurance policy (OMS)",
   "attachSheetGallery": "Gallery",
   "attachSheetPoll": "Poll",
-  "attachSheetCameraComingSoon": "Camera is coming soon",
+  "attachSheetCameraError": "Couldn't open the camera",
   "attachSheetSendFileTitle": "Send a file",
   "attachSheetSendFileSubtitle": "A document, archive, or any other file",
   "attachSheetChooseFileButton": "Choose file",
@@ -932,6 +984,7 @@
   "attachSheetSettings": "Settings",
   "attachSheetAddCaptionHint": "Add a caption...",
   "attachSheetCamera": "Camera",
+  "attachSheetCameraAllow": "Allow camera",
   "photoEditorApplyFailed": "Couldn't apply",
   "photoEditorFlipTooltip": "Flip",
   "photoEditorRotateTooltip": "Rotate",
@@ -1105,5 +1158,62 @@
         "type": "String"
       }
     }
-  }
+  },
+  "savedMessagesEmptyPreview": "Save something here",
+  "proxyCurrentState": "Currently: {value}",
+  "@proxyCurrentState": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "blacklistEmpty": "Nobody is blocked",
+  "blacklistLoadError": "Failed to load the blacklist",
+  "videoEditorQualityLow": "Small size",
+  "videoEditorQualityHigh": "High quality",
+  "videoEditorCaptionHint": "Add a caption...",
+  "videoEditorMuteTooltip": "Send without sound",
+  "videoEditorProcessing": "Processing video…",
+  "videoEditorExportFailed": "Failed to process the video",
+  "videoEditorFrameFailed": "Failed to grab a frame",
+  "videoEditorQualityTooltip": "Quality",
+  "webPushTitle": "Notifications on iOS",
+  "webPushIntro": "Komet has no ordinary push on iOS: Apple issues a notification token only to apps signed with a developer certificate, and a sideloaded build never gets one.\n\nThe way around it is a web app on the Home Screen. MAX's own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.",
+  "webPushConfirm": "Continue",
+  "webPushPasswordExplainer": "Two-factor protection is enabled on this account.",
+  "webPushPasswordHintLabel": "Hint: {hint}",
+  "@webPushPasswordHintLabel": {
+    "placeholders": {
+      "hint": {
+        "type": "String"
+      }
+    }
+  },
+  "webPushPasswordHint": "Password",
+  "webPushInstallTitle": "Install the web app",
+  "webPushInstallBody": "Open push.komet.pw in Safari, add it to the Home Screen and launch the icon that appears. Notifications do not work from a browser tab — that is how iOS works.\n\nIn the app, allow notifications, create a subscription and tap \"Open Komet\". The subscription registers itself from there.",
+  "webPushLinkedTitle": "Notifications connected",
+  "webPushLinkedBody": "The subscription is registered on the server. Do not delete the Home Screen icon — the notifications go with it.\n\nIf push stops arriving, open the web app and link again: Apple sometimes rotates the subscription address.",
+  "webPushOpenSite": "Open push.komet.pw",
+  "webPushSignOut": "Disconnect notifications",
+  "webPushLinked": "Notifications connected",
+  "webPushLinkFailed": "Could not connect notifications: {error}",
+  "@webPushLinkFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "webPushNotAuthorized": "Sign in under \"Notifications via PWA\" first",
+  "webPushConnect": "Connect notifications",
+  "webPushWaitingBody": "Komet is approving the web session from this device. This usually takes a few seconds.",
+  "webPushNeedsOnline": "No connection to the server. Wait for it and try again.",
+  "webPushSignOutConfirm": "The web session will be terminated and disappear from your device list. To get notifications back you will have to connect again.",
+  "webPushSignOutAction": "Disconnect",
+  "webPushStatusService": "Service",
+  "webPushStatusToken": "Token",
+  "webPushStatusLinkedAt": "Linked",
+  "webPushStatusDevice": "Device"
 }

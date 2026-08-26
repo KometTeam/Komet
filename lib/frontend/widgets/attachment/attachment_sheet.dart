@@ -1,19 +1,27 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_nav_pill_style.dart';
 import 'package:komet/core/config/app_visual_style.dart';
 import 'package:komet/core/media/gallery_source.dart';
+import 'package:komet/core/media/video_transcoder.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/widgets/attachment/contact_picker_page.dart';
 import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
 import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/attachment/photo_hero.dart';
+import 'package:komet/frontend/widgets/attachment/video_edit.dart';
+import 'package:komet/frontend/widgets/attachment/video_preview_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
@@ -45,7 +53,7 @@ Future<void> showAttachmentSheet(
     isScrollControlled: true,
     requestFocus: false,
     backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.45),
+    barrierColor: AppFrost.scrim(),
     builder: (_) => AttachmentSheet(
       title: title,
       onSend: onSend,
@@ -80,13 +88,19 @@ class AttachmentSheet extends StatefulWidget {
 }
 
 class _AttachmentSheetState extends State<AttachmentSheet> {
+  static const int _loadAhead = 24;
+
   static List<GalleryItem>? _cachedItems;
   static GalleryPermission _cachedPermission = GalleryPermission.granted;
+  static bool _cachedHasMore = false;
 
   final GallerySource _source = GallerySource.create();
   final ValueNotifier<Set<String>> _selected = ValueNotifier(<String>{});
   final Map<String, GlobalKey<_ThumbnailState>> _thumbKeys = {};
   final Map<String, PhotoEditState> _edits = {};
+  final Map<String, VideoEditState> _videoEdits = {};
+  bool _videoEditorReady = false;
+  bool _exporting = false;
   final Set<String> _tempFiles = {};
   final Set<String> _sentFiles = {};
   final TextEditingController _captionCtrl = TextEditingController();
@@ -97,6 +111,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   double _navDragAccumDx = 0;
 
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  int _loadToken = 0;
   GalleryPermission _permission = GalleryPermission.granted;
   List<GalleryItem> _items = const [];
 
@@ -107,11 +124,15 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     if (cached != null) {
       _items = cached;
       _permission = _cachedPermission;
+      _hasMore = _cachedHasMore;
       _loading = false;
       _loadGallery(silent: true);
     } else {
       _loadGallery();
     }
+    VideoTranscoder.ensureAvailable().then((ready) {
+      if (mounted && ready) setState(() => _videoEditorReady = true);
+    });
   }
 
   @override
@@ -127,26 +148,60 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Future<void> _loadGallery({bool silent = false}) async {
+    final token = ++_loadToken;
     if (!silent) setState(() => _loading = true);
     final permission = await _source.ensurePermission();
-    if (!mounted) return;
+    if (!mounted || token != _loadToken) return;
     if (permission == GalleryPermission.denied) {
       _cachedItems = null;
+      _cachedHasMore = false;
       setState(() {
         _permission = permission;
         _items = const [];
+        _hasMore = false;
         _loading = false;
       });
       return;
     }
-    final items = await _source.load(limit: 120);
-    if (!mounted) return;
-    _cachedItems = items;
-    _cachedPermission = permission;
+    final loaded = _items.length;
+    final page = await _source.load(
+      offset: 0,
+      limit: loaded > GallerySource.pageSize ? loaded : GallerySource.pageSize,
+    );
+    if (!mounted || token != _loadToken) return;
+    _permission = permission;
+    _loading = false;
+    _publishItems(page.items, page.hasMore);
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || _loadingMore || !_hasMore) return;
+    final token = _loadToken;
+    final offset = _items.length;
+    _loadingMore = true;
+    final page = await _source.load(offset: offset);
+    _loadingMore = false;
+    if (!mounted || token != _loadToken || offset != _items.length) return;
+    if (page.items.isEmpty) {
+      _cachedHasMore = false;
+      setState(() => _hasMore = false);
+      return;
+    }
+    _publishItems([..._items, ...page.items], page.hasMore);
+  }
+
+  void _publishItems(List<GalleryItem> items, bool hasMore) {
+    final seen = <String>{};
+    final unique = [
+      for (final item in items)
+        if (seen.add(item.id)) item,
+    ];
+    _cachedItems = unique;
+    _cachedPermission = _permission;
+    _cachedHasMore = hasMore;
     setState(() {
-      _permission = permission;
-      _items = items;
-      _loading = false;
+      _items = unique;
+      _hasMore = hasMore;
     });
   }
 
@@ -160,15 +215,35 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       _thumbKeys.putIfAbsent(id, () => GlobalKey<_ThumbnailState>());
 
   void _openPreview(GalleryItem item) {
-    if (item.isVideo) {
-      _toggleSelection(item);
-      return;
-    }
     final thumbKey = _thumbKey(item.id);
     final hero = PhotoHeroController(
       origin: () => photoHeroRect(thumbKey),
       image: thumbKey.currentState?.provider,
     );
+    if (item.isVideo) {
+      final edit = _videoEdits.putIfAbsent(item.id, VideoEditState.new);
+      Navigator.of(context).push(
+        PhotoHeroRoute<void>(
+          hero: hero,
+          builder: (_) => VideoPreviewScreen(
+            item: item,
+            hero: hero,
+            title: widget.title,
+            selectedIds: _selected,
+            editable: _videoEditorReady,
+            edit: edit,
+            onToggleSelection: () => _toggleSelection(item),
+            onSend: () => _sendSelection(fallback: item),
+            onEditChanged: () {
+              if (mounted) setState(() {});
+            },
+            initialCaption: _captionCtrl.text,
+            onCaptionChanged: (text) => _captionCtrl.text = text,
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).push(
       PhotoHeroRoute<void>(
         hero: hero,
@@ -199,20 +274,127 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     );
   }
 
-  void _onCameraTap() {
-    showCustomNotification(
-      context,
-      AppLocalizations.of(context)!.attachSheetCameraComingSoon,
-    );
+  Future<void> _onCameraTap() async {
+    final l10n = AppLocalizations.of(context)!;
+    XFile? shot;
+    try {
+      shot = await ImagePicker().pickImage(source: ImageSource.camera);
+    } catch (_) {
+      if (mounted) showCustomNotification(context, l10n.attachSheetCameraError);
+      return;
+    }
+    if (shot == null || !mounted) return;
+    _openPreview(GalleryItem.fromFile(File(shot.path)));
   }
 
-  void _sendSelection({GalleryItem? fallback}) {
+  Future<bool> _exportVideos(List<GalleryItem> chosen) async {
+    final jobs = <(GalleryItem, VideoEditState)>[];
+    for (final item in chosen) {
+      if (!item.isVideo) continue;
+      final edit = _videoEdits[item.id];
+      if (edit != null && edit.hasEdits) jobs.add((item, edit));
+    }
+    if (jobs.isEmpty) return true;
+
+    final progress = ValueNotifier<double>(0);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var cancelled = false;
+    setState(() => _exporting = true);
+    unawaited(
+      showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        pageBuilder: (_, _, _) => _ExportProgress(
+          progress: progress,
+          onCancel: () {
+            cancelled = true;
+            VideoTranscoder.cancel();
+          },
+        ),
+      ),
+    );
+
+    var ok = true;
+    for (final (item, edit) in jobs) {
+      final file = item.localFile ?? await item.originFile();
+      if (file == null) {
+        ok = false;
+        break;
+      }
+      final info = await VideoTranscoder.probe(file.path);
+      var source = info != null && info.width > 0 && info.height > 0
+          ? Size(info.width.toDouble(), info.height.toDouble())
+          : Size.zero;
+      if (source.isEmpty) {
+        final dims = await item.dimensions();
+        if (dims == null) {
+          ok = false;
+          break;
+        }
+        source = Size(dims.$1.toDouble(), dims.$2.toDouble());
+      }
+      final signature = edit.signature(source);
+      if (edit.exported != null && edit.exportedSignature == signature) {
+        continue;
+      }
+      progress.value = 0;
+      final spec = await buildVideoExportSpec(
+        edit,
+        file.path,
+        source,
+        info?.fps ?? 30,
+      );
+      if (spec == null) {
+        ok = false;
+        break;
+      }
+      final done = await VideoTranscoder.export(
+        spec,
+        onProgress: (value) => progress.value = value,
+      );
+      final overlay = spec.overlayPath;
+      if (overlay != null) {
+        File(overlay).delete().then((_) {}, onError: (_) {});
+      }
+      if (!done) {
+        ok = false;
+        break;
+      }
+      edit.exported = File(spec.output);
+      edit.exportedSignature = signature;
+      _tempFiles.add(spec.output);
+    }
+
+    progress.dispose();
+    navigator.pop();
+    if (!mounted) return false;
+    setState(() => _exporting = false);
+    if (!ok && !cancelled) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.videoEditorExportFailed,
+      );
+    }
+    return ok;
+  }
+
+  Future<void> _sendSelection({GalleryItem? fallback}) async {
+    if (_exporting) return;
     final ids = _selected.value;
     var chosen = _items.where((it) => ids.contains(it.id)).toList();
     if (chosen.isEmpty && fallback != null) chosen = [fallback];
     if (chosen.isEmpty) return;
+    if (!await _exportVideos(chosen) || !mounted) return;
     final picked = chosen
-        .map((it) => PickedPhoto(item: it, editedFile: _edits[it.id]?.working))
+        .map(
+          (it) => PickedPhoto(
+            item: it,
+            editedFile: it.isVideo
+                ? _videoEdits[it.id]?.exported
+                : _edits[it.id]?.working,
+          ),
+        )
         .toList();
     final callback = widget.onSend;
     if (callback != null) {
@@ -478,12 +660,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
               ),
             ),
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                hpad,
-                spacing,
-                hpad,
-                bottomReserve + 6,
-              ),
+              padding: const EdgeInsets.fromLTRB(hpad, spacing, hpad, 0),
               sliver: SliverGrid(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
@@ -491,6 +668,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                   crossAxisSpacing: spacing,
                 ),
                 delegate: SliverChildBuilderDelegate((context, index) {
+                  if (index >= gridPhotos.length - _loadAhead) {
+                    unawaited(_loadMore());
+                  }
                   final item = gridPhotos[index];
                   return _GalleryTile(
                     key: ValueKey(item.id),
@@ -503,6 +683,18 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                     cs: cs,
                   );
                 }, childCount: gridPhotos.length),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  if (_hasMore)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: SmallSpinner(size: 22, color: cs.primary),
+                    ),
+                  SizedBox(height: bottomReserve + 6),
+                ],
               ),
             ),
           ],
@@ -832,6 +1024,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                   controller: _captionCtrl,
                   style: TextStyle(color: cs.onSurface, fontSize: 15),
                   cursorColor: cs.primary,
+                  textCapitalization: TextCapitalization.sentences,
                   decoration: InputDecoration(
                     isCollapsed: true,
                     border: InputBorder.none,
@@ -872,34 +1065,193 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   }
 }
 
-class _CameraTile extends StatelessWidget {
+enum _CameraAccess { unknown, granted, denied }
+
+class _CameraTile extends StatefulWidget {
   final VoidCallback onTap;
   final ColorScheme cs;
 
   const _CameraTile({required this.onTap, required this.cs});
 
   @override
+  State<_CameraTile> createState() => _CameraTileState();
+}
+
+class _CameraTileState extends State<_CameraTile> with WidgetsBindingObserver {
+  static const String _askedKey = 'komet_camera_permission_asked';
+
+  CameraController? _controller;
+  bool _starting = false;
+  _CameraAccess _access = _CameraAccess.unknown;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _resolveAccess();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _resolveAccess();
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _stopPreview();
+    }
+  }
+
+  Future<void> _resolveAccess() async {
+    if (!(Platform.isAndroid || Platform.isIOS)) return;
+
+    var status = await Permission.camera.status;
+    if (status.isDenied) {
+      final prefs = await SharedPreferences.getInstance();
+      if (!(prefs.getBool(_askedKey) ?? false)) {
+        await prefs.setBool(_askedKey, true);
+        status = await Permission.camera.request();
+      }
+    }
+    if (!mounted) return;
+
+    final granted = status.isGranted;
+    setState(
+      () => _access = granted ? _CameraAccess.granted : _CameraAccess.denied,
+    );
+    if (granted) _startPreview();
+  }
+
+  void _onTap() {
+    if (_access == _CameraAccess.denied) {
+      openAppSettings();
+      return;
+    }
+    widget.onTap();
+  }
+
+  Future<void> _startPreview() async {
+    if (_starting || _controller != null) return;
+    _starting = true;
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty || !mounted) return;
+      final back = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.back,
+        orElse: () => cameras.first,
+      );
+      final controller = CameraController(
+        back,
+        ResolutionPreset.low,
+        enableAudio: false,
+      );
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() => _controller = controller);
+    } catch (_) {
+    } finally {
+      _starting = false;
+    }
+  }
+
+  void _stopPreview() {
+    final controller = _controller;
+    if (controller == null) return;
+    _controller = null;
+    controller.dispose();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cs = widget.cs;
+    final controller = _controller;
+    final hasPreview = controller != null && controller.value.isInitialized;
+    final denied = _access == _CameraAccess.denied;
+    final l10n = AppLocalizations.of(context)!;
+
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        color: cs.surfaceContainerHighest,
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Symbols.photo_camera,
-              size: 34,
-              color: cs.onSurface,
-              weight: 400,
+      onTap: _onTap,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (hasPreview)
+            _buildPreview(controller)
+          else
+            Container(color: cs.surfaceContainerHighest),
+          if (hasPreview)
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x00000000), Color(0x66000000)],
+                ),
+              ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              AppLocalizations.of(context)!.attachSheetCamera,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+          Align(
+            alignment: hasPreview ? Alignment.bottomLeft : Alignment.center,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: hasPreview
+                  ? const Icon(
+                      Symbols.photo_camera,
+                      size: 22,
+                      color: Colors.white,
+                      weight: 500,
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          denied
+                              ? Symbols.no_photography
+                              : Symbols.photo_camera,
+                          size: 34,
+                          color: cs.onSurface,
+                          weight: 400,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          denied
+                              ? l10n.attachSheetCameraAllow
+                              : l10n.attachSheetCamera,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreview(CameraController controller) {
+    final size = controller.value.previewSize;
+    if (size == null) {
+      return Container(color: widget.cs.surfaceContainerHighest);
+    }
+    return ClipRect(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: size.height,
+          height: size.width,
+          child: CameraPreview(controller),
         ),
       ),
     );
@@ -1093,7 +1445,9 @@ class _ThumbnailState extends State<_Thumbnail> {
   }
 
   void _resolveProvider() {
-    final file = widget.editedFile ?? (widget.item.isVideo ? null : widget.item.localFile);
+    final file =
+        widget.editedFile ??
+        (widget.item.isVideo ? null : widget.item.localFile);
     if (file != null) {
       _provider = ResizeImage(
         FileImage(file),
@@ -1135,4 +1489,52 @@ class _ThumbnailState extends State<_Thumbnail> {
           )
         : null,
   );
+}
+
+class _ExportProgress extends StatelessWidget {
+  final ValueListenable<double> progress;
+  final VoidCallback onCancel;
+
+  const _ExportProgress({required this.progress, required this.onCancel});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return Center(
+      child: Material(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ValueListenableBuilder<double>(
+                valueListenable: progress,
+                builder: (context, value, _) => SizedBox(
+                  width: 46,
+                  height: 46,
+                  child: CircularProgressIndicator(
+                    value: value <= 0 ? null : value,
+                    strokeWidth: 3,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                l10n.videoEditorProcessing,
+                style: TextStyle(color: cs.onSurface, fontSize: 15),
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: onCancel,
+                child: Text(l10n.photoEditorCancel),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

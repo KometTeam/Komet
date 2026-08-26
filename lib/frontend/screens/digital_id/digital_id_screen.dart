@@ -2,19 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:m3e_collection/m3e_collection.dart'
     show ExpressiveRefreshIndicator;
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../backend/modules/digital_id.dart';
-import '../../../backend/modules/webapp.dart';
 import '../../../core/utils/webview_support.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../main.dart' show digitalIdModule, webAppModule;
+import '../../../main.dart' show digitalIdModule;
 import '../../../models/digital_id.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/small_spinner.dart';
-import '../webapp/web_app_screen.dart';
 
 String _documentLabel(AppLocalizations l10n, String type) {
   return switch (type) {
@@ -79,7 +78,12 @@ class _DigitalIdScreenState extends State<DigitalIdScreen>
           rethrow;
         }
       }
-      final cards = await digitalIdModule.getCardsList(passStatus: 'active');
+      List<DigitalIdAcmsCard> cards;
+      try {
+        cards = await digitalIdModule.getCardsList(passStatus: 'active');
+      } catch (_) {
+        cards = const [];
+      }
       if (!mounted) return;
       setState(() {
         _biometry = biometry;
@@ -122,21 +126,13 @@ class _DigitalIdScreenState extends State<DigitalIdScreen>
         );
         return;
       }
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => WebAppScreen(
-            title: AppLocalizations.of(context)!.digitalIdGosuslugiTitle,
-            loader: () async => WebAppLaunch(url: link.url),
-            onExternalCallback: webAppModule.handleExternalCallback,
-            closeAfterExternalCallback: true,
-          ),
-        ),
-      );
-      if (!mounted) return;
-      await digitalIdModule.loadDocuments(createIfMissing: true);
-      if (!mounted) return;
-      await _load();
+      // Госуслуги (ЕСИА) открываем во ВНЕШНЕМ браузере — их антифрод режет
+      // встроенный webview. Возврат придёт диплинком max.ru?externalCallback=1
+      // (deep_link_service -> опкод 105), после чего экран перезагрузится.
+      final uri = Uri.tryParse(link.url);
+      if (uri != null) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
     } on DigitalIdException catch (e) {
       if (mounted) showCustomNotification(context, e.message);
     } catch (e) {

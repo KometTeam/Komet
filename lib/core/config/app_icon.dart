@@ -5,15 +5,34 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppIcon {
-  defaultIcon('default', 'Default', 'assets/komet_icon.png', 'MainActivity'),
-  minimal('minimal', 'Minimal', 'assets/meteor_icon.png', 'MinimalIcon');
+  defaultIcon(
+    'default',
+    'Default',
+    'assets/komet_icon.png',
+    'MainActivity',
+    null,
+  ),
+  minimal(
+    'minimal',
+    'Minimal',
+    'assets/meteor_icon.png',
+    'MinimalIcon',
+    'MinimalIcon',
+  );
 
   final String id;
   final String title;
   final String previewAsset;
-  final String platformName;
+  final String androidAlias;
+  final String? iosAlternateName;
 
-  const AppIcon(this.id, this.title, this.previewAsset, this.platformName);
+  const AppIcon(
+    this.id,
+    this.title,
+    this.previewAsset,
+    this.androidAlias,
+    this.iosAlternateName,
+  );
 }
 
 class AppIconConfig {
@@ -29,19 +48,35 @@ class AppIconConfig {
   static Future<void> load() async {
     if (!isSupported) return;
     final prefs = await SharedPreferences.getInstance();
-    final id = prefs.getString(prefKey);
-    current.value = _parse(id);
+    var icon = _parse(prefs.getString(prefKey));
+    final applied = await _appliedIcon();
+    if (applied != null && applied != icon) {
+      icon = applied;
+      await prefs.setString(prefKey, icon.id);
+    }
+    current.value = icon;
   }
 
   static Future<void> apply(AppIcon icon) async {
     if (!isSupported) return;
     if (current.value == icon) return;
     await _channel.invokeMethod<void>('setAppIcon', {
-      'name': icon.platformName,
+      'name': Platform.isIOS ? icon.iosAlternateName : icon.androidAlias,
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(prefKey, icon.id);
     current.value = icon;
+  }
+
+  static Future<AppIcon?> _appliedIcon() async {
+    if (!Platform.isIOS) return null;
+    try {
+      final name = await _channel.invokeMethod<String>('getAppIcon');
+      for (final icon in AppIcon.values) {
+        if (icon.iosAlternateName == name) return icon;
+      }
+    } catch (_) {}
+    return null;
   }
 
   static AppIcon _parse(String? val) {

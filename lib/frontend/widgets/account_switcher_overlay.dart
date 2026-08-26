@@ -9,6 +9,7 @@ import '../../core/storage/token_storage.dart';
 import '../../core/utils/haptics.dart';
 import 'animated_overlay_popup.dart';
 import 'komet_avatar.dart';
+import '../../core/config/app_frost.dart';
 
 class AccountSwitcherController extends ChangeNotifier {
   Offset? pointer;
@@ -239,7 +240,7 @@ class _AccountSwitcherLayerState extends State<_AccountSwitcherLayer>
       animation: overlayAnimation,
       builder: (ctx, _) {
         final t = overlayAnimation.value.clamp(0.0, 1.0);
-        final blurSigma = 14.0 * t;
+        final blurSigma = AppFrost.overlaySigma * t;
         return GestureDetector(
           onTap: closeOverlay,
           behavior: HitTestBehavior.opaque,

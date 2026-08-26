@@ -26,22 +26,24 @@ class OpusOggEncoder {
 
   /// Лениво загружает libopus и инициализирует opus_dart: на Windows —
   /// вендоренную `opus.dll` рядом с exe, на Android — через
-  /// `opus_flutter_android`. Возвращает `false`, если кодек недоступен.
+  /// `opus_flutter_android`, на iOS/macOS — статически слинкованную
+  /// `ogg_opus_player` (см. `-force_load` в ios/Podfile).
+  /// Возвращает `false`, если кодек недоступен.
   static Future<bool> ensureAvailable() async {
     if (_initialized) return _available;
     _initialized = true;
     try {
-      // libopus.so на Android бандлится плагином opus_flutter_android,
-      // opus.dll — вендоренная рядом с exe на Windows.
-      final String libName;
-      if (Platform.isWindows) {
-        libName = 'opus.dll';
+      final DynamicLibrary lib;
+      if (Platform.isIOS || Platform.isMacOS) {
+        lib = DynamicLibrary.process();
+      } else if (Platform.isWindows) {
+        lib = DynamicLibrary.open('opus.dll');
       } else if (Platform.isAndroid) {
-        libName = 'libopus.so';
+        lib = DynamicLibrary.open('libopus.so');
       } else {
         return false;
       }
-      initOpus(DynamicLibrary.open(libName) as dynamic);
+      initOpus(lib as dynamic);
       _available = true;
     } catch (e) {
       logger.w('OpusOggEncoder: libopus недоступна: $e');

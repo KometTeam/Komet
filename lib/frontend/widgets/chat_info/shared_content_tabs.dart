@@ -27,6 +27,7 @@ import '../photo_viewer.dart';
 import '../reload_on_reconnect.dart';
 import '../small_spinner.dart';
 import '../swipe_route.dart';
+import '../sheet_helpers.dart';
 
 enum SharedContentKind { media, files, voice, links }
 
@@ -153,9 +154,7 @@ Future<void> _showItemMenu(BuildContext context, List<_MenuAction> actions) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: cs.surfaceContainerHigh,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
+    shape: kSheetShape,
     builder: (sheetContext) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -419,7 +418,7 @@ class _CommonChatsTabState extends State<CommonChatsTab>
     final cs = Theme.of(context).colorScheme;
     if (_loading) return _loadingState(cs);
     if (_chats.isEmpty) {
-      return _emptyState(cs, widget.emptyLabel, Icons.group);
+      return _emptyState(cs, widget.emptyLabel, Symbols.group);
     }
 
     return Container(

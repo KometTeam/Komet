@@ -7,6 +7,7 @@ import '../../core/utils/haptics.dart';
 import '../../models/poll.dart';
 import 'custom_notification.dart';
 import 'small_spinner.dart';
+import '../../core/config/app_shape.dart';
 
 class PollView extends StatefulWidget {
   final int chatId;
@@ -242,9 +243,7 @@ class _PollViewState extends State<PollView>
           style: TextButton.styleFrom(
             foregroundColor: widget.accentColor,
             backgroundColor: widget.dimColor.withValues(alpha: 0.12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
+            shape: AppShape.buttonBorder,
           ),
           child: _voting
               ? SmallSpinner(size: 16, color: widget.accentColor)

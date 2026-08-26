@@ -3,6 +3,7 @@ import 'dart:async';
 import '../../backend/api.dart';
 import '../../backend/modules/calls.dart';
 import '../protocol/opcode_map.dart';
+import '../push/fkm_controller.dart';
 import '../protocol/packet.dart';
 import '../utils/parse.dart';
 import 'call_bridge.dart';
@@ -56,6 +57,7 @@ class CallController {
   Stream<void> get incomingCanceled => _canceled.stream;
 
   CallSession? _active;
+  StreamSubscription<CallSessionState>? _activeSub;
   CallSession? get activeSession => _active;
 
   IncomingCall? _pending;
@@ -72,7 +74,6 @@ class CallController {
 
   void _onPush(Packet packet) {
     if (packet.opcode != Opcode.notifCallStart) return;
-    if (!appResumed) return;
     final payload = packet.payload;
     if (payload is! Map) return;
 
@@ -80,6 +81,13 @@ class CallController {
     final conversationId = payload['conversationId'] as String?;
     final callerId = payload['callerId'] as int?;
     if (vcp == null || conversationId == null || callerId == null) return;
+
+    // Приложение свёрнуто — звонок показывает FKM отдельным уведомлением,
+    // приём оттуда вернётся через injectFromNative.
+    if (!appResumed) {
+      unawaited(FkmController.instance.showIncomingCall(payload));
+      return;
+    }
 
     final params = ConversationParams.decode(vcp);
     if (params == null) return;
@@ -154,33 +162,12 @@ class CallController {
       osVersion: _api?.callsOsVersion,
     );
     final session = CallSession(ws2Config: config, role: CallRole.caller);
-    _bind(session);
-    await session.start();
-    CallBridge.instance.notifyAccepted();
-    return session;
+    return _launch(session, session.start);
   }
 
-  Future<({CallSession session, String? joinLink})> createGroupCall({
-    bool isVideo = false,
-  }) async {
+  Future<CreatedCall> createConference() async {
     if (_active != null) throw StateError('уже идёт звонок');
-    final out = await _calls!.startGroupCall(isVideo: isVideo);
-    final joinLink = await _calls!.createJoinLink(out.conversationId);
-    final config = Ws2Config.fromEndpoint(
-      out.endpoint,
-      userId: out.callsUserId,
-      device: _api?.callsDevice,
-      osVersion: _api?.callsOsVersion,
-    );
-    final session = CallSession(
-      ws2Config: config,
-      role: CallRole.caller,
-      isGroup: true,
-    );
-    _bind(session);
-    await session.start();
-    CallBridge.instance.notifyAccepted();
-    return (session: session, joinLink: joinLink);
+    return _calls!.createConference();
   }
 
   Future<CallLinkPreview?> previewCallLink(String url) =>
@@ -200,10 +187,7 @@ class CallController {
       role: CallRole.joiner,
       isGroup: true,
     );
-    _bind(session);
-    await session.start();
-    CallBridge.instance.notifyAccepted();
-    return session;
+    return _launch(session, session.start);
   }
 
   Future<CallSession> acceptIncoming(IncomingCall call) async {
@@ -220,11 +204,14 @@ class CallController {
       params: call.params,
       role: CallRole.callee,
     );
-    _bind(session);
-    await session.start();
-    await session.accept();
-    CallBridge.instance.notifyAccepted(caller: call.callerName);
-    return session;
+    return _launch(
+      session,
+      () async {
+        await session.start();
+        await session.accept();
+      },
+      caller: call.callerName,
+    );
   }
 
   Future<void> rejectIncoming(IncomingCall call) async {
@@ -255,18 +242,45 @@ class CallController {
     return true;
   }
 
+  Future<CallSession> _launch(
+    CallSession session,
+    Future<void> Function() open, {
+    String? caller,
+  }) async {
+    _bind(session);
+    try {
+      await open();
+    } catch (_) {
+      await _release(session);
+      try {
+        await session.hangup();
+      } catch (_) {}
+      rethrow;
+    }
+    CallBridge.instance.notifyAccepted(caller: caller);
+    return session;
+  }
+
   void _bind(CallSession session) {
+    unawaited(_activeSub?.cancel());
     _active = session;
-    session.stateStream.listen((state) {
-      if (state == CallSessionState.ended && _active == session) {
-        _active = null;
-        CallBridge.instance.notifyEnded();
-        _ended.add(null);
-      }
+    _activeSub = session.stateStream.listen((state) {
+      if (state != CallSessionState.ended) return;
+      unawaited(_release(session));
     });
   }
 
+  Future<void> _release(CallSession session) async {
+    if (!identical(_active, session)) return;
+    _active = null;
+    await _activeSub?.cancel();
+    _activeSub = null;
+    CallBridge.instance.notifyEnded();
+    _ended.add(null);
+  }
+
   void dispose() {
+    _activeSub?.cancel();
     _pushSub?.cancel();
     _incoming.close();
     _ended.close();

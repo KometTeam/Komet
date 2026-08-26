@@ -64,8 +64,14 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
     final current = widget.currentAvatarUrl;
     _current = (current != null && current.isNotEmpty) ? current : null;
     _rebuildPages();
-    _load();
+    if (_hasHistory) {
+      _load();
+    } else {
+      _loading = false;
+    }
   }
+
+  bool get _hasHistory => widget.contactId > 0;
 
   @override
   void dispose() {
@@ -100,7 +106,9 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
   }
 
   Future<void> _loadMore() async {
-    if (_loadingMore || _history.length >= _historyTotal) return;
+    if (!_hasHistory || _loadingMore || _history.length >= _historyTotal) {
+      return;
+    }
     _loadingMore = true;
     final photos = await ContactsModule.fetchPhotos(
       api,
@@ -286,9 +294,8 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
           imageUrl: _pages[i],
           fit: BoxFit.contain,
           fadeInDuration: const Duration(milliseconds: 120),
-          placeholder: (_, _) => const Center(
-            child: SmallSpinner(size: 36, color: Colors.white),
-          ),
+          placeholder: (_, _) =>
+              const Center(child: SmallSpinner(size: 36, color: Colors.white)),
           errorWidget: (_, _, _) =>
               const Icon(Symbols.broken_image, color: Colors.white54, size: 64),
         ),

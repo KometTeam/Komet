@@ -21,11 +21,7 @@ class ReactionEmoji {
   final String? animationUrl;
   final String? staticUrl;
 
-  const ReactionEmoji({
-    required this.emoji,
-    this.animationUrl,
-    this.staticUrl,
-  });
+  const ReactionEmoji({required this.emoji, this.animationUrl, this.staticUrl});
 }
 
 class MessageReader {
@@ -104,6 +100,7 @@ void showMessageActions({
   required Offset tapPoint,
   required bool isMe,
   required String? messageText,
+  required String? copyText,
   required MessageActionsController controller,
   required MessageActionsStyle style,
   required VoidCallback onDispose,
@@ -114,6 +111,7 @@ void showMessageActions({
   Future<bool> Function(int reasonId)? onReport,
   VoidCallback? onDelete,
   bool allowDelete = true,
+  bool allowCopy = true,
   VoidCallback? onEdit,
   VoidCallback? onReply,
   VoidCallback? onForward,
@@ -143,6 +141,7 @@ void showMessageActions({
       tapPoint: tapPoint,
       isMe: isMe,
       messageText: messageText,
+      copyText: copyText,
       controller: controller,
       style: style,
       interaction: interaction,
@@ -153,6 +152,7 @@ void showMessageActions({
       onReport: onReport,
       onDelete: onDelete,
       allowDelete: allowDelete,
+      allowCopy: allowCopy,
       onEdit: onEdit,
       onReply: onReply,
       onForward: onForward,
@@ -178,6 +178,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final Offset tapPoint;
   final bool isMe;
   final String? messageText;
+  final String? copyText;
   final MessageActionsController controller;
   final MessageActionsStyle style;
   final MessageActionsInteraction interaction;
@@ -189,6 +190,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final Future<bool> Function(int reasonId)? onReport;
   final VoidCallback? onDelete;
   final bool allowDelete;
+  final bool allowCopy;
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
@@ -206,6 +208,7 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.tapPoint,
     required this.isMe,
     required this.messageText,
+    required this.copyText,
     required this.controller,
     required this.style,
     required this.interaction,
@@ -217,6 +220,7 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onReport,
     this.onDelete,
     this.allowDelete = true,
+    this.allowCopy = true,
     this.onEdit,
     this.onReply,
     this.onForward,
@@ -234,7 +238,7 @@ class _MessageActionsLayer extends StatefulWidget {
 }
 
 class _MessageActionsLayerState extends State<_MessageActionsLayer>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _animController;
   late final Animation<double> _animation;
   late final AnimationController _expandController;
@@ -496,14 +500,14 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
 
   List<_Action> _buildActions() {
     final l10n = AppLocalizations.of(context)!;
-    final hasText =
-        widget.messageText != null && widget.messageText!.isNotEmpty;
+    final copyText = widget.copyText;
+    final canCopy = widget.allowCopy && copyText != null && copyText.isNotEmpty;
     return <_Action>[
       if (widget.onReply != null)
         _Action(Symbols.reply, l10n.msgActionsReply, _reply),
       if (widget.onForward != null)
         _Action(Symbols.forward, l10n.msgActionsForward, _forward),
-      if (hasText) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
+      if (canCopy) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
       if (widget.isMe && widget.onEdit != null)
         _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
       if (widget.onPin != null)
@@ -641,7 +645,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   }
 
   Future<void> _copy() async {
-    final text = widget.messageText;
+    final text = widget.copyText;
     if (text != null && text.isNotEmpty) {
       await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) return;
@@ -1004,7 +1008,11 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     );
   }
 
-  Widget _buildQuickRow(ColorScheme cs, double cell, List<ReactionEmoji> quick) {
+  Widget _buildQuickRow(
+    ColorScheme cs,
+    double cell,
+    List<ReactionEmoji> quick,
+  ) {
     return Center(
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1232,9 +1240,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     if (_readByLoading) {
       body = const Padding(
         padding: EdgeInsets.symmetric(vertical: 28),
-        child: Center(
-          child: SmallSpinner(size: 24),
-        ),
+        child: Center(child: SmallSpinner(size: 24)),
       );
     } else {
       final readers = _readers ?? const <MessageReader>[];
@@ -1315,9 +1321,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     if (_reportLoading) {
       body = const Padding(
         padding: EdgeInsets.symmetric(vertical: 28),
-        child: Center(
-          child: SmallSpinner(size: 24),
-        ),
+        child: Center(child: SmallSpinner(size: 24)),
       );
     } else {
       final reasons = _reasons ?? const <({int id, String title})>[];
@@ -1644,9 +1648,7 @@ class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
           _buildSearchField(cs),
           Expanded(
             child: !_loaded
-                ? const Center(
-                    child: SmallSpinner(size: 26),
-                  )
+                ? const Center(child: SmallSpinner(size: 26))
                 : _results.isEmpty
                 ? const SizedBox.shrink()
                 : LottieScrollScope(
@@ -1761,7 +1763,8 @@ class _ReactionGlyph extends StatelessWidget {
     final anim = reaction.animationUrl;
     final still = reaction.staticUrl;
     final hasAsset =
-        (anim != null && anim.isNotEmpty) || (still != null && still.isNotEmpty);
+        (anim != null && anim.isNotEmpty) ||
+        (still != null && still.isNotEmpty);
     if (!hasAsset) {
       return Center(
         child: Text(reaction.emoji, style: TextStyle(fontSize: size * 0.9)),

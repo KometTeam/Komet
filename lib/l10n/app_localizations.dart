@@ -164,12 +164,6 @@ abstract class AppLocalizations {
   /// **'Done'**
   String get loginDone;
 
-  /// No description provided for @loginReadTermsNotification.
-  ///
-  /// In en, this message translates to:
-  /// **'Please read the terms of use first'**
-  String get loginReadTermsNotification;
-
   /// No description provided for @loginSpoofRedacted.
   ///
   /// In en, this message translates to:
@@ -740,6 +734,24 @@ abstract class AppLocalizations {
   /// **'Account'**
   String get infoAccountSection;
 
+  /// No description provided for @infoPacketSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Login packet'**
+  String get infoPacketSection;
+
+  /// No description provided for @infoChatsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats in login packet'**
+  String get infoChatsSection;
+
+  /// No description provided for @infoChatSettingsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Per-chat settings'**
+  String get infoChatSettingsSection;
+
   /// No description provided for @infoServerSection.
   ///
   /// In en, this message translates to:
@@ -751,6 +763,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'User'**
   String get infoUserSection;
+
+  /// No description provided for @infoExperimentsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Experiments'**
+  String get infoExperimentsSection;
 
   /// No description provided for @infoYMapSection.
   ///
@@ -800,11 +818,149 @@ abstract class AppLocalizations {
   /// **'id'**
   String get infoId;
 
+  /// No description provided for @infoPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'phone'**
+  String get infoPhone;
+
+  /// No description provided for @infoPhotoId.
+  ///
+  /// In en, this message translates to:
+  /// **'photoId'**
+  String get infoPhotoId;
+
+  /// No description provided for @infoAccountStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'accountStatus'**
+  String get infoAccountStatus;
+
+  /// No description provided for @infoContactOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'contact options'**
+  String get infoContactOptions;
+
+  /// No description provided for @infoProfileOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'profile options'**
+  String get infoProfileOptions;
+
+  /// No description provided for @infoNames.
+  ///
+  /// In en, this message translates to:
+  /// **'names'**
+  String get infoNames;
+
+  /// No description provided for @infoBaseUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'baseUrl'**
+  String get infoBaseUrl;
+
+  /// No description provided for @infoBaseRawUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'baseRawUrl'**
+  String get infoBaseRawUrl;
+
   /// No description provided for @infoChatMarker.
   ///
   /// In en, this message translates to:
   /// **'chatMarker'**
   String get infoChatMarker;
+
+  /// No description provided for @infoServerTime.
+  ///
+  /// In en, this message translates to:
+  /// **'server time'**
+  String get infoServerTime;
+
+  /// No description provided for @infoUpdates.
+  ///
+  /// In en, this message translates to:
+  /// **'updates'**
+  String get infoUpdates;
+
+  /// No description provided for @infoMessagesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'messages in packet'**
+  String get infoMessagesCount;
+
+  /// No description provided for @infoContactsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'contacts in packet'**
+  String get infoContactsCount;
+
+  /// No description provided for @infoPresenceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'presence records'**
+  String get infoPresenceCount;
+
+  /// No description provided for @infoConfigHash.
+  ///
+  /// In en, this message translates to:
+  /// **'config hash'**
+  String get infoConfigHash;
+
+  /// No description provided for @infoChatsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'chats loaded'**
+  String get infoChatsCount;
+
+  /// No description provided for @infoChatsActive.
+  ///
+  /// In en, this message translates to:
+  /// **'active'**
+  String get infoChatsActive;
+
+  /// No description provided for @infoChatsHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'hidden'**
+  String get infoChatsHidden;
+
+  /// No description provided for @infoChatsDialogs.
+  ///
+  /// In en, this message translates to:
+  /// **'dialogs'**
+  String get infoChatsDialogs;
+
+  /// No description provided for @infoChatsGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'groups'**
+  String get infoChatsGroups;
+
+  /// No description provided for @infoChatsChannels.
+  ///
+  /// In en, this message translates to:
+  /// **'channels'**
+  String get infoChatsChannels;
+
+  /// No description provided for @infoChatsUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'unread chats'**
+  String get infoChatsUnread;
+
+  /// No description provided for @infoChatsNewMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'new messages'**
+  String get infoChatsNewMessages;
+
+  /// No description provided for @infoChatsMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'messages in loaded chats'**
+  String get infoChatsMessages;
 
   /// No description provided for @infoAccountRemovalEnabled.
   ///
@@ -1256,11 +1412,11 @@ abstract class AppLocalizations {
   /// **'Why? You already have FCM.'**
   String get notificationsFkmAlreadyHasFcm;
 
-  /// No description provided for @notificationsFkmDownloadFcm.
+  /// No description provided for @notificationsFkmIosUnsupported.
   ///
   /// In en, this message translates to:
-  /// **'Better download the FCM version.'**
-  String get notificationsFkmDownloadFcm;
+  /// **'Push notifications are not available on iOS yet.'**
+  String get notificationsFkmIosUnsupported;
 
   /// No description provided for @notificationsTitle.
   ///
@@ -1285,6 +1441,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'For FKM notifications to work, the app will need to keep a notification in the shade.'**
   String get notificationsFkmEnableSubtitle;
+
+  /// No description provided for @notificationsFkmUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'FKM is Android-only'**
+  String get notificationsFkmUnsupported;
+
+  /// No description provided for @notificationsFkmBatteryAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get notificationsFkmBatteryAction;
+
+  /// No description provided for @notificationsFkmBatteryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Otherwise the system will put the background connection to sleep and notifications will be late or lost.'**
+  String get notificationsFkmBatteryMessage;
+
+  /// No description provided for @notificationsFkmBatteryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off battery saving?'**
+  String get notificationsFkmBatteryTitle;
+
+  /// No description provided for @notificationsFkmPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'FKM cannot work without the notification permission'**
+  String get notificationsFkmPermissionDenied;
+
+  /// No description provided for @notificationsFkmConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable FKM'**
+  String get notificationsFkmConfirmAction;
+
+  /// No description provided for @notificationsFkmConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications will arrive over the app’s own background connection, and a permanent service notification will stay in the shade. You can turn FKM off right from it.'**
+  String get notificationsFkmConfirmMessage;
 
   /// No description provided for @notificationsMainSectionTitle.
   ///
@@ -1543,6 +1741,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Material You or dimensional Glossy capsules'**
   String get appearanceVisualStyleSubtitle;
+
+  /// No description provided for @appearanceStyleAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Match theme'**
+  String get appearanceStyleAuto;
 
   /// No description provided for @appearanceVisualStyleMaterialYou.
   ///
@@ -1814,6 +2018,42 @@ abstract class AppLocalizations {
   /// **'Waiting for participants…'**
   String get callGroupWaitingParticipants;
 
+  /// No description provided for @callLinkGroupCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Group call'**
+  String get callLinkGroupCall;
+
+  /// No description provided for @callLinkSendInMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Send in MAX'**
+  String get callLinkSendInMax;
+
+  /// No description provided for @callLinkStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start call'**
+  String get callLinkStart;
+
+  /// No description provided for @callLinkSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Link sent'**
+  String get callLinkSent;
+
+  /// No description provided for @callLinkSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t send the link'**
+  String get callLinkSendFailed;
+
+  /// No description provided for @callLinkCreateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t create the call'**
+  String get callLinkCreateFailed;
+
   /// No description provided for @callParticipantYou.
   ///
   /// In en, this message translates to:
@@ -1831,6 +2071,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Minimize'**
   String get callTooltipMinimize;
+
+  /// No description provided for @callTooltipExpand.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand'**
+  String get callTooltipExpand;
 
   /// No description provided for @callTooltipKometHub.
   ///
@@ -1927,6 +2173,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'End'**
   String get callEndButton;
+
+  /// No description provided for @callCameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera unavailable: {error}'**
+  String callCameraUnavailable(Object error);
+
+  /// No description provided for @callTooltipMicrophone.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get callTooltipMicrophone;
+
+  /// No description provided for @callMicrophoneTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get callMicrophoneTitle;
+
+  /// No description provided for @callMicrophoneSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get callMicrophoneSystem;
+
+  /// No description provided for @callMicrophoneEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No microphones found'**
+  String get callMicrophoneEmpty;
+
+  /// No description provided for @callMicrophoneRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh list'**
+  String get callMicrophoneRefresh;
+
+  /// No description provided for @callMicrophoneMonitors.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitors — system audio'**
+  String get callMicrophoneMonitors;
+
+  /// No description provided for @callMicrophoneFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone {index}'**
+  String callMicrophoneFallback(Object index);
+
+  /// No description provided for @callMicrophoneFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not switch microphone: {error}'**
+  String callMicrophoneFailed(Object error);
+
+  /// No description provided for @callMicStillLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Still live'**
+  String get callMicStillLive;
+
+  /// No description provided for @callNoMuteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'--no-mute: audio keeps going out even while the mic is off'**
+  String get callNoMuteHint;
 
   /// No description provided for @callInfoClient.
   ///
@@ -3074,6 +3386,72 @@ abstract class AppLocalizations {
   /// **'Details'**
   String get chatInfoShowMoreExtra;
 
+  /// No description provided for @chatSendConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Send this message to the chat?'**
+  String get chatSendConfirmMessage;
+
+  /// No description provided for @chatSendConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get chatSendConfirmAction;
+
+  /// No description provided for @chatInfoRowDisableForward.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarding disabled'**
+  String get chatInfoRowDisableForward;
+
+  /// No description provided for @chatInfoRowCopyDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Copying disabled'**
+  String get chatInfoRowCopyDisabled;
+
+  /// No description provided for @chatInfoRowOnlyAdminCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Admins can call'**
+  String get chatInfoRowOnlyAdminCall;
+
+  /// No description provided for @chatInfoRowAllCanPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone can pin'**
+  String get chatInfoRowAllCanPin;
+
+  /// No description provided for @chatInfoRowMembersSeeLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Members see the link'**
+  String get chatInfoRowMembersSeeLink;
+
+  /// No description provided for @chatInfoRowConfirmBeforeSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm before sending'**
+  String get chatInfoRowConfirmBeforeSend;
+
+  /// No description provided for @chatInfoRowOnlyOwnerIconTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner edits title and icon'**
+  String get chatInfoRowOnlyOwnerIconTitle;
+
+  /// No description provided for @chatInfoRowPromotedDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Promoted content off'**
+  String get chatInfoRowPromotedDisabled;
+
+  /// No description provided for @chatInfoRowUserId.
+  ///
+  /// In en, this message translates to:
+  /// **'User ID'**
+  String get chatInfoRowUserId;
+
   /// No description provided for @chatInfoRowId.
   ///
   /// In en, this message translates to:
@@ -3998,11 +4376,11 @@ abstract class AppLocalizations {
   /// **'Poll'**
   String get attachSheetPoll;
 
-  /// No description provided for @attachSheetCameraComingSoon.
+  /// No description provided for @attachSheetCameraError.
   ///
   /// In en, this message translates to:
-  /// **'Camera is coming soon'**
-  String get attachSheetCameraComingSoon;
+  /// **'Couldn\'t open the camera'**
+  String get attachSheetCameraError;
 
   /// No description provided for @attachSheetSendFileTitle.
   ///
@@ -4129,6 +4507,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Camera'**
   String get attachSheetCamera;
+
+  /// No description provided for @attachSheetCameraAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow camera'**
+  String get attachSheetCameraAllow;
 
   /// No description provided for @photoEditorApplyFailed.
   ///
@@ -4753,6 +5137,222 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{value} MB/s'**
   String uploadSpeedMb(String value);
+
+  /// No description provided for @savedMessagesEmptyPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Save something here'**
+  String get savedMessagesEmptyPreview;
+
+  /// No description provided for @proxyCurrentState.
+  ///
+  /// In en, this message translates to:
+  /// **'Currently: {value}'**
+  String proxyCurrentState(String value);
+
+  /// No description provided for @blacklistEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody is blocked'**
+  String get blacklistEmpty;
+
+  /// No description provided for @blacklistLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load the blacklist'**
+  String get blacklistLoadError;
+
+  /// No description provided for @videoEditorQualityLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Small size'**
+  String get videoEditorQualityLow;
+
+  /// No description provided for @videoEditorQualityHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'High quality'**
+  String get videoEditorQualityHigh;
+
+  /// No description provided for @videoEditorCaptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a caption...'**
+  String get videoEditorCaptionHint;
+
+  /// No description provided for @videoEditorMuteTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Send without sound'**
+  String get videoEditorMuteTooltip;
+
+  /// No description provided for @videoEditorProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing video…'**
+  String get videoEditorProcessing;
+
+  /// No description provided for @videoEditorExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to process the video'**
+  String get videoEditorExportFailed;
+
+  /// No description provided for @videoEditorFrameFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to grab a frame'**
+  String get videoEditorFrameFailed;
+
+  /// No description provided for @videoEditorQualityTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Quality'**
+  String get videoEditorQualityTooltip;
+
+  /// No description provided for @webPushTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications on iOS'**
+  String get webPushTitle;
+
+  /// No description provided for @webPushIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet has no ordinary push on iOS: Apple issues a notification token only to apps signed with a developer certificate, and a sideloaded build never gets one.\n\nThe way around it is a web app on the Home Screen. MAX\'s own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.'**
+  String get webPushIntro;
+
+  /// No description provided for @webPushConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get webPushConfirm;
+
+  /// No description provided for @webPushPasswordExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-factor protection is enabled on this account.'**
+  String get webPushPasswordExplainer;
+
+  /// No description provided for @webPushPasswordHintLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hint: {hint}'**
+  String webPushPasswordHintLabel(String hint);
+
+  /// No description provided for @webPushPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get webPushPasswordHint;
+
+  /// No description provided for @webPushInstallTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Install the web app'**
+  String get webPushInstallTitle;
+
+  /// No description provided for @webPushInstallBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Open push.komet.pw in Safari, add it to the Home Screen and launch the icon that appears. Notifications do not work from a browser tab — that is how iOS works.\n\nIn the app, allow notifications, create a subscription and tap \"Open Komet\". The subscription registers itself from there.'**
+  String get webPushInstallBody;
+
+  /// No description provided for @webPushLinkedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications connected'**
+  String get webPushLinkedTitle;
+
+  /// No description provided for @webPushLinkedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The subscription is registered on the server. Do not delete the Home Screen icon — the notifications go with it.\n\nIf push stops arriving, open the web app and link again: Apple sometimes rotates the subscription address.'**
+  String get webPushLinkedBody;
+
+  /// No description provided for @webPushOpenSite.
+  ///
+  /// In en, this message translates to:
+  /// **'Open push.komet.pw'**
+  String get webPushOpenSite;
+
+  /// No description provided for @webPushSignOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect notifications'**
+  String get webPushSignOut;
+
+  /// No description provided for @webPushLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications connected'**
+  String get webPushLinked;
+
+  /// No description provided for @webPushLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not connect notifications: {error}'**
+  String webPushLinkFailed(String error);
+
+  /// No description provided for @webPushNotAuthorized.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in under \"Notifications via PWA\" first'**
+  String get webPushNotAuthorized;
+
+  /// No description provided for @webPushConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect notifications'**
+  String get webPushConnect;
+
+  /// No description provided for @webPushWaitingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet is approving the web session from this device. This usually takes a few seconds.'**
+  String get webPushWaitingBody;
+
+  /// No description provided for @webPushNeedsOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection to the server. Wait for it and try again.'**
+  String get webPushNeedsOnline;
+
+  /// No description provided for @webPushSignOutConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'The web session will be terminated and disappear from your device list. To get notifications back you will have to connect again.'**
+  String get webPushSignOutConfirm;
+
+  /// No description provided for @webPushSignOutAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get webPushSignOutAction;
+
+  /// No description provided for @webPushStatusService.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get webPushStatusService;
+
+  /// No description provided for @webPushStatusToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Token'**
+  String get webPushStatusToken;
+
+  /// No description provided for @webPushStatusLinkedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked'**
+  String get webPushStatusLinkedAt;
+
+  /// No description provided for @webPushStatusDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get webPushStatusDevice;
 }
 
 class _AppLocalizationsDelegate

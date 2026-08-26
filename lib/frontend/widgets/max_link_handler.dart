@@ -8,6 +8,7 @@ import '../../backend/modules/links.dart';
 import '../../core/cache/info_cache.dart';
 import '../../core/links/max_link.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/utils/share_origin.dart';
 import '../../main.dart';
 import '../screens/chats/chat_screen.dart';
 import '../screens/contacts/open_contact_profile.dart';
@@ -125,7 +126,7 @@ Future<bool> _shareOwnLink(BuildContext context) async {
     return true;
   }
   try {
-    await Share.share(link);
+    await Share.share(link, sharePositionOrigin: shareOriginOf(context));
   } catch (_) {
     if (context.mounted) {
       showCustomNotification(context, 'Не удалось поделиться ссылкой');

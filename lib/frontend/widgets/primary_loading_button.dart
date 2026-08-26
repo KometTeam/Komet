@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'small_spinner.dart';
 import 'springy_tap.dart';
+import '../../core/config/app_shape.dart';
 
 class PrimaryLoadingButton extends StatelessWidget {
   final ValueListenable<bool> loading;
@@ -34,13 +35,9 @@ class PrimaryLoadingButton extends StatelessWidget {
             backgroundColor: background ?? cs.primary,
             foregroundColor: fg,
             padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape: AppShape.buttonBorder,
           ),
-          child: isLoading
-              ? SmallSpinner(size: 20, color: fg)
-              : child,
+          child: isLoading ? SmallSpinner(size: 20, color: fg) : child,
         ),
       ),
     );

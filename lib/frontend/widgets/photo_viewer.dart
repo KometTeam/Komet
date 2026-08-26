@@ -18,6 +18,7 @@ import '../../core/utils/media_cache.dart';
 import '../../core/utils/media_saver.dart';
 import '../../core/utils/save_file_as.dart';
 import '../../l10n/app_localizations.dart';
+import '../../core/config/app_colors.dart';
 import '../../main.dart';
 import '../../models/attachment.dart';
 import 'attachment/photo_hero.dart';
@@ -1498,7 +1499,7 @@ class _VideoSettingsButton extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return PopupMenuButton<String>(
       key: const ValueKey('video-settings'),
-      color: const Color(0xFF292326),
+      color: MediaAccent.schemeOf(context).surfaceContainerHigh,
       tooltip: l10n.videoViewerSettings,
       icon: const Icon(Symbols.settings, color: Colors.white),
       onSelected: (value) {
@@ -1564,7 +1565,7 @@ class _SettingChoice extends StatelessWidget {
           child: Text(label, style: const TextStyle(color: Colors.white)),
         ),
         if (selected)
-          const Icon(Symbols.check, color: Color(0xFFE68ABA), size: 18),
+          Icon(Symbols.check, color: MediaAccent.of(context), size: 18),
       ],
     );
   }

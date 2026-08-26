@@ -20,11 +20,11 @@ class PollBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             PollView(
-              chatId: ctx.message.chatId,
-              messageId: ctx.message.id,
+              chatId: ctx.sourceChatId,
+              messageId: ctx.sourceMessageId,
               pollId: poll.pollId,
               myId: ctx.myId,
-              fallbackTitle: poll.title ?? ctx.message.text,
+              fallbackTitle: poll.title ?? ctx.contentText,
               textColor: ctx.text,
               dimColor: ctx.dim,
               accentColor: ctx.isMe

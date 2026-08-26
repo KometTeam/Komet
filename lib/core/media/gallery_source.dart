@@ -25,6 +25,15 @@ abstract class GalleryItem {
   static GalleryItem fromFile(File file) => _FileGalleryItem(file);
 }
 
+class GalleryPage {
+  const GalleryPage({required this.items, required this.hasMore});
+
+  static const empty = GalleryPage(items: <GalleryItem>[], hasMore: false);
+
+  final List<GalleryItem> items;
+  final bool hasMore;
+}
+
 class PickedPhoto {
   final GalleryItem item;
   final File? editedFile;
@@ -49,8 +58,10 @@ Future<(int, int)?> imageFileDimensions(File file) async {
 }
 
 abstract class GallerySource {
+  static const int pageSize = 120;
+
   Future<GalleryPermission> ensurePermission();
-  Future<List<GalleryItem>> load({int limit});
+  Future<GalleryPage> load({int offset, int limit});
   Future<void> openSettings();
   Future<void> manageAccess();
 
@@ -71,20 +82,51 @@ class _PhotoManagerSource implements GallerySource {
     return GalleryPermission.denied;
   }
 
-  @override
-  Future<List<GalleryItem>> load({int limit = 120}) async {
-    final paths = await PhotoManager.getAssetPathList(
-      type: RequestType.common,
-      onlyAll: true,
-      filterOption: FilterOptionGroup(
-        orders: const [
-          OrderOption(type: OrderOptionType.createDate, asc: false),
-        ],
+  AssetPathEntity? _album;
+  int _total = 0;
+
+  static FilterOptionGroup _filter() => FilterOptionGroup(
+    imageOption: const FilterOption(
+      sizeConstraint: SizeConstraint(ignoreSize: true),
+    ),
+    videoOption: const FilterOption(
+      sizeConstraint: SizeConstraint(ignoreSize: true),
+      durationConstraint: DurationConstraint(
+        max: Duration(days: 365),
+        allowNullable: true,
       ),
+    ),
+    createTimeCond: DateTimeCond.def().copyWith(ignore: true),
+    orders: const [OrderOption(type: OrderOptionType.createDate, asc: false)],
+  );
+
+  @override
+  Future<GalleryPage> load({
+    int offset = 0,
+    int limit = GallerySource.pageSize,
+  }) async {
+    if (offset == 0 || _album == null) {
+      final paths = await PhotoManager.getAssetPathList(
+        type: RequestType.common,
+        onlyAll: true,
+        filterOption: _filter(),
+      );
+      if (paths.isEmpty) {
+        _album = null;
+        _total = 0;
+        return GalleryPage.empty;
+      }
+      _album = paths.first;
+      _total = await paths.first.assetCountAsync;
+    }
+    final album = _album;
+    if (album == null || offset >= _total) return GalleryPage.empty;
+    final end = offset + limit < _total ? offset + limit : _total;
+    final assets = await album.getAssetListRange(start: offset, end: end);
+    return GalleryPage(
+      items: assets.map((a) => _AssetGalleryItem(a)).toList(),
+      hasMore: end < _total,
     );
-    if (paths.isEmpty) return const [];
-    final assets = await paths.first.getAssetListRange(start: 0, end: limit);
-    return assets.map((a) => _AssetGalleryItem(a)).toList();
   }
 
   @override
@@ -168,13 +210,38 @@ bool isVideoPath(String path) =>
     kGalleryVideoExtensions.contains(_fileExtension(path));
 
 class _DesktopGallerySource implements GallerySource {
-
   @override
   Future<GalleryPermission> ensurePermission() async =>
       GalleryPermission.granted;
 
+  List<_FileGalleryItem> _all = const [];
+
   @override
-  Future<List<GalleryItem>> load({int limit = 120}) async {
+  Future<GalleryPage> load({
+    int offset = 0,
+    int limit = GallerySource.pageSize,
+  }) async {
+    if (offset == 0 || _all.isEmpty) _all = _scan();
+    if (offset >= _all.length) return GalleryPage.empty;
+    final end = offset + limit < _all.length ? offset + limit : _all.length;
+    final items = _all.sublist(offset, end);
+    const batch = 8;
+    const eager = 24;
+
+    Future<void> probeRange(int from, int to) async {
+      for (var i = from; i < to; i += batch) {
+        final stop = i + batch > to ? to : i + batch;
+        await Future.wait(items.sublist(i, stop).map((it) => it.probe()));
+      }
+    }
+
+    final head = items.length < eager ? items.length : eager;
+    await probeRange(0, head);
+    if (head < items.length) unawaited(probeRange(head, items.length));
+    return GalleryPage(items: items, hasMore: end < _all.length);
+  }
+
+  List<_FileGalleryItem> _scan() {
     final entries = <({File file, DateTime modified})>[];
     for (final dir in _candidateDirs()) {
       if (!dir.existsSync()) continue;
@@ -186,24 +253,7 @@ class _DesktopGallerySource implements GallerySource {
       } catch (_) {}
     }
     entries.sort((a, b) => b.modified.compareTo(a.modified));
-    final items = entries
-        .take(limit)
-        .map((e) => _FileGalleryItem(e.file))
-        .toList();
-    const batch = 8;
-    const eager = 24;
-
-    Future<void> probeRange(int from, int to) async {
-      for (var i = from; i < to; i += batch) {
-        final end = i + batch > to ? to : i + batch;
-        await Future.wait(items.sublist(i, end).map((it) => it.probe()));
-      }
-    }
-
-    final head = items.length < eager ? items.length : eager;
-    await probeRange(0, head);
-    if (head < items.length) unawaited(probeRange(head, items.length));
-    return items;
+    return entries.map((e) => _FileGalleryItem(e.file)).toList();
   }
 
   @override

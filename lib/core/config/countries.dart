@@ -39,6 +39,25 @@ final Map<String, CountryName> countriesByCode = {
   for (final country in allCountries) country.code: country,
 };
 
+const Map<String, String> primaryCountryByPhoneCode = {'+7': 'RU', '+1': 'US'};
+
+bool isPrimaryForPhoneCode(CountryName country) =>
+    primaryCountryByPhoneCode[country.phoneCode] == country.code;
+
+List<CountryName> sortedByDisplayName(
+  Iterable<CountryName> countries,
+  String languageCode,
+) {
+  final list = countries.toList();
+  list.sort(
+    (a, b) => a
+        .displayName(languageCode)
+        .toLowerCase()
+        .compareTo(b.displayName(languageCode).toLowerCase()),
+  );
+  return list;
+}
+
 List<CountryName> countriesInServerOrder(Iterable<String> codes) {
   final out = <CountryName>[];
   for (final raw in codes) {

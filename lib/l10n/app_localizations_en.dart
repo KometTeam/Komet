@@ -43,9 +43,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginDone => 'Done';
 
   @override
-  String get loginReadTermsNotification => 'Please read the terms of use first';
-
-  @override
   String get loginSpoofRedacted => 'Spoofing';
 
   @override
@@ -349,10 +346,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get infoAccountSection => 'Account';
 
   @override
+  String get infoPacketSection => 'Login packet';
+
+  @override
+  String get infoChatsSection => 'Chats in login packet';
+
+  @override
+  String get infoChatSettingsSection => 'Per-chat settings';
+
+  @override
   String get infoServerSection => 'Server';
 
   @override
   String get infoUserSection => 'User';
+
+  @override
+  String get infoExperimentsSection => 'Experiments';
 
   @override
   String get infoYMapSection => 'Y-Map';
@@ -379,7 +388,76 @@ class AppLocalizationsEn extends AppLocalizations {
   String get infoId => 'id';
 
   @override
+  String get infoPhone => 'phone';
+
+  @override
+  String get infoPhotoId => 'photoId';
+
+  @override
+  String get infoAccountStatus => 'accountStatus';
+
+  @override
+  String get infoContactOptions => 'contact options';
+
+  @override
+  String get infoProfileOptions => 'profile options';
+
+  @override
+  String get infoNames => 'names';
+
+  @override
+  String get infoBaseUrl => 'baseUrl';
+
+  @override
+  String get infoBaseRawUrl => 'baseRawUrl';
+
+  @override
   String get infoChatMarker => 'chatMarker';
+
+  @override
+  String get infoServerTime => 'server time';
+
+  @override
+  String get infoUpdates => 'updates';
+
+  @override
+  String get infoMessagesCount => 'messages in packet';
+
+  @override
+  String get infoContactsCount => 'contacts in packet';
+
+  @override
+  String get infoPresenceCount => 'presence records';
+
+  @override
+  String get infoConfigHash => 'config hash';
+
+  @override
+  String get infoChatsCount => 'chats loaded';
+
+  @override
+  String get infoChatsActive => 'active';
+
+  @override
+  String get infoChatsHidden => 'hidden';
+
+  @override
+  String get infoChatsDialogs => 'dialogs';
+
+  @override
+  String get infoChatsGroups => 'groups';
+
+  @override
+  String get infoChatsChannels => 'channels';
+
+  @override
+  String get infoChatsUnread => 'unread chats';
+
+  @override
+  String get infoChatsNewMessages => 'new messages';
+
+  @override
+  String get infoChatsMessages => 'messages in loaded chats';
 
   @override
   String get infoAccountRemovalEnabled => 'account-removal-enabled';
@@ -619,7 +697,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationsFkmAlreadyHasFcm => 'Why? You already have FCM.';
 
   @override
-  String get notificationsFkmDownloadFcm => 'Better download the FCM version.';
+  String get notificationsFkmIosUnsupported =>
+      'Push notifications are not available on iOS yet.';
 
   @override
   String get notificationsTitle => 'Notifications';
@@ -633,6 +712,30 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationsFkmEnableSubtitle =>
       'For FKM notifications to work, the app will need to keep a notification in the shade.';
+
+  @override
+  String get notificationsFkmUnsupported => 'FKM is Android-only';
+
+  @override
+  String get notificationsFkmBatteryAction => 'Open settings';
+
+  @override
+  String get notificationsFkmBatteryMessage =>
+      'Otherwise the system will put the background connection to sleep and notifications will be late or lost.';
+
+  @override
+  String get notificationsFkmBatteryTitle => 'Turn off battery saving?';
+
+  @override
+  String get notificationsFkmPermissionDenied =>
+      'FKM cannot work without the notification permission';
+
+  @override
+  String get notificationsFkmConfirmAction => 'Enable FKM';
+
+  @override
+  String get notificationsFkmConfirmMessage =>
+      'Notifications will arrive over the app’s own background connection, and a permanent service notification will stay in the shade. You can turn FKM off right from it.';
 
   @override
   String get notificationsMainSectionTitle => 'Notifications';
@@ -777,6 +880,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Material You or dimensional Glossy capsules';
 
   @override
+  String get appearanceStyleAuto => 'Match theme';
+
+  @override
   String get appearanceVisualStyleMaterialYou => 'Material You';
 
   @override
@@ -919,6 +1025,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callGroupWaitingParticipants => 'Waiting for participants…';
 
   @override
+  String get callLinkGroupCall => 'Group call';
+
+  @override
+  String get callLinkSendInMax => 'Send in MAX';
+
+  @override
+  String get callLinkStart => 'Start call';
+
+  @override
+  String get callLinkSent => 'Link sent';
+
+  @override
+  String get callLinkSendFailed => 'Couldn\'t send the link';
+
+  @override
+  String get callLinkCreateFailed => 'Couldn\'t create the call';
+
+  @override
   String get callParticipantYou => 'You';
 
   @override
@@ -926,6 +1050,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callTooltipMinimize => 'Minimize';
+
+  @override
+  String get callTooltipExpand => 'Expand';
 
   @override
   String get callTooltipKometHub => 'Komet';
@@ -974,6 +1101,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callEndButton => 'End';
+
+  @override
+  String callCameraUnavailable(Object error) {
+    return 'Camera unavailable: $error';
+  }
+
+  @override
+  String get callTooltipMicrophone => 'Microphone';
+
+  @override
+  String get callMicrophoneTitle => 'Microphone';
+
+  @override
+  String get callMicrophoneSystem => 'System default';
+
+  @override
+  String get callMicrophoneEmpty => 'No microphones found';
+
+  @override
+  String get callMicrophoneRefresh => 'Refresh list';
+
+  @override
+  String get callMicrophoneMonitors => 'Monitors — system audio';
+
+  @override
+  String callMicrophoneFallback(Object index) {
+    return 'Microphone $index';
+  }
+
+  @override
+  String callMicrophoneFailed(Object error) {
+    return 'Could not switch microphone: $error';
+  }
+
+  @override
+  String get callMicStillLive => 'Still live';
+
+  @override
+  String get callNoMuteHint =>
+      '--no-mute: audio keeps going out even while the mic is off';
 
   @override
   String get callInfoClient => 'Client';
@@ -1589,6 +1756,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatInfoShowMoreExtra => 'Details';
 
   @override
+  String get chatSendConfirmMessage => 'Send this message to the chat?';
+
+  @override
+  String get chatSendConfirmAction => 'Send';
+
+  @override
+  String get chatInfoRowDisableForward => 'Forwarding disabled';
+
+  @override
+  String get chatInfoRowCopyDisabled => 'Copying disabled';
+
+  @override
+  String get chatInfoRowOnlyAdminCall => 'Admins can call';
+
+  @override
+  String get chatInfoRowAllCanPin => 'Anyone can pin';
+
+  @override
+  String get chatInfoRowMembersSeeLink => 'Members see the link';
+
+  @override
+  String get chatInfoRowConfirmBeforeSend => 'Confirm before sending';
+
+  @override
+  String get chatInfoRowOnlyOwnerIconTitle => 'Owner edits title and icon';
+
+  @override
+  String get chatInfoRowPromotedDisabled => 'Promoted content off';
+
+  @override
+  String get chatInfoRowUserId => 'User ID';
+
+  @override
   String get chatInfoRowId => 'Chat ID';
 
   @override
@@ -2085,7 +2285,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachSheetPoll => 'Poll';
 
   @override
-  String get attachSheetCameraComingSoon => 'Camera is coming soon';
+  String get attachSheetCameraError => 'Couldn\'t open the camera';
 
   @override
   String get attachSheetSendFileTitle => 'Send a file';
@@ -2151,6 +2351,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attachSheetCamera => 'Camera';
+
+  @override
+  String get attachSheetCameraAllow => 'Allow camera';
 
   @override
   String get photoEditorApplyFailed => 'Couldn\'t apply';
@@ -2500,4 +2703,126 @@ class AppLocalizationsEn extends AppLocalizations {
   String uploadSpeedMb(String value) {
     return '$value MB/s';
   }
+
+  @override
+  String get savedMessagesEmptyPreview => 'Save something here';
+
+  @override
+  String proxyCurrentState(String value) {
+    return 'Currently: $value';
+  }
+
+  @override
+  String get blacklistEmpty => 'Nobody is blocked';
+
+  @override
+  String get blacklistLoadError => 'Failed to load the blacklist';
+
+  @override
+  String get videoEditorQualityLow => 'Small size';
+
+  @override
+  String get videoEditorQualityHigh => 'High quality';
+
+  @override
+  String get videoEditorCaptionHint => 'Add a caption...';
+
+  @override
+  String get videoEditorMuteTooltip => 'Send without sound';
+
+  @override
+  String get videoEditorProcessing => 'Processing video…';
+
+  @override
+  String get videoEditorExportFailed => 'Failed to process the video';
+
+  @override
+  String get videoEditorFrameFailed => 'Failed to grab a frame';
+
+  @override
+  String get videoEditorQualityTooltip => 'Quality';
+
+  @override
+  String get webPushTitle => 'Notifications on iOS';
+
+  @override
+  String get webPushIntro =>
+      'Komet has no ordinary push on iOS: Apple issues a notification token only to apps signed with a developer certificate, and a sideloaded build never gets one.\n\nThe way around it is a web app on the Home Screen. MAX\'s own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.';
+
+  @override
+  String get webPushConfirm => 'Continue';
+
+  @override
+  String get webPushPasswordExplainer =>
+      'Two-factor protection is enabled on this account.';
+
+  @override
+  String webPushPasswordHintLabel(String hint) {
+    return 'Hint: $hint';
+  }
+
+  @override
+  String get webPushPasswordHint => 'Password';
+
+  @override
+  String get webPushInstallTitle => 'Install the web app';
+
+  @override
+  String get webPushInstallBody =>
+      'Open push.komet.pw in Safari, add it to the Home Screen and launch the icon that appears. Notifications do not work from a browser tab — that is how iOS works.\n\nIn the app, allow notifications, create a subscription and tap \"Open Komet\". The subscription registers itself from there.';
+
+  @override
+  String get webPushLinkedTitle => 'Notifications connected';
+
+  @override
+  String get webPushLinkedBody =>
+      'The subscription is registered on the server. Do not delete the Home Screen icon — the notifications go with it.\n\nIf push stops arriving, open the web app and link again: Apple sometimes rotates the subscription address.';
+
+  @override
+  String get webPushOpenSite => 'Open push.komet.pw';
+
+  @override
+  String get webPushSignOut => 'Disconnect notifications';
+
+  @override
+  String get webPushLinked => 'Notifications connected';
+
+  @override
+  String webPushLinkFailed(String error) {
+    return 'Could not connect notifications: $error';
+  }
+
+  @override
+  String get webPushNotAuthorized =>
+      'Sign in under \"Notifications via PWA\" first';
+
+  @override
+  String get webPushConnect => 'Connect notifications';
+
+  @override
+  String get webPushWaitingBody =>
+      'Komet is approving the web session from this device. This usually takes a few seconds.';
+
+  @override
+  String get webPushNeedsOnline =>
+      'No connection to the server. Wait for it and try again.';
+
+  @override
+  String get webPushSignOutConfirm =>
+      'The web session will be terminated and disappear from your device list. To get notifications back you will have to connect again.';
+
+  @override
+  String get webPushSignOutAction => 'Disconnect';
+
+  @override
+  String get webPushStatusService => 'Service';
+
+  @override
+  String get webPushStatusToken => 'Token';
+
+  @override
+  String get webPushStatusLinkedAt => 'Linked';
+
+  @override
+  String get webPushStatusDevice => 'Device';
 }

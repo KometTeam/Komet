@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/logger.dart';
+import 'font_metrics.dart';
 
 class CustomFontService {
   static const String prefKey = 'app_custom_fonts';
@@ -15,6 +16,9 @@ class CustomFontService {
       'AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30';
 
   static final Set<String> _loaded = <String>{};
+  static final Map<String, double> _metricScales = <String, double>{};
+
+  static double metricScaleFor(String family) => _metricScales[family] ?? 1.0;
 
   static Future<List<String>> families() async {
     final prefs = await SharedPreferences.getInstance();
@@ -85,6 +89,10 @@ class CustomFontService {
       ..addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
     await loader.load();
     _loaded.add(family);
+    final xHeight = FontMetrics.xHeightRatio(bytes);
+    if (xHeight != null) {
+      _metricScales[family] = FontMetrics.scaleForXHeight(xHeight);
+    }
   }
 
   static bool _isSfnt(Uint8List b) {

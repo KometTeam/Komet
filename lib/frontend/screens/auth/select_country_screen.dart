@@ -28,18 +28,24 @@ class _CountrySearchEntry {
 class _SelectCountryScreenState extends State<SelectCountryScreen> {
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
-  late List<CountryName> _filteredCountries;
-  late final List<_CountrySearchEntry> _searchEntries;
+  List<CountryName> _sortedCountries = const [];
+  List<CountryName> _filteredCountries = const [];
+  List<_CountrySearchEntry> _searchEntries = const [];
+  String _lang = '';
 
   @override
-  void initState() {
-    super.initState();
-    _filteredCountries = widget.countries;
-    _searchEntries = widget.countries
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final lang = Localizations.localeOf(context).languageCode;
+    if (lang == _lang) return;
+    _lang = lang;
+    _sortedCountries = sortedByDisplayName(widget.countries, lang);
+    _searchEntries = _sortedCountries
         .map(
           (c) => _CountrySearchEntry(c, c.ru.toLowerCase(), c.en.toLowerCase()),
         )
         .toList();
+    _filteredCountries = _applyFilter(_searchController.text);
   }
 
   @override
@@ -48,23 +54,38 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
     super.dispose();
   }
 
+  List<CountryName> _applyFilter(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return _sortedCountries;
+    final matches = _searchEntries
+        .where(
+          (e) =>
+              e.ruLower.contains(q) ||
+              e.enLower.contains(q) ||
+              e.country.phoneCode.contains(q),
+        )
+        .map((e) => e.country)
+        .toList();
+    if (_looksLikePhoneCode(q)) {
+      matches.sort((a, b) {
+        final byPrimary =
+            (isPrimaryForPhoneCode(b) ? 1 : 0) -
+            (isPrimaryForPhoneCode(a) ? 1 : 0);
+        if (byPrimary != 0) return byPrimary;
+        return a
+            .displayName(_lang)
+            .toLowerCase()
+            .compareTo(b.displayName(_lang).toLowerCase());
+      });
+    }
+    return matches;
+  }
+
+  static bool _looksLikePhoneCode(String query) =>
+      RegExp(r'^\+?\d+$').hasMatch(query);
+
   void _filterCountries(String query) {
-    setState(() {
-      if (query.isEmpty) {
-        _filteredCountries = widget.countries;
-      } else {
-        final q = query.toLowerCase();
-        _filteredCountries = _searchEntries
-            .where(
-              (e) =>
-                  e.ruLower.contains(q) ||
-                  e.enLower.contains(q) ||
-                  e.country.phoneCode.contains(q),
-            )
-            .map((e) => e.country)
-            .toList();
-      }
-    });
+    setState(() => _filteredCountries = _applyFilter(query));
   }
 
   @override
@@ -118,7 +139,7 @@ class _SelectCountryScreenState extends State<SelectCountryScreen> {
                 _isSearching = !_isSearching;
                 if (!_isSearching) {
                   _searchController.clear();
-                  _filteredCountries = widget.countries;
+                  _filteredCountries = _sortedCountries;
                 }
               });
             },

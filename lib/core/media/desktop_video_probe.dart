@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+
+import 'video_transcoder.dart' show VideoInfo;
 
 class DesktopVideoProbe {
   static const Duration _timeout = Duration(seconds: 6);
@@ -12,6 +15,8 @@ class DesktopVideoProbe {
   static bool? _hasTools;
   static final Map<String, Duration?> _durations = {};
   static final Map<String, Uint8List?> _thumbs = {};
+
+  static Future<bool> toolsAvailable() => _toolsAvailable();
 
   static Future<bool> _toolsAvailable() async {
     if (_hasTools != null) return _hasTools!;
@@ -77,6 +82,60 @@ class DesktopVideoProbe {
     } catch (_) {}
     _remember(_sizes, path, result);
     return result;
+  }
+
+  static Future<VideoInfo?> info(String path) async {
+    if (!await _toolsAvailable()) return null;
+    try {
+      final out = await Process.run('ffprobe', [
+        '-v',
+        'error',
+        '-show_entries',
+        'stream=codec_type,width,height,r_frame_rate:format=duration',
+        '-of',
+        'json',
+        path,
+      ]).timeout(_timeout);
+      final root = jsonDecode('${out.stdout}') as Map<String, dynamic>;
+      final streams = (root['streams'] as List?) ?? const [];
+      Map<String, dynamic>? video;
+      var hasAudio = false;
+      for (final raw in streams) {
+        final s = raw as Map<String, dynamic>;
+        if (s['codec_type'] == 'video') {
+          video ??= s;
+        } else if (s['codec_type'] == 'audio') {
+          hasAudio = true;
+        }
+      }
+      if (video == null) return null;
+      final seconds =
+          double.tryParse('${(root['format'] as Map?)?['duration']}') ?? 0;
+      return VideoInfo(
+        width: (video['width'] as num?)?.toInt() ?? 0,
+        height: (video['height'] as num?)?.toInt() ?? 0,
+        durationMs: (seconds * 1000).round(),
+        fps: _parseRate('${video['r_frame_rate']}'),
+        hasAudio: hasAudio,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static double _parseRate(String value) {
+    final parts = value.split('/');
+    if (parts.length == 2) {
+      final num = double.tryParse(parts[0]);
+      final den = double.tryParse(parts[1]);
+      if (num != null && den != null && den > 0) return num / den;
+    }
+    return double.tryParse(value) ?? 30;
+  }
+
+  static Future<Uint8List?> frameAt(String path, int timeMs, int size) async {
+    if (!await _toolsAvailable()) return null;
+    return _grabFrame(path, size, (timeMs / 1000).toStringAsFixed(3));
   }
 
   static Future<Uint8List?> thumbnail(String path, int size) async {

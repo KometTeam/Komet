@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../../core/config/app_fonts.dart';
 
 class DebugHeaderSection extends StatelessWidget {
   const DebugHeaderSection({super.key});
@@ -28,7 +29,7 @@ class DebugHeaderSection extends StatelessWidget {
               color: cs.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
         ),

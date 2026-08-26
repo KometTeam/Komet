@@ -4,12 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../backend/modules/messages.dart';
 import '../../../../models/attachment.dart';
-import '../../formatted_message_text.dart';
 import 'bubble_context.dart';
-import 'contact_bubble.dart';
-import 'file_bubble.dart';
-import 'photo_bubble.dart';
-import 'sticker_bubble.dart';
 
 String _forwardedSourceName(ForwardedMessageAttachment forwarded) {
   final resolved =
@@ -96,175 +91,30 @@ class ForwardedHeader extends StatelessWidget {
   }
 }
 
-Widget buildForwardedMessageText(
-  BubbleContext ctx,
-  ForwardedMessageAttachment forwarded, {
-  double fontSize = 14,
-}) {
-  final text = forwarded.originalText ?? '';
-  final style = TextStyle(color: ctx.text, fontSize: fontSize, height: 1.3);
-  if (FormattedMessageText.isFormatted(text, forwarded.originalFormatRanges)) {
-    return FormattedMessageText(
-      text: text,
-      ranges: forwarded.originalFormatRanges,
-      style: style,
-    );
-  }
-  return Text(text, style: style);
-}
-
-class ForwardedPhotoBubble extends StatelessWidget {
+class ForwardedHeaderFloating extends StatelessWidget {
   final BubbleContext ctx;
   final ForwardedMessageAttachment forwarded;
-  final List<PhotoAttachment> photos;
 
-  const ForwardedPhotoBubble({
+  const ForwardedHeaderFloating({
     super.key,
     required this.ctx,
     required this.forwarded,
-    required this.photos,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasCaption = forwarded.originalText?.isNotEmpty ?? false;
-
-    return SizedBox(
-      width: PhotoBubble.layoutWidth(photos),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ForwardedHeader(ctx: ctx, forwarded: forwarded),
-          const SizedBox(height: 4),
-          PhotoBubble(
-            ctx: ctx,
-            photos: photos,
-            caption: hasCaption
-                ? buildForwardedMessageText(ctx, forwarded, fontSize: 16)
-                : null,
-            hasContentAbove: true,
-          ),
-        ],
+    return Material(
+      color: ctx.isMe
+          ? ctx.cs.primaryContainer
+          : ctx.cs.surfaceContainerHighest,
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.2),
+      borderRadius: BorderRadius.circular(18),
+      child: ForwardedHeader(
+        ctx: ctx,
+        forwarded: forwarded,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       ),
-    );
-  }
-}
-
-class ForwardedGenericBubble extends StatelessWidget {
-  final BubbleContext ctx;
-  final ForwardedMessageAttachment forwarded;
-  final List<MessageAttachment> attachments;
-
-  const ForwardedGenericBubble({
-    super.key,
-    required this.ctx,
-    required this.forwarded,
-    required this.attachments,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return IntrinsicWidth(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ForwardedHeader(ctx: ctx, forwarded: forwarded),
-          const SizedBox(height: 4),
-          if (forwarded.originalText?.isNotEmpty ?? false) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: buildForwardedMessageText(ctx, forwarded),
-            ),
-            const SizedBox(height: 6),
-          ],
-          ...attachments.map((a) {
-            if (a is FileAttachment) {
-              return FileBubble(ctx: ctx, file: a, fill: true);
-            }
-            if (a is StickerAttachment) {
-              return StickerBubble(ctx: ctx, sticker: a);
-            }
-            return const SizedBox.shrink();
-          }),
-        ],
-      ),
-    );
-  }
-}
-
-class ForwardedStickerBubble extends StatelessWidget {
-  final BubbleContext ctx;
-  final ForwardedMessageAttachment forwarded;
-  final MessageAttachment sticker;
-
-  const ForwardedStickerBubble({
-    super.key,
-    required this.ctx,
-    required this.forwarded,
-    required this.sticker,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ForwardedHeader(ctx: ctx, forwarded: forwarded),
-        const SizedBox(height: 4),
-        if (forwarded.originalText?.isNotEmpty ?? false) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: buildForwardedMessageText(ctx, forwarded),
-          ),
-          const SizedBox(height: 6),
-        ],
-        StickerBubble(ctx: ctx, sticker: sticker),
-      ],
-    );
-  }
-}
-
-class ForwardedContactBubble extends StatelessWidget {
-  final BubbleContext ctx;
-  final ForwardedMessageAttachment forwarded;
-
-  const ForwardedContactBubble({
-    super.key,
-    required this.ctx,
-    required this.forwarded,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final contact = forwarded.originalContact!;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ForwardedHeader(ctx: ctx, forwarded: forwarded),
-        const SizedBox(height: 4),
-        if (forwarded.originalText?.isNotEmpty ?? false) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: buildForwardedMessageText(ctx, forwarded),
-          ),
-          const SizedBox(height: 6),
-        ],
-        buildContactCard(
-          ctx,
-          firstName: contact.firstName,
-          lastName: contact.lastName,
-          name: contact.name,
-          photoUrl: contact.photoUrl ?? contact.baseUrl,
-          phoneNumber: contact.phoneNumber,
-          contactId: contact.contactId,
-          userId: contact.userId,
-        ),
-      ],
     );
   }
 }

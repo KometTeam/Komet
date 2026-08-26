@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../../core/utils/format.dart';
 import 'custom_notification.dart';
 import 'sheet_helpers.dart';
+import '../../core/config/app_fonts.dart';
+import '../../core/config/app_shape.dart';
 
 const List<String> _weekdayShort = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
 
@@ -132,7 +134,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                 color: cs.onSurface,
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Outfit',
+                fontFamily: displayFontOf(context),
               ),
             ),
             const SizedBox(height: 8),
@@ -172,9 +174,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
               child: FilledButton(
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  shape: AppShape.buttonBorder,
                 ),
                 onPressed: _confirm,
                 child: Text(

@@ -14,6 +14,7 @@ import '../../core/storage/chat_members_store.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
+import '../../models/chat_preview_media.dart';
 import '../../models/contact_info.dart';
 import '../api.dart';
 import 'chat_parsing.dart';
@@ -63,6 +64,7 @@ class CachedChat {
   final String? lastMsgText;
   final String? lastMsgTextOneLine;
   final String? lastMsgElements;
+  final String? lastMsgPreview;
   final int? lastMsgSenderId;
   final String? lastMsgStatus;
   final int unreadCount;
@@ -92,6 +94,7 @@ class CachedChat {
     this.lastMsgTime,
     this.lastMsgText,
     this.lastMsgElements,
+    this.lastMsgPreview,
     this.lastMsgSenderId,
     this.lastMsgStatus,
     required this.unreadCount,
@@ -115,6 +118,10 @@ class CachedChat {
            : lastMsgText;
 
   bool get isOfficial => options.contains('OFFICIAL');
+
+  late final ChatPreviewMedia? lastMsgMedia = ChatPreviewMedia.decode(
+    lastMsgPreview,
+  );
 
   List<FormatRange> get lastMsgFormatRanges {
     final raw = lastMsgElements;
@@ -146,6 +153,12 @@ class CachedChat {
     return iAmAdmin(myId) || options.contains('ALL_CAN_PIN_MESSAGE');
   }
 
+  bool get forwardDisabled => options.contains('DISABLE_FORWARD');
+
+  bool get copyDisabled => options.contains('MESSAGE_COPY_NOT_ALLOWED');
+
+  bool get confirmBeforeSend => options.contains('CONFIRM_BEFORE_SEND');
+
   bool get isMuted {
     if (dontDisturbUntil == ChatsModule.muteOff) return false;
     if (dontDisturbUntil < 0) return true;
@@ -170,6 +183,7 @@ class CachedChat {
     lastMsgTime: row['last_msg_time'] as int?,
     lastMsgText: row['last_msg_text'] as String?,
     lastMsgElements: row['last_msg_elements'] as String?,
+    lastMsgPreview: row['last_msg_preview'] as String?,
     lastMsgSenderId: row['last_msg_sender'] as int?,
     lastMsgStatus: row['last_msg_status'] as String?,
     unreadCount: row['unread_count'] as int,
@@ -214,6 +228,7 @@ class CachedChat {
     'last_msg_time': lastMsgTime,
     'last_msg_text': lastMsgText,
     'last_msg_elements': lastMsgElements,
+    'last_msg_preview': lastMsgPreview,
     'last_msg_sender': lastMsgSenderId,
     'last_msg_status': lastMsgStatus,
     'unread_count': unreadCount,
@@ -246,6 +261,7 @@ class CachedChat {
     Object? lastMsgTime = _keep,
     Object? lastMsgText = _keep,
     Object? lastMsgElements = _keep,
+    Object? lastMsgPreview = _keep,
     Object? lastMsgSenderId = _keep,
     Object? lastMsgStatus = _keep,
     int? unreadCount,
@@ -283,6 +299,9 @@ class CachedChat {
       lastMsgElements: identical(lastMsgElements, _keep)
           ? this.lastMsgElements
           : lastMsgElements as String?,
+      lastMsgPreview: identical(lastMsgPreview, _keep)
+          ? this.lastMsgPreview
+          : lastMsgPreview as String?,
       lastMsgSenderId: identical(lastMsgSenderId, _keep)
           ? this.lastMsgSenderId
           : lastMsgSenderId as int?,
@@ -502,7 +521,10 @@ class ChatsModule {
     if (cached.unreadCount == next && nextMark == currentMark) return;
     final participants = Map<int, int>.from(cached.participants)
       ..[accountId] = nextMark;
-    final updated = cached.copyWith(unreadCount: next, participants: participants);
+    final updated = cached.copyWith(
+      unreadCount: next,
+      participants: participants,
+    );
     await AppDatabase.saveChats([updated.toDbRow()]);
     _bump();
   }
@@ -538,6 +560,7 @@ class ChatsModule {
     required String text,
     required String status,
     List<Map<String, dynamic>>? elements,
+    String? preview,
   }) async {
     final thisId = int.tryParse(messageId);
     await _updateChat(accountId, chatId, (chat) {
@@ -549,6 +572,7 @@ class ChatsModule {
         lastMsgElements: (elements != null && elements.isNotEmpty)
             ? jsonEncode(elements)
             : null,
+        lastMsgPreview: preview,
         lastMsgTime: time,
         lastEventTime: time,
         lastMsgSenderId: accountId,
@@ -882,6 +906,7 @@ class ChatsModule {
       }
       newRow['last_msg_text'] = messagePreviewText(msg);
       newRow['last_msg_elements'] = messagePreviewElements(msg);
+      newRow['last_msg_preview'] = messagePreviewMedia(msg);
       if (senderId != null) newRow['last_msg_sender'] = senderId;
       newRow['last_msg_status'] = 'sent';
     }
@@ -951,7 +976,9 @@ class ChatsModule {
       final rawText = m['text']?.toString();
       String? previewText = rawText;
       String? elementsJson;
+      String? previewMedia;
       final payload = _decodePayload(m['payload']);
+      if (payload != null) previewMedia = messagePreviewMedia(payload);
       if (rawText == null || rawText.isEmpty) {
         if (payload != null) previewText = messagePreviewText(payload);
       } else {
@@ -960,6 +987,7 @@ class ChatsModule {
       newRow['last_msg_id'] = int.tryParse(m['id']?.toString() ?? '');
       newRow['last_msg_text'] = previewText ?? m['text'];
       newRow['last_msg_elements'] = elementsJson;
+      newRow['last_msg_preview'] = previewMedia;
       newRow['last_msg_time'] = m['time'];
       newRow['last_msg_sender'] = m['sender_id'];
       newRow['last_msg_status'] = m['status'];
@@ -967,6 +995,7 @@ class ChatsModule {
       newRow['last_msg_id'] = null;
       newRow['last_msg_text'] = lastMsgPlaceholder;
       newRow['last_msg_elements'] = null;
+      newRow['last_msg_preview'] = null;
       newRow['last_msg_sender'] = null;
       newRow['last_msg_status'] = null;
     }
@@ -1359,11 +1388,16 @@ class ChatsModule {
     }
   }
 
+  final Set<int> _repairedSenders = {};
+
   Future<List<CachedChat>> getChats(
     int accountId, {
     bool includeHidden = false,
   }) async {
     try {
+      if (_repairedSenders.add(accountId)) {
+        await AppDatabase.repairLastMessageSenders(accountId);
+      }
       final rows = await AppDatabase.loadChats(
         accountId,
         includeHidden: includeHidden,
@@ -1571,7 +1605,9 @@ class ChatsModule {
     };
     final packet = await api.sendRequest(Opcode.msgSend, payload);
     if (!packet.isOk) {
-      logger.w('_createChat($chatType): server error payload=${packet.payload}');
+      logger.w(
+        '_createChat($chatType): server error payload=${packet.payload}',
+      );
       return null;
     }
     final data = packet.payload;
@@ -1688,7 +1724,7 @@ class ChatsModule {
             : folders.first,
       );
 
-      final favorites = List<int>.from(allFolder.favorites ?? const []);
+      final favorites = List<int>.from(allFolder.favorites);
       if (pin) {
         for (final id in chatIds) {
           if (!favorites.contains(id)) favorites.add(id);
@@ -1740,7 +1776,7 @@ class ChatsModule {
         FoldersModule.isAllChatsFolder,
         orElse: () => folders.first,
       );
-      final favorites = allFolder.favorites ?? const <int>[];
+      final favorites = allFolder.favorites;
       final favIndexById = <int, int>{};
       for (var i = 0; i < favorites.length; i++) {
         favIndexById[favorites[i]] = i + 1;
@@ -1882,7 +1918,9 @@ class ChatsModule {
         'operation': 'add',
       });
       if (!packet.isOk) {
-        logger.w('addMembers $chatId: ${messageFromErrorPayload(packet.payload)}');
+        logger.w(
+          'addMembers $chatId: ${messageFromErrorPayload(packet.payload)}',
+        );
         return false;
       }
       final data = packet.payload;

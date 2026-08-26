@@ -16,8 +16,8 @@ class ShareBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMe = ctx.isMe;
-    final message = ctx.message;
-    final hasText = message.text != null && message.text!.isNotEmpty;
+    final text = ctx.contentText;
+    final hasText = text?.isNotEmpty ?? false;
     final image = share.image;
     final imageUrl = image?.baseUrl ?? image?.previewData ?? '';
     final cardColor = isMe
@@ -123,8 +123,8 @@ class ShareBubble extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: FormattedMessageText(
-                    text: message.text!,
-                    ranges: message.formatRanges,
+                    text: text!,
+                    ranges: ctx.contentFormatRanges,
                     style: TextStyle(
                       color: ctx.text,
                       fontSize: 16,

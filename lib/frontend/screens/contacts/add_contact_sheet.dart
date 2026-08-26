@@ -10,6 +10,7 @@ import 'package:komet/frontend/screens/contacts/open_contact_profile.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/main.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 Future<void> showAddContactSheet(BuildContext context) {
   return showBlurredCard<void>(
@@ -209,7 +210,7 @@ class _AddContactCardState extends State<_AddContactCard> {
                     ),
                   ),
                   Icon(
-                    Icons.keyboard_arrow_down,
+                    Symbols.keyboard_arrow_down,
                     size: 20,
                     color: cs.onSurfaceVariant,
                   ),
@@ -297,7 +298,10 @@ class _AddContactCardState extends State<_AddContactCard> {
               )
             : Text(
                 l10n.addContactSave,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
       ),
     );
@@ -339,5 +343,4 @@ class _AddContactCardState extends State<_AddContactCard> {
       ),
     );
   }
-
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import '../../core/config/app_shape.dart';
 
 String _resourceLabel(PermissionResourceType type) {
   if (type == PermissionResourceType.CAMERA) return 'камера';
@@ -16,9 +17,9 @@ Future<PermissionResponse> askWebViewPermission(
   PermissionRequest request,
 ) async {
   PermissionResponse deny() => PermissionResponse(
-        resources: request.resources,
-        action: PermissionResponseAction.DENY,
-      );
+    resources: request.resources,
+    action: PermissionResponseAction.DENY,
+  );
 
   if (!context.mounted) return deny();
 
@@ -32,6 +33,7 @@ Future<PermissionResponse> askWebViewPermission(
   final granted = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
+      shape: AppShape.dialogBorder,
       title: const Text('Запрос доступа'),
       content: Text('$host запрашивает доступ к: $labels.'),
       actions: [

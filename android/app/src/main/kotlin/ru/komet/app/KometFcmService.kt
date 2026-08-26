@@ -5,11 +5,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ShortcutInfo
 import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.os.Build
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -29,6 +31,12 @@ class KometFcmService : FirebaseMessagingService() {
         val data = message.data
         Log.d("KometFcm", "onMessageReceived type=${data["type"]} keys=${data.keys}")
         if (data.isEmpty()) return
+        val type = data["type"]
+        FkmState.restore(applicationContext)
+        if (FkmState.enabled && type != "InboundCall" && type != "CallFinished") {
+            Log.d("KometFcm", "message push dropped: FKM handles messages")
+            return
+        }
         KometNotifier(applicationContext).handle(data)
     }
 }
@@ -50,7 +58,18 @@ class KometNotifier(private val ctx: Context) {
         private const val ACCENT = 0xFF7C6BF0.toInt()
     }
 
-    private data class Hist(val text: String, val key: String, val name: String, val ts: Long)
+    private data class Hist(
+        val text: String,
+        val key: String,
+        val name: String,
+        val ts: Long,
+        val mid: String,
+        val deleted: Boolean,
+    )
+
+    // Что нужно для перерисовки чата, когда нового пуша нет: правка и удаление
+    // приходят без заголовка, аккаунта и признака группы.
+    private data class ChatMeta(val title: String, val account: Int, val group: Boolean)
 
     fun handle(data: Map<String, String>) {
         when (data["type"]) {
@@ -72,23 +91,107 @@ class KometNotifier(private val ctx: Context) {
         }
     }
 
+    private fun notifIdOf(chatId: Long): Int = (chatId and 0x7fffffff).toInt()
+
     private fun showMessage(data: Map<String, String>) {
         val chatId = data["mc"]?.toLongOrNull() ?: return
+        val notifId = notifIdOf(chatId)
+        if (ChatNotifications.isDisplayed(chatId)) {
+            manager().cancel(notifId)
+            clearChat(chatId)
+            syncSummary(notifId, null)
+            return
+        }
         val senderId = data["suid"] ?: ""
         val senderName = data["userName"] ?: data["title"] ?: "MAX"
         val chatTitle = data["title"] ?: senderName
         val text = data["msg"] ?: data["body"] ?: data["text"] ?: "Новое сообщение"
         val ts = data["ctime"]?.toLongOrNull() ?: data["ttime"]?.toLongOrNull()
             ?: System.currentTimeMillis()
-        val isGroup = chatTitle != senderName
-        val notifId = (chatId and 0x7fffffff).toInt()
 
         ensureChannel()
 
         val active = activeIds()
-        if (!active.contains(notifId)) clearHistory(chatId)
-        val history = appendHistory(chatId, Hist(text, senderId, senderName, ts))
+        if (!active.contains(notifId)) clearChat(chatId)
+        val meta = ChatMeta(chatTitle, data["c"]?.toIntOrNull() ?: 0, chatTitle != senderName)
+        saveMeta(chatId, meta)
+        val history = appendHistory(
+            chatId,
+            Hist(text, senderId, senderName, ts, data["msgid"] ?: "", false),
+        )
 
+        render(chatId, notifId, meta, history, alertOnce = false)
+        updateSummary(notifId, senderName, text, ts, active)
+    }
+
+    // Сообщение отредактировали — правим текст в уже висящем уведомлении.
+    fun editMessage(data: Map<String, String>) {
+        val chatId = data["mc"]?.toLongOrNull() ?: return
+        val mid = data["msgid"]?.takeIf { it.isNotEmpty() } ?: return
+        val text = data["msg"]?.takeIf { it.isNotEmpty() } ?: return
+
+        val history = loadHistory(chatId)
+        val index = history.indexOfLast { it.mid == mid }
+        if (index < 0) return
+        val old = history[index]
+        if (old.deleted || old.text == text) return
+
+        val updated = history.toMutableList()
+        updated[index] = old.copy(text = text)
+        saveHistory(chatId, updated)
+
+        val notifId = notifIdOf(chatId)
+        if (!activeIds().contains(notifId)) return
+        val meta = loadMeta(chatId) ?: return
+        render(chatId, notifId, meta, updated, alertOnce = true)
+        syncSummary(notifId, updated.last())
+    }
+
+    // Сообщение удалили. keep — включено «показывать удалённые сообщения»:
+    // тогда строка остаётся в шторке, но зачёркнутой и с пометкой.
+    fun removeMessage(data: Map<String, String>) {
+        val chatId = data["mc"]?.toLongOrNull() ?: return
+        val mid = data["msgid"]?.takeIf { it.isNotEmpty() } ?: return
+        val keep = data["keep"] == "true"
+
+        val history = loadHistory(chatId)
+        val index = history.indexOfLast { it.mid == mid }
+        if (index < 0) return
+        if (keep && history[index].deleted) return
+
+        val updated = history.toMutableList()
+        if (keep) {
+            updated[index] = updated[index].copy(deleted = true)
+        } else {
+            updated.removeAt(index)
+        }
+
+        val notifId = notifIdOf(chatId)
+        if (updated.isEmpty()) {
+            clearChat(chatId)
+            manager().cancel(notifId)
+            syncSummary(notifId, null)
+            return
+        }
+
+        saveHistory(chatId, updated)
+        if (!activeIds().contains(notifId)) return
+        val meta = loadMeta(chatId) ?: return
+        render(chatId, notifId, meta, updated, alertOnce = true)
+        syncSummary(notifId, updated.last())
+    }
+
+    private fun render(
+        chatId: Long,
+        notifId: Int,
+        meta: ChatMeta,
+        history: List<Hist>,
+        alertOnce: Boolean,
+    ) {
+        if (history.isEmpty()) return
+        ensureChannel()
+
+        val newest = history.last()
         val avatarCache = HashMap<String, Bitmap>()
         val personCache = HashMap<String, Person>()
         fun avatarFor(key: String, name: String): Bitmap =
@@ -102,17 +205,16 @@ class KometNotifier(private val ctx: Context) {
                     .build()
             }
 
-        val senderPerson = personFor(senderId, senderName)
         val shortcutId = "chat_$chatId"
-        publishShortcut(shortcutId, chatId, chatTitle, senderPerson)
+        publishShortcut(shortcutId, chatId, meta.title, personFor(newest.key, newest.name))
 
         val style = NotificationCompat.MessagingStyle(Person.Builder().setName("Вы").build())
-        if (isGroup) {
-            style.conversationTitle = chatTitle
+        if (meta.group) {
+            style.conversationTitle = meta.title
             style.isGroupConversation = true
         }
         for (h in history) {
-            style.addMessage(h.text, h.ts, personFor(h.key, h.name))
+            style.addMessage(displayText(h), h.ts, personFor(h.key, h.name))
         }
 
         val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
@@ -121,26 +223,38 @@ class KometNotifier(private val ctx: Context) {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setGroup(GROUP_KEY)
-            .setWhen(ts)
+            .setWhen(newest.ts)
             .setShowWhen(true)
+            .setOnlyAlertOnce(alertOnce)
             .setContentIntent(openIntent(notifId, chatId))
             .setShortcutId(shortcutId)
             .setLocusId(LocusIdCompat(shortcutId))
             .setStyle(style)
-            .setLargeIcon(avatarFor(senderId, senderName))
+            .setLargeIcon(avatarFor(newest.key, newest.name))
 
-        val account = data["c"]?.toIntOrNull() ?: 0
-        if (account != 0) {
-            builder.addAction(replyAction(notifId, account, chatId, data["msgid"]?.toLongOrNull()))
+        if (meta.account != 0) {
+            val replyTo = history.lastOrNull { !it.deleted }?.mid?.toLongOrNull()
+            builder.addAction(replyAction(notifId, meta.account, chatId, replyTo))
         }
 
         manager().notify(notifId, builder.build())
-        updateSummary(notifId, chatId, senderName, text, ts, active)
     }
+
+    private fun displayText(h: Hist): CharSequence {
+        if (!h.deleted) return h.text
+        val sb = SpannableStringBuilder(ctx.getString(R.string.notif_deleted_prefix))
+        sb.append(' ')
+        val start = sb.length
+        sb.append(h.text)
+        sb.setSpan(StrikethroughSpan(), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return sb
+    }
+
+    private fun plainText(h: Hist): String =
+        if (h.deleted) "${ctx.getString(R.string.notif_deleted_prefix)} ${h.text}" else h.text
 
     private fun updateSummary(
         notifId: Int,
-        chatId: Long,
         senderName: String,
         text: String,
         ts: Long,
@@ -153,27 +267,60 @@ class KometNotifier(private val ctx: Context) {
             val k = keys.next()
             val id = k.toIntOrNull() ?: continue
             if (id == notifId) continue
-            if (activeBefore.contains(id)) kept.put(k, reg.getJSONObject(k))
+            val entry = reg.optJSONObject(k) ?: continue
+            if (activeBefore.contains(id)) kept.put(k, entry)
         }
         kept.put(
             notifId.toString(),
             JSONObject().put("n", senderName).put("t", text).put("ts", ts),
         )
         saveRegistry(kept)
+        publishSummary(entriesOf(kept))
+    }
 
-        if (kept.length() < 2) {
-            manager().cancel(SUMMARY_ID)
-            return
+    // `newest` == null — уведомление чата ушло из шторки.
+    private fun syncSummary(notifId: Int, newest: Hist?) {
+        val active = activeIds()
+        val reg = loadRegistry()
+        val kept = JSONObject()
+        val keys = reg.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            val id = k.toIntOrNull() ?: continue
+            if (id == notifId) continue
+            val entry = reg.optJSONObject(k) ?: continue
+            if (active.contains(id)) kept.put(k, entry)
         }
+        if (newest != null && active.contains(notifId)) {
+            kept.put(
+                notifId.toString(),
+                JSONObject()
+                    .put("n", newest.name)
+                    .put("t", plainText(newest))
+                    .put("ts", newest.ts),
+            )
+        }
+        saveRegistry(kept)
+        publishSummary(entriesOf(kept))
+    }
 
+    private fun entriesOf(reg: JSONObject): List<Triple<String, String, Long>> {
         val entries = ArrayList<Triple<String, String, Long>>()
-        val kk = kept.keys()
-        while (kk.hasNext()) {
-            val k = kk.next()
-            val o = kept.getJSONObject(k)
+        val keys = reg.keys()
+        while (keys.hasNext()) {
+            val o = reg.optJSONObject(keys.next()) ?: continue
             entries.add(Triple(o.optString("n"), o.optString("t"), o.optLong("ts")))
         }
         entries.sortByDescending { it.third }
+        return entries
+    }
+
+    private fun publishSummary(entries: List<Triple<String, String, Long>>) {
+        if (entries.size < 2) {
+            manager().cancel(SUMMARY_ID)
+            return
+        }
+        val newest = entries.first()
 
         val inbox = NotificationCompat.InboxStyle()
         for (e in entries.take(6)) inbox.addLine(boldLine(e.first, e.second))
@@ -185,11 +332,12 @@ class KometNotifier(private val ctx: Context) {
             .setGroup(GROUP_KEY)
             .setGroupSummary(true)
             .setAutoCancel(true)
-            .setWhen(ts)
+            .setWhen(newest.third)
             .setShowWhen(true)
             .setNumber(entries.size)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
             .setContentTitle("Komet")
-            .setContentText(boldLine(senderName, text))
+            .setContentText(boldLine(newest.first, newest.second))
             .setStyle(inbox)
             .build()
         manager().notify(SUMMARY_ID, summary)
@@ -239,17 +387,15 @@ class KometNotifier(private val ctx: Context) {
 
     private fun publishShortcut(id: String, chatId: Long, title: String, person: Person) {
         try {
-            val intent = (ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
-                ?: Intent(Intent.ACTION_VIEW)).apply {
-                action = Intent.ACTION_VIEW
-                putExtra("komet_chat", chatId)
-            }
+            val intent = chatIntent(chatId).setAction(Intent.ACTION_VIEW)
             val shortcut = ShortcutInfoCompat.Builder(ctx, id)
                 .setShortLabel(title)
                 .setLongLived(true)
                 .setIntent(intent)
                 .setPerson(person)
                 .setIcon(person.icon)
+                .setCategories(setOf(ShortcutInfo.SHORTCUT_CATEGORY_CONVERSATION))
+                .setLocusId(LocusIdCompat(id))
                 .build()
             ShortcutManagerCompat.pushDynamicShortcut(ctx, shortcut)
         } catch (e: Exception) {
@@ -257,12 +403,26 @@ class KometNotifier(private val ctx: Context) {
         }
     }
 
-    private fun openIntent(notifId: Int, chatId: Long): PendingIntent? {
-        val launch = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName) ?: return null
-        launch.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        launch.putExtra("komet_chat", chatId)
+    private fun chatIntent(chatId: Long): Intent {
+        val launcher = ctx.packageManager
+            .getLaunchIntentForPackage(ctx.packageName)?.component
+        val intent = if (launcher != null) {
+            Intent().setComponent(launcher)
+        } else {
+            Intent(ctx, MainActivity::class.java)
+        }
+        intent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP,
+        )
+        intent.putExtra(ChatNotifications.EXTRA_CHAT, chatId)
+        return intent
+    }
+
+    private fun openIntent(notifId: Int, chatId: Long): PendingIntent {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        return PendingIntent.getActivity(ctx, notifId, launch, flags)
+        return PendingIntent.getActivity(ctx, notifId, chatIntent(chatId), flags)
     }
 
     private fun activeIds(): Set<Int> = try {
@@ -273,30 +433,74 @@ class KometNotifier(private val ctx: Context) {
 
     private fun pushPrefs() = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    private fun appendHistory(chatId: Long, item: Hist): List<Hist> {
-        val prefs = pushPrefs()
-        val key = "hist_$chatId"
+    private fun loadHistory(chatId: Long): List<Hist> {
         val arr = try {
-            JSONArray(prefs.getString(key, "[]"))
+            JSONArray(pushPrefs().getString("hist_$chatId", "[]"))
         } catch (e: Exception) {
             JSONArray()
         }
-        arr.put(
-            JSONObject().put("t", item.text).put("k", item.key)
-                .put("n", item.name).put("ts", item.ts),
-        )
-        while (arr.length() > HISTORY_LIMIT) arr.remove(0)
-        prefs.edit().putString(key, arr.toString()).apply()
         val out = ArrayList<Hist>(arr.length())
         for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            out.add(Hist(o.optString("t"), o.optString("k"), o.optString("n"), o.optLong("ts")))
+            val o = arr.optJSONObject(i) ?: continue
+            out.add(
+                Hist(
+                    o.optString("t"),
+                    o.optString("k"),
+                    o.optString("n"),
+                    o.optLong("ts"),
+                    o.optString("m"),
+                    o.optBoolean("d"),
+                ),
+            )
         }
         return out
     }
 
-    private fun clearHistory(chatId: Long) {
-        pushPrefs().edit().remove("hist_$chatId").apply()
+    private fun saveHistory(chatId: Long, items: List<Hist>) {
+        val arr = JSONArray()
+        for (h in items) {
+            arr.put(
+                JSONObject()
+                    .put("t", h.text)
+                    .put("k", h.key)
+                    .put("n", h.name)
+                    .put("ts", h.ts)
+                    .put("m", h.mid)
+                    .put("d", h.deleted),
+            )
+        }
+        pushPrefs().edit().putString("hist_$chatId", arr.toString()).apply()
+    }
+
+    private fun appendHistory(chatId: Long, item: Hist): List<Hist> {
+        val items = ArrayList(loadHistory(chatId))
+        items.add(item)
+        while (items.size > HISTORY_LIMIT) items.removeAt(0)
+        saveHistory(chatId, items)
+        return items
+    }
+
+    private fun clearChat(chatId: Long) {
+        pushPrefs().edit().remove("hist_$chatId").remove("meta_$chatId").apply()
+    }
+
+    private fun saveMeta(chatId: Long, meta: ChatMeta) {
+        val json = JSONObject()
+            .put("t", meta.title)
+            .put("a", meta.account)
+            .put("g", meta.group)
+            .toString()
+        pushPrefs().edit().putString("meta_$chatId", json).apply()
+    }
+
+    private fun loadMeta(chatId: Long): ChatMeta? {
+        val raw = pushPrefs().getString("meta_$chatId", null) ?: return null
+        return try {
+            val o = JSONObject(raw)
+            ChatMeta(o.optString("t"), o.optInt("a"), o.optBoolean("g"))
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun loadRegistry(): JSONObject = try {

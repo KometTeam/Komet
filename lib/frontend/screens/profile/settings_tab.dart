@@ -33,6 +33,7 @@ import '../../../core/config/app_digital_id_mode.dart';
 import '../../../core/utils/webview_support.dart';
 import '../digital_id/digital_id_screen.dart';
 import '../digital_id/digital_id_web_screen.dart';
+import '../webapp/web_app_bridge.dart';
 import '../webapp/web_app_screen.dart';
 import 'cloud_storage_screen.dart';
 import 'customization_section.dart';
@@ -46,6 +47,8 @@ import 'notifications_screen.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
 import '../../widgets/media_playback_pill.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -61,6 +64,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   double _headerDelta = 0;
   bool _headerEverExpanded = false;
   bool _expandArmed = false;
+  bool _headerDragging = false;
   bool _zoneHapticFired = false;
   bool _pastCommitPoint = false;
   String? _appVersionLabel;
@@ -114,6 +118,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   bool _handleScrollNotification(ScrollNotification n, double delta) {
     if (n.depth != 0) return false;
     if (n is ScrollStartNotification) {
+      _headerDragging = n.dragDetails != null;
       if (n.dragDetails != null) {
         final px = n.metrics.pixels;
         _expandArmed = delta > 0 && px <= delta + 8;
@@ -138,7 +143,10 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
         }
       }
     } else if (n is ScrollEndNotification) {
-      _snapHeader(delta);
+      if (_headerDragging) {
+        _headerDragging = false;
+        _snapHeader(delta);
+      }
     }
     return false;
   }
@@ -146,9 +154,11 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   void _snapHeader(double delta) {
     final c = _scrollController;
     if (c == null || !c.hasClients || delta <= 0) return;
+    final collapsed = math.min(delta, c.position.maxScrollExtent);
     final offset = c.offset;
-    if (offset <= 0 || offset >= delta) return;
-    final target = offset < delta / 2 ? 0.0 : delta;
+    if (offset <= 0 || offset >= collapsed) return;
+    final target = offset < collapsed / 2 ? 0.0 : collapsed;
+    if ((target - offset).abs() < 1) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !c.hasClients) return;
       c.animateTo(
@@ -290,9 +300,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                     backgroundColor: cs.error,
                     foregroundColor: cs.onError,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    shape: AppShape.buttonBorder,
                   ),
                   child: const Text('Выйти'),
                 ),
@@ -421,6 +429,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                                   MaterialPageRoute(
                                     builder: (context) => WebAppScreen(
                                       title: 'Сферум',
+                                      entryPoint: WebAppEntryPoint.settings,
                                       loader: () => webAppModule.fetchSferum(),
                                     ),
                                   ),
@@ -825,7 +834,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                           color: nameColor,
                           fontSize: lerpDouble(20, 26, pt),
                           fontWeight: FontWeight.w700,
-                          fontFamily: 'Outfit',
+                          fontFamily: displayFontOf(context),
                         ),
                       ),
                     ),
@@ -1025,7 +1034,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                       Symbols.check_circle,
                       fill: 1,
                       size: 15,
-                      color: online ? kOnlineGreen : cs.mutedText,
+                      color: online ? kSuccessGreen : cs.mutedText,
                     ),
                     const SizedBox(width: 5),
                     Text(

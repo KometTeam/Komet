@@ -1,19 +1,25 @@
 import 'dart:io';
 
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_phonebook_names.dart';
+import '../utils/logger.dart';
 
 class DeviceContactsService {
   DeviceContactsService._();
 
-  static const _grantedKey = 'phonebook_granted';
+  static const _deniedKey = 'phonebook_denied';
 
   static final Map<String, String> _byLast10 = {};
   static bool _loaded = false;
 
   static bool get _supported => Platform.isAndroid || Platform.isIOS;
+
+  static bool get isLoaded => _loaded;
+
+  static int get knownNumbers => _byLast10.length;
 
   static String? _last10(String raw) {
     final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
@@ -31,37 +37,61 @@ class DeviceContactsService {
     return name.trim();
   }
 
+  static Future<bool> hasPermission() async {
+    if (!_supported) return false;
+    try {
+      return await Permission.contacts.isGranted;
+    } catch (e) {
+      logger.w('Телефонная книга: не удалось прочитать статус разрешения: $e');
+      return false;
+    }
+  }
+
   static Future<void> loadFromStartup() async {
     if (_loaded || !_supported) return;
     if (!AppPhonebookNames.current.value) return;
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_grantedKey) != true) return;
-    final granted = await FlutterContacts.requestPermission(readonly: true);
-    if (!granted) return;
+    if (!await hasPermission()) return;
+    await _forgetDenial();
     await _readBook();
   }
 
-  static Future<bool> ensureLoadedInteractive() async {
-    if (_loaded || !_supported) return false;
+  static Future<bool> ensureLoadedInteractive({bool force = false}) async {
+    if (!_supported) return false;
     if (!AppPhonebookNames.current.value) return false;
-    final granted = await FlutterContacts.requestPermission(readonly: true);
-    if (!granted) return false;
+    if (_loaded && !force) return false;
+
+    if (await hasPermission()) {
+      await _forgetDenial();
+      return _readBook();
+    }
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_grantedKey, true);
+    if (!force && prefs.getBool(_deniedKey) == true) return false;
+
+    final granted = await FlutterContacts.requestPermission(readonly: true);
+    if (!granted) {
+      await prefs.setBool(_deniedKey, true);
+      return false;
+    }
+    await prefs.remove(_deniedKey);
     return _readBook();
   }
 
   static Future<bool> reload() async {
     _loaded = false;
     _byLast10.clear();
-    return ensureLoadedInteractive();
+    return ensureLoadedInteractive(force: true);
+  }
+
+  static Future<void> _forgetDenial() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_deniedKey) == true) await prefs.remove(_deniedKey);
   }
 
   static Future<bool> _readBook() async {
     try {
-      final contacts = await FlutterContacts.getContacts(
-        withProperties: true,
-      );
+      FlutterContacts.config.includeNonVisibleOnAndroid = true;
+      final contacts = await FlutterContacts.getContacts(withProperties: true);
       _byLast10.clear();
       for (final contact in contacts) {
         final name = contact.displayName.trim();
@@ -74,8 +104,13 @@ class DeviceContactsService {
         }
       }
       _loaded = true;
-      return _byLast10.isNotEmpty;
-    } catch (_) {
+      logger.i(
+        'Телефонная книга: прочитано ${contacts.length} записей, '
+        '${_byLast10.length} номеров',
+      );
+      return true;
+    } catch (e) {
+      logger.w('Телефонная книга: не удалось прочитать: $e');
       return false;
     }
   }

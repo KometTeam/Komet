@@ -9,8 +9,8 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/glossy_pill.dart';
 import '../../widgets/prompt_dialog.dart';
+import '../../widgets/settings_card.dart';
 
 class FontSettingsScreen extends StatefulWidget {
   const FontSettingsScreen({super.key});
@@ -198,11 +198,8 @@ class _PreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
+    return SettingsPanel(
       padding: const EdgeInsets.all(24),
-      depth: 6,
       child: SizedBox(
         width: double.infinity,
         child: Column(
@@ -337,11 +334,8 @@ class _FontSizeControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDefault = (scale - AppFonts.defaultScale).abs() < 0.001;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
+    return SettingsPanel(
       padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
-      depth: 6,
       child: Column(
         children: [
           Row(

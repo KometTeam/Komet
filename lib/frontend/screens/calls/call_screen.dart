@@ -2,37 +2,33 @@ import 'dart:async';
 import 'dart:math' show cos, pi;
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart'
-    show
-        Helper,
-        MediaStream,
-        RTCVideoRenderer,
-        RTCVideoValue,
-        RTCVideoView,
-        RTCVideoViewObjectFit;
+    show MediaStream, RTCVideoRenderer, RTCVideoValue, RTCVideoViewObjectFit;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
+import '../../../core/calls/active_call.dart';
 import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
+import '../../../core/config/app_colors.dart';
+import '../../../core/config/call_no_mute.dart';
 import '../../../core/utils/format.dart';
-import '../../../core/utils/logger.dart';
+import '../../../core/utils/screen_wake.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/call_video_view.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
+import 'call_mic_sheet.dart';
 import 'call_participants_sheet.dart';
 import 'komet_hub.dart';
-
-const Color _kEndRed = Color(0xFFE5484D);
-const Color _kAcceptGreen = Color(0xFF2EC36B);
+import '../../../core/config/app_fonts.dart';
 
 class CallScreen extends StatefulWidget {
   final String name;
@@ -137,6 +133,8 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    ActiveCall.instance.enterScreen();
+    unawaited(ScreenWake.instance.acquire(this));
     _dotsController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -183,6 +181,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       if (name != null && name.isNotEmpty) _name = name;
       if (avatar != null && avatar.isNotEmpty) _avatarUrl = avatar;
     });
+    _publishActiveCall();
   }
 
   Future<void> _initRenderer() async {
@@ -247,7 +246,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       _resolveParticipants();
       _syncVideo();
       _syncLocalPreview();
+      _isSpeaker = session.isSpeaker;
       setState(() {});
+      _publishActiveCall();
     });
     _remoteStreamSub = session.remoteStreamStream.listen(_attachStream);
     _tileStreamSub = session.participantStreamUpdates.listen(_onTileStream);
@@ -260,6 +261,19 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     if (existing != null) _attachStream(existing);
     _resolveParticipants();
     _syncVideo();
+    _isSpeaker = session.isSpeaker;
+    _publishActiveCall();
+  }
+
+  void _publishActiveCall() {
+    final session = _session;
+    if (session == null) return;
+    ActiveCall.instance.attach(
+      session: session,
+      name: _name,
+      avatarUrl: _avatarUrl,
+      isGroup: _isGroup,
+    );
   }
 
   void _showKometBadge() {
@@ -357,19 +371,12 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     await _session?.setMuted(next);
   }
 
-  static bool get _hasSpeakerphone =>
-      defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS;
-
   Future<void> _toggleSpeaker() async {
-    final next = !_isSpeaker;
+    final session = _session;
+    if (session == null) return;
+    final next = !session.isSpeaker;
     setState(() => _isSpeaker = next);
-    if (!_hasSpeakerphone) return;
-    try {
-      await Helper.setSpeakerphoneOn(next);
-    } catch (e) {
-      logger.w('[call] setSpeakerphoneOn недоступен: $e');
-    }
+    await session.setSpeaker(next);
   }
 
   bool _videoBusy = false;
@@ -377,12 +384,15 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   Future<void> _toggleVideo() async {
     final session = _session;
     if (session == null || _videoBusy) return;
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _videoBusy = true);
     await WidgetsBinding.instance.endOfFrame;
     try {
       await session.setVideoEnabled(!session.localVideo);
     } catch (e) {
-      if (mounted) showCustomNotification(context, 'Камера недоступна: $e');
+      if (mounted) {
+        showCustomNotification(context, l10n.callCameraUnavailable(e));
+      }
     } finally {
       _syncLocalPreview();
       if (mounted) setState(() => _videoBusy = false);
@@ -413,6 +423,8 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    ActiveCall.instance.leaveScreen();
+    unawaited(ScreenWake.instance.release(this));
     _stateSub?.cancel();
     _canceledSub?.cancel();
     _infoSub?.cancel();
@@ -458,6 +470,16 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           avatarUrl: info?.avatar,
         );
       },
+    );
+  }
+
+  void _showMicrophones() {
+    final session = _session;
+    if (session == null) return;
+    showCallMicrophoneSheet(
+      context,
+      session: session,
+      scheme: _darkScheme(context),
     );
   }
 
@@ -537,24 +559,25 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
             border: Border.all(color: cs.outlineVariant, width: 1),
           ),
           child: _localRendererReady && _localRenderer.srcObject != null
-              ? RTCVideoView(
-                  _localRenderer,
+              ? CallVideoView(
+                  renderer: _localRenderer,
                   mirror: _session?.localScreen != true,
                   objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                  placeholder: _localPreviewIcon(cs),
                 )
-              : Center(
-                  child: Icon(
-                    _session?.localScreen == true
-                        ? Symbols.screen_share
-                        : Symbols.videocam,
-                    color: cs.onSurfaceVariant,
-                    size: 28,
-                  ),
-                ),
+              : _localPreviewIcon(cs),
         ),
       ),
     );
   }
+
+  Widget _localPreviewIcon(ColorScheme cs) => Center(
+    child: Icon(
+      _session?.localScreen == true ? Symbols.screen_share : Symbols.videocam,
+      color: cs.onSurfaceVariant,
+      size: 28,
+    ),
+  );
 
   Widget _buildGroupBody(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
@@ -603,7 +626,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
               color: cs.onSurface,
               fontSize: 24,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
           const SizedBox(height: 2),
@@ -673,7 +696,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       borderRadius: BorderRadius.circular(20),
       depth: 6,
       borderSide: speaking
-          ? const BorderSide(color: _kAcceptGreen, width: 2.5)
+          ? const BorderSide(color: kSuccessGreen, width: 2.5)
           : null,
       padding: EdgeInsets.all(showVideo ? 0 : 12),
       child: showVideo
@@ -773,9 +796,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          RTCVideoView(
-            renderer,
+          CallVideoView(
+            renderer: renderer,
             objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            placeholder: ColoredBox(color: cs.surfaceContainerHighest),
           ),
           Positioned(
             left: 8,
@@ -881,8 +905,8 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                         child: AspectRatio(
                           aspectRatio: ar,
                           child: RepaintBoundary(
-                            child: RTCVideoView(
-                              _remoteRenderer,
+                            child: CallVideoView(
+                              renderer: _remoteRenderer,
                               objectFit: RTCVideoViewObjectFit
                                   .RTCVideoViewObjectFitCover,
                             ),
@@ -997,6 +1021,16 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                         size: 26,
                       ),
                     ),
+                  IconButton(
+                    onPressed: _showMicrophones,
+                    tooltip: l10n.callTooltipMicrophone,
+                    icon: Icon(
+                      Symbols.settings_voice,
+                      color: cs.onSurface,
+                      weight: 500,
+                      size: 26,
+                    ),
+                  ),
                   IconButton(
                     onPressed: _showInfoSheet,
                     tooltip: l10n.callInfoTitle,
@@ -1136,7 +1170,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           color: cs.onPrimaryContainer,
           fontSize: size * 0.38,
           fontWeight: FontWeight.w600,
-          fontFamily: 'Outfit',
+          fontFamily: displayFontOf(context),
         ),
       ),
     );
@@ -1154,7 +1188,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           color: cs.onSurface,
           fontSize: 30,
           fontWeight: FontWeight.w600,
-          fontFamily: 'Outfit',
+          fontFamily: displayFontOf(context),
           height: 1.1,
         ),
       ),
@@ -1228,14 +1262,14 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           _CallButton(
             icon: Symbols.call_end,
             label: l10n.callDecline,
-            background: _kEndRed,
+            background: kDangerRed,
             foreground: Colors.white,
             onTap: _decline,
           ),
           _CallButton(
             icon: Symbols.call,
             label: l10n.callAccept,
-            background: _kAcceptGreen,
+            background: kSuccessGreen,
             foreground: Colors.white,
             onTap: _accept,
           ),
@@ -1282,15 +1316,18 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
             icon: Symbols.mic,
             slashedIcon: Symbols.mic_off,
             slashed: _isMuted,
-            label: _isMuted ? l10n.callUnmute : l10n.callMute,
+            label: _isMuted
+                ? (CallNoMute.enabled ? l10n.callMicStillLive : l10n.callUnmute)
+                : l10n.callMute,
             background: _isMuted ? cs.primary : cs.surfaceContainerHighest,
             foreground: _isMuted ? cs.onPrimary : cs.onSurface,
             onTap: _toggleMute,
+            onLongPress: _showMicrophones,
           ),
           _CallButton(
             icon: Symbols.call_end,
             label: l10n.callEndButton,
-            background: _kEndRed,
+            background: kDangerRed,
             foreground: Colors.white,
             onTap: _hangup,
           ),
@@ -1351,6 +1388,7 @@ class _CallButton extends StatelessWidget {
   final Color background;
   final Color foreground;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool busy;
 
   const _CallButton({
@@ -1359,6 +1397,7 @@ class _CallButton extends StatelessWidget {
     required this.background,
     required this.foreground,
     required this.onTap,
+    this.onLongPress,
     this.slashedIcon,
     this.slashed = false,
     this.busy = false,
@@ -1392,6 +1431,7 @@ class _CallButton extends StatelessWidget {
             color: background,
             borderRadius: BorderRadius.circular(31),
             onTap: busy ? null : onTap,
+            onLongPress: busy ? null : onLongPress,
             depth: 9,
             child: Center(
               child: busy
@@ -1550,7 +1590,7 @@ class _CallInfoSheet extends StatelessWidget {
                   color: cs.onSurface,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  fontFamily: 'Outfit',
+                  fontFamily: displayFontOf(context),
                 ),
               ),
               const SizedBox(height: 2),

@@ -11,6 +11,7 @@ import '../../main.dart';
 import '../screens/chats/chat_list_screen.dart';
 import '../screens/chats/chat_screen.dart';
 import '../screens/contacts/open_contact_profile.dart';
+import '../screens/webapp/web_app_bridge.dart';
 import '../screens/webapp/web_app_screen.dart';
 import 'custom_notification.dart';
 import 'sticker_pack_sheet.dart';
@@ -71,16 +72,21 @@ Future<bool> openChatAtMessage(
   }
 
   final title = chat.title?.trim();
+  final peerId = (chat.type == 'DIALOG' && chatId != 0) ? chatId ^ myId : 0;
   final name = (title != null && title.isNotEmpty)
       ? title
       : (ContactCache.get(chatId ^ myId) ?? 'Чат');
+  final imageUrl =
+      (peerId > 0 ? ContactCache.getAvatar(peerId) : null) ??
+      chat.iconUrl ??
+      '';
 
   await pushSwipeable(
     context,
     (_) => ChatScreen(
       chatId: chatId,
       name: name,
-      imageUrl: chat.iconUrl ?? '',
+      imageUrl: imageUrl,
       chatType: chat.type,
       initialMessageId: messageId,
       initialMessageTime: messageTime,
@@ -137,6 +143,7 @@ Future<bool> openWebAppForBot(
     context,
     (_) => WebAppScreen(
       title: title,
+      entryPoint: WebAppEntryPoint.url,
       loader: () => webAppModule.fetchLaunch(
         botId,
         startParam: startParam,

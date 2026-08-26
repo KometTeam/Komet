@@ -30,6 +30,21 @@ class HeaderPullScrollPhysics extends ScrollPhysics {
   }
 
   @override
+  double applyBoundaryConditions(ScrollMetrics position, double value) {
+    if (delta <= 0) {
+      if (value < position.pixels &&
+          position.pixels <= position.minScrollExtent) {
+        return value - position.pixels;
+      }
+      if (value < position.minScrollExtent &&
+          position.minScrollExtent < position.pixels) {
+        return value - position.minScrollExtent;
+      }
+    }
+    return super.applyBoundaryConditions(position, value);
+  }
+
+  @override
   double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
     if (delta <= 0 || offset <= 0 || position.pixels <= 0) {
       return super.applyPhysicsToUserOffset(position, offset);
@@ -107,8 +122,10 @@ class MorphHeaderDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => expandedExtent;
 
   @override
-  OverScrollHeaderStretchConfiguration get stretchConfiguration =>
-      OverScrollHeaderStretchConfiguration();
+  OverScrollHeaderStretchConfiguration? get stretchConfiguration =>
+      expandedExtent > collapsedExtent
+      ? OverScrollHeaderStretchConfiguration()
+      : null;
 
   @override
   Widget build(

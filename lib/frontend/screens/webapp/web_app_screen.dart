@@ -6,15 +6,21 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/webapp.dart';
 import '../../../core/storage/spoofing_service.dart';
+import '../../../core/utils/link_opener.dart';
 import '../../../main.dart' show api;
+import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/error_view.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/webview_permission_prompt.dart';
+import 'web_app_bridge.dart';
 
 class WebAppScreen extends StatefulWidget {
   final String title;
   final Future<WebAppLaunch> Function() loader;
+  final String entryPoint;
+  final bool privateChannel;
+  final WebAppMobileIdVerifier? mobileIdVerifier;
   final List<UserScript>? extraUserScripts;
   final void Function(InAppWebViewController controller)? onWebViewCreated;
   final void Function(
@@ -26,6 +32,7 @@ class WebAppScreen extends StatefulWidget {
   onLoadStart;
   final Future<WebAppLaunch> Function(String url)? onExternalCallback;
   final bool closeAfterExternalCallback;
+  final bool preferSystemUserAgent;
   final Future<NavigationActionPolicy?> Function(
     InAppWebViewController controller,
     NavigationAction navigationAction,
@@ -37,12 +44,16 @@ class WebAppScreen extends StatefulWidget {
     super.key,
     required this.title,
     required this.loader,
+    this.entryPoint = WebAppEntryPoint.webApp,
+    this.privateChannel = false,
+    this.mobileIdVerifier,
     this.extraUserScripts,
     this.onWebViewCreated,
     this.onConsoleMessage,
     this.onLoadStart,
     this.onExternalCallback,
     this.closeAfterExternalCallback = false,
+    this.preferSystemUserAgent = false,
     this.shouldOverrideUrlLoading,
   });
 
@@ -52,10 +63,12 @@ class WebAppScreen extends StatefulWidget {
 
 class _WebAppScreenState extends State<WebAppScreen> {
   InAppWebViewController? _controller;
+  WebAppBridge? _bridge;
   WebAppLaunch? _launch;
   String? _loadError;
   String _userAgent = '';
   double _progress = 0;
+  Size _viewport = Size.zero;
 
   @override
   void initState() {
@@ -63,32 +76,81 @@ class _WebAppScreenState extends State<WebAppScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _bridge?.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     setState(() {
       _loadError = null;
       _launch = null;
+      _bridge?.dispose();
+      _bridge = null;
     });
     try {
       // Тот же UA, что уходит в sessionInit (из handshake-устройства ядра),
       // чтобы веб-аппы видели нативный клиент; фолбэк — браузерный UA спуфа.
-      _userAgent =
-          api.session?.userAgent() ??
-          await SpoofingService.getWebViewUserAgent() ??
-          '';
+      // Для веб-аппов с внешней авторизацией (Госуслуги/ЕСИА) клиентский UA
+      // ядра отбраковывается антифродом — там нужен UA настоящего WebView.
+      _userAgent = '';
+      if (widget.preferSystemUserAgent) {
+        try {
+          _userAgent = await InAppWebViewController.getDefaultUserAgent();
+        } catch (_) {}
+      }
+      if (_userAgent.isEmpty) {
+        _userAgent =
+            api.session?.userAgent() ??
+            await SpoofingService.getWebViewUserAgent() ??
+            '';
+      }
       final launch = await widget.loader();
       if (!mounted) return;
-      setState(() => _launch = launch);
+      setState(() {
+        _launch = launch;
+        _bridge = _createBridge(launch.botId);
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _loadError = e.toString());
     }
   }
 
+  WebAppBridge _createBridge(int botId) => WebAppBridge(
+    botId: botId,
+    entryPoint: widget.entryPoint,
+    privateChannel: widget.privateChannel,
+    mobileIdVerifier: widget.mobileIdVerifier,
+    contextResolver: () => mounted ? context : null,
+    viewportResolver: () => _viewport,
+    onClose: _closeFromWebApp,
+  );
+
+  void _closeFromWebApp() {
+    if (!mounted) return;
+    Navigator.of(context).maybePop();
+  }
+
   Future<bool> _handleBack() async {
+    final bridge = _bridge;
+    if (bridge != null && bridge.handlesBackButton) {
+      bridge.notifyBackPressed();
+      return false;
+    }
     final controller = _controller;
     if (controller != null && await controller.canGoBack()) {
       await controller.goBack();
       return false;
+    }
+    if (bridge != null && bridge.needsCloseConfirmation && mounted) {
+      return showConfirmDialog(
+        context,
+        title: widget.title,
+        message: 'Закрыть мини-приложение?',
+        confirmLabel: 'Закрыть',
+      );
     }
     return true;
   }
@@ -120,8 +182,13 @@ class _WebAppScreenState extends State<WebAppScreen> {
       return NavigationActionPolicy.CANCEL;
     }
     final handler = widget.shouldOverrideUrlLoading;
-    if (handler == null) return NavigationActionPolicy.ALLOW;
-    return handler(controller, action, _launch?.url);
+    if (handler != null) return handler(controller, action, _launch?.url);
+
+    if (uri != null && leavesWebView(uri.scheme)) {
+      if (mounted) await openExternalUrl(context, uri.toString());
+      return NavigationActionPolicy.CANCEL;
+    }
+    return NavigationActionPolicy.ALLOW;
   }
 
   @override
@@ -173,14 +240,28 @@ class _WebAppScreenState extends State<WebAppScreen> {
       return ErrorView(message: _loadError!, onRetry: _load);
     }
     final launch = _launch;
-    if (launch == null) {
+    final bridge = _bridge;
+    if (launch == null || bridge == null) {
       return const Center(child: SmallSpinner(size: 36));
     }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _viewport = Size(constraints.maxWidth, constraints.maxHeight);
+        return Listener(
+          onPointerDown: (_) => bridge.registerGesture(),
+          child: _buildWebView(launch, bridge),
+        );
+      },
+    );
+  }
+
+  Widget _buildWebView(WebAppLaunch launch, WebAppBridge bridge) {
     return InAppWebView(
       initialUrlRequest: URLRequest(url: WebUri(launch.url)),
-      initialUserScripts: widget.extraUserScripts == null
-          ? null
-          : UnmodifiableListView<UserScript>(widget.extraUserScripts!),
+      initialUserScripts: UnmodifiableListView<UserScript>([
+        bridge.userScript,
+        ...?widget.extraUserScripts,
+      ]),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
         domStorageEnabled: true,
@@ -188,25 +269,32 @@ class _WebAppScreenState extends State<WebAppScreen> {
         supportZoom: false,
         transparentBackground: true,
         mediaPlaybackRequiresUserGesture: false,
+        allowsInlineMediaPlayback: true,
+        sharedCookiesEnabled: true,
+        allowsBackForwardNavigationGestures: true,
         useHybridComposition: true,
-        useShouldOverrideUrlLoading:
-            widget.shouldOverrideUrlLoading != null ||
-            widget.onExternalCallback != null,
+        supportMultipleWindows: true,
+        allowFileAccess: false,
+        useShouldOverrideUrlLoading: true,
         userAgent: _userAgent,
       ),
       onWebViewCreated: (controller) {
         _controller = controller;
+        bridge.attach(controller);
         widget.onWebViewCreated?.call(controller);
       },
       onPermissionRequest: (controller, request) =>
           askWebViewPermission(context, request),
+      onCreateWindow: (controller, action) async {
+        final url = action.request.url?.toString();
+        if (url != null && url.isNotEmpty && mounted) {
+          await openExternalUrl(context, url);
+        }
+        return false;
+      },
       onConsoleMessage: widget.onConsoleMessage,
       onLoadStart: widget.onLoadStart,
-      shouldOverrideUrlLoading:
-          widget.shouldOverrideUrlLoading == null &&
-              widget.onExternalCallback == null
-          ? null
-          : _handleNavigation,
+      shouldOverrideUrlLoading: _handleNavigation,
       onProgressChanged: (controller, progress) {
         if (!mounted) return;
         setState(() => _progress = progress / 100);

@@ -43,10 +43,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loginDone => 'Готово';
 
   @override
-  String get loginReadTermsNotification =>
-      'Сначала прочитайте условия использования';
-
-  @override
   String get loginSpoofRedacted => 'Подмена данных';
 
   @override
@@ -351,10 +347,22 @@ class AppLocalizationsRu extends AppLocalizations {
   String get infoAccountSection => 'Аккаунт';
 
   @override
+  String get infoPacketSection => 'Пакет входа';
+
+  @override
+  String get infoChatsSection => 'Чаты в пакете входа';
+
+  @override
+  String get infoChatSettingsSection => 'Настройки отдельных чатов';
+
+  @override
   String get infoServerSection => 'Сервер';
 
   @override
   String get infoUserSection => 'Пользователь';
+
+  @override
+  String get infoExperimentsSection => 'Эксперименты';
 
   @override
   String get infoYMapSection => 'Y-Map';
@@ -381,7 +389,76 @@ class AppLocalizationsRu extends AppLocalizations {
   String get infoId => 'id аккаунта:';
 
   @override
+  String get infoPhone => 'Телефон:';
+
+  @override
+  String get infoPhotoId => 'id аватарки:';
+
+  @override
+  String get infoAccountStatus => 'Статус аккаунта:';
+
+  @override
+  String get infoContactOptions => 'Опции контакта:';
+
+  @override
+  String get infoProfileOptions => 'Опции профиля:';
+
+  @override
+  String get infoNames => 'Имена:';
+
+  @override
+  String get infoBaseUrl => 'Ссылка на аватарку:';
+
+  @override
+  String get infoBaseRawUrl => 'Исходная аватарка:';
+
+  @override
   String get infoChatMarker => 'chatMarker';
+
+  @override
+  String get infoServerTime => 'Время сервера:';
+
+  @override
+  String get infoUpdates => 'Количество обновлений:';
+
+  @override
+  String get infoMessagesCount => 'Сообщений в пакете:';
+
+  @override
+  String get infoContactsCount => 'Контактов в пакете:';
+
+  @override
+  String get infoPresenceCount => 'Статусов присутствия:';
+
+  @override
+  String get infoConfigHash => 'Хеш конфигурации:';
+
+  @override
+  String get infoChatsCount => 'Загружено чатов:';
+
+  @override
+  String get infoChatsActive => 'Активных:';
+
+  @override
+  String get infoChatsHidden => 'Скрытых:';
+
+  @override
+  String get infoChatsDialogs => 'Диалогов:';
+
+  @override
+  String get infoChatsGroups => 'Групп:';
+
+  @override
+  String get infoChatsChannels => 'Каналов:';
+
+  @override
+  String get infoChatsUnread => 'Непрочитанных чатов:';
+
+  @override
+  String get infoChatsNewMessages => 'Новых сообщений:';
+
+  @override
+  String get infoChatsMessages => 'Сообщений в загруженных чатах:';
 
   @override
   String get infoAccountRemovalEnabled => 'Мгновенное удаление аккаунта:';
@@ -623,8 +700,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notificationsFkmAlreadyHasFcm => 'А зачем? У тебя уже FCM.';
 
   @override
-  String get notificationsFkmDownloadFcm =>
-      'Установите FCM версию с официального источника';
+  String get notificationsFkmIosUnsupported =>
+      'На iOS пуш-уведомления пока недоступны';
 
   @override
   String get notificationsTitle => 'Уведомления';
@@ -638,6 +715,30 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get notificationsFkmEnableSubtitle =>
       'Для работы FKM уведомлений, приложению понадобится держать уведомление в шторке.';
+
+  @override
+  String get notificationsFkmUnsupported => 'FKM работает только на Android';
+
+  @override
+  String get notificationsFkmBatteryAction => 'Настроить';
+
+  @override
+  String get notificationsFkmBatteryMessage =>
+      'Иначе система усыпит фоновое соединение, и уведомления начнут опаздывать или пропадать.';
+
+  @override
+  String get notificationsFkmBatteryTitle => 'Отключить экономию батареи?';
+
+  @override
+  String get notificationsFkmPermissionDenied =>
+      'Без разрешения на уведомления FKM не заработает';
+
+  @override
+  String get notificationsFkmConfirmAction => 'Включить FKM';
+
+  @override
+  String get notificationsFkmConfirmMessage =>
+      'Уведомления начнут приходить через собственное фоновое соединение, а в шторке будет постоянно висеть уведомление сервиса. Выключить FKM можно прямо в нём.';
 
   @override
   String get notificationsMainSectionTitle => 'Уведомления';
@@ -782,6 +883,9 @@ class AppLocalizationsRu extends AppLocalizations {
       'Material You или объёмные Glossy-капсулы';
 
   @override
+  String get appearanceStyleAuto => 'Как в теме';
+
+  @override
   String get appearanceVisualStyleMaterialYou => 'Material You';
 
   @override
@@ -923,6 +1027,24 @@ class AppLocalizationsRu extends AppLocalizations {
   String get callGroupWaitingParticipants => 'Ожидание участников…';
 
   @override
+  String get callLinkGroupCall => 'Групповой звонок';
+
+  @override
+  String get callLinkSendInMax => 'Отправить в MAX';
+
+  @override
+  String get callLinkStart => 'Начать звонок';
+
+  @override
+  String get callLinkSent => 'Ссылка отправлена';
+
+  @override
+  String get callLinkSendFailed => 'Не удалось отправить ссылку';
+
+  @override
+  String get callLinkCreateFailed => 'Не удалось создать звонок';
+
+  @override
   String get callParticipantYou => 'Вы';
 
   @override
@@ -930,6 +1052,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get callTooltipMinimize => 'Свернуть';
+
+  @override
+  String get callTooltipExpand => 'Развернуть';
 
   @override
   String get callTooltipKometHub => 'Komet';
@@ -978,6 +1103,46 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get callEndButton => 'Завершить';
+
+  @override
+  String callCameraUnavailable(Object error) {
+    return 'Камера недоступна: $error';
+  }
+
+  @override
+  String get callTooltipMicrophone => 'Микрофон';
+
+  @override
+  String get callMicrophoneTitle => 'Микрофон';
+
+  @override
+  String get callMicrophoneSystem => 'Системный по умолчанию';
+
+  @override
+  String get callMicrophoneEmpty => 'Микрофоны не найдены';
+
+  @override
+  String get callMicrophoneRefresh => 'Обновить список';
+
+  @override
+  String get callMicrophoneMonitors => 'Мониторы — звук системы';
+
+  @override
+  String callMicrophoneFallback(Object index) {
+    return 'Микрофон $index';
+  }
+
+  @override
+  String callMicrophoneFailed(Object error) {
+    return 'Не удалось переключить микрофон: $error';
+  }
+
+  @override
+  String get callMicStillLive => 'Всё равно слышно';
+
+  @override
+  String get callNoMuteHint =>
+      '--no-mute: звук идёт даже с выключенным микрофоном';
 
   @override
   String get callInfoClient => 'Клиент';
@@ -1598,6 +1763,39 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatInfoShowMoreExtra => 'Подробнее';
 
   @override
+  String get chatSendConfirmMessage => 'Отправить это сообщение в чат?';
+
+  @override
+  String get chatSendConfirmAction => 'Отправить';
+
+  @override
+  String get chatInfoRowDisableForward => 'Пересылка запрещена';
+
+  @override
+  String get chatInfoRowCopyDisabled => 'Копирование запрещено';
+
+  @override
+  String get chatInfoRowOnlyAdminCall => 'Звонить могут админы';
+
+  @override
+  String get chatInfoRowAllCanPin => 'Все могут закреплять';
+
+  @override
+  String get chatInfoRowMembersSeeLink => 'Ссылка видна участникам';
+
+  @override
+  String get chatInfoRowConfirmBeforeSend => 'Подтверждать отправку';
+
+  @override
+  String get chatInfoRowOnlyOwnerIconTitle => 'Название меняет владелец';
+
+  @override
+  String get chatInfoRowPromotedDisabled => 'Реклама отключена';
+
+  @override
+  String get chatInfoRowUserId => 'ID пользователя';
+
+  @override
   String get chatInfoRowId => 'ID чата';
 
   @override
@@ -2098,7 +2296,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get attachSheetPoll => 'Опрос';
 
   @override
-  String get attachSheetCameraComingSoon => 'Камера скоро появится';
+  String get attachSheetCameraError => 'Не удалось открыть камеру';
 
   @override
   String get attachSheetSendFileTitle => 'Отправить файл';
@@ -2165,6 +2363,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get attachSheetCamera => 'Камера';
+
+  @override
+  String get attachSheetCameraAllow => 'Разрешите камеру';
 
   @override
   String get photoEditorApplyFailed => 'Не удалось применить';
@@ -2514,4 +2715,126 @@ class AppLocalizationsRu extends AppLocalizations {
   String uploadSpeedMb(String value) {
     return '$value МБ/с';
   }
+
+  @override
+  String get savedMessagesEmptyPreview => 'Сохраните что-нибудь';
+
+  @override
+  String proxyCurrentState(String value) {
+    return 'Сейчас: $value';
+  }
+
+  @override
+  String get blacklistEmpty => 'Никто не заблокирован';
+
+  @override
+  String get blacklistLoadError => 'Не удалось загрузить чёрный список';
+
+  @override
+  String get videoEditorQualityLow => 'Небольшой размер';
+
+  @override
+  String get videoEditorQualityHigh => 'Высокое качество';
+
+  @override
+  String get videoEditorCaptionHint => 'Добавить подпись...';
+
+  @override
+  String get videoEditorMuteTooltip => 'Отправить без звука';
+
+  @override
+  String get videoEditorProcessing => 'Обработка видео…';
+
+  @override
+  String get videoEditorExportFailed => 'Не удалось обработать видео';
+
+  @override
+  String get videoEditorFrameFailed => 'Не удалось получить кадр';
+
+  @override
+  String get videoEditorQualityTooltip => 'Качество';
+
+  @override
+  String get webPushTitle => 'Уведомления на iOS';
+
+  @override
+  String get webPushIntro =>
+      'На iOS у Комета нет обычных пушей: Apple выдаёт токен уведомлений только приложениям, подписанным сертификатом разработчика, а sideload-сборка такого не получает.\n\nОбход — веб-приложение на экране «Домой». Уведомления шлёт сам сервер MAX через Apple, а показывает их отдельная иконка.\n\nДля этого нужна веб-сессия. Комет создаст её и подтвердит сам, с этого же устройства — вводить номер и код не придётся.';
+
+  @override
+  String get webPushConfirm => 'Продолжить';
+
+  @override
+  String get webPushPasswordExplainer =>
+      'На аккаунте включена двухфакторная защита.';
+
+  @override
+  String webPushPasswordHintLabel(String hint) {
+    return 'Подсказка: $hint';
+  }
+
+  @override
+  String get webPushPasswordHint => 'Пароль';
+
+  @override
+  String get webPushInstallTitle => 'Установите приложение';
+
+  @override
+  String get webPushInstallBody =>
+      'Откройте push.komet.pw в Safari, добавьте на экран «Домой» и запустите появившуюся иконку. Из вкладки браузера уведомления не работают — так устроена iOS.\n\nВ приложении разрешите уведомления, создайте подписку и нажмите «Открыть Комет». Дальше подписка зарегистрируется сама.';
+
+  @override
+  String get webPushLinkedTitle => 'Уведомления подключены';
+
+  @override
+  String get webPushLinkedBody =>
+      'Подписка зарегистрирована на сервере. Не удаляйте иконку с экрана «Домой» — вместе с ней пропадут уведомления.\n\nЕсли пуши перестанут приходить, откройте приложение и свяжите заново: Apple иногда меняет адрес подписки.';
+
+  @override
+  String get webPushOpenSite => 'Открыть push.komet.pw';
+
+  @override
+  String get webPushSignOut => 'Отключить уведомления';
+
+  @override
+  String get webPushLinked => 'Уведомления подключены';
+
+  @override
+  String webPushLinkFailed(String error) {
+    return 'Не удалось подключить уведомления: $error';
+  }
+
+  @override
+  String get webPushNotAuthorized =>
+      'Сначала войдите в разделе «Уведомления через PWA»';
+
+  @override
+  String get webPushConnect => 'Подключить уведомления';
+
+  @override
+  String get webPushWaitingBody =>
+      'Комет подтверждает вход веб-сессии с этого устройства. Обычно занимает несколько секунд.';
+
+  @override
+  String get webPushNeedsOnline =>
+      'Нет связи с сервером. Дождитесь подключения и попробуйте снова.';
+
+  @override
+  String get webPushSignOutConfirm =>
+      'Веб-сессия будет завершена и исчезнет из списка устройств. Чтобы вернуть уведомления, подключение придётся пройти заново.';
+
+  @override
+  String get webPushSignOutAction => 'Отключить';
+
+  @override
+  String get webPushStatusService => 'Сервис';
+
+  @override
+  String get webPushStatusToken => 'Токен';
+
+  @override
+  String get webPushStatusLinkedAt => 'Привязан';
+
+  @override
+  String get webPushStatusDevice => 'Устройство';
 }

@@ -20,8 +20,22 @@ bool hasMiniAppOption(Set<String>? options) =>
 
 class WebAppLaunch {
   final String url;
+  final String? queryId;
+  final int botId;
 
-  const WebAppLaunch({required this.url});
+  const WebAppLaunch({required this.url, required this.botId, this.queryId});
+}
+
+class WebAppPhone {
+  final String phone;
+  final String hash;
+  final int authDate;
+
+  const WebAppPhone({
+    required this.phone,
+    required this.hash,
+    required this.authDate,
+  });
 }
 
 class ExternalCallbackResult {
@@ -51,18 +65,22 @@ class ExternalCallbackResult {
     }
     return null;
   }
+}
 
-  static int? _asInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '');
-  }
+int? _asInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '');
 }
 
 class WebAppModule {
   final Api _api;
 
   WebAppModule(this._api);
+
+  /// device_id сессии (опкод 6 sessionInit, с учётом спуфинга) — тот же id,
+  /// к которому сервер привязывает Цифровой ID.
+  String? get sessionDeviceId => _api.deviceId;
 
   Future<WebAppLaunch> fetchLaunch(
     int botId, {
@@ -72,9 +90,11 @@ class WebAppModule {
     if (_api.state != SessionState.online) {
       throw const WebAppUnavailable('Нет соединения с сервером');
     }
+    final normalizedStartParam =
+        (startParam != null && startParam.trim().isNotEmpty) ? startParam : null;
     final packet = await _api.sendRequest(Opcode.webAppInitData, {
       'botId': botId,
-      'startParam': ?startParam,
+      'startParam': ?normalizedStartParam,
       'chatId': ?chatId,
     });
     if (!packet.isOk) {
@@ -85,7 +105,33 @@ class WebAppModule {
     if (url == null || url.isEmpty) {
       throw const WebAppUnavailable('Сервер не вернул адрес приложения');
     }
-    return WebAppLaunch(url: url);
+    final queryId = (data is Map) ? data['query_id']?.toString() : null;
+    return WebAppLaunch(url: url, botId: botId, queryId: queryId);
+  }
+
+  Future<WebAppPhone> requestPhone(int botId) async {
+    if (_api.state != SessionState.online) {
+      throw const WebAppUnavailable('Нет соединения с сервером');
+    }
+    final packet = await _api.sendRequest(Opcode.phoneWebappShare, {
+      'botId': botId,
+    });
+    final data = packet.payload;
+    if (!packet.isOk || data is! Map) {
+      throw const WebAppUnavailable('Не удалось передать номер телефона');
+    }
+    final phone = data['phone']?.toString();
+    final hash = data['hash']?.toString();
+    final authDate = _asInt(data['authDate'] ?? data['auth_date']);
+    if (phone == null ||
+        phone.isEmpty ||
+        hash == null ||
+        hash.isEmpty ||
+        authDate == null ||
+        authDate == 0) {
+      throw const WebAppUnavailable('Сервер не вернул номер телефона');
+    }
+    return WebAppPhone(phone: phone, hash: hash, authDate: authDate);
   }
 
   Future<WebAppLaunch> fetchSferum() async {

@@ -109,7 +109,8 @@ class RichMessageController extends TextEditingController {
       return (text: src, elements: elementsForSend());
     }
 
-    final entities = [..._animoji]..sort((a, b) => a.offset.compareTo(b.offset));
+    final entities = [..._animoji]
+      ..sort((a, b) => a.offset.compareTo(b.offset));
 
     final sb = StringBuffer();
     var last = 0;
@@ -386,6 +387,9 @@ class RichMessageController extends TextEditingController {
     final ranges = _toFormatRanges();
     final baseColor = baseStyle.color;
     final quoteColor = baseColor?.withValues(alpha: 0.85);
+    final quoteBackground = baseColor == null
+        ? null
+        : (Paint()..color = baseColor.withValues(alpha: 0.12));
     final mentionColor = mentionTextColor(Theme.of(context).colorScheme);
     final segments = segmentizeFormats(content, ranges);
     final entityByOffset = {for (final e in _animoji) e.offset: e};
@@ -398,6 +402,7 @@ class RichMessageController extends TextEditingController {
         segment.formats,
         quoteColor: quoteColor,
         mentionColor: mentionColor,
+        quoteBackground: quoteBackground,
       );
       var runStart = segment.start;
       var i = segment.start;

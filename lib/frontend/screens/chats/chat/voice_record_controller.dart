@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/media/opus_ogg_encoder.dart';
 import '../../../../core/utils/haptics.dart';
+import '../../../../core/utils/screen_wake.dart';
 import '../../../widgets/custom_notification.dart';
 
 class VoiceRecordController {
@@ -112,6 +113,7 @@ class VoiceRecordController {
       _locked.value = false;
       _lockDrag.value = 0;
       _isRecording.value = true;
+      unawaited(ScreenWake.instance.acquire(this));
       FocusManager.instance.primaryFocus?.unfocus();
       Haptics.send();
       _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
@@ -131,6 +133,7 @@ class VoiceRecordController {
       }
     } catch (_) {
       _isRecording.value = false;
+      unawaited(ScreenWake.instance.release(this));
       if (isMounted()) {
         showCustomNotification(contextOf(), 'Не удалось начать запись');
       }
@@ -172,6 +175,7 @@ class VoiceRecordController {
     final rec = _recorder;
     if (rec == null) {
       _isRecording.value = false;
+      unawaited(ScreenWake.instance.release(this));
       return;
     }
 
@@ -182,6 +186,7 @@ class VoiceRecordController {
     _stopwatch.stop();
     final elapsed = _stopwatch.elapsedMilliseconds;
     _isRecording.value = false;
+    unawaited(ScreenWake.instance.release(this));
     _cancelDrag.value = 0;
     _amplitude.value = 0;
     _locked.value = false;
@@ -237,6 +242,7 @@ class VoiceRecordController {
   }
 
   void dispose() {
+    unawaited(ScreenWake.instance.release(this));
     _timer?.cancel();
     _ampSub?.cancel();
     _recorder?.dispose();

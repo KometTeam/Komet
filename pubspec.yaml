@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.5.18+18
+version: 0.5.19+19
 
 environment:
   sdk: ^3.10.4
@@ -37,7 +37,7 @@ dependencies:
   # Rust networking core (kolibri) — FFI plugin, replaces the Dart transport.
   # Published from the KometTeam/kolibri repo; the native core is compiled at
   # app build time and pulled from that repo by git tag.
-  kolibri: ^0.1.2
+  kolibri: ^0.1.4
 
   # Rust message-encryption core — Argon2id + ChaCha20-Poly1305, output encoded
   # as lowercase Cyrillic base32. Separate from kolibri: that is vendored
@@ -54,6 +54,9 @@ dependencies:
   flutter_timezone: ^5.0.1
   timezone: ^0.11.0
   file_picker: ^8.0.0
+  image_picker: ^1.1.2
+  camera: ^0.11.0
+  permission_handler: ^11.3.1
   archive: ^4.0.9
   geolocator: ^13.0.0
   photo_manager: ^3.0.0

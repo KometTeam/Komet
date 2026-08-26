@@ -26,12 +26,14 @@ import 'core/config/app_show_extra_info.dart';
 import 'core/config/app_spectrum_background.dart';
 import 'core/config/app_bubble_behavior.dart';
 import 'core/config/komet_settings.dart';
+import 'core/config/call_no_mute.dart';
 import 'core/config/debug_test.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
 import 'core/config/custom_font_service.dart';
 import 'core/config/app_message_actions_style.dart';
+import 'core/config/app_microphone.dart';
 import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
 import 'core/config/app_stories.dart';
@@ -58,6 +60,7 @@ import 'backend/modules/chats.dart';
 import 'backend/modules/comments.dart';
 import 'backend/modules/contacts.dart';
 import 'backend/modules/file_uploader.dart';
+import 'backend/modules/folders.dart';
 import 'backend/modules/messages.dart';
 import 'backend/modules/outbox.dart';
 import 'backend/modules/polls.dart';
@@ -72,6 +75,9 @@ import 'core/calls/call_bridge.dart';
 import 'core/calls/call_controller.dart';
 import 'core/links/deep_link_service.dart';
 import 'frontend/screens/calls/call_screen.dart';
+import 'core/push/fkm_controller.dart';
+import 'core/push/notification_bridge.dart';
+import 'core/share/share_intent_bridge.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/transport/tls_config.dart';
@@ -88,6 +94,7 @@ import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/liquid_glass.dart';
 import 'frontend/widgets/small_spinner.dart';
 import 'frontend/widgets/theme_reveal.dart';
+import 'frontend/widgets/floating_call_badge.dart';
 import 'frontend/widgets/floating_video_note.dart';
 
 final api = Api();
@@ -176,6 +183,7 @@ void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await initKolibri();
   DebugTest.parse(args);
+  CallNoMute.parse(args);
   _installLogCapture();
   VideoPlayerMediaKit.ensureInitialized(
     windows: true,
@@ -193,6 +201,9 @@ void main(List<String> args) async {
   }
   attachInfoCacheApi(api);
   chats.attachGlobalPushHandlers(api);
+  unawaited(FkmController.instance.init(api));
+  FoldersModule.attachGlobalPushHandlers(api);
+  TranscriptionPushHandler.attach(api);
   commentsModule.attachPushHandlers(api);
   storiesModule.attach();
   unawaited(storiesModule.loadCache());
@@ -219,6 +230,7 @@ void main(List<String> args) async {
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
   final swipeBackFuture = AppSwipeBackDesktop.load();
+  final microphoneFuture = AppMicrophone.load();
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
   final commandsFuture = AppCommands.load();
@@ -280,6 +292,7 @@ void main(List<String> args) async {
     themeScheduleFuture,
     messageActionsFuture,
     swipeBackFuture,
+    microphoneFuture,
     pranksFuture,
     storiesFuture,
     commandsFuture,
@@ -416,6 +429,8 @@ class KometAppState extends State<KometApp>
     _loginStatusSub = accountModule.loginStatusStream.listen((status) async {
       if (status == LoginStatus.success) {
         DeepLinkService.instance.markReady();
+        NotificationBridge.instance.markReady();
+        ShareIntentBridge.instance.markReady();
         unawaited(_refreshWallpaperSeed());
         CallController.instance.init(api);
         OutboxService.instance.init(api, messagesModule);
@@ -434,8 +449,12 @@ class KometAppState extends State<KometApp>
     );
     CallController.instance.appResumed = true;
     CallBridge.instance.init();
+    NotificationBridge.instance.init();
+    ShareIntentBridge.instance.init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       CallBridge.instance.checkInitialCall();
+      unawaited(NotificationBridge.instance.checkInitialChat());
+      unawaited(ShareIntentBridge.instance.checkInitialShare());
     });
 
     _sessionExpiredSub = api.sessionExpiredStream.listen((
@@ -593,6 +612,9 @@ class KometAppState extends State<KometApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     CallController.instance.appResumed = state == AppLifecycleState.resumed;
+    if (state == AppLifecycleState.inactive && CallController.instance.isBusy) {
+      unawaited(CallBridge.instance.ensureOngoing());
+    }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
@@ -602,7 +624,12 @@ class KometAppState extends State<KometApp>
     if (state != AppLifecycleState.resumed) return;
     api.wakeUp();
     SelfCheckService.instance.resume();
+    if (!CallController.instance.isBusy) {
+      unawaited(CallBridge.instance.dropOngoing());
+    }
     CallBridge.instance.checkInitialCall();
+    unawaited(NotificationBridge.instance.checkInitialChat());
+    unawaited(ShareIntentBridge.instance.checkInitialShare());
     if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
     _rescheduleSwitch();
     final next = _effectiveThemeMode;
@@ -871,12 +898,14 @@ class KometAppState extends State<KometApp>
     _themeCacheFontId = _fontId;
     _themeCacheLight = light;
     _themeCacheDark = dark;
+    final displayFont = AppDisplayFont(AppFonts.displayFamily(_fontId));
     _lightTheme = withM3ETheme(
       ThemeData(
         useMaterial3: true,
         colorScheme: light,
         pageTransitionsTheme: _appPageTransitions,
         progressIndicatorTheme: _expressiveProgressTheme,
+        extensions: [displayFont],
         textTheme: AppFonts.textTheme(
           _fontId,
           ThemeData(brightness: Brightness.light).textTheme,
@@ -889,6 +918,7 @@ class KometAppState extends State<KometApp>
         colorScheme: dark,
         pageTransitionsTheme: _appPageTransitions,
         progressIndicatorTheme: _expressiveProgressTheme,
+        extensions: [displayFont],
         textTheme: AppFonts.textTheme(
           _fontId,
           ThemeData(brightness: Brightness.dark).textTheme,
@@ -994,10 +1024,11 @@ class KometAppState extends State<KometApp>
                   child: child ?? const SizedBox.shrink(),
                   builder: (context, scale, appChild) {
                     Widget scaledChild = appChild!;
-                    if ((scale - 1.0).abs() > 0.001) {
+                    final effective = AppFonts.effectiveScale(_fontId, scale);
+                    if ((effective - 1.0).abs() > 0.001) {
                       scaledChild = MediaQuery.withClampedTextScaling(
-                        minScaleFactor: scale,
-                        maxScaleFactor: scale,
+                        minScaleFactor: effective,
+                        maxScaleFactor: effective,
                         child: scaledChild,
                       );
                     }
@@ -1015,6 +1046,9 @@ class KometAppState extends State<KometApp>
                             ),
                             const Positioned.fill(
                               child: FloatingVideoNoteLayer(),
+                            ),
+                            const Positioned.fill(
+                              child: FloatingCallBadgeLayer(),
                             ),
                             if (fpsOn) const FpsOverlayLayer(),
                           ],
@@ -1109,9 +1143,7 @@ class _StartupScreenState extends State<_StartupScreen> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: cs.surface,
-      body: Center(
-        child: SmallSpinner(size: 36, color: cs.primary),
-      ),
+      body: Center(child: SmallSpinner(size: 36, color: cs.primary)),
     );
   }
 }

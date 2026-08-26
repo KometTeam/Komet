@@ -65,9 +65,11 @@ double _pageOpacity(WidgetTester tester) => tester
 
 void main() {
   late ui.Image image;
+  late ui.Image wide;
 
   setUpAll(() async {
     image = await createTestImage(width: 4, height: 3);
+    wide = await createTestImage(width: 8, height: 2);
   });
 
   testWidgets('photo flies from the origin rect to the contained target', (
@@ -184,5 +186,42 @@ void main() {
 
     expect(find.byType(Opacity), findsNothing);
     expect(tester.getSize(find.byKey(const ValueKey('target'))).height, 500);
+  });
+
+  testWidgets('замена кадра меняет пропорции обратного перелёта', (
+    tester,
+  ) async {
+    final hero = PhotoHeroController(
+      origin: () => _origin,
+      image: RawImageProvider(image),
+    );
+    late BuildContext context;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (ctx) {
+            context = ctx;
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+
+    final navigator = Navigator.of(context);
+    navigator.push(PhotoHeroRoute<void>(hero: hero, builder: (_) => _page()));
+    await tester.pumpAndSettle();
+    hero.image.value = RawImageProvider(wide);
+    await tester.pump();
+
+    navigator.pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(_flying, findsOneWidget);
+    final size = tester.getSize(_flying);
+    expect(size.width / size.height, closeTo(4, 0.2));
+
+    await tester.pump(const Duration(milliseconds: 400));
   });
 }

@@ -8,7 +8,9 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
+import androidx.core.app.ServiceCompat
 
 object CallState {
     @Volatile
@@ -26,6 +28,9 @@ class CallForegroundService : Service() {
 
         @Volatile
         var screenShare = false
+
+        @Volatile
+        private var running: CallForegroundService? = null
 
         fun setScreenShare(ctx: Context, enabled: Boolean, caller: String) {
             screenShare = enabled
@@ -65,6 +70,12 @@ class CallForegroundService : Service() {
         fun stop(ctx: Context) {
             CallState.inCall = false
             screenShare = false
+            val service = running
+            if (service != null) {
+                service.shutdown()
+                return
+            }
+            NotificationManagerCompat.from(ctx).cancel(ONGOING_ID)
             try {
                 ctx.startService(
                     Intent(ctx, CallForegroundService::class.java).apply {
@@ -78,18 +89,25 @@ class CallForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        running = this
+    }
+
     override fun onDestroy() {
+        if (running === this) running = null
         CallState.inCall = false
         super.onDestroy()
     }
 
+    private fun shutdown() {
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
-                stopSelf()
-            }
+            ACTION_STOP -> shutdown()
             ACTION_SCREEN_SHARE -> {
                 screenShare = intent.getBooleanExtra(EXTRA_SCREEN_SHARE, false)
                 val caller = intent.getStringExtra(CallConst.EXTRA_CALLER) ?: "Звонок"

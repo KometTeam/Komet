@@ -20,6 +20,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
+import '../../../core/config/app_shape.dart';
 
 enum _EnvState { loading, notConfigured, ready }
 
@@ -416,9 +417,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                   horizontal: 32,
                   vertical: 14,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                shape: AppShape.buttonBorder,
               ),
               child: _isCreatingEnv
                   ? SmallSpinner(size: 18, color: cs.onPrimary)
@@ -608,9 +607,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                   horizontal: 32,
                   vertical: 14,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                shape: AppShape.buttonBorder,
               ),
               child: Text(
                 l10n.cloudStorageUpload,
@@ -1037,7 +1034,9 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppShape.sheet),
+        ),
       ),
       padding: EdgeInsets.fromLTRB(
         24,
@@ -1199,7 +1198,9 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppShape.sheet),
+        ),
       ),
       padding: EdgeInsets.fromLTRB(
         24,
@@ -1248,9 +1249,7 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
             onPressed: _sending ? null : _submit,
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: AppShape.buttonBorder,
             ),
             child: _sending
                 ? SmallSpinner(size: 18, color: cs.onPrimary)

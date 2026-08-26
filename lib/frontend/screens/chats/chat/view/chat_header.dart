@@ -16,6 +16,7 @@ import 'package:komet/frontend/widgets/online_dot.dart';
 import 'package:komet/frontend/widgets/profile_hero.dart';
 import 'package:komet/main.dart' show storiesModule;
 import 'package:komet/models/story.dart';
+import '../../../../../core/config/app_fonts.dart';
 
 class ChatHeaderRow extends StatelessWidget {
   final bool glossy;
@@ -85,7 +86,7 @@ class ChatHeaderRow extends StatelessWidget {
       color: cs.onSurface,
       fontSize: 17,
       fontWeight: FontWeight.w600,
-      fontFamily: 'Outfit',
+      fontFamily: displayFontOf(context),
     );
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
@@ -152,7 +153,7 @@ class ChatHeaderRow extends StatelessWidget {
                                   color: cs.onPrimaryContainer,
                                   fontSize: d * 0.36,
                                   fontWeight: FontWeight.w600,
-                                  fontFamily: 'Outfit',
+                                  fontFamily: displayFontOf(context),
                                 ),
                               ),
                             ),
@@ -270,7 +271,7 @@ class ChatHeaderRow extends StatelessWidget {
       color: cs.onSurface,
       fontSize: 16,
       fontWeight: FontWeight.w600,
-      fontFamily: 'Outfit',
+      fontFamily: displayFontOf(context),
     );
     return Row(
       children: [
@@ -405,7 +406,10 @@ class ChatHeaderRow extends StatelessWidget {
     );
   }
 
-  int get _storyOwnerId => chatType == 'DIALOG' ? chatId ^ myId : chatId;
+  bool get _isSavedMessages => chatId == 0;
+
+  int get _storyOwnerId =>
+      chatType == 'DIALOG' ? (_isSavedMessages ? 0 : chatId ^ myId) : chatId;
 
   Widget _heroAvatar(
     double size,
@@ -468,7 +472,8 @@ class ChatHeaderRow extends StatelessWidget {
 
   Widget _withOnlineDot(ColorScheme cs, Widget avatar, {double dotSize = 12}) {
     final otherId = chatId ^ myId;
-    final showDot = chatType == 'DIALOG' && myId != 0 && otherId > 0;
+    final showDot =
+        chatType == 'DIALOG' && myId != 0 && otherId > 0 && !_isSavedMessages;
     return Stack(
       clipBehavior: Clip.none,
       children: [

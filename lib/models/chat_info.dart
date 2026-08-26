@@ -23,6 +23,14 @@ class ChatInfo {
   bool isAdmin(int id) => adminIds.contains(id);
   bool isOwner(int id) => owner != null && id == owner;
 
+  bool option(String name) {
+    final opts = raw['options'];
+    return opts is Map && opts[name] == true;
+  }
+
+  bool canSeeInviteLink(int id) =>
+      isAdmin(id) || isOwner(id) || option('MEMBERS_CAN_SEE_PRIVATE_LINK');
+
   String? adminAlias(int id) {
     final source = raw['adminParticipants'];
     if (source is! Map) return null;

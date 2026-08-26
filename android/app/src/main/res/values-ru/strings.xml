@@ -1,3 +1,13 @@
 <resources>
     <string name="upload_channel_name">Отправка медиа</string>
+    <string name="fkm_channel_name">Сервис уведомлений</string>
+    <string name="fkm_channel_description">Держит фоновое соединение с сервером</string>
+    <string name="fkm_title">Komet · сервис уведомлений</string>
+    <string name="fkm_status_active">Соединение активно</string>
+    <string name="fkm_status_inactive">Соединение не активно</string>
+    <string name="fkm_status_line">%1$s · принято %2$d</string>
+    <string name="fkm_explain">Это уведомление держит фоновое соединение с сервером, чтобы сообщения приходили без гугловых пушей. Убрать его можно, выключив FKM — кнопкой ниже или в Настройки → Уведомления → FKM.</string>
+    <string name="fkm_disable">Выключить</string>
+    <string name="notif_deleted_prefix">Удалено:</string>
+    <string name="share_target_label">Отправить в чат</string>
 </resources>

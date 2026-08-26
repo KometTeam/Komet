@@ -11,6 +11,7 @@ import '../../core/storage/app_database.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
+import '../../models/login_info.dart';
 import 'banners.dart';
 import 'chats.dart';
 import 'complaints.dart';
@@ -487,7 +488,7 @@ class AccountModule {
     final data = _requireMapPayload(packet, 'checkPassword');
 
     if (data['error'] != null) {
-      throw Exception('checkPassword: неверный пароль');
+      throw const WrongPasswordException();
     }
 
     final tokenAttrs = data['tokenAttrs'];
@@ -693,41 +694,12 @@ class AccountModule {
   }
 
   Future<void> _saveLoginInfo(Map<dynamic, dynamic> data, int accountId) async {
-    final contact = data['profile']?['contact'] as Map?;
-    final videoChatHistory = data['videoChatHistory'];
-    final chats = data['chats'] as List?;
     final config = data['config'] as Map?;
     final serverConfig = config?['server'] as Map?;
-    final userConfig = config?['user'] as Map?;
     if (serverConfig != null) {
       await _persistEntryBannerApps(accountId, serverConfig);
     }
-    final yMap = serverConfig?['y-map'] as Map?;
-    final whiteListLinks = serverConfig?['white-list-links'] as List?;
-    final fileUploadUnsupported =
-        serverConfig?['file-upload-unsupported-types'] as List?;
-    final time = data['time'] as int?;
-
-    final info = {
-      'registrationTime': contact?['registrationTime'],
-      'country': contact?['country'],
-      'videoChatHistory': videoChatHistory,
-      'updateTime': contact?['updateTime'],
-      'id': contact?['id'],
-      'chatMarker': chats != null && chats.isNotEmpty
-          ? _extractChatMarker(chats.cast<Map>())
-          : null,
-      'time': time,
-      'server': serverConfig != null
-          ? _extractServerInfo(
-              serverConfig,
-              yMap,
-              whiteListLinks,
-              fileUploadUnsupported,
-            )
-          : null,
-      'user': userConfig != null ? _extractUserConfig(userConfig) : null,
-    };
+    final info = LoginInfo.fromPayload(data);
 
     await AppDatabase.saveLoginInfo(accountId, jsonEncode(info));
   }
@@ -758,86 +730,6 @@ class AccountModule {
         entry.value.toString(),
       );
     }
-  }
-
-  Map<String, dynamic> _extractChatMarker(List<Map> chats) {
-    int? latestTime;
-    for (final chat in chats) {
-      final lastEventTime = chat['lastEventTime'] as int?;
-      if (lastEventTime != null &&
-          (latestTime == null || lastEventTime > latestTime)) {
-        latestTime = lastEventTime;
-      }
-    }
-    return {'chatMarker': latestTime};
-  }
-
-  Map<String, dynamic> _extractServerInfo(
-    Map serverConfig,
-    Map? yMap,
-    List? whiteListLinks,
-    List? fileUploadUnsupported,
-  ) {
-    return {
-      'account-removal-enabled': serverConfig['account-removal-enabled'],
-      'image-size': serverConfig['image-size'],
-      'gce': serverConfig['gce'],
-      'gcce': serverConfig['gcce'],
-      'max-msg-length': serverConfig['max-msg-length'],
-      'quotes-enabled': serverConfig['quotes-enabled'],
-      'calls-endpoint': serverConfig['calls-endpoint'],
-      'send-location-enabled': serverConfig['send-location-enabled'],
-      'lgce': serverConfig['lgce'],
-      'wud': serverConfig['wud'],
-      'video-msg-enabled': serverConfig['video-msg-enabled'],
-      'grse': serverConfig['grse'],
-      'edit-timeout': serverConfig['edit-timeout'],
-      'image-quality': serverConfig['image-quality'],
-      'unsafe-files-alert': serverConfig['unsafe-files-alert'],
-      'account-nickname-enabled': serverConfig['account-nickname-enabled'],
-      'mentions_entity_names_limit':
-          serverConfig['mentions_entity_names_limit'],
-      'reactions-enabled': serverConfig['reactions-enabled'],
-      'y-map': yMap != null
-          ? {
-              'tile': yMap['tile'],
-              'geocoder': yMap['geocoder'],
-              'static': yMap['static'],
-            }
-          : null,
-      'white-list-links': whiteListLinks,
-      'file-upload-unsupported-types': fileUploadUnsupported,
-    };
-  }
-
-  Map<String, dynamic> _extractUserConfig(Map userConfig) {
-    return {
-      'CHATS_PUSH_NOTIFICATION': userConfig['CHATS_PUSH_NOTIFICATION'],
-      'PUSH_DETAILS': userConfig['PUSH_DETAILS'],
-      'PUSH_SOUND': userConfig['PUSH_SOUND'],
-      'PHONE_NUMBER_PRIVACY': userConfig['PHONE_NUMBER_PRIVACY'],
-      'INACTIVE_TTL': userConfig['INACTIVE_TTL'],
-      'SHOW_READ_MARK': userConfig['SHOW_READ_MARK'],
-      'AUDIO_TRANSCRIPTION_ENABLED': userConfig['AUDIO_TRANSCRIPTION_ENABLED'],
-      'SEARCH_BY_PHONE': userConfig['SEARCH_BY_PHONE'],
-      'INCOMING_CALL': userConfig['INCOMING_CALL'],
-      'DOUBLE_TAP_REACTION_DISABLED':
-          userConfig['DOUBLE_TAP_REACTION_DISABLED'],
-      'SAFE_MODE_NO_PIN': userConfig['SAFE_MODE_NO_PIN'],
-      'CHATS_PUSH_SOUND': userConfig['CHATS_PUSH_SOUND'],
-      'DOUBLE_TAP_REACTION_VALUE': userConfig['DOUBLE_TAP_REACTION_VALUE'],
-      'FAMILY_PROTECTION': userConfig['FAMILY_PROTECTION'],
-      'HIDDEN': userConfig['HIDDEN'],
-      'CHATS_INVITE': userConfig['CHATS_INVITE'],
-      'PUSH_NEW_CONTACTS': userConfig['PUSH_NEW_CONTACTS'],
-      'UNSAFE_FILES': userConfig['UNSAFE_FILES'],
-      'DONT_DISTURB_UNTIL': userConfig['DONT_DISTURB_UNTIL'],
-      'ALT_KEYBOARD': userConfig['ALT_KEYBOARD'],
-      'CONTENT_LEVEL_ACCESS': userConfig['CONTENT_LEVEL_ACCESS'],
-      'STICKERS_SUGGEST': userConfig['STICKERS_SUGGEST'],
-      'SAFE_MODE': userConfig['SAFE_MODE'],
-      'M_CALL_PUSH_NOTIFICATION': userConfig['M_CALL_PUSH_NOTIFICATION'],
-    };
   }
 
   Future<RequestCodeResult> _requestCodeInternal(

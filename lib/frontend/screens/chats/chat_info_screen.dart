@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
@@ -20,6 +22,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_members_store.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/logger.dart';
+import '../../../core/utils/route_settle.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/chat_info.dart';
@@ -48,6 +51,7 @@ import '../stories/story_viewer_screen.dart';
 import 'chat_screen.dart';
 import 'group_invite_sheets.dart';
 import 'profile_action_sheets.dart';
+import '../../../core/config/app_fonts.dart';
 
 class _MemberInfo {
   final int id;
@@ -167,8 +171,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   bool _avatarHistoryBusy = false;
   bool _avatarHistoryLoaded = false;
 
+  late final RouteSettle _routeSettle = RouteSettle(isMounted: () => mounted);
+  bool _rebuildQueued = false;
+
   double _headerDelta = 0;
   bool _expandArmed = false;
+  bool _headerDragging = false;
   bool _headerEverExpanded = false;
 
   @override
@@ -181,19 +189,42 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     _load();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _routeSettle.bind(context);
+  }
+
   int? get _memberCount => ChatMembersStore.instance.count(widget.chatId);
 
-  void _onMemberCountChanged() {
-    if (mounted) setState(() {});
-  }
+  void _onMemberCountChanged() => _loadedRebuild();
 
   void _onStoriesChanged() {
     if (!mounted) return;
-    setState(_refreshUnreadStories);
+    _loadedUpdate(_refreshUnreadStories);
+  }
+
+  void _loadedRebuild() {
+    if (_routeSettle.settled) {
+      if (mounted) setState(() {});
+      return;
+    }
+    if (_rebuildQueued) return;
+    _rebuildQueued = true;
+    _routeSettle.run(() {
+      _rebuildQueued = false;
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _loadedUpdate(VoidCallback mutation) {
+    mutation();
+    _loadedRebuild();
   }
 
   @override
   void dispose() {
+    _routeSettle.dispose();
     storiesModule.storiesChanged.removeListener(_onStoriesChanged);
     ChatMembersStore.instance
         .listenable(widget.chatId)
@@ -319,7 +350,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         unawaited(_loadAvatarHistory(_otherId!));
       }
     } else if (info == null) {
-      setState(() => _isLoading = false);
+      _loadedUpdate(() => _isLoading = false);
       return;
     } else if (widget.chatType == 'CHAT') {
       _contactIds = (await AppDatabase.loadContactIds(_myId)).toSet();
@@ -328,7 +359,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
 
     if (mounted) {
-      setState(() {
+      _loadedUpdate(() {
         _isLoading = false;
         if (_selectedTab.isEmpty && _tabs.isNotEmpty) {
           _selectedTab = _initialTabLabel() ?? _tabs.first;
@@ -340,7 +371,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   Future<void> _loadBlockedState(int peerId) async {
     final blocked = await ContactsModule.isBlocked(api, peerId);
     if (!mounted || blocked == _blocked) return;
-    setState(() => _blocked = blocked);
+    _loadedUpdate(() => _blocked = blocked);
   }
 
   String? _initialTabLabel() {
@@ -434,7 +465,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   Future<void> _fetchMembersPage({bool initial = false}) async {
     if (_membersLoading || _membersEnd) return;
     _membersLoading = true;
-    if (!initial && mounted) setState(() {});
+    if (!initial) _loadedRebuild();
 
     final page = await chats.getChatMembers(
       api,
@@ -445,7 +476,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     if (!mounted) return;
 
     if (page == null) {
-      if (!initial) setState(() {});
+      if (!initial) _loadedRebuild();
       return;
     }
 
@@ -475,7 +506,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
     _memberMarker = page.marker;
 
-    if (!initial) setState(() {});
+    if (!initial) _loadedRebuild();
   }
 
   bool _revealMoreMembers() {
@@ -551,9 +582,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     _membersLoading = false;
     _memberRenderLimit = _memberRenderChunk;
     _rebuildMembers();
-    if (mounted) setState(() {});
+    _loadedRebuild();
     await _fetchMembersPage(initial: true);
-    if (mounted) setState(() {});
+    _loadedRebuild();
   }
 
   @override
@@ -588,9 +619,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             : collapsedH;
         final delta = expandedH - collapsedH;
         _syncHeaderDelta(delta);
-        final controller = _bodyScrollController ??=
-            (ScrollController(initialScrollOffset: delta)
-              ..addListener(_onBodyScroll));
+        final controller = _bodyScrollController ??= (ScrollController(
+          initialScrollOffset: delta,
+        )..addListener(_onBodyScroll));
 
         return NotificationListener<ScrollNotification>(
           onNotification: (n) => _onHeaderScrollNotification(n, delta),
@@ -645,11 +676,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   bool _onHeaderScrollNotification(ScrollNotification n, double delta) {
     if (n.depth != 0) return false;
     if (n is ScrollStartNotification) {
+      _headerDragging = n.dragDetails != null;
       if (n.dragDetails != null) {
         _expandArmed = delta > 0 && n.metrics.pixels <= delta + 8;
       }
     } else if (n is ScrollEndNotification) {
-      _snapHeader(delta);
+      if (_headerDragging) {
+        _headerDragging = false;
+        _snapHeader(delta);
+      }
     }
     return false;
   }
@@ -657,12 +692,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   void _snapHeader(double delta) {
     final c = _bodyScrollController;
     if (c == null || !c.hasClients || delta <= 0) return;
+    final collapsed = math.min(delta, c.position.maxScrollExtent);
     final offset = c.offset;
-    if (offset <= 0 || offset >= delta) return;
-    final target = (offset < delta / 2 ? 0.0 : delta).clamp(
-      0.0,
-      c.position.maxScrollExtent,
-    );
+    if (offset <= 0 || offset >= collapsed) return;
+    final target = offset < collapsed / 2 ? 0.0 : collapsed;
     if ((target - offset).abs() < 1) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !c.hasClients) return;
@@ -794,7 +827,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
                           : SegmentedRingPainter(
                               total: _storyPreview!.totalCount,
                               read: _storyPreview!.readCount,
-                              unreadColors: [cs.primary, cs.tertiary, cs.primary],
+                              unreadColors: [
+                                cs.primary,
+                                cs.tertiary,
+                                cs.primary,
+                              ],
                               readColor: cs.outlineVariant,
                               strokeWidth: 3.4,
                             ),
@@ -809,7 +846,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
                 child: Row(
                   children: [
                     IconButton(
-                      icon: Icon(Icons.arrow_back, color: iconColor),
+                      icon: Icon(Symbols.arrow_back, color: iconColor),
                       onPressed: () => Navigator.pop(context),
                     ),
                     Expanded(
@@ -958,13 +995,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           if (interactive && _avatarHover) ...[
             _avatarArrow(
               alignment: Alignment.centerLeft,
-              icon: Icons.chevron_left,
+              icon: Symbols.chevron_left,
               enabled: _avatarIndex > 0,
               onTap: () => _stepAvatar(-1),
             ),
             _avatarArrow(
               alignment: Alignment.centerRight,
-              icon: Icons.chevron_right,
+              icon: Symbols.chevron_right,
               enabled: _avatarIndex < pages.length - 1,
               onTap: () => _stepAvatar(1),
             ),
@@ -1085,11 +1122,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
               '${pluralRu(unread.length, 'история', 'истории', 'историй')}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
-                fontFamily: 'Outfit',
+                fontFamily: displayFontOf(context),
               ),
             ),
           ),
@@ -1147,12 +1184,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     final color = iconColor ?? cs.onSurface;
     if (entries.isEmpty) {
       return IconButton(
-        icon: Icon(Icons.more_vert, color: color),
+        icon: Icon(Symbols.more_vert, color: color),
         onPressed: null,
       );
     }
     return PopupMenuButton<VoidCallback>(
-      icon: Icon(Icons.more_vert, color: color),
+      icon: Icon(Symbols.more_vert, color: color),
       onSelected: (action) => action(),
       itemBuilder: (_) => [
         for (final entry in entries)
@@ -1181,7 +1218,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   _moreMenuEntries() {
     if (_isLoading) return const [];
     final entries =
-        <({IconData icon, String label, bool destructive, VoidCallback onTap})>[];
+        <
+          ({IconData icon, String label, bool destructive, VoidCallback onTap})
+        >[];
 
     if (widget.chatType == 'DIALOG') {
       if (_isContact) {
@@ -1270,7 +1309,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       color: textColor,
       fontSize: lerpDouble(22, 25, t)!,
       fontWeight: FontWeight.w700,
-      fontFamily: 'Outfit',
+      fontFamily: displayFontOf(context),
     );
     final custom = _customName;
     final real = _realName;
@@ -1377,8 +1416,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   Widget _buildActions(ColorScheme cs) {
     final muteBtn = (
-      icon: Icons.notifications,
-      slashedIcon: Icons.notifications_off,
+      icon: Symbols.notifications,
+      slashedIcon: Symbols.notifications_off,
       slashed: _isMuted,
       label: _isMuted
           ? l10n.chatInfoActionMuted
@@ -1386,14 +1425,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       onTap: _muteBusy ? null : _toggleMute,
     );
     final chatBtn = (
-      icon: Icons.chat_bubble,
+      icon: Symbols.chat_bubble,
       slashedIcon: null,
       slashed: false,
       label: l10n.contactProfileActionChat,
       onTap: _openChat,
     );
     final leaveBtn = (
-      icon: Icons.exit_to_app,
+      icon: Symbols.exit_to_app,
       slashedIcon: null,
       slashed: false,
       label: l10n.chatInfoActionLeave,
@@ -1416,7 +1455,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         muteBtn,
         if (!_isBot)
           (
-            icon: Icons.call,
+            icon: Symbols.call,
             slashedIcon: null,
             slashed: false,
             label: l10n.contactProfileActionCall,
@@ -1526,7 +1565,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     showCustomNotification(
       context,
       error ??
-          (muted ? l10n.chatInfoNotificationsOn : l10n.chatInfoNotificationsOff),
+          (muted
+              ? l10n.chatInfoNotificationsOn
+              : l10n.chatInfoNotificationsOff),
     );
   }
 
@@ -1549,8 +1590,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     if (active != null) {
       await navigator.push(
         MaterialPageRoute(
-          builder: (_) =>
-              CallScreen(name: _customName, avatarUrl: avatarUrl, session: active),
+          builder: (_) => CallScreen(
+            name: _customName,
+            avatarUrl: avatarUrl,
+            session: active,
+          ),
         ),
       );
       return;
@@ -1819,8 +1863,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         }
       }
     } else {
-      final link = _chatInfo?.link;
-      if (link != null && link.isNotEmpty) {
+      final info = _chatInfo;
+      final link = info?.link;
+      if (link != null &&
+          link.isNotEmpty &&
+          (info?.canSeeInviteLink(_myId) ?? false)) {
         items.add(_linkCard(cs, link));
       }
       final desc = _chatInfo?.description;
@@ -1903,13 +1950,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             ),
           ),
           IconButton(
-            icon: Icon(Icons.qr_code_2, color: cs.primary, size: 22),
+            icon: Icon(Symbols.qr_code_2, color: cs.primary, size: 22),
             onPressed: () {},
           ),
         ],
       ),
     );
   }
+
+  static const Duration _descRevealDuration = Duration(milliseconds: 260);
+  static const Curve _descRevealCurve = Curves.easeOutCubic;
 
   Widget _collapsibleDescCard(ColorScheme cs, String desc) {
     const int collapsedLines = 3;
@@ -1930,23 +1980,45 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 4),
-            FormattedMessageText(
-              text: desc,
-              ranges: const [],
-              entityMode: TextEntityMode.copy,
-              style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4),
-              maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
-              overflow: (_descExpanded || !isLong)
-                  ? null
-                  : TextOverflow.ellipsis,
+            AnimatedSize(
+              duration: _descRevealDuration,
+              curve: _descRevealCurve,
+              alignment: Alignment.topLeft,
+              child: FormattedMessageText(
+                text: desc,
+                ranges: const [],
+                entityMode: TextEntityMode.copy,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 15,
+                  height: 1.4,
+                ),
+                maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
+                overflow: (_descExpanded || !isLong)
+                    ? null
+                    : TextOverflow.ellipsis,
+              ),
             ),
             if (isLong) ...[
               const SizedBox(height: 6),
               GestureDetector(
-                onTap: () => setState(() => _descExpanded = !_descExpanded),
-                child: Text(
-                  _descExpanded ? l10n.chatInfoCollapse : l10n.chatInfoShowMore,
-                  style: TextStyle(color: cs.primary, fontSize: 13),
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  Haptics.tap();
+                  setState(() => _descExpanded = !_descExpanded);
+                },
+                child: AnimatedTextSwap(
+                  showAlternate: _descExpanded,
+                  duration: _descRevealDuration,
+                  curve: _descRevealCurve,
+                  alternate: Text(
+                    l10n.chatInfoCollapse,
+                    style: TextStyle(color: cs.primary, fontSize: 13),
+                  ),
+                  child: Text(
+                    l10n.chatInfoShowMore,
+                    style: TextStyle(color: cs.primary, fontSize: 13),
+                  ),
                 ),
               ),
             ],
@@ -2046,7 +2118,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         return _buildPlaceholder(
           cs,
           l10n.chatInfoEmptyGeneralChats,
-          Icons.group,
+          Symbols.group,
         );
       }
       return CommonChatsTab(
@@ -2060,7 +2132,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         cs,
         SharedContentKind.media,
         l10n.chatInfoEmptyMedia,
-        Icons.photo_library,
+        Symbols.photo_library,
       );
     }
     if (_selectedTab == l10n.chatInfoTabFiles) {
@@ -2068,7 +2140,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         cs,
         SharedContentKind.files,
         l10n.chatInfoEmptyFiles,
-        Icons.description,
+        Symbols.description,
       );
     }
     if (_selectedTab == l10n.chatInfoTabVoice) {
@@ -2076,7 +2148,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         cs,
         SharedContentKind.voice,
         l10n.chatInfoEmptyVoice,
-        Icons.mic,
+        Symbols.mic,
       );
     }
     if (_selectedTab == l10n.chatInfoTabLinks) {
@@ -2084,7 +2156,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         cs,
         SharedContentKind.links,
         l10n.chatInfoEmptyLinks,
-        Icons.link,
+        Symbols.link,
       );
     }
     return const SizedBox.shrink();
@@ -2187,7 +2259,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         children: [
           _memberAction(
             cs,
-            Icons.person_add,
+            Symbols.person_add,
             l10n.chatInfoAddMember,
             _openAddMembers,
           ),
@@ -2195,7 +2267,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             _listDivider(cs),
             _memberAction(
               cs,
-              Icons.link,
+              Symbols.link,
               l10n.chatInfoInviteByLink,
               () => _openInviteLink(_inviteLink!),
             ),
@@ -2232,7 +2304,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Icon(Icons.expand_more, color: cs.primary, size: 26),
+            Icon(Symbols.expand_more, color: cs.primary, size: 26),
             const SizedBox(width: 14),
             Text(
               l10n.chatInfoShowMore,
@@ -2480,6 +2552,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     add(l10n.chatInfoRowId, chat['id']);
 
     if (type == 'DIALOG') {
+      add(l10n.chatInfoRowUserId, _contactData?.raw['id'] ?? _otherId);
       add(l10n.chatInfoRowCreated, chat['created'], tsFormat: true);
       add(l10n.chatInfoRowModified, chat['modified'], tsFormat: true);
       add(l10n.callInfoStatus, chat['status']);
@@ -2508,6 +2581,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       final opts = chat['options'] as Map?;
       add(l10n.chatInfoRowOfficialGroup, opts?['OFFICIAL'] as bool?);
       add(l10n.chatInfoRowSignAdmin, opts?['SIGN_ADMIN'] as bool?);
+      _addChatOptions(add, opts);
       add(l10n.callInfoStatus, chat['status']);
     }
 
@@ -2524,6 +2598,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         l10n.chatInfoRowOnlyAdmin,
         opts?['ONLY_ADMIN_CAN_ADD_MEMBER'] as bool?,
       );
+      _addChatOptions(add, opts);
       add(l10n.callInfoStatus, chat['status']);
     }
 
@@ -2569,6 +2644,36 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             ],
         ],
       ),
+    );
+  }
+
+  void _addChatOptions(
+    void Function(String label, dynamic val, {bool tsFormat}) add,
+    Map? opts,
+  ) {
+    if (opts == null) return;
+    add(l10n.chatInfoRowDisableForward, opts['DISABLE_FORWARD'] as bool?);
+    add(
+      l10n.chatInfoRowCopyDisabled,
+      opts['MESSAGE_COPY_NOT_ALLOWED'] as bool?,
+    );
+    add(l10n.chatInfoRowOnlyAdminCall, opts['ONLY_ADMIN_CAN_CALL'] as bool?);
+    add(l10n.chatInfoRowAllCanPin, opts['ALL_CAN_PIN_MESSAGE'] as bool?);
+    add(
+      l10n.chatInfoRowMembersSeeLink,
+      opts['MEMBERS_CAN_SEE_PRIVATE_LINK'] as bool?,
+    );
+    add(
+      l10n.chatInfoRowConfirmBeforeSend,
+      opts['CONFIRM_BEFORE_SEND'] as bool?,
+    );
+    add(
+      l10n.chatInfoRowOnlyOwnerIconTitle,
+      opts['ONLY_OWNER_CAN_CHANGE_ICON_TITLE'] as bool?,
+    );
+    add(
+      l10n.chatInfoRowPromotedDisabled,
+      opts['PROMOTED_CONTENT_DISABLED'] as bool?,
     );
   }
 
@@ -2646,6 +2751,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
   }
 
+  Future<void> _copyInfoValue(String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    Haptics.tap();
+    showCustomNotification(context, l10n.msgActionsCopied);
+  }
+
   Widget _infoRow(
     ColorScheme cs,
     String label,
@@ -2658,22 +2770,26 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
-                ),
-                Text(
-                  value,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onLongPress: () => unawaited(_copyInfoValue(value)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
                   ),
-                ),
-              ],
+                  Text(
+                    value,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           ?trailing,

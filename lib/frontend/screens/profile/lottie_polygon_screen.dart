@@ -3,6 +3,7 @@ import 'package:lottie/lottie.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/config/app_animations.dart';
+import '../../../core/config/app_fonts.dart';
 
 class LottiePolygonScreen extends StatelessWidget {
   const LottiePolygonScreen({super.key});
@@ -32,7 +33,7 @@ class LottiePolygonScreen extends StatelessWidget {
         title: Text(
           'Lottie полигон',
           style: TextStyle(
-            fontFamily: 'Outfit',
+            fontFamily: displayFontOf(context),
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: cs.onSurface,
@@ -47,9 +48,7 @@ class LottiePolygonScreen extends StatelessWidget {
           crossAxisCount: 3,
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
-          children: [
-            for (final entry in _entries) _PolygonTile(entry: entry),
-          ],
+          children: [for (final entry in _entries) _PolygonTile(entry: entry)],
         ),
       ),
     );
@@ -113,14 +112,10 @@ class _PolygonTileState extends State<_PolygonTile>
                   fit: BoxFit.contain,
                   delegates: LottieDelegates(
                     values: [
-                      ValueDelegate.color(
-                        const ['**'],
-                        value: cs.onSurface,
-                      ),
-                      ValueDelegate.strokeColor(
-                        const ['**'],
-                        value: cs.onSurface,
-                      ),
+                      ValueDelegate.color(const ['**'], value: cs.onSurface),
+                      ValueDelegate.strokeColor(const [
+                        '**',
+                      ], value: cs.onSurface),
                     ],
                   ),
                   onLoaded: (composition) {

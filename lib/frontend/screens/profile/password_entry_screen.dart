@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart' show accountModule;
-import '../../../backend/modules/account.dart' show TwoFactorDetails;
 import '../../../core/storage/app_database.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/animated_slash_icon.dart';
@@ -9,6 +8,15 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/primary_loading_button.dart';
 import '../../widgets/small_spinner.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
+import '../../../backend/modules/account/account_models.dart';
+
+
+String _passwordErrorText(Object error, AppLocalizations l10n) =>
+    error is WrongPasswordException
+        ? l10n.passwordEntryWrongPassword
+        : l10n.devicesGenericError('$error');
 
 class PasswordEntryScreen extends StatefulWidget {
   const PasswordEntryScreen({super.key});
@@ -54,12 +62,13 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
         _details = details;
       });
       _passwordController.clear();
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(
-          () => _errorMessage = AppLocalizations.of(
-            context,
-          )!.passwordEntryWrongPassword,
+          () => _errorMessage = _passwordErrorText(
+            e,
+            AppLocalizations.of(context)!,
+          ),
         );
       }
     } finally {
@@ -74,6 +83,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
       return await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
+          shape: AppShape.dialogBorder,
           title: Text(l10n.passwordEntryConfirmTitle),
           content: TextField(
             controller: controller,
@@ -189,7 +199,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               color: cs.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
         ],
@@ -390,7 +400,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               ),
               _buildActionRow(
                 cs,
-                icon: Icons.email_outlined,
+                icon: Symbols.mail,
                 label: l10n.passwordEntryChangeEmailAction,
                 isLast: false,
                 onTap: () => _openWithPassword(
@@ -403,7 +413,7 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
               ),
               _buildActionRow(
                 cs,
-                icon: Icons.delete_outline,
+                icon: Symbols.delete,
                 label: l10n.passwordEntryDeleteAction,
                 isLast: true,
                 textColor: cs.error,
@@ -478,7 +488,9 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
           child: InkWell(
             onTap: onTap,
             borderRadius: isLast
-                ? const BorderRadius.vertical(bottom: Radius.circular(20))
+                ? const BorderRadius.vertical(
+                    bottom: Radius.circular(AppShape.card),
+                  )
                 : BorderRadius.zero,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
@@ -616,7 +628,14 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           break;
       }
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = e.toString());
+      if (mounted) {
+        setState(
+          () => _errorMessage = _passwordErrorText(
+            e,
+            AppLocalizations.of(context)!,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         _isLoading.value = false;
@@ -1006,7 +1025,14 @@ class _TwoFactorPasswordChangeScreenState
         Navigator.popUntil(context, ModalRoute.withName('SecurityScreen'));
       }
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = e.toString());
+      if (mounted) {
+        setState(
+          () => _errorMessage = _passwordErrorText(
+            e,
+            AppLocalizations.of(context)!,
+          ),
+        );
+      }
     } finally {
       if (mounted) _isLoading.value = false;
     }
@@ -1177,7 +1203,14 @@ class _TwoFactorEmailChangeScreenState
           break;
       }
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = e.toString());
+      if (mounted) {
+        setState(
+          () => _errorMessage = _passwordErrorText(
+            e,
+            AppLocalizations.of(context)!,
+          ),
+        );
+      }
     } finally {
       if (mounted) _isLoading.value = false;
     }
@@ -1330,7 +1363,14 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
         Navigator.popUntil(context, ModalRoute.withName('SecurityScreen'));
       }
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = e.toString());
+      if (mounted) {
+        setState(
+          () => _errorMessage = _passwordErrorText(
+            e,
+            AppLocalizations.of(context)!,
+          ),
+        );
+      }
     } finally {
       if (mounted) _isLoading.value = false;
     }
