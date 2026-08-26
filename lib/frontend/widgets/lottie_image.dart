@@ -89,6 +89,9 @@ class LottiePlayer extends StatefulWidget {
   final int? memCacheWidth;
   final bool shimmer;
   final bool eager;
+  final bool animate;
+  final bool repeat;
+  final VoidCallback? onCompleted;
 
   const LottiePlayer({
     super.key,
@@ -98,6 +101,9 @@ class LottiePlayer extends StatefulWidget {
     this.memCacheWidth,
     this.shimmer = true,
     this.eager = false,
+    this.animate = true,
+    this.repeat = true,
+    this.onCompleted,
   });
 
   @override
@@ -119,7 +125,9 @@ class _LottiePlayerState extends State<LottiePlayer>
   int? _px;
   bool _started = false;
   bool _showedFrames = false;
+  bool _completed = false;
   Timer? _deferTimer;
+  Timer? _fallbackCompletionTimer;
 
   static const Duration _maxLoadDefer = Duration(milliseconds: 700);
 
@@ -174,12 +182,22 @@ class _LottiePlayerState extends State<LottiePlayer>
       _speed = 1.0;
       _targetSpeed = _isScrolling ? _slowSpeed : 1.0;
       _lastElapsedMs = null;
+      if (_frameIndex.value != 0) _frameIndex.value = 0;
+      _completed = false;
+      _fallbackCompletionTimer?.cancel();
+      _fallbackCompletionTimer = null;
+    } else if (oldWidget.animate != widget.animate ||
+        oldWidget.repeat != widget.repeat) {
+      _resetPlayback();
+      final clip = _clip;
+      if (clip != null) _maybeStartTicker(clip);
     }
   }
 
   @override
   void dispose() {
     _deferTimer?.cancel();
+    _fallbackCompletionTimer?.cancel();
     LottieLoadGovernor.instance.throttled.removeListener(_onGateChanged);
     _scrollState?.removeListener(_onGateChanged);
     _holdState?.removeListener(_onGateChanged);
@@ -218,10 +236,22 @@ class _LottiePlayerState extends State<LottiePlayer>
       _speed = diff.abs() <= step ? _targetSpeed : _speed + step * diff.sign;
     }
 
-    _playheadMs = (_playheadMs + dt * _speed) % periodMs;
+    final nextPlayhead = _playheadMs + dt * _speed;
+    if (!widget.repeat && nextPlayhead >= periodMs) {
+      _playheadMs = periodMs.toDouble();
+      if (_frameIndex.value != clip.frameCount - 1) {
+        _frameIndex.value = clip.frameCount - 1;
+      }
+      _completePlayback();
+      return;
+    }
+
+    _playheadMs = widget.repeat ? nextPlayhead % periodMs : nextPlayhead;
     final t = _playheadMs / periodMs;
-    final index =
-        (t * (clip.frameCount - 1)).round().clamp(0, clip.frameCount - 1);
+    final index = (t * (clip.frameCount - 1)).round().clamp(
+      0,
+      clip.frameCount - 1,
+    );
     if (index != _frameIndex.value) _frameIndex.value = index;
   }
 
@@ -244,12 +274,44 @@ class _LottiePlayerState extends State<LottiePlayer>
   }
 
   void _maybeStartTicker(RlottieClip clip) {
-    if (clip.frameCount <= 1) return;
+    if (!widget.animate || _completed) return;
+    if (clip.frameCount <= 1) {
+      if (!widget.repeat) _completePlayback();
+      return;
+    }
     final lead = clip.frameCount < _leadFrames ? clip.frameCount : _leadFrames;
     if (clip.ready.value >= lead && !_ticker.isActive) {
       _lastElapsedMs = null;
       _ticker.start();
     }
+  }
+
+  void _resetPlayback() {
+    _ticker.stop();
+    _fallbackCompletionTimer?.cancel();
+    _fallbackCompletionTimer = null;
+    _completed = false;
+    _playheadMs = 0;
+    _lastElapsedMs = null;
+    if (_frameIndex.value != 0) _frameIndex.value = 0;
+  }
+
+  void _completePlayback() {
+    if (_completed) return;
+    _completed = true;
+    _ticker.stop();
+    _fallbackCompletionTimer?.cancel();
+    _fallbackCompletionTimer = null;
+    final callback = widget.onCompleted;
+    if (callback == null) return;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (mounted) callback();
+    });
+  }
+
+  void _scheduleFallbackCompletion(Duration duration) {
+    if (!widget.animate || widget.repeat || _completed) return;
+    _fallbackCompletionTimer ??= Timer(duration, _completePlayback);
   }
 
   void _ensure(double box) {
@@ -328,6 +390,10 @@ class _LottiePlayerState extends State<LottiePlayer>
       height: widget.size,
       fit: BoxFit.contain,
       frameRate: FrameRate.max,
+      animate: widget.animate,
+      repeat: widget.repeat,
+      onLoaded: (composition) =>
+          _scheduleFallbackCompletion(composition.duration),
       errorBuilder: (context, _, _) => _staticFallback(widget.size ?? 96.0),
     );
   }
@@ -359,6 +425,9 @@ class LottieImage extends StatelessWidget {
   final int? memCacheWidth;
   final bool shimmer;
   final bool eager;
+  final bool animate;
+  final bool repeat;
+  final VoidCallback? onCompleted;
 
   const LottieImage({
     super.key,
@@ -368,6 +437,9 @@ class LottieImage extends StatelessWidget {
     this.memCacheWidth,
     this.shimmer = true,
     this.eager = false,
+    this.animate = true,
+    this.repeat = true,
+    this.onCompleted,
   });
 
   @override
@@ -380,6 +452,9 @@ class LottieImage extends StatelessWidget {
         memCacheWidth: memCacheWidth,
         shimmer: shimmer,
         eager: eager,
+        animate: animate,
+        repeat: repeat,
+        onCompleted: onCompleted,
       );
     }
     return _static();
@@ -395,7 +470,9 @@ class LottieImage extends StatelessWidget {
       fit: BoxFit.contain,
       memCacheWidth: memCacheWidth,
       fadeInDuration: const Duration(milliseconds: 120),
-      placeholder: (_, _) => LottieShimmer(size: size),
+      placeholder: (_, _) => shimmer
+          ? LottieShimmer(size: size)
+          : SizedBox(width: size, height: size),
       errorWidget: (_, _, _) => SizedBox(width: size, height: size),
     );
   }

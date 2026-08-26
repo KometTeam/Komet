@@ -1,41 +1,89 @@
+import 'dart:async';
+
+import 'package:flutter/services.dart';
+import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../contacts/edit_contact_sheet.dart';
+import '../../../backend/modules/complaints.dart';
+import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
+import '../../../core/calls/call_controller.dart';
 import '../../../core/config/app_show_extra_info.dart';
+import '../../../core/config/app_stories.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/storage/chat_members_store.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/logger.dart';
+import '../../../core/utils/route_settle.dart';
+import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/chat_info.dart';
 import '../../../models/contact_info.dart';
+import '../../../models/story.dart';
+import '../../widgets/animated_slash_icon.dart';
+import '../../widgets/animated_text_swap.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/custom_notification.dart';
+import '../../widgets/formatted_message_text.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/profile_header_scroll.dart';
+import '../../widgets/profile_hero.dart';
 import '../../widgets/swipe_route.dart';
+import '../../../backend/modules/chats.dart';
+import '../calls/call_screen.dart';
+import '../contacts/open_contact_profile.dart';
+import '../stories/story_owner_info.dart';
+import '../stories/story_peanut.dart';
+import '../stories/story_ring.dart';
+import '../stories/story_viewer_screen.dart';
 import 'chat_screen.dart';
+import 'group_invite_sheets.dart';
+import 'profile_action_sheets.dart';
+import '../../../core/config/app_fonts.dart';
 
 class _MemberInfo {
   final int id;
+  final String? name;
+  final String? avatarUrl;
   final bool isAdmin;
   final bool isOwner;
   final bool isMe;
+  final String? alias;
   final int? seenTime;
-  final bool isOnline;
+  final int presenceStatus;
+  final bool blocked;
+  final bool isContact;
 
   const _MemberInfo({
     required this.id,
+    this.name,
+    this.avatarUrl,
     required this.isAdmin,
     required this.isOwner,
     required this.isMe,
+    this.alias,
     this.seenTime,
-    required this.isOnline,
+    required this.presenceStatus,
+    this.blocked = false,
+    this.isContact = false,
   });
+
+  bool get isOnline => presenceStatus == 1;
 }
+
+enum ChatInfoTab { media }
 
 class ChatInfoScreen extends StatefulWidget {
   final int chatId;
@@ -44,6 +92,9 @@ class ChatInfoScreen extends StatefulWidget {
   final String chatType;
 
   final int? dialogPeerId;
+  final ChatInfoTab? initialTab;
+  final Object? heroTag;
+  final bool openedFromChat;
 
   final void Function(String messageId, int time)? onJumpToMessage;
 
@@ -54,6 +105,9 @@ class ChatInfoScreen extends StatefulWidget {
     required this.imageUrl,
     required this.chatType,
     this.dialogPeerId,
+    this.initialTab,
+    this.heroTag,
+    this.openedFromChat = false,
     this.onJumpToMessage,
   });
 
@@ -61,9 +115,10 @@ class ChatInfoScreen extends StatefulWidget {
   State<ChatInfoScreen> createState() => _ChatInfoScreenState();
 }
 
-class _ChatInfoScreenState extends State<ChatInfoScreen> {
+class _ChatInfoScreenState extends State<ChatInfoScreen>
+    with ReloadOnReconnect {
   final _tabScrollController = ScrollController();
-  final _bodyScrollController = ScrollController();
+  ScrollController? _bodyScrollController;
 
   int _myId = 0;
   bool _isLoading = true;
@@ -71,35 +126,118 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   ChatInfo? _chatInfo;
   String _selectedTab = '';
   bool _descExpanded = false;
+  bool _showRealName = false;
 
   int? _otherId;
   ContactInfo? _contactData;
+  CachedContact? _localContact;
   int? _seenTime;
   bool _isOnline = false;
   int _presenceStatus = 0;
   bool _isBot = false;
 
-  List<_MemberInfo> _members = [];
-  int _onlineCount = 0;
+  final List<_MemberInfo> _members = [];
+  final List<_MemberInfo> _owners = [];
+  final List<_MemberInfo> _admins = [];
+  final List<_MemberInfo> _contactMembers = [];
+  final List<_MemberInfo> _otherMembers = [];
+  final Set<int> _seenMemberIds = {};
+  Set<int> _contactIds = {};
+  int _memberMarker = 0;
+  bool _membersLoading = false;
+  bool _membersEnd = false;
+  static const int _memberRenderChunk = 24;
+  int _memberRenderLimit = _memberRenderChunk;
+  bool _memberFillScheduled = false;
 
   int _mediaChatId = 0;
   String? _anchorMsgId;
 
+  int _dontDisturbUntil = 0;
+  int _lastEventTime = 0;
+  bool _blocked = false;
+  bool _muteBusy = false;
+  bool _addContactBusy = false;
+
+  StoryPreview? _storyPreview;
+  List<Story> _unreadStories = const [];
+  final GlobalKey _avatarKey = GlobalKey();
+
+  final PageController _avatarPageController = PageController();
+  List<String> _avatarPages = const [];
+  int _avatarIndex = 0;
+  int _avatarTotal = 0;
+  bool _avatarHover = false;
+  bool _avatarHistoryBusy = false;
+  bool _avatarHistoryLoaded = false;
+
+  late final RouteSettle _routeSettle = RouteSettle(isMounted: () => mounted);
+  bool _rebuildQueued = false;
+
+  double _headerDelta = 0;
+  bool _expandArmed = false;
+  bool _headerDragging = false;
+  bool _headerEverExpanded = false;
+
   @override
   void initState() {
     super.initState();
+    storiesModule.storiesChanged.addListener(_onStoriesChanged);
+    ChatMembersStore.instance
+        .listenable(widget.chatId)
+        .addListener(_onMemberCountChanged);
     _load();
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _routeSettle.bind(context);
+  }
+
+  int? get _memberCount => ChatMembersStore.instance.count(widget.chatId);
+
+  void _onMemberCountChanged() => _loadedRebuild();
+
+  void _onStoriesChanged() {
+    if (!mounted) return;
+    _loadedUpdate(_refreshUnreadStories);
+  }
+
+  void _loadedRebuild() {
+    if (_routeSettle.settled) {
+      if (mounted) setState(() {});
+      return;
+    }
+    if (_rebuildQueued) return;
+    _rebuildQueued = true;
+    _routeSettle.run(() {
+      _rebuildQueued = false;
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _loadedUpdate(VoidCallback mutation) {
+    mutation();
+    _loadedRebuild();
+  }
+
+  @override
   void dispose() {
+    _routeSettle.dispose();
+    storiesModule.storiesChanged.removeListener(_onStoriesChanged);
+    ChatMembersStore.instance
+        .listenable(widget.chatId)
+        .removeListener(_onMemberCountChanged);
     _tabScrollController.dispose();
-    _bodyScrollController.dispose();
+    _bodyScrollController?.dispose();
+    _avatarPageController.dispose();
     super.dispose();
   }
 
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
+
   List<String> get _tabs {
-    final l10n = AppLocalizations.of(context)!;
     final showInfo = AppShowExtraInfo.current.value;
     switch (widget.chatType) {
       case 'DIALOG':
@@ -142,6 +280,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     }
   }
 
+  @override
+  void reloadAfterReconnect() => _load();
+
   Future<void> _load() async {
     final profile = await AppDatabase.loadActiveProfile();
     _myId = profile?.id ?? 0;
@@ -151,6 +292,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     _chatInfo = info;
 
     _mediaChatId = (info?.raw['id'] as int?) ?? widget.chatId;
+
+    final cached = await chats.getChat(_myId, _mediaChatId);
+    if (!mounted) return;
+    if (cached.isNotEmpty) {
+      _dontDisturbUntil = cached.first.dontDisturbUntil;
+      _lastEventTime = cached.first.lastEventTime;
+    }
+    final serverEventTime = (info?.raw['lastEventTime'] as int?) ?? 0;
+    if (serverEventTime > _lastEventTime) _lastEventTime = serverEventTime;
+
     final lastMessage = info?.raw['lastMessage'];
     if (lastMessage is Map) {
       _anchorMsgId = lastMessage['id']?.toString();
@@ -179,6 +330,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       }
 
       if (_otherId != null) {
+        _localContact = await ContactsModule.getContact(_myId, _otherId!);
         final contact = await ContactInfoFetch.get(_otherId!);
         if (contact != null) {
           _contactData = contact;
@@ -192,49 +344,247 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           _presenceStatus = st;
           _isOnline = st == 1;
         }
+
+        if (!_isBot && _otherId != _myId) _loadBlockedState(_otherId!);
+        if (!_isBot) unawaited(_loadStories(_otherId!));
+        unawaited(_loadAvatarHistory(_otherId!));
       }
     } else if (info == null) {
-      setState(() => _isLoading = false);
+      _loadedUpdate(() => _isLoading = false);
       return;
     } else if (widget.chatType == 'CHAT') {
-      final chatInfo = _chatInfo!;
-      final memberIds = chatInfo.participantIds;
-
-      Map<int, Map<String, dynamic>> presenceMap = {};
-      if (memberIds.isNotEmpty) {
-        presenceMap = await PresenceFetch.getMany(memberIds);
-      }
-
-      _onlineCount = 0;
-      _members = memberIds.map((id) {
-        final pres = presenceMap[id];
-        final online = (pres?['status'] as int?) == 1;
-        if (online) _onlineCount++;
-        return _MemberInfo(
-          id: id,
-          isAdmin: chatInfo.isAdmin(id),
-          isOwner: chatInfo.isOwner(id),
-          isMe: id == _myId,
-          seenTime: pres?['seen'] as int?,
-          isOnline: online,
-        );
-      }).toList();
-
-      _members.sort((a, b) {
-        if (a.isMe != b.isMe) return a.isMe ? -1 : 1;
-        if (a.isOnline != b.isOnline) return a.isOnline ? -1 : 1;
-        return (b.seenTime ?? 0).compareTo(a.seenTime ?? 0);
-      });
+      _contactIds = (await AppDatabase.loadContactIds(_myId)).toSet();
+      await _loadLeaders();
+      await _fetchMembersPage(initial: true);
     }
 
     if (mounted) {
-      setState(() {
+      _loadedUpdate(() {
         _isLoading = false;
         if (_selectedTab.isEmpty && _tabs.isNotEmpty) {
-          _selectedTab = _tabs.first;
+          _selectedTab = _initialTabLabel() ?? _tabs.first;
         }
       });
     }
+  }
+
+  Future<void> _loadBlockedState(int peerId) async {
+    final blocked = await ContactsModule.isBlocked(api, peerId);
+    if (!mounted || blocked == _blocked) return;
+    _loadedUpdate(() => _blocked = blocked);
+  }
+
+  String? _initialTabLabel() {
+    if (widget.initialTab != ChatInfoTab.media) return null;
+    final media = AppLocalizations.of(context)!.chatInfoTabMedia;
+    return _tabs.contains(media) ? media : null;
+  }
+
+  _MemberInfo _memberFrom(ChatMemberEntry e) => _MemberInfo(
+    id: e.id,
+    name: e.name,
+    avatarUrl: e.avatarUrl,
+    isAdmin: _chatInfo?.isAdmin(e.id) ?? false,
+    isOwner: _chatInfo?.isOwner(e.id) ?? false,
+    isMe: e.id == _myId,
+    alias: _chatInfo?.adminAlias(e.id),
+    seenTime: e.seenTime,
+    presenceStatus: e.presenceStatus,
+    blocked: e.blocked,
+    isContact: _contactIds.contains(e.id),
+  );
+
+  Future<void> _loadLeaders() async {
+    final info = _chatInfo;
+    if (info == null) return;
+
+    final owner = info.owner;
+    final leaderIds = <int>[
+      if (owner != null && owner != 0) owner,
+      for (final a in info.adminIds)
+        if (a != owner) a,
+    ];
+    if (leaderIds.isEmpty) return;
+
+    final contacts = await ContactInfoFetch.getMany(leaderIds);
+    final presence = await PresenceFetch.getMany(leaderIds);
+    if (!mounted) return;
+
+    for (final id in leaderIds) {
+      if (!_seenMemberIds.add(id)) continue;
+      final c = contacts[id];
+      final pres = presence[id];
+      _addMember(
+        _MemberInfo(
+          id: id,
+          name: c?.displayName ?? ContactCache.get(id),
+          avatarUrl: c?.avatarUrl ?? ContactCache.getAvatar(id),
+          isAdmin: info.isAdmin(id),
+          isOwner: info.isOwner(id),
+          isMe: id == _myId,
+          alias: info.adminAlias(id),
+          seenTime: pres?['seen'] as int?,
+          presenceStatus: (pres?['status'] as int?) ?? 0,
+          blocked: c?.isDeleted ?? false,
+          isContact: _contactIds.contains(id),
+        ),
+      );
+    }
+    _rebuildMembers();
+  }
+
+  int _memberRank(_MemberInfo m) {
+    if (m.isOwner) return 0;
+    if (m.isAdmin) return 1;
+    if (m.isContact) return 2;
+    return 3;
+  }
+
+  void _addMember(_MemberInfo m) {
+    switch (_memberRank(m)) {
+      case 0:
+        _owners.add(m);
+      case 1:
+        _admins.add(m);
+      case 2:
+        _contactMembers.add(m);
+      default:
+        _otherMembers.add(m);
+    }
+  }
+
+  void _rebuildMembers() {
+    _members
+      ..clear()
+      ..addAll(_owners)
+      ..addAll(_admins)
+      ..addAll(_contactMembers)
+      ..addAll(_otherMembers);
+  }
+
+  Future<void> _fetchMembersPage({bool initial = false}) async {
+    if (_membersLoading || _membersEnd) return;
+    _membersLoading = true;
+    if (!initial) _loadedRebuild();
+
+    final page = await chats.getChatMembers(
+      api,
+      widget.chatId,
+      marker: _memberMarker,
+    );
+    _membersLoading = false;
+    if (!mounted) return;
+
+    if (page == null) {
+      if (!initial) _loadedRebuild();
+      return;
+    }
+
+    var added = 0;
+    final fresh = <int>[];
+    for (final e in page.members) {
+      if (_seenMemberIds.add(e.id)) {
+        _addMember(_memberFrom(e));
+        fresh.add(e.id);
+        added++;
+      }
+    }
+    if (added > 0) {
+      _rebuildMembers();
+      _scheduleMemberFillCheck();
+    }
+    if (fresh.isNotEmpty && AppStories.current.value) {
+      unawaited(storiesModule.loadOwnersPreviews(fresh));
+    }
+
+    final total = _memberCount;
+    if (page.members.isEmpty ||
+        added == 0 ||
+        page.marker == _memberMarker ||
+        (total != null && _members.length >= total)) {
+      _membersEnd = true;
+    }
+    _memberMarker = page.marker;
+
+    if (!initial) _loadedRebuild();
+  }
+
+  bool _revealMoreMembers() {
+    if (_memberRenderLimit >= _members.length) return false;
+    setState(() => _memberRenderLimit += _memberRenderChunk);
+    _scheduleMemberFillCheck();
+    return true;
+  }
+
+  void _scheduleMemberFillCheck() {
+    if (_memberFillScheduled) return;
+    _memberFillScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _memberFillScheduled = false;
+      if (!mounted) return;
+      if (_memberRenderLimit >= _members.length) return;
+      final controller = _bodyScrollController;
+      if (controller == null || !controller.hasClients) return;
+      if (controller.position.maxScrollExtent > 0) return;
+      _revealMoreMembers();
+    });
+  }
+
+  void _onBodyScroll() {
+    if (!mounted || widget.chatType != 'CHAT') return;
+    if (_selectedTab != AppLocalizations.of(context)!.chatInfoTabMembers)
+      return;
+    final controller = _bodyScrollController;
+    if (controller == null || !controller.hasClients) return;
+    final pos = controller.position;
+    if (pos.pixels < pos.maxScrollExtent - 400) return;
+    if (_revealMoreMembers()) return;
+    if (_membersLoading || _membersEnd) return;
+    _fetchMembersPage();
+  }
+
+  String? get _inviteLink {
+    final link = _chatInfo?.link;
+    return (link != null && link.isNotEmpty) ? link : null;
+  }
+
+  Future<void> _openAddMembers() async {
+    final exclude = {_myId, ..._members.map((m) => m.id)};
+    final added = await showAddMembersSheet(
+      context,
+      chatId: widget.chatId,
+      excludeIds: exclude,
+    );
+    if (added == true && mounted) await _refreshMembers();
+  }
+
+  void _openInviteLink(String link) {
+    showInviteLinkSheet(
+      context,
+      link: link,
+      title: widget.name,
+      avatarUrl: widget.imageUrl,
+    );
+  }
+
+  Future<void> _refreshMembers() async {
+    final info = await ChatInfoFetch.get(widget.chatId, forceRefresh: true);
+    if (!mounted) return;
+    if (info != null) _chatInfo = info;
+    _contactMembers.clear();
+    _otherMembers.clear();
+    _seenMemberIds
+      ..clear()
+      ..addAll(_owners.map((m) => m.id))
+      ..addAll(_admins.map((m) => m.id));
+    _memberMarker = 0;
+    _membersEnd = false;
+    _membersLoading = false;
+    _memberRenderLimit = _memberRenderChunk;
+    _rebuildMembers();
+    _loadedRebuild();
+    await _fetchMembersPage(initial: true);
+    _loadedRebuild();
   }
 
   @override
@@ -245,33 +595,543 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       backgroundColor: cs.surface,
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: const ConnectionSpinner(),
-      body: SafeArea(
-        child: _isLoading ? _buildShimmer(cs) : _buildScrollBody(cs),
+      body: _buildScrollBody(cs),
+    );
+  }
+
+  static const double _headerAvatarSize = 96;
+  static const double _headerCollapsedBody = 232;
+  static const double _headerVignette = 64;
+
+  bool get _headerHasPhoto => widget.imageUrl.isNotEmpty && !_peerDeleted;
+
+  Widget _buildScrollBody(ColorScheme cs) {
+    return LayoutBuilder(
+      builder: (context, viewport) {
+        final media = MediaQuery.of(context);
+        final topPad = media.padding.top;
+        final collapsedH = topPad + _headerCollapsedBody;
+        final expandedH = _headerHasPhoto
+            ? math.max(
+                collapsedH,
+                math.min(media.size.width, viewport.maxHeight * 0.62),
+              )
+            : collapsedH;
+        final delta = expandedH - collapsedH;
+        _syncHeaderDelta(delta);
+        final controller = _bodyScrollController ??= (ScrollController(
+          initialScrollOffset: delta,
+        )..addListener(_onBodyScroll));
+
+        return NotificationListener<ScrollNotification>(
+          onNotification: (n) => _onHeaderScrollNotification(n, delta),
+          child: CustomScrollView(
+            key: ValueKey(delta),
+            controller: controller,
+            physics: HeaderPullScrollPhysics(
+              delta: delta,
+              isArmed: () => _expandArmed,
+              parent: const BouncingScrollPhysics(),
+            ),
+            slivers: [
+              SliverPersistentHeader(
+                delegate: MorphHeaderDelegate(
+                  collapsedExtent: collapsedH,
+                  expandedExtent: expandedH,
+                  headerBuilder: (ctx, t) =>
+                      _buildMorphHeader(ctx, cs, _headerHasPhoto ? t : 0.0),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: math.max(0, viewport.maxHeight - collapsedH),
+                  ),
+                  child: _buildBody(cs),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _syncHeaderDelta(double delta) {
+    if (_headerDelta == delta) return;
+    final prev = _headerDelta;
+    _headerDelta = delta;
+    if (_bodyScrollController == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final c = _bodyScrollController;
+      if (!mounted || c == null || !c.hasClients) return;
+      final target = (c.offset + (delta - prev)).clamp(
+        0.0,
+        c.position.maxScrollExtent,
+      );
+      c.jumpTo(target);
+    });
+  }
+
+  bool _onHeaderScrollNotification(ScrollNotification n, double delta) {
+    if (n.depth != 0) return false;
+    if (n is ScrollStartNotification) {
+      _headerDragging = n.dragDetails != null;
+      if (n.dragDetails != null) {
+        _expandArmed = delta > 0 && n.metrics.pixels <= delta + 8;
+      }
+    } else if (n is ScrollEndNotification) {
+      if (_headerDragging) {
+        _headerDragging = false;
+        _snapHeader(delta);
+      }
+    }
+    return false;
+  }
+
+  void _snapHeader(double delta) {
+    final c = _bodyScrollController;
+    if (c == null || !c.hasClients || delta <= 0) return;
+    final collapsed = math.min(delta, c.position.maxScrollExtent);
+    final offset = c.offset;
+    if (offset <= 0 || offset >= collapsed) return;
+    final target = offset < collapsed / 2 ? 0.0 : collapsed;
+    if ((target - offset).abs() < 1) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !c.hasClients) return;
+      c.animateTo(
+        target,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  Widget _buildMorphHeader(BuildContext context, ColorScheme cs, double t) {
+    final topPad = MediaQuery.paddingOf(context).top;
+    if (t > 0) {
+      _headerEverExpanded = true;
+      final peerId = _otherId;
+      if (!_avatarHistoryLoaded && peerId != null) {
+        unawaited(_loadAvatarHistory(peerId));
+      }
+    }
+    final iconColor = Color.lerp(cs.onSurface, Colors.white, t)!;
+    final nameColor = Color.lerp(cs.onSurface, Colors.white, t)!;
+    final subColor = Color.lerp(
+      cs.onSurfaceVariant,
+      Colors.white.withValues(alpha: 0.85),
+      t,
+    )!;
+    final ringOpacity = (1 - t * 3).clamp(0.0, 1.0);
+    final chipOpacity = ((t - 0.3) / 0.5).clamp(0.0, 1.0);
+    final unread = _unreadStories;
+    final totalPhotos = math.max(_avatarTotal, _avatarPages.length);
+
+    return ClipRect(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
+          const size = _headerAvatarSize;
+          final avatarRect = Rect.lerp(
+            Rect.fromLTWH((w - size) / 2, topPad + 52, size, size),
+            Rect.fromLTWH(0, 0, w, h),
+            t,
+          )!;
+          final radius = lerpDouble(size / 2, 0, t)!;
+
+          return Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              Positioned.fromRect(
+                rect: avatarRect,
+                child: _headerAvatar(cs, radius, t),
+              ),
+              if (_headerHasPhoto) ...[
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: topPad + 72,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: t,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.black45, Colors.transparent],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 170,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: t,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Colors.transparent, Colors.black54],
+                            stops: [0.0, 0.62],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: _headerVignette,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: t,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              cs.surface.withValues(alpha: 0),
+                              cs.surface.withValues(alpha: 0.55),
+                              cs.surface,
+                            ],
+                            stops: const [0.0, 0.55, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              Positioned.fromRect(
+                rect: avatarRect.inflate(7 * (1 - t)),
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: ringOpacity,
+                    child: CustomPaint(
+                      painter: _storyPreview == null
+                          ? null
+                          : SegmentedRingPainter(
+                              total: _storyPreview!.totalCount,
+                              read: _storyPreview!.readCount,
+                              unreadColors: [
+                                cs.primary,
+                                cs.tertiary,
+                                cs.primary,
+                              ],
+                              readColor: cs.outlineVariant,
+                              strokeWidth: 3.4,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 4,
+                right: 4,
+                top: topPad + 4,
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Symbols.arrow_back, color: iconColor),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    Expanded(
+                      child: chipOpacity > 0 && unread.isNotEmpty
+                          ? Align(
+                              alignment: Alignment.centerLeft,
+                              child: Opacity(
+                                opacity: chipOpacity,
+                                child: _storyChip(unread),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    if (chipOpacity > 0 && totalPhotos > 1)
+                      Opacity(
+                        opacity: chipOpacity,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Text(
+                            '${_avatarIndex + 1}/$totalPhotos',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    _buildMoreButton(cs, iconColor),
+                  ],
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: lerpDouble(16, 18, t)!,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _headerAligned(t, _buildNameRow(cs, nameColor, t)),
+                    const SizedBox(height: 2),
+                    _headerAligned(
+                      t,
+                      SelectionArea(
+                        child: Text(
+                          _subtitle(),
+                          style: TextStyle(color: subColor, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildScrollBody(ColorScheme cs) {
-    return CustomScrollView(
-      controller: _bodyScrollController,
-      slivers: [
-        SliverAppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          floating: true,
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back, color: cs.onSurface),
-            onPressed: () => Navigator.pop(context),
-          ),
-          actions: [
-            IconButton(
-              icon: Icon(Icons.more_vert, color: cs.onSurface),
-              onPressed: () {},
+  Widget _headerAligned(double t, Widget child) {
+    return Align(
+      alignment: Alignment.lerp(Alignment.center, Alignment.centerLeft, t)!,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: lerpDouble(12, 18, t)!),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _headerAvatar(ColorScheme cs, double radius, double t) {
+    final expanded = t > 0.5;
+    final openHistory = _headerHasPhoto
+        ? () => AvatarHistoryScreen.open(
+            context,
+            contactId: _otherId ?? widget.dialogPeerId ?? 0,
+            name: widget.name,
+            currentAvatarUrl: _avatarPages.isEmpty
+                ? widget.imageUrl
+                : _avatarPages[_avatarIndex.clamp(0, _avatarPages.length - 1)],
+          )
+        : null;
+    final openStories = _storyPreview == null ? null : _openStories;
+
+    return KeyedSubtree(
+      key: _avatarKey,
+      child: GestureDetector(
+        onTap: expanded ? openHistory : (openStories ?? openHistory),
+        onLongPress: expanded
+            ? null
+            : (openStories == null ? null : openHistory),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ProfileHeroAvatar(
+              tag: widget.heroTag,
+              size: _headerAvatarSize,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(radius),
+                child: _headerAvatarContent(cs),
+              ),
+            ),
+            Offstage(
+              offstage: t < 0.5 || _avatarPages.length < 2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(radius),
+                child: _avatarPager(cs, t),
+              ),
             ),
           ],
         ),
-        SliverToBoxAdapter(child: _buildBody(cs)),
-      ],
+      ),
+    );
+  }
+
+  Widget _avatarPager(ColorScheme cs, double t) {
+    final pages = _avatarPages;
+    if (pages.length < 2) return const SizedBox.shrink();
+    final interactive = t > 0.5;
+    return MouseRegion(
+      onEnter: (_) {
+        if (!_avatarHover) setState(() => _avatarHover = true);
+      },
+      onExit: (_) {
+        if (_avatarHover) setState(() => _avatarHover = false);
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              dragDevices: PointerDeviceKind.values.toSet(),
+              scrollbars: false,
+              overscroll: false,
+            ),
+            child: PageView.builder(
+              controller: _avatarPageController,
+              itemCount: pages.length,
+              physics: interactive
+                  ? const PageScrollPhysics()
+                  : const NeverScrollableScrollPhysics(),
+              onPageChanged: (i) => setState(() => _avatarIndex = i),
+              itemBuilder: (_, i) => _avatarPhoto(cs, pages[i]),
+            ),
+          ),
+          if (interactive && _avatarHover) ...[
+            _avatarArrow(
+              alignment: Alignment.centerLeft,
+              icon: Symbols.chevron_left,
+              enabled: _avatarIndex > 0,
+              onTap: () => _stepAvatar(-1),
+            ),
+            _avatarArrow(
+              alignment: Alignment.centerRight,
+              icon: Symbols.chevron_right,
+              enabled: _avatarIndex < pages.length - 1,
+              onTap: () => _stepAvatar(1),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _avatarArrow({
+    required Alignment alignment,
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return Align(
+      alignment: alignment,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 150),
+          opacity: enabled ? 1 : 0,
+          child: IgnorePointer(
+            ignoring: !enabled,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: Colors.black38,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: Colors.white, size: 24),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _stepAvatar(int delta) {
+    final target = (_avatarIndex + delta).clamp(0, _avatarPages.length - 1);
+    if (target == _avatarIndex) return;
+    _avatarPageController.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Widget _avatarPhoto(ColorScheme cs, String url) {
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: BoxFit.cover,
+      memCacheWidth: _headerEverExpanded ? 720 : 288,
+      fadeInDuration: const Duration(milliseconds: 150),
+      errorWidget: (_, _, _) => ColoredBox(
+        color: cs.surfaceContainerHigh,
+        child: Center(
+          child: Text(
+            widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 32),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerAvatarContent(ColorScheme cs) {
+    if (_peerDeleted) {
+      return _ghostAvatar(radius: _headerAvatarSize / 2, fontSize: 52);
+    }
+    final url = _avatarPages.isNotEmpty ? _avatarPages.first : widget.imageUrl;
+    if (url.isEmpty) {
+      return KometAvatar(
+        name: widget.name,
+        size: _headerAvatarSize,
+        fontSize: 36,
+        fadeIn: false,
+      );
+    }
+    return _avatarPhoto(cs, url);
+  }
+
+  void _refreshUnreadStories() {
+    final preview = _storyPreview;
+    if (preview == null || preview.unreadCount <= 0) {
+      _unreadStories = const [];
+      return;
+    }
+    final stories = storiesModule.cachedStories(preview.owner.ownerId);
+    if (stories == null || stories.isEmpty) {
+      _unreadStories = const [];
+      return;
+    }
+    final from = (stories.length - preview.unreadCount).clamp(
+      0,
+      stories.length,
+    );
+    _unreadStories = stories.sublist(from);
+  }
+
+  Widget _storyChip(List<Story> unread) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _openStories,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          StoryPeanut(stories: unread),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              '${unread.length} '
+              '${pluralRu(unread.length, 'история', 'истории', 'историй')}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                fontFamily: displayFontOf(context),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -281,151 +1141,630 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const SizedBox(height: 4),
-          _avatar(),
-          const SizedBox(height: 14),
-          Text(
-            widget.name,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _subtitle(),
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-          _buildActions(cs),
-          const SizedBox(height: 16),
-          _buildPersistentInfo(cs),
-          _buildTabBar(cs),
-          const SizedBox(height: 12),
-          _buildTabContent(cs),
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
-  }
-
-  String _subtitle() {
-    final l10n = AppLocalizations.of(context)!;
-    switch (widget.chatType) {
-      case 'DIALOG':
-        if (_isBot) return l10n.contactProfileBot;
-        if (_isOnline) return l10n.contactProfileOnline;
-        if (_presenceStatus == 2 || _presenceStatus == 3) return l10n.contactProfileRecentlyActive;
-        if (_seenTime != null && _seenTime! > 0) {
-          return formatLastSeen(_seenTime!);
-        }
-        return '';
-      case 'CHAT':
-        final total = _chatInfo?.participantsCount ?? _members.length;
-        if (_onlineCount > 0) {
-          return l10n.chatInfoOnlineOfTotal('$_onlineCount', '$total');
-        }
-        return '$total ${pluralRu(total, 'участник', 'участника', 'участников')}';
-      case 'CHANNEL':
-        final count = _chatInfo?.participantsCount ?? 0;
-        return '$count ${pluralRu(count, 'подписчик', 'подписчика', 'подписчиков')}';
-      default:
-        return '';
-    }
-  }
-
-  Widget _buildActions(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
-    final List<({IconData icon, String label, VoidCallback? onTap})> btns;
-
-    if (widget.chatType == 'DIALOG') {
-      if (_isBot) {
-        btns = [
-          (
-            icon: Icons.chat_bubble,
-            label: l10n.contactProfileActionChat,
-            onTap: _openChat,
-          ),
-          (
-            icon: Icons.notifications,
-            label: l10n.contactProfileActionSound,
-            onTap: null,
-          ),
-        ];
-      } else {
-        btns = [
-          (
-            icon: Icons.chat_bubble,
-            label: l10n.contactProfileActionChat,
-            onTap: _openChat,
-          ),
-          (
-            icon: Icons.notifications,
-            label: l10n.contactProfileActionSound,
-            onTap: null,
-          ),
-          (icon: Icons.call, label: l10n.contactProfileActionCall, onTap: null),
-        ];
-      }
-    } else if (widget.chatType == 'CHANNEL') {
-      btns = [
-        (
-          icon: Icons.notifications,
-          label: l10n.contactProfileActionSound,
-          onTap: null,
-        ),
-        (icon: Icons.exit_to_app, label: l10n.chatInfoActionLeave, onTap: null),
-      ];
-    } else {
-      btns = [
-        (
-          icon: Icons.chat_bubble,
-          label: l10n.contactProfileActionChat,
-          onTap: null,
-        ),
-        (
-          icon: Icons.notifications,
-          label: l10n.contactProfileActionSound,
-          onTap: null,
-        ),
-        (icon: Icons.exit_to_app, label: l10n.chatInfoActionLeave, onTap: null),
-      ];
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          for (int i = 0; i < btns.length; i++) ...[
-            _actionBtn(cs, btns[i].icon, btns[i].label, btns[i].onTap),
-            if (i < btns.length - 1) const SizedBox(width: 8),
+          if (_isLoading)
+            ..._loadingBlocks(cs)
+          else ...[
+            _buildActions(cs),
+            const SizedBox(height: 16),
+            _buildPersistentInfo(cs),
+            _buildTabBar(cs),
+            const SizedBox(height: 12),
+            _buildTabContent(cs),
+            SizedBox(height: 40 + MediaQuery.paddingOf(context).bottom),
           ],
         ],
       ),
     );
   }
 
+  ContactName? _nameEntry(String type) {
+    final data = _contactData;
+    if (data == null) return null;
+    for (final n in data.names) {
+      if (n.type == type) return n;
+    }
+    return null;
+  }
+
+  bool get _isContact => _localContact != null;
+
+  bool get _peerDeleted => _contactData?.isDeleted ?? false;
+
+  String _joinName(String first, String last) =>
+      last.trim().isEmpty ? first.trim() : '${first.trim()} ${last.trim()}';
+
+  String get _customName {
+    final c = _localContact;
+    if (c != null) return _joinName(c.firstName, c.lastName ?? '');
+    return widget.name;
+  }
+
+  Widget _buildMoreButton(ColorScheme cs, [Color? iconColor]) {
+    final entries = _moreMenuEntries();
+    final color = iconColor ?? cs.onSurface;
+    if (entries.isEmpty) {
+      return IconButton(
+        icon: Icon(Symbols.more_vert, color: color),
+        onPressed: null,
+      );
+    }
+    return PopupMenuButton<VoidCallback>(
+      icon: Icon(Symbols.more_vert, color: color),
+      onSelected: (action) => action(),
+      itemBuilder: (_) => [
+        for (final entry in entries)
+          PopupMenuItem<VoidCallback>(
+            value: entry.onTap,
+            child: Row(
+              children: [
+                Icon(
+                  entry.icon,
+                  size: 20,
+                  color: entry.destructive ? cs.error : cs.onSurface,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  entry.label,
+                  style: entry.destructive ? TextStyle(color: cs.error) : null,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  List<({IconData icon, String label, bool destructive, VoidCallback onTap})>
+  _moreMenuEntries() {
+    if (_isLoading) return const [];
+    final entries =
+        <
+          ({IconData icon, String label, bool destructive, VoidCallback onTap})
+        >[];
+
+    if (widget.chatType == 'DIALOG') {
+      if (_isContact) {
+        entries.add((
+          icon: Symbols.edit,
+          label: l10n.editContactMenu,
+          destructive: false,
+          onTap: _openEdit,
+        ));
+      }
+      if (!_isBot && _otherId != null && _otherId != _myId) {
+        entries.add((
+          icon: _blocked ? Symbols.lock_open : Symbols.block,
+          label: _blocked ? l10n.chatInfoMenuUnblock : l10n.chatInfoMenuBlock,
+          destructive: !_blocked,
+          onTap: _toggleBlock,
+        ));
+      }
+      entries.add((
+        icon: Symbols.delete,
+        label: l10n.chatInfoMenuDeleteChat,
+        destructive: true,
+        onTap: _deleteChat,
+      ));
+    }
+
+    entries.add((
+      icon: Symbols.mop,
+      label: l10n.chatInfoMenuClearHistory,
+      destructive: true,
+      onTap: _clearHistory,
+    ));
+
+    return entries;
+  }
+
+  Future<void> _openEdit() async {
+    final oneme = _nameEntry('ONEME');
+    final local = _localContact;
+    final peerId = _otherId ?? widget.dialogPeerId ?? 0;
+    if (peerId == 0) return;
+
+    final result = await showEditContactSheet(
+      context,
+      contactId: peerId,
+      avatarUrl: _contactData?.avatarUrl ?? local?.baseUrl ?? widget.imageUrl,
+      customFirst: local?.firstName ?? '',
+      customLast: local?.lastName ?? '',
+      onemeFirst: oneme?.firstName ?? '',
+      onemeLast: oneme?.lastName ?? '',
+    );
+    if (!mounted || result == null) return;
+
+    switch (result.action) {
+      case EditContactAction.updated:
+        final fresh = await ContactsModule.getContact(_myId, peerId);
+        if (!mounted) return;
+        setState(() {
+          _localContact = fresh;
+          _showRealName = false;
+        });
+      case EditContactAction.removed:
+        Navigator.of(context).pop();
+    }
+  }
+
+  String? get _realName {
+    final data = _contactData;
+    if (data == null) return null;
+    for (final n in data.names) {
+      if (n.type == 'ONEME') {
+        final combined = [n.firstName, n.lastName]
+            .where((s) => s != null && s.trim().isNotEmpty)
+            .map((s) => s!.trim())
+            .join(' ');
+        if (combined.isNotEmpty) return combined;
+        final label = n.label;
+        if (label != null && label.isNotEmpty) return label;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildNameRow(ColorScheme cs, Color textColor, double t) {
+    final nameStyle = TextStyle(
+      color: textColor,
+      fontSize: lerpDouble(22, 25, t)!,
+      fontWeight: FontWeight.w700,
+      fontFamily: displayFontOf(context),
+    );
+    final custom = _customName;
+    final real = _realName;
+    final hasToggle = _isContact && real != null && real != custom;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(width: (hasToggle ? 30.0 : 0.0) * (1 - t)),
+        Flexible(
+          child: SelectionArea(
+            child: ProfileHeroName(
+              tag: widget.heroTag,
+              text: custom,
+              style: nameStyle,
+              child: AnimatedTextSwap(
+                showAlternate: _showRealName,
+                alignment: Alignment.center,
+                alternate: Text(
+                  real ?? custom,
+                  style: nameStyle,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                child: Text(
+                  custom,
+                  style: nameStyle,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(
+          width: hasToggle ? 30 : 0,
+          height: 28,
+          child: hasToggle
+              ? IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
+                  iconSize: 20,
+                  color: _showRealName
+                      ? Color.lerp(cs.primary, Colors.white, t)
+                      : textColor.withValues(alpha: 0.7),
+                  icon: AnimatedSlashIcon(
+                    icon: Symbols.visibility,
+                    slashedIcon: Symbols.visibility_off,
+                    slashed: !_showRealName,
+                  ),
+                  tooltip: real,
+                  onPressed: () =>
+                      setState(() => _showRealName = !_showRealName),
+                )
+              : null,
+        ),
+      ],
+    );
+  }
+
+  String _subtitle() {
+    switch (widget.chatType) {
+      case 'DIALOG':
+        if (_peerDeleted) return l10n.chatInfoMemberDeleted;
+        if (_isBot) return l10n.contactProfileBot;
+        if (_isOnline) return l10n.contactProfileOnline;
+        if (_presenceStatus == 2 || _presenceStatus == 3)
+          return l10n.contactProfileRecentlyActive;
+        if (_seenTime != null && _seenTime! > 0) {
+          return formatLastSeen(_seenTime!);
+        }
+        return '';
+      case 'CHAT':
+        final total = _memberCount ?? _members.length;
+        return '$total ${pluralRu(total, 'участник', 'участника', 'участников')}';
+      case 'CHANNEL':
+        final count = _memberCount ?? 0;
+        return '$count ${pluralRu(count, 'подписчик', 'подписчика', 'подписчиков')}';
+      default:
+        return '';
+    }
+  }
+
+  bool get _isMuted {
+    if (_dontDisturbUntil == ChatsModule.muteOff) return false;
+    if (_dontDisturbUntil < 0) return true;
+    return _dontDisturbUntil > DateTime.now().millisecondsSinceEpoch;
+  }
+
+  bool get _iAmAdmin {
+    final info = _chatInfo;
+    if (info == null || _myId == 0) return false;
+    return info.isOwner(_myId) || info.isAdmin(_myId);
+  }
+
+  bool get _isGroupOrChannel =>
+      widget.chatType == 'CHAT' || widget.chatType == 'CHANNEL';
+
+  Widget _buildActions(ColorScheme cs) {
+    final muteBtn = (
+      icon: Symbols.notifications,
+      slashedIcon: Symbols.notifications_off,
+      slashed: _isMuted,
+      label: _isMuted
+          ? l10n.chatInfoActionMuted
+          : l10n.contactProfileActionSound,
+      onTap: _muteBusy ? null : _toggleMute,
+    );
+    final chatBtn = (
+      icon: Symbols.chat_bubble,
+      slashedIcon: null,
+      slashed: false,
+      label: l10n.contactProfileActionChat,
+      onTap: _openChat,
+    );
+    final leaveBtn = (
+      icon: Symbols.exit_to_app,
+      slashedIcon: null,
+      slashed: false,
+      label: l10n.chatInfoActionLeave,
+      onTap: _leaveChat,
+    );
+
+    final List<
+      ({
+        IconData icon,
+        IconData? slashedIcon,
+        bool slashed,
+        String label,
+        VoidCallback? onTap,
+      })
+    >
+    btns;
+    if (widget.chatType == 'DIALOG') {
+      btns = [
+        chatBtn,
+        muteBtn,
+        if (!_isBot)
+          (
+            icon: Symbols.call,
+            slashedIcon: null,
+            slashed: false,
+            label: l10n.contactProfileActionCall,
+            onTap: _confirmAndStartCall,
+          ),
+      ];
+    } else if (widget.chatType == 'CHANNEL') {
+      btns = [muteBtn, leaveBtn];
+    } else {
+      btns = [chatBtn, muteBtn, leaveBtn];
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            for (int i = 0; i < btns.length; i++) ...[
+              _actionBtn(
+                cs,
+                btns[i].icon,
+                btns[i].label,
+                onTap: btns[i].onTap,
+                slashedIcon: btns[i].slashedIcon,
+                slashed: btns[i].slashed,
+              ),
+              if (i < btns.length - 1) const SizedBox(width: 8),
+            ],
+          ],
+        ),
+        if (_canAddContact) ...[
+          const SizedBox(height: 8),
+          _wideActionBtn(
+            cs,
+            Symbols.person_add,
+            l10n.contactProfileActionAddContact,
+            _addContactBusy ? null : _addToContacts,
+          ),
+        ],
+      ],
+    );
+  }
+
+  bool get _canAddContact =>
+      widget.chatType == 'DIALOG' &&
+      !_isContact &&
+      !_isBot &&
+      !_peerDeleted &&
+      _otherId != null &&
+      _otherId != _myId;
+
+  Future<void> _addToContacts() async {
+    final peerId = _otherId;
+    if (peerId == null || _addContactBusy) return;
+    setState(() => _addContactBusy = true);
+
+    CachedContact? contact;
+    try {
+      contact = await ContactsModule.addContact(api, peerId, '');
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() {
+      _addContactBusy = false;
+      if (contact != null) {
+        _localContact = contact;
+        _showRealName = false;
+      }
+    });
+    showCustomNotification(
+      context,
+      contact != null ? l10n.nfcContactAdded : l10n.addContactError,
+    );
+  }
+
   void _openChat() {
+    if (widget.openedFromChat) {
+      Navigator.of(context).pop();
+      return;
+    }
     pushSwipeable(
       context,
       (_) => ChatScreen(
-        chatId: widget.chatId,
+        chatId: _mediaChatId,
         name: widget.name,
         imageUrl: widget.imageUrl,
-        chatType: 'DIALOG',
+        chatType: widget.chatType,
       ),
+    );
+  }
+
+  Future<void> _toggleMute() async {
+    if (_muteBusy) return;
+    setState(() => _muteBusy = true);
+    final muted = _isMuted;
+    final target = muted ? ChatsModule.muteOff : ChatsModule.muteForever;
+    final error = await chats.setChatMute(
+      api,
+      chatId: _mediaChatId,
+      dontDisturbUntil: target,
+    );
+    if (!mounted) return;
+    setState(() {
+      _muteBusy = false;
+      if (error == null) _dontDisturbUntil = target;
+    });
+    showCustomNotification(
+      context,
+      error ??
+          (muted
+              ? l10n.chatInfoNotificationsOn
+              : l10n.chatInfoNotificationsOff),
+    );
+  }
+
+  Future<void> _confirmAndStartCall() async {
+    final peerId = _otherId;
+    if (peerId == null || peerId == _myId) return;
+
+    final choice = await showBlurredConfirm(
+      context,
+      title: l10n.chatInfoCallConfirmTitle,
+      message: l10n.chatInfoCallConfirmMessage(_customName),
+      confirmLabel: l10n.chatInfoConfirmYes,
+      cancelLabel: l10n.chatInfoConfirmNo,
+    );
+    if (!mounted || !choice.confirmed) return;
+
+    final navigator = Navigator.of(context);
+    final avatarUrl = widget.imageUrl.isNotEmpty ? widget.imageUrl : null;
+    final active = CallController.instance.activeSession;
+    if (active != null) {
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            name: _customName,
+            avatarUrl: avatarUrl,
+            session: active,
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final session = await CallController.instance.startOutgoing(peerId);
+      if (!mounted) return;
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (_) => CallScreen(
+            name: _customName,
+            avatarUrl: avatarUrl,
+            session: session,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      showCustomNotification(context, l10n.chatInfoCallFailed);
+    }
+  }
+
+  Future<void> _leaveChat() async {
+    final isChannel = widget.chatType == 'CHANNEL';
+    final choice = await showBlurredConfirm(
+      context,
+      title: isChannel
+          ? l10n.chatInfoLeaveChannelTitle
+          : l10n.chatInfoLeaveGroupTitle,
+      message: isChannel
+          ? l10n.chatInfoLeaveChannelMessage
+          : l10n.chatInfoLeaveGroupMessage,
+      confirmLabel: l10n.chatInfoLeaveConfirm,
+      cancelLabel: l10n.chatInfoActionCancel,
+      destructive: true,
+    );
+    if (!mounted || !choice.confirmed) return;
+
+    final ok = await chats.leaveChat(api, chatId: _mediaChatId);
+    if (!mounted) return;
+    if (!ok) {
+      showCustomNotification(context, l10n.chatInfoLeaveFailed);
+      return;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _clearHistory() async {
+    final canClearForAll = _isGroupOrChannel && _iAmAdmin;
+    final choice = await showBlurredConfirm(
+      context,
+      title: l10n.chatInfoClearHistoryTitle,
+      message: l10n.chatInfoClearHistoryMessage,
+      confirmLabel: l10n.chatInfoClearHistoryConfirm,
+      cancelLabel: l10n.chatInfoActionCancel,
+      destructive: true,
+      checkboxLabel: canClearForAll ? l10n.chatInfoClearHistoryForAll : null,
+    );
+    if (!mounted || !choice.confirmed) return;
+
+    final error = await chats.clearHistory(
+      api,
+      chatId: _mediaChatId,
+      lastEventTime: _lastEventTime,
+      forAll: canClearForAll && choice.checked,
+    );
+    if (!mounted) return;
+    showCustomNotification(context, error ?? l10n.chatInfoClearHistoryDone);
+  }
+
+  Future<void> _deleteChat() async {
+    final choice = await showBlurredConfirm(
+      context,
+      title: l10n.chatInfoDeleteChatTitle,
+      message: l10n.chatInfoDeleteChatMessage,
+      confirmLabel: l10n.chatInfoDeleteChatConfirm,
+      cancelLabel: l10n.chatInfoActionCancel,
+      destructive: true,
+    );
+    if (!mounted || !choice.confirmed) return;
+
+    final error = await chats.deleteChat(
+      api,
+      chatId: _mediaChatId,
+      lastEventTime: _lastEventTime,
+      forAll: false,
+    );
+    if (!mounted) return;
+    if (error != null) {
+      showCustomNotification(context, error);
+      return;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _toggleBlock() async {
+    final peerId = _otherId;
+    if (peerId == null) return;
+
+    final block = !_blocked;
+    if (block) {
+      final choice = await showBlurredConfirm(
+        context,
+        title: l10n.chatInfoBlockConfirmTitle,
+        message: l10n.chatInfoBlockConfirmMessage(_customName),
+        confirmLabel: l10n.chatInfoConfirmYes,
+        cancelLabel: l10n.chatInfoConfirmNo,
+        destructive: true,
+      );
+      if (!mounted || !choice.confirmed) return;
+    }
+
+    final ok = await ContactsModule.setBlocked(api, peerId, block);
+    if (!mounted) return;
+    if (!ok) {
+      showCustomNotification(context, l10n.chatInfoBlockFailed);
+      return;
+    }
+    setState(() => _blocked = block);
+    showCustomNotification(
+      context,
+      block ? l10n.chatInfoBlockDone : l10n.chatInfoUnblockDone,
+    );
+    if (block) await _openComplaintCard(peerId);
+  }
+
+  Future<void> _openComplaintCard(int peerId) async {
+    if (!mounted) return;
+    await showComplaintCard(
+      context,
+      title: l10n.chatInfoComplaintTitle,
+      subtitle: l10n.chatInfoComplaintSubtitle,
+      sendLabel: l10n.chatInfoComplaintSend,
+      closeLabel: l10n.chatInfoComplaintClose,
+      emptyLabel: l10n.chatInfoComplaintEmpty,
+      loadReasons: () async {
+        final reasons = await ComplaintsModule.reasonsFor(
+          api,
+          ComplaintsModule.userTypeId,
+        );
+        return reasons
+            .map((r) => (id: r.reasonId, title: r.reasonTitle))
+            .toList();
+      },
+      onSend: (reasonId) async {
+        final ok = await ComplaintsModule.sendComplaint(
+          api,
+          reasonId: reasonId,
+          typeId: ComplaintsModule.userTypeId,
+          ids: [peerId],
+        );
+        if (!mounted) return ok;
+        showCustomNotification(
+          context,
+          ok ? l10n.chatInfoComplaintSent : l10n.chatInfoComplaintFailed,
+        );
+        return ok;
+      },
     );
   }
 
   Widget _actionBtn(
     ColorScheme cs,
     IconData icon,
-    String label, [
+    String label, {
     VoidCallback? onTap,
-  ]) {
+    IconData? slashedIcon,
+    bool slashed = false,
+  }) {
     return Expanded(
       child: GlossyPill(
         onTap: onTap,
@@ -436,7 +1775,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: cs.primary, size: 22),
+            if (slashedIcon != null)
+              AnimatedSlashIcon(
+                icon: icon,
+                slashedIcon: slashedIcon,
+                slashed: slashed,
+                color: cs.primary,
+                size: 22,
+              )
+            else
+              Icon(icon, color: cs.primary, size: 22),
             const SizedBox(height: 4),
             Text(
               label,
@@ -449,8 +1797,38 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
+  Widget _wideActionBtn(
+    ColorScheme cs,
+    IconData icon,
+    String label, [
+    VoidCallback? onTap,
+  ]) {
+    return GlossyPill(
+      onTap: onTap,
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(14),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      depth: 6,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: cs.primary, size: 22),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(color: cs.onSurface, fontSize: 13),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPersistentInfo(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     final items = <Widget>[];
 
     if (widget.chatType == 'DIALOG') {
@@ -484,9 +1862,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
           items.add(_simpleInfoCard(cs, l10n.chatInfoBio, bio));
         }
       }
-    } else if (widget.chatType == 'CHANNEL') {
-      final link = _chatInfo?.link;
-      if (link != null && link.isNotEmpty) {
+    } else {
+      final info = _chatInfo;
+      final link = info?.link;
+      if (link != null &&
+          link.isNotEmpty &&
+          (info?.canSeeInviteLink(_myId) ?? false)) {
         items.add(_linkCard(cs, link));
       }
       final desc = _chatInfo?.description;
@@ -497,9 +1878,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     }
 
     if (items.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [...items, const SizedBox(height: 16)],
+    return SelectionArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [...items, const SizedBox(height: 16)],
+      ),
     );
   }
 
@@ -524,8 +1907,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 4),
-            Text(
-              value,
+            FormattedMessageText(
+              text: value,
+              ranges: const [],
+              entityMode: TextEntityMode.copy,
               style: TextStyle(
                 color: isLink ? cs.primary : cs.onSurface,
                 fontSize: 16,
@@ -539,7 +1924,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _linkCard(ColorScheme cs, String link) {
-    final l10n = AppLocalizations.of(context)!;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
@@ -556,12 +1940,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
                 const SizedBox(height: 4),
-                Text(link, style: TextStyle(color: cs.primary, fontSize: 15)),
+                FormattedMessageText(
+                  text: link,
+                  ranges: const [],
+                  entityMode: TextEntityMode.copy,
+                  style: TextStyle(color: cs.primary, fontSize: 15),
+                ),
               ],
             ),
           ),
           IconButton(
-            icon: Icon(Icons.qr_code_2, color: cs.primary, size: 22),
+            icon: Icon(Symbols.qr_code_2, color: cs.primary, size: 22),
             onPressed: () {},
           ),
         ],
@@ -569,8 +1958,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
+  static const Duration _descRevealDuration = Duration(milliseconds: 260);
+  static const Curve _descRevealCurve = Curves.easeOutCubic;
+
   Widget _collapsibleDescCard(ColorScheme cs, String desc) {
-    final l10n = AppLocalizations.of(context)!;
     const int collapsedLines = 3;
     final isLong = desc.length > 120;
 
@@ -589,21 +1980,45 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 4),
-            Text(
-              desc,
-              style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.4),
-              maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
-              overflow: (_descExpanded || !isLong)
-                  ? null
-                  : TextOverflow.ellipsis,
+            AnimatedSize(
+              duration: _descRevealDuration,
+              curve: _descRevealCurve,
+              alignment: Alignment.topLeft,
+              child: FormattedMessageText(
+                text: desc,
+                ranges: const [],
+                entityMode: TextEntityMode.copy,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 15,
+                  height: 1.4,
+                ),
+                maxLines: (_descExpanded || !isLong) ? null : collapsedLines,
+                overflow: (_descExpanded || !isLong)
+                    ? null
+                    : TextOverflow.ellipsis,
+              ),
             ),
             if (isLong) ...[
               const SizedBox(height: 6),
               GestureDetector(
-                onTap: () => setState(() => _descExpanded = !_descExpanded),
-                child: Text(
-                  _descExpanded ? l10n.chatInfoCollapse : l10n.chatInfoShowMore,
-                  style: TextStyle(color: cs.primary, fontSize: 13),
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  Haptics.tap();
+                  setState(() => _descExpanded = !_descExpanded);
+                },
+                child: AnimatedTextSwap(
+                  showAlternate: _descExpanded,
+                  duration: _descRevealDuration,
+                  curve: _descRevealCurve,
+                  alternate: Text(
+                    l10n.chatInfoCollapse,
+                    style: TextStyle(color: cs.primary, fontSize: 13),
+                  ),
+                  child: Text(
+                    l10n.chatInfoShowMore,
+                    style: TextStyle(color: cs.primary, fontSize: 13),
+                  ),
                 ),
               ),
             ],
@@ -693,7 +2108,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _tabBody(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     if (_selectedTab == 'Info') return _buildInfoTabContent(cs);
     if (_selectedTab == l10n.chatInfoTabMembers) {
       return _buildMembersTabContent(cs);
@@ -704,7 +2118,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         return _buildPlaceholder(
           cs,
           l10n.chatInfoEmptyGeneralChats,
-          Icons.group,
+          Symbols.group,
         );
       }
       return CommonChatsTab(
@@ -718,7 +2132,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         cs,
         SharedContentKind.media,
         l10n.chatInfoEmptyMedia,
-        Icons.photo_library,
+        Symbols.photo_library,
       );
     }
     if (_selectedTab == l10n.chatInfoTabFiles) {
@@ -726,7 +2140,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         cs,
         SharedContentKind.files,
         l10n.chatInfoEmptyFiles,
-        Icons.description,
+        Symbols.description,
       );
     }
     if (_selectedTab == l10n.chatInfoTabVoice) {
@@ -734,7 +2148,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         cs,
         SharedContentKind.voice,
         l10n.chatInfoEmptyVoice,
-        Icons.mic,
+        Symbols.mic,
       );
     }
     if (_selectedTab == l10n.chatInfoTabLinks) {
@@ -742,7 +2156,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         cs,
         SharedContentKind.links,
         l10n.chatInfoEmptyLinks,
-        Icons.link,
+        Symbols.link,
       );
     }
     return const SizedBox.shrink();
@@ -761,6 +2175,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       chatId: _mediaChatId,
       anchorMessageId: anchor,
       myId: _myId,
+      sourceName: widget.name,
       kind: kind,
       emptyLabel: emptyLabel,
       emptyIcon: emptyIcon,
@@ -810,23 +2225,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget _buildInfoTabContent(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     final items = <Widget>[];
-
-    if (widget.chatType == 'CHAT') {
-      final desc = _chatInfo?.description;
-      if (desc != null && desc.isNotEmpty) {
-        items
-          ..add(_infoCard(cs, l10n.contactProfileInfoDescription, desc))
-          ..add(const SizedBox(height: 8));
-      }
-    }
 
     items.add(_buildInfoRowsCard(cs));
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: items,
+    return SelectionArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: items,
+      ),
     );
   }
 
@@ -840,38 +2247,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  Widget _infoCard(ColorScheme cs, String label, String value) {
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(14),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      depth: 6,
-      child: SizedBox(
-        width: double.infinity,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildMembersTabContent(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
+    final hasHidden = _members.length > _memberRenderLimit;
+    final shown = hasHidden ? _members.take(_memberRenderLimit) : _members;
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
@@ -879,9 +2257,61 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       ),
       child: Column(
         children: [
-          _memberAction(cs, Icons.person_add, l10n.chatInfoAddMember, () {}),
-          ..._members.expand((m) => [_listDivider(cs), _memberTile(cs, m)]),
+          _memberAction(
+            cs,
+            Symbols.person_add,
+            l10n.chatInfoAddMember,
+            _openAddMembers,
+          ),
+          if (_inviteLink != null) ...[
+            _listDivider(cs),
+            _memberAction(
+              cs,
+              Symbols.link,
+              l10n.chatInfoInviteByLink,
+              () => _openInviteLink(_inviteLink!),
+            ),
+          ],
+          ...shown.expand((m) => [_listDivider(cs), _memberTile(cs, m)]),
+          if (hasHidden || _membersLoading || !_membersEnd) ...[
+            _listDivider(cs),
+            _membersFooter(cs),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _membersFooter(ColorScheme cs) {
+    if (_membersLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    return InkWell(
+      onTap: () {
+        if (!_revealMoreMembers()) _fetchMembersPage();
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(Symbols.expand_more, color: cs.primary, size: 26),
+            const SizedBox(width: 14),
+            Text(
+              l10n.chatInfoShowMore,
+              style: TextStyle(color: cs.primary, fontSize: 16),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -916,18 +2346,22 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   );
 
   Widget _memberTile(ColorScheme cs, _MemberInfo member) {
-    final l10n = AppLocalizations.of(context)!;
     final name =
+        member.name ??
         ContactCache.get(member.id) ??
         (member.isMe ? l10n.callParticipantYou : '${member.id}');
-    final avatar = ContactCache.getAvatar(member.id);
+    final avatar = member.avatarUrl ?? ContactCache.getAvatar(member.id);
 
     final String sublabel;
-    if (member.isMe) {
+    if (member.blocked) {
+      sublabel = l10n.chatInfoMemberDeleted;
+    } else if (member.isMe) {
       sublabel = l10n.callParticipantYou;
-    } else if (member.isOnline) {
+    } else if (member.presenceStatus == 1) {
       sublabel = l10n.contactProfileOnline;
-    } else if (member.seenTime != null) {
+    } else if (member.presenceStatus == 2 || member.presenceStatus == 3) {
+      sublabel = l10n.contactProfileRecentlyActive;
+    } else if (member.seenTime != null && member.seenTime! > 0) {
       sublabel = formatLastSeen(member.seenTime!);
     } else {
       sublabel = l10n.contactProfileRecentlyActive;
@@ -937,63 +2371,159 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         ? l10n.chatInfoRoleOwner
         : (member.isAdmin ? l10n.chatInfoRoleAdmin : null);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          (avatar != null && avatar.isNotEmpty)
-              ? CircleAvatar(
-                  radius: 22,
-                  backgroundImage: CachedNetworkImageProvider(
-                    avatar,
-                    maxWidth: 144,
-                    maxHeight: 144,
-                  ),
-                  backgroundColor: cs.primaryContainer,
-                )
-              : CircleAvatar(
-                  radius: 22,
-                  backgroundColor: cs.primaryContainer,
-                  child: Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+    final story = member.blocked || !AppStories.current.value
+        ? null
+        : storiesModule.previewOf(member.id);
+    final avatarRadius = story == null ? 22.0 : 19.0;
+
+    return InkWell(
+      onTap: member.isMe
+          ? null
+          : () => openContactDialogProfile(
+              context,
+              contactId: member.id,
+              name: name,
+              avatarUrl: avatar,
+            ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            if (member.blocked)
+              _ghostAvatar()
+            else
+              _memberAvatar(
+                cs,
+                story: story,
+                radius: avatarRadius,
+                name: name,
+                avatarUrl: avatar,
+              ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
                     style: TextStyle(
-                      color: cs.onPrimaryContainer,
-                      fontSize: 16,
+                      color: cs.onSurface,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
+                  Text(
+                    sublabel,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                   ),
-                ),
-                Text(
-                  sublabel,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          if (roleLabel != null)
-            Text(
-              roleLabel,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+            if (member.alias != null)
+              _memberTag(cs, member.alias!)
+            else if (roleLabel != null)
+              Text(
+                roleLabel,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _memberAvatar(
+    ColorScheme cs, {
+    required StoryPreview? story,
+    required double radius,
+    required String name,
+    String? avatarUrl,
+  }) {
+    final circle = (avatarUrl != null && avatarUrl.isNotEmpty)
+        ? CircleAvatar(
+            radius: radius,
+            backgroundImage: CachedNetworkImageProvider(
+              avatarUrl,
+              maxWidth: 144,
+              maxHeight: 144,
             ),
-        ],
+            backgroundColor: cs.primaryContainer,
+          )
+        : CircleAvatar(
+            radius: radius,
+            backgroundColor: cs.primaryContainer,
+            child: Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: TextStyle(
+                color: cs.onPrimaryContainer,
+                fontSize: radius * 0.72,
+              ),
+            ),
+          );
+    if (story == null) return circle;
+    return Builder(
+      builder: (avatarContext) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openMemberStories(avatarContext, story, name, avatarUrl),
+        child: StoryAvatarRing(
+          diameter: radius * 2,
+          total: story.totalCount,
+          read: story.readCount,
+          strokeWidth: 2.2,
+          ringGap: 3,
+          haloWidth: 1.5,
+          child: circle,
+        ),
+      ),
+    );
+  }
+
+  void _openMemberStories(
+    BuildContext avatarContext,
+    StoryPreview story,
+    String name,
+    String? avatarUrl,
+  ) {
+    Haptics.tap();
+    unawaited(
+      openStoryViewer(
+        context,
+        previews: [story],
+        origin: storyOriginOf(avatarContext),
+        ownerOverrides: {
+          story.owner.ownerId: StoryOwnerInfo(name: name, avatarUrl: avatarUrl),
+        },
+      ),
+    );
+  }
+
+  Widget _ghostAvatar({double radius = 22, double fontSize = 24}) {
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: const Color(0xFFD4D4D4),
+      child: Text('👻', style: TextStyle(fontSize: fontSize)),
+    );
+  }
+
+  Widget _memberTag(ColorScheme cs, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: cs.onPrimaryContainer,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
 
   Widget _buildAllInfoRows(ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     final rows = <({String label, String value})>[];
     final chat = _chatInfo?.raw;
     if (chat == null) {
@@ -1022,6 +2552,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     add(l10n.chatInfoRowId, chat['id']);
 
     if (type == 'DIALOG') {
+      add(l10n.chatInfoRowUserId, _contactData?.raw['id'] ?? _otherId);
       add(l10n.chatInfoRowCreated, chat['created'], tsFormat: true);
       add(l10n.chatInfoRowModified, chat['modified'], tsFormat: true);
       add(l10n.callInfoStatus, chat['status']);
@@ -1050,6 +2581,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       final opts = chat['options'] as Map?;
       add(l10n.chatInfoRowOfficialGroup, opts?['OFFICIAL'] as bool?);
       add(l10n.chatInfoRowSignAdmin, opts?['SIGN_ADMIN'] as bool?);
+      _addChatOptions(add, opts);
       add(l10n.callInfoStatus, chat['status']);
     }
 
@@ -1066,6 +2598,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         l10n.chatInfoRowOnlyAdmin,
         opts?['ONLY_ADMIN_CAN_ADD_MEMBER'] as bool?,
       );
+      _addChatOptions(add, opts);
       add(l10n.callInfoStatus, chat['status']);
     }
 
@@ -1114,8 +2647,37 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
+  void _addChatOptions(
+    void Function(String label, dynamic val, {bool tsFormat}) add,
+    Map? opts,
+  ) {
+    if (opts == null) return;
+    add(l10n.chatInfoRowDisableForward, opts['DISABLE_FORWARD'] as bool?);
+    add(
+      l10n.chatInfoRowCopyDisabled,
+      opts['MESSAGE_COPY_NOT_ALLOWED'] as bool?,
+    );
+    add(l10n.chatInfoRowOnlyAdminCall, opts['ONLY_ADMIN_CAN_CALL'] as bool?);
+    add(l10n.chatInfoRowAllCanPin, opts['ALL_CAN_PIN_MESSAGE'] as bool?);
+    add(
+      l10n.chatInfoRowMembersSeeLink,
+      opts['MEMBERS_CAN_SEE_PRIVATE_LINK'] as bool?,
+    );
+    add(
+      l10n.chatInfoRowConfirmBeforeSend,
+      opts['CONFIRM_BEFORE_SEND'] as bool?,
+    );
+    add(
+      l10n.chatInfoRowOnlyOwnerIconTitle,
+      opts['ONLY_OWNER_CAN_CHANGE_ICON_TITLE'] as bool?,
+    );
+    add(
+      l10n.chatInfoRowPromotedDisabled,
+      opts['PROMOTED_CONTENT_DISABLED'] as bool?,
+    );
+  }
+
   List<({String label, String value})> _buildExtraContactRows() {
-    final l10n = AppLocalizations.of(context)!;
     final c = _contactData;
     if (c == null) return const [];
     final rows = <({String label, String value})>[];
@@ -1170,7 +2732,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
   }
 
   Widget? _trailingFor(String label, ColorScheme cs) {
-    final l10n = AppLocalizations.of(context)!;
     if (label != l10n.chatInfoRowId) return null;
     if (widget.chatType != 'DIALOG') return null;
     if (_contactData == null) return null;
@@ -1190,6 +2751,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
+  Future<void> _copyInfoValue(String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    Haptics.tap();
+    showCustomNotification(context, l10n.msgActionsCopied);
+  }
+
   Widget _infoRow(
     ColorScheme cs,
     String label,
@@ -1202,22 +2770,26 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
-                ),
-                Text(
-                  value,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onLongPress: () => unawaited(_copyInfoValue(value)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
                   ),
-                ),
-              ],
+                  Text(
+                    value,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           ?trailing,
@@ -1226,27 +2798,77 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
     );
   }
 
-  Widget _avatar() {
-    final avatar = KometAvatar(
-      name: widget.name,
-      imageUrl: widget.imageUrl,
-      size: 96,
-      fontSize: 36,
-    );
-    final peerId = widget.chatType == 'DIALOG' ? _otherId : null;
-    if (peerId == null || widget.imageUrl.isEmpty) return avatar;
-    return GestureDetector(
-      onTap: () => AvatarHistoryScreen.open(
-        context,
-        contactId: peerId,
-        name: widget.name,
-        currentAvatarUrl: widget.imageUrl,
-      ),
-      child: avatar,
-    );
+  Future<void> _loadAvatarHistory(int peerId) async {
+    if (!_headerHasPhoto || _avatarHistoryBusy) return;
+    _avatarHistoryBusy = true;
+    final cached = ContactsModule.cachedPhotos(peerId);
+    if (cached != null) _applyAvatarPhotos(cached);
+    try {
+      final photos = await ContactsModule.fetchPhotos(api, peerId, count: 30);
+      if (!mounted) return;
+      _avatarHistoryLoaded = true;
+      _applyAvatarPhotos(photos);
+    } catch (e) {
+      logger.w('Не удалось получить историю аватарок $peerId: $e');
+    } finally {
+      _avatarHistoryBusy = false;
+    }
   }
 
-  Widget _buildShimmer(ColorScheme cs) {
+  void _applyAvatarPhotos(ContactPhotos photos) {
+    final urls = <String>[];
+    if (widget.imageUrl.isNotEmpty) urls.add(widget.imageUrl);
+    for (final url in photos.urls) {
+      if (url.isNotEmpty && !urls.contains(url)) urls.add(url);
+    }
+    if (urls.isEmpty || listEquals(urls, _avatarPages)) return;
+    setState(() {
+      _avatarPages = urls;
+      _avatarTotal = math.max(photos.total, urls.length);
+      _avatarIndex = _avatarIndex.clamp(0, urls.length - 1);
+    });
+  }
+
+  Future<void> _loadStories(int peerId) async {
+    if (!AppStories.current.value || _peerDeleted) return;
+    final cached = storiesModule.previewOf(peerId);
+    if (cached != null && !cached.isEmpty && mounted) {
+      setState(() {
+        _storyPreview = cached;
+        _refreshUnreadStories();
+      });
+    }
+    final fresh = await storiesModule.loadOwnerPreview(
+      StoryOwner(ownerId: peerId),
+    );
+    if (!mounted) return;
+    setState(() {
+      _storyPreview = (fresh == null || fresh.isEmpty) ? null : fresh;
+      _refreshUnreadStories();
+    });
+  }
+
+  Future<void> _openStories() async {
+    final preview = _storyPreview;
+    if (preview == null) return;
+    Haptics.tap();
+    final avatarContext = _avatarKey.currentContext;
+    await openStoryViewer(
+      context,
+      previews: [preview],
+      origin: avatarContext == null ? null : storyOriginOf(avatarContext),
+      ownerOverrides: {
+        preview.owner.ownerId: StoryOwnerInfo(
+          name: _customName,
+          avatarUrl: _contactData?.avatarUrl ?? widget.imageUrl,
+        ),
+      },
+    );
+    if (!mounted) return;
+    await _loadStories(preview.owner.ownerId);
+  }
+
+  List<Widget> _loadingBlocks(ColorScheme cs) {
     Widget block(double w, double h, {double r = 8}) => Container(
       width: w,
       height: h,
@@ -1256,21 +2878,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       ),
     );
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 60, 16, 0),
-      children: [
-        Center(child: block(96, 96, r: 48)),
-        const SizedBox(height: 14),
-        Center(child: block(160, 22, r: 8)),
-        const SizedBox(height: 8),
-        Center(child: block(110, 16, r: 6)),
-        const SizedBox(height: 24),
-        Center(child: block(240, 54, r: 14)),
-        const SizedBox(height: 16),
-        block(double.infinity, 36, r: 20),
-        const SizedBox(height: 12),
-        block(double.infinity, 120, r: 14),
-      ],
-    );
+    return [
+      block(double.infinity, 60, r: 14),
+      const SizedBox(height: 16),
+      block(double.infinity, 36, r: 20),
+      const SizedBox(height: 12),
+      block(double.infinity, 120, r: 14),
+    ];
   }
 }

@@ -11,6 +11,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/settings_radio_tile.dart';
+import '../../widgets/settings_card.dart';
 
 class ThemeSettingsScreen extends StatelessWidget {
   const ThemeSettingsScreen({super.key});
@@ -71,11 +72,8 @@ class _ThemeModeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(28),
+    return SettingsPanel(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-      depth: 6,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -171,11 +169,8 @@ class _AmoledCardState extends State<_AmoledCard> {
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (e) => _lastPointerPosition = e.position,
-      child: GlossyPill(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(28),
+      child: SettingsPanel(
         padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
-        depth: 6,
         child: Row(
           children: [
             Icon(Symbols.contrast, color: cs.onSurface, size: 24, weight: 500),
@@ -235,11 +230,7 @@ class _ScheduleCard extends StatelessWidget {
         return AnimatedOpacity(
           opacity: enabled ? 1 : 0.5,
           duration: const Duration(milliseconds: 200),
-          child: GlossyPill(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(28),
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-            depth: 6,
+          child: SettingsPanel(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

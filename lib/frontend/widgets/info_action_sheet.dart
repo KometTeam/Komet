@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'sheet_helpers.dart';
+import '../../core/config/app_shape.dart';
 
 class InfoActionSheetItem {
   final IconData icon;
@@ -188,9 +189,7 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
                 disabledBackgroundColor: cs.primary.withValues(alpha: 0.45),
                 disabledForegroundColor: cs.onPrimary.withValues(alpha: 0.85),
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(28),
-                ),
+                shape: AppShape.buttonBorder,
               ),
               child: Text(
                 buttonText,

@@ -5,10 +5,13 @@ import 'persisted_setting.dart';
 class AppAmoled {
   static const prefKey = 'app_amoled';
 
+  static bool get systemIsDark =>
+      PlatformDispatcher.instance.platformBrightness == Brightness.dark;
+
   static final _setting = PersistedSetting<bool>(
     prefKey: prefKey,
-    defaultValue: false,
-    read: (prefs, key) => prefs.getBool(key),
+    defaultValue: systemIsDark,
+    read: (prefs, key) => prefs.getBool(key) ?? systemIsDark,
     write: (prefs, key, value) async {
       await prefs.setBool(key, value);
     },

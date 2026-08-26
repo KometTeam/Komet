@@ -12,6 +12,8 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/transport/traffic_monitor.dart';
 import '../../../core/utils/format.dart';
 import '../../widgets/custom_notification.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 
 class TrafficMonitorScreen extends StatefulWidget {
   const TrafficMonitorScreen({super.key});
@@ -153,7 +155,7 @@ class _TrafficMonitorScreenState extends State<TrafficMonitorScreen> {
                 color: cs.onSurface,
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                fontFamily: 'Outfit',
+                fontFamily: displayFontOf(context),
               ),
             ),
           ),
@@ -202,7 +204,7 @@ class _TrafficMonitorScreenState extends State<TrafficMonitorScreen> {
       padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppShape.cardRadius,
       ),
       child: AnimatedBuilder(
         animation: _monitor,
@@ -216,7 +218,7 @@ class _TrafficMonitorScreenState extends State<TrafficMonitorScreen> {
                 height: 10,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: on ? kOnlineGreen : cs.outline,
+                  color: on ? kSuccessGreen : cs.outline,
                 ),
               ),
               const SizedBox(width: 12),

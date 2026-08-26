@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
-import '../utils/logger.dart';
+import 'package:kolibri/kolibri.dart' as kb;
+
 import 'conversation_params.dart';
 
 /// Параметры подключения к сигналинг-сокету ws2.
@@ -20,55 +20,63 @@ class Ws2Config {
 
   const Ws2Config({required this.uri, required this.userId});
 
-  static const _defaultCapabilities = '3c03f';
-  static const _appVersion = 'sdk-0.1.16.4';
+  static const defaultCapabilities = '3c02f';
+  static const _appVersion = 'sdk-0.2.1.3';
+  static const defaultDevice = 'Android/Unknown';
+  static const defaultOsVersion = '34';
 
   /// Входящий звонок: из распакованных параметров [ConversationParams].
   /// `userId` — часть после `:` в [ConversationParams.turnUser].
   factory Ws2Config.fromVcp(
     ConversationParams params, {
     required String conversationId,
-    String capabilities = _defaultCapabilities,
-    String device = 'Komet',
-    String osVersion = '36',
+    String capabilities = defaultCapabilities,
+    String? device,
+    String? osVersion,
   }) {
-    final userId =
-        int.tryParse((params.turnUser ?? '').split(':').last) ?? 0;
-    final uri = Uri.parse(params.wsEndpoint).replace(queryParameters: {
-      'userId': '$userId',
-      'entityType': 'USER',
-      'conversationId': conversationId,
-      'token': params.token,
-      'version': '5',
-      'capabilities': capabilities,
-      'device': device,
-      'platform': 'ANDROID',
-      'clientType': 'ONE_ME',
-      'appVersion': _appVersion,
-      'osVersion': osVersion,
-    });
+    final userId = int.tryParse((params.turnUser ?? '').split(':').last) ?? 0;
+    final uri = Uri.parse(params.wsEndpoint).replace(
+      queryParameters: {
+        'userId': '$userId',
+        'token': params.token,
+        'conversationId': conversationId,
+        'version': '5',
+        'capabilities': capabilities,
+        'device': device ?? defaultDevice,
+        'platform': 'ANDROID',
+        'clientType': 'ONE_ME',
+        'appVersion': _appVersion,
+        'osVersion': osVersion ?? defaultOsVersion,
+      },
+    );
     return Ws2Config(uri: uri, userId: userId);
   }
 
-  /// Исходящий звонок: `endpoint` из ответа opcode 78 уже содержит токен и
-  /// conversationId/userId в query — дописываем клиентские параметры.
+  /// Исходящий звонок или вход в конференцию: `endpoint` из ответа opcode 78 /
+  /// 166 уже содержит токен и conversationId/userId в query — дописываем
+  /// клиентские параметры. Без `tgt=start` медиасервер принимает сокет, но не
+  /// поднимает разговор и не шлёт нотификацию `connection`.
   factory Ws2Config.fromEndpoint(
     String endpoint, {
     required int userId,
-    String capabilities = _defaultCapabilities,
-    String device = 'Komet',
+    String capabilities = defaultCapabilities,
+    String? device,
+    String? osVersion,
   }) {
     final base = Uri.parse(endpoint);
-    final uri = base.replace(queryParameters: {
-      ...base.queryParameters,
-      'platform': 'ANDROID',
-      'version': '5',
-      'capabilities': capabilities,
-      'clientType': 'ONE_ME',
-      'appVersion': _appVersion,
-      'device': device,
-      'tgt': 'start',
-    });
+    final uri = base.replace(
+      queryParameters: {
+        ...base.queryParameters,
+        'version': '5',
+        'capabilities': capabilities,
+        'device': device ?? defaultDevice,
+        'platform': 'ANDROID',
+        'clientType': 'ONE_ME',
+        'appVersion': _appVersion,
+        'osVersion': osVersion ?? defaultOsVersion,
+        'tgt': 'start',
+      },
+    );
     return Ws2Config(uri: uri, userId: userId);
   }
 }
@@ -84,17 +92,19 @@ class Ws2CommandException implements Exception {
 
 /// Клиент сигналинга звонка поверх WebSocket `ws2`.
 ///
-/// Конверт сообщений (подтверждено захватом `docs/ws2_capture.log`):
+/// Тонкий адаптер над Rust-ядром (kolibri [kb.CallSignaling]): ядро держит
+/// WebSocket, корреляцию `sequence`/`response`, keepalive `ping`→`pong` и
+/// разбор кадров; здесь — прежний Dart-интерфейс для [call_session].
+///
+/// Конверт сообщений:
 /// - запрос: `{"command": ..., ..., "sequence": N}`
 /// - ответ:  `{"sequence": N, "response": "<command>", "type": "response"}`
 /// - пуш:    `{..., "notification": "<name>", "type": "notification"}`
-/// - keepalive: текстовый кадр `ping` → ответ `pong`.
 class Ws2Signaling {
   final Ws2Config config;
 
-  WebSocket? _socket;
-  int _sequence = 0;
-  final Map<int, Completer<Map<String, dynamic>>> _pending = {};
+  kb.CallSignaling? _call;
+  StreamSubscription<String>? _notifSub;
 
   final _notifications = StreamController<Map<String, dynamic>>.broadcast();
   final _closed = Completer<Object?>();
@@ -104,106 +114,58 @@ class Ws2Signaling {
   /// Пуши сервера (`type == "notification"`). Фильтруй по полю `notification`.
   Stream<Map<String, dynamic>> get notifications => _notifications.stream;
 
-  /// Завершается, когда сокет закрыт (значение — причина закрытия, если была).
+  /// Завершается, когда сокет закрыт.
   Future<Object?> get done => _closed.future;
 
-  bool get isConnected => _socket != null;
+  bool get isConnected => _call?.isConnected() ?? false;
 
   Future<void> connect() async {
-    final socket = await WebSocket.connect(
-      config.uri.toString(),
-      headers: {'User-Agent': 'okhttp/4.12.0'},
+    final call = await kb.connectCallSignaling(
+      url: config.uri.toString(),
+      userAgent: 'okhttp/4.12.0',
     );
-    _socket = socket;
-    socket.listen(
-      _onFrame,
-      onError: _onDone,
+    _call = call;
+    _notifSub = call.notifications().listen(
+      (json) {
+        Object? decoded;
+        try {
+          decoded = jsonDecode(json);
+        } catch (_) {
+          return;
+        }
+        if (decoded is Map<String, dynamic>) _notifications.add(decoded);
+      },
+      onError: (_) => _onDone(null),
       onDone: () => _onDone(null),
       cancelOnError: false,
     );
   }
 
-  void _onFrame(dynamic frame) {
-    if (frame is String && frame == 'ping') {
-      _socket?.add('pong');
-      return;
-    }
-
-    final String text;
-    if (frame is String) {
-      text = frame;
-    } else if (frame is List<int>) {
-      text = utf8.decode(frame);
-    } else {
-      return;
-    }
-
-    Object? decoded;
-    try {
-      decoded = jsonDecode(text);
-    } catch (_) {
-      return;
-    }
-    if (decoded is! Map<String, dynamic>) return;
-
-    final label =
-        decoded['notification'] ?? decoded['response'] ?? decoded['type'];
-    final dump = jsonEncode(decoded);
-    logger.t('[ws2] ← $label');
-    logger.t(dump.length > 1500
-        ? '${dump.substring(0, 1500)}… (${dump.length}b)'
-        : dump);
-
-    final type = decoded['type'];
-    if (type == 'response' || type == 'error') {
-      final seq = decoded['sequence'];
-      if (seq is int) {
-        final completer = _pending.remove(seq);
-        if (completer != null && !completer.isCompleted) {
-          completer.complete(decoded);
-        }
-      }
-      if (type == 'error') _notifications.add(decoded);
-      return;
-    }
-
-    if (type == 'notification' || decoded.containsKey('notification')) {
-      _notifications.add(decoded);
-    }
-  }
-
   void _onDone(Object? error) {
-    for (final c in _pending.values) {
-      if (!c.isCompleted) c.completeError(error ?? const SocketException('ws2 closed'));
-    }
-    _pending.clear();
     if (!_closed.isCompleted) _closed.complete(error);
     if (!_notifications.isClosed) _notifications.close();
   }
 
   /// Отправляет команду и ждёт ответ сервера. Бросает [Ws2CommandException],
-  /// если в ответе есть поле `error`.
+  /// если сервер вернул ошибку.
   Future<Map<String, dynamic>> sendCommand(
     String command, {
     Map<String, dynamic> extra = const {},
     Duration timeout = const Duration(seconds: 15),
-  }) {
-    final socket = _socket;
-    if (socket == null) {
+  }) async {
+    final call = _call;
+    if (call == null) {
       return Future.error(StateError('ws2 не подключён'));
     }
-
-    final seq = ++_sequence;
-    final completer = Completer<Map<String, dynamic>>();
-    _pending[seq] = completer;
-
-    socket.add(jsonEncode({'command': command, ...extra, 'sequence': seq}));
-
-    return completer.future.timeout(timeout).then((response) {
-      final error = response['error'];
-      if (error != null) throw Ws2CommandException(command, error);
-      return response;
-    });
+    try {
+      final response = await call
+          .sendCommand(command: command, extraJson: jsonEncode(extra))
+          .timeout(timeout);
+      final decoded = jsonDecode(response);
+      return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+    } catch (e) {
+      throw Ws2CommandException(command, e);
+    }
   }
 
   /// Передаёт SDP (offer/answer) другому участнику.
@@ -213,7 +175,7 @@ class Ws2Signaling {
     required String sdp,
     String participantType = 'USER',
     int deviceIdx = 0,
-    String capabilities = '1',
+    String capabilities = Ws2Config.defaultCapabilities,
   }) {
     return sendCommand(
       'transmit-data',
@@ -260,9 +222,45 @@ class Ws2Signaling {
     bool isVideoEnabled = false,
     bool isScreenSharingEnabled = false,
     bool isAnimojiEnabled = false,
+    bool? isFastScreenSharingEnabled,
+    bool? isAudioSharingEnabled,
   }) {
     return sendCommand(
       'change-media-settings',
+      extra: {
+        'mediaSettings': {
+          'isVideoEnabled': isVideoEnabled,
+          'isAudioEnabled': isAudioEnabled,
+          'isScreenSharingEnabled': isScreenSharingEnabled,
+          'isAnimojiEnabled': isAnimojiEnabled,
+          'isFastScreenSharingEnabled': ?isFastScreenSharingEnabled,
+          'isAudioSharingEnabled': ?isAudioSharingEnabled,
+        },
+      },
+    );
+  }
+
+  Future<void> switchTopology({
+    String topology = 'SERVER',
+    bool force = false,
+  }) {
+    return sendCommand(
+      'switch-topology',
+      extra: {'topology': topology, 'force': force},
+    );
+  }
+
+  Future<void> requestRealloc() => sendCommand('request-realloc');
+
+  /// Принять входящий звонок (сторона вызываемого).
+  Future<void> acceptCall({
+    bool isAudioEnabled = true,
+    bool isVideoEnabled = false,
+    bool isScreenSharingEnabled = false,
+    bool isAnimojiEnabled = false,
+  }) {
+    return sendCommand(
+      'accept-call',
       extra: {
         'mediaSettings': {
           'isVideoEnabled': isVideoEnabled,
@@ -274,62 +272,47 @@ class Ws2Signaling {
     );
   }
 
-  /// Принять входящий звонок (сторона вызываемого).
-  Future<void> acceptCall() => sendCommand('accept-call');
-
   Future<void> hangup({String reason = 'HUNGUP'}) =>
       sendCommand('hangup', extra: {'reason': reason});
 
-  Future<void> allocateConsumer() => sendCommand(
-        'allocate-consumer',
-        extra: const {
-          'capabilities': {
-            'maxH264Decoders': 10,
-            'producerNotificationDataChannelVersion': 7,
-            'producerCommandDataChannelVersion': 2,
-            'audioMix': true,
-            'consumerUpdate': true,
-            'onDemandTracks': true,
-            'singleSession': true,
-            'unifiedPlan': true,
-            'fastScreenShare': true,
-            'producerScreenDataChannelVersion': 1,
-            'consumerScreenDataChannelVersion': 1,
-            'animojiDataChannelVersion': 2,
-            'animojiBackendRender': true,
-            'asrDataChannelVersion': 1,
-            'consumerFastScreenShare': true,
-            'consumerFastScreenShareQualityOnDemand': true,
-            'audioShare': true,
-            'simulcast': true,
-            'simulcastNativeOrder': true,
-            'red': true,
-            'videoTracksCount': 10,
-            'csrcAccessible': true,
-          },
-        },
-      );
+  Future<Map<String, dynamic>> allocateConsumer() => sendCommand(
+    'allocate-consumer',
+    extra: const {
+      'capabilities': {
+        'maxH264Decoders': 10,
+        'producerNotificationDataChannelVersion': 7,
+        'producerCommandDataChannelVersion': 2,
+        'audioMix': true,
+        'consumerUpdate': true,
+        'onDemandTracks': true,
+        'singleSession': true,
+        'unifiedPlan': true,
+        'fastScreenShare': true,
+        'consumerFastScreenShareQualityOnDemand': true,
+        'red': true,
+        'videoTracksCount': 10,
+        'csrcAccessible': true,
+      },
+    },
+  );
 
-  Future<void> acceptProducer({
+  Future<Map<String, dynamic>> acceptProducer({
     required String description,
-    required List<int> ssrcs,
+    required List<String> ssrcs,
     Object? sessionId,
-  }) =>
-      sendCommand('accept-producer', extra: {
-        'description': description,
-        'ssrcs': ssrcs,
-        'sessionId': ?sessionId,
-      });
-
-  Future<void> changeSimulcast({
-    String mediaSource = 'CAMERA',
-    required List<Map<String, dynamic>> layers,
-  }) =>
-      sendCommand('change-simulcast',
-          extra: {'mediaSource': mediaSource, 'layers': layers});
+  }) => sendCommand(
+    'accept-producer',
+    extra: {
+      'description': description,
+      if (ssrcs.isNotEmpty) 'ssrcs': ssrcs,
+      'sessionId': ?sessionId,
+    },
+  );
 
   Future<void> close() async {
-    await _socket?.close();
-    _socket = null;
+    await _notifSub?.cancel();
+    _notifSub = null;
+    _call?.close();
+    _call = null;
   }
 }

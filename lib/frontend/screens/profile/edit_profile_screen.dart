@@ -8,6 +8,7 @@ import '../../../main.dart' show accountModule, fileUploader, KometApp;
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/small_spinner.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -180,11 +181,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           TextButton(
             onPressed: _isLoading || _isSaving ? null : _saveName,
             child: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SmallSpinner(size: 16)
                 : Text(
                     l10n?.editProfileSave ?? 'Save',
                     style: TextStyle(
@@ -196,7 +193,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: SmallSpinner(size: 36))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [

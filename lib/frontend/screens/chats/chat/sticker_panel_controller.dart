@@ -20,13 +20,29 @@ class StickerPanelController {
 
   final VoidCallback onSendTyping;
 
+  static const double _minPanelHeight = 120;
+
   late final AnimationController anim;
   final ValueNotifier<bool> showPanel = ValueNotifier(false);
   final ValueNotifier<bool> panelHold = ValueNotifier(true);
-  double panelHeight = 300;
+  final ValueNotifier<double> panelHeight = ValueNotifier(300);
+  double baseHeight = 300;
+  double maxHeight = 300;
   Timer? _typingTimer;
 
   void hide() => showPanel.value = false;
+
+  void setBaseHeight(double value) {
+    if (value < _minPanelHeight) return;
+    baseHeight = value;
+    if (panelHeight.value < value) panelHeight.value = value;
+  }
+
+  void resizeBy(double delta) {
+    final upper = maxHeight < baseHeight ? baseHeight : maxHeight;
+    final next = (panelHeight.value + delta).clamp(baseHeight, upper);
+    if (next != panelHeight.value) panelHeight.value = next;
+  }
 
   void _onAnimStatus(AnimationStatus status) {
     final held = status != AnimationStatus.completed;
@@ -61,5 +77,6 @@ class StickerPanelController {
     anim.dispose();
     showPanel.dispose();
     panelHold.dispose();
+    panelHeight.dispose();
   }
 }

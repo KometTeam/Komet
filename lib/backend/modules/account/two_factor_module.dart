@@ -124,7 +124,7 @@ class TwoFactorModule extends AccountApiBase {
     checkPacketError(packet, 'check2faPassword');
     final data = packet.payload;
     if (data is Map && data['error'] != null) {
-      throw Exception('Неверный пароль');
+      throw const WrongPasswordException();
     }
   }
 

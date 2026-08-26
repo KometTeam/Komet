@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/config/device_presets.dart';
 import '../../../core/storage/device_identity.dart';
@@ -17,7 +18,11 @@ import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/info_action_sheet.dart';
+import '../../../core/config/app_colors.dart';
+import '../../../core/config/app_shape.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/settings_card.dart';
+import '../../widgets/small_spinner.dart';
 import '../auth/login_screen.dart';
 
 enum SpoofingMethod { partial, full }
@@ -73,7 +78,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
   Future<bool> _confirmFullSpoofing() {
     return showInfoActionSheet(
       context,
-      headerIcon: Icons.warning_amber_rounded,
+      headerIcon: Symbols.warning,
       title: 'Могут быть последствия.',
       subtitle: 'Меняй, только если знаешь что делаешь.',
       confirmLabel: 'ОК',
@@ -213,13 +218,11 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _deviceNameController.text =
           '${androidInfo.manufacturer} ${androidInfo.model}';
       _osVersionController.text = 'Android ${androidInfo.version.release}';
-      _selectedArch = androidInfo.supportedAbis.isNotEmpty
-          ? androidInfo.supportedAbis.first
-          : 'arm64-v8a';
+      _selectedArch = 'arm64-v8a';
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
       _selectedDeviceType = 'ANDROID';
-      _selectedArch = 'arm64';
+      _selectedArch = 'arm64-v8a';
       _deviceNameController.text = iosInfo.utsname.machine;
       _osVersionController.text = iosInfo.systemVersion;
     } else if (Platform.isLinux) {
@@ -273,7 +276,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _spoofingEnabled = true;
 
       _selectedDeviceType = preset.deviceType;
-      _selectedArch = preset.deviceType == 'IOS' ? 'arm64' : 'arm64-v8a';
+      _selectedArch = 'arm64-v8a';
       _buildNumberController.text = '$_hardcodedBuildNumber';
 
       if (_selectedMethod == SpoofingMethod.full) {
@@ -329,6 +332,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
     final confirmed = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: AppShape.dialogBorder,
         title: Text(l10n.spoofDialogApplyTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -437,31 +441,39 @@ class _SpoofScreenState extends State<SpoofScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(
-        title: ConnectionTitleText(l10n.spoofScreenTitle),
-        centerTitle: true,
+      backgroundColor: cs.surface,
+      appBar: ConnectionTitleBar(
+        titleText: l10n.spoofScreenTitle,
+        backgroundColor: cs.surface,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+          ? const Center(child: SmallSpinner(size: 36))
+          : SafeArea(
+              top: false,
+              child: ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                 children: [
                   _buildEnableCard(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   _buildInfoCard(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
+                  _sectionHeader(l10n.spoofMethodTitle),
                   _buildSpoofingMethodCard(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
+                  _sectionHeader(l10n.spoofDeviceTypeTitle),
                   _buildDeviceTypeCard(),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
+                  _sectionHeader(l10n.spoofMainSectionTitle),
                   _buildMainDataCard(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
+                  _sectionHeader(l10n.spoofRegionalSectionTitle),
                   _buildRegionalDataCard(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
+                  _sectionHeader(l10n.spoofIdentifiersSectionTitle),
                   _buildIdentifiersCard(),
                 ],
               ),
@@ -471,62 +483,61 @@ class _SpoofScreenState extends State<SpoofScreen> {
     );
   }
 
+  Widget _sectionHeader(String title) => SectionHeader(
+    title,
+    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+    fontSize: 14,
+  );
+
   Widget _buildEnableCard() {
     final l10n = AppLocalizations.of(context)!;
-    return Card(
-      child: SwitchListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        title: Text(
-          l10n.spoofEnableTitle,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        subtitle: Text(
-          _spoofingEnabled
+    return SettingsCard(
+      children: [
+        SettingsToggleTile(
+          icon: Symbols.security,
+          label: l10n.spoofEnableTitle,
+          subtitle: _spoofingEnabled
               ? l10n.spoofEnableSubtitleOn
               : l10n.spoofEnableSubtitleOff,
+          value: _spoofingEnabled,
+          onChanged: (value) async {
+            if (value) {
+              await _applyGeneratedData();
+            } else {
+              await _loadDeviceData();
+            }
+          },
         ),
-        value: _spoofingEnabled,
-        onChanged: (value) async {
-          if (value) {
-            await _applyGeneratedData();
-          } else {
-            await _loadDeviceData();
-          }
-        },
-      ),
+      ],
     );
   }
 
   Widget _buildInfoCard() {
+    final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    return Card(
-      color: Theme.of(
-        context,
-      ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.touch_app,
-              size: 18,
-              color: Theme.of(context).colorScheme.onSecondaryContainer,
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                l10n.spoofInfoHint,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSecondaryContainer,
-                ),
+    return SettingsPanel(
+      color: cs.secondaryContainer.withValues(alpha: 0.5),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          Icon(
+            Symbols.touch_app,
+            size: 20,
+            weight: 400,
+            color: cs.onSecondaryContainer,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              l10n.spoofInfoHint,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.3,
+                color: cs.onSecondaryContainer,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -538,37 +549,35 @@ class _SpoofScreenState extends State<SpoofScreen> {
 
     if (_selectedMethod == SpoofingMethod.partial) {
       descriptionWidget = _buildDescriptionTile(
-        icon: Icons.check_circle_outline,
-        color: Colors.green.shade700,
+        icon: Symbols.check_circle,
+        color: kSuccessGreen,
         text: l10n.spoofMethodPartialDescription,
       );
     } else {
       descriptionWidget = _buildDescriptionTile(
-        icon: Icons.warning_amber_rounded,
+        icon: Symbols.warning,
         color: theme.colorScheme.error,
         text: l10n.spoofMethodFullDescription,
       );
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Text(l10n.spoofMethodTitle, style: theme.textTheme.titleMedium),
-            const SizedBox(height: 12),
-            SegmentedButton<SpoofingMethod>(
-              style: SegmentedButton.styleFrom(shape: const StadiumBorder()),
+    return SettingsPanel(
+      child: Column(
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SegmentedButton<SpoofingMethod>(
+              showSelectedIcon: false,
               segments: [
                 ButtonSegment(
                   value: SpoofingMethod.partial,
                   label: Text(l10n.spoofMethodPartial),
-                  icon: const Icon(Icons.security_outlined),
+                  icon: const Icon(Symbols.security),
                 ),
                 ButtonSegment(
                   value: SpoofingMethod.full,
                   label: Text(l10n.spoofMethodFull),
-                  icon: const Icon(Icons.public_outlined),
+                  icon: const Icon(Symbols.public),
                 ),
               ],
               selected: {_selectedMethod},
@@ -587,10 +596,10 @@ class _SpoofScreenState extends State<SpoofScreen> {
                 _syncDeviceLocale();
               },
             ),
-            const SizedBox(height: 12),
-            descriptionWidget,
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          descriptionWidget,
+        ],
       ),
     );
   }
@@ -598,54 +607,41 @@ class _SpoofScreenState extends State<SpoofScreen> {
   Widget _buildDeviceTypeCard() {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.spoofDeviceTypeTitle, style: theme.textTheme.titleMedium),
-            const SizedBox(height: 12),
-            _buildDescriptionTile(
-              icon: Icons.info_outline,
-              color: theme.colorScheme.primary,
-              text: l10n.spoofDeviceTypeDescription,
+    return SettingsPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildDescriptionTile(
+            icon: Symbols.info,
+            color: theme.colorScheme.primary,
+            text: l10n.spoofDeviceTypeDescription,
+          ),
+          const SizedBox(height: 12),
+          if (_selectedMethod == SpoofingMethod.full)
+            _buildChipSelector<String>(
+              options: const [
+                _ChipOption('ANDROID', 'Android', Symbols.android),
+                _ChipOption('DESKTOP', 'Desktop', Symbols.desktop_windows),
+              ],
+              selected: _selectedDeviceType,
+              onSelected: _onDeviceTypeChanged,
+              trailing: [
+                _buildDisabledChip('iOS', Symbols.phone_iphone, theme),
+              ],
+            )
+          else
+            _buildChipSelector<String>(
+              options: const [
+                _ChipOption('ANDROID', 'Android', Symbols.android),
+              ],
+              selected: 'ANDROID',
+              onSelected: _onDeviceTypeChanged,
+              trailing: [
+                _buildDisabledChip('iOS', Symbols.phone_iphone, theme),
+                _buildDisabledChip('Desktop', Symbols.desktop_windows, theme),
+              ],
             ),
-            const SizedBox(height: 12),
-            if (_selectedMethod == SpoofingMethod.full)
-              _buildChipSelector<String>(
-                options: const [
-                  _ChipOption('ANDROID', 'Android', Icons.android_outlined),
-                  _ChipOption(
-                    'DESKTOP',
-                    'Desktop',
-                    Icons.desktop_windows_outlined,
-                  ),
-                ],
-                selected: _selectedDeviceType,
-                onSelected: _onDeviceTypeChanged,
-                trailing: [
-                  _buildDisabledChip('iOS', Icons.phone_iphone_outlined, theme),
-                ],
-              )
-            else
-              _buildChipSelector<String>(
-                options: const [
-                  _ChipOption('ANDROID', 'Android', Icons.android_outlined),
-                ],
-                selected: 'ANDROID',
-                onSelected: _onDeviceTypeChanged,
-                trailing: [
-                  _buildDisabledChip('iOS', Icons.phone_iphone_outlined, theme),
-                  _buildDisabledChip(
-                    'Desktop',
-                    Icons.desktop_windows_outlined,
-                    theme,
-                  ),
-                ],
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -664,214 +660,189 @@ class _SpoofScreenState extends State<SpoofScreen> {
     required Color color,
     required String text,
   }) {
-    return ListTile(
-      leading: Icon(icon, color: color),
-      contentPadding: EdgeInsets.zero,
-      title: Text(
-        text,
-        style: TextStyle(
-          fontSize: 13,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: color, size: 20, weight: 400),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.3,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildMainDataCard() {
     final l10n = AppLocalizations.of(context)!;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SectionHeader(
-              l10n.spoofMainSectionTitle,
-              padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
-              fontSize: 22,
+    return SettingsPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _deviceNameController,
+            decoration: _inputDecoration(
+              l10n.spoofFieldDeviceName,
+              Symbols.smartphone,
             ),
-            TextField(
-              controller: _deviceNameController,
-              decoration: _inputDecoration(
-                l10n.spoofFieldDeviceName,
-                Icons.smartphone_outlined,
-              ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _osVersionController,
+            decoration: _inputDecoration(
+              l10n.spoofFieldOsVersion,
+              Symbols.layers,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _osVersionController,
-              decoration: _inputDecoration(
-                l10n.spoofFieldOsVersion,
-                Icons.layers_outlined,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildRegionalDataCard() {
     final l10n = AppLocalizations.of(context)!;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SectionHeader(
-              l10n.spoofRegionalSectionTitle,
-              padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
-              fontSize: 22,
+    return SettingsPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _screenController,
+            decoration: _inputDecoration(
+              l10n.spoofFieldScreen,
+              Symbols.fullscreen,
             ),
-            TextField(
-              controller: _screenController,
-              decoration: _inputDecoration(
-                l10n.spoofFieldScreen,
-                Icons.fullscreen_outlined,
-              ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _timezoneController,
+            enabled: _selectedMethod == SpoofingMethod.full,
+            decoration: _inputDecoration(
+              l10n.spoofFieldTimezone,
+              Symbols.public,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _timezoneController,
-              enabled: _selectedMethod == SpoofingMethod.full,
-              decoration: _inputDecoration(
-                l10n.spoofFieldTimezone,
-                Icons.public_outlined,
-              ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _localeController,
+            enabled: _selectedMethod == SpoofingMethod.full,
+            decoration: _inputDecoration(
+              l10n.spoofFieldLocale,
+              Symbols.language,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _localeController,
-              enabled: _selectedMethod == SpoofingMethod.full,
-              decoration: _inputDecoration(
-                l10n.spoofFieldLocale,
-                Icons.language_outlined,
-              ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _deviceLocaleController,
+            enabled: _selectedMethod == SpoofingMethod.full,
+            decoration: _inputDecoration(
+              l10n.spoofFieldDeviceLocale,
+              Symbols.translate,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _deviceLocaleController,
-              enabled: _selectedMethod == SpoofingMethod.full,
-              decoration: _inputDecoration(
-                l10n.spoofFieldDeviceLocale,
-                Icons.translate_outlined,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildIdentifiersCard() {
     final l10n = AppLocalizations.of(context)!;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SectionHeader(
-              l10n.spoofIdentifiersSectionTitle,
-              padding: const EdgeInsets.only(bottom: 16.0, top: 8.0),
-              fontSize: 22,
+    return SettingsPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildDescriptionTile(
+            icon: Symbols.info,
+            color: Theme.of(context).colorScheme.tertiary,
+            text: l10n.spoofIdentifiersDescription,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _instanceIdController,
+            enabled: _selectedMethod == SpoofingMethod.full,
+            decoration: _inputDecoration(
+              l10n.spoofFieldInstanceId,
+              Symbols.fingerprint,
             ),
-            _buildDescriptionTile(
-              icon: Icons.info_outline,
-              color: Theme.of(context).colorScheme.tertiary,
-              text: l10n.spoofIdentifiersDescription,
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _clientSessionIdController,
+            enabled: _selectedMethod == SpoofingMethod.full,
+            decoration: _inputDecoration(
+              l10n.spoofFieldClientSessionId,
+              Symbols.vpn_key,
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _instanceIdController,
-              enabled: _selectedMethod == SpoofingMethod.full,
-              decoration: _inputDecoration(
-                l10n.spoofFieldInstanceId,
-                Icons.fingerprint_outlined,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _clientSessionIdController,
-              enabled: _selectedMethod == SpoofingMethod.full,
-              decoration: _inputDecoration(
-                l10n.spoofFieldClientSessionId,
-                Icons.vpn_key_outlined,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _deviceIdController,
-              decoration:
-                  _inputDecoration(
-                    l10n.spoofFieldDeviceId,
-                    Icons.tag_outlined,
-                  ).copyWith(
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.autorenew_outlined),
-                      tooltip: l10n.spoofRegenerateIdTooltip,
-                      onPressed: _generateNewDeviceId,
-                    ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _deviceIdController,
+            decoration: _inputDecoration(l10n.spoofFieldDeviceId, Symbols.tag)
+                .copyWith(
+                  suffixIcon: IconButton(
+                    icon: const Icon(Symbols.autorenew),
+                    tooltip: l10n.spoofRegenerateIdTooltip,
+                    onPressed: _generateNewDeviceId,
                   ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _appVersionController,
-              enabled: _selectedMethod == SpoofingMethod.full,
-              decoration: _inputDecoration(
-                l10n.spoofFieldAppVersion,
-                Icons.info_outline_rounded,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _buildNumberController,
-              enabled: _selectedMethod == SpoofingMethod.full,
-              keyboardType: TextInputType.number,
-              decoration: _inputDecoration(
-                l10n.spoofFieldBuildNumber,
-                Icons.numbers_outlined,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _pushDeviceTypeController,
-              enabled: _selectedMethod == SpoofingMethod.full,
-              decoration: _inputDecoration(
-                l10n.spoofFieldPushDeviceType,
-                Icons.notifications_outlined,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 8),
-              child: Text(
-                l10n.spoofFieldArchitecture,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _appVersionController,
+            enabled: _selectedMethod == SpoofingMethod.full,
+            decoration: _inputDecoration(
+              l10n.spoofFieldAppVersion,
+              Symbols.info,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _buildNumberController,
+            enabled: _selectedMethod == SpoofingMethod.full,
+            keyboardType: TextInputType.number,
+            decoration: _inputDecoration(
+              l10n.spoofFieldBuildNumber,
+              Symbols.numbers,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _pushDeviceTypeController,
+            enabled: _selectedMethod == SpoofingMethod.full,
+            decoration: _inputDecoration(
+              l10n.spoofFieldPushDeviceType,
+              Symbols.notifications,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              l10n.spoofFieldArchitecture,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-            _buildChipSelector<String>(
-              options: const [
-                _ChipOption('arm64-v8a', 'arm64-v8a', Icons.memory_outlined),
-                _ChipOption(
-                  'armeabi-v7a',
-                  'armeabi-v7a',
-                  Icons.memory_outlined,
-                ),
-                _ChipOption('x86', 'x86', Icons.memory_outlined),
-                _ChipOption('x86_64', 'x86_64', Icons.memory_outlined),
-                _ChipOption('arm64', 'arm64', Icons.memory_outlined),
-              ],
-              selected: _selectedArch,
-              onSelected: (value) => setState(() => _selectedArch = value),
-            ),
-          ],
-        ),
+          ),
+          _buildChipSelector<String>(
+            options: const [
+              _ChipOption('arm64-v8a', 'arm64-v8a', Symbols.memory),
+              _ChipOption('armeabi-v7a', 'armeabi-v7a', Symbols.memory),
+              _ChipOption('x86', 'x86', Symbols.memory),
+              _ChipOption('x86_64', 'x86_64', Symbols.memory),
+              _ChipOption('arm64', 'arm64', Symbols.memory),
+            ],
+            selected: _selectedArch,
+            onSelected: (value) => setState(() => _selectedArch = value),
+          ),
+        ],
       ),
     );
   }
@@ -880,7 +851,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
     return InputDecoration(
       labelText: label,
       prefixIcon: Icon(icon),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      border: const OutlineInputBorder(borderRadius: AppShape.buttonRadius),
       filled: true,
       fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
     );
@@ -902,7 +873,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
           return ChoiceChip(
             label: Text(opt.label),
             avatar: isSelected
-                ? Icon(Icons.check, size: 18, color: cs.onSecondaryContainer)
+                ? Icon(Symbols.check, size: 18, color: cs.onSecondaryContainer)
                 : (opt.icon != null
                       ? Icon(opt.icon, size: 18, color: cs.onSurfaceVariant)
                       : null),
@@ -919,8 +890,8 @@ class _SpoofScreenState extends State<SpoofScreen> {
             side: BorderSide(
               color: isSelected ? Colors.transparent : cs.outlineVariant,
             ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+            shape: const RoundedRectangleBorder(
+              borderRadius: AppShape.buttonRadius,
             ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -947,7 +918,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
                   vertical: 16,
                   horizontal: 16,
                 ),
-                shape: const StadiumBorder(),
+                shape: AppShape.buttonBorder,
               ),
               child: Text(l10n.spoofButtonGenerate),
             ),
@@ -962,12 +933,12 @@ class _SpoofScreenState extends State<SpoofScreen> {
                   vertical: 16,
                   horizontal: 16,
                 ),
-                shape: const StadiumBorder(),
+                shape: AppShape.buttonBorder,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.save_alt_outlined),
+                  const Icon(Symbols.save_alt),
                   const SizedBox(width: 8),
                   Text(l10n.spoofButtonApply),
                 ],

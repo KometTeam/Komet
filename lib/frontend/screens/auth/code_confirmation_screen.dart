@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'password_2fa_screen.dart';
 import 'registration_screen.dart';
 import 'session_stale_recovery.dart';
@@ -11,6 +12,7 @@ import '../../../core/utils/sms_code_listener.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
+import '../../widgets/small_spinner.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -313,7 +315,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: cs.onSurfaceVariant),
+          icon: Icon(Symbols.arrow_back, color: cs.onSurfaceVariant),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -525,16 +527,9 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                       borderRadius: BorderRadius.circular(50),
                     ),
                     child: recovering
-                        ? SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: cs.onPrimaryContainer,
-                            ),
-                          )
+                        ? SmallSpinner(size: 24, color: cs.onPrimaryContainer)
                         : Icon(
-                            Icons.arrow_forward,
+                            Symbols.arrow_forward,
                             color: _codeController.text.length == 6
                                 ? cs.onPrimaryContainer
                                 : cs.onSurfaceVariant,

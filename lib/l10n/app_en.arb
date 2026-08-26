@@ -11,13 +11,14 @@
   "loginConfirmPhoneTitle": "Is this the correct number?",
   "loginEdit": "Change",
   "loginDone": "Done",
-  "loginReadTermsNotification": "Please read the terms of use first",
   "loginSpoofRedacted": "Spoofing",
   "loginProxy": "Proxy",
   "loginChangeServer": "Change server",
   "serverSettingsTitle": "Server",
   "serverHostLabel": "Host",
   "serverPortLabel": "Port",
+  "serverTrustMincifryTitle": "Trust the Минцифры CA",
+  "serverTrustMincifrySubtitle": "Required for api2.oneme.ru: its certificate chains to the Russian Trusted Root CA, which is absent from the standard trust store. The root is bundled with the app; other hosts keep using the usual roots.",
   "serverApply": "Apply and reconnect",
   "serverUseDefault": "Reset to default",
   "serverInvalidHostOrPort": "Enter a valid host and port (1–65535)",
@@ -49,7 +50,6 @@
   "codeResendSms": "Resend code via SMS",
   "codeError2faMissing": "Error: missing data for 2FA",
   "codeConfirmation2faWarning": "MAX may require 2FA on your account to sign in. If you didn't receive the code, set up 2FA from a client where you're already signed in.",
-
   "proxySettingsTitle": "Proxy",
   "proxyTypeNone": "Disabled",
   "proxyTypeSocks5": "SOCKS5",
@@ -62,7 +62,6 @@
   "proxyDisable": "Disable proxy",
   "proxySettingsSaved": "Proxy settings applied",
   "proxyInvalidHostOrPort": "Enter a valid proxy host and port (1–65535)",
-
   "spoofScreenTitle": "Session spoofing",
   "spoofEnableTitle": "Device spoofing",
   "spoofEnableSubtitleOn": "Enabled for this account",
@@ -121,8 +120,12 @@
   "profileMenuSpoof": "Spoofing",
   "infoTitle": "Info",
   "infoAccountSection": "Account",
+  "infoPacketSection": "Login packet",
+  "infoChatsSection": "Chats in login packet",
+  "infoChatSettingsSection": "Per-chat settings",
   "infoServerSection": "Server",
   "infoUserSection": "User",
+  "infoExperimentsSection": "Experiments",
   "infoYMapSection": "Y-Map",
   "infoFileUploadTypes": "file-upload-unsupported-types",
   "infoWhiteListLinks": "white-list-links",
@@ -131,7 +134,30 @@
   "infoVideoChatHistory": "videoChatHistory",
   "infoUpdateTime": "updateTime",
   "infoId": "id",
+  "infoPhone": "phone",
+  "infoPhotoId": "photoId",
+  "infoAccountStatus": "accountStatus",
+  "infoContactOptions": "contact options",
+  "infoProfileOptions": "profile options",
+  "infoNames": "names",
+  "infoBaseUrl": "baseUrl",
+  "infoBaseRawUrl": "baseRawUrl",
   "infoChatMarker": "chatMarker",
+  "infoServerTime": "server time",
+  "infoUpdates": "updates",
+  "infoMessagesCount": "messages in packet",
+  "infoContactsCount": "contacts in packet",
+  "infoPresenceCount": "presence records",
+  "infoConfigHash": "config hash",
+  "infoChatsCount": "chats loaded",
+  "infoChatsActive": "active",
+  "infoChatsHidden": "hidden",
+  "infoChatsDialogs": "dialogs",
+  "infoChatsGroups": "groups",
+  "infoChatsChannels": "channels",
+  "infoChatsUnread": "unread chats",
+  "infoChatsNewMessages": "new messages",
+  "infoChatsMessages": "messages in loaded chats",
   "infoAccountRemovalEnabled": "account-removal-enabled",
   "infoImageSize": "image-size",
   "infoGce": "gce",
@@ -158,6 +184,16 @@
   "chatInfoLink": "link:",
   "chatInfoOfficial": "official:",
   "chatInfoComments": "comments:",
+  "commentsWrite": "Comment",
+  "commentsTitle": "Comments",
+  "commentsCount": "{count, plural, =1{1 comment} other{{count} comments}}",
+  "@commentsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "chatInfoAplus": "approved by Roskomnadzor:",
   "chatInfoSignAdmin": "admin signature:",
   "chatInfoLastChanged": "last changed:",
@@ -169,7 +205,6 @@
   "chatInfoHasBots": "has bots:",
   "chatInfoBlockedCount": "blocked in group:",
   "chatInfoOfficialStatus": "official status:",
-  "chatInfoLastChanged": "last changed:",
   "chatInfoJoined": "joined:",
   "chatInfoGroupCreated": "group created:",
   "chatInfoGroupOwner": "group owner:",
@@ -183,6 +218,7 @@
   "registrationSubtitle": "Add your name and pick an avatar",
   "registrationChooseAvatar": "Choose an avatar",
   "msgActionsCopy": "Copy",
+  "msgActionsSelectAll": "Select all",
   "emojiSearchHint": "Search emoji",
   "msgActionsEdit": "Edit",
   "msgActionsReply": "Reply",
@@ -192,6 +228,9 @@
   "msgActionsUnpin": "Unpin",
   "pinnedMessageTitle": "Pinned message",
   "msgActionsEditHistory": "Edit history",
+  "msgActionsReadBy": "Read by",
+  "msgActionsReadByEmpty": "Nobody has read it yet",
+  "msgActionsReadByUnknownUser": "User",
   "msgActionsReport": "Report",
   "msgActionsDelete": "Delete",
   "msgActionsCopied": "Copied",
@@ -215,11 +254,18 @@
     }
   },
   "notificationsFkmAlreadyHasFcm": "Why? You already have FCM.",
-  "notificationsFkmDownloadFcm": "Better download the FCM version.",
+  "notificationsFkmIosUnsupported": "Push notifications are not available on iOS yet.",
   "notificationsTitle": "Notifications",
   "notificationsFkmSectionTitle": "FKM",
   "notificationsFkmEnableLabel": "Enable notifications",
   "notificationsFkmEnableSubtitle": "For FKM notifications to work, the app will need to keep a notification in the shade.",
+  "notificationsFkmUnsupported": "FKM is Android-only",
+  "notificationsFkmBatteryAction": "Open settings",
+  "notificationsFkmBatteryMessage": "Otherwise the system will put the background connection to sleep and notifications will be late or lost.",
+  "notificationsFkmBatteryTitle": "Turn off battery saving?",
+  "notificationsFkmPermissionDenied": "FKM cannot work without the notification permission",
+  "notificationsFkmConfirmAction": "Enable FKM",
+  "notificationsFkmConfirmMessage": "Notifications will arrive over the app’s own background connection, and a permanent service notification will stay in the shade. You can turn FKM off right from it.",
   "notificationsMainSectionTitle": "Notifications",
   "notificationsAllLabel": "All notifications",
   "notificationsNewSectionTitle": "New notifications",
@@ -284,16 +330,31 @@
   "appearanceTitle": "Appearance",
   "appearanceVisualStyleTitle": "Visual style",
   "appearanceVisualStyleSubtitle": "Material You or dimensional Glossy capsules",
+  "appearanceStyleAuto": "Match theme",
   "appearanceVisualStyleMaterialYou": "Material You",
   "appearanceVisualStyleGlossy": "Glossy",
+  "appearanceVisualStyleLiquidGlass": "Liquid Glass",
+  "appearanceGlassMaterial": "Glass",
   "appearanceChatChromeTitle": "Chat screen elements",
   "appearanceChatChromeSubtitle": "Background of the top and bottom panels: color, blur, or transparent. With blur or transparency, messages scroll under the panels",
   "appearanceChatChromeColor": "Color",
   "appearanceChatChromeBlur": "Blur",
   "appearanceChatChromeNone": "None",
-  "appearanceChatChromeTransparent": "Clear",
+  "appearanceChatChromeTransparent": "Frost blur",
+  "appearanceComposerTitle": "Input bar",
+  "appearanceComposerSubtitle": "Style and background of the message input bar",
+  "appearanceComposerBackgroundStandard": "Default",
+  "appearanceComposerBackgroundFrost": "Frost blur",
+  "appearanceNavPillTitle": "Switcher style",
+  "appearanceNavPillSubtitle": "Section switcher on the chats screen",
+  "appearanceNavPillGlossy": "Glossy",
+  "appearanceNavPillFrost": "G-FrostBlur",
+  "playbackPillAt": "at",
+  "playbackPillYou": "You",
   "appearanceGradientTitle": "Gradient",
   "appearanceGradientSubtitle": "Depth and highlights in Glossy capsules",
+  "appearanceSpectrumTitle": "Spectrum background",
+  "appearanceSpectrumSubtitle": "Experimental — living bars beneath the interface",
   "appearanceAccentColorTitle": "Accent color",
   "appearanceAccentColorSystem": "System",
   "appearanceAccentColorSubtitle": "Main color of the interface and bubbles",
@@ -311,14 +372,20 @@
   "appearancePreviewHowIsIt": "How do you like it?",
   "appearancePreviewHmm": "hmm...",
   "appearancePreviewNotBad": "Not bad at all!",
-
   "callKometDetectedNotification": "This person uses Komet! :3",
   "callStatusConnecting": "Connecting",
   "callGroupConnecting": "Connecting…",
   "callGroupWaitingParticipants": "Waiting for participants…",
+  "callLinkGroupCall": "Group call",
+  "callLinkSendInMax": "Send in MAX",
+  "callLinkStart": "Start call",
+  "callLinkSent": "Link sent",
+  "callLinkSendFailed": "Couldn't send the link",
+  "callLinkCreateFailed": "Couldn't create the call",
   "callParticipantYou": "You",
   "callParticipantFallback": "Participant",
   "callTooltipMinimize": "Minimize",
+  "callTooltipExpand": "Expand",
   "callTooltipKometHub": "Komet",
   "callInfoTitle": "About call",
   "callPeerMicOff": "Microphone off",
@@ -335,6 +402,17 @@
   "callUnmute": "Unmute",
   "callMute": "Mute",
   "callEndButton": "End",
+  "callCameraUnavailable": "Camera unavailable: {error}",
+  "callTooltipMicrophone": "Microphone",
+  "callMicrophoneTitle": "Microphone",
+  "callMicrophoneSystem": "System default",
+  "callMicrophoneEmpty": "No microphones found",
+  "callMicrophoneRefresh": "Refresh list",
+  "callMicrophoneMonitors": "Monitors — system audio",
+  "callMicrophoneFallback": "Microphone {index}",
+  "callMicrophoneFailed": "Could not switch microphone: {error}",
+  "callMicStillLive": "Still live",
+  "callNoMuteHint": "--no-mute: audio keeps going out even while the mic is off",
   "callInfoClient": "Client",
   "callInfoPlatform": "Platform",
   "callInfoCountry": "Country",
@@ -373,7 +451,6 @@
   "callBadgeNoiseSuppression": "Noise suppression",
   "callBadgeAnimoji": "Animoji",
   "callInfoNoDataYet": "Data will appear after connecting…",
-
   "hubTitleMenu": "Komet",
   "hubChatPageTitle": "Anonymous chat",
   "hubGamesTitle": "Games",
@@ -394,7 +471,6 @@
   "hubCheckersLost": "You lost",
   "hubCheckersYourMove": "Your move",
   "hubCheckersOpponentMove": "Opponent's move…",
-
   "scheduledPickTimeTitle": "When to send",
   "scheduledEditTitle": "Edit",
   "scheduledMessageTextHint": "Message text",
@@ -413,7 +489,6 @@
   "scheduledAttachLocation": "Location",
   "scheduledAttachForwarded": "Forwarded",
   "scheduledAttachGeneric": "Attachment",
-
   "contactProfileLoadError": "Error: {error}",
   "@contactProfileLoadError": {
     "placeholders": {
@@ -428,6 +503,7 @@
   "contactProfileActionChat": "Chat",
   "contactProfileActionSound": "Sound",
   "contactProfileActionCall": "Call",
+  "contactProfileActionAddContact": "Add to contacts",
   "contactProfileInfoPhone": "Phone",
   "contactProfileInfoCountry": "Country",
   "contactProfileInfoGender": "Gender",
@@ -437,7 +513,6 @@
   "contactProfileInfoDescription": "Description",
   "contactProfileInfoLink": "Link",
   "contactProfileInfoFlags": "Flags",
-
   "nfcPeerNameFallback": "Contact #{id}",
   "@nfcPeerNameFallback": {
     "placeholders": {
@@ -476,7 +551,6 @@
   },
   "nfcAdded": "Added",
   "nfcAddContact": "Add contact",
-
   "chatInfoTabGeneralChats": "Common chats",
   "chatInfoTabMedia": "Media",
   "chatInfoTabFiles": "Files",
@@ -510,9 +584,124 @@
   "sharedLoadMore": "Show more",
   "sharedGoToMessage": "Go to message",
   "sharedDownload": "Download",
+  "photoViewerCounter": "Photo {index} of {total}",
+  "@photoViewerCounter": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "photoViewerCounterFile": "FILE of {total}",
+  "@photoViewerCounterFile": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "photoViewerSentToday": "{sender} • today at {time}",
+  "@photoViewerSentToday": {
+    "placeholders": {
+      "sender": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "photoViewerSentOn": "{sender} • {date} at {time}",
+  "@photoViewerSentOn": {
+    "placeholders": {
+      "sender": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "photoViewerSaveAs": "Save as…",
+  "photoViewerViewAll": "View all photos",
+  "photoViewerRotate": "Rotate",
+  "mediaViewerCounter": "{index} of {total}",
+  "@mediaViewerCounter": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "mediaViewerViewAll": "View all media",
+  "videoViewerSettings": "Settings",
+  "videoViewerSpeed": "Speed",
+  "videoViewerQuality": "Quality",
   "sharedCopyLink": "Copy link",
   "sharedLinkCopied": "Link copied",
   "chatInfoActionLeave": "Leave",
+  "chatInfoActionMuted": "Muted",
+  "chatInfoNotificationsOn": "Notifications on",
+  "chatInfoNotificationsOff": "Notifications off",
+  "chatInfoMenuBlock": "Block",
+  "chatInfoMenuUnblock": "Unblock",
+  "chatInfoMenuDeleteChat": "Delete chat",
+  "chatInfoMenuClearHistory": "Clear history",
+  "chatInfoClearHistoryTitle": "Clear history",
+  "chatInfoClearHistoryMessage": "All messages in this chat will be deleted permanently.",
+  "chatInfoClearHistoryForAll": "For everyone",
+  "chatInfoClearHistoryConfirm": "Clear",
+  "chatInfoClearHistoryDone": "History cleared",
+  "chatInfoDeleteChatTitle": "Delete chat",
+  "chatInfoDeleteChatMessage": "The chat will be deleted together with the whole conversation.",
+  "chatInfoDeleteChatConfirm": "Delete",
+  "chatInfoLeaveGroupTitle": "Leave group",
+  "chatInfoLeaveGroupMessage": "You will no longer receive messages from this group.",
+  "chatInfoLeaveChannelTitle": "Leave channel",
+  "chatInfoLeaveChannelMessage": "You will no longer receive posts from this channel.",
+  "chatInfoLeaveConfirm": "Leave",
+  "chatInfoLeaveFailed": "Could not leave the chat",
+  "chatInfoCallConfirmTitle": "Start a call",
+  "chatInfoCallConfirmMessage": "Call {name}?",
+  "@chatInfoCallConfirmMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInfoConfirmYes": "Yes",
+  "chatInfoConfirmNo": "No",
+  "chatInfoCallFailed": "Could not start the call",
+  "chatInfoBlockConfirmTitle": "Block",
+  "chatInfoBlockConfirmMessage": "Are you sure you want to block {name}?",
+  "@chatInfoBlockConfirmMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "chatInfoBlockDone": "User blocked",
+  "chatInfoUnblockDone": "User unblocked",
+  "chatInfoBlockFailed": "Could not change the block state",
+  "chatInfoComplaintTitle": "Report",
+  "chatInfoComplaintSubtitle": "Choose a reason for the report",
+  "chatInfoComplaintSend": "Report",
+  "chatInfoComplaintClose": "Close",
+  "chatInfoComplaintEmpty": "Could not load the report reasons",
+  "chatInfoComplaintSent": "Report sent",
+  "chatInfoComplaintFailed": "Could not send the report",
+  "chatInfoActionCancel": "Cancel",
   "chatInfoBio": "About",
   "chatInfoInviteLink": "Invite link",
   "chatInfoCollapse": "Collapse",
@@ -520,9 +709,28 @@
   "chatInfoAddMember": "Add member",
   "chatInfoRoleOwner": "owner",
   "chatInfoRoleAdmin": "Admin",
+  "chatInfoMemberDeleted": "Account deleted",
+  "chatInfoInviteByLink": "Invite via link",
+  "chatInfoInviteLinkHint": "You can invite anyone with this link",
+  "chatInfoAddMembersAction": "Add",
+  "chatInfoMembersSearchHint": "Search",
+  "chatInfoAddMembersEmpty": "No one to add",
+  "chatInfoMembersAdded": "Members added",
+  "chatInfoAddMembersError": "Couldn't add members",
   "chatInfoNoData": "No data",
   "chatInfoHideExtra": "Hide",
   "chatInfoShowMoreExtra": "Details",
+  "chatSendConfirmMessage": "Send this message to the chat?",
+  "chatSendConfirmAction": "Send",
+  "chatInfoRowDisableForward": "Forwarding disabled",
+  "chatInfoRowCopyDisabled": "Copying disabled",
+  "chatInfoRowOnlyAdminCall": "Admins can call",
+  "chatInfoRowAllCanPin": "Anyone can pin",
+  "chatInfoRowMembersSeeLink": "Members see the link",
+  "chatInfoRowConfirmBeforeSend": "Confirm before sending",
+  "chatInfoRowOnlyOwnerIconTitle": "Owner edits title and icon",
+  "chatInfoRowPromotedDisabled": "Promoted content off",
+  "chatInfoRowUserId": "User ID",
   "chatInfoRowId": "Chat ID",
   "chatInfoRowCreated": "Created",
   "chatInfoRowModified": "Modified",
@@ -540,7 +748,6 @@
   "chatInfoRowComments": "Comments",
   "chatInfoRowRkn": "Roskomnadzor approved",
   "chatInfoRowOnlyAdmin": "Admins only",
-
   "securityTitle": "Security",
   "securityLoadError": "Loading error: {error}",
   "@securityLoadError": {
@@ -594,7 +801,6 @@
       }
     }
   },
-
   "passwordEntryWrongPassword": "Wrong password",
   "passwordEntryConfirmTitle": "Confirm password",
   "passwordEntryCurrentPasswordHint": "Current password",
@@ -756,7 +962,7 @@
   "digitalIdDocChildOms": "Child's health insurance policy (OMS)",
   "attachSheetGallery": "Gallery",
   "attachSheetPoll": "Poll",
-  "attachSheetCameraComingSoon": "Camera is coming soon",
+  "attachSheetCameraError": "Couldn't open the camera",
   "attachSheetSendFileTitle": "Send a file",
   "attachSheetSendFileSubtitle": "A document, archive, or any other file",
   "attachSheetChooseFileButton": "Choose file",
@@ -768,12 +974,17 @@
   "attachSheetNoImagesFound": "No images found",
   "attachSheetLimitedAccessInfo": "Not all photos are accessible",
   "attachSheetSectionInProgress": "Section under development",
+  "attachSheetContact": "Contact",
+  "attachSheetContactSearchHint": "Search contacts",
+  "attachSheetNoContacts": "You have no contacts yet",
+  "attachSheetNoContactsFound": "No contacts found",
   "attachSheetNoGalleryAccessTitle": "No access to the gallery",
   "attachSheetNoGalleryAccessSubtitle": "Allow access to photos to pick them from here",
   "attachSheetAllow": "Allow",
   "attachSheetSettings": "Settings",
   "attachSheetAddCaptionHint": "Add a caption...",
   "attachSheetCamera": "Camera",
+  "attachSheetCameraAllow": "Allow camera",
   "photoEditorApplyFailed": "Couldn't apply",
   "photoEditorFlipTooltip": "Flip",
   "photoEditorRotateTooltip": "Rotate",
@@ -850,5 +1061,159 @@
   "updateLater": "Later",
   "updateSkip": "Skip",
   "updateDownloading": "Downloading update…",
-  "updateDownloadFailed": "Failed to download the update"
+  "updateDownloadFailed": "Failed to download the update",
+  "updateCheck": "Check for updates",
+  "updateChecking": "Checking for updates…",
+  "updateUpToDate": "You have the latest version",
+  "updateCheckFailed": "Couldn't check for updates. Try again later",
+  "profileResurrecting": "Oops! The server didn't send your profile. Trying to regenerate…",
+  "profilePhoneRegenFailed": "Couldn't regenerate your phone number. Please sign in again and report the issue to the developers",
+  "addContactTitle": "Add contact",
+  "addContactFirstName": "First name",
+  "addContactLastName": "Last name (optional)",
+  "addContactSave": "Save contact",
+  "addContactNotFound": "{phone} not found",
+  "@addContactNotFound": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "addContactNotFoundSubtitle": "This number isn't on the app yet",
+  "addContactSearchOther": "Search for other number",
+  "addContactError": "Couldn't add contact",
+  "contactBubbleNew": "New contact",
+  "contactBubbleAlreadyAdded": "Already in your contacts",
+  "contactBubbleOpenProfile": "Open profile",
+  "miniAppOpen": "Open",
+  "miniAppFailed": "Couldn't open the app",
+  "editContactMenu": "Edit contact",
+  "editContactTitle": "Edit contact",
+  "editContactFirstName": "First name",
+  "editContactLastName": "Last name",
+  "editContactSave": "Save",
+  "editContactDelete": "Delete contact",
+  "editContactDeleteConfirmTitle": "Delete contact?",
+  "editContactDeleteConfirmBody": "This contact will be removed from your list.",
+  "editContactDeleteCancel": "Cancel",
+  "editContactError": "Couldn't save changes",
+  "downloadsTitle": "Recent downloads",
+  "downloadsTooltip": "Downloads",
+  "downloadsSettings": "Settings",
+  "downloadsEmpty": "Downloaded files will appear here",
+  "downloadsUnknownSource": "Unknown source",
+  "downloadsPhoto": "Photo",
+  "downloadsVideo": "Video",
+  "downloadsGif": "GIF",
+  "downloadsAudio": "Audio",
+  "downloadsFile": "File",
+  "downloadsOpenFailed": "Couldn't open the file",
+  "downloadsClearHistory": "Clear download history",
+  "downloadsClearTitle": "Clear download history?",
+  "downloadsClearBody": "The files will stay on the device, but this list will be cleared.",
+  "downloadsClearConfirm": "Clear",
+  "downloadsHistoryCleared": "Download history cleared",
+  "uploadNotificationPhotos": "{count, plural, =1{Photo} other{{count} photos}}",
+  "@uploadNotificationPhotos": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadNotificationVideo": "Video",
+  "uploadNotificationVideoNote": "Video message",
+  "uploadNotificationVoice": "Voice message",
+  "uploadNotificationFile": "File",
+  "uploadNotificationMultiple": "{count, plural, other{Sending {count} files}}",
+  "@uploadNotificationMultiple": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadNotificationPreparing": "Preparing…",
+  "uploadSpeedBytes": "{value} B/s",
+  "@uploadSpeedBytes": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSpeedKb": "{value} KB/s",
+  "@uploadSpeedKb": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSpeedMb": "{value} MB/s",
+  "@uploadSpeedMb": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "savedMessagesEmptyPreview": "Save something here",
+  "proxyCurrentState": "Currently: {value}",
+  "@proxyCurrentState": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "blacklistEmpty": "Nobody is blocked",
+  "blacklistLoadError": "Failed to load the blacklist",
+  "videoEditorQualityLow": "Small size",
+  "videoEditorQualityHigh": "High quality",
+  "videoEditorCaptionHint": "Add a caption...",
+  "videoEditorMuteTooltip": "Send without sound",
+  "videoEditorProcessing": "Processing video…",
+  "videoEditorExportFailed": "Failed to process the video",
+  "videoEditorFrameFailed": "Failed to grab a frame",
+  "videoEditorQualityTooltip": "Quality",
+  "webPushTitle": "Notifications on iOS",
+  "webPushIntro": "Komet has no ordinary push on iOS: Apple issues a notification token only to apps signed with a developer certificate, and a sideloaded build never gets one.\n\nThe way around it is a web app on the Home Screen. MAX's own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.",
+  "webPushConfirm": "Continue",
+  "webPushPasswordExplainer": "Two-factor protection is enabled on this account.",
+  "webPushPasswordHintLabel": "Hint: {hint}",
+  "@webPushPasswordHintLabel": {
+    "placeholders": {
+      "hint": {
+        "type": "String"
+      }
+    }
+  },
+  "webPushPasswordHint": "Password",
+  "webPushInstallTitle": "Install the web app",
+  "webPushInstallBody": "Open push.komet.pw in Safari, add it to the Home Screen and launch the icon that appears. Notifications do not work from a browser tab — that is how iOS works.\n\nIn the app, allow notifications, create a subscription and tap \"Open Komet\". The subscription registers itself from there.",
+  "webPushLinkedTitle": "Notifications connected",
+  "webPushLinkedBody": "The subscription is registered on the server. Do not delete the Home Screen icon — the notifications go with it.\n\nIf push stops arriving, open the web app and link again: Apple sometimes rotates the subscription address.",
+  "webPushOpenSite": "Open push.komet.pw",
+  "webPushSignOut": "Disconnect notifications",
+  "webPushLinked": "Notifications connected",
+  "webPushLinkFailed": "Could not connect notifications: {error}",
+  "@webPushLinkFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "webPushNotAuthorized": "Sign in under \"Notifications via PWA\" first",
+  "webPushConnect": "Connect notifications",
+  "webPushWaitingBody": "Komet is approving the web session from this device. This usually takes a few seconds.",
+  "webPushNeedsOnline": "No connection to the server. Wait for it and try again.",
+  "webPushSignOutConfirm": "The web session will be terminated and disappear from your device list. To get notifications back you will have to connect again.",
+  "webPushSignOutAction": "Disconnect",
+  "webPushStatusService": "Service",
+  "webPushStatusToken": "Token",
+  "webPushStatusLinkedAt": "Linked",
+  "webPushStatusDevice": "Device"
 }

@@ -6,6 +6,7 @@ import '../../backend/modules/contacts.dart';
 import '../../core/utils/media_saver.dart';
 import '../../main.dart';
 import 'custom_notification.dart';
+import 'small_spinner.dart';
 
 class AvatarHistoryScreen extends StatefulWidget {
   final int contactId;
@@ -63,8 +64,14 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
     final current = widget.currentAvatarUrl;
     _current = (current != null && current.isNotEmpty) ? current : null;
     _rebuildPages();
-    _load();
+    if (_hasHistory) {
+      _load();
+    } else {
+      _loading = false;
+    }
   }
+
+  bool get _hasHistory => widget.contactId > 0;
 
   @override
   void dispose() {
@@ -99,7 +106,9 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
   }
 
   Future<void> _loadMore() async {
-    if (_loadingMore || _history.length >= _historyTotal) return;
+    if (!_hasHistory || _loadingMore || _history.length >= _historyTotal) {
+      return;
+    }
     _loadingMore = true;
     final photos = await ContactsModule.fetchPhotos(
       api,
@@ -210,14 +219,7 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
                 Expanded(child: _buildCounter()),
                 IconButton(
                   icon: _saving
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.white,
-                          ),
-                        )
+                      ? const SmallSpinner(size: 22, color: Colors.white)
                       : const Icon(Symbols.download, color: Colors.white),
                   onPressed: _pages.isEmpty || _saving ? null : _save,
                 ),
@@ -276,7 +278,7 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
     if (_pages.isEmpty) {
       return Center(
         child: _loading
-            ? const CircularProgressIndicator(color: Colors.white)
+            ? const SmallSpinner(size: 36, color: Colors.white)
             : const Text(
                 'Нет фотографий',
                 style: TextStyle(color: Colors.white54, fontSize: 15),
@@ -292,9 +294,8 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
           imageUrl: _pages[i],
           fit: BoxFit.contain,
           fadeInDuration: const Duration(milliseconds: 120),
-          placeholder: (_, _) => const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          ),
+          placeholder: (_, _) =>
+              const Center(child: SmallSpinner(size: 36, color: Colors.white)),
           errorWidget: (_, _, _) =>
               const Icon(Symbols.broken_image, color: Colors.white54, size: 64),
         ),

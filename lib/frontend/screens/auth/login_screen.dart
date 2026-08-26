@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'code_confirmation_screen.dart';
 import 'token_login_screen.dart';
 import 'select_country_screen.dart';
+import 'phone_input_formatter.dart';
 import 'proxy_settings_sheet.dart';
 import 'server_settings_sheet.dart';
 import '../profile/spoof_screen.dart';
@@ -18,9 +19,12 @@ import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/adaptive_shell.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
 import '../../../backend/api.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
+import '../../../core/config/app_frost.dart';
+import '../../../core/config/app_shape.dart';
 
 class LoginScreen extends StatefulWidget {
   final int? returnToAccountId;
@@ -407,7 +411,7 @@ class _LoginScreenState extends State<LoginScreen> {
       context: screenContext,
       barrierDismissible: true,
       barrierLabel: '',
-      barrierColor: Colors.black54,
+      barrierColor: AppFrost.scrim(),
       transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
       transitionBuilder: (context, anim1, anim2, child) {
@@ -422,9 +426,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: AlertDialog(
                 backgroundColor: cs.surfaceContainerHigh,
                 surfaceTintColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                shape: AppShape.dialogBorder,
                 contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
                 actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                 content: Column(
@@ -527,10 +529,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _validateAndSubmit() {
     if (!_isTOSRead) {
-      showCustomNotification(
-        context,
-        AppLocalizations.of(context)!.loginReadTermsNotification,
-      );
+      _showTOS(context);
       return;
     }
     _showPhoneConfirmationDialog(_phoneController.text);
@@ -838,7 +837,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   const Spacer(),
                                   Icon(
-                                    Icons.keyboard_arrow_down,
+                                    Symbols.keyboard_arrow_down,
                                     color: cs.onSurfaceVariant,
                                   ),
                                 ],
@@ -872,7 +871,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     keyboardType: TextInputType.phone,
                                     inputFormatters: [
                                       FilteringTextInputFormatter.digitsOnly,
-                                      _PhoneInputFormatter(_selectedCountry),
+                                      PhoneInputFormatter(_selectedCountry),
                                     ],
                                     style: TextStyle(
                                       color: cs.onSurface,
@@ -998,16 +997,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                     borderRadius: BorderRadius.circular(50),
                                   ),
                                   child: _isPhoneValid && !_isOnline
-                                      ? SizedBox(
-                                          width: 24,
-                                          height: 24,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: cs.onPrimaryContainer,
-                                          ),
+                                      ? SmallSpinner(
+                                          size: 24,
+                                          color: cs.onPrimaryContainer,
                                         )
                                       : Icon(
-                                          Icons.arrow_forward,
+                                          Symbols.arrow_forward,
                                           color: _isPhoneValid
                                               ? cs.onPrimaryContainer
                                               : cs.onSurfaceVariant,
@@ -1067,64 +1062,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
       ],
-    );
-  }
-}
-
-class _PhoneInputFormatter extends TextInputFormatter {
-  final CountryName country;
-  _PhoneInputFormatter(this.country);
-
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    var text = newValue.text.replaceAll(RegExp(r'\D'), '');
-
-    if (newValue.text.length < oldValue.text.length) {
-      final oldDigits = oldValue.text.replaceAll(RegExp(r'\D'), '');
-      if (text.length == oldDigits.length && text.isNotEmpty) {
-        text = text.substring(0, text.length - 1);
-      }
-    }
-
-    if (text.length > country.phoneDigits) {
-      text = text.substring(0, country.phoneDigits);
-    }
-
-    final buffer = StringBuffer();
-    int digitIdx = 0;
-
-    for (int i = 0; i < country.phoneGroupSizes.length; i++) {
-      if (digitIdx >= text.length) break;
-
-      buffer.write(country.phoneGroupSeparators[i]);
-
-      final groupSize = country.phoneGroupSizes[i];
-      final remainingDigits = text.length - digitIdx;
-      final digitsToTake = remainingDigits < groupSize
-          ? remainingDigits
-          : groupSize;
-
-      buffer.write(text.substring(digitIdx, digitIdx + digitsToTake));
-      digitIdx += digitsToTake;
-
-      if (digitIdx == text.length &&
-          i < country.phoneGroupSeparators.length - 1) {}
-    }
-
-    if (digitIdx == text.length && text.length == country.phoneDigits) {
-      if (country.phoneGroupSeparators.length >
-          country.phoneGroupSizes.length) {
-        buffer.write(country.phoneGroupSeparators.last);
-      }
-    }
-
-    final formattedText = buffer.toString();
-    return TextEditingValue(
-      text: formattedText,
-      selection: TextSelection.collapsed(offset: formattedText.length),
     );
   }
 }

@@ -29,6 +29,8 @@ flutter build windows --release
 
 Android builds require **Java 17**. Gradle memory is configured to `-Xmx4096m`.
 
+**Never run APK/AAB builds yourself** (`flutter build apk`, `flutter build appbundle`, gradle assemble tasks) — they are slow and the user builds them. Verify changes with `flutter analyze`; the build commands above are documentation only.
+
 ## Build Flavors
 
 | Flavor | App ID | Notes |
@@ -68,6 +70,21 @@ Incoming packets: transport → dispatcher → backend module → state → UI r
 - **Use `showCustomNotification(context, 'text')`** for all user-facing notifications — never use SnackBars.
 - When a fix can be done quickly with a hack or properly with a rewrite, **choose the proper rewrite**.
 - Quality over quantity.
+- **Never leave real data in test files**, including existing message contents or real IDs captured from requests. Use synthetic fixtures instead.
+- **A button whose icon toggles between plain and slashed** (flash on/off, mic muted, sound, notifications) **must animate with a Lottie icon** — never swap two `Icon`s instantly. See *Animated icons* below.
+
+## Animated icons
+
+Everything in `assets/lottie/` is generated from the Material Symbols font by `tool/make_morph_icons.py` (stdlib-only Python, no deps). Never hand-edit the JSON — add a spec and re-run `python3 tool/make_morph_icons.py`.
+
+| Kind | Spec list | Widget |
+|------|-----------|--------|
+| Morph between two glyphs | `SPECS` | `ComposerMorphIcon` |
+| Plain ↔ slashed toggle | `SLASH_SPECS` | `LottieSlashIcon` |
+
+A slash spec takes the plain and slashed codepoints; the generator lays both glyphs out as static layers and sweeps a mask across the diagonal, so the slash looks drawn on top of the icon. Pass `fill=1.0` when the button renders `Icon(..., fill: 1)` — contours are then taken from the `FILL=1` instance of the variable font.
+
+`LottieSlashIcon` plays the asset forward when `slashed` turns true and backward when it turns false, so a single asset covers both directions. The older `AnimatedSlashIcon` (clip wipe over two glyphs) stays where it is already used; new buttons use the Lottie one.
 
 ## Localization
 

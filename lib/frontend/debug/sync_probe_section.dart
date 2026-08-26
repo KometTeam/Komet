@@ -6,6 +6,8 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../main.dart';
 import '../widgets/glossy_pill.dart';
+import '../widgets/small_spinner.dart';
+import '../../core/config/app_shape.dart';
 
 class DebugSyncProbeSection extends StatefulWidget {
   const DebugSyncProbeSection({super.key});
@@ -142,16 +144,10 @@ class _DebugSyncProbeSectionState extends State<DebugSyncProbeSection> {
             onPressed: _loading ? null : _send,
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(44),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: AppShape.buttonBorder,
             ),
             child: _loading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SmallSpinner(size: 20)
                 : const Text('Отправить'),
           ),
           if (_result != null) ...[

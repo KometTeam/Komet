@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
@@ -17,6 +16,8 @@ import 'segmented_pill_toggle.dart';
 import 'small_spinner.dart';
 import 'lottie_image.dart';
 import 'sticker_peek.dart';
+import '../../core/config/app_frost.dart';
+import 'liquid_glass.dart';
 
 class _DragScrollBehavior extends MaterialScrollBehavior {
   const _DragScrollBehavior();
@@ -49,12 +50,14 @@ class StickerPanel extends StatefulWidget {
   final double height;
   final void Function(StickerItem sticker) onStickerTap;
   final void Function(Animoji animoji)? onEmojiTap;
+  final void Function(double delta)? onResize;
 
   const StickerPanel({
     super.key,
     required this.height,
     required this.onStickerTap,
     this.onEmojiTap,
+    this.onResize,
   });
 
   @override
@@ -67,6 +70,7 @@ class _StickerPanelState extends State<StickerPanel>
   static const double _headerHeight = 34;
   static const double _searchFieldHeight = 50;
   static const double _toggleBarHeight = 48;
+  static const double _resizeHandleHeight = 16;
   static const int _modeEmoji = 0;
   static const int _modeStickers = 1;
   static const String _modePrefKey = 'komet_panel_mode';
@@ -248,28 +252,41 @@ class _StickerPanelState extends State<StickerPanel>
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: widget.height,
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 34, sigmaY: 34),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: cs.surface.withValues(alpha: 0.38),
-              border: Border(
-                top: BorderSide(
-                  color: cs.outlineVariant.withValues(alpha: 0.4),
-                  width: 0.5,
-                ),
+      child: GlassSurface(
+        liquid: false,
+        frostTint: AppFrost.glassTint(cs),
+        border: Border(top: AppFrost.hairline(cs)),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              if (widget.onResize != null) _buildResizeHandle(cs),
+              Expanded(
+                child: _mode == _modeEmoji && widget.onEmojiTap != null
+                    ? EmojiPanel(onEmojiTap: widget.onEmojiTap!)
+                    : _buildStickerBody(cs),
               ),
-            ),
-            child: Column(
-              children: [
-                Expanded(
-                  child: _mode == _modeEmoji && widget.onEmojiTap != null
-                      ? EmojiPanel(onEmojiTap: widget.onEmojiTap!)
-                      : _buildStickerBody(cs),
-                ),
-                if (widget.onEmojiTap != null) _buildToggleBar(cs),
-              ],
+              if (widget.onEmojiTap != null) _buildToggleBar(cs),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResizeHandle(ColorScheme cs) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragUpdate: (details) => widget.onResize!(-details.delta.dy),
+      child: SizedBox(
+        height: _resizeHandleHeight,
+        child: Center(
+          child: Container(
+            width: 38,
+            height: 4,
+            decoration: BoxDecoration(
+              color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
         ),

@@ -27,6 +27,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import android.media.MediaCodecInfo
 import android.net.Uri
@@ -75,14 +76,24 @@ class MainActivity : FlutterActivity() {
     @Volatile private var exchangingEmitted = false
 
     private var pendingCall: Map<String, Any?>? = null
+    private var pendingChat: Long = 0L
+    private var pendingShare: Map<String, Any?>? = null
+    private var pendingShareTask: java.util.concurrent.Future<Map<String, Any?>?>? = null
+    private val shareExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val shareHandler = Handler(Looper.getMainLooper())
 
     private companion object {
+        @Volatile
+        var keepAwake = false
+
         const val LOG_TAG = "VpnBypass"
+        const val SHARE_TAG = "ShareIntake"
         const val NFC_TAG = "NfcExchange"
-        const val CALL_ENGINE_ID = "komet_call_engine"
+        const val KEEP_ENGINE_ID = "komet_keep_engine"
         const val NFC_PHASE_MIN_MS = 350L
         const val NFC_PHASE_JITTER_MS = 400
         const val BLE_PERMS_REQUEST = 7711
+        const val NOTE_PERMS_REQUEST = 7712
         val NFC_READER_FLAGS = NfcAdapter.FLAG_READER_NFC_A or
             NfcAdapter.FLAG_READER_NFC_B or
             NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
@@ -189,37 +200,46 @@ class MainActivity : FlutterActivity() {
             "ru.komet.app/upload_service",
         ).setMethodCallHandler { call, result ->
             val ctx = this
-            when (call.method) {
-                "start" -> {
-                    val filename = call.argument<String>("filename") ?: "Файл"
-                    val intent = Intent(ctx, UploadForegroundService::class.java).apply {
-                        action = UploadForegroundService.ACTION_START
-                        putExtra(UploadForegroundService.EXTRA_FILENAME, filename)
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            fun uploadIntent(call: MethodCall, action: String) =
+                Intent(ctx, UploadForegroundService::class.java).apply {
+                    this.action = action
+                    putExtra(UploadForegroundService.EXTRA_TITLE, call.argument<String>("title"))
+                    putExtra(UploadForegroundService.EXTRA_BODY, call.argument<String>("body") ?: "")
+                    putExtra(UploadForegroundService.EXTRA_PROGRESS, call.argument<Int>("progress") ?: 0)
+                    putExtra(
+                        UploadForegroundService.EXTRA_INDETERMINATE,
+                        call.argument<Boolean>("indeterminate") ?: true,
+                    )
+                }
+
+            fun launch(intent: Intent, asForeground: Boolean) {
+                try {
+                    if (asForeground && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startForegroundService(intent)
                     } else {
                         startService(intent)
                     }
+                } catch (e: Exception) {
+                    Log.w("UploadService", "${intent.action} failed: ${e.message}")
+                }
+            }
+
+            when (call.method) {
+                "start" -> {
+                    launch(uploadIntent(call, UploadForegroundService.ACTION_START), true)
                     result.success(null)
                 }
                 "update" -> {
-                    val filename = call.argument<String>("filename") ?: "Файл"
-                    val progress = call.argument<Int>("progress") ?: 0
-                    val speed    = call.argument<Long>("speed") ?: 0L
-                    val intent = Intent(ctx, UploadForegroundService::class.java).apply {
-                        action = UploadForegroundService.ACTION_UPDATE
-                        putExtra(UploadForegroundService.EXTRA_FILENAME, filename)
-                        putExtra(UploadForegroundService.EXTRA_PROGRESS, progress)
-                        putExtra(UploadForegroundService.EXTRA_SPEED, speed)
-                    }
-                    startService(intent)
+                    launch(uploadIntent(call, UploadForegroundService.ACTION_UPDATE), false)
                     result.success(null)
                 }
                 "stop" -> {
-                    startService(Intent(ctx, UploadForegroundService::class.java).apply {
-                        action = UploadForegroundService.ACTION_STOP
-                    })
+                    launch(
+                        Intent(ctx, UploadForegroundService::class.java).apply {
+                            action = UploadForegroundService.ACTION_STOP
+                        },
+                        false,
+                    )
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -231,14 +251,28 @@ class MainActivity : FlutterActivity() {
             "ru.komet.app/video_note",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "permission" -> requestNotePermissions(result)
                 "init" -> {
                     val front = call.argument<Boolean>("front") ?: true
-                    val rec = VideoNoteRecorder(applicationContext, flutterEngine.renderer)
+                    val size = call.argument<Int>("size") ?: 480
+                    val fps = call.argument<Int>("fps") ?: 30
+                    val rec = VideoNoteRecorder(
+                        applicationContext,
+                        flutterEngine.renderer,
+                        size,
+                        fps,
+                    )
                     noteRecorder?.dispose()
                     noteRecorder = rec
                     rec.init(front, result)
                 }
                 "start" -> noteRecorder?.start(result)
+                    ?: result.error("NOT_READY", "recorder not initialized", null)
+                "switch" -> noteRecorder?.switchCamera(result)
+                "torch" -> noteRecorder?.setTorch(
+                    call.argument<Boolean>("on") ?: false,
+                    result,
+                )
                     ?: result.error("NOT_READY", "recorder not initialized", null)
                 "stop" -> noteRecorder?.stop(result)
                     ?: result.error("NOT_READY", "recorder not initialized", null)
@@ -266,6 +300,32 @@ class MainActivity : FlutterActivity() {
                         cropSquare(input, output, size, result)
                     }
                 }
+                "probe" -> {
+                    val input = call.argument<String>("input")
+                    if (input == null) {
+                        result.error("BAD_ARGS", "input required", null)
+                    } else {
+                        probeVideo(input, result)
+                    }
+                }
+                "frames" -> {
+                    val input = call.argument<String>("input")
+                    val times = call.argument<List<Int>>("times")
+                    if (input == null || times == null) {
+                        result.error("BAD_ARGS", "input/times required", null)
+                    } else {
+                        videoFrames(
+                            input,
+                            times,
+                            call.argument<Int>("size") ?: 256,
+                            call.argument<Boolean>("precise") == true,
+                            result,
+                        )
+                    }
+                }
+                "edit" -> editVideo(call, result)
+                "editProgress" -> editVideoProgress(result)
+                "editCancel" -> editVideoCancel(result)
                 else -> result.notImplemented()
             }
         }
@@ -285,6 +345,25 @@ class MainActivity : FlutterActivity() {
                     CallRinger.stop()
                     NotificationManagerCompat.from(this).cancel(CallConst.NOTIF_ID)
                     CallForegroundService.start(applicationContext, caller)
+                    result.success(null)
+                }
+                "ensureOngoing" -> {
+                    val caller = call.argument<String>("caller") ?: "Звонок"
+                    CallForegroundService.start(applicationContext, caller)
+                    result.success(null)
+                }
+                "setScreenShare" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    val caller = call.argument<String>("caller") ?: "Звонок"
+                    CallForegroundService.setScreenShare(
+                        applicationContext,
+                        enabled,
+                        caller,
+                    )
+                    result.success(null)
+                }
+                "dropOngoing" -> {
+                    CallForegroundService.stop(applicationContext)
                     result.success(null)
                 }
                 "notifyEnded" -> {
@@ -323,6 +402,19 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/screen",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setKeepAwake" -> {
+                    setKeepAwake(call.argument<Boolean>("enabled") == true)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "ru.komet.app/calls_events",
@@ -335,12 +427,101 @@ class MainActivity : FlutterActivity() {
                 CallEvents.sink = null
             }
         })
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/notifications",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "consumeInitialChat" -> {
+                    stashChatOpen(intent, emit = false)
+                    val chatId = pendingChat
+                    pendingChat = 0L
+                    result.success(if (chatId > 0L) chatId else null)
+                }
+                "setActiveChat" -> {
+                    ChatNotifications.activeChatId = longArg(call.argument<Any>("chatId"))
+                    result.success(null)
+                }
+                "clearActiveChat" -> {
+                    ChatNotifications.activeChatId = 0L
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/notification_events",
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                ChatNotifications.sink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                ChatNotifications.sink = null
+            }
+        })
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/share",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "consumeInitialShare" -> {
+                    stashShare(intent, emit = false)
+                    val ready = pendingShare
+                    val task = pendingShareTask
+                    if (ready != null) {
+                        pendingShare = null
+                        result.success(ready)
+                    } else if (task != null) {
+                        pendingShareTask = null
+                        shareExecutor.execute {
+                            val payload = try {
+                                task.get()
+                            } catch (e: Exception) {
+                                Log.w(SHARE_TAG, "materialize failed: $e")
+                                null
+                            }
+                            shareHandler.post { result.success(payload) }
+                        }
+                    } else {
+                        result.success(null)
+                    }
+                }
+                "clearCache" -> {
+                    ShareIntake.clearCache(applicationContext)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/share_events",
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                ShareIntake.sink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                ShareIntake.sink = null
+            }
+        })
+
+        FkmChannel.attach(flutterEngine, this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (intent?.hasExtra(CallConst.EXTRA_CALL) == true) applyCallWindowFlags()
         super.onCreate(savedInstanceState)
+        applyKeepAwake()
         intent?.let { if (it.hasExtra(CallConst.EXTRA_CALL)) stashCall(it, emit = false) }
+        stashChatOpen(intent, emit = false)
+        stashShare(intent, emit = false)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -350,11 +531,56 @@ class MainActivity : FlutterActivity() {
             applyCallWindowFlags()
             stashCall(intent, emit = true)
         }
+        stashChatOpen(intent, emit = true)
+        stashShare(intent, emit = true)
+    }
+
+    private fun stashChatOpen(source: Intent?, emit: Boolean) {
+        val chatId = ChatNotifications.chatIdFrom(source)
+        if (chatId == 0L) return
+        source?.removeExtra(ChatNotifications.EXTRA_CHAT)
+        val sink = ChatNotifications.sink
+        if (emit && sink != null) {
+            sink.success(chatId)
+        } else {
+            pendingChat = chatId
+        }
+    }
+
+    private fun stashShare(source: Intent?, emit: Boolean) {
+        if (!ShareIntake.isShare(source)) return
+        val intent = source ?: return
+        val snapshot = ShareIntake.snapshot(intent) ?: return
+        intent.action = Intent.ACTION_MAIN
+        intent.removeExtra(Intent.EXTRA_STREAM)
+        intent.removeExtra(Intent.EXTRA_TEXT)
+        val task = shareExecutor.submit<Map<String, Any?>?> {
+            ShareIntake.materialize(applicationContext, snapshot)
+        }
+        if (!emit) {
+            pendingShareTask = task
+            return
+        }
+        shareExecutor.execute {
+            val payload = try {
+                task.get()
+            } catch (e: Exception) {
+                Log.w(SHARE_TAG, "materialize failed: $e")
+                null
+            } ?: return@execute
+            shareHandler.post {
+                val sink = ShareIntake.sink
+                if (sink != null) sink.success(payload) else pendingShare = payload
+            }
+        }
     }
 
     private fun stashCall(intent: Intent, emit: Boolean) {
         val json = intent.getStringExtra(CallConst.EXTRA_CALL) ?: return
         val action = intent.getStringExtra(CallConst.EXTRA_ACTION) ?: CallConst.ACTION_RING
+        intent.removeExtra(CallConst.EXTRA_CALL)
+        intent.removeExtra(CallConst.EXTRA_ACTION)
+        intent.removeExtra(CallConst.EXTRA_CALLER)
         if (action == CallConst.ACTION_ANSWER) CallRinger.stop()
         val map = mapOf<String, Any?>("data" to json, "action" to action)
         val sink = CallEvents.sink
@@ -373,8 +599,7 @@ class MainActivity : FlutterActivity() {
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             )
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -391,9 +616,21 @@ class MainActivity : FlutterActivity() {
             @Suppress("DEPRECATION")
             window.clearFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             )
+        }
+    }
+
+    private fun setKeepAwake(enabled: Boolean) {
+        keepAwake = enabled
+        runOnUiThread { applyKeepAwake() }
+    }
+
+    private fun applyKeepAwake() {
+        if (keepAwake) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
@@ -461,6 +698,31 @@ class MainActivity : FlutterActivity() {
             result.error("TRANSCODE_FAILED", e.message, null)
         }
     }
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun probeVideo(input: String, result: MethodChannel.Result) =
+        VideoEditor.probe(input, result)
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun videoFrames(
+        input: String,
+        times: List<Int>,
+        size: Int,
+        precise: Boolean,
+        result: MethodChannel.Result,
+    ) = VideoEditor.frames(input, times, size, precise, result)
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun editVideo(call: MethodCall, result: MethodChannel.Result) =
+        VideoEditor.edit(this, call, result)
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun editVideoProgress(result: MethodChannel.Result) =
+        VideoEditor.progress(result)
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun editVideoCancel(result: MethodChannel.Result) =
+        VideoEditor.cancel(result)
 
     private fun nfcStatus(): Map<String, Any> {
         val adapter = nfcAdapter
@@ -566,12 +828,46 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private var notePermResult: MethodChannel.Result? = null
+
+    private fun isGranted(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(this, permission) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun notePermissionState(): Map<String, Boolean> = mapOf(
+        "camera" to isGranted(Manifest.permission.CAMERA),
+        "microphone" to isGranted(Manifest.permission.RECORD_AUDIO),
+    )
+
+    private fun requestNotePermissions(result: MethodChannel.Result) {
+        val state = notePermissionState()
+        if (state.values.all { it } || notePermResult != null) {
+            result.success(state); return
+        }
+        notePermResult = result
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO),
+            NOTE_PERMS_REQUEST,
+        )
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == FkmChannel.NOTIF_PERMS_REQUEST) {
+            FkmChannel.onPermissionResult(grantResults)
+            return
+        }
+        if (requestCode == NOTE_PERMS_REQUEST) {
+            val pending = notePermResult
+            notePermResult = null
+            pending?.success(notePermissionState())
+            return
+        }
         if (requestCode != BLE_PERMS_REQUEST) return
         if (!NfcExchange.active) return
         val granted = grantResults.isNotEmpty() &&
@@ -641,30 +937,36 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // Движок переживает смерть активити, пока идёт звонок или включён FKM:
+    // в обоих случаях в фоне должно жить то же соединение, что и в UI.
+    private fun keepEngineAlive(): Boolean = CallState.inCall || FkmState.enabled
+
     override fun provideFlutterEngine(context: Context): FlutterEngine? {
         val cache = FlutterEngineCache.getInstance()
-        val cached = cache.get(CALL_ENGINE_ID)
+        val cached = cache.get(KEEP_ENGINE_ID)
         if (cached != null) {
-            if (CallState.inCall) return cached
-            cache.remove(CALL_ENGINE_ID)
+            if (keepEngineAlive()) return cached
+            cache.remove(KEEP_ENGINE_ID)
             cached.destroy()
         }
         return super.provideFlutterEngine(context)
     }
 
-    override fun shouldDestroyEngineWithHost(): Boolean = !CallState.inCall
+    override fun shouldDestroyEngineWithHost(): Boolean = !keepEngineAlive()
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        if (!CallState.inCall) {
-            FlutterEngineCache.getInstance().remove(CALL_ENGINE_ID)
+        if (!keepEngineAlive()) {
+            FlutterEngineCache.getInstance().remove(KEEP_ENGINE_ID)
+            FkmChannel.detach()
         }
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
     override fun onDestroy() {
-        if (CallState.inCall && isFinishing) {
-            Log.d("KometFcm", "task removed during call, caching engine")
-            flutterEngine?.let { FlutterEngineCache.getInstance().put(CALL_ENGINE_ID, it) }
+        shareExecutor.shutdown()
+        if (keepEngineAlive() && isFinishing) {
+            Log.d("KometFcm", "task removed, caching engine (call=${CallState.inCall} fkm=${FkmState.enabled})")
+            flutterEngine?.let { FlutterEngineCache.getInstance().put(KEEP_ENGINE_ID, it) }
         }
         super.onDestroy()
     }
@@ -672,6 +974,7 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         AppState.resumed = true
+        stashChatOpen(intent, emit = true)
     }
 
     override fun onPause() {

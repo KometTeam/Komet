@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../main.dart' show accountModule;
 import 'custom_notification.dart';
 import 'sheet_helpers.dart';
+import 'small_spinner.dart';
+import '../../core/config/app_fonts.dart';
 
 Future<bool> showWebQrLoginConfirmSheet(BuildContext context) async {
   final agreed = await showModalBottomSheet<bool>(
@@ -23,7 +25,7 @@ Future<bool> showWebQrLoginConfirmSheet(BuildContext context) async {
               Text(
                 'Вход по QR',
                 style: TextStyle(
-                  fontFamily: 'Outfit',
+                  fontFamily: displayFontOf(context),
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: cs.onSurface,
@@ -88,7 +90,7 @@ Future<bool> confirmAndAuthorizeWebQrLogin(
             color: cs.surfaceContainerHigh,
             child: const Padding(
               padding: EdgeInsets.all(28),
-              child: CircularProgressIndicator(),
+              child: SmallSpinner(size: 36),
             ),
           ),
         ),

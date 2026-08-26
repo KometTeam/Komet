@@ -5,6 +5,7 @@ import 'package:m3e_collection/m3e_collection.dart';
 
 import '../../backend/api.dart';
 import '../../main.dart' show api;
+import 'small_spinner.dart';
 
 final ValueNotifier<bool> debugForceOffline = ValueNotifier<bool>(false);
 
@@ -175,14 +176,7 @@ class ConnectionSpinner extends StatelessWidget {
                   ],
                 ),
                 child: Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      color: cs.primary,
-                    ),
-                  ),
+                  child: SmallSpinner(size: 20, color: cs.primary),
                 ),
               ),
       ),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import '../api.dart';
+import '../../core/config/debug_test.dart';
 import '../../core/config/komet_settings.dart';
 import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
@@ -10,6 +11,8 @@ import '../../core/storage/app_database.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
+import '../../models/login_info.dart';
+import 'banners.dart';
 import 'chats.dart';
 import 'complaints.dart';
 import 'contacts.dart';
@@ -40,7 +43,9 @@ class AccountModule {
   late final PrivacyModule _privacy = PrivacyModule(_api);
   late final ProfileModule _profile = ProfileModule(_api);
   late final TwoFactorModule _twoFactor = TwoFactorModule(_api, _profile);
+  late final BannersModule banners = BannersModule(_api);
   final _loginStatusController = StreamController<LoginStatus>.broadcast();
+  final _noticeController = StreamController<AccountNotice>.broadcast();
   bool _loggedIn = false;
 
   AccountModule(this._api) {
@@ -50,6 +55,8 @@ class AccountModule {
   }
 
   Stream<LoginStatus> get loginStatusStream => _loginStatusController.stream;
+
+  Stream<AccountNotice> get noticeStream => _noticeController.stream;
 
   /// `true`, только когда сервер считает сессию ONLINE — после успешного
   /// login (opcode 19), а не просто после хэндшейка (opcode 6).
@@ -327,6 +334,8 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    ContactsModule.clearBlockedCache();
+    banners.clear();
     chats.resetForAccountSwitch();
 
     logger.i('Добавление аккаунта: сессия сброшена, активный аккаунт очищен');
@@ -341,6 +350,8 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    ContactsModule.clearBlockedCache();
+    banners.clear();
     chats.resetForAccountSwitch();
 
     await _api.connect();
@@ -372,6 +383,8 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    ContactsModule.clearBlockedCache();
+    banners.clear();
     chats.resetForAccountSwitch();
     await ContactsModule.primeCacheFromDb(accountId);
 
@@ -422,6 +435,8 @@ class AccountModule {
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
+    ContactsModule.clearBlockedCache();
+    banners.clear();
     chats.resetForAccountSwitch();
   }
 
@@ -473,7 +488,7 @@ class AccountModule {
     final data = _requireMapPayload(packet, 'checkPassword');
 
     if (data['error'] != null) {
-      throw Exception('checkPassword: неверный пароль');
+      throw const WrongPasswordException();
     }
 
     final tokenAttrs = data['tokenAttrs'];
@@ -565,22 +580,16 @@ class AccountModule {
 
     ProfileData profile;
     final profileMap = data['profile'];
-    if (profileMap is Map) {
-      final contact = profileMap['contact'];
-      if (contact is! Map) {
-        throw Exception('login: отсутствует profile.contact в ответе');
-      }
+    if (!DebugTest.berserk &&
+        profileMap is Map &&
+        profileMap['contact'] is Map) {
       profile = ProfileData.fromServerProfile(
         profileMap.cast<dynamic, dynamic>(),
       );
-      await AppDatabase.saveProfile(profile, isActive: true);
     } else {
-      final cachedProfile = await AppDatabase.loadProfile(accountId);
-      if (cachedProfile == null) {
-        throw Exception('login: отсутствует profile в ответе');
-      }
-      profile = cachedProfile;
+      profile = await _resurrectProfile(accountId);
     }
+    await AppDatabase.saveProfile(profile, isActive: true);
     await AppDatabase.setActiveAccount(profile.id);
 
     await _saveSyncState(data, serverTime, profile.id);
@@ -600,6 +609,7 @@ class AccountModule {
         profile.id,
         config.cast<dynamic, dynamic>(),
       );
+      await chats.applyFavorites(profile.id);
       final userConfig = config['user'];
       if (userConfig is Map) {
         await AppDatabase.savePrivacyConfig(profile.id, jsonEncode(userConfig));
@@ -609,6 +619,13 @@ class AccountModule {
       await FoldersModule.syncFromServer(_api, profile.id);
     } catch (e) {
       logger.w('Папки чатов: $e');
+    }
+    await chats.applyFavorites(profile.id);
+
+    try {
+      await banners.initFromLogin(profile.id, data);
+    } catch (e) {
+      logger.w('Баннеры: $e');
     }
 
     try {
@@ -623,6 +640,31 @@ class AccountModule {
       serverTime: serverTime,
       raw: data,
     );
+  }
+
+  Future<ProfileData> _resurrectProfile(int accountId) async {
+    if (DebugTest.berserk) {
+      await AppDatabase.deleteAccount(accountId);
+      logger.w('login: [BERSERK] профиль удалён из БД, форсирую регенерацию (id=$accountId)');
+    } else {
+      final cached = await AppDatabase.loadProfile(accountId);
+      if (cached != null) return cached;
+    }
+
+    _noticeController.add(AccountNotice.resurrectingProfile);
+
+    try {
+      final fetched = await ContactsModule.fetchSelfProfile(_api, accountId);
+      if (fetched != null) {
+        logger.i('login: профиль восстановлен через CONTACT_INFO (id=$accountId)');
+        return fetched;
+      }
+    } catch (e) {
+      logger.w('login: восстановление профиля через CONTACT_INFO не удалось: $e');
+    }
+
+    logger.w('login: профиль недоступен, использую заглушку (id=$accountId)');
+    return ProfileData.stub(accountId);
   }
 
   Future<void> _saveSyncState(
@@ -652,41 +694,12 @@ class AccountModule {
   }
 
   Future<void> _saveLoginInfo(Map<dynamic, dynamic> data, int accountId) async {
-    final contact = data['profile']?['contact'] as Map?;
-    final videoChatHistory = data['videoChatHistory'];
-    final chats = data['chats'] as List?;
     final config = data['config'] as Map?;
     final serverConfig = config?['server'] as Map?;
-    final userConfig = config?['user'] as Map?;
     if (serverConfig != null) {
       await _persistEntryBannerApps(accountId, serverConfig);
     }
-    final yMap = serverConfig?['y-map'] as Map?;
-    final whiteListLinks = serverConfig?['white-list-links'] as List?;
-    final fileUploadUnsupported =
-        serverConfig?['file-upload-unsupported-types'] as List?;
-    final time = data['time'] as int?;
-
-    final info = {
-      'registrationTime': contact?['registrationTime'],
-      'country': contact?['country'],
-      'videoChatHistory': videoChatHistory,
-      'updateTime': contact?['updateTime'],
-      'id': contact?['id'],
-      'chatMarker': chats != null && chats.isNotEmpty
-          ? _extractChatMarker(chats.cast<Map>())
-          : null,
-      'time': time,
-      'server': serverConfig != null
-          ? _extractServerInfo(
-              serverConfig,
-              yMap,
-              whiteListLinks,
-              fileUploadUnsupported,
-            )
-          : null,
-      'user': userConfig != null ? _extractUserConfig(userConfig) : null,
-    };
+    final info = LoginInfo.fromPayload(data);
 
     await AppDatabase.saveLoginInfo(accountId, jsonEncode(info));
   }
@@ -717,86 +730,6 @@ class AccountModule {
         entry.value.toString(),
       );
     }
-  }
-
-  Map<String, dynamic> _extractChatMarker(List<Map> chats) {
-    int? latestTime;
-    for (final chat in chats) {
-      final lastEventTime = chat['lastEventTime'] as int?;
-      if (lastEventTime != null &&
-          (latestTime == null || lastEventTime > latestTime)) {
-        latestTime = lastEventTime;
-      }
-    }
-    return {'chatMarker': latestTime};
-  }
-
-  Map<String, dynamic> _extractServerInfo(
-    Map serverConfig,
-    Map? yMap,
-    List? whiteListLinks,
-    List? fileUploadUnsupported,
-  ) {
-    return {
-      'account-removal-enabled': serverConfig['account-removal-enabled'],
-      'image-size': serverConfig['image-size'],
-      'gce': serverConfig['gce'],
-      'gcce': serverConfig['gcce'],
-      'max-msg-length': serverConfig['max-msg-length'],
-      'quotes-enabled': serverConfig['quotes-enabled'],
-      'calls-endpoint': serverConfig['calls-endpoint'],
-      'send-location-enabled': serverConfig['send-location-enabled'],
-      'lgce': serverConfig['lgce'],
-      'wud': serverConfig['wud'],
-      'video-msg-enabled': serverConfig['video-msg-enabled'],
-      'grse': serverConfig['grse'],
-      'edit-timeout': serverConfig['edit-timeout'],
-      'image-quality': serverConfig['image-quality'],
-      'unsafe-files-alert': serverConfig['unsafe-files-alert'],
-      'account-nickname-enabled': serverConfig['account-nickname-enabled'],
-      'mentions_entity_names_limit':
-          serverConfig['mentions_entity_names_limit'],
-      'reactions-enabled': serverConfig['reactions-enabled'],
-      'y-map': yMap != null
-          ? {
-              'tile': yMap['tile'],
-              'geocoder': yMap['geocoder'],
-              'static': yMap['static'],
-            }
-          : null,
-      'white-list-links': whiteListLinks,
-      'file-upload-unsupported-types': fileUploadUnsupported,
-    };
-  }
-
-  Map<String, dynamic> _extractUserConfig(Map userConfig) {
-    return {
-      'CHATS_PUSH_NOTIFICATION': userConfig['CHATS_PUSH_NOTIFICATION'],
-      'PUSH_DETAILS': userConfig['PUSH_DETAILS'],
-      'PUSH_SOUND': userConfig['PUSH_SOUND'],
-      'PHONE_NUMBER_PRIVACY': userConfig['PHONE_NUMBER_PRIVACY'],
-      'INACTIVE_TTL': userConfig['INACTIVE_TTL'],
-      'SHOW_READ_MARK': userConfig['SHOW_READ_MARK'],
-      'AUDIO_TRANSCRIPTION_ENABLED': userConfig['AUDIO_TRANSCRIPTION_ENABLED'],
-      'SEARCH_BY_PHONE': userConfig['SEARCH_BY_PHONE'],
-      'INCOMING_CALL': userConfig['INCOMING_CALL'],
-      'DOUBLE_TAP_REACTION_DISABLED':
-          userConfig['DOUBLE_TAP_REACTION_DISABLED'],
-      'SAFE_MODE_NO_PIN': userConfig['SAFE_MODE_NO_PIN'],
-      'CHATS_PUSH_SOUND': userConfig['CHATS_PUSH_SOUND'],
-      'DOUBLE_TAP_REACTION_VALUE': userConfig['DOUBLE_TAP_REACTION_VALUE'],
-      'FAMILY_PROTECTION': userConfig['FAMILY_PROTECTION'],
-      'HIDDEN': userConfig['HIDDEN'],
-      'CHATS_INVITE': userConfig['CHATS_INVITE'],
-      'PUSH_NEW_CONTACTS': userConfig['PUSH_NEW_CONTACTS'],
-      'UNSAFE_FILES': userConfig['UNSAFE_FILES'],
-      'DONT_DISTURB_UNTIL': userConfig['DONT_DISTURB_UNTIL'],
-      'ALT_KEYBOARD': userConfig['ALT_KEYBOARD'],
-      'CONTENT_LEVEL_ACCESS': userConfig['CONTENT_LEVEL_ACCESS'],
-      'STICKERS_SUGGEST': userConfig['STICKERS_SUGGEST'],
-      'SAFE_MODE': userConfig['SAFE_MODE'],
-      'M_CALL_PUSH_NOTIFICATION': userConfig['M_CALL_PUSH_NOTIFICATION'],
-    };
   }
 
   Future<RequestCodeResult> _requestCodeInternal(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 enum TextFormat {
+  heading,
   strong,
   emphasized,
   underline,
@@ -9,9 +10,11 @@ enum TextFormat {
   quote,
   link,
   animoji,
+  userMention,
 }
 
 const Map<TextFormat, String> _formatToServer = {
+  TextFormat.heading: 'HEADING',
   TextFormat.strong: 'STRONG',
   TextFormat.emphasized: 'EMPHASIZED',
   TextFormat.underline: 'UNDERLINE',
@@ -20,6 +23,7 @@ const Map<TextFormat, String> _formatToServer = {
   TextFormat.quote: 'QUOTE',
   TextFormat.link: 'LINK',
   TextFormat.animoji: 'ANIMOJI',
+  TextFormat.userMention: 'USER_MENTION',
 };
 
 final Map<String, TextFormat> _serverToFormat = {
@@ -35,12 +39,16 @@ class FormatRange {
   final TextFormat format;
   final int start;
   final int length;
+  final int? entityId;
+  final String? entityName;
   final Map<String, dynamic>? attributes;
 
   const FormatRange({
     required this.format,
     required this.start,
     required this.length,
+    this.entityId,
+    this.entityName,
     this.attributes,
   });
 
@@ -60,6 +68,8 @@ class FormatRange {
     'type': textFormatToServer(format),
     'from': start,
     'length': length,
+    if (entityId != null) 'entityId': entityId,
+    if (entityName != null) 'entityName': entityName,
     if (attributes != null) 'attributes': attributes,
   };
 }
@@ -78,11 +88,17 @@ List<FormatRange> parseFormatElements(dynamic raw) {
     final attributes = attrsRaw is Map
         ? Map<String, dynamic>.from(attrsRaw)
         : null;
+    final entityId = item['entityId'];
+    final entityName = item['entityName'];
     result.add(
       FormatRange(
         format: format,
         start: from,
         length: length,
+        entityId: entityId is int ? entityId : null,
+        entityName: entityName is String && entityName.isNotEmpty
+            ? entityName
+            : null,
         attributes: attributes,
       ),
     );
@@ -134,6 +150,8 @@ class FormatSegment {
   final Set<TextFormat> formats;
   final String? url;
   final String? animojiUrl;
+  final int? mentionId;
+  final String? mentionName;
 
   const FormatSegment({
     required this.start,
@@ -141,6 +159,8 @@ class FormatSegment {
     required this.formats,
     this.url,
     this.animojiUrl,
+    this.mentionId,
+    this.mentionName,
   });
 }
 
@@ -157,6 +177,8 @@ List<FormatSegment> segmentizeFormats(String text, List<FormatRange> ranges) {
         format: range.format,
         start: start,
         length: end - start,
+        entityId: range.entityId,
+        entityName: range.entityName,
         attributes: range.attributes,
       ),
     );
@@ -180,11 +202,17 @@ List<FormatSegment> segmentizeFormats(String text, List<FormatRange> ranges) {
     final formats = <TextFormat>{};
     String? url;
     String? animojiUrl;
+    int? mentionId;
+    String? mentionName;
     for (final range in clamped) {
       if (range.start <= start && range.end >= end) {
         formats.add(range.format);
         if (range.format == TextFormat.link) url ??= range.url;
         if (range.format == TextFormat.animoji) animojiUrl ??= range.animojiUrl;
+        if (range.format == TextFormat.userMention) {
+          mentionId ??= range.entityId;
+          mentionName ??= range.entityName;
+        }
       }
     }
     segments.add(
@@ -194,6 +222,8 @@ List<FormatSegment> segmentizeFormats(String text, List<FormatRange> ranges) {
         formats: formats,
         url: url,
         animojiUrl: animojiUrl,
+        mentionId: mentionId,
+        mentionName: mentionName,
       ),
     );
   }
@@ -204,6 +234,8 @@ TextStyle applyTextFormats(
   TextStyle base,
   Set<TextFormat> formats, {
   Color? quoteColor,
+  Color? mentionColor,
+  Paint? quoteBackground,
 }) {
   if (formats.isEmpty) return base;
 
@@ -216,14 +248,21 @@ TextStyle applyTextFormats(
     decorations.add(TextDecoration.lineThrough);
   }
 
-  final isItalic = formats.contains(TextFormat.emphasized) ||
-      formats.contains(TextFormat.quote);
+  final isItalic = formats.contains(TextFormat.emphasized);
+
+  final isQuote = formats.contains(TextFormat.quote);
+  final isMention = formats.contains(TextFormat.userMention);
+  final isHeading = formats.contains(TextFormat.heading);
 
   return base.copyWith(
-    fontWeight: formats.contains(TextFormat.strong) ? FontWeight.w700 : null,
+    fontSize: isHeading ? (base.fontSize ?? 16) * 1.08 : null,
+    fontWeight: formats.contains(TextFormat.strong) || isHeading
+        ? FontWeight.w700
+        : null,
     fontStyle: isItalic ? FontStyle.italic : null,
     fontFamily: formats.contains(TextFormat.monospaced) ? 'monospace' : null,
-    color: formats.contains(TextFormat.quote) ? quoteColor : null,
+    background: isQuote ? quoteBackground : null,
+    color: isMention ? mentionColor : (isQuote ? quoteColor : null),
     decoration: decorations.isEmpty
         ? null
         : TextDecoration.combine(decorations),

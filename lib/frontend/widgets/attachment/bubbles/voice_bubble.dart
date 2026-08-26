@@ -1,18 +1,17 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:ogg_opus_player/ogg_opus_player.dart';
 import 'package:komet/main.dart';
 
 import '../../../../backend/modules/messages.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/config/komet_settings.dart';
+import '../../../../core/media/media_playback.dart';
+import '../../../../core/media/voice_audio_controller.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/logger.dart';
-import '../../../../core/utils/media_cache.dart';
 import '../../custom_notification.dart';
+import '../../small_spinner.dart';
 
 class VoiceMessageBubble extends StatefulWidget {
   final int duration;
@@ -27,8 +26,12 @@ class VoiceMessageBubble extends StatefulWidget {
   final String? waveData;
   final int chatId;
   final String messageId;
+  final int? sourceChatId;
+  final String? sourceMessageId;
+  final int senderId;
   final int? audioId;
   final String? preloadedText;
+  final ValueListenable<List<double>>? uploadProgress;
 
   const VoiceMessageBubble({
     super.key,
@@ -44,24 +47,26 @@ class VoiceMessageBubble extends StatefulWidget {
     this.waveData,
     required this.chatId,
     required this.messageId,
+    this.sourceChatId,
+    this.sourceMessageId,
+    required this.senderId,
     this.audioId,
     this.preloadedText,
+    this.uploadProgress,
   });
 
   @override
   State<VoiceMessageBubble> createState() => _VoiceMessageBubbleState();
 }
 
+const double _transcriptionMaxHeight = 132;
+
 class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
-  bool _isPlaying = false;
-  final ValueNotifier<double> _progress = ValueNotifier(0.0);
   bool _transcriptionVisible = false;
   String? _transcriptionText;
   bool _transcriptionLoading = false;
 
-  OggOpusPlayer? _player;
-  bool _loadingAudio = false;
-  Timer? _ticker;
+  late final VoiceAudioController _audio;
   late final List<int> _amps = _parseWave(widget.waveData);
 
   static List<int> _parseWave(String? data) {
@@ -73,75 +78,82 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   void initState() {
     super.initState();
     _transcriptionText = widget.preloadedText;
+    _audio = MediaPlayback.instance.acquireVoice(
+      cacheName: _cacheName,
+      resolveUrl: () async => widget.url,
+      fallbackDuration: Duration(seconds: widget.duration),
+    );
+    _audio.failure.addListener(_onFailure);
+    TranscriptionCache.listen(_sourceMessageId, _onTranscriptionPush);
+    _adoptCachedTranscription();
   }
 
   @override
   void dispose() {
-    _ticker?.cancel();
-    _player?.state.removeListener(_onPlayerState);
-    _player?.dispose();
-    _progress.dispose();
+    TranscriptionCache.unlisten(_sourceMessageId, _onTranscriptionPush);
+    _audio.failure.removeListener(_onFailure);
+    MediaPlayback.instance.releaseVoice(_audio);
     super.dispose();
   }
 
-  Future<void> _togglePlay() async {
-    if (_loadingAudio) return;
-
-    if (_player != null) {
-      if (_isPlaying) {
-        _player!.pause();
-      } else {
-        if (widget.duration > 0 &&
-            _player!.currentPosition >= widget.duration - 0.05) {
-          _progress.value = 0;
-        }
-        _player!.play();
-      }
-      return;
-    }
-
-    final url = widget.url;
-    if (url.isEmpty) return;
-
-    setState(() => _loadingAudio = true);
-    try {
-      final name = '${widget.audioId ?? widget.messageId}.ogg';
-      final file = await MediaCache.getOrDownload(name, url);
-      if (!mounted) return;
-      if (file == null) {
-        showCustomNotification(context, 'Не удалось загрузить аудио');
-        return;
-      }
-      final player = OggOpusPlayer(file.path);
-      _player = player;
-      player.state.addListener(_onPlayerState);
-      _ticker = Timer.periodic(
-        const Duration(milliseconds: 60),
-        (_) => _onTick(),
-      );
-      player.play();
-    } catch (e) {
-      logger.w('VoiceBubble._togglePlay: $e');
-      if (mounted) showCustomNotification(context, 'Ошибка воспроизведения');
-    } finally {
-      if (mounted) setState(() => _loadingAudio = false);
-    }
+  void _adoptCachedTranscription() {
+    final cached = TranscriptionCache.get(_sourceMessageId);
+    if (cached == null || cached.status != 1) return;
+    _transcriptionText = cached.text ?? 'не удалось распознать текст';
+    _transcriptionVisible = TranscriptionCache.isExpanded(_sourceMessageId);
   }
 
-  void _onTick() {
-    final player = _player;
-    if (player == null || widget.duration <= 0) return;
-    final pos = player.currentPosition;
-    _progress.value = (pos / widget.duration).clamp(0.0, 1.0);
-  }
-
-  void _onPlayerState() {
-    final state = _player?.state.value;
+  void _onTranscriptionPush() {
     if (!mounted) return;
-    final playing = state == PlayerState.playing;
-    if (playing != _isPlaying) setState(() => _isPlaying = playing);
-    if (state == PlayerState.ended) {
-      _progress.value = 1.0;
+    setState(() {
+      _transcriptionLoading = false;
+      _adoptCachedTranscription();
+    });
+  }
+
+  void _showTranscription(String text) {
+    _transcriptionText = text;
+    _transcriptionVisible = true;
+    TranscriptionCache.setExpanded(_sourceMessageId, true);
+  }
+
+  String get _cacheName => '${widget.audioId ?? _sourceMessageId}.ogg';
+
+  int get _sourceChatId => widget.sourceChatId ?? widget.chatId;
+
+  String get _sourceMessageId => widget.sourceMessageId ?? widget.messageId;
+
+  void _claimPlayback() {
+    MediaPlayback.instance.activateVoice(
+      VoiceTrack(
+        cacheName: _cacheName,
+        chatId: widget.chatId,
+        messageId: widget.messageId,
+        senderId: widget.senderId,
+        isMe: widget.isMe,
+        time: widget.time,
+        audio: _audio,
+      ),
+    );
+  }
+
+  bool get _uploading => widget.uploadProgress != null;
+
+  void _toggle() {
+    if (_uploading) return;
+    _claimPlayback();
+    _audio.toggle();
+  }
+
+  void _onFailure() {
+    if (!mounted) return;
+    switch (_audio.failure.value) {
+      case VoiceAudioFailure.none:
+        return;
+      case VoiceAudioFailure.download:
+        showCustomNotification(context, 'Не удалось загрузить аудио');
+      case VoiceAudioFailure.playback:
+        showCustomNotification(context, 'Ошибка воспроизведения');
     }
   }
 
@@ -199,13 +211,120 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     return Icon(icon, size: 14, color: color);
   }
 
+  Color get _accent =>
+      widget.isMe ? widget.cs.onPrimaryContainer : widget.cs.primary;
+
+  Widget _buildPlayButton() {
+    final uploading = widget.uploadProgress;
+    return GestureDetector(
+      onTap: uploading == null ? _toggle : null,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: widget.isMe
+              ? widget.cs.onPrimaryContainer.withValues(alpha: 0.12)
+              : widget.cs.primaryContainer,
+          shape: BoxShape.circle,
+        ),
+        child: uploading != null
+            ? _buildUploadIndicator(uploading)
+            : AnimatedBuilder(
+                animation: Listenable.merge([
+                  _audio.downloaded,
+                  _audio.downloadProgress,
+                  _audio.playing,
+                ]),
+                builder: (context, _) {
+                  final progress = _audio.downloadProgress.value;
+                  if (progress != null) {
+                    return Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        value: progress > 0 ? progress : null,
+                        color: _accent,
+                        backgroundColor: _accent.withValues(alpha: 0.2),
+                      ),
+                    );
+                  }
+                  final IconData icon;
+                  if (_audio.playing.value) {
+                    icon = Symbols.pause;
+                  } else if (_audio.downloaded.value) {
+                    icon = Symbols.play_arrow;
+                  } else {
+                    icon = Symbols.arrow_downward;
+                  }
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 160),
+                    transitionBuilder: (child, animation) =>
+                        ScaleTransition(scale: animation, child: child),
+                    child: Icon(
+                      icon,
+                      key: ValueKey(icon),
+                      color: _accent,
+                      size: 18,
+                    ),
+                  );
+                },
+              ),
+      ),
+    );
+  }
+
+  Widget _buildUploadIndicator(ValueListenable<List<double>> progress) {
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: ValueListenableBuilder<List<double>>(
+        valueListenable: progress,
+        builder: (context, values, _) {
+          final value = values.isEmpty
+              ? 0.0
+              : values.reduce((a, b) => a + b) / values.length;
+          return TweenAnimationBuilder<double>(
+            tween: Tween<double>(end: value.clamp(0.0, 1.0)),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            builder: (context, shown, _) => CircularProgressIndicator(
+              strokeWidth: 2,
+              value: shown >= 1.0 ? null : shown,
+              color: _accent,
+              backgroundColor: _accent.withValues(alpha: 0.2),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTimeLabel() {
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        _audio.position,
+        _audio.duration,
+        _audio.playing,
+      ]),
+      builder: (context, _) {
+        final elapsed = _audio.position.value;
+        final total = _audio.duration.value;
+        final seconds = elapsed > 0 ? elapsed.round() : total.round();
+        return Text(
+          formatSecondsMmSs(seconds),
+          style: TextStyle(
+            color: widget.textColor.withValues(alpha: 0.7),
+            fontSize: 11,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final waveInactiveColor = widget.isMe
-        ? widget.cs.onPrimaryContainer.withValues(alpha: 0.35)
-        : widget.cs.surfaceContainerHighest;
+    final waveInactiveColor = widget.textColor.withValues(alpha: 0.35);
     final waveActiveColor = widget.isMe
-        ? widget.cs.onPrimaryContainer.withValues(alpha: 0.7)
+        ? widget.cs.onPrimaryContainer
         : widget.cs.primary;
 
     return SizedBox(
@@ -217,52 +336,16 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              GestureDetector(
-                onTap: _togglePlay,
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: widget.isMe
-                        ? widget.cs.onPrimaryContainer.withValues(alpha: 0.12)
-                        : widget.cs.primaryContainer,
-                    shape: BoxShape.circle,
-                  ),
-                  child: _loadingAudio
-                      ? Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: widget.isMe
-                                ? widget.cs.onPrimaryContainer
-                                : widget.cs.primary,
-                          ),
-                        )
-                      : Icon(
-                          _isPlaying ? Symbols.pause : Symbols.play_arrow,
-                          color: widget.isMe
-                              ? widget.cs.onPrimaryContainer
-                              : widget.cs.primary,
-                          size: 18,
-                        ),
-                ),
-              ),
+              _buildPlayButton(),
               const SizedBox(width: 10),
               Expanded(
-                child: SizedBox(
-                  height: 26,
-                  child: ValueListenableBuilder<double>(
-                    valueListenable: _progress,
-                    builder: (context, progress, _) => CustomPaint(
-                      size: Size.infinite,
-                      painter: _WaveformPainter(
-                        amps: _amps,
-                        progress: progress,
-                        active: waveActiveColor,
-                        inactive: waveInactiveColor,
-                      ),
-                    ),
-                  ),
+                child: _SeekableWaveform(
+                  onClaim: _claimPlayback,
+                  onToggle: _toggle,
+                  audio: _audio,
+                  amps: _amps,
+                  active: waveActiveColor,
+                  inactive: waveInactiveColor,
                 ),
               ),
               const SizedBox(width: 8),
@@ -273,13 +356,9 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                   height: 32,
                   child: Center(
                     child: _transcriptionLoading
-                        ? SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 1.5,
-                              color: widget.textColor.withValues(alpha: 0.6),
-                            ),
+                        ? SmallSpinner(
+                            size: 12,
+                            color: widget.textColor.withValues(alpha: 0.6),
                           )
                         : Text(
                             'Т',
@@ -298,18 +377,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 32,
-                child: Center(
-                  child: Text(
-                    formatSecondsMmSs(widget.duration),
-                    style: TextStyle(
-                      color: widget.textColor.withValues(alpha: 0.7),
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ),
+              SizedBox(width: 32, child: Center(child: _buildTimeLabel())),
               const SizedBox(width: 10),
               Expanded(
                 child: AnimatedSize(
@@ -317,15 +385,21 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                   curve: Curves.easeOut,
                   alignment: Alignment.topLeft,
                   child: _transcriptionVisible
-                      ? Text(
-                          _transcriptionText ?? '',
-                          style: TextStyle(
-                            color: widget.textColor.withValues(alpha: 0.8),
-                            fontSize: 12,
-                            height: 1.3,
+                      ? ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxHeight: _transcriptionMaxHeight,
                           ),
-                          maxLines: 10,
-                          overflow: TextOverflow.ellipsis,
+                          child: SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: Text(
+                              _transcriptionText ?? '',
+                              style: TextStyle(
+                                color: widget.textColor.withValues(alpha: 0.8),
+                                fontSize: 12,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
                         )
                       : const SizedBox.shrink(),
                 ),
@@ -396,16 +470,16 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     if (_transcriptionVisible && _transcriptionText != null) {
       setState(() {
         _transcriptionVisible = false;
+        TranscriptionCache.setExpanded(_sourceMessageId, false);
       });
       return;
     }
 
-    if (TranscriptionCache.has(widget.messageId)) {
-      final cached = TranscriptionCache.get(widget.messageId)!;
-      setState(() {
-        _transcriptionText = cached.text ?? 'не удалось распознать текст';
-        _transcriptionVisible = true;
-      });
+    if (TranscriptionCache.has(_sourceMessageId)) {
+      final cached = TranscriptionCache.get(_sourceMessageId)!;
+      setState(
+        () => _showTranscription(cached.text ?? 'не удалось распознать текст'),
+      );
       return;
     }
 
@@ -415,24 +489,24 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
 
     try {
       final result = await messagesModule.requestTranscription(
-        widget.chatId,
-        int.tryParse(widget.messageId) ?? 0,
+        _sourceChatId,
+        int.tryParse(_sourceMessageId) ?? 0,
         widget.audioId!,
       );
 
-      TranscriptionCache.put(widget.messageId, result);
+      TranscriptionCache.put(_sourceMessageId, result);
 
       if (!mounted) return;
       setState(() {
         _transcriptionLoading = false;
         if (result.status == 1) {
-          _transcriptionText = (result.text == null || result.text!.isEmpty)
-              ? 'не удалось распознать текст'
-              : result.text;
-          _transcriptionVisible = true;
+          _showTranscription(
+            (result.text == null || result.text!.isEmpty)
+                ? 'не удалось распознать текст'
+                : result.text!,
+          );
         } else if (result.status == 0) {
-          _transcriptionText = 'транскрибация...';
-          _transcriptionVisible = true;
+          _showTranscription('транскрибация...');
         }
       });
     } catch (e) {
@@ -440,10 +514,121 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       if (!mounted) return;
       setState(() {
         _transcriptionLoading = false;
-        _transcriptionText = 'ошибка транскрибации';
-        _transcriptionVisible = true;
+        _showTranscription('ошибка транскрибации');
       });
     }
+  }
+}
+
+class _SeekableWaveform extends StatefulWidget {
+  final VoiceAudioController audio;
+  final List<int> amps;
+  final Color active;
+  final Color inactive;
+  final VoidCallback onClaim;
+  final VoidCallback onToggle;
+
+  const _SeekableWaveform({
+    required this.audio,
+    required this.amps,
+    required this.active,
+    required this.inactive,
+    required this.onClaim,
+    required this.onToggle,
+  });
+
+  @override
+  State<_SeekableWaveform> createState() => _SeekableWaveformState();
+}
+
+class _SeekableWaveformState extends State<_SeekableWaveform> {
+  static const double _hitHeight = 32;
+  static const double _waveHeight = 26;
+
+  double _width = 0;
+
+  VoiceAudioController get _audio => widget.audio;
+
+  void _claimPlayback() => widget.onClaim();
+
+  void _toggle() => widget.onToggle();
+
+  double _secondsAt(double dx) {
+    final total = _audio.duration.value;
+    if (_width <= 0 || total <= 0) return 0;
+    return (dx / _width).clamp(0.0, 1.0) * total;
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    if (!_audio.downloaded.value) {
+      _toggle();
+      return;
+    }
+    _claimPlayback();
+    _audio.seekTo(_secondsAt(details.localPosition.dx));
+  }
+
+  void _onDragStart(DragStartDetails details) {
+    if (!_audio.downloaded.value) return;
+    _claimPlayback();
+    _audio.scrubStart();
+    _audio.scrubTo(_secondsAt(details.localPosition.dx));
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (!_audio.scrubbing) return;
+    _audio.scrubTo(_secondsAt(details.localPosition.dx));
+  }
+
+  void _onDragEnd(DragEndDetails details) => _audio.scrubEnd();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _width = constraints.maxWidth;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: _onTapUp,
+          onHorizontalDragStart: _onDragStart,
+          onHorizontalDragUpdate: _onDragUpdate,
+          onHorizontalDragEnd: _onDragEnd,
+          onHorizontalDragCancel: _audio.scrubEnd,
+          child: SizedBox(
+            height: _hitHeight,
+            child: Center(
+              child: SizedBox(
+                height: _waveHeight,
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([
+                    _audio.position,
+                    _audio.duration,
+                    _audio.playing,
+                    _audio.downloaded,
+                  ]),
+                  builder: (context, _) {
+                    final total = _audio.duration.value;
+                    final progress = total > 0
+                        ? (_audio.position.value / total).clamp(0.0, 1.0)
+                        : 0.0;
+                    return CustomPaint(
+                      size: Size.infinite,
+                      painter: _WaveformPainter(
+                        amps: widget.amps,
+                        progress: progress,
+                        active: widget.active,
+                        inactive: widget.inactive,
+                        knob: _audio.downloaded.value && progress > 0,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -452,12 +637,14 @@ class _WaveformPainter extends CustomPainter {
   final double progress;
   final Color active;
   final Color inactive;
+  final bool knob;
 
   const _WaveformPainter({
     required this.amps,
     required this.progress,
     required this.active,
     required this.inactive,
+    this.knob = false,
   });
 
   @override
@@ -480,6 +667,7 @@ class _WaveformPainter extends CustomPainter {
           track..color = active,
         );
       }
+      _paintKnob(canvas, size, center);
       return;
     }
 
@@ -504,6 +692,23 @@ class _WaveformPainter extends CustomPainter {
         paint,
       );
     }
+
+    _paintKnob(canvas, size, center);
+  }
+
+  void _paintKnob(Canvas canvas, Size size, double center) {
+    if (!knob) return;
+    final x = (size.width * progress.clamp(0.0, 1.0)).clamp(
+      1.5,
+      size.width - 1.5,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(x - 1.5, 0, 3, size.height),
+        const Radius.circular(1.5),
+      ),
+      Paint()..color = active,
+    );
   }
 
   @override
@@ -511,5 +716,6 @@ class _WaveformPainter extends CustomPainter {
       old.progress != progress ||
       old.active != active ||
       old.inactive != inactive ||
+      old.knob != knob ||
       !identical(old.amps, amps);
 }

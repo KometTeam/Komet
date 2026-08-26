@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:m3e_collection/m3e_collection.dart';
 
 class SmallSpinner extends StatelessWidget {
   final double size;
-  final double strokeWidth;
   final Color? color;
 
   const SmallSpinner({
     super.key,
     this.size = 26,
-    this.strokeWidth = 2.4,
     this.color,
   });
 
@@ -17,9 +16,12 @@ class SmallSpinner extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CircularProgressIndicator(
-        strokeWidth: strokeWidth,
-        color: color ?? Theme.of(context).colorScheme.primary,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: ExpressiveLoadingIndicator(
+          color: color ?? Theme.of(context).colorScheme.primary,
+          constraints: BoxConstraints.tight(const Size.square(48)),
+        ),
       ),
     );
   }
@@ -33,7 +35,7 @@ class BusyOverlay extends StatelessWidget {
     return const Positioned.fill(
       child: ColoredBox(
         color: Colors.black54,
-        child: Center(child: CircularProgressIndicator(color: Colors.white)),
+        child: Center(child: SmallSpinner(size: 44, color: Colors.white)),
       ),
     );
   }

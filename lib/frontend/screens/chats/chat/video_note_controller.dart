@@ -1,15 +1,28 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException, rootBundle;
+import 'package:lottie/lottie.dart' show AssetLottie;
+import 'package:path_provider/path_provider.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../widgets/glossy_pill.dart';
+
+import '../../../../core/config/app_video_note_quality.dart';
 import '../../../../core/media/native_video_note_recorder.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
+import '../../../../core/utils/screen_wake.dart';
 import '../../../widgets/custom_notification.dart';
+import '../../../widgets/lottie_slash_icon.dart';
 import 'voice_record_controller.dart';
+import '../../../../core/config/app_frost.dart';
+
+const String _flashIcon = 'assets/lottie/ic_flash_on_to_off.json';
 
 class VideoNoteController {
   VideoNoteController({
@@ -17,12 +30,14 @@ class VideoNoteController {
     required this.isMounted,
     required this.onRecorded,
     required this.formatElapsed,
+    required this.bottomInset,
   });
 
   final BuildContext Function() contextOf;
   final bool Function() isMounted;
   final Future<void> Function(File file, int durationMs) onRecorded;
   final String Function(int ms) formatElapsed;
+  final double Function() bottomInset;
 
   final NativeVideoNoteRecorder _rec = NativeVideoNoteRecorder();
   final ValueNotifier<bool> _videoNoteMode = ValueNotifier(false);
@@ -31,15 +46,40 @@ class VideoNoteController {
   final ValueNotifier<bool> _isRecording = ValueNotifier(false);
   final ValueNotifier<int> _elapsedMs = ValueNotifier(0);
   final ValueNotifier<double> _cancelDrag = ValueNotifier(0);
+  final ValueNotifier<bool> _locked = ValueNotifier(false);
+  final ValueNotifier<double> _lockDrag = ValueNotifier(0);
+  final ValueNotifier<bool> _flashOn = ValueNotifier(false);
   final Stopwatch _stopwatch = Stopwatch();
   Timer? _timer;
   bool _cancelled = false;
   bool _stopRequested = false;
-  OverlayEntry? _overlay;
+  bool? _frontOverride;
+  bool _switchingCamera = false;
+
+  bool get _front => _frontOverride ?? !AppVideoNoteRearCamera.current.value;
+
+  static const int maxMs = 60000;
+  static const double _lockThreshold = 90;
 
   ValueListenable<bool> get videoNoteMode => _videoNoteMode;
   ValueListenable<bool> get camReady => _camReady;
   ValueListenable<bool> get isRecording => _isRecording;
+  ValueListenable<int> get elapsedMs => _elapsedMs;
+  ValueListenable<double> get cancelDrag => _cancelDrag;
+  ValueListenable<bool> get locked => _locked;
+  ValueListenable<double> get lockDrag => _lockDrag;
+  ValueListenable<bool> get flashOn => _flashOn;
+  ValueListenable<int?> get textureId => _textureId;
+
+  bool get flashAvailable => _rec.hasFlash || _stub;
+
+  bool get cameraControlsAvailable => true;
+
+  Future<void> toggleFlash() async {
+    final next = !_flashOn.value;
+    _flashOn.value = _stub ? next : await _rec.setTorch(next);
+    Haptics.tap();
+  }
 
   Future<void> toggleMode() async {
     final toVideo = !_videoNoteMode.value;
@@ -52,18 +92,32 @@ class VideoNoteController {
     }
   }
 
+  bool get _stub => !_rec.isAvailable;
+
   Future<void> _initCamera() async {
+    unawaited(AssetLottie(_flashIcon).load());
+    if (_stub) {
+      _camReady.value = true;
+      unawaited(ScreenWake.instance.acquire(this));
+      _textureId.value = null;
+      return;
+    }
     if (_rec.textureId != null) return;
-    if (!_rec.isAvailable) {
-      if (isMounted()) showCustomNotification(contextOf(), 'Камера недоступна');
+    final access = await _rec.requestAccess();
+    if (!access.granted) {
+      _videoNoteMode.value = false;
+      _notify(_accessMessage(access));
       return;
     }
     try {
-      final ok = await _rec.init();
+      final ok = await _rec.init(
+        front: _front,
+        size: AppVideoNoteResolution.current.value,
+        fps: AppVideoNoteFps.current.value,
+      );
       if (!ok) {
-        if (isMounted()) {
-          showCustomNotification(contextOf(), 'Камера недоступна');
-        }
+        _videoNoteMode.value = false;
+        _notify('Камера недоступна');
         return;
       }
       if (!isMounted() || !_videoNoteMode.value) {
@@ -72,33 +126,55 @@ class VideoNoteController {
       }
       _textureId.value = _rec.textureId;
       _camReady.value = true;
+      unawaited(ScreenWake.instance.acquire(this));
     } catch (e) {
       logger.w('initNoteCamera: $e');
-      if (isMounted()) showCustomNotification(contextOf(), 'Камера недоступна');
+      await _disposeCamera();
+      _videoNoteMode.value = false;
+      _notify(_failureMessage(e, 'Камера недоступна'));
     }
+  }
+
+  void _notify(String message) {
+    if (isMounted()) showCustomNotification(contextOf(), message);
+  }
+
+  String _accessMessage(VideoNoteAccess access) {
+    if (!access.camera && !access.microphone) {
+      return 'Для кружков нужен доступ к камере и микрофону';
+    }
+    return access.camera ? 'Нет доступа к микрофону' : 'Нет доступа к камере';
+  }
+
+  String _failureMessage(Object error, String fallback) {
+    if (error is! PlatformException) return fallback;
+    return switch (error.code) {
+      'NO_CAMERA_PERMISSION' => 'Нет доступа к камере',
+      'NO_MIC_PERMISSION' => 'Нет доступа к микрофону',
+      'NO_CAMERA' => 'Камера недоступна',
+      'NOT_READY' => 'Камера ещё не готова',
+      _ => fallback,
+    };
   }
 
   Future<void> _disposeCamera() async {
     _camReady.value = false;
+    unawaited(ScreenWake.instance.release(this));
     _textureId.value = null;
-    await _rec.dispose();
+    if (!_stub) await _rec.dispose();
   }
 
   Future<void> start() async {
     if (_isRecording.value) return;
     _stopRequested = false;
-    if (_rec.textureId == null) {
+    if (!_stub && _rec.textureId == null) {
       await _initCamera();
-      return;
+      if (_rec.textureId == null) return;
     }
     try {
-      final ok = await _rec.start();
-      if (!ok) {
-        _isRecording.value = false;
-        return;
-      }
+      if (!_stub) await _rec.start();
       if (!isMounted()) {
-        await _rec.stop();
+        if (!_stub) await _rec.stop();
         return;
       }
       _stopwatch
@@ -106,14 +182,17 @@ class VideoNoteController {
         ..start();
       _elapsedMs.value = 0;
       _cancelDrag.value = 0;
+      _lockDrag.value = 0;
+      _locked.value = false;
       _cancelled = false;
       _isRecording.value = true;
       FocusManager.instance.primaryFocus?.unfocus();
       Haptics.send();
-      _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
-        _elapsedMs.value = _stopwatch.elapsedMilliseconds;
+      _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+        final ms = _stopwatch.elapsedMilliseconds;
+        _elapsedMs.value = ms >= maxMs ? maxMs : ms;
+        if (ms >= maxMs) unawaited(stop(cancel: false));
       });
-      _showOverlay();
       if (_stopRequested) {
         _stopRequested = false;
         await stop(cancel: false);
@@ -121,11 +200,56 @@ class VideoNoteController {
     } catch (e) {
       logger.w('startNoteRecording: $e');
       _isRecording.value = false;
+      _notify(_failureMessage(e, 'Не удалось начать запись кружка'));
+    }
+  }
+
+  Future<String?> _stubClip() async {
+    try {
+      final data = await rootBundle.load('assets/debug/fake_video_note.mp4');
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/note_stub_${DateTime.now().millisecondsSinceEpoch}.mp4',
+      );
+      await file.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      return file.path;
+    } catch (e) {
+      logger.w('VideoNoteController._stubClip: $e');
+      return null;
+    }
+  }
+
+  Future<void> flipCamera() async {
+    if (_stub) {
+      Haptics.tap();
+      return;
+    }
+    if (!_camReady.value || _switchingCamera) return;
+    _switchingCamera = true;
+    try {
+      final ok = await _rec.switchCamera();
+      if (ok) {
+        _frontOverride = !_front;
+        Haptics.tap();
+      }
+    } finally {
+      _switchingCamera = false;
     }
   }
 
   void handleDrag(Offset offsetFromOrigin) {
-    if (!_isRecording.value) return;
+    if (!_isRecording.value || _locked.value) return;
+
+    final lock = (-offsetFromOrigin.dy / _lockThreshold).clamp(0.0, 1.0);
+    _lockDrag.value = lock;
+    if (lock >= 1.0) {
+      _locked.value = true;
+      _lockDrag.value = 0;
+      _cancelDrag.value = 0;
+      Haptics.send();
+      return;
+    }
+
     final drag = (-offsetFromOrigin.dx / VoiceRecordController.cancelThreshold)
         .clamp(0.0, 1.0);
     _cancelDrag.value = drag;
@@ -136,7 +260,10 @@ class VideoNoteController {
     }
   }
 
-  void handleEnd() => stop(cancel: false);
+  void handleEnd() {
+    if (_locked.value) return;
+    stop(cancel: false);
+  }
 
   Future<void> stop({required bool cancel}) async {
     if (!_isRecording.value) {
@@ -149,89 +276,40 @@ class VideoNoteController {
     final elapsed = _stopwatch.elapsedMilliseconds;
     _isRecording.value = false;
     _cancelDrag.value = 0;
-    _hideOverlay();
-
-    final path = await _rec.stop();
+    _lockDrag.value = 0;
+    _locked.value = false;
+    if (_flashOn.value) {
+      _flashOn.value = false;
+      unawaited(_rec.setTorch(false));
+    }
 
     final shouldCancel =
         cancel || _cancelled || elapsed < VoiceRecordController.minMs;
+
+    String? path;
+    try {
+      path = _stub ? await _stubClip() : await _rec.stop();
+    } catch (e) {
+      logger.w('stopNoteRecording: $e');
+    }
+
     if (shouldCancel || path == null) {
       if (path != null) {
         try {
           await File(path).delete();
         } catch (_) {}
+      } else if (!shouldCancel) {
+        _notify('Не удалось сохранить кружок');
       }
       return;
     }
 
-    // Файл уже квадратный 480×480 (нативная запись) — шлём как есть.
     await onRecorded(File(path), elapsed);
   }
 
-  void _showOverlay() {
-    _overlay?.remove();
-    _overlay = OverlayEntry(
-      builder: (context) {
-        final texId = _textureId.value;
-        return Positioned.fill(
-          child: IgnorePointer(
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.55),
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ClipOval(
-                    child: SizedBox(
-                      width: 260,
-                      height: 260,
-                      child: texId != null
-                          ? Texture(textureId: texId)
-                          : Container(color: Colors.black),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  ValueListenableBuilder<int>(
-                    valueListenable: _elapsedMs,
-                    builder: (context, ms, _) => Text(
-                      formatElapsed(ms),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontFeatures: [ui.FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ValueListenableBuilder<double>(
-                    valueListenable: _cancelDrag,
-                    builder: (context, drag, _) => Opacity(
-                      opacity: (0.5 + drag * 0.5).clamp(0.0, 1.0),
-                      child: const Text(
-                        '‹ влево — отмена',
-                        style: TextStyle(color: Colors.white70, fontSize: 13),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-    final overlay = Overlay.of(contextOf(), rootOverlay: true);
-    overlay.insert(_overlay!);
-  }
-
-  void _hideOverlay() {
-    _overlay?.remove();
-    _overlay = null;
-  }
-
   void dispose() {
+    unawaited(ScreenWake.instance.release(this));
     _timer?.cancel();
-    _overlay?.remove();
     _rec.dispose();
     _textureId.dispose();
     _videoNoteMode.dispose();
@@ -239,5 +317,245 @@ class VideoNoteController {
     _isRecording.dispose();
     _elapsedMs.dispose();
     _cancelDrag.dispose();
+    _locked.dispose();
+    _lockDrag.dispose();
+    _flashOn.dispose();
   }
+}
+
+class VideoNoteRecordingLayer extends StatefulWidget {
+  const VideoNoteRecordingLayer({super.key, required this.controller});
+
+  final VideoNoteController controller;
+
+  @override
+  State<VideoNoteRecordingLayer> createState() =>
+      _VideoNoteRecordingLayerState();
+}
+
+class _VideoNoteRecordingLayerState extends State<VideoNoteRecordingLayer>
+    with SingleTickerProviderStateMixin {
+  static const double _circle = 260;
+  static const double _maxBlur = AppFrost.overlaySigma;
+
+  late final AnimationController _reveal = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.isRecording.addListener(_onRecordingChanged);
+  }
+
+  void _onRecordingChanged() {
+    if (widget.controller.isRecording.value) {
+      _reveal.forward();
+    } else {
+      _reveal.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.isRecording.removeListener(_onRecordingChanged);
+    _reveal.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final controller = widget.controller;
+    return Positioned.fill(
+      child: AnimatedBuilder(
+        animation: _reveal,
+        builder: (context, child) {
+          final t = Curves.easeOut.transform(_reveal.value);
+          if (t <= 0.001) return const SizedBox.shrink();
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ClipRect(
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(
+                        sigmaX: _maxBlur * t,
+                        sigmaY: _maxBlur * t,
+                      ),
+                      child: ColoredBox(
+                        color: Colors.black.withValues(alpha: 0.35 * t),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const Positioned.fill(
+                child: AbsorbPointer(child: SizedBox.expand()),
+              ),
+              Opacity(opacity: t, child: child),
+            ],
+          );
+        },
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Center(
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: controller.elapsedMs,
+                    builder: (context, ms, child) => CustomPaint(
+                      foregroundPainter: _NoteProgressPainter(
+                        progress: (ms / VideoNoteController.maxMs).clamp(
+                          0.0,
+                          1.0,
+                        ),
+                        color: Colors.white,
+                      ),
+                      child: child,
+                    ),
+                    child: SizedBox(
+                      width: _circle,
+                      height: _circle,
+                      child: Padding(
+                        padding: const EdgeInsets.all(5),
+                        child: ClipOval(
+                          child: ValueListenableBuilder<int?>(
+                            valueListenable: controller.textureId,
+                            builder: (context, texId, _) => texId == null
+                                ? _StubPreview(controller: controller)
+                                : Texture(textureId: texId),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom:
+                  MediaQuery.paddingOf(context).bottom +
+                  widget.controller.bottomInset() +
+                  12,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _CameraControls(controller: controller, cs: cs),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StubPreview extends StatelessWidget {
+  const _StubPreview({required this.controller});
+
+  final VideoNoteController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: controller.elapsedMs,
+      builder: (context, ms, _) {
+        final hue = (ms / 40) % 360;
+        return ColoredBox(
+          color: HSVColor.fromAHSV(1, hue, 0.45, 0.35).toColor(),
+          child: const Center(
+            child: Icon(Symbols.videocam, size: 64, color: Colors.white54),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CameraControls extends StatelessWidget {
+  const _CameraControls({required this.controller, required this.cs});
+
+  final VideoNoteController controller;
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlossyPill(
+      color: cs.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(26),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      depth: 10,
+      elevated: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (controller.cameraControlsAvailable)
+            _ControlButton(
+              onTap: controller.flipCamera,
+              child: Icon(
+                Symbols.flip_camera_ios,
+                size: 24,
+                color: cs.onSurface,
+                fill: 1,
+              ),
+            ),
+          if (controller.flashAvailable)
+            ValueListenableBuilder<bool>(
+              valueListenable: controller.flashOn,
+              builder: (context, on, _) => _ControlButton(
+                onTap: controller.toggleFlash,
+                child: LottieSlashIcon(
+                  asset: _flashIcon,
+                  slashed: !on,
+                  color: on ? cs.primary : cs.onSurface,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ControlButton extends StatelessWidget {
+  const _ControlButton({required this.child, required this.onTap});
+
+  final Widget child;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkResponse(
+      onTap: onTap,
+      radius: 26,
+      child: Padding(padding: const EdgeInsets.all(8), child: child),
+    );
+  }
+}
+
+class _NoteProgressPainter extends CustomPainter {
+  const _NoteProgressPainter({required this.progress, required this.color});
+
+  final double progress;
+  final Color color;
+
+  static const double _stroke = 4;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0) return;
+    final circle = (Offset.zero & size).deflate(_stroke / 2);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _stroke
+      ..strokeCap = StrokeCap.round
+      ..color = color;
+    canvas.drawArc(circle, -math.pi / 2, math.pi * 2 * progress, false, paint);
+  }
+
+  @override
+  bool shouldRepaint(_NoteProgressPainter old) => old.progress != progress;
 }

@@ -6,14 +6,34 @@ import '../../../../backend/modules/messages.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/config/komet_settings.dart';
 import '../../../../core/utils/format.dart';
+import '../../../../core/utils/text_format.dart';
 import '../../../../models/attachment.dart';
 import '../../formatted_message_text.dart';
+import '../../sending_clock_icon.dart';
+import '../../photo_viewer.dart';
 
 enum MessageType { text, attachment, voice, control }
 
 enum BubbleShape { singleTop, singleBottom, singleMiddle, groupedMiddle }
 
+typedef ForwardedSourceTap =
+    void Function(ForwardedMessageAttachment forwarded);
+
 final Expando<({bool full, String text})> _clockTextCache = Expando();
+
+class BubblePresentation {
+  final String? text;
+  final List<FormatRange> formatRanges;
+  final String? sourceMessageId;
+  final int? sourceChatId;
+
+  const BubblePresentation({
+    this.text,
+    this.formatRanges = const [],
+    this.sourceMessageId,
+    this.sourceChatId,
+  });
+}
 
 ({IconData icon, Color color}) messageStatusVisual(
   String? status, {
@@ -44,8 +64,9 @@ class BubbleContext {
   static const double photoMinSize = 100.0;
   static const double photoBorderRadius = 12.0;
   static const double bubbleBorderRadius = 20.0;
-  static const double captionPaddingHorizontal = 6.0;
-  static const double captionPaddingRight = 4.0;
+  static const double captionPaddingHorizontal = 10.0;
+  static const double captionPaddingRight = 6.0;
+  static const double captionPaddingTop = 6.0;
   static const double compactTimePadding = 8.0;
 
   final BuildContext context;
@@ -62,10 +83,17 @@ class BubbleContext {
   final bool isMe;
   final int myId;
   final String chatType;
+  final int? chatId;
+  final String? chatName;
+  final PhotoViewerActions? photoActions;
   final String? overrideStatus;
   final ValueListenable<int>? otherReadTime;
   final ValueListenable<List<double>>? uploadProgress;
   final void Function(StickerAttachment sticker)? onStickerTap;
+  final ForwardedSourceTap? onForwardedSourceTap;
+  final BubblePresentation? presentation;
+  final bool metaInFooter;
+  final Widget Function(Widget)? selectable;
 
   BubbleContext({
     required this.context,
@@ -79,12 +107,55 @@ class BubbleContext {
     required this.isMe,
     required this.myId,
     required this.chatType,
+    this.chatId,
+    this.chatName,
+    this.photoActions,
     this.overrideStatus,
     this.otherReadTime,
     this.uploadProgress,
     this.onStickerTap,
+    this.onForwardedSourceTap,
     this.reactionInfo,
+    this.presentation,
+    this.metaInFooter = false,
+    this.selectable,
   }) : dim = text.withValues(alpha: 0.7);
+
+  String? get contentText =>
+      presentation == null ? message.text : presentation!.text;
+
+  List<FormatRange> get contentFormatRanges =>
+      presentation == null ? message.formatRanges : presentation!.formatRanges;
+
+  String get sourceMessageId => presentation?.sourceMessageId ?? message.id;
+
+  int get sourceChatId => presentation?.sourceChatId ?? message.chatId;
+
+  BubbleContext withPresentation(BubblePresentation value) => BubbleContext(
+    context: context,
+    cs: cs,
+    text: text,
+    shape: shape,
+    contentType: contentType,
+    hasPhotoWithCaption: hasPhotoWithCaption,
+    hasMultiplePhotosNoCaption: hasMultiplePhotosNoCaption,
+    message: message,
+    isMe: isMe,
+    myId: myId,
+    chatType: chatType,
+    chatId: chatId,
+    chatName: chatName,
+    photoActions: photoActions,
+    overrideStatus: overrideStatus,
+    otherReadTime: otherReadTime,
+    uploadProgress: uploadProgress,
+    onStickerTap: onStickerTap,
+    onForwardedSourceTap: onForwardedSourceTap,
+    reactionInfo: reactionInfo,
+    presentation: value,
+    metaInFooter: metaInFooter,
+    selectable: selectable,
+  );
 
   String get clockText {
     final full = KometSettings.fullTimestamp.value;
@@ -102,18 +173,27 @@ class BubbleContext {
 
   Widget caption() {
     final style = TextStyle(color: text, fontSize: 16, height: 1.3);
-    final ranges = message.formatRanges;
-    if (FormattedMessageText.isFormatted(message.text, ranges)) {
-      return FormattedMessageText(
-        text: message.text!,
+    final captionText = contentText;
+    final ranges = contentFormatRanges;
+    final Widget body;
+    if (FormattedMessageText.isFormatted(captionText, ranges)) {
+      body = FormattedMessageText(
+        text: captionText!,
         ranges: ranges,
         style: style,
       );
+    } else {
+      body = Text(captionText ?? '', style: style);
     }
-    return Text(message.text ?? '', style: style);
+    final wrap = selectable;
+    return wrap == null ? body : wrap(body);
   }
 
-  Widget meta() {
+  Widget meta() => metaInFooter ? const SizedBox.shrink() : _metaRow();
+
+  Widget footerMeta() => _metaRow();
+
+  Widget _metaRow() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Row(
@@ -129,6 +209,8 @@ class BubbleContext {
   }
 
   Widget compactTime() {
+    if (metaInFooter) return const SizedBox.shrink();
+
     final bgColor = isMe
         ? Colors.black.withValues(alpha: 0.4)
         : Colors.black.withValues(alpha: 0.5);
@@ -154,6 +236,10 @@ class BubbleContext {
             const SizedBox(width: 3),
             const Icon(Symbols.delete, size: 11, color: Colors.white),
           ],
+          if (isMe) ...[
+            const SizedBox(width: 3),
+            statusIcon(color: Colors.white, size: 12),
+          ],
         ],
       ),
     );
@@ -161,14 +247,17 @@ class BubbleContext {
 
   Widget deletedIcon() => Icon(Symbols.delete, size: 13, color: dim);
 
-  Widget statusIcon() {
+  Widget statusIcon({Color? color, double size = 14}) {
     final base = overrideStatus ?? message.status;
     final rt = otherReadTime;
-    if (rt == null) return _statusIconFor(base);
+    if (rt == null) return _statusIconFor(base, color: color, size: size);
     return ValueListenableBuilder<int>(
       valueListenable: rt,
-      builder: (context, readTime, _) =>
-          _statusIconFor(_readUpgradedStatus(base, readTime)),
+      builder: (context, readTime, _) => _statusIconFor(
+        _readUpgradedStatus(base, readTime),
+        color: color,
+        size: size,
+      ),
     );
   }
 
@@ -181,8 +270,11 @@ class BubbleContext {
     return base;
   }
 
-  Widget _statusIconFor(String? status) {
-    final v = messageStatusVisual(status, dimColor: dim);
-    return Icon(v.icon, size: 14, color: v.color);
+  Widget _statusIconFor(String? status, {Color? color, double size = 14}) {
+    final v = messageStatusVisual(status, dimColor: color ?? dim);
+    if (isSendingStatus(status)) {
+      return SendingClockIcon(color: v.color, size: size);
+    }
+    return Icon(v.icon, size: size, color: v.color);
   }
 }

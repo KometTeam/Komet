@@ -10,8 +10,8 @@ import '../utils/ids.dart';
 import '../utils/logger.dart';
 
 class SpoofingService {
-  static const String hardcodedAppVersion = '26.20.2';
-  static const int hardcodedBuildNumber = 6758;
+  static const String hardcodedAppVersion = '26.23.2';
+  static const int hardcodedBuildNumber = 6779;
   static const String pendingScope = 'pending';
 
   static const String _legacyEnabledKey = 'spoofing_enabled';
@@ -144,6 +144,7 @@ class SpoofingService {
       'instance_id': profile.instanceId,
       'client_session_id': profile.clientSessionId,
       'push_device_type': profile.pushDeviceType,
+      'user_agent': profile.userAgent,
     };
   }
 

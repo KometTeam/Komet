@@ -8,10 +8,15 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:komet/core/config/app_chat_chrome.dart';
 import 'package:komet/core/config/app_colors.dart';
+import 'package:komet/core/config/app_composer_background.dart';
+import 'package:komet/core/config/app_composer_style.dart';
+import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/frontend/screens/chats/chat/upload_status.dart';
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
+import 'package:komet/frontend/widgets/composer_morph_icon.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
+import 'package:komet/frontend/widgets/liquid_glass.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
 
 class ComposerInputBar extends StatelessWidget {
@@ -19,8 +24,12 @@ class ComposerInputBar extends StatelessWidget {
     super.key,
     required this.chatType,
     required this.chrome,
+    required this.style,
+    required this.background,
+    this.backdropKey,
     required this.attachAnim,
     required this.replyTo,
+    required this.forwardMessages,
     required this.myId,
     required this.hasText,
     required this.uploadStatus,
@@ -35,16 +44,31 @@ class ComposerInputBar extends StatelessWidget {
     required this.onOpenAttachScheduled,
     required this.onSendHistory,
     required this.onCancelReply,
+    required this.onCancelForward,
+    this.onPickReplyChat,
     required this.formatElapsed,
     required this.contextMenuBuilder,
     required this.isMuted,
     required this.onToggleMute,
+    this.channelSubscribed = true,
+    this.channelSubscribing = false,
+    this.onSubscribe,
+    this.showStickerButton = true,
+    this.showAttachButton = true,
+    this.forceSend = false,
+    this.hintText = 'Message',
+    this.bottomSafe = true,
+    this.vignette = false,
   });
 
   final String chatType;
   final ChatChromeStyle chrome;
+  final ComposerStyle style;
+  final ComposerBackground background;
+  final BackdropKey? backdropKey;
   final Animation<double> attachAnim;
   final ValueListenable<CachedMessage?> replyTo;
+  final ValueListenable<List<CachedMessage>> forwardMessages;
   final int myId;
   final ValueListenable<bool> hasText;
   final ValueListenable<UploadStatus> uploadStatus;
@@ -59,17 +83,79 @@ class ComposerInputBar extends StatelessWidget {
   final VoidCallback onOpenAttachScheduled;
   final Future<void> Function(FileHistoryEntry entry) onSendHistory;
   final VoidCallback onCancelReply;
+  final VoidCallback onCancelForward;
+  final VoidCallback? onPickReplyChat;
   final String Function(int ms) formatElapsed;
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
   final bool isMuted;
   final VoidCallback onToggleMute;
+  final bool channelSubscribed;
+  final bool channelSubscribing;
+  final VoidCallback? onSubscribe;
+  final bool showStickerButton;
+  final bool showAttachButton;
+  final bool forceSend;
+  final String hintText;
+  final bool bottomSafe;
+  final bool vignette;
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<CachedMessage>>(
+      valueListenable: forwardMessages,
+      builder: (context, forwards, _) => _build(context, forwards),
+    );
+  }
+
+  Widget _build(BuildContext context, List<CachedMessage> forwards) {
     final cs = Theme.of(context).colorScheme;
     final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
+    final hasForward = forwards.isNotEmpty;
 
-    if (chatType == "CHANNEL") {
+    if (chatType == "CHANNEL" && !hasForward) {
+      if (!channelSubscribed) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 8.0,
+            ),
+            child: GlossyPill(
+              onTap: channelSubscribing ? null : onSubscribe,
+              color: cs.primary,
+              borderRadius: BorderRadius.circular(28),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              depth: 8,
+              borderSide: BorderSide(
+                color: cs.outlineVariant.withValues(alpha: 0.5),
+                width: 0.5,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: Center(
+                  child: channelSubscribing
+                      ? SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: cs.onPrimary,
+                          ),
+                        )
+                      : Text(
+                          'Подписаться',
+                          style: TextStyle(
+                            color: cs.onPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -104,15 +190,16 @@ class ComposerInputBar extends StatelessWidget {
       );
     }
 
-    return SafeArea(
+    final bar = SafeArea(
+      bottom: bottomSafe,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _replyPreview(cs),
+          _messagePreview(cs, forwards),
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 8.0,
+            padding: EdgeInsets.symmetric(
+              horizontal: _barSideInset,
+              vertical: _barVerticalInset,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -120,105 +207,129 @@ class ComposerInputBar extends StatelessWidget {
                 Expanded(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    constraints: const BoxConstraints(
-                      minHeight: 54,
+                    constraints: BoxConstraints(
+                      minHeight: _controlSize,
                       maxHeight: 180,
                     ),
-                    child: GlossyPill(
-                      color: Color.alphaBlend(
-                        cs.surfaceContainerHighest.withValues(alpha: 0.92),
-                        cs.surface,
-                      ),
-                      borderRadius: BorderRadius.circular(28),
-                      depth: 8,
-                      borderSide: BorderSide(
-                        color: cs.outlineVariant.withValues(alpha: 0.5),
-                        width: 0.5,
-                      ),
-                      child: Stack(
+                    child: _fieldSurface(
+                      cs,
+                      Stack(
                         alignment: Alignment.center,
                         children: [
                           AnimatedBuilder(
-                            animation: attachAnim,
+                            animation: Listenable.merge([
+                              voiceRec.isRecording,
+                              note.isRecording,
+                            ]),
                             builder: (context, child) {
-                              final t = attachAnim.value;
+                              final recording =
+                                  voiceRec.isRecording.value ||
+                                  note.isRecording.value;
                               return IgnorePointer(
-                                ignoring: t > 0.5,
-                                child: Opacity(
-                                  opacity: (1 - t).clamp(0.0, 1.0),
+                                ignoring: recording,
+                                child: AnimatedOpacity(
+                                  opacity: recording ? 0 : 1,
+                                  duration: const Duration(milliseconds: 180),
+                                  curve: Curves.easeOut,
                                   child: child,
                                 ),
                               );
                             },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: onToggleStickerPanel,
-                                    child: Icon(
-                                      Symbols.face,
-                                      color: mutedIcon,
-                                      size: 24,
-                                      weight: 400,
-                                    ),
+                            child: AnimatedBuilder(
+                              animation: attachAnim,
+                              builder: (context, child) {
+                                final t = attachAnim.value;
+                                return IgnorePointer(
+                                  ignoring: t > 0.5,
+                                  child: Opacity(
+                                    opacity: (1 - t).clamp(0.0, 1.0),
+                                    child: child,
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Focus(
-                                      onKeyEvent: (node, event) {
-                                        if (event is KeyDownEvent &&
-                                            event.logicalKey ==
-                                                LogicalKeyboardKey.enter &&
-                                            !HardwareKeyboard
-                                                .instance
-                                                .isShiftPressed) {
-                                          if (hasText.value) onSendText();
-                                          return KeyEventResult.handled;
-                                        }
-                                        return KeyEventResult.ignored;
-                                      },
-                                      child: TextField(
-                                        controller: messageController,
-                                        focusNode: messageFocusNode,
-                                        style: TextStyle(
-                                          color: cs.onSurface,
-                                          fontSize: 16,
+                                );
+                              },
+                              child: Padding(
+                                padding: EdgeInsets.only(
+                                  left: _fieldSideInset,
+                                  right: _fieldTrailingInset,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    if (showStickerButton) ...[
+                                      GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: onToggleStickerPanel,
+                                        child: Icon(
+                                          Symbols.face,
+                                          color: mutedIcon,
+                                          size: 24,
+                                          weight: 400,
                                         ),
-                                        maxLines: null,
-                                        keyboardType: TextInputType.multiline,
-                                        textAlignVertical:
-                                            TextAlignVertical.center,
-                                        contextMenuBuilder: contextMenuBuilder,
-                                        decoration: InputDecoration(
-                                          hintText: 'Message',
-                                          hintStyle: TextStyle(
-                                            color: cs.onSurfaceVariant,
+                                      ),
+                                      const SizedBox(width: 12),
+                                    ],
+                                    Expanded(
+                                      child: Focus(
+                                        onKeyEvent: (node, event) {
+                                          if (event is KeyDownEvent &&
+                                              event.logicalKey ==
+                                                  LogicalKeyboardKey.enter &&
+                                              !HardwareKeyboard
+                                                  .instance
+                                                  .isShiftPressed) {
+                                            if (hasText.value ||
+                                                hasForward ||
+                                                forceSend) {
+                                              onSendText();
+                                            }
+                                            return KeyEventResult.handled;
+                                          }
+                                          return KeyEventResult.ignored;
+                                        },
+                                        child: TextField(
+                                          controller: messageController,
+                                          focusNode: messageFocusNode,
+                                          style: TextStyle(
+                                            color: cs.onSurface,
                                             fontSize: 16,
                                           ),
-                                          border: InputBorder.none,
-                                          isDense: true,
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                vertical: 14,
-                                              ),
+                                          maxLines: null,
+                                          keyboardType: TextInputType.multiline,
+                                          textCapitalization:
+                                              TextCapitalization.sentences,
+                                          textAlignVertical:
+                                              TextAlignVertical.center,
+                                          contextMenuBuilder:
+                                              contextMenuBuilder,
+                                          decoration: InputDecoration(
+                                            hintText: hintText,
+                                            hintStyle: TextStyle(
+                                              color: cs.onSurfaceVariant,
+                                              fontSize: 16,
+                                            ),
+                                            border: InputBorder.none,
+                                            isDense: true,
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                  vertical: 10,
+                                                ),
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                  _AttachButton(
-                                    hasText: hasText,
-                                    onOpen: onOpenAttach,
-                                    onLongOpen: onOpenAttachScheduled,
-                                    uploadStatus: uploadStatus,
-                                    mutedIcon: mutedIcon,
-                                    cs: cs,
-                                  ),
-                                ],
+                                    if (showAttachButton)
+                                      _AttachButton(
+                                        hasText: hasText,
+                                        onOpen: onOpenAttach,
+                                        onLongOpen: onOpenAttachScheduled,
+                                        uploadStatus: uploadStatus,
+                                        mutedIcon: mutedIcon,
+                                        cs: cs,
+                                        slot: _attachSlot,
+                                        leading: _attachLeading,
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -227,7 +338,7 @@ class ComposerInputBar extends StatelessWidget {
                             right: 0,
                             bottom: 0,
                             child: SizedBox(
-                              height: 54,
+                              height: _controlSize,
                               child: AnimatedBuilder(
                                 animation: attachAnim,
                                 builder: (context, child) {
@@ -249,24 +360,34 @@ class ComposerInputBar extends StatelessWidget {
                             ),
                           ),
                           Positioned.fill(
-                            child: ValueListenableBuilder<bool>(
-                              valueListenable: voiceRec.isRecording,
-                              builder: (context, recording, _) => IgnorePointer(
-                                ignoring: !recording,
-                                child: AnimatedSlide(
-                                  offset: recording
-                                      ? Offset.zero
-                                      : const Offset(0.06, 0),
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves.easeOutCubic,
-                                  child: AnimatedOpacity(
-                                    opacity: recording ? 1 : 0,
-                                    duration: const Duration(milliseconds: 180),
-                                    curve: Curves.easeOut,
-                                    child: _voiceRecordingIndicator(cs),
+                            child: AnimatedBuilder(
+                              animation: Listenable.merge([
+                                voiceRec.isRecording,
+                                note.isRecording,
+                              ]),
+                              builder: (context, _) {
+                                final video = note.isRecording.value;
+                                final recording =
+                                    video || voiceRec.isRecording.value;
+                                return IgnorePointer(
+                                  ignoring: !recording,
+                                  child: AnimatedSlide(
+                                    offset: recording
+                                        ? Offset.zero
+                                        : const Offset(0.06, 0),
+                                    duration: const Duration(milliseconds: 200),
+                                    curve: Curves.easeOutCubic,
+                                    child: AnimatedOpacity(
+                                      opacity: recording ? 1 : 0,
+                                      duration: const Duration(
+                                        milliseconds: 180,
+                                      ),
+                                      curve: Curves.easeOut,
+                                      child: _recordingIndicator(cs, video),
+                                    ),
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             ),
                           ),
                         ],
@@ -290,7 +411,7 @@ class ComposerInputBar extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(width: 8),
+                      SizedBox(width: _actionGap),
                       AnimatedBuilder(
                         animation: attachAnim,
                         builder: (context, child) {
@@ -308,51 +429,80 @@ class ComposerInputBar extends StatelessWidget {
                           builder: (context, hasText, _) =>
                               ValueListenableBuilder<bool>(
                                 valueListenable: voiceRec.locked,
-                                builder: (context, locked, _) =>
+                                builder: (context, voiceLocked, _) =>
                                     ValueListenableBuilder<bool>(
                                       valueListenable: voiceRec.isRecording,
-                                      builder: (context, recording, _) =>
-                                          ValueListenableBuilder<bool>(
-                                            valueListenable: note.videoNoteMode,
-                                            builder: (context, videoMode, _) {
+                                      builder: (context, voiceRecording, _) =>
+                                          AnimatedBuilder(
+                                            animation: Listenable.merge([
+                                              note.videoNoteMode,
+                                              note.isRecording,
+                                              note.locked,
+                                            ]),
+                                            builder: (context, _) {
+                                              final videoMode =
+                                                  note.videoNoteMode.value;
+                                              final noteRecording =
+                                                  note.isRecording.value;
+                                              final recording =
+                                                  voiceRecording ||
+                                                  noteRecording;
+                                              final locked = noteRecording
+                                                  ? note.locked.value
+                                                  : voiceLocked;
                                               final sendMode =
-                                                  hasText || locked;
-                                              final pill = GlossyPill(
-                                                color: sendMode
-                                                    ? cs.primary
+                                                  hasText ||
+                                                  hasForward ||
+                                                  locked ||
+                                                  forceSend;
+                                              final pill = _actionSurface(
+                                                color: _flat
+                                                    ? Colors.transparent
                                                     : recording
                                                     ? cs.error
+                                                    : _frost
+                                                    ? AppFrost.glassTint(cs)
                                                     : cs.surfaceContainerHighest,
-                                                borderRadius:
-                                                    BorderRadius.circular(27),
-                                                onTap: hasText
+                                                onTap:
+                                                    (hasText ||
+                                                        hasForward ||
+                                                        forceSend)
                                                     ? onSendText
                                                     : locked
-                                                    ? () => voiceRec.stop(
-                                                        cancel: false,
-                                                      )
+                                                    ? () => noteRecording
+                                                          ? note.stop(
+                                                              cancel: false,
+                                                            )
+                                                          : voiceRec.stop(
+                                                              cancel: false,
+                                                            )
                                                     : null,
-                                                onLongPress: hasText
+                                                onLongPress:
+                                                    (hasText &&
+                                                        !forceSend &&
+                                                        !hasForward)
                                                     ? onScheduleMessage
                                                     : null,
-                                                depth: 8,
                                                 child: SizedBox(
-                                                  width: 54,
-                                                  height: 54,
+                                                  width: _controlSize,
+                                                  height: _controlSize,
                                                   child: Center(
-                                                    child: Icon(
-                                                      sendMode
-                                                          ? Symbols.send
+                                                    child: ComposerMorphIcon(
+                                                      action: sendMode
+                                                          ? ComposerAction.send
                                                           : videoMode
-                                                          ? Symbols.videocam
-                                                          : Symbols.mic,
-                                                      color: sendMode
-                                                          ? cs.onPrimary
-                                                          : recording
-                                                          ? cs.onError
+                                                          ? ComposerAction
+                                                                .videocam
+                                                          : ComposerAction.mic,
+                                                      color: recording
+                                                          ? (_flat
+                                                                ? cs.error
+                                                                : cs.onError)
+                                                          : sendMode
+                                                          ? cs.primary
+                                                          : _flat
+                                                          ? cs.onSurfaceVariant
                                                           : cs.onSurface,
-                                                      size: 24,
-                                                      weight: 400,
                                                     ),
                                                   ),
                                                 ),
@@ -364,30 +514,32 @@ class ComposerInputBar extends StatelessWidget {
                                                     active:
                                                         recording && !locked,
                                                   );
+                                              final voiceEnabled =
+                                                  !sendMode && !forceSend;
                                               return GestureDetector(
-                                                onTap: sendMode
-                                                    ? null
-                                                    : note.toggleMode,
-                                                onLongPressStart: sendMode
-                                                    ? null
-                                                    : (_) => videoMode
+                                                onTap: voiceEnabled
+                                                    ? note.toggleMode
+                                                    : null,
+                                                onLongPressStart: voiceEnabled
+                                                    ? (_) => videoMode
                                                           ? note.start()
-                                                          : voiceRec.start(),
-                                                onLongPressMoveUpdate: sendMode
-                                                    ? null
-                                                    : (d) => videoMode
+                                                          : voiceRec.start()
+                                                    : null,
+                                                onLongPressMoveUpdate:
+                                                    voiceEnabled
+                                                    ? (d) => videoMode
                                                           ? note.handleDrag(
                                                               d.offsetFromOrigin,
                                                             )
                                                           : voiceRec.handleDrag(
                                                               d.offsetFromOrigin,
-                                                            ),
-                                                onLongPressEnd: sendMode
-                                                    ? null
-                                                    : (_) => videoMode
+                                                            )
+                                                    : null,
+                                                onLongPressEnd: voiceEnabled
+                                                    ? (_) => videoMode
                                                           ? note.handleEnd()
-                                                          : voiceRec
-                                                                .handleEnd(),
+                                                          : voiceRec.handleEnd()
+                                                    : null,
                                                 child: visual,
                                               );
                                             },
@@ -405,6 +557,198 @@ class ComposerInputBar extends StatelessWidget {
         ],
       ),
     );
+
+    return _barSurface(cs, bar);
+  }
+
+  bool get _flat => !ComposerChrome.isGlossy(style);
+
+  bool get _frost => ComposerMaterial.isFrost(background);
+
+  bool get _liquid => ComposerMaterial.isLiquid(background);
+
+  bool get _translucent => _frost || _liquid;
+
+  double get _controlSize => _flat ? 48 : 54;
+
+  double get _barSideInset => _flat ? 0 : 12;
+
+  double get _barVerticalInset => _flat ? 4 : 8;
+
+  double get _fieldSideInset => _flat ? 12 : 14;
+
+  double get _fieldTrailingInset => _flat ? 0 : 14;
+
+  double get _actionGap => _flat ? 0 : 8;
+
+  double get _attachSlot => _flat ? 48 : 36;
+
+  double get _attachLeading => _flat ? 0 : 12;
+
+  Widget _barSurface(ColorScheme cs, Widget child) {
+    if (!_flat || _translucent) return child;
+    if (chrome == ChatChromeStyle.blur) return child;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: vignette ? null : Border(top: AppFrost.hairline(cs)),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _fieldSurface(ColorScheme cs, Widget child) {
+    if (_flat) return child;
+    return GlossyPill(
+      color: _translucent
+          ? AppFrost.glassTint(cs)
+          : Color.alphaBlend(
+              cs.surfaceContainerHighest.withValues(alpha: 0.92),
+              cs.surface,
+            ),
+      blurSigma: _frost ? AppFrost.sigma : null,
+      liquid: _liquid,
+      backdropKey: backdropKey,
+      borderRadius: BorderRadius.circular(28),
+      depth: 8,
+      borderSide: BorderSide(
+        color: cs.outlineVariant.withValues(alpha: 0.5),
+        width: 0.5,
+      ),
+      child: child,
+    );
+  }
+
+  Widget _actionSurface({
+    required Color color,
+    required Widget child,
+    VoidCallback? onTap,
+    VoidCallback? onLongPress,
+  }) {
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: color),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      builder: (context, tinted, _) => _actionSurfaceOf(
+        color: tinted ?? color,
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: child,
+      ),
+    );
+  }
+
+  Widget _actionSurfaceOf({
+    required Color color,
+    required Widget child,
+    VoidCallback? onTap,
+    VoidCallback? onLongPress,
+  }) {
+    if (_flat) {
+      return Material(
+        color: color,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(onTap: onTap, onLongPress: onLongPress, child: child),
+      );
+    }
+    return GlossyPill(
+      color: color,
+      blurSigma: _frost ? AppFrost.sigma : null,
+      liquid: _liquid,
+      backdropKey: backdropKey,
+      borderRadius: BorderRadius.circular(_controlSize / 2),
+      onTap: onTap,
+      onLongPress: onLongPress,
+      keepInkLayer: true,
+      depth: 8,
+      child: child,
+    );
+  }
+
+  Widget _replyIconButton(ColorScheme cs) {
+    final icon = Icon(Symbols.reply, size: 20, color: cs.primary);
+    if (onPickReplyChat == null) return icon;
+    return InkWell(
+      onTap: onPickReplyChat,
+      customBorder: const CircleBorder(),
+      child: Padding(padding: const EdgeInsets.all(4), child: icon),
+    );
+  }
+
+  Widget _messagePreview(ColorScheme cs, List<CachedMessage> forwards) {
+    if (forwards.isNotEmpty) return _forwardPreview(cs, forwards);
+    return _replyPreview(cs);
+  }
+
+  Widget _forwardPreview(ColorScheme cs, List<CachedMessage> messages) {
+    final first = messages.first;
+    final senderName = ContactCache.get(first.senderId);
+    final info = ReplyInfo(
+      senderId: first.senderId,
+      text: first.text,
+      attachments: first.attachments,
+    );
+    final preview = info.previewText();
+    final title = messages.length == 1
+        ? first.senderId == myId
+              ? 'Пересылка от вас'
+              : senderName == null
+              ? 'Пересылка сообщения'
+              : 'Пересылка от $senderName'
+        : 'Пересылка: ${_forwardCount(messages.length)}';
+    final row = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
+      child: Row(
+        children: [
+          Icon(Symbols.forward, size: 20, color: cs.primary),
+          const SizedBox(width: 10),
+          Container(width: 2, height: 34, color: cs.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (preview.isNotEmpty)
+                  Text(
+                    preview,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Symbols.close, size: 20),
+            color: cs.onSurfaceVariant,
+            onPressed: onCancelForward,
+          ),
+        ],
+      ),
+    );
+    return _previewSurface(cs, row);
+  }
+
+  String _forwardCount(int count) {
+    final last = count % 10;
+    final lastTwo = count % 100;
+    if (last == 1 && lastTwo != 11) return '$count сообщение';
+    if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) {
+      return '$count сообщения';
+    }
+    return '$count сообщений';
   }
 
   Widget _replyPreview(ColorScheme cs) {
@@ -425,7 +769,7 @@ class ComposerInputBar extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
           child: Row(
             children: [
-              Icon(Symbols.reply, size: 20, color: cs.primary),
+              _replyIconButton(cs),
               const SizedBox(width: 10),
               Container(width: 2, height: 34, color: cs.primary),
               const SizedBox(width: 10),
@@ -465,25 +809,20 @@ class ComposerInputBar extends StatelessWidget {
             ],
           ),
         );
-        if (chrome != ChatChromeStyle.transparent) return row;
-        return ClipRect(
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 34, sigmaY: 34),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: cs.surface.withValues(alpha: 0.38),
-                border: Border(
-                  top: BorderSide(
-                    color: cs.outlineVariant.withValues(alpha: 0.4),
-                    width: 0.5,
-                  ),
-                ),
-              ),
-              child: row,
-            ),
-          ),
-        );
+        return _previewSurface(cs, row);
       },
+    );
+  }
+
+  Widget _previewSurface(ColorScheme cs, Widget child) {
+    if (_flat && _translucent) return child;
+    if (!_translucent && chrome != ChatChromeStyle.transparent) return child;
+    return GlassSurface(
+      liquid: _liquid,
+      frostTint: AppFrost.glassTint(cs),
+      border: Border(top: AppFrost.hairline(cs)),
+      backdropKey: backdropKey,
+      child: child,
     );
   }
 
@@ -497,11 +836,10 @@ class ComposerInputBar extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
       builder: (context, a, _) {
-        if (a <= 0.001) return pill;
         return ValueListenableBuilder<double>(
           valueListenable: voiceRec.amplitude,
           builder: (context, amp, _) => TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.0, end: amp),
+            tween: Tween(begin: 0.0, end: a <= 0.001 ? 0.0 : amp),
             duration: const Duration(milliseconds: 110),
             builder: (context, v, _) {
               final glow = a * (88.0 + v * 76.0);
@@ -510,8 +848,8 @@ class ComposerInputBar extends StatelessWidget {
                 alignment: Alignment.center,
                 children: [
                   Positioned(
-                    left: 27 - glow / 2,
-                    top: 27 - glow / 2,
+                    left: _controlSize / 2 - glow / 2,
+                    top: _controlSize / 2 - glow / 2,
                     child: Container(
                       width: glow,
                       height: glow,
@@ -523,7 +861,14 @@ class ComposerInputBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  _voiceLockChip(cs),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: note.isRecording,
+                    builder: (context, video, _) => _lockChip(
+                      cs,
+                      a,
+                      video ? note.lockDrag : voiceRec.lockDrag,
+                    ),
+                  ),
                   Transform.scale(
                     scale: 1.0 + a * 0.14 + a * v * 0.24,
                     child: pill,
@@ -537,13 +882,17 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
-  Widget _voiceLockChip(ColorScheme cs) {
+  Widget _lockChip(
+    ColorScheme cs,
+    double reveal,
+    ValueListenable<double> lockDrag,
+  ) {
     return Positioned(
-      bottom: 62,
+      bottom: _controlSize + 8,
       child: ValueListenableBuilder<double>(
-        valueListenable: voiceRec.lockDrag,
+        valueListenable: lockDrag,
         builder: (context, lock, _) => Opacity(
-          opacity: (0.5 + lock * 0.5).clamp(0.0, 1.0),
+          opacity: (reveal * (0.5 + lock * 0.5)).clamp(0.0, 1.0),
           child: Transform.translate(
             offset: Offset(0, lock * 12),
             child: Container(
@@ -583,29 +932,28 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
-  Widget _voiceRecordingIndicator(ColorScheme cs) {
-    return Container(
-      color: Color.alphaBlend(
-        cs.surfaceContainerHighest.withValues(alpha: 0.92),
-        cs.surface,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+  Widget _recordingIndicator(ColorScheme cs, bool video) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: _fieldSideInset),
       child: Row(
         children: [
-          ValueListenableBuilder<double>(
-            valueListenable: voiceRec.amplitude,
-            builder: (context, amp, child) => TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: amp),
-              duration: const Duration(milliseconds: 120),
-              builder: (context, v, child) =>
-                  Transform.scale(scale: 1.0 + v * 0.7, child: child),
-              child: child,
+          if (video)
+            _RecordingDot(color: cs.error)
+          else
+            ValueListenableBuilder<double>(
+              valueListenable: voiceRec.amplitude,
+              builder: (context, amp, child) => TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: amp),
+                duration: const Duration(milliseconds: 120),
+                builder: (context, v, child) =>
+                    Transform.scale(scale: 1.0 + v * 0.7, child: child),
+                child: child,
+              ),
+              child: _RecordingDot(color: cs.error),
             ),
-            child: _RecordingDot(color: cs.error),
-          ),
           const SizedBox(width: 12),
           ValueListenableBuilder<int>(
-            valueListenable: voiceRec.elapsedMs,
+            valueListenable: video ? note.elapsedMs : voiceRec.elapsedMs,
             builder: (context, ms, _) => Text(
               formatElapsed(ms),
               style: TextStyle(
@@ -618,8 +966,22 @@ class ComposerInputBar extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: ValueListenableBuilder<double>(
-              valueListenable: voiceRec.cancelDrag,
+              valueListenable: video ? note.cancelDrag : voiceRec.cancelDrag,
               builder: (context, drag, _) {
+                if (video) {
+                  return Opacity(
+                    opacity: (0.55 + drag * 0.45).clamp(0.0, 1.0),
+                    child: Center(
+                      child: Text(
+                        '‹ Влево — отмена',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  );
+                }
                 if (drag > 0.01) {
                   return Opacity(
                     opacity: (0.45 + drag * 0.55).clamp(0.0, 1.0),
@@ -661,16 +1023,20 @@ class ComposerInputBar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           ValueListenableBuilder<bool>(
-            valueListenable: voiceRec.locked,
+            valueListenable: video ? note.locked : voiceRec.locked,
             builder: (context, locked, _) => locked
                 ? GestureDetector(
-                    onTap: () => voiceRec.stop(cancel: true),
+                    onTap: () => video
+                        ? note.stop(cancel: true)
+                        : voiceRec.stop(cancel: true),
                     behavior: HitTestBehavior.opaque,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Icon(Symbols.delete, size: 22, color: cs.error),
                     ),
                   )
+                : video
+                ? const SizedBox.shrink()
                 : Text(
                     '‹ влево — отмена',
                     style: TextStyle(color: cs.mutedText, fontSize: 11),
@@ -689,6 +1055,8 @@ class _AttachButton extends StatelessWidget {
   final ValueListenable<UploadStatus> uploadStatus;
   final Color mutedIcon;
   final ColorScheme cs;
+  final double slot;
+  final double leading;
 
   const _AttachButton({
     required this.hasText,
@@ -697,6 +1065,8 @@ class _AttachButton extends StatelessWidget {
     required this.uploadStatus,
     required this.mutedIcon,
     required this.cs,
+    required this.slot,
+    required this.leading,
   });
 
   @override
@@ -716,7 +1086,7 @@ class _AttachButton extends StatelessWidget {
         final onLongPress = disabled ? null : onLongOpen;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: isText ? 0 : 36,
+          width: isText ? 0 : slot,
           child: AnimatedOpacity(
             duration: const Duration(milliseconds: 200),
             opacity: isText ? 0 : 1,
@@ -727,7 +1097,7 @@ class _AttachButton extends StatelessWidget {
                     onTap: onTap,
                     onLongPress: onLongPress,
                     child: Padding(
-                      padding: const EdgeInsets.only(left: 12),
+                      padding: EdgeInsets.only(left: leading),
                       child: Stack(
                         alignment: Alignment.center,
                         children: [

@@ -10,9 +10,17 @@ import '../../../core/calls/call_controller.dart';
 import '../../../backend/modules/calls.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/chat_menu_overlay.dart';
+import '../../widgets/small_spinner.dart';
+import '../../widgets/prompt_dialog.dart';
+import '../../widgets/call_link_handler.dart';
+import '../../widgets/spectrum_tint.dart';
+import '../../../l10n/app_localizations.dart';
+import 'call_link_sheet.dart';
 import 'call_screen.dart';
+import '../../../core/config/app_fonts.dart';
 
 class CallsTab extends StatefulWidget {
   const CallsTab({super.key});
@@ -21,7 +29,8 @@ class CallsTab extends StatefulWidget {
   State<CallsTab> createState() => _CallsTabState();
 }
 
-class _CallsTabState extends State<CallsTab> {
+class _CallsTabState extends State<CallsTab>
+    with ReloadOnReconnect, SpectrumSurface {
   List<CallLogEntry> _calls = [];
   final Set<String> _removing = {};
   bool _isLoading = true;
@@ -48,6 +57,11 @@ class _CallsTabState extends State<CallsTab> {
   void dispose() {
     _loginSub?.cancel();
     super.dispose();
+  }
+
+  @override
+  void reloadAfterReconnect() {
+    if (accountModule.isLoggedIn) _loadHistory();
   }
 
   Future<void> _loadHistory() async {
@@ -323,6 +337,104 @@ class _CallsTabState extends State<CallsTab> {
     }
   }
 
+  Widget _buildLinkAction(
+    ColorScheme cs, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool alignEnd = false,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          mainAxisAlignment: alignEnd
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          children: [
+            Icon(icon, color: cs.primary, size: 24),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: cs.primary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _createGroupCall() async {
+    final controller = CallController.instance;
+    if (controller.isBusy) {
+      showCustomNotification(context, 'Звонок уже идёт');
+      return;
+    }
+
+    final l10n = AppLocalizations.of(context)!;
+    CreatedCall created;
+    try {
+      created = await controller.createConference();
+    } catch (e) {
+      if (mounted) {
+        showCustomNotification(context, '${l10n.callLinkCreateFailed}: $e');
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    final start = await showCreatedCallSheet(context, call: created);
+    if (!start || !mounted) return;
+
+    final navigator = Navigator.of(context);
+    final name = created.callName ?? l10n.callLinkGroupCall;
+    try {
+      final session = await controller.joinByLink(created.joinToken);
+      if (!mounted) return;
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (_) =>
+              CallScreen(name: name, session: session, isGroup: true),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showCustomNotification(context, 'Не удалось начать звонок: $e');
+    }
+  }
+
+  Future<void> _joinGroupCall() async {
+    if (CallController.instance.isBusy) {
+      showCustomNotification(context, 'Звонок уже идёт');
+      return;
+    }
+
+    final url = await showTextInputDialog(
+      context,
+      title: 'Присоединиться к звонку',
+      description: 'Вставьте ссылку-приглашение',
+      hint: 'https://max.ru/joincall/...',
+      confirmLabel: 'Присоединиться',
+      keyboardType: TextInputType.url,
+    );
+    if (url == null || url.trim().isEmpty || !mounted) return;
+
+    final handled = await tryHandleCallLink(context, url.trim());
+    if (!handled && mounted) {
+      showCustomNotification(context, 'Это не ссылка на звонок');
+    }
+  }
+
   Widget _buildTabItem(String label, int index, ColorScheme cs) {
     final isSelected = _selectedTabIndex == index;
     return GestureDetector(
@@ -362,7 +474,7 @@ class _CallsTabState extends State<CallsTab> {
         : _calls;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: spectrumSurfaceColor(cs),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -379,34 +491,35 @@ class _CallsTabState extends State<CallsTab> {
                       color: cs.onSurface,
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
-                      fontFamily: 'Outfit',
+                      fontFamily: displayFontOf(context),
                     ),
                   ),
                   const ConnectionStatusLine(),
                 ],
               ),
             ),
-            InkWell(
-              onTap: () {},
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                child: Row(
-                  children: [
-                    Icon(Symbols.link, color: cs.primary, size: 24),
-                    const SizedBox(width: 16),
-                    Text(
-                      'Создать групповой звонок',
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildLinkAction(
+                      cs,
+                      icon: Symbols.link,
+                      label: 'Создать звонок',
+                      onTap: _createGroupCall,
                     ),
-                  ],
-                ),
+                  ),
+                  Expanded(
+                    child: _buildLinkAction(
+                      cs,
+                      icon: Symbols.group_add,
+                      label: 'Присоединиться',
+                      onTap: _joinGroupCall,
+                      alignEnd: true,
+                    ),
+                  ),
+                ],
               ),
             ),
             Padding(
@@ -421,7 +534,7 @@ class _CallsTabState extends State<CallsTab> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: SmallSpinner(size: 36))
                   : filteredCalls.isEmpty
                   ? Center(
                       child: Text(

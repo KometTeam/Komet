@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
@@ -47,6 +48,7 @@ class OutboxService {
 
         final payload = pending.payload;
         final replyToMessageId = _replyIdFromPayload(payload);
+        final replySourceChatId = _replySourceChatIdFromPayload(payload);
         final elements = _elementsFromPayload(payload);
 
         try {
@@ -55,6 +57,7 @@ class OutboxService {
             pending.chatId,
             text,
             replyToMessageId: replyToMessageId,
+            replySourceChatId: replySourceChatId,
             elements: elements,
           );
           final sent = CachedMessage(
@@ -86,8 +89,23 @@ class OutboxService {
             elements: elements.isEmpty ? null : elements,
           );
         } catch (e) {
-          logger.w('Outbox: отправка ${pending.id} не удалась: $e');
-          continue;
+          if (!isPermanentSendFailure(e)) {
+            logger.w('Outbox: отправка ${pending.id} не удалась: $e');
+            continue;
+          }
+          logger.w('Outbox: ${pending.id} отклонено сервером: $e');
+          final failed = pending.copyWith(status: 'error');
+          await AppDatabase.saveMessages([failed.toDbRow()]);
+          chats.emitMessageSent(pending.chatId, pending.id, failed);
+          await chats.applyOutgoing(
+            accountId,
+            pending.chatId,
+            messageId: failed.id,
+            time: failed.time,
+            text: text,
+            status: 'error',
+            elements: elements.isEmpty ? null : elements,
+          );
         }
       }
     } catch (e) {
@@ -111,6 +129,17 @@ class OutboxService {
     final mid = link['messageId'];
     if (mid is int) return mid;
     if (mid != null) return int.tryParse(mid.toString());
+    return null;
+  }
+
+  int? _replySourceChatIdFromPayload(Map<String, dynamic>? payload) {
+    if (payload == null) return null;
+    final link = payload['link'];
+    if (link is! Map) return null;
+    if ((link['type'] as String?)?.toUpperCase() != 'REPLY') return null;
+    final chatId = link['chatId'];
+    if (chatId is int) return chatId;
+    if (chatId != null) return int.tryParse(chatId.toString());
     return null;
   }
 

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../models/attachment.dart';
 import '../../photo_viewer.dart';
+import '../photo_hero.dart';
 import 'bubble_context.dart';
 
 class PhotoBubble extends StatelessWidget {
@@ -20,20 +22,75 @@ class PhotoBubble extends StatelessWidget {
 
   final BubbleContext ctx;
   final List<PhotoAttachment> photos;
+  final bool hasContentAbove;
 
-  const PhotoBubble({super.key, required this.ctx, required this.photos});
+  const PhotoBubble({
+    super.key,
+    required this.ctx,
+    required this.photos,
+    this.hasContentAbove = false,
+  });
+
+  static double layoutWidth(List<PhotoAttachment> photos) {
+    if (photos.length != 1) return BubbleContext.photoMaxSize;
+    return _displaySize(photos.single).width;
+  }
+
+  static Size _displaySize(PhotoAttachment photo) {
+    final width = photo.width?.toDouble() ?? 200;
+    final height = photo.height?.toDouble() ?? 200;
+
+    final downScale = math.min(
+      1.0,
+      math.min(
+        BubbleContext.photoMaxSize / width,
+        BubbleContext.photoMaxSize / height,
+      ),
+    );
+    var displayWidth = width * downScale;
+    var displayHeight = height * downScale;
+
+    final upScale = math.max(
+      1.0,
+      math.max(
+        BubbleContext.photoMinSize / displayWidth,
+        BubbleContext.photoMinSize / displayHeight,
+      ),
+    );
+    displayWidth *= upScale;
+    displayHeight *= upScale;
+
+    return Size(
+      displayWidth.clamp(
+        BubbleContext.photoMinSize,
+        BubbleContext.photoMaxSize,
+      ),
+      displayHeight.clamp(
+        BubbleContext.photoMinSize,
+        BubbleContext.photoMaxSize,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final message = ctx.message;
-    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
+    final resolvedCaption = hasMessageCaption ? ctx.caption() : null;
+    final hasCaption = resolvedCaption != null;
     final count = photos.length;
 
     Widget photosWidget;
     if (count == 1) {
-      photosWidget = _buildSinglePhoto(ctx, photos[0]);
+      photosWidget = _buildSinglePhoto(
+        ctx,
+        photos[0],
+        hasCaption: hasCaption,
+        hasContentAbove: hasContentAbove,
+      );
     } else if (count == 2) {
       photosWidget = _buildTwoPhotos(ctx, photos[0], photos[1]);
+    } else if (count == 3) {
+      photosWidget = _buildThreePhotos(ctx, photos);
     } else {
       photosWidget = _buildPhotoGrid(ctx, photos);
     }
@@ -52,15 +109,8 @@ class PhotoBubble extends StatelessWidget {
     }
 
     if (count == 1) {
-      final photo = photos[0];
-      final pw = photo.width?.toDouble() ?? 200;
-      final photoWidth = pw.clamp(
-        BubbleContext.photoMinSize,
-        BubbleContext.photoMaxSize,
-      );
-
       return SizedBox(
-        width: photoWidth,
+        width: layoutWidth(photos),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,12 +120,13 @@ class PhotoBubble extends StatelessWidget {
               padding: const EdgeInsets.only(
                 left: BubbleContext.captionPaddingHorizontal,
                 right: BubbleContext.captionPaddingRight,
+                top: BubbleContext.captionPaddingTop,
                 bottom: 6,
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Expanded(child: ctx.caption()),
+                  Expanded(child: resolvedCaption),
                   ctx.meta(),
                 ],
               ),
@@ -94,12 +145,13 @@ class PhotoBubble extends StatelessWidget {
           padding: const EdgeInsets.only(
             left: BubbleContext.captionPaddingHorizontal,
             right: BubbleContext.captionPaddingRight,
+            top: BubbleContext.captionPaddingTop,
             bottom: 6,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Expanded(child: ctx.caption()),
+              Expanded(child: resolvedCaption),
               ctx.meta(),
             ],
           ),
@@ -108,22 +160,19 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildSinglePhoto(BubbleContext ctx, PhotoAttachment photo) {
-    final width = photo.width?.toDouble() ?? 200;
-    final height = photo.height?.toDouble() ?? 200;
-
-    final constrainedWidth = width.clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
-    );
-    final constrainedHeight = height.clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
-    );
+  Widget _buildSinglePhoto(
+    BubbleContext ctx,
+    PhotoAttachment photo, {
+    required bool hasCaption,
+    required bool hasContentAbove,
+  }) {
+    final size = _displaySize(photo);
+    final constrainedWidth = size.width;
+    final constrainedHeight = size.height;
     final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
 
-    final matchTop = ctx.hasPhotoWithCaption;
-    final matchBottom = !ctx.hasPhotoWithCaption;
+    final matchTop = hasCaption && !hasContentAbove;
+    final matchBottom = !hasCaption;
 
     final topR = matchTop ? _bigRadius : _photoRadius;
     final bottomL = matchBottom
@@ -133,13 +182,17 @@ class PhotoBubble extends StatelessWidget {
         ? (ctx.isMe ? _smallRadius : _bigRadius)
         : _smallRadius;
 
+    final radius = BorderRadius.only(
+      topLeft: topR,
+      topRight: topR,
+      bottomLeft: bottomL,
+      bottomRight: bottomR,
+    );
+    final memWidth = (constrainedWidth * dpr).round();
+    final memHeight = (constrainedHeight * dpr).round();
+
     return ClipRRect(
-      borderRadius: BorderRadius.only(
-        topLeft: topR,
-        topRight: topR,
-        bottomLeft: bottomL,
-        bottomRight: bottomR,
-      ),
+      borderRadius: radius,
       child: Stack(
         children: [
           _buildPhotoImage(
@@ -147,16 +200,25 @@ class PhotoBubble extends StatelessWidget {
             photo,
             constrainedWidth,
             constrainedHeight,
-            memWidth: (constrainedWidth * dpr).round(),
-            memHeight: (constrainedHeight * dpr).round(),
+            memWidth: memWidth,
+            memHeight: memHeight,
           ),
           if (ctx.uploadProgress != null)
             _buildUploadOverlay(ctx.uploadProgress!, 0),
           if (ctx.uploadProgress == null)
             Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _openPhotoViewer(ctx.context, photo),
+              child: Builder(
+                builder: (tileContext) => GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _openPhotoViewer(
+                    ctx.context,
+                    0,
+                    tileContext: tileContext,
+                    radius: radius,
+                    memWidth: memWidth,
+                    memHeight: memHeight,
+                  ),
+                ),
               ),
             ),
         ],
@@ -275,10 +337,7 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildPhotoGrid(BubbleContext ctx, List<PhotoAttachment> photos) {
-    final displayCount = photos.length > 4 ? 4 : photos.length;
-    final remaining = photos.length - 4;
-
+  Widget _buildThreePhotos(BubbleContext ctx, List<PhotoAttachment> photos) {
     final matchTop =
         ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleTop;
     final matchBottom =
@@ -290,50 +349,122 @@ class PhotoBubble extends StatelessWidget {
         matchBottom: matchBottom,
         isMe: ctx.isMe,
       ),
-      child: GridView.count(
-        crossAxisCount: 2,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        children: List.generate(displayCount, (i) {
-          if (i == 3 && remaining > 0) {
-            return _buildPhotoTileWithOverlay(ctx, photos[i], '+$remaining', i);
-          }
-          return _buildPhotoTile(ctx, photos[i], i);
-        }),
+      child: AspectRatio(
+        aspectRatio: 3 / 2,
+        child: Row(
+          children: [
+            Expanded(flex: 2, child: _buildFillTile(ctx, photos[0], 0)),
+            const SizedBox(width: 2),
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(child: _buildFillTile(ctx, photos[1], 1)),
+                  const SizedBox(height: 2),
+                  Expanded(child: _buildFillTile(ctx, photos[2], 2)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildPhotoTile(BubbleContext ctx, PhotoAttachment photo, int index) {
+  Widget _buildPhotoGrid(BubbleContext ctx, List<PhotoAttachment> photos) {
+    final displayCount = photos.length > 4 ? 4 : photos.length;
+    final remaining = photos.length - 4;
+
+    final matchTop =
+        ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleTop;
+    final matchBottom =
+        ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleBottom;
+
+    final rows = <Widget>[];
+    for (var i = 0; i < displayCount; i += 2) {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 2));
+      rows.add(
+        Row(
+          children: [
+            Expanded(child: _buildGridTile(ctx, photos, i, remaining)),
+            const SizedBox(width: 2),
+            Expanded(
+              child: i + 1 < displayCount
+                  ? _buildGridTile(ctx, photos, i + 1, remaining)
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: _multiPhotoCornerRadius(
+        matchTop: matchTop,
+        matchBottom: matchBottom,
+        isMe: ctx.isMe,
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: rows),
+    );
+  }
+
+  Widget _buildGridTile(
+    BubbleContext ctx,
+    List<PhotoAttachment> photos,
+    int index,
+    int remaining,
+  ) {
+    if (index == 3 && remaining > 0) {
+      return _buildPhotoTileWithOverlay(
+        ctx,
+        photos[index],
+        '+$remaining',
+        index,
+      );
+    }
+    return _buildPhotoTile(ctx, photos[index], index);
+  }
+
+  Widget _buildPhotoTile(BubbleContext ctx, PhotoAttachment photo, int index) =>
+      AspectRatio(aspectRatio: 1, child: _buildFillTile(ctx, photo, index));
+
+  Widget _buildFillTile(BubbleContext ctx, PhotoAttachment photo, int index) {
     final cachePx =
         (BubbleContext.photoMaxSize /
                 2 *
                 MediaQuery.of(ctx.context).devicePixelRatio)
             .round();
-    return AspectRatio(
-      aspectRatio: 1,
-      child: Stack(
-        children: [
-          _buildPhotoImage(
-            ctx,
-            photo,
-            double.infinity,
-            double.infinity,
+    return Stack(
+      children: [
+        _buildPhotoImage(
+          ctx,
+          photo,
+          double.infinity,
+          double.infinity,
+          memWidth: cachePx,
+          memHeight: cachePx,
+        ),
+        if (ctx.uploadProgress != null)
+          _buildUploadOverlay(ctx.uploadProgress!, index),
+        if (ctx.uploadProgress == null)
+          _buildTileTapTarget(ctx, index, cachePx),
+      ],
+    );
+  }
+
+  Widget _buildTileTapTarget(BubbleContext ctx, int index, int cachePx) {
+    return Positioned.fill(
+      child: Builder(
+        builder: (tileContext) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openPhotoViewer(
+            ctx.context,
+            index,
+            tileContext: tileContext,
+            radius: BorderRadius.zero,
             memWidth: cachePx,
             memHeight: cachePx,
           ),
-          if (ctx.uploadProgress != null)
-            _buildUploadOverlay(ctx.uploadProgress!, index),
-          if (ctx.uploadProgress == null)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _openPhotoViewer(ctx.context, photo),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -378,6 +509,8 @@ class PhotoBubble extends StatelessWidget {
           ),
           if (ctx.uploadProgress != null)
             _buildUploadOverlay(ctx.uploadProgress!, index),
+          if (ctx.uploadProgress == null)
+            _buildTileTapTarget(ctx, index, cachePx),
         ],
       ),
     );
@@ -407,13 +540,62 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  void _openPhotoViewer(BuildContext context, PhotoAttachment photo) {
+  static ImageProvider? _photoProvider(
+    PhotoAttachment photo, {
+    required int memWidth,
+    required int memHeight,
+  }) {
+    final localPath = photo.localPath;
+    if (localPath != null) {
+      return ResizeImage.resizeIfNeeded(
+        memWidth,
+        null,
+        FileImage(File(localPath)),
+      );
+    }
     final url = photo.baseUrl ?? '';
-    if (url.isEmpty) return;
+    if (url.isEmpty) return null;
+    return ResizeImage.resizeIfNeeded(
+      memWidth,
+      memHeight,
+      CachedNetworkImageProvider(url),
+    );
+  }
+
+  static Size? _photoSize(PhotoAttachment photo) {
+    final width = photo.width ?? 0;
+    final height = photo.height ?? 0;
+    if (width <= 0 || height <= 0) return null;
+    return Size(width.toDouble(), height.toDouble());
+  }
+
+  void _openPhotoViewer(
+    BuildContext context,
+    int index, {
+    required BuildContext tileContext,
+    required BorderRadius radius,
+    required int memWidth,
+    required int memHeight,
+  }) {
+    final photo = photos[index];
+    final hero = PhotoHeroController(
+      origin: () => photoHeroRectOf(tileContext),
+      image: _photoProvider(photo, memWidth: memWidth, memHeight: memHeight),
+      size: _photoSize(photo),
+      radius: radius,
+    );
     Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => PhotoViewerScreen(baseUrl: url),
+      PhotoHeroRoute<void>(
+        hero: hero,
+        builder: (_) => PhotoViewerScreen(
+          photos: photos,
+          initialIndex: index,
+          chatId: ctx.chatId,
+          message: ctx.message,
+          actions: ctx.photoActions,
+          hero: hero,
+          sourceName: ctx.chatName,
+        ),
       ),
     );
   }

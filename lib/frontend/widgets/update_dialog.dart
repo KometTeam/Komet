@@ -5,11 +5,10 @@ import '../../core/utils/update_installer.dart';
 import '../../core/utils/link_opener.dart';
 import '../../l10n/app_localizations.dart';
 import 'custom_notification.dart';
+import '../../core/config/app_fonts.dart';
+import '../../core/config/app_shape.dart';
 
-Future<void> showUpdateDialog(
-  BuildContext context,
-  AppUpdateInfo info,
-) async {
+Future<void> showUpdateDialog(BuildContext context, AppUpdateInfo info) async {
   final l10n = AppLocalizations.of(context)!;
   await showDialog<void>(
     context: context,
@@ -18,10 +17,11 @@ Future<void> showUpdateDialog(
       final notes = info.notes;
       return AlertDialog(
         backgroundColor: cs.surfaceContainerHigh,
+        shape: AppShape.dialogBorder,
         title: Text(
           l10n.updateAvailableTitle,
           style: TextStyle(
-            fontFamily: 'Outfit',
+            fontFamily: displayFontOf(context),
             fontWeight: FontWeight.w600,
             fontSize: 18,
             color: cs.onSurface,
@@ -152,6 +152,7 @@ class _UpdateProgressDialogState extends State<_UpdateProgressDialog> {
     final percent = (_progress * 100).round();
     return AlertDialog(
       backgroundColor: cs.surfaceContainerHigh,
+      shape: AppShape.dialogBorder,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

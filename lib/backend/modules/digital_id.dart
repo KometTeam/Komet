@@ -1,20 +1,25 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 import 'package:device_info_plus/device_info_plus.dart';
 
 import '../../core/storage/app_database.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
+import '../../core/utils/logger.dart';
 import '../../models/digital_id.dart';
 import 'webapp.dart';
 
 class DigitalIdException implements Exception {
   final String code;
   final String message;
+  final int? statusCode;
 
-  const DigitalIdException(this.code, this.message);
+  const DigitalIdException(this.code, this.message, {this.statusCode});
 
   bool get isUnauthorized => code == 'UNAUTHORIZED';
   bool get isNoGosuslugiLink => code == 'NO_GOSUSLUGI_LINK';
@@ -61,10 +66,21 @@ class DigitalIdModule {
     ).firstMatch(fragment);
     final raw = match?.group(1);
     if (raw == null || raw.isEmpty) return null;
-    return Uri.decodeComponent(raw);
+    // Фрагмент несёт WebAppData полностью percent-encoded (hash%3D…%26…);
+    // сервер ждёт канонический initDataRaw (hash=…&…) — как шлёт web-страница
+    // после decodeURIComponent. Декодируем один раз (фолбэк — сырое значение).
+    try {
+      return Uri.decodeComponent(raw);
+    } catch (_) {
+      return raw;
+    }
   }
 
   Future<String> deviceId() async {
+    // Тот же device_id, что уходит в handshake (опкод 6) — иначе сервер вернёт
+    // device_mismatch. Сессия обычно уже поднята к моменту открытия Цифрового ID.
+    final session = _webApp.sessionDeviceId;
+    if (session != null && session.isNotEmpty) return session;
     if (_deviceId != null) return _deviceId!;
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId != null) {
@@ -144,6 +160,9 @@ class DigitalIdModule {
     }
     final response = await request.close();
     final text = await response.transform(utf8.decoder).join();
+    if (kDebugMode) {
+      logger.i('[DID-native] $method $path -> ${response.statusCode}');
+    }
 
     if (response.statusCode == 401 && retry) {
       await _ensureWebAppData(forceRefresh: true);
@@ -170,7 +189,7 @@ class DigitalIdModule {
       }
     } catch (_) {}
     if (statusCode == 401) code = 'UNAUTHORIZED';
-    return DigitalIdException(code, message);
+    return DigitalIdException(code, message, statusCode: statusCode);
   }
 
   Map _unwrapData(dynamic decoded) {
@@ -246,7 +265,7 @@ class DigitalIdModule {
       );
       return _unwrapData(decoded)['shadow_mode'] == true;
     } on DigitalIdException catch (e) {
-      if (e.code == 'HTTP_404') return false;
+      if (e.statusCode == 404) return false;
       rethrow;
     }
   }
@@ -377,7 +396,34 @@ class DigitalIdModule {
     return null;
   }
 
+  Future<Map<String, dynamic>?> fetchMobileIdVerification(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'https') return null;
+    try {
+      final request = await _http.getUrl(uri);
+      request.followRedirects = true;
+      final response = await request.close();
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in response) {
+        builder.add(chunk);
+      }
+      final headers = <String, String>{};
+      response.headers.forEach((name, values) {
+        headers[name] = values.join(',');
+      });
+      return {
+        'statusCode': response.statusCode,
+        'headers': headers,
+        'data': base64Encode(builder.takeBytes()),
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
   void reset() {
     _webAppData = null;
+    _deviceId = null;
+    _realUserAgent = null;
   }
 }

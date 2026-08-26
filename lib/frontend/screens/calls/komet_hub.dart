@@ -7,6 +7,7 @@ import '../../../core/calls/call_session.dart';
 import '../../../core/games/checkers.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../../core/config/app_fonts.dart';
 
 Future<void> showKometHub(
   BuildContext context, {
@@ -115,7 +116,7 @@ class _KometHubState extends State<_KometHub> {
               color: cs.onSurface,
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
         ],
@@ -550,7 +551,9 @@ class _CheckersViewState extends State<_CheckersView> {
     final l10n = AppLocalizations.of(context)!;
     final w = _result;
     if (w != null) return w == _me ? l10n.hubCheckersWon : l10n.hubCheckersLost;
-    return _turn == _me ? l10n.hubCheckersYourMove : l10n.hubCheckersOpponentMove;
+    return _turn == _me
+        ? l10n.hubCheckersYourMove
+        : l10n.hubCheckersOpponentMove;
   }
 
   Widget _boardWidget(ColorScheme cs) {

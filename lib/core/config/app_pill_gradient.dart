@@ -7,7 +7,7 @@ class AppPillGradient {
 
   static final _setting = PersistedSetting<bool>(
     prefKey: prefKey,
-    defaultValue: true,
+    defaultValue: false,
     read: (prefs, key) => prefs.getBool(key),
     write: (prefs, key, value) async {
       await prefs.setBool(key, value);

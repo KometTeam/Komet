@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../../../core/config/app_colors.dart';
 
+import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/connection_status.dart';
+import '../../../core/config/app_fonts.dart';
 
 class WebQrScanScreen extends StatefulWidget {
   const WebQrScanScreen({super.key});
@@ -72,7 +75,7 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
         title: Text(
           'QR для веба и ПК',
           style: TextStyle(
-            fontFamily: 'Outfit',
+            fontFamily: displayFontOf(context),
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: Colors.white,
@@ -85,8 +88,10 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
               valueListenable: _controller,
               builder: (context, state, _) {
                 final on = state.torchState == TorchState.on;
-                return Icon(
-                  on ? Symbols.flash_on : Symbols.flash_off,
+                return AnimatedSlashIcon(
+                  icon: Symbols.flash_on,
+                  slashedIcon: Symbols.flash_off,
+                  slashed: !on,
                   color: Colors.white,
                 );
               },
@@ -135,7 +140,7 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
                     'Наведите камеру на QR-код на экране компьютера',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontFamily: 'Outfit',
+                      fontFamily: displayFontOf(context),
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                       color: Colors.white,
@@ -357,7 +362,7 @@ class _TelegramStyleFinderOverlayState
 
         final finderRect = _interpolatedFinderRect();
         final rrect = _finderRRect(finderRect, _frameCornerRadius);
-        final frameColor = _qrInView ? const Color(0xFF4ADE80) : Colors.white;
+        final frameColor = _qrInView ? kSuccessGreen : Colors.white;
         return IgnorePointer(
           child: Stack(
             fit: StackFit.expand,

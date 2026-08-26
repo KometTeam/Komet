@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../../core/config/komet_settings.dart';
+import '../../core/contacts/device_contacts_service.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
@@ -17,6 +18,7 @@ class ContactCache {
   static final Map<int, String> _nameCache = {};
   static final Map<int, String> _avatarCache = {};
   static final Map<int, Set<String>> _optionsCache = {};
+  static final Map<int, int> _phoneCache = {};
 
   static const _prefsKey = 'contact_cache_v1';
   static Timer? _saveTimer;
@@ -61,16 +63,37 @@ class ContactCache {
     _scheduleSave();
   }
 
-  static String? get(int id) => _nameCache[id];
+  static void putPhone(int id, int phone) {
+    if (phone > 0) _phoneCache[id] = phone;
+  }
+
+  static String? get(int id) {
+    final phone = _phoneCache[id];
+    if (phone != null) {
+      final book = DeviceContactsService.nameForPhone(phone);
+      if (book != null && book.isNotEmpty) return book;
+    }
+    return _nameCache[id];
+  }
+
   static String? getAvatar(int id) => _avatarCache[id];
   static Set<String>? getOptions(int id) => _optionsCache[id];
   static bool isOfficial(int id) =>
       _optionsCache[id]?.contains('OFFICIAL') ?? false;
 
+  static void remove(int id) {
+    _nameCache.remove(id);
+    _avatarCache.remove(id);
+    _optionsCache.remove(id);
+    _phoneCache.remove(id);
+    _scheduleSave();
+  }
+
   static void clear() {
     _nameCache.clear();
     _avatarCache.clear();
     _optionsCache.clear();
+    _phoneCache.clear();
     _saveTimer?.cancel();
     _saveTimer = null;
     unawaited(_wipePersisted());
@@ -126,16 +149,92 @@ class TranscriptionResult {
 
 class TranscriptionCache {
   static final Map<String, TranscriptionResult> _cache = {};
+  static final Map<String, Set<VoidCallback>> _listeners = {};
+  static final Set<String> _expanded = {};
 
-  static void put(String messageId, TranscriptionResult result) {
+  static void put(
+    String messageId,
+    TranscriptionResult result, {
+    bool expanded = false,
+  }) {
     _cache[messageId] = result;
+    if (expanded) _expanded.add(messageId);
+    final listeners = _listeners[messageId];
+    if (listeners == null) return;
+    for (final listener in listeners.toList()) {
+      listener();
+    }
   }
 
   static TranscriptionResult? get(String messageId) => _cache[messageId];
 
   static bool has(String messageId) => _cache.containsKey(messageId);
 
-  static void clear() => _cache.clear();
+  static bool isExpanded(String messageId) => _expanded.contains(messageId);
+
+  static void setExpanded(String messageId, bool value) {
+    if (value) {
+      _expanded.add(messageId);
+    } else {
+      _expanded.remove(messageId);
+    }
+  }
+
+  static void listen(String messageId, VoidCallback listener) {
+    _listeners.putIfAbsent(messageId, () => <VoidCallback>{}).add(listener);
+  }
+
+  static void unlisten(String messageId, VoidCallback listener) {
+    final listeners = _listeners[messageId];
+    if (listeners == null) return;
+    listeners.remove(listener);
+    if (listeners.isEmpty) _listeners.remove(messageId);
+  }
+
+  static void clear() {
+    _cache.clear();
+    _expanded.clear();
+  }
+}
+
+class TranscriptionPushHandler {
+  static StreamSubscription<Packet>? _sub;
+
+  static void attach(Api api) {
+    _sub?.cancel();
+    _sub = api.pushStream
+        .where((p) => p.opcode == Opcode.transcriptionResult)
+        .listen(_onPush);
+  }
+
+  static void _onPush(Packet packet) {
+    final payload = packet.payload;
+    if (payload is! Map) return;
+    final source = payload['message'] is Map
+        ? payload['message'] as Map
+        : payload;
+
+    final messageId = (source['messageId'] ?? source['msgId'])?.toString();
+    if (messageId == null || messageId.isEmpty) return;
+
+    final status = source['transcriptionStatus'] as int? ?? 1;
+    final rawText = source['transcription'] as String?;
+    if (status != 1) return;
+
+    TranscriptionCache.put(
+      messageId,
+      TranscriptionResult(
+        status: 1,
+        text: (rawText == null || rawText.isEmpty)
+            ? 'не удалось распознать текст'
+            : rawText,
+        messageId: messageId,
+        chatId: source['chatId'] as int?,
+        mediaId: source['mediaId'] as int?,
+      ),
+      expanded: true,
+    );
+  }
 }
 
 class FileHistoryEntry {
@@ -274,6 +373,8 @@ class ReplyInfo {
     this.attachments,
   });
 
+  bool get missing => previewText().isEmpty;
+
   static ReplyInfo? fromPayload(Map<String, dynamic>? payload) {
     if (payload == null) return null;
     final link = payload['link'];
@@ -388,6 +489,30 @@ class CachedMessage {
     this.deleted = false,
     this.editHistory,
   });
+
+  ControlAttachment? get controlAttachment =>
+      attachments?.whereType<ControlAttachment>().firstOrNull;
+
+  ForwardedMessageAttachment? get forwardedAttachment =>
+      attachments?.whereType<ForwardedMessageAttachment>().firstOrNull;
+
+  String? get selectableText {
+    final own = text;
+    if (own != null && own.isNotEmpty) return own;
+    final forwarded = forwardedAttachment?.originalText;
+    if (forwarded != null && forwarded.isNotEmpty) return forwarded;
+    return null;
+  }
+
+  String? get botStartPayload {
+    final control = controlAttachment;
+    if (control == null || !control.isBotStart) return null;
+    final payload = (control.startPayload ?? text)?.trim();
+    return (payload == null || payload.isEmpty) ? null : payload;
+  }
+
+  bool get isSilentBotStart =>
+      (controlAttachment?.isBotStart ?? false) && botStartPayload == null;
 
   CachedMessage copyWith({
     String? status,
@@ -742,6 +867,7 @@ class MessagesModule {
     bool notify = true,
     int? scheduledTime,
     int? replyToMessageId,
+    int? replySourceChatId,
     List<Map<String, dynamic>> elements = const [],
   }) async {
     final message = <String, dynamic>{
@@ -753,7 +879,7 @@ class MessagesModule {
     if (replyToMessageId != null) {
       message['link'] = {
         'type': 'REPLY',
-        'chatId': chatId,
+        'chatId': replySourceChatId ?? chatId,
         'messageId': replyToMessageId,
       };
     }
@@ -766,6 +892,43 @@ class MessagesModule {
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
     return _sendAndExtractMessageId(payload, 'Ошибка отправки');
+  }
+
+  Future<Packet> sendControlMessage(
+    int chatId,
+    Map<String, dynamic> control, {
+    bool notify = true,
+  }) {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'text': '',
+        'attaches': [control],
+      },
+      'notify': notify,
+    };
+    return _api.sendRequest(Opcode.msgSend, payload);
+  }
+
+  Future<Map<String, dynamic>?> sendBotStart(
+    int chatId,
+    String startPayload,
+  ) async {
+    final response = await _api.sendRequest(Opcode.msgSend, {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {
+            '_type': 'CONTROL',
+            'event': ControlAttachment.botStartedEvent,
+            'startPayload': startPayload,
+          },
+        ],
+      },
+    });
+    return _sentMessageMap(response);
   }
 
   Future<String> _sendAndExtractMessageId(
@@ -862,23 +1025,41 @@ class MessagesModule {
     required String tempId,
     required int time,
     required String status,
+    String? sourceChatName,
+    String? sourceChatIconUrl,
+    String? sourceChatType,
   }) {
     final srcPayload = source.payload;
     final srcLink = srcPayload?['link'];
+    final isForwardedSource =
+        srcLink is Map &&
+        srcLink['type']?.toString().toUpperCase() == 'FORWARD' &&
+        srcLink['message'] is Map;
     Map<String, dynamic> originalMsg;
-    if (srcLink is Map &&
-        srcLink['type'] == 'FORWARD' &&
-        srcLink['message'] is Map) {
+    if (isForwardedSource) {
       originalMsg = Map<String, dynamic>.from(srcLink['message'] as Map);
     } else {
+      final originalType = srcPayload?['type']?.toString() ?? sourceChatType;
       originalMsg = {
         'id': int.tryParse(source.id) ?? source.id,
+        'type': ?originalType,
         'sender': source.senderId,
         'time': source.time,
         'text': source.text,
         'attaches': (srcPayload?['attaches'] as List?) ?? const [],
+        'elements': (srcPayload?['elements'] as List?) ?? const [],
       };
     }
+    final isChannelSource =
+        originalMsg['type']?.toString().toUpperCase() == 'CHANNEL';
+    final rawChannelName = isForwardedSource
+        ? srcLink['chatName']
+        : sourceChatName;
+    final rawChannelIconUrl = isForwardedSource
+        ? srcLink['chatIconUrl']
+        : sourceChatIconUrl;
+    final channelName = rawChannelName?.toString().trim();
+    final channelIconUrl = rawChannelIconUrl?.toString().trim();
     final payload = <String, dynamic>{
       'elements': const [],
       'attaches': const [],
@@ -887,6 +1068,12 @@ class MessagesModule {
         'chatId': sourceChatId,
         'messageId': int.tryParse(source.id) ?? source.id,
         'message': originalMsg,
+        if (isChannelSource && channelName != null && channelName.isNotEmpty)
+          'chatName': channelName,
+        if (isChannelSource &&
+            channelIconUrl != null &&
+            channelIconUrl.isNotEmpty)
+          'chatIconUrl': channelIconUrl,
       },
     };
     return CachedMessage(
@@ -1085,6 +1272,42 @@ class MessagesModule {
     return _applyReactionResponse(chatId, messageId, response);
   }
 
+  Future<Map<int, String>> getDetailedReactions(
+    int chatId,
+    String messageId, {
+    int count = 100,
+  }) async {
+    final id = int.tryParse(messageId);
+    if (id == null) return const {};
+    if (_api.state != SessionState.online) return const {};
+    try {
+      final response = await _api.sendRequest(Opcode.msgGetDetailedReactions, {
+        'chatId': chatId,
+        'messageId': id,
+        'count': count,
+      });
+      if (!response.isOk) return const {};
+      final payload = response.payload;
+      if (payload is! Map) return const {};
+      return _parseDetailedReactions(payload['reactions']);
+    } catch (e) {
+      logger.e('getDetailedReactions error: $e');
+      return const {};
+    }
+  }
+
+  static Map<int, String> _parseDetailedReactions(dynamic raw) {
+    if (raw is! List) return const {};
+    final result = <int, String>{};
+    for (final entry in raw.whereType<Map>()) {
+      final userId = entry['userId'];
+      final reaction = entry['reaction'];
+      if (userId is! int || reaction is! String || reaction.isEmpty) continue;
+      result[userId] = reaction;
+    }
+    return result;
+  }
+
   Future<({bool ok, Map<String, dynamic>? info})> _applyReactionResponse(
     int chatId,
     String messageId,
@@ -1132,7 +1355,11 @@ class MessagesModule {
   ) async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
-    final existing = await AppDatabase.loadMessage(accountId, chatId, messageId);
+    final existing = await AppDatabase.loadMessage(
+      accountId,
+      chatId,
+      messageId,
+    );
     if (existing == null) return;
 
     Map<String, dynamic> payloadMap;
@@ -1233,7 +1460,10 @@ class MessagesModule {
     );
   }
 
-  Future<bool> sendFileMessage(
+  /// Returns the server-assigned message id, or null on failure. The id is
+  /// required to later resolve a download URL — a message still carrying its
+  /// local temp id resolves to messageId 0 and the server rejects it.
+  Future<String?> sendFileMessage(
     int chatId,
     int fileId, {
     String? token,
@@ -1262,17 +1492,20 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    return _sendWithNotReadyRetry<bool>(
+    return _sendWithNotReadyRetry<String?>(
       payload: payload,
       maxAttempts: maxAttempts,
       retryDelay: retryDelay,
-      onResult: (response) => response.isOk,
-      onExhausted: false,
+      onResult: (response) => _sentMessageMap(response)?['id']?.toString(),
+      onExhausted: null,
     );
   }
 
-  Future<String?> requestPhotoUploadUrl() async {
-    final response = await _api.sendRequest(Opcode.photoUpload, {'count': 1});
+  Future<String?> requestPhotoUploadUrl({int? type}) async {
+    final response = await _api.sendRequest(Opcode.photoUpload, {
+      'type': ?type,
+      'count': 1,
+    });
     if (!response.isOk) return null;
     final data = response.payload;
     if (data is! Map) return null;
@@ -1313,10 +1546,10 @@ class MessagesModule {
     );
   }
 
-  Future<VideoUploadInfo?> requestVideoUploadUrl() async {
+  Future<VideoUploadInfo?> requestVideoUploadUrl({int type = 0}) async {
     final response = await _api.sendRequest(Opcode.videoUpload, {
       'uploaderType': 0,
-      'type': 0,
+      'type': type,
       'count': 1,
     });
     if (!response.isOk) return null;
@@ -1517,6 +1750,26 @@ class MessagesModule {
             'longitude': longitude,
             'zoom': zoom,
           },
+        ],
+      },
+      'notify': notify,
+    };
+
+    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    return _sentMessageMap(response);
+  }
+
+  Future<Map<String, dynamic>?> sendContactMessage(
+    int chatId,
+    int contactId, {
+    bool notify = true,
+  }) async {
+    final payload = {
+      'chatId': chatId,
+      'message': {
+        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'attaches': [
+          {'_type': 'CONTACT', 'contactId': contactId},
         ],
       },
       'notify': notify,
@@ -1736,9 +1989,10 @@ class MessagesModule {
   }) async {
     try {
       final response = await _api.sendRequest(Opcode.fileDownload, {
-        'messageId': int.tryParse(messageId) ?? 0,
-        'chatId': chatId,
         'fileId': fileId,
+        'chatId': chatId,
+        'messageId': int.tryParse(messageId) ?? 0,
+        'itemType': 'REGULAR',
       });
 
       if (!response.isOk) return null;

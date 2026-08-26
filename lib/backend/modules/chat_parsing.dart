@@ -40,10 +40,18 @@ CachedChat? parseChatRow(
       existing,
     );
     final lastMessage = _resolveLastMessage(chat['lastMessage']);
+    final previous = existing[id];
+    final sameLastMessage =
+        previous != null &&
+        lastMessage.id != null &&
+        previous.lastMsgId == lastMessage.id;
     final muteFav = _resolveMuteAndFavorite(chatsConfig, id, existing);
     final presence = _resolvePresence(type, otherId, presenceMap);
     final adminsOwner = _resolveAdmins(chat);
     final pinned = _resolvePinnedMessage(chat['pinnedMessage']);
+    final mentionId = int.tryParse(
+      chat['lastMentionMessageId']?.toString() ?? '',
+    );
 
     return CachedChat(
       id: id,
@@ -55,7 +63,11 @@ CachedChat? parseChatRow(
       lastMsgTime: lastMessage.time,
       lastMsgText: lastMessage.text,
       lastMsgElements: lastMessage.elements,
-      lastMsgSenderId: lastMessage.senderId,
+      lastMsgPreview: lastMessage.preview,
+      lastMsgSenderId:
+          lastMessage.senderId ??
+          (sameLastMessage ? previous.lastMsgSenderId : null),
+      lastMsgStatus: sameLastMessage ? previous.lastMsgStatus : null,
       unreadCount: (chat['newMessages'] as int?) ?? 0,
       lastEventTime: (chat['lastEventTime'] as int?) ?? 0,
       cachedAt: cachedAt,
@@ -71,6 +83,7 @@ CachedChat? parseChatRow(
       pinnedMsgText: pinned.text,
       pinnedMsgTime: pinned.time,
       pinnedMsgIsPreview: pinned.isPreview,
+      lastMentionMsgId: mentionId ?? existing[id]?.lastMentionMsgId,
     );
   } catch (e) {
     logger.e("Ошибка при парсинге чата: $e");
@@ -121,18 +134,40 @@ CachedChat? parseChatRow(
   );
 }
 
-({int? id, int? time, String? text, String? elements, int? senderId})
+({
+  int? id,
+  int? time,
+  String? text,
+  String? elements,
+  String? preview,
+  int? senderId,
+})
 _resolveLastMessage(dynamic lastMsg) {
   if (lastMsg is! Map) {
-    return (id: null, time: null, text: null, elements: null, senderId: null);
+    return (
+      id: null,
+      time: null,
+      text: null,
+      elements: null,
+      preview: null,
+      senderId: null,
+    );
   }
   return (
-    id: lastMsg['id'] as int?,
-    time: lastMsg['time'] as int?,
+    id: _asIntOrNull(lastMsg['id']),
+    time: _asIntOrNull(lastMsg['time']),
     text: messagePreviewText(lastMsg),
     elements: messagePreviewElements(lastMsg),
-    senderId: lastMsg['sender'] as int?,
+    preview: messagePreviewMedia(lastMsg),
+    senderId: _asIntOrNull(lastMsg['sender']),
   );
+}
+
+int? _asIntOrNull(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value);
+  return null;
 }
 
 ({int? id, String? text, int? time, bool isPreview}) _resolvePinnedMessage(
@@ -159,13 +194,14 @@ _resolveLastMessage(dynamic lastMsg) {
   Map<int, CachedChat> existing,
 ) {
   final config = chatsConfig[id.toString()] ?? chatsConfig[id];
+  final ex = existing[id];
   if (config is Map) {
+    final configFav = config['favIndex'] as int?;
     return (
-      favIndex: config['favIndex'] as int?,
+      favIndex: (configFav != null && configFav > 0) ? configFav : ex?.favIndex,
       dontDisturbUntil: (config['dontDisturbUntil'] as int?) ?? 0,
     );
   }
-  final ex = existing[id];
   if (ex != null) {
     return (favIndex: ex.favIndex, dontDisturbUntil: ex.dontDisturbUntil);
   }
@@ -303,6 +339,7 @@ bool sameChatContent(CachedChat a, CachedChat b) {
   if (a.lastMsgTime != b.lastMsgTime) return false;
   if (a.lastMsgText != b.lastMsgText) return false;
   if (a.lastMsgElements != b.lastMsgElements) return false;
+  if (a.lastMsgPreview != b.lastMsgPreview) return false;
   if (a.lastMsgSenderId != b.lastMsgSenderId) return false;
   if (a.unreadCount != b.unreadCount) return false;
   if (a.lastEventTime != b.lastEventTime) return false;

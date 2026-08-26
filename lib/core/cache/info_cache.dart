@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../backend/api.dart';
+import '../../models/bot_info.dart';
 import '../../models/chat_info.dart';
 import '../../models/contact_info.dart';
 import '../protocol/opcode_map.dart';
+import '../storage/chat_members_store.dart';
 
 Api? _api;
 
@@ -109,6 +111,53 @@ class ContactInfoFetch {
   static void invalidate(int id) => _cache.invalidate(id);
   static void clear() => _cache.clear();
 
+  static void putContact(int id, Map<dynamic, dynamic> contact) {
+    _cache.putValue(
+      id,
+      ContactInfo.fromMap(Map<String, dynamic>.from(contact)),
+    );
+  }
+
+  static Future<Map<int, ContactInfo>> getMany(
+    List<int> ids, {
+    bool forceRefresh = false,
+  }) async {
+    final result = <int, ContactInfo>{};
+    final missing = <int>[];
+    for (final id in ids) {
+      if (!forceRefresh) {
+        final cached = _cache.peek(id);
+        if (cached != null) {
+          result[id] = cached;
+          continue;
+        }
+      }
+      missing.add(id);
+    }
+    if (missing.isEmpty) return result;
+
+    final api = _api;
+    if (api == null || api.state != SessionState.online) return result;
+    try {
+      final resp = await api.sendRequest(Opcode.contactInfo, {
+        'contactIds': missing,
+      });
+      final data = resp.payload;
+      final contacts = data is Map ? data['contacts'] : null;
+      if (contacts is List) {
+        final now = DateTime.now();
+        for (final c in contacts.whereType<Map>()) {
+          final id = c['id'];
+          if (id is! int) continue;
+          final info = ContactInfo.fromMap(Map<String, dynamic>.from(c));
+          _cache.putValue(id, info, at: now);
+          result[id] = info;
+        }
+      }
+    } catch (_) {}
+    return result;
+  }
+
   static Future<ContactInfo?> _fetch(int id) async {
     final api = _api;
     if (api == null || api.state != SessionState.online) return null;
@@ -197,17 +246,41 @@ class PresenceFetch {
     if (missing.isNotEmpty) {
       final fetched = await _fetchBatch(missing);
       final now = DateTime.now();
+      var changed = false;
       for (final id in missing) {
         final value = fetched[id];
         if (value != null) {
           _cache.putValue(id, value, at: now);
+          _live[id] = value;
           result[id] = value;
+          changed = true;
         } else {
           _cache.markFailed(id, at: now);
         }
       }
+      if (changed) revision.value++;
     }
     return result;
+  }
+
+  static const _batchSize = 100;
+
+  static Future<void> ensureFor(Iterable<int> ids) async {
+    final wanted = <int>{};
+    for (final id in ids) {
+      if (id <= 0) continue;
+      if (_cache.peek(id) != null) continue;
+      wanted.add(id);
+    }
+    if (wanted.isEmpty) return;
+    final list = wanted.toList();
+    for (var i = 0; i < list.length; i += _batchSize) {
+      final chunk = list.sublist(
+        i,
+        i + _batchSize > list.length ? list.length : i + _batchSize,
+      );
+      await getMany(chunk);
+    }
   }
 
   static Future<Map<int, Map<String, dynamic>>> _fetchBatch(
@@ -232,6 +305,36 @@ class PresenceFetch {
       }
     }
     return out;
+  }
+}
+
+class BotInfoFetch {
+  static final _cache = InfoCache<BotInfo>(
+    ttl: const Duration(minutes: 30),
+    fetcher: _fetch,
+  );
+
+  static Future<BotInfo?> get(int botId, {bool forceRefresh = false}) =>
+      _cache.get(botId, forceRefresh: forceRefresh);
+
+  static BotInfo? peek(int botId) => _cache.peek(botId);
+
+  static List<BotCommand> commandsOf(int botId) =>
+      _cache.peek(botId)?.commands ?? const [];
+
+  static void invalidate(int botId) => _cache.invalidate(botId);
+  static void clear() => _cache.clear();
+
+  static Future<BotInfo?> _fetch(int botId) async {
+    final api = _api;
+    if (api == null || api.state != SessionState.online) return null;
+    final resp = await api.sendRequest(Opcode.botInfo, {'botId': botId});
+    final data = resp.payload;
+    if (data is! Map) return null;
+    final info = BotInfo.fromPayload(botId, Map<String, dynamic>.from(data));
+    final contact = info.contact;
+    if (contact != null) ContactInfoFetch.putContact(botId, contact.raw);
+    return info;
   }
 }
 
@@ -261,6 +364,7 @@ class ChatInfoFetch {
     if (chats is! List || chats.isEmpty) return null;
     final first = chats.first;
     if (first is! Map) return null;
+    ChatMembersStore.instance.applyChatPayload(first);
     return ChatInfo.fromMap(Map<String, dynamic>.from(first));
   }
 }

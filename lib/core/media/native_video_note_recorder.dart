@@ -4,49 +4,84 @@ import 'package:flutter/services.dart';
 
 import '../utils/logger.dart';
 
-/// Нативная запись видео-кружка (Android, Camera2 + MediaRecorder): пишет
-/// квадрат 480×480 сразу при съёмке — как официальный клиент. Превью отдаётся
-/// через Flutter [Texture] по [textureId]. media3-перекод не используется
-/// (серверный валидатор принимает только нативно записанный MP4).
+class VideoNoteAccess {
+  const VideoNoteAccess({required this.camera, required this.microphone});
+
+  static const denied = VideoNoteAccess(camera: false, microphone: false);
+
+  final bool camera;
+  final bool microphone;
+
+  bool get granted => camera && microphone;
+}
+
 class NativeVideoNoteRecorder {
   static const _channel = MethodChannel('ru.komet.app/video_note');
 
   int? textureId;
-  bool get isAvailable => Platform.isAndroid;
+  bool hasFlash = false;
+  bool get isAvailable => Platform.isAndroid || Platform.isIOS;
 
-  Future<bool> init({bool front = true}) async {
+  Future<VideoNoteAccess> requestAccess() async {
+    if (!isAvailable) return VideoNoteAccess.denied;
+    try {
+      final res = await _channel.invokeMapMethod<String, dynamic>('permission');
+      return VideoNoteAccess(
+        camera: res?['camera'] as bool? ?? false,
+        microphone: res?['microphone'] as bool? ?? false,
+      );
+    } catch (e) {
+      logger.w('NativeVideoNoteRecorder.requestAccess: $e');
+      return VideoNoteAccess.denied;
+    }
+  }
+
+  Future<bool> init({bool front = true, int size = 480, int fps = 30}) async {
+    if (!isAvailable) return false;
+    final res = await _channel.invokeMapMethod<String, dynamic>('init', {
+      'front': front,
+      'size': size,
+      'fps': fps,
+    });
+    textureId = res?['textureId'] as int?;
+    hasFlash = res?['hasFlash'] as bool? ?? false;
+    return textureId != null;
+  }
+
+  Future<bool> switchCamera() async {
     if (!isAvailable) return false;
     try {
-      final res = await _channel.invokeMapMethod<String, dynamic>('init', {
-        'front': front,
-      });
-      textureId = res?['textureId'] as int?;
-      return textureId != null;
+      await _channel.invokeMethod('switch');
+      return true;
     } catch (e) {
-      logger.w('NativeVideoNoteRecorder.init: $e');
+      logger.w('NativeVideoNoteRecorder.switchCamera: $e');
       return false;
     }
   }
 
-  Future<bool> start() async {
-    if (!isAvailable) return false;
+  Future<bool> setTorch(bool on) async {
+    if (!isAvailable || !hasFlash) return false;
     try {
-      await _channel.invokeMethod('start');
-      return true;
+      return await _channel.invokeMethod<bool>('torch', {'on': on}) ?? false;
     } catch (e) {
-      logger.w('NativeVideoNoteRecorder.start: $e');
+      logger.w('NativeVideoNoteRecorder.setTorch: $e');
       return false;
     }
+  }
+
+  Future<void> start() async {
+    if (!isAvailable) {
+      throw PlatformException(
+        code: 'UNSUPPORTED',
+        message: 'video notes are not supported on this platform',
+      );
+    }
+    await _channel.invokeMethod('start');
   }
 
   Future<String?> stop() async {
     if (!isAvailable) return null;
-    try {
-      return await _channel.invokeMethod<String>('stop');
-    } catch (e) {
-      logger.w('NativeVideoNoteRecorder.stop: $e');
-      return null;
-    }
+    return _channel.invokeMethod<String>('stop');
   }
 
   Future<void> dispose() async {
@@ -55,5 +90,6 @@ class NativeVideoNoteRecorder {
       await _channel.invokeMethod('dispose');
     } catch (_) {}
     textureId = null;
+    hasFlash = false;
   }
 }

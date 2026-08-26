@@ -1,7 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/config/app_shape.dart';
 import 'glossy_pill.dart';
+
+class SettingsPanel extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color? color;
+
+  const SettingsPanel({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.fromLTRB(20, 18, 20, 20),
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GlossyPill(
+      color: color ?? cs.surfaceContainerHigh,
+      borderRadius: AppShape.cardRadius,
+      padding: padding,
+      depth: 6,
+      child: child,
+    );
+  }
+}
 
 class SettingsCard extends StatelessWidget {
   final List<Widget> children;
@@ -13,7 +39,7 @@ class SettingsCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppShape.cardRadius,
       depth: 6,
       child: Column(
         children: [
@@ -135,7 +161,9 @@ class SettingsNavTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap ?? () {},
         borderRadius: isLast
-            ? const BorderRadius.vertical(bottom: Radius.circular(20))
+            ? const BorderRadius.vertical(
+                bottom: Radius.circular(AppShape.card),
+              )
             : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),

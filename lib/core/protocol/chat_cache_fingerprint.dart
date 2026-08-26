@@ -8,10 +8,10 @@ class ChatCacheFingerprint {
     '1684414033eb263e2c615f8b7df5ed8793850a07656304997fbf07e9e21e1e93',
   );
   static final Uint8List _soDigest = _hex(
-    '90e2fb8745b17b42a10182f8d8ac590e3fca5b311e2ce2d5144fa2c18cb3090d',
+    '634ecc42b246784d975f180b4fecf903df235cdf0476da47163a85630eb1a6a8',
   );
   static final Uint8List _dexDigest = _hex(
-    '0a6265f6e5d8231b9cba641f8c40475e6f3baeb06ed41b804b9bf7307aa4214e',
+    '38cff46f392dc1734c308be011c2f0d8da152a390b41063dbb2c913e3032f4b3',
   );
 
   static Uint8List compute(int callsSeed, String deviceId) {

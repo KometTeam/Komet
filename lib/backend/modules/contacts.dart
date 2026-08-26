@@ -1,9 +1,12 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/cache/info_cache.dart';
 import '../../core/config/debug_test.dart';
 import '../../core/protocol/opcode_map.dart';
+import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
+import '../../models/contact_info.dart';
 import '../api.dart';
 import 'messages.dart';
 
@@ -18,6 +21,7 @@ class CachedContact {
   final String? baseRawUrl;
   final int updateTime;
   final Set<String> options;
+  final int accountStatus;
 
   const CachedContact({
     required this.id,
@@ -30,12 +34,14 @@ class CachedContact {
     this.baseRawUrl,
     required this.updateTime,
     this.options = const {},
+    this.accountStatus = 0,
   });
 
   bool get isOfficial => options.contains('OFFICIAL');
   bool get isBot => options.contains('BOT');
   bool get isServiceAccount => options.contains('SERVICE_ACCOUNT');
   bool get isVerified => isOfficial;
+  bool get isDeleted => accountStatus != 0;
 
   factory CachedContact.fromDbRow(Map<String, dynamic> row) => CachedContact(
     id: row['id'] as int,
@@ -48,6 +54,7 @@ class CachedContact {
     baseRawUrl: row['base_raw_url'] as String?,
     updateTime: row['update_time'] as int,
     options: _decodeOptions(row['options']),
+    accountStatus: (row['account_status'] as int?) ?? 0,
   );
 
   static Set<String> _decodeOptions(dynamic raw) {
@@ -60,8 +67,14 @@ class PhoneLookupResult {
   final int id;
   final String? name;
   final String? avatarUrl;
+  final int phone;
 
-  const PhoneLookupResult({required this.id, this.name, this.avatarUrl});
+  const PhoneLookupResult({
+    required this.id,
+    this.name,
+    this.avatarUrl,
+    this.phone = 0,
+  });
 }
 
 class ContactPhotos {
@@ -73,20 +86,46 @@ class ContactPhotos {
   static const empty = ContactPhotos(urls: [], total: 0);
 }
 
+enum AddContactStatus { added, notFound, error }
+
+class AddContactResult {
+  final AddContactStatus status;
+  final CachedContact? contact;
+
+  const AddContactResult(this.status, {this.contact});
+}
+
 class ContactsModule {
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
-  static Future<PhoneLookupResult?> findByPhone(Api api, String phone) async {
+  static Future<PhoneLookupResult?> findByPhone(
+    Api api,
+    String phone, {
+    bool silent = false,
+  }) async {
     final normalized = _normalizePhone(phone);
     if (normalized == null) return null;
-    final packet = await api.sendRequest(Opcode.contactInfoByPhone, {
-      'phone': normalized,
-    });
+    final Packet packet;
+    try {
+      packet = await api.sendRequest(Opcode.contactInfoByPhone, {
+        'phone': normalized,
+      }, silent: silent);
+    } on PacketError {
+      return null;
+    }
     if (packet.isError) return null;
     final contact = (packet.payload as Map?)?['contact'];
     if (contact is! Map) return null;
     final id = contact['id'];
     if (id is! int) return null;
+
+    primeContactCache(contact);
+
+    final payloadPhone = contact['phone'];
+    final resolvedPhone = payloadPhone is int && payloadPhone > 0
+        ? payloadPhone
+        : int.tryParse(normalized.substring(1)) ?? 0;
+    ContactCache.putPhone(id, resolvedPhone);
 
     String? name;
     final names = contact['names'];
@@ -105,6 +144,7 @@ class ContactsModule {
       id: id,
       name: name,
       avatarUrl: contact['baseUrl'] as String?,
+      phone: resolvedPhone,
     );
   }
 
@@ -123,7 +163,7 @@ class ContactsModule {
     final resp = await api.sendRequest(Opcode.contactUpdate, {
       'action': 'ADD',
       'contactId': id,
-      'firstName': firstName,
+      if (firstName.isNotEmpty) 'firstName': firstName,
     });
 
     final profile = await AppDatabase.loadActiveProfile();
@@ -147,6 +187,7 @@ class ContactsModule {
             'base_raw_url': null,
             'update_time': 0,
             'options': null,
+            'account_status': 0,
           };
 
     if (row == null) return null;
@@ -154,9 +195,206 @@ class ContactsModule {
       row['phone'] = phone;
     }
     await AppDatabase.saveContacts([row]);
-    if (contact != null) _primeContactCache(contact);
+    if (contact != null) primeContactCache(contact);
     revision.value++;
     return CachedContact.fromDbRow(row);
+  }
+
+  static Future<AddContactResult> addContactByPhone(
+    Api api, {
+    required String phone,
+    required String firstName,
+    String lastName = '',
+  }) async {
+    final normalized = _normalizePhone(phone);
+    if (normalized == null) {
+      return const AddContactResult(AddContactStatus.error);
+    }
+
+    final Packet resp;
+    try {
+      resp = await api.sendRequest(Opcode.contactAddByPhone, {
+        'phone': normalized,
+        'firstName': firstName,
+        'lastName': lastName,
+      }, silent: true);
+    } on PacketError catch (e) {
+      final key = e.errorKey ?? '';
+      final notFound =
+          key == 'user.not.found' ||
+          e.message.toLowerCase().contains('not found');
+      return AddContactResult(
+        notFound ? AddContactStatus.notFound : AddContactStatus.error,
+      );
+    } catch (_) {
+      return const AddContactResult(AddContactStatus.error);
+    }
+
+    final data = resp.payload;
+    final contact = (data is Map && data['contact'] is Map)
+        ? (data['contact'] as Map).cast<dynamic, dynamic>()
+        : null;
+    if (contact == null) {
+      return const AddContactResult(AddContactStatus.error);
+    }
+
+    final profile = await AppDatabase.loadActiveProfile();
+    if (profile == null) {
+      return const AddContactResult(AddContactStatus.error);
+    }
+
+    final row = _parseContact(contact, profile.id);
+    if (row == null) {
+      return const AddContactResult(AddContactStatus.error);
+    }
+
+    await AppDatabase.saveContacts([row]);
+    primeContactCache(contact);
+    revision.value++;
+    return AddContactResult(
+      AddContactStatus.added,
+      contact: CachedContact.fromDbRow(row),
+    );
+  }
+
+  static Future<CachedContact?> updateContact(
+    Api api, {
+    required int contactId,
+    required String firstName,
+    required String lastName,
+  }) async {
+    final Packet resp;
+    try {
+      resp = await api.sendRequest(Opcode.contactUpdate, {
+        'contactId': contactId,
+        'action': 'UPDATE',
+        'firstName': firstName,
+        'lastName': lastName,
+      });
+    } catch (_) {
+      return null;
+    }
+
+    final profile = await AppDatabase.loadActiveProfile();
+    if (profile == null) return null;
+
+    final data = resp.payload;
+    final contact = (data is Map && data['contact'] is Map)
+        ? (data['contact'] as Map).cast<dynamic, dynamic>()
+        : null;
+    if (contact == null) return null;
+
+    final row = _parseContact(contact, profile.id);
+    if (row == null) return null;
+
+    await AppDatabase.saveContacts([row]);
+    primeContactCache(contact);
+    ContactInfoFetch.putContact(contactId, contact);
+    revision.value++;
+    return CachedContact.fromDbRow(row);
+  }
+
+  static Future<bool> removeContact(Api api, int contactId) async {
+    try {
+      await api.sendRequest(Opcode.contactUpdate, {
+        'contactId': contactId,
+        'action': 'REMOVE',
+      });
+    } catch (_) {
+      return false;
+    }
+
+    final profile = await AppDatabase.loadActiveProfile();
+    if (profile != null) {
+      await AppDatabase.deleteContact(profile.id, contactId);
+    }
+
+    ContactCache.remove(contactId);
+
+    ContactInfo? info = ContactInfoFetch.peek(contactId);
+    if (info == null) {
+      ContactInfoFetch.invalidate(contactId);
+      info = await ContactInfoFetch.get(contactId, forceRefresh: true);
+    }
+
+    final rawNames = info?.raw['names'];
+    if (info != null && rawNames is List) {
+      final stripped = rawNames
+          .where((n) => !(n is Map && n['type'] == 'CUSTOM'))
+          .toList();
+      final newRaw = Map<String, dynamic>.from(info.raw)..['names'] = stripped;
+      ContactInfoFetch.putContact(contactId, newRaw);
+      primeContactCache(newRaw);
+    } else {
+      ContactInfoFetch.invalidate(contactId);
+    }
+
+    revision.value++;
+    return true;
+  }
+
+  static final Set<int> _blockedIds = <int>{};
+  static bool _blockedLoaded = false;
+
+  static void clearBlockedCache() {
+    _blockedIds.clear();
+    _blockedLoaded = false;
+  }
+
+  static const int _blockedPageSize = 100;
+  static const int _blockedMaxPages = 20;
+
+  static Future<bool> isBlocked(Api api, int contactId) async {
+    if (!_blockedLoaded) await _loadBlockedIds(api);
+    return _blockedIds.contains(contactId);
+  }
+
+  static Future<void> _loadBlockedIds(Api api) async {
+    final ids = <int>{};
+    try {
+      for (var page = 0; page < _blockedMaxPages; page++) {
+        final map = await api.sendRequestMap(Opcode.contactList, {
+          'status': 'BLOCKED',
+          'count': _blockedPageSize,
+          'from': page * _blockedPageSize,
+        });
+        final contacts = map?['contacts'];
+        if (contacts is! List) return;
+        ids.addAll(
+          contacts.whereType<Map>().map((c) => c['id']).whereType<int>(),
+        );
+        if (contacts.length < _blockedPageSize) break;
+      }
+    } catch (e) {
+      logger.w('Не удалось получить список заблокированных: $e');
+      return;
+    }
+    _blockedIds
+      ..clear()
+      ..addAll(ids);
+    _blockedLoaded = true;
+  }
+
+  static Future<bool> setBlocked(Api api, int contactId, bool blocked) async {
+    try {
+      final packet = await api.sendRequest(Opcode.contactUpdate, {
+        'contactId': contactId,
+        'action': blocked ? 'BLOCK' : 'UNBLOCK',
+      });
+      if (packet.isError) return false;
+    } catch (e) {
+      logger.w('setBlocked $contactId: $e');
+      return false;
+    }
+
+    if (blocked) {
+      _blockedIds.add(contactId);
+    } else {
+      _blockedIds.remove(contactId);
+    }
+    ContactInfoFetch.invalidate(contactId);
+    revision.value++;
+    return true;
   }
 
   static Future<void> syncFromLoginPayload(
@@ -164,14 +402,21 @@ class ContactsModule {
     int accountId,
   ) async {
     final contacts = data['contacts'];
-    if (contacts is! List || contacts.isEmpty) return;
+    if (contacts is! List) {
+      logger.i('Контакты: сервер не прислал список (акк $accountId)');
+      return;
+    }
+    if (contacts.isEmpty) {
+      logger.i('Контакты: сервер прислал пустой список (акк $accountId)');
+      return;
+    }
 
     final rows = <Map<String, dynamic>>[];
     for (final raw in contacts.whereType<Map>()) {
       final contact = raw.cast<dynamic, dynamic>();
       final row = _parseContact(contact, accountId);
       if (row != null) rows.add(row);
-      _primeContactCache(contact);
+      primeContactCache(contact);
     }
 
     if (rows.isNotEmpty) {
@@ -191,17 +436,32 @@ class ContactsModule {
     await syncFromLoginPayload(map.cast<dynamic, dynamic>(), accountId);
   }
 
-  static void _primeContactCache(Map<dynamic, dynamic> contact) {
+  static Future<ProfileData?> fetchSelfProfile(Api api, int accountId) async {
+    final map = await api.sendRequestMap(Opcode.contactInfo, {
+      'contactIds': [accountId],
+    });
+    final contacts = map?['contacts'];
+    if (contacts is! List) return null;
+    for (final raw in contacts.whereType<Map>()) {
+      if (raw['id'] != accountId) continue;
+      final contact = raw.cast<dynamic, dynamic>();
+      primeContactCache(contact);
+      return ProfileData.fromServerMap(contact);
+    }
+    return null;
+  }
+
+  static void primeContactCache(Map<dynamic, dynamic> contact) {
     final id = contact['id'];
     if (id is! int) return;
 
+    final phone = contact['phone'];
+    if (phone is int) ContactCache.putPhone(id, phone);
+
     final names = contact['names'];
     if (names is List && names.isNotEmpty) {
-      final nameRaw = names.firstWhere(
-        (n) => n is Map && n['type'] == 'ONEME',
-        orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
-      );
-      if (nameRaw is Map) {
+      final nameRaw = _preferredNameEntry(names);
+      if (nameRaw != null) {
         final firstName = (nameRaw['firstName'] as String?) ?? '';
         final lastName = nameRaw['lastName'] as String?;
         final fullName = (lastName != null && lastName.isNotEmpty)
@@ -217,12 +477,17 @@ class ContactsModule {
     }
   }
 
+  static final Map<int, ContactPhotos> _photosHead = {};
+
+  static ContactPhotos? cachedPhotos(int contactId) => _photosHead[contactId];
+
   static Future<ContactPhotos> fetchPhotos(
     Api api,
     int contactId, {
     int from = 0,
     int count = 25,
   }) async {
+    if (contactId <= 0) return ContactPhotos.empty;
     final map = await api.sendRequestMap(Opcode.contactPhotos, {
       'contactId': contactId,
       'from': from,
@@ -234,23 +499,67 @@ class ContactsModule {
         ? rawUrls.whereType<String>().toList()
         : <String>[];
     final total = map['total'] is int ? map['total'] as int : urls.length;
-    return ContactPhotos(urls: urls, total: total);
+    final photos = ContactPhotos(urls: urls, total: total);
+    if (from == 0) _photosHead[contactId] = photos;
+    return photos;
   }
 
-  static Future<List<CachedContact>> getContacts(int accountId) async {
-    final rows = await AppDatabase.loadContacts(accountId);
+  static Future<List<CachedContact>> getContacts(
+    int accountId, {
+    bool includeDeleted = false,
+  }) async {
+    final rows = await AppDatabase.loadContacts(
+      accountId,
+      includeDeleted: includeDeleted,
+    );
     return rows.map(CachedContact.fromDbRow).toList();
   }
 
+  static Future<CachedContact?> getContact(int accountId, int id) async {
+    final row = await AppDatabase.loadContact(accountId, id);
+    return row == null ? null : CachedContact.fromDbRow(row);
+  }
+
   static const List<String> _debugFirstNames = [
-    'Алиса', 'Борис', 'Вера', 'Глеб', 'Дарья', 'Егор', 'Жанна', 'Захар',
-    'Ирина', 'Кирилл', 'Лия', 'Максим', 'Нина', 'Олег', 'Полина', 'Роман',
-    'София', 'Тимур', 'Ульяна', 'Фёдор', 'Ханна', 'Цветана', 'Чеслав', 'Шура',
+    'Алиса',
+    'Борис',
+    'Вера',
+    'Глеб',
+    'Дарья',
+    'Егор',
+    'Жанна',
+    'Захар',
+    'Ирина',
+    'Кирилл',
+    'Лия',
+    'Максим',
+    'Нина',
+    'Олег',
+    'Полина',
+    'Роман',
+    'София',
+    'Тимур',
+    'Ульяна',
+    'Фёдор',
+    'Ханна',
+    'Цветана',
+    'Чеслав',
+    'Шура',
   ];
 
   static const List<String> _debugLastNames = [
-    'Иванов', 'Петров', 'Сидоров', 'Кузнецов', 'Смирнов', 'Попов', 'Волков',
-    'Соколов', 'Морозов', 'Новиков', 'Фёдоров', 'Козлов',
+    'Иванов',
+    'Петров',
+    'Сидоров',
+    'Кузнецов',
+    'Смирнов',
+    'Попов',
+    'Волков',
+    'Соколов',
+    'Морозов',
+    'Новиков',
+    'Фёдоров',
+    'Козлов',
   ];
 
   static List<CachedContact> debugContacts() {
@@ -280,8 +589,9 @@ class ContactsModule {
   /// Прогревает in-memory ContactCache из локальных контактов.
   /// Нужно вызывать на cold start: иначе кэш пуст до следующего логина.
   static Future<void> primeCacheFromDb(int accountId) async {
-    final contacts = await getContacts(accountId);
+    final contacts = await getContacts(accountId, includeDeleted: true);
     for (final c in contacts) {
+      ContactCache.putPhone(c.id, c.phone);
       final fullName = (c.lastName != null && c.lastName!.isNotEmpty)
           ? '${c.firstName} ${c.lastName}'
           : c.firstName;
@@ -290,6 +600,19 @@ class ContactsModule {
         ContactCache.putAvatar(c.id, c.baseUrl);
       }
     }
+  }
+
+  static Map? _preferredNameEntry(List names) {
+    Map? oneme;
+    Map? any;
+    for (final n in names) {
+      if (n is! Map) continue;
+      any ??= n;
+      final type = n['type'];
+      if (type == 'CUSTOM') return n;
+      if (type == 'ONEME') oneme ??= n;
+    }
+    return oneme ?? any;
   }
 
   static Map<String, dynamic>? _parseContact(
@@ -304,14 +627,10 @@ class ContactsModule {
 
     final names = contact['names'];
     if (names is List && names.isNotEmpty) {
-      final nameRaw = names.firstWhere(
-        (n) => n is Map && n['type'] == 'ONEME',
-        orElse: () => names.firstWhere((n) => n is Map, orElse: () => null),
-      );
-      if (nameRaw is! Map) return null;
-      final name = nameRaw;
-      firstName = (name['firstName'] as String?) ?? '';
-      lastName = name['lastName'] as String?;
+      final nameRaw = _preferredNameEntry(names);
+      if (nameRaw == null) return null;
+      firstName = (nameRaw['firstName'] as String?) ?? '';
+      lastName = nameRaw['lastName'] as String?;
     }
 
     final optionsRaw = contact['options'];
@@ -331,6 +650,7 @@ class ContactsModule {
       'base_raw_url': contact['baseRawUrl'] as String?,
       'update_time': (contact['updateTime'] as int?) ?? 0,
       'options': optionsStr,
+      'account_status': (contact['accountStatus'] as int?) ?? 0,
     };
   }
 }

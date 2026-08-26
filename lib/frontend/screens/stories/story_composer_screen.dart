@@ -1,19 +1,29 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../core/utils/haptics.dart';
 import '../../../main.dart' show fileUploader, messagesModule, storiesModule;
 import '../../widgets/custom_notification.dart';
 import '../../widgets/primary_loading_button.dart';
+import '../../../core/config/app_frost.dart';
 
-const int _storyExpiration = 86400;
+const int _storyExpiration = 86400000;
 
 class StoryComposerScreen extends StatefulWidget {
   final File file;
+  final bool isVideo;
+  final int? durationMs;
 
-  const StoryComposerScreen({super.key, required this.file});
+  const StoryComposerScreen({
+    super.key,
+    required this.file,
+    this.isVideo = false,
+    this.durationMs,
+  });
 
   @override
   State<StoryComposerScreen> createState() => _StoryComposerScreenState();
@@ -22,10 +32,29 @@ class StoryComposerScreen extends StatefulWidget {
 class _StoryComposerScreenState extends State<StoryComposerScreen> {
   final ValueNotifier<bool> _publishing = ValueNotifier<bool>(false);
   int _audience = 1; // 1 = все, 2 = контакты
+  VideoPlayerController? _video;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isVideo) _initVideo();
+  }
+
+  Future<void> _initVideo() async {
+    final controller = VideoPlayerController.file(widget.file);
+    _video = controller;
+    try {
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.play();
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
     _publishing.dispose();
+    _video?.dispose();
     super.dispose();
   }
 
@@ -33,35 +62,78 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
     if (_publishing.value) return;
     _publishing.value = true;
     try {
-      final url = await messagesModule.requestPhotoUploadUrl();
-      if (url == null || url.isEmpty) {
-        _fail('Не удалось получить адрес загрузки');
-        return;
+      if (widget.isVideo) {
+        await _publishVideo();
+      } else {
+        await _publishPhoto();
       }
-      final segments = widget.file.uri.pathSegments;
-      final filename = segments.isNotEmpty ? segments.last : 'story.jpg';
-      final token = await fileUploader.uploadPhoto(
-        Uri.parse(url),
-        widget.file,
-        filename: filename.isEmpty ? 'story.jpg' : filename,
-      );
-      if (token == null || token.isEmpty) {
-        _fail('Не удалось загрузить фото');
-        return;
-      }
-      await storiesModule.publishPhoto(
-        photoToken: token,
-        settings: _audience,
-        expiration: _storyExpiration,
-      );
-      if (!mounted) return;
-      Haptics.success();
-      Navigator.of(context).pop();
-      showCustomNotification(context, 'История опубликована');
-      storiesModule.loadFeed();
     } catch (e) {
       _fail(e.toString());
     }
+  }
+
+  Future<void> _publishPhoto() async {
+    final url = await messagesModule.requestPhotoUploadUrl(type: 1);
+    if (url == null || url.isEmpty) {
+      _fail('Не удалось получить адрес загрузки');
+      return;
+    }
+    final segments = widget.file.uri.pathSegments;
+    final filename = segments.isNotEmpty ? segments.last : 'story.jpg';
+    final token = await fileUploader.uploadPhoto(
+      Uri.parse(url),
+      widget.file,
+      filename: filename.isEmpty ? 'story.jpg' : filename,
+    );
+    if (token == null || token.isEmpty) {
+      _fail('Не удалось загрузить фото');
+      return;
+    }
+    await storiesModule.publishPhoto(
+      photoToken: token,
+      settings: _audience,
+      expiration: _storyExpiration,
+    );
+    _onPublished();
+  }
+
+  Future<void> _publishVideo() async {
+    final info = await messagesModule.requestVideoUploadUrl(type: 3);
+    if (info == null || info.url.isEmpty) {
+      _fail('Не удалось получить адрес загрузки');
+      return;
+    }
+    final upload = await fileUploader.uploadVideoWithToken(
+      Uri.parse(info.url),
+      widget.file,
+    );
+    if (!upload.ok) {
+      _fail('Не удалось загрузить видео');
+      return;
+    }
+    final uploadedToken = upload.token;
+    final token = (uploadedToken != null && uploadedToken.isNotEmpty)
+        ? uploadedToken
+        : info.token;
+    if (token.isEmpty) {
+      _fail('Не удалось загрузить видео');
+      return;
+    }
+    await storiesModule.publishVideo(
+      videoToken: token,
+      durationMs: widget.durationMs,
+      settings: _audience,
+      expiration: _storyExpiration,
+    );
+    _onPublished();
+  }
+
+  void _onPublished() {
+    if (!mounted) return;
+    Haptics.success();
+    Navigator.of(context).pop();
+    showCustomNotification(context, 'История опубликована');
+    storiesModule.loadFeed();
   }
 
   void _fail(String message) {
@@ -74,6 +146,51 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
     showCustomNotification(context, message);
   }
 
+  Widget _buildPreview() {
+    final Widget foreground;
+    final Widget backdrop;
+    if (widget.isVideo) {
+      final c = _video;
+      if (c == null || !c.value.isInitialized) {
+        return const CircularProgressIndicator(color: Colors.white);
+      }
+      final size = c.value.size;
+      foreground = Center(
+        child: AspectRatio(
+          aspectRatio: c.value.aspectRatio,
+          child: VideoPlayer(c),
+        ),
+      );
+      backdrop = FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: VideoPlayer(c),
+        ),
+      );
+    } else {
+      foreground = Image.file(widget.file, fit: BoxFit.contain);
+      backdrop = Image.file(widget.file, fit: BoxFit.cover);
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(
+          child: ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(
+              sigmaX: AppFrost.mediaBackdropSigma,
+              sigmaY: AppFrost.mediaBackdropSigma,
+            ),
+            child: backdrop,
+          ),
+        ),
+        const Positioned.fill(child: ColoredBox(color: Colors.black26)),
+        foreground,
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -81,9 +198,7 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Center(
-            child: Image.file(widget.file, fit: BoxFit.contain),
-          ),
+          Center(child: _buildPreview()),
           Positioned(
             top: 0,
             left: 0,

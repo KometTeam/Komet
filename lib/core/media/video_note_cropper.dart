@@ -5,14 +5,14 @@ import 'package:flutter/services.dart';
 import '../utils/logger.dart';
 
 /// Центр-кроп записанного видео в квадрат для видеосообщений-кружков.
-/// На Android выполняется нативно (media3 Transformer, без искажений —
-/// заполняет квадрат и обрезает лишнее по бокам). На других платформах
-/// возвращает `null` (кружки там не записываются).
+/// Выполняется нативно: на Android — media3 Transformer, на iOS —
+/// AVAssetExportSession. Без искажений: заполняет квадрат и обрезает
+/// лишнее по бокам. На других платформах возвращает `null`.
 class VideoNoteCropper {
   static const _channel = MethodChannel('ru.komet.app/video');
 
   static Future<String?> cropSquare(String input, {int size = 480}) async {
-    if (!Platform.isAndroid) return null;
+    if (!Platform.isAndroid && !Platform.isIOS) return null;
     try {
       final dot = input.lastIndexOf('.');
       final base = dot > 0 ? input.substring(0, dot) : input;

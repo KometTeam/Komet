@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,14 +6,16 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
+import 'package:komet/frontend/widgets/attachment/photo_hero.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 
-import '../../../core/config/app_colors.dart';
-
-const Color _kBar = Color(0xFF1E1E1E);
+import 'editor_common.dart';
+import 'preview_chrome.dart';
+import '../small_spinner.dart';
 
 class MediaPreviewScreen extends StatefulWidget {
   final GalleryItem item;
+  final PhotoHeroController hero;
   final String? title;
   final ValueListenable<Set<String>> selectedIds;
   final VoidCallback onToggleSelection;
@@ -28,6 +29,7 @@ class MediaPreviewScreen extends StatefulWidget {
   const MediaPreviewScreen({
     super.key,
     required this.item,
+    required this.hero,
     required this.selectedIds,
     required this.onToggleSelection,
     required this.onSend,
@@ -47,13 +49,18 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   late final TextEditingController _caption = TextEditingController(
     text: widget.initialCaption,
   );
+  final TransformationController _zoom = TransformationController();
+  final GlobalKey _stageKey = GlobalKey();
   File? _workingFile;
   File? _cropSource;
   CropState? _cropState;
+  Size? _workingSize;
+  PhotoHeroController? _activeHero;
 
   @override
   void initState() {
     super.initState();
+    _zoom.addListener(_syncHero);
     _caption.addListener(() => widget.onCaptionChanged?.call(_caption.text));
     _cropState = widget.editState?.cropState;
     _cropSource = widget.editState?.cropSource;
@@ -63,34 +70,73 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   Future<void> _resolveWorkingFile() async {
     final initial = widget.editState?.working ?? widget.item.localFile;
     if (initial != null) {
-      _workingFile = initial;
+      _setWorkingFile(initial);
       return;
     }
     final file = await widget.item.originFile();
+    if (!mounted || file == null) return;
+    setState(() => _setWorkingFile(file));
+  }
+
+  void _setWorkingFile(File file) {
+    _workingFile = file;
+    widget.hero.image.value = FileImage(file);
+    _resolveWorkingSize(file);
+  }
+
+  Future<void> _resolveWorkingSize(File file) async {
+    final dims = await imageFileDimensions(file);
+    if (!mounted || dims == null || _workingFile?.path != file.path) return;
+    _workingSize = Size(dims.$1.toDouble(), dims.$2.toDouble());
+  }
+
+  Rect? _stageOrigin() {
+    if (_zoom.value.getMaxScaleOnAxis() > 1.01) return null;
+    final box = photoHeroRect(_stageKey);
+    final size = _workingSize;
+    if (box == null || size == null) return null;
+    return inscribeRect(size, box);
+  }
+
+  Future<void> _flight(File file) async {
+    await _resolveWorkingSize(file);
     if (!mounted) return;
-    setState(() => _workingFile = file);
+    final provider = FileImage(file);
+    await precacheImage(provider, context);
+    if (!mounted) return;
+    _activeHero?.image.value = provider;
   }
 
   @override
   void dispose() {
     _caption.dispose();
+    _zoom.dispose();
     super.dispose();
   }
+
+  void _syncHero() =>
+      widget.hero.enabled = _zoom.value.getMaxScaleOnAxis() <= 1.01;
 
   void _send() {
     Navigator.of(context).pop();
     widget.onSend();
   }
 
-  Future<T?> _pushEditor<T>(Widget editor) {
-    return Navigator.of(context).push<T>(
-      PageRouteBuilder<T>(
-        opaque: true,
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => editor,
-      ),
+  Future<T?> _pushEditor<T>(Widget Function() builder) async {
+    final file = _workingFile;
+    if (file == null) return null;
+    final hero = PhotoHeroController(
+      origin: _stageOrigin,
+      image: FileImage(file),
     );
+    _activeHero = hero;
+    try {
+      return await Navigator.of(
+        context,
+      ).push<T>(PhotoHeroRoute<T>(hero: hero, builder: (_) => builder()));
+    } finally {
+      _activeHero = null;
+    }
   }
 
   void _reportEdit() {
@@ -114,17 +160,24 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
     final source = _cropSource ??=
         widget.item.localFile ?? await widget.item.originFile();
     if (source == null || !mounted) return;
-    final result = await _pushEditor<CropResult>(
-      PhotoCropEditor(source: source, initialState: _cropState),
+    await _pushEditor<CropResult>(
+      () => PhotoCropEditor(
+        source: source,
+        initialState: _cropState,
+        onPreview: _applyCrop,
+      ),
     );
-    if (result != null && mounted) {
-      final old = _workingFile;
-      _cropState = result.state;
-      widget.tempFiles.add(result.file.path);
-      setState(() => _workingFile = result.file);
-      _reportEdit();
-      _disposeTemp(old, {result.file.path, _cropSource?.path ?? ''});
-    }
+  }
+
+  Future<void> _applyCrop(CropResult result) async {
+    if (!mounted) return;
+    final old = _workingFile;
+    _cropState = result.state;
+    widget.tempFiles.add(result.file.path);
+    setState(() => _setWorkingFile(result.file));
+    _reportEdit();
+    _disposeTemp(old, {result.file.path, _cropSource?.path ?? ''});
+    await _flight(result.file);
   }
 
   Future<void> _openDraw() async {
@@ -136,37 +189,36 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       showCustomNotification(context, 'Не удалось открыть редактор');
       return;
     }
-    final result = await _pushEditor<File>(
-      PhotoDrawEditor(source: file, imageWidth: dims.$1, imageHeight: dims.$2),
+    await _pushEditor<File>(
+      () => PhotoDrawEditor(
+        source: file,
+        imageWidth: dims.$1,
+        imageHeight: dims.$2,
+        onPreview: _applyBaked,
+      ),
     );
-    if (result != null && mounted) {
-      final oldWorking = _workingFile;
-      final oldCropSource = _cropSource;
-      _cropSource = result;
-      _cropState = null;
-      widget.tempFiles.add(result.path);
-      setState(() => _workingFile = result);
-      _reportEdit();
-      _disposeTemp(oldWorking, {result.path});
-      _disposeTemp(oldCropSource, {result.path, oldWorking?.path ?? ''});
-    }
   }
 
   Future<void> _openAdjust() async {
     final file = _workingFile;
     if (file == null) return;
-    final result = await _pushEditor<File>(PhotoAdjustEditor(source: file));
-    if (result != null && mounted) {
-      final oldWorking = _workingFile;
-      final oldCropSource = _cropSource;
-      _cropSource = result;
-      _cropState = null;
-      widget.tempFiles.add(result.path);
-      setState(() => _workingFile = result);
-      _reportEdit();
-      _disposeTemp(oldWorking, {result.path});
-      _disposeTemp(oldCropSource, {result.path, oldWorking?.path ?? ''});
-    }
+    await _pushEditor<File>(
+      () => PhotoAdjustEditor(source: file, onPreview: _applyBaked),
+    );
+  }
+
+  Future<void> _applyBaked(File result) async {
+    if (!mounted) return;
+    final oldWorking = _workingFile;
+    final oldCropSource = _cropSource;
+    _cropSource = result;
+    _cropState = null;
+    widget.tempFiles.add(result.path);
+    setState(() => _setWorkingFile(result));
+    _reportEdit();
+    _disposeTemp(oldWorking, {result.path});
+    _disposeTemp(oldCropSource, {result.path, oldWorking?.path ?? ''});
+    await _flight(result);
   }
 
   @override
@@ -190,7 +242,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 14),
-            child: _SelectionToggle(
+            child: PreviewSelectionToggle(
               selectedIds: widget.selectedIds,
               id: widget.item.id,
               onTap: widget.onToggleSelection,
@@ -201,11 +253,14 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
       body: Column(
         children: [
           Expanded(
-            child: Center(
-              child: InteractiveViewer(
-                minScale: 1,
-                maxScale: 4,
-                child: _buildImage(),
+            child: PhotoHeroTarget(
+              child: Center(
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  transformationController: _zoom,
+                  child: KeyedSubtree(key: _stageKey, child: _buildImage()),
+                ),
               ),
             ),
           ),
@@ -216,15 +271,19 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   }
 
   Widget _buildImage() {
-    final file = _workingFile;
-    if (file == null) {
-      return const SizedBox(
-        width: 36,
-        height: 36,
-        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white24),
-      );
-    }
-    return Image.file(file, fit: BoxFit.contain, gaplessPlayback: true);
+    return ValueListenableBuilder<ImageProvider?>(
+      valueListenable: widget.hero.image,
+      builder: (context, provider, _) {
+        if (provider == null) {
+          return const SmallSpinner(size: 36, color: Colors.white24);
+        }
+        return Image(
+          image: provider,
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+        );
+      },
+    );
   }
 
   Widget _buildBottomBar() {
@@ -247,7 +306,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   Widget _buildCaptionField() {
     return Container(
       decoration: BoxDecoration(
-        color: _kBar,
+        color: kEditorBar,
         borderRadius: BorderRadius.circular(28),
       ),
       padding: const EdgeInsets.fromLTRB(20, 6, 8, 6),
@@ -271,7 +330,7 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
             valueListenable: widget.selectedIds,
             builder: (context, selected, _) {
               final count = selected.isEmpty ? 1 : selected.length;
-              return _CountBadge(count: count);
+              return PreviewCountBadge(count: count);
             },
           ),
         ],
@@ -286,193 +345,23 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
           child: Container(
             height: 52,
             decoration: BoxDecoration(
-              color: _kBar,
+              color: kEditorBar,
               borderRadius: BorderRadius.circular(28),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _ToolIcon(icon: Symbols.crop_rotate, onTap: _openCrop),
-                _ToolIcon(icon: Symbols.brush, onTap: _openDraw),
-                const _FileToggle(),
-                _ToolIcon(icon: Symbols.tune, onTap: _openAdjust),
+                PreviewToolIcon(icon: Symbols.crop_rotate, onTap: _openCrop),
+                PreviewToolIcon(icon: Symbols.brush, onTap: _openDraw),
+                const PreviewFileToggle(),
+                PreviewToolIcon(icon: Symbols.tune, onTap: _openAdjust),
               ],
             ),
           ),
         ),
         const SizedBox(width: 10),
-        _SendButton(onTap: _send),
+        PreviewSendButton(onTap: _send),
       ],
-    );
-  }
-}
-
-class _SelectionToggle extends StatelessWidget {
-  final ValueListenable<Set<String>> selectedIds;
-  final String id;
-  final VoidCallback onTap;
-
-  const _SelectionToggle({
-    required this.selectedIds,
-    required this.id,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<Set<String>>(
-      valueListenable: selectedIds,
-      builder: (context, selected, _) {
-        final index = selected.toList().indexOf(id);
-        final isSelected = index >= 0;
-        return GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            width: 30,
-            height: 30,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isSelected ? kEditorAccent : Colors.transparent,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-            child: isSelected
-                ? Text(
-                    '${index + 1}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      height: 1.0,
-                    ),
-                  )
-                : null,
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _CountBadge extends StatelessWidget {
-  final int count;
-
-  const _CountBadge({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: const _DashedCirclePainter(color: Colors.white),
-      child: SizedBox(
-        width: 34,
-        height: 34,
-        child: Center(
-          child: Text(
-            '$count',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DashedCirclePainter extends CustomPainter {
-  final Color color;
-
-  const _DashedCirclePainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    final rect = Rect.fromLTWH(1.5, 1.5, size.width - 3, size.height - 3);
-    const dashes = 22;
-    const sweep = (2 * math.pi) / dashes;
-    const dashRatio = 0.55;
-    for (var i = 0; i < dashes; i++) {
-      canvas.drawArc(rect, i * sweep, sweep * dashRatio, false, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedCirclePainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-class _ToolIcon extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _ToolIcon({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onTap,
-      icon: Icon(icon, color: Colors.white, size: 24),
-    );
-  }
-}
-
-class _FileToggle extends StatefulWidget {
-  const _FileToggle();
-
-  @override
-  State<_FileToggle> createState() => _FileToggleState();
-}
-
-class _FileToggleState extends State<_FileToggle> {
-  bool _active = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: () => setState(() => _active = !_active),
-      icon: TweenAnimationBuilder<double>(
-        tween: Tween(end: _active ? 1 : 0),
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOut,
-        builder: (context, t, _) {
-          final color = Color.lerp(
-            Colors.white54,
-            Color.lerp(Colors.white, kEditorAccent, 0.4),
-            t,
-          );
-          return Icon(Symbols.description, color: color, size: 24);
-        },
-      ),
-    );
-  }
-}
-
-class _SendButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _SendButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: kEditorAccent,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: const SizedBox(
-          width: 52,
-          height: 52,
-          child: Icon(Symbols.send, color: Colors.white, size: 24, fill: 1),
-        ),
-      ),
     );
   }
 }

@@ -8,10 +8,14 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/cache/info_cache.dart';
 import '../../core/cache/message_session_cache.dart';
+import 'shared_content.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/chat_members_store.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
+import '../../models/chat_preview_media.dart';
+import '../../models/contact_info.dart';
 import '../api.dart';
 import 'chat_parsing.dart';
 import 'chat_preview.dart';
@@ -35,6 +39,20 @@ Map<int, int> parseParticipants(dynamic raw) {
   return {};
 }
 
+/// Server message ids carry their timestamp in the high bits: the low 16 bits
+/// are an intra-millisecond sequence number.
+int messageIdToTime(int messageId) => messageId >> 16;
+
+bool messageMentionsUser(Map<dynamic, dynamic> message, int userId) {
+  final elements = message['elements'];
+  if (elements is! List) return false;
+  for (final element in elements.whereType<Map>()) {
+    if (element['type']?.toString() != 'USER_MENTION') continue;
+    if (element['entityId'] == userId) return true;
+  }
+  return false;
+}
+
 class CachedChat {
   final int id;
   final int accountId;
@@ -46,6 +64,7 @@ class CachedChat {
   final String? lastMsgText;
   final String? lastMsgTextOneLine;
   final String? lastMsgElements;
+  final String? lastMsgPreview;
   final int? lastMsgSenderId;
   final String? lastMsgStatus;
   final int unreadCount;
@@ -63,6 +82,7 @@ class CachedChat {
   final String? pinnedMsgText;
   final int? pinnedMsgTime;
   final bool pinnedMsgIsPreview;
+  final int? lastMentionMsgId;
 
   CachedChat({
     required this.id,
@@ -74,6 +94,7 @@ class CachedChat {
     this.lastMsgTime,
     this.lastMsgText,
     this.lastMsgElements,
+    this.lastMsgPreview,
     this.lastMsgSenderId,
     this.lastMsgStatus,
     required this.unreadCount,
@@ -91,11 +112,16 @@ class CachedChat {
     this.pinnedMsgText,
     this.pinnedMsgTime,
     this.pinnedMsgIsPreview = false,
+    this.lastMentionMsgId,
   }) : lastMsgTextOneLine = lastMsgText != null && lastMsgText.contains('\n')
            ? lastMsgText.replaceAll('\n', ' ')
            : lastMsgText;
 
   bool get isOfficial => options.contains('OFFICIAL');
+
+  late final ChatPreviewMedia? lastMsgMedia = ChatPreviewMedia.decode(
+    lastMsgPreview,
+  );
 
   List<FormatRange> get lastMsgFormatRanges {
     final raw = lastMsgElements;
@@ -127,6 +153,12 @@ class CachedChat {
     return iAmAdmin(myId) || options.contains('ALL_CAN_PIN_MESSAGE');
   }
 
+  bool get forwardDisabled => options.contains('DISABLE_FORWARD');
+
+  bool get copyDisabled => options.contains('MESSAGE_COPY_NOT_ALLOWED');
+
+  bool get confirmBeforeSend => options.contains('CONFIRM_BEFORE_SEND');
+
   bool get isMuted {
     if (dontDisturbUntil == ChatsModule.muteOff) return false;
     if (dontDisturbUntil < 0) return true;
@@ -134,6 +166,12 @@ class CachedChat {
   }
 
   bool get isLastMsgDeleted => lastMsgText == ChatsModule.lastMsgPlaceholder;
+
+  bool get hasUnreadMention {
+    final mentionId = lastMentionMsgId;
+    if (mentionId == null || mentionId <= 0) return false;
+    return messageIdToTime(mentionId) > (participants[accountId] ?? 0);
+  }
 
   factory CachedChat.fromDbRow(Map<String, dynamic> row) => CachedChat(
     id: row['id'] as int,
@@ -145,6 +183,7 @@ class CachedChat {
     lastMsgTime: row['last_msg_time'] as int?,
     lastMsgText: row['last_msg_text'] as String?,
     lastMsgElements: row['last_msg_elements'] as String?,
+    lastMsgPreview: row['last_msg_preview'] as String?,
     lastMsgSenderId: row['last_msg_sender'] as int?,
     lastMsgStatus: row['last_msg_status'] as String?,
     unreadCount: row['unread_count'] as int,
@@ -162,6 +201,7 @@ class CachedChat {
     pinnedMsgText: row['pinned_msg_text'] as String?,
     pinnedMsgTime: row['pinned_msg_time'] as int?,
     pinnedMsgIsPreview: (row['pinned_msg_is_preview'] as int? ?? 0) == 1,
+    lastMentionMsgId: row['last_mention_msg_id'] as int?,
   );
 
   static Set<String> _decodeOptions(dynamic raw) {
@@ -188,6 +228,7 @@ class CachedChat {
     'last_msg_time': lastMsgTime,
     'last_msg_text': lastMsgText,
     'last_msg_elements': lastMsgElements,
+    'last_msg_preview': lastMsgPreview,
     'last_msg_sender': lastMsgSenderId,
     'last_msg_status': lastMsgStatus,
     'unread_count': unreadCount,
@@ -207,6 +248,7 @@ class CachedChat {
     'pinned_msg_text': pinnedMsgText,
     'pinned_msg_time': pinnedMsgTime,
     'pinned_msg_is_preview': pinnedMsgIsPreview ? 1 : 0,
+    'last_mention_msg_id': lastMentionMsgId,
   };
 
   static const Object _keep = Object();
@@ -219,6 +261,7 @@ class CachedChat {
     Object? lastMsgTime = _keep,
     Object? lastMsgText = _keep,
     Object? lastMsgElements = _keep,
+    Object? lastMsgPreview = _keep,
     Object? lastMsgSenderId = _keep,
     Object? lastMsgStatus = _keep,
     int? unreadCount,
@@ -236,6 +279,7 @@ class CachedChat {
     Object? pinnedMsgText = _keep,
     Object? pinnedMsgTime = _keep,
     bool? pinnedMsgIsPreview,
+    Object? lastMentionMsgId = _keep,
   }) {
     return CachedChat(
       id: id,
@@ -255,6 +299,9 @@ class CachedChat {
       lastMsgElements: identical(lastMsgElements, _keep)
           ? this.lastMsgElements
           : lastMsgElements as String?,
+      lastMsgPreview: identical(lastMsgPreview, _keep)
+          ? this.lastMsgPreview
+          : lastMsgPreview as String?,
       lastMsgSenderId: identical(lastMsgSenderId, _keep)
           ? this.lastMsgSenderId
           : lastMsgSenderId as int?,
@@ -282,6 +329,9 @@ class CachedChat {
           ? this.pinnedMsgTime
           : pinnedMsgTime as int?,
       pinnedMsgIsPreview: pinnedMsgIsPreview ?? this.pinnedMsgIsPreview,
+      lastMentionMsgId: identical(lastMentionMsgId, _keep)
+          ? this.lastMentionMsgId
+          : lastMentionMsgId as int?,
     );
   }
 }
@@ -300,6 +350,37 @@ class ChatSearchHit {
     this.avatarUrl,
     this.subtitle,
   });
+}
+
+class ChatMemberEntry {
+  final int id;
+  final String? name;
+  final String? fullName;
+  final String? avatarUrl;
+  final int? seenTime;
+  final int presenceStatus;
+  final bool blocked;
+  final bool isContact;
+
+  const ChatMemberEntry({
+    required this.id,
+    this.name,
+    this.fullName,
+    this.avatarUrl,
+    this.seenTime,
+    required this.presenceStatus,
+    this.blocked = false,
+    this.isContact = false,
+  });
+
+  bool get isOnline => presenceStatus == 1;
+}
+
+class ChatMembersPage {
+  final List<ChatMemberEntry> members;
+  final int marker;
+
+  const ChatMembersPage({required this.members, required this.marker});
 }
 
 class MessageSearchHit {
@@ -398,12 +479,16 @@ class ChatsModule {
           'chatId': chatId,
           'messageId': msgIdNum,
           'mark': mark,
-        });
+        }, silent: true);
       } catch (_) {}
     }
 
-    row['unread_count'] = 0;
-    await AppDatabase.saveChats([row]);
+    final cached = CachedChat.fromDbRow(row);
+    final currentMark = cached.participants[accountId] ?? 0;
+    final participants = Map<int, int>.from(cached.participants)
+      ..[accountId] = mark > currentMark ? mark : currentMark;
+    final updated = cached.copyWith(unreadCount: 0, participants: participants);
+    await AppDatabase.saveChats([updated.toDbRow()]);
     _bump();
   }
 
@@ -423,7 +508,7 @@ class ChatsModule {
           'chatId': chatId,
           'messageId': msgIdNum,
           'mark': mark,
-        });
+        }, silent: true);
       } catch (_) {}
     }
 
@@ -436,7 +521,10 @@ class ChatsModule {
     if (cached.unreadCount == next && nextMark == currentMark) return;
     final participants = Map<int, int>.from(cached.participants)
       ..[accountId] = nextMark;
-    final updated = cached.copyWith(unreadCount: next, participants: participants);
+    final updated = cached.copyWith(
+      unreadCount: next,
+      participants: participants,
+    );
     await AppDatabase.saveChats([updated.toDbRow()]);
     _bump();
   }
@@ -472,6 +560,7 @@ class ChatsModule {
     required String text,
     required String status,
     List<Map<String, dynamic>>? elements,
+    String? preview,
   }) async {
     final thisId = int.tryParse(messageId);
     await _updateChat(accountId, chatId, (chat) {
@@ -483,6 +572,7 @@ class ChatsModule {
         lastMsgElements: (elements != null && elements.isNotEmpty)
             ? jsonEncode(elements)
             : null,
+        lastMsgPreview: preview,
         lastMsgTime: time,
         lastEventTime: time,
         lastMsgSenderId: accountId,
@@ -493,6 +583,41 @@ class ChatsModule {
 
   final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   void _bump() => chatsChanged.value = chatsChanged.value + 1;
+
+  static const Set<String> _membershipEvents = {
+    'add',
+    'joinByLink',
+    'leave',
+    'remove',
+  };
+
+  void _applyMembershipControl(
+    int accountId,
+    int chatId,
+    CachedMessage message,
+  ) {
+    final control = message.controlAttachment;
+    final event = control?.event;
+    if (control == null || event == null) return;
+    if (!_membershipEvents.contains(event)) return;
+
+    if (message.senderId != accountId) {
+      final affected = control.userIds?.length ?? 1;
+      ChatMembersStore.instance.adjust(chatId, switch (event) {
+        'add' => affected,
+        'joinByLink' => 1,
+        'leave' => -1,
+        'remove' => -affected,
+        _ => 0,
+      });
+    }
+    _refreshChatInfo(chatId);
+  }
+
+  void _refreshChatInfo(int chatId) {
+    ChatInfoFetch.invalidate(chatId);
+    unawaited(ChatInfoFetch.get(chatId));
+  }
 
   Future<bool> _updateChat(
     int accountId,
@@ -560,6 +685,7 @@ class ChatsModule {
     ContactInfoFetch.clear();
     PresenceFetch.clear();
     ChatInfoFetch.clear();
+    SharedContentModule.clearMediaIndex();
   }
 
   void _enqueueGlobalPush(Packet packet) {
@@ -636,6 +762,15 @@ class ChatsModule {
     if (chatId is! int) return;
     final msg = payload['message'];
     if (msg is! Map) return;
+
+    final msgLink = msg['link'];
+    final linkPostId = (msgLink is Map) ? msgLink['postId'] : null;
+    final payloadPostId = payload['postId'];
+    final isCommentPush =
+        payloadPostId is String ||
+        (linkPostId is String) ||
+        (msg['postId'] is String);
+    if (isCommentPush) return;
 
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
@@ -744,6 +879,7 @@ class ChatsModule {
         final cached = CachedMessage.fromPushPayload(accountId, chatId, msg);
         await AppDatabase.saveMessages([cached.toDbRow()]);
         emittedMessage = cached;
+        _applyMembershipControl(accountId, chatId, cached);
         _messageEventsController.add(MessageAddedEvent(chatId, cached));
       }
     }
@@ -770,10 +906,18 @@ class ChatsModule {
       }
       newRow['last_msg_text'] = messagePreviewText(msg);
       newRow['last_msg_elements'] = messagePreviewElements(msg);
+      newRow['last_msg_preview'] = messagePreviewMedia(msg);
       if (senderId != null) newRow['last_msg_sender'] = senderId;
       newRow['last_msg_status'] = 'sent';
     }
     if (unread != null) newRow['unread_count'] = unread;
+
+    if (msgIdInt != null &&
+        status != 'REMOVED' &&
+        senderId != accountId &&
+        messageMentionsUser(msg, accountId)) {
+      newRow['last_mention_msg_id'] = msgIdInt;
+    }
 
     final pinned = _extractPinnedMessage(msg);
     if (pinned != null) {
@@ -832,7 +976,9 @@ class ChatsModule {
       final rawText = m['text']?.toString();
       String? previewText = rawText;
       String? elementsJson;
+      String? previewMedia;
       final payload = _decodePayload(m['payload']);
+      if (payload != null) previewMedia = messagePreviewMedia(payload);
       if (rawText == null || rawText.isEmpty) {
         if (payload != null) previewText = messagePreviewText(payload);
       } else {
@@ -841,6 +987,7 @@ class ChatsModule {
       newRow['last_msg_id'] = int.tryParse(m['id']?.toString() ?? '');
       newRow['last_msg_text'] = previewText ?? m['text'];
       newRow['last_msg_elements'] = elementsJson;
+      newRow['last_msg_preview'] = previewMedia;
       newRow['last_msg_time'] = m['time'];
       newRow['last_msg_sender'] = m['sender_id'];
       newRow['last_msg_status'] = m['status'];
@@ -848,6 +995,7 @@ class ChatsModule {
       newRow['last_msg_id'] = null;
       newRow['last_msg_text'] = lastMsgPlaceholder;
       newRow['last_msg_elements'] = null;
+      newRow['last_msg_preview'] = null;
       newRow['last_msg_sender'] = null;
       newRow['last_msg_status'] = null;
     }
@@ -1078,13 +1226,16 @@ class ChatsModule {
   }) async {
     final cachedAt = DateTime.now().millisecondsSinceEpoch;
     final id = chat['id'];
+    ChatMembersStore.instance.applyChatPayload(chat);
     Map<int, CachedChat> existing = const {};
+    Map<String, dynamic>? existingRow;
     if (preloadedExisting != null) {
       existing = preloadedExisting;
     } else if (id is int) {
       final rows = await AppDatabase.loadChat(accountId, id);
       if (rows.isNotEmpty) {
-        existing = {id: CachedChat.fromDbRow(rows.first)};
+        existingRow = rows.first;
+        existing = {id: CachedChat.fromDbRow(existingRow)};
       }
     }
     final parsed = parseChatRow(
@@ -1102,11 +1253,14 @@ class ChatsModule {
       return null;
     }
     final ex = existing[parsed.id];
-    if (ex != null && sameChatContent(ex, parsed)) {
+    final listState = !inList ? 0 : (chat['status'] == 'HIDDEN' ? 2 : 1);
+    final membershipUnchanged =
+        existingRow == null || existingRow['in_list'] == listState;
+    if (ex != null && sameChatContent(ex, parsed) && membershipUnchanged) {
       return parsed;
     }
     final row = parsed.toDbRow();
-    row['in_list'] = !inList ? 0 : (chat['status'] == 'HIDDEN' ? 2 : 1);
+    row['in_list'] = listState;
     await AppDatabase.saveChats([row]);
     _bump();
     return parsed;
@@ -1173,6 +1327,7 @@ class ChatsModule {
     final rows = <Map<String, dynamic>>[];
     for (final c in chats.whereType<Map>()) {
       final map = c.cast<dynamic, dynamic>();
+      ChatMembersStore.instance.applyChatPayload(map);
       final parsed = parseChatRow(
         map,
         accountId,
@@ -1226,17 +1381,23 @@ class ChatsModule {
         if (next is! int || next == marker || chats.length < count) break;
         marker = next;
       }
+      await applyFavorites(accountId);
     } catch (e) {
       _paginatedAccountId = null;
       logger.w('Пагинация чатов: $e');
     }
   }
 
+  final Set<int> _repairedSenders = {};
+
   Future<List<CachedChat>> getChats(
     int accountId, {
     bool includeHidden = false,
   }) async {
     try {
+      if (_repairedSenders.add(accountId)) {
+        await AppDatabase.repairLastMessageSenders(accountId);
+      }
       final rows = await AppDatabase.loadChats(
         accountId,
         includeHidden: includeHidden,
@@ -1272,7 +1433,21 @@ class ChatsModule {
     final payload = packet.payload as Map?;
     final chats = payload?['chats'] as List?;
     if (chats == null || chats.isEmpty) return null;
-    return Map<String, dynamic>.from(chats.first as Map);
+    final info = Map<String, dynamic>.from(chats.first as Map);
+    ChatMembersStore.instance.applyChatPayload(info);
+    return info;
+  }
+
+  Future<Map<int, int>> getReadMarks(Api api, int accountId, int chatId) async {
+    try {
+      final info = await getChatInfo(api, chatId);
+      final fresh = parseParticipants(info?['participants']);
+      if (fresh.isNotEmpty) return fresh;
+    } catch (e) {
+      logger.w('Не удалось получить отметки прочтения для $chatId: $e');
+    }
+    final rows = await getChat(accountId, chatId);
+    return rows.isEmpty ? const {} : rows.first.participants;
   }
 
   Future<dynamic> searchById(Api api, int userId) async {
@@ -1334,10 +1509,36 @@ class ChatsModule {
       await api.sendRequest(Opcode.chatSubscribe, {
         'chatId': chatId,
         'subscribe': subscribe,
-      });
+      }, silent: true);
     } catch (e) {
       logger.w('subscribeChat failed: $e');
     }
+  }
+
+  Future<({CachedChat chat, int? subscribersCount})> joinChannel(
+    Api api,
+    String link,
+    int accountId,
+  ) async {
+    final packet = await api.sendRequest(Opcode.chatJoin, {
+      'link': link,
+    }, silent: true);
+    if (!packet.isOk) {
+      throw PacketError(messageFromErrorPayload(packet.payload));
+    }
+    final payload = packet.payload;
+    final chatMap = payload is Map ? payload['chat'] : null;
+    if (chatMap is! Map) {
+      throw const PacketError('Не удалось подписаться');
+    }
+    final cached = await cacheServerChat(chatMap, accountId);
+    if (cached == null) {
+      throw const PacketError('Не удалось подписаться');
+    }
+    final count = chatMap['participantsCount'];
+    if (count is! int) ChatMembersStore.instance.adjust(cached.id, 1);
+    _refreshChatInfo(cached.id);
+    return (chat: cached, subscribersCount: count is int ? count : null);
   }
 
   Future<bool> ensureChatCached(Api api, int accountId, int chatId) async {
@@ -1359,6 +1560,33 @@ class ChatsModule {
     required String title,
     required List<int> userIds,
     bool notify = true,
+  }) => _createChat(
+    api,
+    chatType: 'CHAT',
+    title: title,
+    userIds: userIds,
+    notify: notify,
+  );
+
+  Future<CachedChat?> createChannel(
+    Api api, {
+    required String title,
+    List<int> userIds = const [],
+    bool notify = true,
+  }) => _createChat(
+    api,
+    chatType: 'CHANNEL',
+    title: title,
+    userIds: userIds,
+    notify: notify,
+  );
+
+  Future<CachedChat?> _createChat(
+    Api api, {
+    required String chatType,
+    required String title,
+    required List<int> userIds,
+    required bool notify,
   }) async {
     final payload = {
       'message': {
@@ -1367,7 +1595,7 @@ class ChatsModule {
           {
             '_type': 'CONTROL',
             'event': 'new',
-            'chatType': 'CHAT',
+            'chatType': chatType,
             'title': title,
             'userIds': userIds,
           },
@@ -1377,22 +1605,24 @@ class ChatsModule {
     };
     final packet = await api.sendRequest(Opcode.msgSend, payload);
     if (!packet.isOk) {
-      logger.w('createGroupChat: server error payload=${packet.payload}');
+      logger.w(
+        '_createChat($chatType): server error payload=${packet.payload}',
+      );
       return null;
     }
     final data = packet.payload;
     if (data is! Map) {
-      logger.w('createGroupChat: payload is not a Map: $data');
+      logger.w('_createChat($chatType): payload is not a Map: $data');
       return null;
     }
     final chat = data['chat'];
     if (chat is! Map) {
-      logger.w('createGroupChat: response has no chat field: $data');
+      logger.w('_createChat($chatType): response has no chat field: $data');
       return null;
     }
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) {
-      logger.w('createGroupChat: no active account id');
+      logger.w('_createChat($chatType): no active account id');
       return null;
     }
     return cacheServerChat(chat, accountId);
@@ -1494,7 +1724,7 @@ class ChatsModule {
             : folders.first,
       );
 
-      final favorites = List<int>.from(allFolder.favorites ?? const []);
+      final favorites = List<int>.from(allFolder.favorites);
       if (pin) {
         for (final id in chatIds) {
           if (!favorites.contains(id)) favorites.add(id);
@@ -1535,6 +1765,40 @@ class ChatsModule {
     } catch (e) {
       logger.w('togglePin: $e');
       return 'Не удалось изменить закрепление';
+    }
+  }
+
+  Future<void> applyFavorites(int accountId) async {
+    try {
+      final folders = await FoldersModule.loadFolders(accountId);
+      if (folders.isEmpty) return;
+      final allFolder = folders.firstWhere(
+        FoldersModule.isAllChatsFolder,
+        orElse: () => folders.first,
+      );
+      final favorites = allFolder.favorites;
+      final favIndexById = <int, int>{};
+      for (var i = 0; i < favorites.length; i++) {
+        favIndexById[favorites[i]] = i + 1;
+      }
+
+      final rows = await AppDatabase.loadChats(accountId, includeHidden: true);
+      final updates = <Map<String, dynamic>>[];
+      for (final row in rows) {
+        final id = row['id'] as int;
+        final current = (row['fav_index'] as int?) ?? 0;
+        final next = favIndexById[id] ?? 0;
+        if (current == next) continue;
+        final newRow = Map<String, dynamic>.from(row);
+        newRow['fav_index'] = next;
+        updates.add(newRow);
+      }
+      if (updates.isNotEmpty) {
+        await AppDatabase.saveChats(updates);
+        _bump();
+      }
+    } catch (e) {
+      logger.w('applyFavorites: $e');
     }
   }
 
@@ -1636,6 +1900,127 @@ class ChatsModule {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<bool> addMembers(
+    Api api, {
+    required int chatId,
+    required List<int> userIds,
+    bool showHistory = true,
+  }) async {
+    if (userIds.isEmpty) return false;
+    try {
+      final packet = await api.sendRequest(Opcode.chatMembersUpdate, {
+        'chatId': chatId,
+        'userIds': userIds,
+        'showHistory': showHistory,
+        'operation': 'add',
+      });
+      if (!packet.isOk) {
+        logger.w(
+          'addMembers $chatId: ${messageFromErrorPayload(packet.payload)}',
+        );
+        return false;
+      }
+      final data = packet.payload;
+      final chat = data is Map ? data['chat'] : null;
+      if (chat is Map) {
+        final accountId = await TokenStorage.getActiveAccountId();
+        if (accountId != null) {
+          await cacheServerChat(chat.cast<dynamic, dynamic>(), accountId);
+        }
+      }
+      if (chat is! Map || chat['participantsCount'] is! int) {
+        ChatMembersStore.instance.adjust(chatId, userIds.length);
+      }
+      _refreshChatInfo(chatId);
+      return true;
+    } on PacketError catch (e) {
+      logger.w('addMembers $chatId: ${e.message}');
+      return false;
+    } catch (e) {
+      logger.w('addMembers $chatId: $e');
+      return false;
+    }
+  }
+
+  Future<ChatMembersPage?> getChatMembers(
+    Api api,
+    int chatId, {
+    int marker = 0,
+    int count = 50,
+  }) async {
+    try {
+      final packet = await api.sendRequest(Opcode.chatMembers, {
+        'type': 'MEMBER',
+        'marker': marker,
+        'chatId': chatId,
+        'count': count,
+      });
+      if (!packet.isOk) return null;
+      final payload = packet.payload;
+      if (payload is! Map) return null;
+
+      final entries = <ChatMemberEntry>[];
+      final presenceById = <int, Map<String, dynamic>>{};
+      final rawMembers = payload['members'];
+      if (rawMembers is List) {
+        for (final m in rawMembers.whereType<Map>()) {
+          final contact = m['contact'];
+          if (contact is! Map) continue;
+          final id = contact['id'];
+          if (id is! int) continue;
+
+          final info = ContactInfo.fromMap(Map<String, dynamic>.from(contact));
+          final name = info.displayName;
+          if (name != null && name.isNotEmpty) ContactCache.put(id, name);
+          final avatar = info.avatarUrl;
+          if (avatar != null && avatar.isNotEmpty) {
+            ContactCache.putAvatar(id, avatar);
+          }
+          final phone = contact['phone'];
+          if (phone is int && phone > 0) ContactCache.putPhone(id, phone);
+          ContactInfoFetch.putContact(id, contact.cast<dynamic, dynamic>());
+
+          final presence = m['presence'];
+          var status = 0;
+          int? seen;
+          if (presence is Map) {
+            final p = Map<String, dynamic>.from(presence);
+            presenceById[id] = p;
+            status = (p['status'] as int?) ?? 0;
+            final s = p['seen'];
+            seen = s is int ? s : null;
+          }
+
+          entries.add(
+            ChatMemberEntry(
+              id: id,
+              name: name,
+              fullName: info.fullName,
+              avatarUrl: avatar,
+              seenTime: seen,
+              presenceStatus: status,
+              blocked: info.isDeleted,
+              isContact: info.isSavedContact,
+            ),
+          );
+        }
+      }
+      if (presenceById.isNotEmpty) PresenceFetch.primeAll(presenceById);
+
+      final next = payload['marker'];
+      return ChatMembersPage(
+        members: entries,
+        marker: next is int ? next : marker,
+      );
+    } on PacketError catch (e) {
+      logger.w('getChatMembers $chatId: ${e.message}');
+      return null;
+    } catch (e) {
+      logger.w('getChatMembers $chatId: $e');
+      return null;
     }
   }
 

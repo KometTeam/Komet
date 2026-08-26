@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/contacts.dart';
 import '../../../core/cache/info_cache.dart';
+import '../../../core/contacts/device_contacts_service.dart';
 import '../../../core/nfc/nfc_exchange_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
@@ -15,6 +16,8 @@ import '../../../main.dart';
 import '../../../models/contact_info.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/small_spinner.dart';
+import '../../../core/config/app_shape.dart';
 
 enum _Stage {
   checking,
@@ -129,6 +132,11 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
 
   String _peerName() {
     final l10n = AppLocalizations.of(context)!;
+    final phone = _peerPhone;
+    if (phone != null) {
+      final book = DeviceContactsService.nameForPhone(phone);
+      if (book != null) return book;
+    }
     return _peerInfo?.displayName ??
         l10n.nfcPeerNameFallback('${_peerId ?? ''}');
   }
@@ -152,7 +160,10 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
       );
       if (!mounted) return;
       setState(() => _stage = _Stage.added);
-      showCustomNotification(context, AppLocalizations.of(context)!.nfcContactAdded);
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.nfcContactAdded,
+      );
       await Future.delayed(const Duration(milliseconds: 700));
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -243,7 +254,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
       case _Stage.checking:
         return const Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
-          child: CircularProgressIndicator(),
+          child: SmallSpinner(size: 36),
         );
       case _Stage.unsupported:
         return _message(cs, Symbols.nfc, l10n.nfcUnsupported);
@@ -405,7 +416,8 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           ),
           const SizedBox(height: 4),
           Text(
-            formatPhone(_peerPhone) ?? l10n.nfcPeerIdFallback('${_peerId ?? ''}'),
+            formatPhone(_peerPhone) ??
+                l10n.nfcPeerIdFallback('${_peerId ?? ''}'),
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 24),
@@ -414,17 +426,11 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
             child: FilledButton(
               onPressed: (_stage == _Stage.adding || loading) ? null : _add,
               style: FilledButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                shape: AppShape.buttonBorder,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: _stage == _Stage.adding
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const SmallSpinner(size: 20)
                   : Text(
                       _stage == _Stage.added
                           ? l10n.nfcAdded

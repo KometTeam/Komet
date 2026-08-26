@@ -12,10 +12,13 @@ import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show SessionInfo;
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/prompt_dialog.dart';
+import '../../widgets/small_spinner.dart';
 import '../../widgets/web_qr_login.dart';
 import 'web_qr_scan_screen.dart';
+import '../../../core/config/app_fonts.dart';
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key});
@@ -25,7 +28,7 @@ class DevicesScreen extends StatefulWidget {
 }
 
 class _DevicesScreenState extends State<DevicesScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, ReloadOnReconnect {
   bool _isLoading = true;
   List<SessionInfo> _sessions = [];
   final Map<int, Map<String, dynamic>> _ipDetails = {};
@@ -48,6 +51,9 @@ class _DevicesScreenState extends State<DevicesScreen>
     _shimmerController.dispose();
     super.dispose();
   }
+
+  @override
+  void reloadAfterReconnect() => _loadSessions();
 
   Future<void> _loadSessions() async {
     try {
@@ -207,7 +213,7 @@ class _DevicesScreenState extends State<DevicesScreen>
         title: ConnectionTitleText(
           l10n.devicesTitle,
           style: TextStyle(
-            fontFamily: 'Outfit',
+            fontFamily: displayFontOf(context),
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: cs.onSurface,
@@ -259,7 +265,7 @@ class _DevicesScreenState extends State<DevicesScreen>
               Text(
                 l10n.devicesPromoTitle,
                 style: TextStyle(
-                  fontFamily: 'Outfit',
+                  fontFamily: displayFontOf(context),
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: cs.onSurface,
@@ -282,7 +288,7 @@ class _DevicesScreenState extends State<DevicesScreen>
                 label: Text(
                   l10n.devicesScanQrButton,
                   style: TextStyle(
-                    fontFamily: 'Outfit',
+                    fontFamily: displayFontOf(context),
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
@@ -458,7 +464,7 @@ class _DevicesScreenState extends State<DevicesScreen>
                     Text(
                       title,
                       style: TextStyle(
-                        fontFamily: 'Outfit',
+                        fontFamily: displayFontOf(context),
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: cs.onSurface,
@@ -533,14 +539,10 @@ class _DevicesScreenState extends State<DevicesScreen>
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         child: isLoading
-                            ? SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: cs.onSurfaceVariant.withValues(
-                                    alpha: 0.5,
-                                  ),
+                            ? SmallSpinner(
+                                size: 14,
+                                color: cs.onSurfaceVariant.withValues(
+                                  alpha: 0.5,
                                 ),
                               )
                             : Icon(

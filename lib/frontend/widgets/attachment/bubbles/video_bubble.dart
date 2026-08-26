@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/main.dart';
 
+import '../../../../core/media/preview_image.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
-import '../../video_player_screen.dart';
+import '../../upload_progress_ring.dart';
+import '../../photo_viewer.dart';
 import 'bubble_context.dart';
 import 'video_note_bubble.dart';
 
@@ -17,25 +19,35 @@ class VideoBubble extends StatelessWidget {
 
   const VideoBubble({super.key, required this.ctx, required this.video});
 
+  static double layoutWidth(VideoAttachment video) {
+    return (video.width?.toDouble() ?? 200.0).clamp(
+      BubbleContext.photoMinSize,
+      BubbleContext.photoMaxSize,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final message = ctx.message;
     if (video.isNote) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          VideoNoteBubble(
-            attachment: video,
-            messageId: message.id,
-            chatId: message.chatId,
-            cs: ctx.cs,
-          ),
-          const SizedBox(height: 6),
-          ctx.meta(),
-        ],
+      return VideoNoteBubble(
+        attachment: video,
+        messageId: message.id,
+        chatId: message.chatId,
+        sourceMessageId: ctx.sourceMessageId,
+        sourceChatId: ctx.sourceChatId,
+        senderId: message.senderId,
+        isMe: ctx.isMe,
+        time: message.time,
+        cs: ctx.cs,
+        textColor: ctx.text,
+        meta: ctx.meta(),
+        uploadProgress: ctx.uploadProgress,
       );
     }
-    final hasCaption = message.text != null && message.text!.isNotEmpty;
+    final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
+    final resolvedCaption = hasMessageCaption ? ctx.caption() : null;
+    final hasCaption = resolvedCaption != null;
     final thumb = video.thumbnail;
     final durationMs = video.duration;
     final previewUrl = (thumb != null && thumb.isNotEmpty)
@@ -44,12 +56,8 @@ class VideoBubble extends StatelessWidget {
         ? video.baseUrl!
         : (video.previewData ?? '');
 
-    final w = video.width;
     final h = video.height;
-    final width = (w?.toDouble() ?? 200.0).clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
-    );
+    final width = layoutWidth(video);
     final height = (h?.toDouble() ?? 150.0).clamp(
       BubbleContext.photoMinSize,
       BubbleContext.photoMaxSize,
@@ -63,39 +71,78 @@ class VideoBubble extends StatelessWidget {
       child: Icon(Symbols.videocam, size: 48, color: ctx.cs.onSurfaceVariant),
     );
 
+    final localThumb = dataUriImage(video, video.previewData);
+    final uploading = ctx.uploadProgress;
+
+    Widget previewImage() {
+      if (previewUrl.isNotEmpty && !previewUrl.startsWith('data:')) {
+        return CachedNetworkImage(
+          imageUrl: previewUrl,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          memCacheWidth: (width * dpr).round(),
+          fadeInDuration: Duration.zero,
+          placeholderFadeInDuration: Duration.zero,
+          errorWidget: (_, _, _) => localThumb == null
+              ? placeholder()
+              : Image(
+                  image: localThumb,
+                  width: width,
+                  height: height,
+                  fit: BoxFit.cover,
+                ),
+        );
+      }
+      if (localThumb != null) {
+        return Image(
+          image: localThumb,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => placeholder(),
+        );
+      }
+      return placeholder();
+    }
+
     final preview = ClipRRect(
       borderRadius: BorderRadius.circular(BubbleContext.photoBorderRadius),
       child: Stack(
         children: [
-          previewUrl.isEmpty
-              ? placeholder()
-              : CachedNetworkImage(
-                  imageUrl: previewUrl,
-                  width: width,
-                  height: height,
-                  fit: BoxFit.cover,
-                  memCacheWidth: (width * dpr).round(),
-                  fadeInDuration: Duration.zero,
-                  placeholderFadeInDuration: Duration.zero,
-                  errorWidget: (_, _, _) => placeholder(),
+          previewImage(),
+          if (uploading != null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.35),
+                child: Center(
+                  child: UploadProgressRing(
+                    progress: uploading,
+                    color: Colors.white,
+                    trackColor: Colors.white24,
+                  ),
                 ),
-          Positioned.fill(
-            child: Center(
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: const BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Symbols.play_arrow,
-                  color: Colors.white,
-                  size: 30,
+              ),
+            )
+          else
+            Positioned.fill(
+              child: Center(
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Symbols.play_arrow,
+                    color: Colors.white,
+                    size: 30,
+                  ),
                 ),
               ),
             ),
-          ),
           if (durationMs != null && durationMs > 0)
             Positioned(
               left: 6,
@@ -112,12 +159,13 @@ class VideoBubble extends StatelessWidget {
                 ),
               ),
             ),
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _playVideo(ctx.context, video),
+          if (uploading == null)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _playVideo(ctx.context, video),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -146,12 +194,13 @@ class VideoBubble extends StatelessWidget {
             padding: const EdgeInsets.only(
               left: BubbleContext.captionPaddingHorizontal,
               right: BubbleContext.captionPaddingRight,
+              top: BubbleContext.captionPaddingTop,
               bottom: 6,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Expanded(child: ctx.caption()),
+                Expanded(child: resolvedCaption),
                 ctx.meta(),
               ],
             ),
@@ -171,8 +220,8 @@ class VideoBubble extends StatelessWidget {
     Haptics.tap();
 
     final sources = await messagesModule.getVideoSources(
-      messageId: ctx.message.id,
-      chatId: ctx.message.chatId,
+      messageId: ctx.sourceMessageId,
+      chatId: ctx.sourceChatId,
       token: token,
       videoId: videoId,
     );
@@ -185,7 +234,14 @@ class VideoBubble extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => VideoPlayerScreen(sources: sources),
+        builder: (_) => PhotoViewerScreen.video(
+          attachment: video,
+          initialVideoSources: sources,
+          chatId: ctx.message.chatId,
+          message: ctx.message,
+          actions: ctx.photoActions,
+          sourceName: ctx.chatName,
+        ),
       ),
     );
   }

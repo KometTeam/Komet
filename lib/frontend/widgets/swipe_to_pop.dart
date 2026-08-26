@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'rightward_drag_recognizer.dart';
+import 'directional_drag_recognizer.dart';
 
 class SwipeToPop extends StatefulWidget {
   final Widget child;

@@ -17,6 +17,7 @@ class SharedMediaItem {
   final int senderId;
   final int time;
   final MessageAttachment attachment;
+  final String? text;
 
   const SharedMediaItem({
     required this.messageId,
@@ -24,6 +25,7 @@ class SharedMediaItem {
     required this.senderId,
     required this.time,
     required this.attachment,
+    this.text,
   });
 
   String get dedupKey {
@@ -93,10 +95,143 @@ class CommonChatEntry {
   }
 }
 
+class ChatMediaFeed {
+  final List<SharedMediaItem> items;
+  final int total;
+  final bool reachedEnd;
+
+  const ChatMediaFeed({
+    required this.items,
+    required this.total,
+    required this.reachedEnd,
+  });
+}
+
+class _ChatMediaIndex {
+  final List<SharedMediaItem> items = [];
+  final Set<String> seen = {};
+  int total = 0;
+  bool reachedEnd = false;
+  bool started = false;
+  Future<void>? inFlight;
+}
+
+String mediaDedupKey(String messageId, MessageAttachment attachment) {
+  if (attachment is PhotoAttachment) {
+    return '$messageId:p${attachment.photoId ?? attachment.baseUrl}';
+  }
+  if (attachment is VideoAttachment) {
+    return '$messageId:v${attachment.videoId ?? attachment.baseUrl}';
+  }
+  return '$messageId:${attachment.hashCode}';
+}
+
 class SharedContentModule {
+  static const int _mediaIndexPageSize = 60;
+  static const int _mediaIndexMaxPages = 40;
+
+  static final Map<int, _ChatMediaIndex> _mediaIndexes = {};
+
   final Api _api;
 
   SharedContentModule(this._api);
+
+  static void clearMediaIndex() => _mediaIndexes.clear();
+
+  Future<ChatMediaFeed?> mediaFeedFor({
+    required int chatId,
+    required String mediaKey,
+    required Future<String?> Function() resolveAnchor,
+  }) async {
+    final index = _mediaIndexes.putIfAbsent(chatId, _ChatMediaIndex.new);
+
+    for (var page = 0; page < _mediaIndexMaxPages; page++) {
+      if (index.seen.contains(mediaKey)) return _snapshot(index);
+      if (index.reachedEnd) return null;
+      await _nextMediaPage(chatId, index, resolveAnchor);
+    }
+    return null;
+  }
+
+  Future<ChatMediaFeed> loadMoreMedia({
+    required int chatId,
+    required Future<String?> Function() resolveAnchor,
+  }) async {
+    final index = _mediaIndexes.putIfAbsent(chatId, _ChatMediaIndex.new);
+    if (!index.reachedEnd) {
+      await _nextMediaPage(chatId, index, resolveAnchor);
+    }
+    return _snapshot(index);
+  }
+
+  ChatMediaFeed _snapshot(_ChatMediaIndex index) {
+    final counted = index.items.length;
+    final total = index.reachedEnd
+        ? counted
+        : (index.total > counted ? index.total : counted);
+    return ChatMediaFeed(
+      items: List.unmodifiable(index.items),
+      total: total,
+      reachedEnd: index.reachedEnd,
+    );
+  }
+
+  Future<void> _nextMediaPage(
+    int chatId,
+    _ChatMediaIndex index,
+    Future<String?> Function() resolveAnchor,
+  ) async {
+    final pending = index.inFlight;
+    if (pending != null) {
+      await pending;
+      return;
+    }
+    final task = _loadMediaPage(chatId, index, resolveAnchor);
+    index.inFlight = task;
+    try {
+      await task;
+    } finally {
+      index.inFlight = null;
+    }
+  }
+
+  Future<void> _loadMediaPage(
+    int chatId,
+    _ChatMediaIndex index,
+    Future<String?> Function() resolveAnchor,
+  ) async {
+    final initial = !index.started;
+    final anchor = initial ? await resolveAnchor() : index.items.last.messageId;
+    if (anchor == null || anchor.isEmpty) {
+      index.reachedEnd = true;
+      return;
+    }
+
+    final page = await fetchMedia(
+      chatId: chatId,
+      anchorMessageId: anchor,
+      attachTypes: const ['PHOTO', 'VIDEO'],
+      forward: initial ? _mediaIndexPageSize : 0,
+      backward: _mediaIndexPageSize,
+    );
+    index.started = true;
+    if (page.total > index.total) index.total = page.total;
+
+    final fresh = <SharedMediaItem>[];
+    for (final item in page.items) {
+      if (index.seen.add(item.dedupKey)) fresh.add(item);
+    }
+    if (fresh.isEmpty) {
+      index.reachedEnd = true;
+      return;
+    }
+
+    final oldest = index.items.isEmpty ? null : index.items.last;
+    index.items.addAll(fresh);
+    if (oldest != null && fresh.first.time > oldest.time) {
+      index.items.sort((a, b) => b.time.compareTo(a.time));
+    }
+  }
 
   Future<SharedMediaPage> fetchMedia({
     required int chatId,
@@ -134,6 +269,7 @@ class SharedContentModule {
         if (id == null) continue;
         final sender = (map['sender'] as num?)?.toInt() ?? 0;
         final time = (map['time'] as num?)?.toInt() ?? 0;
+        final text = map['text'] as String?;
         final attaches = map['attaches'];
         if (attaches is! List) continue;
         for (final a in attaches) {
@@ -147,6 +283,7 @@ class SharedContentModule {
               senderId: sender,
               time: time,
               attachment: att,
+              text: text,
             ),
           );
         }

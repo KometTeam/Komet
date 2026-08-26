@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/utils/text_format.dart';
 import '../../models/animoji.dart';
+import 'formatted_message_text.dart';
 import 'lottie_image.dart';
 
 const List<TextFormat> composerFormats = [
@@ -16,6 +17,13 @@ class _Interval {
   int start;
   int end;
   _Interval(this.start, this.end);
+}
+
+class _MentionEntity {
+  int start;
+  int end;
+  final int userId;
+  _MentionEntity(this.start, this.end, this.userId);
 }
 
 class _AnimojiEntity {
@@ -39,6 +47,7 @@ class RichMessageController extends TextEditingController {
 
   final Map<TextFormat, List<_Interval>> _intervals = {};
   final List<_AnimojiEntity> _animoji = [];
+  final List<_MentionEntity> _mentions = [];
   int _entitySeq = 0;
 
   RichMessageController({super.text});
@@ -73,13 +82,35 @@ class RichMessageController extends TextEditingController {
     notifyListeners();
   }
 
+  void insertMention({
+    required int userId,
+    required String name,
+    required int start,
+    required int end,
+  }) {
+    final oldText = value.text;
+    if (start < 0 || end > oldText.length || start > end || name.isEmpty) {
+      return;
+    }
+    final inserted = '$name ';
+    value = TextEditingValue(
+      text: oldText.replaceRange(start, end, inserted),
+      selection: TextSelection.collapsed(offset: start + inserted.length),
+    );
+
+    _mentions.add(_MentionEntity(start, start + name.length, userId));
+    _mentions.sort((a, b) => a.start.compareTo(b.start));
+    notifyListeners();
+  }
+
   ({String text, List<Map<String, dynamic>> elements}) buildContent() {
     final src = value.text;
     if (_animoji.isEmpty) {
       return (text: src, elements: elementsForSend());
     }
 
-    final entities = [..._animoji]..sort((a, b) => a.offset.compareTo(b.offset));
+    final entities = [..._animoji]
+      ..sort((a, b) => a.offset.compareTo(b.offset));
 
     final sb = StringBuffer();
     var last = 0;
@@ -121,6 +152,7 @@ class RichMessageController extends TextEditingController {
         'type': textFormatToServer(range.format),
         'from': from,
         'length': to - from,
+        if (range.entityId != null) 'entityId': range.entityId,
       });
     }
     return (text: glyphText, elements: elements);
@@ -136,7 +168,8 @@ class RichMessageController extends TextEditingController {
     super.value = newValue;
   }
 
-  bool get hasFormatting => _intervals.values.any((list) => list.isNotEmpty);
+  bool get hasFormatting =>
+      _intervals.values.any((list) => list.isNotEmpty) || _mentions.isNotEmpty;
 
   void clearFormatting() {
     if (_intervals.isEmpty) return;
@@ -146,12 +179,21 @@ class RichMessageController extends TextEditingController {
 
   void setFormatRanges(Iterable<FormatRange> ranges) {
     _intervals.clear();
+    _mentions.clear();
     for (final range in ranges) {
+      if (range.format == TextFormat.userMention) {
+        final userId = range.entityId;
+        if (userId != null) {
+          _mentions.add(_MentionEntity(range.start, range.end, userId));
+        }
+        continue;
+      }
       if (!composerFormats.contains(range.format)) continue;
       _intervals
           .putIfAbsent(range.format, () => [])
           .add(_Interval(range.start, range.end));
     }
+    _mentions.sort((a, b) => a.start.compareTo(b.start));
     for (final list in _intervals.values) {
       _normalize(list);
     }
@@ -175,6 +217,16 @@ class RichMessageController extends TextEditingController {
         );
       }
     });
+    for (final mention in _mentions) {
+      ranges.add(
+        FormatRange(
+          format: TextFormat.userMention,
+          start: mention.start,
+          length: mention.end - mention.start,
+          entityId: mention.userId,
+        ),
+      );
+    }
     return ranges;
   }
 
@@ -200,7 +252,7 @@ class RichMessageController extends TextEditingController {
   }
 
   void _remap(String oldText, String newText) {
-    if (_intervals.isEmpty && _animoji.isEmpty) return;
+    if (_intervals.isEmpty && _animoji.isEmpty && _mentions.isEmpty) return;
     final oldLen = oldText.length;
     final newLen = newText.length;
 
@@ -237,6 +289,16 @@ class RichMessageController extends TextEditingController {
       );
       for (final e in _animoji) {
         if (e.offset >= oldChangeEnd) e.offset += delta;
+      }
+    }
+
+    if (_mentions.isNotEmpty) {
+      _mentions.removeWhere(
+        (mention) => changeStart < mention.end && oldChangeEnd > mention.start,
+      );
+      for (final mention in _mentions) {
+        mention.start = mapStart(mention.start);
+        mention.end = mapEnd(mention.end);
       }
     }
 
@@ -325,6 +387,10 @@ class RichMessageController extends TextEditingController {
     final ranges = _toFormatRanges();
     final baseColor = baseStyle.color;
     final quoteColor = baseColor?.withValues(alpha: 0.85);
+    final quoteBackground = baseColor == null
+        ? null
+        : (Paint()..color = baseColor.withValues(alpha: 0.12));
+    final mentionColor = mentionTextColor(Theme.of(context).colorScheme);
     final segments = segmentizeFormats(content, ranges);
     final entityByOffset = {for (final e in _animoji) e.offset: e};
     final box = (baseStyle.fontSize ?? 16) * 1.4;
@@ -335,6 +401,8 @@ class RichMessageController extends TextEditingController {
         baseStyle,
         segment.formats,
         quoteColor: quoteColor,
+        mentionColor: mentionColor,
+        quoteBackground: quoteBackground,
       );
       var runStart = segment.start;
       var i = segment.start;

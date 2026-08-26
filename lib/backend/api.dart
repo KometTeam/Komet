@@ -1,53 +1,66 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:kolibri/kolibri.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
 
 import '../core/cache/self_presence.dart';
 import '../core/config/config.dart';
 import '../core/config/countries.dart';
 import '../core/config/komet_settings.dart';
+import '../core/config/proxy_config.dart';
 import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
 import '../core/storage/device_identity.dart';
 import '../core/storage/spoofing_service.dart';
-import '../core/transport/connection.dart';
 import '../core/transport/dispatcher.dart';
-import '../core/transport/receiver.dart';
-import '../core/transport/sender.dart';
+import '../core/transport/tls_config.dart';
 import '../core/transport/traffic_monitor.dart';
 import '../core/transport/vpn_bypass.dart';
 import '../core/utils/debug_session_log.dart';
 import '../core/utils/logger.dart';
 
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
-import 'dart:io';
-
 enum SessionState { disconnected, connecting, connected, online }
 
 /// Клиент API.
 ///
-/// Подключение, хэндшейк, пинг, реконнект.
+/// Тонкий адаптер над Rust-ядром [KolibriSession] (пакет kolibri): подключение,
+/// хэндшейк, пинг и реконнект живут в ядре, здесь — оркестрация жизненного цикла
+/// и сохранение прежнего интерфейса для модулей (Packet/пуши/стримы).
 class Api {
-  final Connection _connection = Connection();
-  final PacketReceiver _receiver = PacketReceiver();
-  final PacketSender _sender = PacketSender();
+  KolibriSession? _session;
+
+  /// Роутер пушей (ответы на запросы ядро матчит само, диспетчер держим только
+  /// ради registerHandler/pushStream).
   final PacketDispatcher _dispatcher = PacketDispatcher();
+  StreamSubscription<(int, Map<String, dynamic>)>? _pushSub;
+  StreamSubscription<WireLogEvent>? _wireLogSub;
 
   SessionState _sessionState = SessionState.disconnected;
   final _stateController = StreamController<SessionState>.broadcast();
   final _sessionExpiredController =
       StreamController<SessionExpiredException>.broadcast();
   final _handshakeSuccessController = StreamController<String>.broadcast();
-  Map<dynamic, dynamic>? _userAgent;
+  final _errorController = StreamController<String>.broadcast();
 
+  Map<dynamic, dynamic>? _userAgent;
   Map<dynamic, dynamic>? get userAgent => _userAgent;
 
   int? _callsSeed;
   String? _deviceId;
+  String? _callsDevice;
+  String? _callsOsVersion;
 
   int? get callsSeed => _callsSeed;
   String? get deviceId => _deviceId;
+  String? get callsDevice => _callsDevice;
+  String? get callsOsVersion => _callsOsVersion;
+
+  /// Сырой доступ к сессии ядра — для медиа-загрузок (data-plane).
+  KolibriSession? get session => _session;
 
   String? spoofScope;
 
@@ -63,27 +76,24 @@ class Api {
       _sessionExpiredController.stream;
   Stream<String> get handshakeSuccessStream =>
       _handshakeSuccessController.stream;
-  Stream<String> get errorStream => _dispatcher.errorStream;
+  Stream<String> get errorStream => _errorController.stream;
   SessionState get state => _sessionState;
 
-  StreamSubscription<Uint8List>? _dataSubscription;
-  StreamSubscription<SocketState>? _socketStateSubscription;
-  Timer? _pingTimer;
+  Timer? _livenessTimer;
   Timer? _reconnectTimer;
   Timer? _connectWatchdog;
   int _connectGen = 0;
   int _reconnectAttempts = 0;
   bool _autoReconnect = false;
   int _sessionEpoch = 0;
+  bool? _lastInteractive;
 
   static const Duration _connectWatchdogTimeout = Duration(seconds: 75);
   static const Duration _shouldArmTimeout = Duration(seconds: 5);
   static const Duration _endpointTimeout = Duration(seconds: 5);
+  static const Duration _livenessInterval = Duration(seconds: 5);
 
   int get sessionEpoch => _sessionEpoch;
-
-  /// Залипает на время сессии: VPN-путь не сработал — идём мимо туннеля.
-  bool _bypassActive = false;
 
   // Публичное API
 
@@ -100,32 +110,18 @@ class Api {
     _armConnectWatchdog(gen);
 
     try {
-      _dataSubscription = _connection.dataStream.listen(_onDataReceived);
-      _socketStateSubscription = _connection.stateStream.listen((socketState) {
-        if (socketState == SocketState.disconnected &&
-            _sessionState != SessionState.disconnected) {
-          _onDisconnected();
-        }
-      });
-
-      bool bypassArmed;
+      bool useBypass;
       try {
-        bypassArmed = await VpnBypassService.instance.shouldArm().timeout(
+        useBypass = await VpnBypassService.instance.shouldArm().timeout(
           _shouldArmTimeout,
         );
       } catch (e) {
         logger.w('connect: shouldArm завис/упал ($e) — без обхода VPN');
-        bypassArmed = false;
+        useBypass = false;
       }
       if (gen != _connectGen) return;
 
-      if (!bypassArmed) _bypassActive = false;
-      final useBypass = _bypassActive && bypassArmed;
-      final attemptTimeout = bypassArmed && !useBypass
-          ? const Duration(seconds: 8)
-          : null;
-
-      ({String host, int port}) endpoint;
+      ({String host, int port, bool trustMincifryCa}) endpoint;
       try {
         endpoint = await ServerConfig.loadEndpoint().timeout(_endpointTimeout);
       } catch (e) {
@@ -133,84 +129,75 @@ class Api {
         endpoint = (
           host: ServerConfig.defaultHost,
           port: ServerConfig.defaultPort,
+          trustMincifryCa: ServerConfig.defaultTrustMincifryCa,
         );
       }
+      if (gen != _connectGen) return;
+
+      setTrustMincifryCa(enabled: endpoint.trustMincifryCa);
+
+      final (session, wireLog) = await _buildSessionOptions(endpoint);
       if (gen != _connectGen) return;
 
       logger.i(
         'connect: endpoint ${endpoint.host}:${endpoint.port}, bypass=$useBypass',
       );
-      try {
-        await _connection.connect(
-          endpoint.host,
-          endpoint.port,
-          bypassVpn: useBypass,
-          timeout: attemptTimeout,
-        );
-      } catch (e) {
-        if (gen != _connectGen) return;
-        await _handleConnectFailure(
-          e,
-          phase: 'Не удалось подключиться',
-          bypassArmed: bypassArmed,
-          useBypass: useBypass,
-          bypassWhy: 'подключение не удалось',
-        );
-        return;
+
+      if (useBypass) {
+        try {
+          await VpnBypassService.instance.bind();
+        } catch (e) {
+          logger.w('connect: VPN bind не удался ($e)');
+        }
       }
-      if (gen != _connectGen) return;
+
+      _session = session;
+      // Подписываемся на wire-лог ядра ДО connect(), чтобы поймать пакеты
+      // SESSION_INIT-хендшейка (иначе они уходят до listen и теряются).
+      _wireLogSub = wireLog.listen(_onWireLog);
+      _pushSub = session.pushesMap().listen(_onPush);
+      TrafficMonitor.instance.recordEvent(
+        'connect',
+        endpoint: '${endpoint.host}:${endpoint.port}',
+      );
 
       _setSessionState(SessionState.connected);
       _reconnectAttempts = 0;
 
+      HandshakeInfo info;
       try {
         logger.i('connect: сокет готов, отправляю хэндшейк');
-        final response = await sendHandshake();
-        if (gen != _connectGen) return;
-        if (response.isOk) {
-          _callsSeed = response.payload['callsSeed'] as int?;
-          _registrationCountries = _parseRegistrationCountries(
-            response.payload,
-          );
-          _sessionState = SessionState.online;
-          _sessionEpoch++;
-          _cancelConnectWatchdog();
-          _startPinging();
-          logger.i('Сессия онлайн, хэндшейк ок');
-          if (_onReconnectCallback != null) {
-            try {
-              await _onReconnectCallback!();
-            } catch (e) {
-              logger.w('Авто-логин при хэндшейке не удался: $e');
-            }
-          }
-          if (_sessionState == SessionState.online) {
-            _stateController.add(SessionState.online);
-            _handshakeSuccessController.add(
-              response.payload['device_name'] as String? ?? 'Unknown',
-            );
-          }
-        } else {
-          logger.e('Хэндшейк отклонён: ${response.payload}');
-          await _handleConnectFailure(
-            StateError('хэндшейк отклонён сервером'),
-            phase: 'Хэндшейк отклонён',
-            bypassArmed: bypassArmed,
-            useBypass: useBypass,
-            bypassWhy: 'хэндшейк отклонён',
-            disconnectSocket: true,
-          );
-        }
+        info = await session.connect();
       } catch (e) {
         if (gen != _connectGen) return;
-        await _handleConnectFailure(
-          e,
-          phase: 'Ошибка хэндшейка',
-          bypassArmed: bypassArmed,
-          useBypass: useBypass,
-          bypassWhy: 'хэндшейк не прошёл',
-          disconnectSocket: true,
-        );
+        await _handleConnectFailure(e, phase: 'Ошибка хэндшейка');
+        return;
+      } finally {
+        if (useBypass) {
+          try {
+            await VpnBypassService.instance.restoreDefault();
+          } catch (_) {}
+        }
+      }
+      if (gen != _connectGen) return;
+
+      _callsSeed = info.callsSeed?.toInt();
+      _registrationCountries = _parseRegistrationCountries(info.payloadMap);
+      _sessionState = SessionState.online;
+      _sessionEpoch++;
+      _cancelConnectWatchdog();
+      _startLiveness();
+      logger.i('Сессия онлайн, хэндшейк ок');
+      if (_onReconnectCallback != null) {
+        try {
+          await _onReconnectCallback!();
+        } catch (e) {
+          logger.w('Авто-логин при хэндшейке не удался: $e');
+        }
+      }
+      if (_sessionState == SessionState.online) {
+        _stateController.add(SessionState.online);
+        _handshakeSuccessController.add(info.deviceName ?? 'Unknown');
       }
     } catch (e, st) {
       logger.e('connect: непредвиденная ошибка: $e\n$st');
@@ -244,9 +231,6 @@ class Api {
     _connectGen++;
     _cancelConnectWatchdog();
     _cleanup();
-    try {
-      await _connection.disconnect();
-    } catch (_) {}
     _setSessionState(SessionState.disconnected);
     if (_autoReconnect) _scheduleReconnect();
   }
@@ -254,37 +238,22 @@ class Api {
   Future<void> _handleConnectFailure(
     Object error, {
     required String phase,
-    required bool bypassArmed,
-    required bool useBypass,
-    required String bypassWhy,
-    bool disconnectSocket = false,
   }) async {
     logger.e('$phase: $error');
     _cancelConnectWatchdog();
     if (_sessionState != SessionState.disconnected) {
       _cleanup();
-      if (disconnectSocket) await _connection.disconnect();
       _setSessionState(SessionState.disconnected);
-      _armBypassIfPossible(bypassArmed, useBypass, bypassWhy);
       _scheduleReconnect();
-    }
-  }
-
-  void _armBypassIfPossible(bool armed, bool alreadyBypassing, String why) {
-    if (armed && !alreadyBypassing && !_bypassActive) {
-      _bypassActive = true;
-      logger.w('VPN bypass: $why — следующая попытка мимо VPN');
     }
   }
 
   /// Отключается без автореконнекта.
   Future<void> disconnect() async {
     _autoReconnect = false;
-    _bypassActive = false;
     _connectGen++;
     _reconnectTimer?.cancel();
     _cleanup();
-    await _connection.disconnect();
     _setSessionState(SessionState.disconnected);
   }
 
@@ -303,145 +272,49 @@ class Api {
     }
   }
 
-  Future<Packet> sendHandshake() async {
-    final deviceInfo = DeviceInfoPlugin();
-
-    String deviceType = 'ANDROID';
-    String osVersion = '';
-    String deviceName = 'Unknown';
-    String architecture = 'arm64';
-    String appVersion = SpoofingService.hardcodedAppVersion;
-    int buildNumber = SpoofingService.hardcodedBuildNumber;
-    String screen = '420dpi 420dpi 1080x2340';
-
-    if (!_tzInitialized) {
-      tz.initializeTimeZones();
-      _tzInitialized = true;
-    }
-    final timeZoneName = await FlutterTimezone.getLocalTimezone();
-    String timezone = timeZoneName.identifier;
-    String locale = 'ru';
-    String deviceLocale = Platform.localeName.substring(0, 2);
-    String deviceId = await DeviceIdentity.deviceId();
-    String pushDeviceType = 'GCM';
-    String instanceId = await DeviceIdentity.instanceId();
-    int clientSessionId = DeviceIdentity.clientSessionId;
-
-    if (Platform.isLinux) {
-      final linuxInfo = await deviceInfo.linuxInfo;
-      osVersion = linuxInfo.name;
-      architecture = _archFromPlatformVersion();
-    } else if (Platform.isIOS) {
-      final iosInfo = await deviceInfo.iosInfo;
-      osVersion = iosInfo.systemVersion;
-      deviceName = iosInfo.utsname.machine;
-    } else if (Platform.isAndroid) {
-      final androidInfo = await deviceInfo.androidInfo;
-      osVersion = 'Android ${androidInfo.version.release}';
-      deviceName = '${androidInfo.manufacturer} ${androidInfo.model}';
-      architecture = androidInfo.supportedAbis.first;
-    } else if (Platform.isWindows) {
-      final windowsInfo = await deviceInfo.windowsInfo;
-      osVersion = windowsInfo.productName;
-      architecture = _archFromPlatformVersion();
-    }
-
-    final spoofed = await SpoofingService.getSpoofedSessionData(
-      scope: spoofScope,
-    );
-    if (spoofed != null) {
-      final sDeviceType = spoofed['device_type'] as String?;
-      if (sDeviceType != null && sDeviceType != 'IOS') deviceType = sDeviceType;
-      final sDeviceName = spoofed['device_name'] as String?;
-      if (sDeviceName != null && sDeviceName.isNotEmpty) {
-        deviceName = sDeviceName;
-      }
-      final sOsVersion = spoofed['os_version'] as String?;
-      if (sOsVersion != null && sOsVersion.isNotEmpty) osVersion = sOsVersion;
-      final sScreen = spoofed['screen'] as String?;
-      if (sScreen != null && sScreen.isNotEmpty) screen = sScreen;
-      final sTimezone = spoofed['timezone'] as String?;
-      if (sTimezone != null && sTimezone.isNotEmpty) timezone = sTimezone;
-      final sLocale = spoofed['locale'] as String?;
-      if (sLocale != null && sLocale.isNotEmpty) {
-        locale = sLocale;
-        deviceLocale = sLocale.split(RegExp(r'[-_]')).first;
-      }
-      final sDeviceLocale = spoofed['device_locale'] as String?;
-      if (sDeviceLocale != null && sDeviceLocale.isNotEmpty) {
-        deviceLocale = sDeviceLocale;
-      }
-      final sDeviceId = spoofed['device_id'] as String?;
-      if (sDeviceId != null && sDeviceId.isNotEmpty) deviceId = sDeviceId;
-      appVersion = (spoofed['app_version'] as String?) ?? appVersion;
-      architecture = (spoofed['arch'] as String?) ?? architecture;
-      final sBuild = spoofed['build_number'];
-      if (sBuild is int) {
-        buildNumber = sBuild;
-      } else if (sBuild is String) {
-        buildNumber = int.tryParse(sBuild) ?? buildNumber;
-      }
-      final sPushType = spoofed['push_device_type'] as String?;
-      if (sPushType != null && sPushType.isNotEmpty) pushDeviceType = sPushType;
-      final sInstanceId = spoofed['instance_id'] as String?;
-      if (sInstanceId != null && sInstanceId.isNotEmpty) {
-        instanceId = sInstanceId;
-      }
-      final sClientSession = spoofed['client_session_id'];
-      if (sClientSession is int) clientSessionId = sClientSession;
-    }
-
-    _userAgent = {
-      'deviceType': deviceType,
-      'appVersion': appVersion,
-      'osVersion': osVersion,
-      'timezone': timezone,
-      'screen': screen,
-      'pushDeviceType': pushDeviceType,
-      'arch': architecture,
-      'locale': locale,
-      'buildNumber': buildNumber,
-      'deviceName': deviceName,
-      'deviceLocale': deviceLocale,
-    };
-
-    _deviceId = deviceId;
-
-    final payload = <dynamic, dynamic>{
-      'mt_instanceid': instanceId,
-      'userAgent': _userAgent,
-      'clientSessionId': clientSessionId,
-      'deviceId': deviceId,
-    };
-
-    return sendRequest(Opcode.sessionInit, payload);
-  }
-
   /// Отправляет запрос и ждёт ответ от сервера.
-  Future<Packet> sendRequest(int opcode, Map<dynamic, dynamic> payload) {
-    final seq = _sender.send(_connection, opcode, payload);
-    DebugSessionLog.instance.recordRequest(opcode, seq, payload);
-    return _dispatcher
-        .registerPending(seq)
+  Future<Packet> sendRequest(
+    int opcode,
+    Map<dynamic, dynamic> payload, {
+    bool silent = false,
+  }) async {
+    final session = _session;
+    if (session == null) {
+      throw StateError('Нет соединения (${Opcode.name(opcode)})');
+    }
+    // Лог запроса/ответа ведётся из wire-лога ядра (_onWireLog) по настоящему
+    // проводному seq, поэтому здесь ничего не пишем.
+    final KolibriResponse resp = await session
+        .requestMapFull(opcode, Map<String, dynamic>.from(payload))
         .timeout(
           ServerConfig.requestTimeout,
           onTimeout: () =>
               throw TimeoutException('${Opcode.name(opcode)} таймаут'),
-        )
-        .then(
-          (packet) {
-            DebugSessionLog.instance.recordResponse(
-              seq,
-              packet.cmd,
-              packet.payload,
-            );
-            return packet;
-          },
-          onError: (Object e, StackTrace st) {
-            DebugSessionLog.instance.recordError(seq, e);
-            Error.throwWithStackTrace(e, st);
-          },
         );
+
+    final packet = Packet(
+      cmd: resp.cmd,
+      opcode: resp.opcode,
+      payload: resp.payload,
+    );
+
+    if (packet.isError) {
+      if (isSessionExpiredPayload(packet.payload)) {
+        final ex = SessionExpiredException(
+          messageFromErrorPayload(packet.payload),
+        );
+        _sessionExpiredController.add(ex);
+        throw ex;
+      }
+      final text = _serverErrorText(packet.payload);
+      if (text != null && !silent) _errorController.add(text);
+      final err = PacketError(
+        messageFromErrorPayload(packet.payload),
+        errorKey: resp.errorKey,
+      );
+      throw err;
+    }
+    return packet;
   }
 
   Future<Map<dynamic, dynamic>?> sendRequestMap(
@@ -485,48 +358,295 @@ class Api {
     _reconnectTimer?.cancel();
     _cleanup();
     _dispatcher.dispose();
-    await _connection.dispose();
     await _stateController.close();
     await _sessionExpiredController.close();
     await _handshakeSuccessController.close();
+    await _errorController.close();
   }
 
   // Внутрянка
+
+  /// Строит устройство-поля и создаёт сессию ядра. Заодно заполняет
+  /// [_userAgent] и [_deviceId] для геттеров.
+  Future<(KolibriSession, Stream<WireLogEvent>)> _buildSessionOptions(
+    ({String host, int port, bool trustMincifryCa}) endpoint,
+  ) async {
+    final deviceInfo = DeviceInfoPlugin();
+
+    String deviceType = 'ANDROID';
+    String osVersion = '';
+    String deviceName = 'Unknown';
+    String architecture = 'arm64-v8a';
+    String appVersion = SpoofingService.hardcodedAppVersion;
+    int buildNumber = SpoofingService.hardcodedBuildNumber;
+    String screen = '420dpi 420dpi 1080x2340';
+
+    if (!_tzInitialized) {
+      tz.initializeTimeZones();
+      _tzInitialized = true;
+    }
+    final timeZoneName = await FlutterTimezone.getLocalTimezone();
+    String timezone = timeZoneName.identifier;
+    String locale = 'ru';
+    String deviceLocale = Platform.localeName.substring(0, 2);
+    String deviceId = await DeviceIdentity.deviceId();
+    String pushDeviceType = 'GCM';
+    String instanceId = await DeviceIdentity.instanceId();
+    int clientSessionId = DeviceIdentity.clientSessionId;
+
+    String? androidManufacturer;
+    String? androidModel;
+    int? androidSdkInt;
+
+    if (Platform.isLinux) {
+      final linuxInfo = await deviceInfo.linuxInfo;
+      osVersion = linuxInfo.name;
+    } else if (Platform.isIOS) {
+      final iosInfo = await deviceInfo.iosInfo;
+      osVersion = iosInfo.systemVersion;
+      deviceName = iosInfo.utsname.machine;
+    } else if (Platform.isAndroid) {
+      final androidInfo = await deviceInfo.androidInfo;
+      osVersion = 'Android ${androidInfo.version.release}';
+      deviceName = '${androidInfo.manufacturer} ${androidInfo.model}';
+      androidManufacturer = androidInfo.manufacturer;
+      androidModel = androidInfo.model;
+      androidSdkInt = androidInfo.version.sdkInt;
+    } else if (Platform.isWindows) {
+      final windowsInfo = await deviceInfo.windowsInfo;
+      osVersion = windowsInfo.productName;
+    }
+
+    String? spoofUserAgent;
+    final spoofed = await SpoofingService.getSpoofedSessionData(
+      scope: spoofScope,
+    );
+    if (spoofed != null) {
+      spoofUserAgent = spoofed['user_agent'] as String?;
+      final sDeviceType = spoofed['device_type'] as String?;
+      if (sDeviceType != null && sDeviceType != 'IOS') deviceType = sDeviceType;
+      final sDeviceName = spoofed['device_name'] as String?;
+      if (sDeviceName != null && sDeviceName.isNotEmpty) {
+        deviceName = sDeviceName;
+      }
+      final sOsVersion = spoofed['os_version'] as String?;
+      if (sOsVersion != null && sOsVersion.isNotEmpty) osVersion = sOsVersion;
+      final sScreen = spoofed['screen'] as String?;
+      if (sScreen != null && sScreen.isNotEmpty) screen = sScreen;
+      final sTimezone = spoofed['timezone'] as String?;
+      if (sTimezone != null && sTimezone.isNotEmpty) timezone = sTimezone;
+      final sLocale = spoofed['locale'] as String?;
+      if (sLocale != null && sLocale.isNotEmpty) {
+        locale = sLocale;
+        deviceLocale = sLocale.split(RegExp(r'[-_]')).first;
+      }
+      final sDeviceLocale = spoofed['device_locale'] as String?;
+      if (sDeviceLocale != null && sDeviceLocale.isNotEmpty) {
+        deviceLocale = sDeviceLocale;
+      }
+      final sDeviceId = spoofed['device_id'] as String?;
+      if (sDeviceId != null && sDeviceId.isNotEmpty) deviceId = sDeviceId;
+      appVersion = (spoofed['app_version'] as String?) ?? appVersion;
+      architecture = (spoofed['arch'] as String?) ?? architecture;
+      final sBuild = spoofed['build_number'];
+      if (sBuild is int) {
+        buildNumber = sBuild;
+      } else if (sBuild is String) {
+        buildNumber = int.tryParse(sBuild) ?? buildNumber;
+      }
+      final sPushType = spoofed['push_device_type'] as String?;
+      if (sPushType != null && sPushType.isNotEmpty) pushDeviceType = sPushType;
+      final sInstanceId = spoofed['instance_id'] as String?;
+      if (sInstanceId != null && sInstanceId.isNotEmpty) {
+        instanceId = sInstanceId;
+      }
+      final sClientSession = spoofed['client_session_id'];
+      if (sClientSession is int) clientSessionId = sClientSession;
+    }
+
+    _callsDevice = _resolveCallsDevice(
+      spoofed: spoofed != null,
+      deviceName: deviceName,
+      spoofUserAgent: spoofUserAgent,
+      manufacturer: androidManufacturer,
+      model: androidModel,
+    );
+    _callsOsVersion = _resolveCallsOsVersion(
+      spoofed: spoofed != null,
+      osVersion: osVersion,
+      sdkInt: androidSdkInt,
+    );
+
+    _userAgent = {
+      'deviceType': deviceType,
+      'appVersion': appVersion,
+      'osVersion': osVersion,
+      'timezone': timezone,
+      'screen': screen,
+      'pushDeviceType': pushDeviceType,
+      'arch': architecture,
+      'locale': locale,
+      'buildNumber': buildNumber,
+      'deviceName': deviceName,
+      'deviceLocale': deviceLocale,
+    };
+    _deviceId = deviceId;
+
+    final insecureTls = await TlsConfig.isInsecureAllowed();
+    final proxy = await _buildProxyUrl();
+
+    return openSessionWithWireLog(
+      host: endpoint.host,
+      port: endpoint.port,
+      deviceId: deviceId,
+      instanceId: instanceId,
+      appVersion: appVersion,
+      buildNumber: buildNumber,
+      deviceType: deviceType,
+      osVersion: osVersion,
+      timezone: timezone,
+      screen: screen,
+      pushDeviceType: pushDeviceType,
+      arch: architecture,
+      locale: locale,
+      deviceName: deviceName,
+      deviceLocale: deviceLocale,
+      clientSessionId: clientSessionId,
+      pingIntervalSecs: ServerConfig.pingInterval.inSeconds,
+      pingInteractive: !KometSettings.ghostMode.value,
+      autoReconnect: false,
+      insecureTls: insecureTls,
+      proxy: proxy,
+    );
+  }
+
+  static String? _resolveCallsDevice({
+    required bool spoofed,
+    required String deviceName,
+    String? spoofUserAgent,
+    String? manufacturer,
+    String? model,
+  }) {
+    if (!spoofed &&
+        manufacturer != null &&
+        manufacturer.isNotEmpty &&
+        model != null &&
+        model.isNotEmpty) {
+      return '$manufacturer/$model';
+    }
+    final parts = deviceName.trim().split(RegExp(r'\s+'))
+      ..removeWhere((p) => p.isEmpty);
+    if (parts.isEmpty) return null;
+    final fallbackModel = parts.length > 1
+        ? parts.sublist(1).join(' ')
+        : parts.first;
+    return '${parts.first}/'
+        '${_modelFromUserAgent(spoofUserAgent) ?? fallbackModel}';
+  }
+
+  static String? _modelFromUserAgent(String? userAgent) {
+    if (userAgent == null || userAgent.isEmpty) return null;
+    final match = RegExp(r'Android\s+[\d.]+;\s*([^;)]+)').firstMatch(userAgent);
+    final model = match
+        ?.group(1)
+        ?.replaceFirst(RegExp(r'\s+Build/.*$'), '')
+        .trim();
+    return model == null || model.isEmpty ? null : model;
+  }
+
+  static String _resolveCallsOsVersion({
+    required bool spoofed,
+    required String osVersion,
+    int? sdkInt,
+  }) {
+    if (!spoofed && sdkInt != null && sdkInt > 0) return '$sdkInt';
+    final release = RegExp(
+      r'^Android\s+(\d+)',
+    ).firstMatch(osVersion.trim())?.group(1);
+    return '${_androidSdkForRelease(int.tryParse(release ?? ''))}';
+  }
+
+  static int _androidSdkForRelease(int? release) => switch (release) {
+    null => 34,
+    <= 9 => 28,
+    10 => 29,
+    11 => 30,
+    12 => 31,
+    13 => 33,
+    14 => 34,
+    15 => 35,
+    _ => 36,
+  };
+
+  static Future<String?> _buildProxyUrl() async {
+    final p = await ProxyConfig.load();
+    if (!p.isEnabled) return null;
+    final scheme = p.type == ProxyType.socks5 ? 'socks5h' : 'http';
+    final auth = p.hasCredentials
+        ? '${Uri.encodeComponent(p.username!)}:'
+              '${Uri.encodeComponent(p.password!)}@'
+        : '';
+    return '$scheme://$auth${p.host}:${p.port}';
+  }
+
+  void _onPush((int, Map<String, dynamic>) event) {
+    final packet = Packet(
+      cmd: CmdType.push,
+      opcode: event.$1,
+      payload: event.$2,
+    );
+    // Учёт трафика пушей ведётся из wire-лога ядра (_onWireLog).
+    _dispatcher.dispatch(packet);
+  }
+
+  /// Единый источник лога трафика: ядро отдаёт сюда каждый пакет обеих сторон —
+  /// включая SESSION_INIT-хендшейк и пинги — с настоящим проводным seq. Раньше
+  /// лог вёлся вручную из [sendRequest] по локальному счётчику, из-за чего
+  /// хендшейк/пинги в дамп не попадали, а seq был смещён относительно провода.
+  void _onWireLog(WireLogEvent e) {
+    final payload = _decodeWireJson(e.json);
+    final cmd = _wireCmdCode(e.cmd);
+    if (e.direction == 'out') {
+      DebugSessionLog.instance.recordRequest(e.opcode, e.seq, payload);
+      TrafficMonitor.instance.recordOutgoing(e.opcode, payload, e.seq, 0);
+      return;
+    }
+    // Входящие: ответы матчатся по seq, пуши идут только в монитор трафика.
+    if (e.cmd != 'push') {
+      DebugSessionLog.instance.recordResponse(e.seq, cmd, payload);
+    }
+    TrafficMonitor.instance.recordIncoming(
+      Packet(cmd: cmd, seq: e.seq, opcode: e.opcode, payload: payload),
+      0,
+    );
+  }
+
+  static int _wireCmdCode(String cmd) {
+    switch (cmd) {
+      case 'ok':
+        return CmdType.ok;
+      case 'not_found':
+        return CmdType.notFound;
+      case 'error':
+        return CmdType.error;
+      default:
+        return CmdType.request; // 'request' и 'push'
+    }
+  }
+
+  static dynamic _decodeWireJson(String json) {
+    try {
+      return jsonDecode(json);
+    } catch (_) {
+      return json;
+    }
+  }
 
   void _setSessionState(SessionState state) {
     if (_sessionState == state) return;
     _sessionState = state;
     _stateController.add(state);
     logger.i('Сессия: ${state.name}');
-  }
-
-  Future<void> _onDataReceived(Uint8List data) async {
-    final List<Uint8List> rawPackets;
-    try {
-      rawPackets = _receiver.feed(data);
-    } on ReceiverOverflowException catch (e) {
-      logger.e('$e — форсируем реконнект');
-      if (_sessionState != SessionState.disconnected) {
-        unawaited(_forceReconnect());
-      }
-      return;
-    }
-    for (final raw in rawPackets) {
-      final Packet packet;
-      try {
-        packet = await unpackPacket(raw);
-      } catch (e) {
-        logger.e('PacketReceiver: ошибка распаковки: $e');
-        continue;
-      }
-      TrafficMonitor.instance.recordIncoming(packet, raw.length);
-      if (packet.isError && isSessionExpiredPayload(packet.payload)) {
-        _sessionExpiredController.add(
-          SessionExpiredException(messageFromErrorPayload(packet.payload)),
-        );
-      }
-      _dispatcher.dispatch(packet);
-    }
   }
 
   void _onDisconnected() {
@@ -536,13 +656,18 @@ class Api {
     if (_autoReconnect) _scheduleReconnect();
   }
 
+  /// Пробный запрос-пинг: если не ответил — форсируем реконнект.
   Future<void> _probeLiveness() async {
     if (_sessionState != SessionState.online) return;
+    final session = _session;
+    if (session == null) return;
     final epoch = _sessionEpoch;
     try {
-      await sendRequest(Opcode.ping, {
-        'interactive': !KometSettings.ghostMode.value,
-      }).timeout(const Duration(seconds: 6));
+      await session
+          .requestMapFull(Opcode.ping, {
+            'interactive': !KometSettings.ghostMode.value,
+          })
+          .timeout(const Duration(seconds: 6));
     } catch (_) {
       if (_sessionEpoch != epoch || _sessionState != SessionState.online) {
         return;
@@ -555,7 +680,6 @@ class Api {
   Future<void> _forceReconnect() async {
     _connectGen++;
     _cleanup();
-    await _connection.disconnect();
     _reconnectAttempts = 0;
     _reconnectTimer?.cancel();
     _setSessionState(SessionState.disconnected);
@@ -564,12 +688,20 @@ class Api {
 
   void _cleanup() {
     _cancelConnectWatchdog();
-    _pingTimer?.cancel();
-    _dataSubscription?.cancel();
-    _socketStateSubscription?.cancel();
-    _dataSubscription = null;
-    _socketStateSubscription = null;
-    _receiver.reset();
+    _livenessTimer?.cancel();
+    _livenessTimer = null;
+    _pushSub?.cancel();
+    _pushSub = null;
+    _wireLogSub?.cancel();
+    _wireLogSub = null;
+    _lastInteractive = null;
+    final session = _session;
+    _session = null;
+    if (session != null) {
+      try {
+        session.disconnect();
+      } catch (_) {}
+    }
     _dispatcher.clearPending();
     _handshakeSuccessController.add('disconnected');
   }
@@ -584,17 +716,44 @@ class Api {
     _onReconnectCallback = callback;
   }
 
-  void _startPinging() {
-    _pingTimer?.cancel();
-    sendPing(interactive: !KometSettings.ghostMode.value);
-    _pingTimer = Timer.periodic(ServerConfig.pingInterval, (_) {
-      sendPing(interactive: !KometSettings.ghostMode.value);
-    });
+  /// Поллит состояние ядра (стрима состояний нет) — детект разрыва, плюс
+  /// синхронизация interactive-флага пинга и присутствия.
+  void _startLiveness() {
+    _livenessTimer?.cancel();
+    _lastInteractive = !KometSettings.ghostMode.value;
+    _livenessTimer = Timer.periodic(_livenessInterval, (_) => _tickLiveness());
+  }
+
+  void _tickLiveness() {
+    final session = _session;
+    if (session == null || _sessionState != SessionState.online) return;
+    final st = session.state();
+    if (st != 'online' && st != 'connected') {
+      logger.w('kolibri сессия "$st" — реконнект');
+      _onDisconnected();
+      return;
+    }
+    final interactive = !KometSettings.ghostMode.value;
+    if (interactive != _lastInteractive) {
+      _lastInteractive = interactive;
+      try {
+        session.setPingInteractive(interactive: interactive);
+      } catch (_) {}
+    }
+    if (interactive) {
+      SelfPresence.markOnline();
+    } else {
+      SelfPresence.markOfflineFromPing();
+    }
   }
 
   void sendPing({required bool interactive}) {
-    if (_connection.isConnected) {
-      _sender.send(_connection, Opcode.ping, {'interactive': interactive});
+    final session = _session;
+    if (session != null && _sessionState == SessionState.online) {
+      try {
+        session.setPingInteractive(interactive: interactive);
+      } catch (_) {}
+      _lastInteractive = interactive;
       if (interactive) {
         SelfPresence.markOnline();
       } else {
@@ -603,9 +762,13 @@ class Api {
     }
   }
 
-  static String _archFromPlatformVersion() {
-    final v = Platform.version;
-    return v.substring(v.indexOf('_') + 1, v.length - 1);
+  static String? _serverErrorText(dynamic payload) {
+    if (payload is! Map) return null;
+    for (final key in ['localizedMessage', 'title']) {
+      final v = payload[key];
+      if (v is String && v.trim().isNotEmpty) return v.trim();
+    }
+    return null;
   }
 
   static List<CountryName>? _parseRegistrationCountries(dynamic payload) {

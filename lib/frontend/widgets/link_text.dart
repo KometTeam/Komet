@@ -4,9 +4,13 @@ import 'package:flutter/material.dart';
 import '../../core/utils/link_opener.dart';
 
 final RegExp linkPattern = RegExp(
-  r'(https?://[^\s<>]+|www\.[^\s<>]+)',
+  r'((?:https?|komet|max)://[^\s<>]+'
+  r'|www\.[^\s<>]+'
+  r'|(?<![\w.@/-])max\.ru(?![\w.-])(?:/[^\s<>]*)?)',
   caseSensitive: false,
 );
+
+String linkTarget(String raw) => raw.contains('://') ? raw : 'https://$raw';
 
 class LinkText extends StatefulWidget {
   final String text;
@@ -46,7 +50,7 @@ class _LinkTextState extends State<LinkText> {
         spans.add(TextSpan(text: widget.text.substring(cursor, match.start)));
       }
       final url = match.group(0)!;
-      final target = url.startsWith('www.') ? 'https://$url' : url;
+      final target = linkTarget(url);
       final recognizer = TapGestureRecognizer()
         ..onTap = () => openExternalUrl(context, target);
       _recognizers.add(recognizer);

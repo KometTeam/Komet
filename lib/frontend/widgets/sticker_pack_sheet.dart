@@ -10,6 +10,7 @@ import 'custom_notification.dart';
 import 'small_spinner.dart';
 import 'lottie_image.dart';
 import 'sticker_peek.dart';
+import '../../core/config/app_shape.dart';
 
 enum _PackAction { forward, copyLink }
 
@@ -304,19 +305,13 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
                   ? cs.surfaceContainerHighest
                   : cs.primary,
               foregroundColor: _isFavorite ? cs.onSurface : cs.onPrimary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
+              shape: AppShape.buttonBorder,
             ),
             onPressed: _busy ? null : _toggle,
             child: _busy
-                ? SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      color: _isFavorite ? cs.onSurface : cs.onPrimary,
-                    ),
+                ? SmallSpinner(
+                    size: 22,
+                    color: _isFavorite ? cs.onSurface : cs.onPrimary,
                   )
                 : Text(
                     _isFavorite ? 'Убрать' : 'Добавить',

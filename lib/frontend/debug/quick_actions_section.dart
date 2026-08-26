@@ -49,7 +49,7 @@ class DebugQuickActionsSection extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Все логи и запросы за последние 3 захода в приложение',
+                            'Zip-архив: логи и запросы за последние 24 часа, каждый заход отдельным файлом',
                             style: TextStyle(
                               color: cs.onSurfaceVariant,
                               fontSize: 13,

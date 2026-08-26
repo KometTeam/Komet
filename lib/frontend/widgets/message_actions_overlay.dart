@@ -12,17 +12,29 @@ import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../l10n/app_localizations.dart';
 import 'custom_notification.dart';
+import 'komet_avatar.dart';
 import 'lottie_image.dart';
+import 'small_spinner.dart';
 
 class ReactionEmoji {
   final String emoji;
   final String? animationUrl;
   final String? staticUrl;
 
-  const ReactionEmoji({
-    required this.emoji,
-    this.animationUrl,
-    this.staticUrl,
+  const ReactionEmoji({required this.emoji, this.animationUrl, this.staticUrl});
+}
+
+class MessageReader {
+  final int id;
+  final String name;
+  final String? avatarUrl;
+  final ReactionEmoji? reaction;
+
+  const MessageReader({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+    this.reaction,
   });
 }
 
@@ -88,13 +100,18 @@ void showMessageActions({
   required Offset tapPoint,
   required bool isMe,
   required String? messageText,
+  required String? copyText,
   required MessageActionsController controller,
   required MessageActionsStyle style,
   required VoidCallback onDispose,
   List<Map<String, dynamic>>? editHistory,
+  Future<List<MessageReader>> Function()? loadReadBy,
+  void Function(int userId)? onReaderTap,
   Future<List<({int id, String title})>> Function()? loadReportReasons,
   Future<bool> Function(int reasonId)? onReport,
   VoidCallback? onDelete,
+  bool allowDelete = true,
+  bool allowCopy = true,
   VoidCallback? onEdit,
   VoidCallback? onReply,
   VoidCallback? onForward,
@@ -124,13 +141,18 @@ void showMessageActions({
       tapPoint: tapPoint,
       isMe: isMe,
       messageText: messageText,
+      copyText: copyText,
       controller: controller,
       style: style,
       interaction: interaction,
       editHistory: editHistory,
+      loadReadBy: loadReadBy,
+      onReaderTap: onReaderTap,
       loadReportReasons: loadReportReasons,
       onReport: onReport,
       onDelete: onDelete,
+      allowDelete: allowDelete,
+      allowCopy: allowCopy,
       onEdit: onEdit,
       onReply: onReply,
       onForward: onForward,
@@ -156,14 +178,19 @@ class _MessageActionsLayer extends StatefulWidget {
   final Offset tapPoint;
   final bool isMe;
   final String? messageText;
+  final String? copyText;
   final MessageActionsController controller;
   final MessageActionsStyle style;
   final MessageActionsInteraction interaction;
   final VoidCallback onDismiss;
   final List<Map<String, dynamic>>? editHistory;
+  final Future<List<MessageReader>> Function()? loadReadBy;
+  final void Function(int userId)? onReaderTap;
   final Future<List<({int id, String title})>> Function()? loadReportReasons;
   final Future<bool> Function(int reasonId)? onReport;
   final VoidCallback? onDelete;
+  final bool allowDelete;
+  final bool allowCopy;
   final VoidCallback? onEdit;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
@@ -181,14 +208,19 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.tapPoint,
     required this.isMe,
     required this.messageText,
+    required this.copyText,
     required this.controller,
     required this.style,
     required this.interaction,
     required this.onDismiss,
     this.editHistory,
+    this.loadReadBy,
+    this.onReaderTap,
     this.loadReportReasons,
     this.onReport,
     this.onDelete,
+    this.allowDelete = true,
+    this.allowCopy = true,
     this.onEdit,
     this.onReply,
     this.onForward,
@@ -206,7 +238,7 @@ class _MessageActionsLayer extends StatefulWidget {
 }
 
 class _MessageActionsLayerState extends State<_MessageActionsLayer>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _animController;
   late final Animation<double> _animation;
   late final AnimationController _expandController;
@@ -234,9 +266,14 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   bool _committedFired = false;
   bool _showHistory = false;
   bool _showReport = false;
+  bool _showReadBy = false;
   bool _reportLoading = false;
   bool _reportSending = false;
+  bool _readByLoading = false;
   List<({int id, String title})>? _reasons;
+  List<MessageReader>? _readers;
+
+  bool get _panelOpen => _showHistory || _showReport || _showReadBy;
 
   @override
   void initState() {
@@ -463,22 +500,22 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
 
   List<_Action> _buildActions() {
     final l10n = AppLocalizations.of(context)!;
-    final hasText =
-        widget.messageText != null && widget.messageText!.isNotEmpty;
+    final copyText = widget.copyText;
+    final canCopy = widget.allowCopy && copyText != null && copyText.isNotEmpty;
     return <_Action>[
-      if (hasText) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
-      if (widget.isMe && widget.onEdit != null)
-        _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
       if (widget.onReply != null)
         _Action(Symbols.reply, l10n.msgActionsReply, _reply),
+      if (widget.onForward != null)
+        _Action(Symbols.forward, l10n.msgActionsForward, _forward),
+      if (canCopy) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
+      if (widget.isMe && widget.onEdit != null)
+        _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
       if (widget.onPin != null)
         _Action(
           widget.isPinned ? Symbols.keep_off : Symbols.push_pin,
           widget.isPinned ? l10n.msgActionsUnpin : l10n.msgActionsPin,
           _pin,
         ),
-      if (widget.onForward != null)
-        _Action(Symbols.forward, l10n.msgActionsForward, _forward),
       if (widget.onMarkUnread != null)
         _Action(
           Symbols.mark_chat_unread,
@@ -487,6 +524,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         ),
       if (widget.editHistory != null && widget.editHistory!.isNotEmpty)
         _Action(Symbols.history, l10n.msgActionsEditHistory, _showHistoryView),
+      if (widget.loadReadBy != null)
+        _Action(Symbols.visibility, l10n.msgActionsReadBy, _showReadByView),
       if (widget.onReport != null && widget.loadReportReasons != null)
         _Action(
           Symbols.flag,
@@ -494,18 +533,34 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
           _showReportView,
           destructive: true,
         ),
-      _Action(
-        Symbols.delete,
-        l10n.msgActionsDelete,
-        _delete,
-        destructive: true,
-      ),
+      if (widget.allowDelete)
+        _Action(
+          Symbols.delete,
+          l10n.msgActionsDelete,
+          _delete,
+          destructive: true,
+        ),
     ];
   }
 
   void _showHistoryView() {
     if (!mounted) return;
     setState(() => _showHistory = true);
+  }
+
+  Future<void> _showReadByView() async {
+    if (!mounted) return;
+    setState(() {
+      _showReadBy = true;
+      _readByLoading = _readers == null;
+    });
+    if (_readers != null) return;
+    final loaded = await widget.loadReadBy?.call();
+    if (!mounted) return;
+    setState(() {
+      _readers = loaded ?? const [];
+      _readByLoading = false;
+    });
   }
 
   Future<void> _showReportView() async {
@@ -541,6 +596,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     setState(() {
       _showHistory = false;
       _showReport = false;
+      _showReadBy = false;
     });
   }
 
@@ -589,7 +645,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   }
 
   Future<void> _copy() async {
-    final text = widget.messageText;
+    final text = widget.copyText;
     if (text != null && text.isNotEmpty) {
       await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) return;
@@ -648,7 +704,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         final t = _animation.value.clamp(0.0, 1.0);
         final e = showReactions ? _expandAnim.value.clamp(0.0, 1.0) : 0.0;
         final bubbleScale = 1.0 + 0.02 * t;
-        final menuHidden = _showHistory || _showReport || _reactionsExpanded;
+        final menuHidden = _panelOpen || _reactionsExpanded;
 
         return GestureDetector(
           onTap: _close,
@@ -702,9 +758,9 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
               ),
               Positioned.fill(
                 child: IgnorePointer(
-                  ignoring: !(_showHistory || _showReport),
+                  ignoring: !_panelOpen,
                   child: AnimatedOpacity(
-                    opacity: (_showHistory || _showReport) ? 1.0 : 0.0,
+                    opacity: _panelOpen ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOut,
                     child: Stack(
@@ -712,14 +768,26 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
                         if (_showReport)
                           _buildReportMenu()
                         else if (_showHistory)
-                          _buildHistoryMenu(),
+                          _buildHistoryMenu()
+                        else if (_showReadBy)
+                          _buildReadByMenu(),
                       ],
                     ),
                   ),
                 ),
               ),
               if (showReactions)
-                Positioned.fill(child: _buildReactionStrip(t, e)),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: _panelOpen,
+                    child: AnimatedOpacity(
+                      opacity: _panelOpen ? 0.0 : 1.0,
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOut,
+                      child: _buildReactionStrip(t, e),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
@@ -940,7 +1008,11 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     );
   }
 
-  Widget _buildQuickRow(ColorScheme cs, double cell, List<ReactionEmoji> quick) {
+  Widget _buildQuickRow(
+    ColorScheme cs,
+    double cell,
+    List<ReactionEmoji> quick,
+  ) {
     return Center(
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1041,10 +1113,14 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     );
   }
 
-  Widget _buildAnchoredPanel({required String title, required Widget body}) {
+  Widget _buildAnchoredPanel({
+    required String title,
+    required Widget body,
+    double width = 220.0,
+  }) {
     final cs = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
-    const menuWidth = 220.0;
+    final panelWidth = math.min(width, size.width - 16.0);
 
     double left;
     double top;
@@ -1053,21 +1129,21 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       top = _menuRect.top;
     } else {
       left = widget.isMe
-          ? widget.originRect.right - menuWidth
+          ? widget.originRect.right - panelWidth
           : widget.originRect.left;
       top = _showBelow
           ? widget.originRect.bottom + 10
           : widget.originRect.top - 10;
     }
     final bottomLimit = size.height - MediaQuery.viewInsetsOf(context).bottom;
-    left = left.clamp(8.0, size.width - menuWidth - 8.0);
+    left = left.clamp(8.0, math.max(8.0, size.width - panelWidth - 8.0));
     top = top.clamp(8.0, math.max(8.0, bottomLimit - 160.0));
     final maxHeight = math.min(size.height * 0.6, bottomLimit - top - 8.0);
 
     return Positioned(
       left: left,
       top: top,
-      width: menuWidth,
+      width: panelWidth,
       child: GestureDetector(
         onTap: () {},
         child: Material(
@@ -1157,6 +1233,87 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     );
   }
 
+  Widget _buildReadByMenu() {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final Widget body;
+    if (_readByLoading) {
+      body = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 28),
+        child: Center(child: SmallSpinner(size: 24)),
+      );
+    } else {
+      final readers = _readers ?? const <MessageReader>[];
+      if (readers.isEmpty) {
+        body = Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          child: Text(
+            l10n.msgActionsReadByEmpty,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          ),
+        );
+      } else {
+        body = SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [for (final reader in readers) _readerRow(cs, reader)],
+          ),
+        );
+      }
+    }
+    return _buildAnchoredPanel(
+      title: l10n.msgActionsReadBy,
+      body: body,
+      width: 250,
+    );
+  }
+
+  Future<void> _openReaderProfile(MessageReader reader) async {
+    final onTap = widget.onReaderTap;
+    if (onTap == null) return;
+    Haptics.tap();
+    await _close();
+    onTap(reader.id);
+  }
+
+  Widget _readerRow(ColorScheme cs, MessageReader reader) {
+    final reaction = reader.reaction;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onReaderTap == null
+            ? null
+            : () => _openReaderProfile(reader),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              KometAvatar(
+                name: reader.name,
+                imageUrl: reader.avatarUrl,
+                size: 30,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  reader.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: cs.onSurface, fontSize: 14),
+                ),
+              ),
+              if (reaction != null) ...[
+                const SizedBox(width: 8),
+                _ReactionGlyph(reaction: reaction, size: 20),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildReportMenu() {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
@@ -1164,13 +1321,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     if (_reportLoading) {
       body = const Padding(
         padding: EdgeInsets.symmetric(vertical: 28),
-        child: Center(
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2.4),
-          ),
-        ),
+        child: Center(child: SmallSpinner(size: 24)),
       );
     } else {
       final reasons = _reasons ?? const <({int id, String title})>[];
@@ -1497,13 +1648,7 @@ class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
           _buildSearchField(cs),
           Expanded(
             child: !_loaded
-                ? const Center(
-                    child: SizedBox(
-                      width: 26,
-                      height: 26,
-                      child: CircularProgressIndicator(strokeWidth: 2.4),
-                    ),
-                  )
+                ? const Center(child: SmallSpinner(size: 26))
                 : _results.isEmpty
                 ? const SizedBox.shrink()
                 : LottieScrollScope(
@@ -1618,7 +1763,8 @@ class _ReactionGlyph extends StatelessWidget {
     final anim = reaction.animationUrl;
     final still = reaction.staticUrl;
     final hasAsset =
-        (anim != null && anim.isNotEmpty) || (still != null && still.isNotEmpty);
+        (anim != null && anim.isNotEmpty) ||
+        (still != null && still.isNotEmpty);
     if (!hasAsset) {
       return Center(
         child: Text(reaction.emoji, style: TextStyle(fontSize: size * 0.9)),

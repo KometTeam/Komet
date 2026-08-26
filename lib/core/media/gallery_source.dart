@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:photo_manager/photo_manager.dart';
+
+import 'desktop_video_probe.dart';
 
 enum GalleryPermission { granted, limited, denied }
 
@@ -14,6 +17,21 @@ abstract class GalleryItem {
   Future<Uint8List?> thumbnail(int size);
   Future<File?> originFile();
   Future<(int, int)?> dimensions();
+  Future<Uint8List?> encodeForUpload({
+    required int maxDimension,
+    required int quality,
+  });
+
+  static GalleryItem fromFile(File file) => _FileGalleryItem(file);
+}
+
+class GalleryPage {
+  const GalleryPage({required this.items, required this.hasMore});
+
+  static const empty = GalleryPage(items: <GalleryItem>[], hasMore: false);
+
+  final List<GalleryItem> items;
+  final bool hasMore;
 }
 
 class PickedPhoto {
@@ -40,8 +58,10 @@ Future<(int, int)?> imageFileDimensions(File file) async {
 }
 
 abstract class GallerySource {
+  static const int pageSize = 120;
+
   Future<GalleryPermission> ensurePermission();
-  Future<List<GalleryItem>> load({int limit});
+  Future<GalleryPage> load({int offset, int limit});
   Future<void> openSettings();
   Future<void> manageAccess();
 
@@ -62,20 +82,51 @@ class _PhotoManagerSource implements GallerySource {
     return GalleryPermission.denied;
   }
 
-  @override
-  Future<List<GalleryItem>> load({int limit = 120}) async {
-    final paths = await PhotoManager.getAssetPathList(
-      type: RequestType.common,
-      onlyAll: true,
-      filterOption: FilterOptionGroup(
-        orders: const [
-          OrderOption(type: OrderOptionType.createDate, asc: false),
-        ],
+  AssetPathEntity? _album;
+  int _total = 0;
+
+  static FilterOptionGroup _filter() => FilterOptionGroup(
+    imageOption: const FilterOption(
+      sizeConstraint: SizeConstraint(ignoreSize: true),
+    ),
+    videoOption: const FilterOption(
+      sizeConstraint: SizeConstraint(ignoreSize: true),
+      durationConstraint: DurationConstraint(
+        max: Duration(days: 365),
+        allowNullable: true,
       ),
+    ),
+    createTimeCond: DateTimeCond.def().copyWith(ignore: true),
+    orders: const [OrderOption(type: OrderOptionType.createDate, asc: false)],
+  );
+
+  @override
+  Future<GalleryPage> load({
+    int offset = 0,
+    int limit = GallerySource.pageSize,
+  }) async {
+    if (offset == 0 || _album == null) {
+      final paths = await PhotoManager.getAssetPathList(
+        type: RequestType.common,
+        onlyAll: true,
+        filterOption: _filter(),
+      );
+      if (paths.isEmpty) {
+        _album = null;
+        _total = 0;
+        return GalleryPage.empty;
+      }
+      _album = paths.first;
+      _total = await paths.first.assetCountAsync;
+    }
+    final album = _album;
+    if (album == null || offset >= _total) return GalleryPage.empty;
+    final end = offset + limit < _total ? offset + limit : _total;
+    final assets = await album.getAssetListRange(start: offset, end: end);
+    return GalleryPage(
+      items: assets.map((a) => _AssetGalleryItem(a)).toList(),
+      hasMore: end < _total,
     );
-    if (paths.isEmpty) return const [];
-    final assets = await paths.first.getAssetListRange(start: 0, end: limit);
-    return assets.map((a) => _AssetGalleryItem(a)).toList();
   }
 
   @override
@@ -110,6 +161,16 @@ class _AssetGalleryItem implements GalleryItem {
   Future<File?> originFile() => asset.file;
 
   @override
+  Future<Uint8List?> encodeForUpload({
+    required int maxDimension,
+    required int quality,
+  }) => asset.thumbnailDataWithSize(
+    ThumbnailSize(maxDimension, maxDimension),
+    format: ThumbnailFormat.jpeg,
+    quality: quality,
+  );
+
+  @override
   Future<(int, int)?> dimensions() async {
     if (asset.width > 0 && asset.height > 0) {
       return (asset.width, asset.height);
@@ -118,36 +179,81 @@ class _AssetGalleryItem implements GalleryItem {
   }
 }
 
-class _DesktopGallerySource implements GallerySource {
-  static const _imageExtensions = {
-    '.jpg',
-    '.jpeg',
-    '.png',
-    '.gif',
-    '.webp',
-    '.bmp',
-    '.heic',
-    '.heif',
-  };
+const Set<String> kGalleryImageExtensions = {
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.webp',
+  '.bmp',
+  '.heic',
+  '.heif',
+};
 
+const Set<String> kGalleryVideoExtensions = {
+  '.mp4',
+  '.mov',
+  '.m4v',
+  '.mkv',
+  '.webm',
+  '.avi',
+  '.3gp',
+};
+
+String _fileExtension(String path) {
+  final dot = path.lastIndexOf('.');
+  if (dot < 0) return '';
+  return path.substring(dot).toLowerCase();
+}
+
+bool isVideoPath(String path) =>
+    kGalleryVideoExtensions.contains(_fileExtension(path));
+
+class _DesktopGallerySource implements GallerySource {
   @override
   Future<GalleryPermission> ensurePermission() async =>
       GalleryPermission.granted;
 
+  List<_FileGalleryItem> _all = const [];
+
   @override
-  Future<List<GalleryItem>> load({int limit = 120}) async {
+  Future<GalleryPage> load({
+    int offset = 0,
+    int limit = GallerySource.pageSize,
+  }) async {
+    if (offset == 0 || _all.isEmpty) _all = _scan();
+    if (offset >= _all.length) return GalleryPage.empty;
+    final end = offset + limit < _all.length ? offset + limit : _all.length;
+    final items = _all.sublist(offset, end);
+    const batch = 8;
+    const eager = 24;
+
+    Future<void> probeRange(int from, int to) async {
+      for (var i = from; i < to; i += batch) {
+        final stop = i + batch > to ? to : i + batch;
+        await Future.wait(items.sublist(i, stop).map((it) => it.probe()));
+      }
+    }
+
+    final head = items.length < eager ? items.length : eager;
+    await probeRange(0, head);
+    if (head < items.length) unawaited(probeRange(head, items.length));
+    return GalleryPage(items: items, hasMore: end < _all.length);
+  }
+
+  List<_FileGalleryItem> _scan() {
     final entries = <({File file, DateTime modified})>[];
     for (final dir in _candidateDirs()) {
       if (!dir.existsSync()) continue;
       try {
         for (final entity in dir.listSync(followLinks: false)) {
-          if (entity is! File || !_isImage(entity.path)) continue;
+          if (entity is! File || !_isMedia(entity.path)) continue;
           entries.add((file: entity, modified: entity.statSync().modified));
         }
       } catch (_) {}
     }
     entries.sort((a, b) => b.modified.compareTo(a.modified));
-    return entries.take(limit).map((e) => _FileGalleryItem(e.file)).toList();
+    return entries.map((e) => _FileGalleryItem(e.file)).toList();
   }
 
   @override
@@ -164,39 +270,57 @@ class _DesktopGallerySource implements GallerySource {
       Directory('$home/Pictures'),
       Directory('$home/Изображения'),
       Directory('$home/Images'),
+      Directory('$home/Videos'),
+      Directory('$home/Видео'),
+      Directory('$home/Movies'),
     ];
   }
 
-  bool _isImage(String path) {
-    final dot = path.lastIndexOf('.');
-    if (dot < 0) return false;
-    return _imageExtensions.contains(path.substring(dot).toLowerCase());
+  bool _isMedia(String path) {
+    final ext = _fileExtension(path);
+    return kGalleryImageExtensions.contains(ext) ||
+        kGalleryVideoExtensions.contains(ext);
   }
 }
 
 class _FileGalleryItem implements GalleryItem {
   final File file;
+  Duration? _duration;
 
-  _FileGalleryItem(this.file);
+  _FileGalleryItem(this.file, {Duration? duration}) : _duration = duration;
+
+  Future<void> probe() async {
+    if (!isVideo || _duration != null) return;
+    _duration = await DesktopVideoProbe.duration(file.path);
+  }
 
   @override
   String get id => file.path;
 
   @override
-  bool get isVideo => false;
+  bool get isVideo => isVideoPath(file.path);
 
   @override
-  Duration? get duration => null;
+  Duration? get duration => _duration;
 
   @override
   File? get localFile => file;
 
   @override
-  Future<Uint8List?> thumbnail(int size) async => null;
+  Future<Uint8List?> thumbnail(int size) async =>
+      isVideo ? DesktopVideoProbe.thumbnail(file.path, size) : null;
 
   @override
   Future<File?> originFile() async => file;
 
   @override
-  Future<(int, int)?> dimensions() => imageFileDimensions(file);
+  Future<Uint8List?> encodeForUpload({
+    required int maxDimension,
+    required int quality,
+  }) async => null;
+
+  @override
+  Future<(int, int)?> dimensions() => isVideo
+      ? DesktopVideoProbe.dimensions(file.path)
+      : imageFileDimensions(file);
 }

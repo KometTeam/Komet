@@ -37,6 +37,11 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
 
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
       - name: Get dependencies
         run: flutter pub get
 
@@ -74,6 +79,9 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>get-task-allow</key><true/>
+            <key>application-identifier</key><string>ru.komet.app</string>
+            <key>keychain-access-groups</key>
+            <array><string>ru.komet.app</string></array>
           </dict>
           </plist>
           PLIST

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -26,6 +28,9 @@ void showChatMenu({
   required BuildContext context,
   required Rect anchorRect,
   required List<ChatMenuItem> items,
+  Widget? header,
+  Widget? footer,
+  bool compact = false,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
   late OverlayEntry entry;
@@ -33,6 +38,9 @@ void showChatMenu({
     builder: (ctx) => _ChatMenuLayer(
       anchorRect: anchorRect,
       items: items,
+      header: header,
+      footer: footer,
+      compact: compact,
       onDismiss: () {
         if (entry.mounted) entry.remove();
       },
@@ -45,25 +53,85 @@ void showChatMenu({
 class _ChatMenuLayer extends StatefulWidget {
   final Rect anchorRect;
   final List<ChatMenuItem> items;
+  final Widget? header;
+  final Widget? footer;
+  final bool compact;
   final VoidCallback onDismiss;
 
   const _ChatMenuLayer({
     required this.anchorRect,
     required this.items,
     required this.onDismiss,
+    this.header,
+    this.footer,
+    this.compact = false,
   });
 
   @override
   State<_ChatMenuLayer> createState() => _ChatMenuLayerState();
 }
 
+class _MenuLayout extends SingleChildLayoutDelegate {
+  static const double menuWidth = 290.0;
+  static const double compactMenuWidth = 226.0;
+  static const double margin = 8.0;
+  static const double gap = 6.0;
+
+  final Rect anchor;
+  final EdgeInsets safeArea;
+  final bool compact;
+
+  const _MenuLayout({
+    required this.anchor,
+    required this.safeArea,
+    this.compact = false,
+  });
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final width = math.min(
+      compact ? compactMenuWidth : menuWidth,
+      constraints.maxWidth - margin * 2,
+    );
+    final available =
+        constraints.maxHeight - safeArea.top - safeArea.bottom - margin * 2;
+    return BoxConstraints(
+      minWidth: math.max(0, width),
+      maxWidth: math.max(0, width),
+      maxHeight: math.max(120.0, available),
+    );
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final maxLeft = math.max(margin, size.width - childSize.width - margin);
+    final left = (anchor.right - childSize.width).clamp(margin, maxLeft);
+
+    final topLimit = safeArea.top + margin;
+    final bottomLimit = size.height - safeArea.bottom - margin;
+    final below = anchor.bottom + gap;
+    final above = anchor.top - gap - childSize.height;
+
+    double top;
+    if (below + childSize.height <= bottomLimit) {
+      top = below;
+    } else if (above >= topLimit) {
+      top = above;
+    } else {
+      top = bottomLimit - childSize.height;
+    }
+    return Offset(left, math.max(topLimit, top));
+  }
+
+  @override
+  bool shouldRelayout(_MenuLayout oldDelegate) =>
+      oldDelegate.anchor != anchor ||
+      oldDelegate.safeArea != safeArea ||
+      oldDelegate.compact != compact;
+}
+
 class _ChatMenuLayerState extends State<_ChatMenuLayer>
     with SingleTickerProviderStateMixin, AnimatedOverlayPopup<_ChatMenuLayer> {
-  static const double _menuWidth = 290.0;
-  static const double _hMargin = 8.0;
-  static const double _vMargin = 8.0;
-  static const double _gap = 6.0;
-
   @override
   Duration get overlayForwardDuration => const Duration(milliseconds: 220);
 
@@ -78,29 +146,10 @@ class _ChatMenuLayerState extends State<_ChatMenuLayer>
     closeOverlay().then((_) => item.onTap?.call());
   }
 
-  Rect _resolveRect(Size screen) {
-    final maxWidth = screen.width - 2 * _hMargin;
-    final width = maxWidth <= 0
-        ? screen.width
-        : (_menuWidth.clamp(0.0, maxWidth));
-    final maxLeft = screen.width - width - _hMargin;
-    double left = widget.anchorRect.right - width;
-    if (left > maxLeft) left = maxLeft;
-    if (left < _hMargin) left = _hMargin;
-    final top = widget.anchorRect.bottom + _gap;
-    return Rect.fromLTWH(left, top, width, 0);
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final screen = MediaQuery.sizeOf(context);
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final rect = _resolveRect(screen);
-    final maxHeight = (screen.height - rect.top - bottomInset - _vMargin).clamp(
-      120.0,
-      double.infinity,
-    );
+    final safeArea = MediaQuery.paddingOf(context);
     return AnimatedBuilder(
       animation: overlayAnimation,
       builder: (ctx, child) {
@@ -115,16 +164,20 @@ class _ChatMenuLayerState extends State<_ChatMenuLayer>
                 child: const SizedBox.expand(),
               ),
             ),
-            Positioned(
-              left: rect.left,
-              top: rect.top,
-              width: rect.width,
-              child: Opacity(
-                opacity: t,
-                child: Transform.scale(
-                  scale: scale,
-                  alignment: Alignment.topRight,
-                  child: child,
+            Positioned.fill(
+              child: CustomSingleChildLayout(
+                delegate: _MenuLayout(
+                  anchor: widget.anchorRect,
+                  safeArea: safeArea,
+                  compact: widget.compact,
+                ),
+                child: Opacity(
+                  opacity: t,
+                  child: Transform.scale(
+                    scale: scale,
+                    alignment: Alignment.topRight,
+                    child: child,
+                  ),
                 ),
               ),
             ),
@@ -137,25 +190,43 @@ class _ChatMenuLayerState extends State<_ChatMenuLayer>
         clipBehavior: Clip.antiAlias,
         elevation: 12,
         shadowColor: Colors.black.withValues(alpha: 0.45),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 6),
-                for (final item in widget.items) ...[
-                  _ChatMenuRow(item: item, onTap: () => _onItemTap(item)),
-                  if (item.dividerAfter)
-                    Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: cs.onSurface.withValues(alpha: 0.07),
-                    ),
-                ],
-                const SizedBox(height: 6),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (widget.header != null) ...[
+                widget.header!,
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: cs.onSurface.withValues(alpha: 0.07),
+                ),
               ],
-            ),
+              SizedBox(height: widget.compact ? 4 : 6),
+              for (final item in widget.items) ...[
+                _ChatMenuRow(
+                  item: item,
+                  compact: widget.compact,
+                  onTap: () => _onItemTap(item),
+                ),
+                if (item.dividerAfter)
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: cs.onSurface.withValues(alpha: 0.07),
+                  ),
+              ],
+              SizedBox(height: widget.compact ? 4 : 6),
+              if (widget.footer != null) ...[
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: cs.onSurface.withValues(alpha: 0.07),
+                ),
+                widget.footer!,
+              ],
+            ],
           ),
         ),
       ),
@@ -166,8 +237,13 @@ class _ChatMenuLayerState extends State<_ChatMenuLayer>
 class _ChatMenuRow extends StatelessWidget {
   final ChatMenuItem item;
   final VoidCallback onTap;
+  final bool compact;
 
-  const _ChatMenuRow({required this.item, required this.onTap});
+  const _ChatMenuRow({
+    required this.item,
+    required this.onTap,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -176,11 +252,14 @@ class _ChatMenuRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 14 : 18,
+          vertical: compact ? 10 : 15,
+        ),
         child: Row(
           children: [
-            Icon(item.icon, size: 24, weight: 350, color: fg),
-            const SizedBox(width: 18),
+            Icon(item.icon, size: compact ? 20 : 24, weight: 350, color: fg),
+            SizedBox(width: compact ? 12 : 18),
             Expanded(
               child: Text(
                 item.label,
@@ -188,7 +267,7 @@ class _ChatMenuRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: fg,
-                  fontSize: 16,
+                  fontSize: compact ? 14 : 16,
                   fontWeight: FontWeight.w500,
                 ),
               ),

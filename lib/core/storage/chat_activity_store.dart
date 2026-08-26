@@ -14,6 +14,24 @@ extension ChatActivityLabel on ChatActivity {
 ChatActivity chatActivityFromType(dynamic type) =>
     type == 'STICKER' ? ChatActivity.sticker : ChatActivity.typing;
 
+class ChatActivitySnapshot {
+  const ChatActivitySnapshot({required this.activity, required this.userIds});
+
+  final ChatActivity activity;
+  final List<int> userIds;
+
+  String get label => activity.label;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ChatActivitySnapshot &&
+      other.activity == activity &&
+      listEquals(other.userIds, userIds);
+
+  @override
+  int get hashCode => Object.hash(activity, Object.hashAll(userIds));
+}
+
 class ChatActivityStore {
   ChatActivityStore._();
 
@@ -23,15 +41,17 @@ class ChatActivityStore {
 
   final Map<int, Map<int, ChatActivity>> _users = {};
   final Map<int, Map<int, Timer>> _timers = {};
-  final Map<int, ValueNotifier<ChatActivity?>> _notifiers = {};
+  final Map<int, ValueNotifier<ChatActivitySnapshot?>> _notifiers = {};
 
-  ValueListenable<ChatActivity?> listenable(int chatId) =>
+  ValueListenable<ChatActivitySnapshot?> listenable(int chatId) =>
       _notifiers.putIfAbsent(
         chatId,
-        () => ValueNotifier<ChatActivity?>(_current(chatId)),
+        () => ValueNotifier<ChatActivitySnapshot?>(_current(chatId)),
       );
 
-  ChatActivity? activity(int chatId) => _current(chatId);
+  ChatActivitySnapshot? snapshot(int chatId) => _current(chatId);
+
+  ChatActivity? activity(int chatId) => _current(chatId)?.activity;
 
   void mark(int chatId, int userId, ChatActivity activity) {
     final timers = _timers.putIfAbsent(chatId, () => <int, Timer>{});
@@ -64,13 +84,17 @@ class ChatActivityStore {
     _sync(chatId);
   }
 
-  ChatActivity? _current(int chatId) {
+  ChatActivitySnapshot? _current(int chatId) {
     final users = _users[chatId];
     if (users == null || users.isEmpty) return null;
-    for (final activity in users.values) {
-      if (activity == ChatActivity.typing) return ChatActivity.typing;
-    }
-    return ChatActivity.sticker;
+    final leading = users.values.contains(ChatActivity.typing)
+        ? ChatActivity.typing
+        : ChatActivity.sticker;
+    final ids = <int>[];
+    users.forEach((userId, activity) {
+      if (activity == leading) ids.add(userId);
+    });
+    return ChatActivitySnapshot(activity: leading, userIds: ids);
   }
 
   void _sync(int chatId) {

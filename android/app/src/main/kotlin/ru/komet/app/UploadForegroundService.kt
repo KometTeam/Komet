@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 
 class UploadForegroundService : Service() {
@@ -15,10 +16,13 @@ class UploadForegroundService : Service() {
         const val ACTION_START  = "ru.komet.app.UPLOAD_START"
         const val ACTION_UPDATE = "ru.komet.app.UPLOAD_UPDATE"
         const val ACTION_STOP   = "ru.komet.app.UPLOAD_STOP"
-        const val EXTRA_FILENAME = "filename"
-        const val EXTRA_PROGRESS = "progress"   // 0-100
-        const val EXTRA_SPEED    = "speed"      // bytes/sec (Long)
+        const val EXTRA_TITLE = "title"
+        const val EXTRA_BODY = "body"
+        const val EXTRA_PROGRESS = "progress"
+        const val EXTRA_INDETERMINATE = "indeterminate"
     }
+
+    private var inForeground = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -29,67 +33,96 @@ class UploadForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> {
-                val filename = intent.getStringExtra(EXTRA_FILENAME) ?: "Файл"
-                val notification = buildNotification(filename, 0, 0, indeterminate = true)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            ACTION_START, ACTION_UPDATE -> {
+                val notification = buildNotification(
+                    title = intent.getStringExtra(EXTRA_TITLE)
+                        ?: applicationInfo.loadLabel(packageManager).toString(),
+                    body = intent.getStringExtra(EXTRA_BODY) ?: "",
+                    progress = intent.getIntExtra(EXTRA_PROGRESS, 0),
+                    indeterminate = intent.getBooleanExtra(EXTRA_INDETERMINATE, true),
+                )
+                if (inForeground) {
+                    (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+                        .notify(NOTIFICATION_ID, notification)
                 } else {
-                    startForeground(NOTIFICATION_ID, notification)
+                    goForeground(notification)
                 }
             }
-            ACTION_UPDATE -> {
-                val filename = intent.getStringExtra(EXTRA_FILENAME) ?: "Файл"
-                val progress = intent.getIntExtra(EXTRA_PROGRESS, 0)
-                val speed    = intent.getLongExtra(EXTRA_SPEED, 0L)
-                val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                nm.notify(NOTIFICATION_ID, buildNotification(filename, progress, speed))
-            }
-            ACTION_STOP -> {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-            }
+            ACTION_STOP -> stopEverything()
         }
         return START_NOT_STICKY
     }
 
-    private fun createChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Загрузка файлов",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply { setShowBadge(false) }
-            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
-                .createNotificationChannel(channel)
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        stopEverything()
+        super.onTaskRemoved(rootIntent)
+    }
+
+    private fun goForeground(notification: Notification) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            inForeground = true
+        } catch (e: Exception) {
+            Log.w("UploadService", "startForeground failed: ${e.message}")
         }
+    }
+
+    private fun stopEverything() {
+        if (inForeground) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            inForeground = false
+        }
+        stopSelf()
+    }
+
+    private fun createChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.upload_channel_name),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            setShowBadge(false)
+            setSound(null, null)
+            enableVibration(false)
+            enableLights(false)
+        }
+        manager.createNotificationChannel(channel)
     }
 
     private fun buildNotification(
-        filename: String,
+        title: String,
+        body: String,
         progress: Int,
-        speedBps: Long,
-        indeterminate: Boolean = false
+        indeterminate: Boolean,
     ): Notification {
-        val body = when {
-            indeterminate       -> "Подготовка..."
-            speedBps > 0        -> "$progress% · ${formatSpeed(speedBps)}"
-            else                -> "$progress%"
-        }
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val open = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java)
+                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
-            .setContentTitle(filename)
+            .setContentTitle(title)
             .setContentText(body)
+            .setContentIntent(open)
             .setProgress(100, progress, indeterminate)
             .setOngoing(true)
-            .setOnlyAlertOnce(true)
             .setSilent(true)
-            .build()
-    }
-
-    private fun formatSpeed(bps: Long): String = when {
-        bps < 1_024L             -> "$bps Б/с"
-        bps < 1_048_576L         -> "${bps / 1024} КБ/с"
-        else                     -> "${"%.1f".format(bps / 1_048_576.0)} МБ/с"
+            .setOnlyAlertOnce(true)
+            .setDefaults(0)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
+        }
+        return builder.build()
     }
 }

@@ -22,6 +22,22 @@ class AppUpdateInfo {
   });
 }
 
+enum UpdateCheckStatus { updateAvailable, upToDate, failed }
+
+class UpdateCheckResult {
+  final UpdateCheckStatus status;
+  final AppUpdateInfo? update;
+
+  const UpdateCheckResult._(this.status, [this.update]);
+
+  const UpdateCheckResult.updateAvailable(AppUpdateInfo update)
+    : this._(UpdateCheckStatus.updateAvailable, update);
+
+  const UpdateCheckResult.upToDate() : this._(UpdateCheckStatus.upToDate);
+
+  const UpdateCheckResult.failed() : this._(UpdateCheckStatus.failed);
+}
+
 abstract class UpdateChecker {
   static const String _owner = 'KometTeam';
   static const String _repo = 'Komet';
@@ -96,6 +112,21 @@ abstract class UpdateChecker {
     return update;
   }
 
+  /// Runs a user-initiated check without applying the automatic-check interval
+  /// or the "skip this version" preference.
+  static Future<UpdateCheckResult> checkNow() async {
+    try {
+      final update = await fetchLatest();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_lastCheckKey, DateTime.now().millisecondsSinceEpoch);
+      return update == null
+          ? const UpdateCheckResult.upToDate()
+          : UpdateCheckResult.updateAvailable(update);
+    } catch (_) {
+      return const UpdateCheckResult.failed();
+    }
+  }
+
   static Future<void> skip(String tag) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_skippedTagKey, tag);
@@ -117,21 +148,24 @@ abstract class UpdateChecker {
       final resp = await req.close().timeout(_timeout);
       if (resp.statusCode != HttpStatus.ok) {
         await resp.drain<void>();
-        return null;
+        throw HttpException(
+          'GitHub returned HTTP ${resp.statusCode}',
+          uri: uri,
+        );
       }
       final body = await resp
           .transform(const Utf8Decoder())
           .join()
           .timeout(_timeout);
       final decoded = jsonDecode(body);
-      if (decoded is! List) return null;
+      if (decoded is! List) {
+        throw const FormatException('Invalid GitHub releases response');
+      }
       for (final entry in decoded) {
         if (entry is! Map) continue;
         if (entry['draft'] == true) continue;
         return entry.cast<String, dynamic>();
       }
-      return null;
-    } catch (_) {
       return null;
     } finally {
       client.close(force: true);

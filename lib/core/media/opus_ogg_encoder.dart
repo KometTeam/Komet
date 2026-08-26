@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:opus_dart/opus_dart.dart';
 
 import '../utils/logger.dart';
+import 'ogg_page_writer.dart';
 
 /// Кодирует PCM в Ogg/Opus через libopus (FFI) на платформах, где у системы нет
 /// своего Opus-энкодера (Windows). Сырые Opus-пакеты выдаёт [opus_dart], а
@@ -25,22 +26,24 @@ class OpusOggEncoder {
 
   /// Лениво загружает libopus и инициализирует opus_dart: на Windows —
   /// вендоренную `opus.dll` рядом с exe, на Android — через
-  /// `opus_flutter_android`. Возвращает `false`, если кодек недоступен.
+  /// `opus_flutter_android`, на iOS/macOS — статически слинкованную
+  /// `ogg_opus_player` (см. `-force_load` в ios/Podfile).
+  /// Возвращает `false`, если кодек недоступен.
   static Future<bool> ensureAvailable() async {
     if (_initialized) return _available;
     _initialized = true;
     try {
-      // libopus.so на Android бандлится плагином opus_flutter_android,
-      // opus.dll — вендоренная рядом с exe на Windows.
-      final String libName;
-      if (Platform.isWindows) {
-        libName = 'opus.dll';
+      final DynamicLibrary lib;
+      if (Platform.isIOS || Platform.isMacOS) {
+        lib = DynamicLibrary.process();
+      } else if (Platform.isWindows) {
+        lib = DynamicLibrary.open('opus.dll');
       } else if (Platform.isAndroid) {
-        libName = 'libopus.so';
+        lib = DynamicLibrary.open('libopus.so');
       } else {
         return false;
       }
-      initOpus(DynamicLibrary.open(libName) as dynamic);
+      initOpus(lib as dynamic);
       _available = true;
     } catch (e) {
       logger.w('OpusOggEncoder: libopus недоступна: $e');
@@ -176,70 +179,15 @@ class OpusOggEncoder {
     required int granulePos,
     required int seq,
     required List<Uint8List> packets,
-  }) {
-    final segs = <int>[];
-    for (final p in packets) {
-      var len = p.length;
-      while (len >= 255) {
-        segs.add(255);
-        len -= 255;
-      }
-      segs.add(len);
-    }
-
-    final header = Uint8List(27 + segs.length);
-    final hd = ByteData.sublistView(header);
-    header.setRange(0, 4, _ascii('OggS'));
-    hd.setUint8(4, 0); // stream structure version
-    hd.setUint8(5, headerType);
-    hd.setUint64(6, granulePos, Endian.little);
-    hd.setUint32(14, _serial, Endian.little);
-    hd.setUint32(18, seq, Endian.little);
-    hd.setUint32(22, 0, Endian.little); // CRC placeholder
-    hd.setUint8(26, segs.length);
-    header.setRange(27, 27 + segs.length, segs);
-
-    final body = BytesBuilder();
-    body.add(header);
-    for (final p in packets) {
-      body.add(p);
-    }
-    final page = body.toBytes();
-
-    final crc = _crc32(page);
-    ByteData.sublistView(page).setUint32(22, crc, Endian.little);
-    return page;
-  }
+  }) => OggPageWriter.page(
+    headerType: headerType,
+    granulePos: granulePos,
+    serial: _serial,
+    sequence: seq,
+    packets: packets,
+  );
 
   static Uint8List _ascii(String s) => Uint8List.fromList(s.codeUnits);
-
-  static final Uint32List _crcTable = _buildCrcTable();
-
-  static Uint32List _buildCrcTable() {
-    final t = Uint32List(256);
-    for (var i = 0; i < 256; i++) {
-      var r = (i << 24) & 0xffffffff;
-      for (var j = 0; j < 8; j++) {
-        if ((r & 0x80000000) != 0) {
-          r = ((r << 1) ^ 0x04c11db7) & 0xffffffff;
-        } else {
-          r = (r << 1) & 0xffffffff;
-        }
-      }
-      t[i] = r;
-    }
-    return t;
-  }
-
-  static int _crc32(Uint8List data) {
-    var crc = 0;
-    for (final b in data) {
-      crc =
-          (((crc << 8) & 0xffffffff) ^ _crcTable[((crc >> 24) & 0xff) ^ b]) &
-          0xffffffff;
-    }
-    return crc & 0xffffffff;
-  }
 
   static Int16List? _pcmFromWav(Uint8List bytes) {
     if (bytes.length < 12) return null;

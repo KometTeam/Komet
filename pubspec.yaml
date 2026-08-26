@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.5.0+14
+version: 0.5.19+19
 
 environment:
   sdk: ^3.10.4
@@ -34,11 +34,19 @@ dependencies:
     sdk: flutter
   intl: any
 
+  # Rust networking core (kolibri) — FFI plugin, replaces the Dart transport.
+  # Published from the KometTeam/kolibri repo; the native core is compiled at
+  # app build time and pulled from that repo by git tag.
+  kolibri: ^0.1.4
+
+  # Rust message-encryption core — Argon2id + ChaCha20-Poly1305, output encoded
+  # as lowercase Cyrillic base32. Separate from kolibri: that is vendored
+  # transport, this is Komet's own crypto.
+  komet_crypto:
+    path: native/komet_crypto
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  dart_lz4: ^1.0.0
-  libcompress: ^1.0.0
-  msgpack_dart: ^1.0.1
   crypto: ^3.0.7
   ffi: ^2.1.0
   logger: ^2.6.2
@@ -46,6 +54,10 @@ dependencies:
   flutter_timezone: ^5.0.1
   timezone: ^0.11.0
   file_picker: ^8.0.0
+  image_picker: ^1.1.2
+  camera: ^0.11.0
+  permission_handler: ^11.3.1
+  archive: ^4.0.9
   geolocator: ^13.0.0
   photo_manager: ^3.0.0
   image: ^4.3.0
@@ -59,6 +71,7 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   package_info_plus: ^9.0.1
   mobile_scanner: ^7.2.0
+  flutter_contacts: ^1.1.9+2
   cached_network_image: ^3.4.1
   flutter_cache_manager: ^3.4.1
   lottie: ^3.3.1
@@ -88,6 +101,10 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  # Needed by test/chat_crypto_roundtrip_test.dart to open the built
+  # komet_crypto shared library directly.
+  flutter_rust_bridge: 2.12.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -122,6 +139,9 @@ flutter_launcher_icons:
 flutter:
   generate: true
 
+  shaders:
+    - shaders/liquid_glass.frag
+
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
@@ -133,6 +153,7 @@ flutter:
     - assets/emoji_keywords.json
     - assets/lottie/
     - assets/wallpapers/patterns/
+    - assets/debug/
 
   fonts:
     - family: Inter

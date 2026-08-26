@@ -23,12 +23,16 @@ class DesktopChatSelection {
   final String name;
   final String imageUrl;
   final String chatType;
+  final String? initialMessageId;
+  final int? initialMessageTime;
 
   const DesktopChatSelection({
     required this.chatId,
     required this.name,
     required this.imageUrl,
     required this.chatType,
+    this.initialMessageId,
+    this.initialMessageTime,
   });
 }
 
@@ -139,11 +143,15 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
                 child: _selected == null
                     ? _EmptyChatPane(colorScheme: cs)
                     : ChatScreen(
-                        key: ValueKey(_selected!.chatId),
+                        key: ValueKey(
+                          '${_selected!.chatId}:${_selected!.initialMessageId ?? ''}',
+                        ),
                         chatId: _selected!.chatId,
                         name: _selected!.name,
                         imageUrl: _selected!.imageUrl,
                         chatType: _selected!.chatType,
+                        initialMessageId: _selected!.initialMessageId,
+                        initialMessageTime: _selected!.initialMessageTime,
                         embedded: true,
                         onClose: _closeChat,
                       ),

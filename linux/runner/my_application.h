@@ -9,6 +9,8 @@ G_DECLARE_FINAL_TYPE(MyApplication,
                      APPLICATION,
                      GtkApplication)
 
+void my_application_configure_windowing();
+
 /**
  * my_application_new:
  *

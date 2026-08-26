@@ -1,0 +1,30 @@
+[package]
+name = "komet_crypto"
+version = "0.1.0"
+edition = "2021"
+description = "Message encryption core for Komet (Argon2id + ChaCha20-Poly1305 + Cyrillic base32)"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+data-encoding = "2"
+flutter_rust_bridge = "=2.12.0"
+png = "0.17"
+rand_core = { version = "0.6", features = ["getrandom"] }
+sha2 = "0.10"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+[workspace]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"

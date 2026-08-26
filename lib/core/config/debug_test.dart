@@ -1,20 +1,24 @@
 class DebugTest {
   static bool enabled = false;
   static int contactCount = 0;
+  static bool berserk = false;
 
   static const int debugAccountId = -424242;
 
   static const bool _envEnabled = bool.fromEnvironment('DEBUG_TEST');
+  static const bool _envBerserk = bool.fromEnvironment('BERSERK');
   static const int _envContacts = int.fromEnvironment(
     'DEBUG_CONTACTS',
     defaultValue: -1,
   );
 
   static const String _flag = '--debug-test';
+  static const String _berserkFlag = '--berserk';
   static const String _contactsFlag = '--contacts';
 
   static void parse(List<String> args) {
     if (_envEnabled) enabled = true;
+    if (_envBerserk) berserk = true;
     if (_envContacts >= 0) {
       enabled = true;
       contactCount = _envContacts;
@@ -24,6 +28,8 @@ class DebugTest {
       final arg = args[i];
       if (arg == _flag) {
         enabled = true;
+      } else if (arg == _berserkFlag) {
+        berserk = true;
       } else if (arg.startsWith('$_contactsFlag=')) {
         enabled = true;
         contactCount =

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/utils/format.dart';
+import '../widgets/small_spinner.dart';
 
 class DebugCacheSection extends StatelessWidget {
   final int cacheSize;
@@ -129,14 +130,7 @@ class DebugCacheSection extends StatelessWidget {
                       ),
                     ),
                     if (clearingCache)
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
+                      SmallSpinner(size: 20, color: cs.onSurfaceVariant),
                   ],
                 ),
               ),

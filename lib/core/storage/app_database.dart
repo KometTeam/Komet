@@ -36,6 +36,15 @@ class ProfileData {
     this.profileOptions,
   });
 
+  factory ProfileData.stub(int id) => ProfileData(
+    id: id,
+    firstName: '',
+    phone: 0,
+    country: '',
+    accountStatus: 0,
+    updateTime: 0,
+  );
+
   factory ProfileData.fromServerProfile(Map<dynamic, dynamic> profile) {
     final contact = profile['contact'];
     if (contact is! Map) {
@@ -70,7 +79,7 @@ class ProfileData {
       id: contact['id'] as int,
       firstName: firstName,
       lastName: lastName,
-      phone: contact['phone'] as int,
+      phone: (contact['phone'] as int?) ?? 0,
       photoId: contact['photoId'] as int?,
       baseUrl: contact['baseUrl'] as String?,
       baseRawUrl: contact['baseRawUrl'] as String?,
@@ -212,7 +221,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
-      version: 19,
+      version: 23,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -324,6 +333,34 @@ class AppDatabase {
             'INTEGER NOT NULL DEFAULT 0',
           );
         }
+        if (oldVersion < 20) {
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'last_mention_msg_id',
+            'INTEGER',
+          );
+        }
+        if (oldVersion < 21) {
+          await _addColumnIfMissing(
+            db,
+            'chats_cache',
+            'last_msg_preview',
+            'TEXT',
+          );
+        }
+        if (oldVersion < 22) {
+          await db.execute(_webAppStorageSchema);
+          await db.execute(_webAppBiometrySchema);
+        }
+        if (oldVersion < 23) {
+          await _addColumnIfMissing(
+            db,
+            'contacts',
+            'account_status',
+            'INTEGER NOT NULL DEFAULT 0',
+          );
+        }
       },
     );
   }
@@ -350,6 +387,8 @@ class AppDatabase {
     await db.execute(_contactsSchema);
     await db.execute(_messagesSchema);
     await db.execute(_chatParticipantsSchema);
+    await db.execute(_webAppStorageSchema);
+    await db.execute(_webAppBiometrySchema);
     await _createIndexes(db);
     await _createChatParticipantsIndex(db);
   }
@@ -434,7 +473,8 @@ class AppDatabase {
       base_url     TEXT,
       base_raw_url TEXT,
       update_time  INTEGER NOT NULL DEFAULT 0,
-      options      TEXT
+      options      TEXT,
+      account_status INTEGER NOT NULL DEFAULT 0
     )
   ''';
 
@@ -458,6 +498,7 @@ class AppDatabase {
       last_msg_time   INTEGER,
       last_msg_text   TEXT,
       last_msg_elements TEXT,
+      last_msg_preview TEXT,
       last_msg_sender INTEGER,
       last_msg_status TEXT,
       unread_count    INTEGER NOT NULL DEFAULT 0,
@@ -476,6 +517,7 @@ class AppDatabase {
       pinned_msg_text TEXT,
       pinned_msg_time INTEGER,
       pinned_msg_is_preview INTEGER NOT NULL DEFAULT 0,
+      last_mention_msg_id INTEGER,
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -505,6 +547,26 @@ class AppDatabase {
       edit_history TEXT,
       PRIMARY KEY (id, account_id),
       FOREIGN KEY (chat_id, account_id) REFERENCES chats_cache (id, account_id) ON DELETE CASCADE
+    )
+  ''';
+
+  static const _webAppStorageSchema = '''
+    CREATE TABLE webapp_storage (
+      account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      bot_id     INTEGER NOT NULL,
+      key        TEXT    NOT NULL,
+      value      TEXT    NOT NULL,
+      PRIMARY KEY (account_id, bot_id, key)
+    )
+  ''';
+
+  static const _webAppBiometrySchema = '''
+    CREATE TABLE webapp_biometry (
+      account_id       INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      bot_id           INTEGER NOT NULL,
+      access_requested INTEGER NOT NULL DEFAULT 0,
+      access_granted   INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (account_id, bot_id)
     )
   ''';
 
@@ -607,6 +669,104 @@ class AppDatabase {
     };
   }
 
+  static Future<void> saveWebAppValue(
+    int accountId,
+    int botId,
+    String key,
+    String value,
+  ) async {
+    final db = await _instance;
+    await db.insert('webapp_storage', {
+      'account_id': accountId,
+      'bot_id': botId,
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<String?> getWebAppValue(
+    int accountId,
+    int botId,
+    String key,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'webapp_storage',
+      where: 'account_id = ? AND bot_id = ? AND key = ?',
+      whereArgs: [accountId, botId, key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['value'] as String;
+  }
+
+  static Future<void> removeWebAppValue(
+    int accountId,
+    int botId,
+    String key,
+  ) async {
+    final db = await _instance;
+    await db.delete(
+      'webapp_storage',
+      where: 'account_id = ? AND bot_id = ? AND key = ?',
+      whereArgs: [accountId, botId, key],
+    );
+  }
+
+  static Future<void> clearWebAppValues(int accountId, int botId) async {
+    final db = await _instance;
+    await db.delete(
+      'webapp_storage',
+      where: 'account_id = ? AND bot_id = ?',
+      whereArgs: [accountId, botId],
+    );
+  }
+
+  static Future<int> countWebAppValues(int accountId, int botId) async {
+    final db = await _instance;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS total FROM webapp_storage '
+      'WHERE account_id = ? AND bot_id = ?',
+      [accountId, botId],
+    );
+    if (rows.isEmpty) return 0;
+    return (rows.first['total'] as num?)?.toInt() ?? 0;
+  }
+
+  static Future<(bool, bool)> getWebAppBiometryAccess(
+    int accountId,
+    int botId,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'webapp_biometry',
+      where: 'account_id = ? AND bot_id = ?',
+      whereArgs: [accountId, botId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return (false, false);
+    final row = rows.first;
+    return (
+      (row['access_requested'] as int? ?? 0) != 0,
+      (row['access_granted'] as int? ?? 0) != 0,
+    );
+  }
+
+  static Future<void> setWebAppBiometryAccess(
+    int accountId,
+    int botId, {
+    required bool requested,
+    required bool granted,
+  }) async {
+    final db = await _instance;
+    await db.insert('webapp_biometry', {
+      'account_id': accountId,
+      'bot_id': botId,
+      'access_requested': requested ? 1 : 0,
+      'access_granted': granted ? 1 : 0,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
   static Future<void> savePrivacyConfig(
     int accountId,
     String jsonConfig,
@@ -647,6 +807,7 @@ class AppDatabase {
   static Future<void> close() async {
     await _db?.close();
     _db = null;
+    _initCompleter = null;
   }
 
   // Chats cache
@@ -696,6 +857,25 @@ class AppDatabase {
     }
   }
 
+  static Future<void> repairLastMessageSenders(int accountId) async {
+    try {
+      final db = await _instance;
+      await db.rawUpdate(
+        'UPDATE chats_cache SET last_msg_sender = ('
+        '  SELECT m.sender_id FROM messages m'
+        '  WHERE m.account_id = chats_cache.account_id'
+        '    AND m.chat_id = chats_cache.id'
+        '    AND m.id = CAST(chats_cache.last_msg_id AS TEXT)'
+        ') '
+        'WHERE account_id = ? AND last_msg_sender IS NULL '
+        'AND last_msg_id IS NOT NULL',
+        [accountId],
+      );
+    } catch (e) {
+      logger.w('Не удалось восстановить отправителей последних сообщений: $e');
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> loadChat(
     int accountId,
     int chatId,
@@ -707,6 +887,16 @@ class AppDatabase {
       whereArgs: [accountId, chatId],
       orderBy: 'last_event_time DESC',
     );
+  }
+
+  static bool chatRowIsInList(Map<String, dynamic> row) {
+    final value = row['in_list'];
+    return value is! int || value != 0;
+  }
+
+  static Future<bool> isChatInList(int accountId, int chatId) async {
+    final rows = await loadChat(accountId, chatId);
+    return rows.isNotEmpty && chatRowIsInList(rows.first);
   }
 
   static Future<List<Map<String, dynamic>>> loadChats(
@@ -865,12 +1055,51 @@ class AppDatabase {
     await batch.commit(noResult: true);
   }
 
-  static Future<List<Map<String, dynamic>>> loadContacts(int accountId) async {
+  static Future<List<Map<String, dynamic>>> loadContacts(
+    int accountId, {
+    bool includeDeleted = false,
+  }) async {
     final db = await _instance;
     return db.query(
       'contacts',
+      where: includeDeleted
+          ? 'account_id = ?'
+          : 'account_id = ? AND account_status = 0',
+      whereArgs: [accountId],
+    );
+  }
+
+  static Future<List<int>> loadContactIds(int accountId) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'contacts',
+      columns: ['id'],
       where: 'account_id = ?',
       whereArgs: [accountId],
+    );
+    return [for (final r in rows) r['id'] as int];
+  }
+
+  static Future<Map<String, dynamic>?> loadContact(
+    int accountId,
+    int id,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'contacts',
+      where: 'account_id = ? AND id = ?',
+      whereArgs: [accountId, id],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  static Future<void> deleteContact(int accountId, int id) async {
+    final db = await _instance;
+    await db.delete(
+      'contacts',
+      where: 'account_id = ? AND id = ?',
+      whereArgs: [accountId, id],
     );
   }
 
@@ -926,6 +1155,56 @@ class AppDatabase {
       orderBy: 'time DESC',
       limit: limit,
     );
+  }
+
+  static Future<List<Map<String, dynamic>>> loadMessagesBetween(
+    int accountId,
+    int chatId, {
+    required int afterTime,
+    required int beforeTime,
+    int limit = 60,
+    bool onlyVisible = false,
+  }) async {
+    final db = await _instance;
+    return db.query(
+      'messages',
+      where: onlyVisible
+          ? 'account_id = ? AND chat_id = ? AND deleted = 0 '
+                'AND time > ? AND time < ?'
+          : 'account_id = ? AND chat_id = ? AND time > ? AND time < ?',
+      whereArgs: [accountId, chatId, afterTime, beforeTime],
+      orderBy: 'time ASC',
+      limit: limit,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> loadMessagesAround(
+    int accountId,
+    int chatId, {
+    required int centerTime,
+    int before = 40,
+    int after = 20,
+    bool onlyVisible = false,
+  }) async {
+    final db = await _instance;
+    final base = onlyVisible
+        ? 'account_id = ? AND chat_id = ? AND deleted = 0'
+        : 'account_id = ? AND chat_id = ?';
+    final older = await db.query(
+      'messages',
+      where: '$base AND time <= ?',
+      whereArgs: [accountId, chatId, centerTime],
+      orderBy: 'time DESC',
+      limit: before,
+    );
+    final newer = await db.query(
+      'messages',
+      where: '$base AND time > ?',
+      whereArgs: [accountId, chatId, centerTime],
+      orderBy: 'time ASC',
+      limit: after,
+    );
+    return [...newer.reversed, ...older];
   }
 
   static Future<void> markMessageDeleted(

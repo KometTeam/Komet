@@ -10,9 +10,17 @@ import '../../../l10n/app_localizations.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
+import 'blacklist_screen.dart';
 import 'password_entry_screen.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
+
+const bool _showFamilyProtection = false;
+const bool _showSafeMode = false;
 
 class SecurityScreen extends StatefulWidget {
   const SecurityScreen({super.key});
@@ -22,7 +30,7 @@ class SecurityScreen extends StatefulWidget {
 }
 
 class _SecurityScreenState extends State<SecurityScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, ReloadOnReconnect {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _is2faEnabled = false;
@@ -45,6 +53,9 @@ class _SecurityScreenState extends State<SecurityScreen>
     _shimmerController.dispose();
     super.dispose();
   }
+
+  @override
+  void reloadAfterReconnect() => _loadData();
 
   Future<void> _loadData() async {
     try {
@@ -157,9 +168,9 @@ class _SecurityScreenState extends State<SecurityScreen>
       child: Column(
         children: [
           _buildAppBar(context, cs),
-          _buildShimmerSection(cs, height: 104),
+          _buildShimmerSection(cs, height: _showFamilyProtection ? 104 : 56),
           const SizedBox(height: 12),
-          _buildShimmerSection(cs, height: 280),
+          _buildShimmerSection(cs, height: _showSafeMode ? 280 : 232),
           const SizedBox(height: 20),
           _buildShimmerSection(cs, height: 220),
           const SizedBox(height: 12),
@@ -212,21 +223,14 @@ class _SecurityScreenState extends State<SecurityScreen>
               color: cs.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              fontFamily: 'Outfit',
+              fontFamily: displayFontOf(context),
             ),
           ),
           const Spacer(),
           if (_isSaving)
             Padding(
               padding: const EdgeInsets.only(right: 16),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: cs.primary,
-                ),
-              ),
+              child: SmallSpinner(size: 20, color: cs.primary),
             ),
         ],
       ),
@@ -252,20 +256,21 @@ class _SecurityScreenState extends State<SecurityScreen>
     final l10n = AppLocalizations.of(context)!;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppShape.cardRadius,
       depth: 6,
       child: Column(
         children: [
           _buildPasswordRow(cs),
-          _settingsRow(
-            cs,
-            icon: Symbols.shield,
-            label: l10n.securityFamilyProtection,
-            subtitle: _privacyConfig?.familyProtection == 'ON'
-                ? l10n.securityEnabledFem
-                : l10n.securityDisabledFem,
-            isLast: true,
-          ),
+          if (_showFamilyProtection)
+            _settingsRow(
+              cs,
+              icon: Symbols.shield,
+              label: l10n.securityFamilyProtection,
+              subtitle: _privacyConfig?.familyProtection == 'ON'
+                  ? l10n.securityEnabledFem
+                  : l10n.securityDisabledFem,
+              isLast: true,
+            ),
         ],
       ),
     );
@@ -336,14 +341,15 @@ class _SecurityScreenState extends State<SecurityScreen>
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.only(left: 58),
-          child: Divider(
-            height: 1,
-            thickness: 1,
-            color: cs.outlineVariant.withValues(alpha: 0.35),
+        if (_showFamilyProtection)
+          Padding(
+            padding: const EdgeInsets.only(left: 58),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: cs.outlineVariant.withValues(alpha: 0.35),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -353,63 +359,65 @@ class _SecurityScreenState extends State<SecurityScreen>
     final isSafeMode = _privacyConfig?.safeMode ?? false;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppShape.cardRadius,
       depth: 6,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
-            child: Row(
-              children: [
-                Icon(
-                  Symbols.lock,
-                  color: cs.onSurfaceVariant,
-                  size: 22,
-                  weight: 400,
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.securityModeTitle,
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        l10n.securityModeSubtitle,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: isSafeMode,
-                  onChanged: (v) => showCustomNotification(
-                    context,
-                    l10n.securitySettingsUnavailable,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (isSafeMode) ...[
+          if (_showSafeMode)
             Padding(
-              padding: const EdgeInsets.only(left: 58),
-              child: Divider(
-                height: 1,
-                thickness: 1,
-                color: cs.outlineVariant.withValues(alpha: 0.35),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+              child: Row(
+                children: [
+                  Icon(
+                    Symbols.lock,
+                    color: cs.onSurfaceVariant,
+                    size: 22,
+                    weight: 400,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.securityModeTitle,
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          l10n.securityModeSubtitle,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: isSafeMode,
+                    onChanged: (v) => showCustomNotification(
+                      context,
+                      l10n.securitySettingsUnavailable,
+                    ),
+                  ),
+                ],
               ),
             ),
+          if (isSafeMode) ...[
+            if (_showSafeMode)
+              Padding(
+                padding: const EdgeInsets.only(left: 58),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: cs.outlineVariant.withValues(alpha: 0.35),
+                ),
+              ),
             _settingsRow(
               cs,
               label: l10n.securityFindByPhone,
@@ -464,14 +472,15 @@ class _SecurityScreenState extends State<SecurityScreen>
             ),
           ],
           if (!isSafeMode) ...[
-            Padding(
-              padding: const EdgeInsets.only(left: 20),
-              child: Divider(
-                height: 1,
-                thickness: 1,
-                color: cs.outlineVariant.withValues(alpha: 0.35),
+            if (_showSafeMode)
+              Padding(
+                padding: const EdgeInsets.only(left: 20),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: cs.outlineVariant.withValues(alpha: 0.35),
+                ),
               ),
-            ),
             _settingsRow(
               cs,
               icon: Symbols.phone,
@@ -534,7 +543,7 @@ class _SecurityScreenState extends State<SecurityScreen>
             ),
             _settingsRow(
               cs,
-              icon: Icons.visibility_off_outlined,
+              icon: Symbols.visibility_off,
               label: l10n.securityShowOnlineStatus,
               trailingText: _privacyConfig?.hidden == true
                   ? l10n.securityPrivacyNobody
@@ -715,7 +724,7 @@ class _SecurityScreenState extends State<SecurityScreen>
         _privacyConfig?.audioTranscriptionEnabled ?? true;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppShape.cardRadius,
       depth: 6,
       child: Column(
         children: [
@@ -760,7 +769,7 @@ class _SecurityScreenState extends State<SecurityScreen>
           ),
           _settingsRow(
             cs,
-            icon: Icons.mic_none_outlined,
+            icon: Symbols.mic,
             label: l10n.securityAudioTranscription,
             trailingWidget: Switch(
               value: audioTranscription,
@@ -780,20 +789,31 @@ class _SecurityScreenState extends State<SecurityScreen>
     );
   }
 
+  Future<void> _openBlacklist() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlacklistScreen(initialContacts: _blockedContacts),
+      ),
+    );
+    if (!mounted) return;
+    try {
+      final contacts = await accountModule.getBlockedContacts();
+      if (mounted) setState(() => _blockedContacts = contacts);
+    } catch (_) {}
+  }
+
   Widget _buildBlacklistSection(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
     final count = _blockedContacts.length;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppShape.cardRadius,
       depth: 6,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => showCustomNotification(
-            context,
-            l10n.securityBlacklistNotification('$count'),
-          ),
+          onTap: _openBlacklist,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
@@ -875,7 +895,9 @@ class _SecurityScreenState extends State<SecurityScreen>
           child: InkWell(
             onTap: onTap ?? () => showCustomNotification(context, label),
             borderRadius: isLast
-                ? const BorderRadius.vertical(bottom: Radius.circular(20))
+                ? const BorderRadius.vertical(
+                    bottom: Radius.circular(AppShape.card),
+                  )
                 : BorderRadius.zero,
             child: Padding(
               padding: EdgeInsets.symmetric(

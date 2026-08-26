@@ -9,7 +9,7 @@ class AppMessageActionsStyle {
 
   static final _setting = PersistedEnum<MessageActionsStyle>(
     prefKey: prefKey,
-    defaultValue: MessageActionsStyle.radial,
+    defaultValue: MessageActionsStyle.list,
     encode: (value) => value.name,
     decode: _parse,
   );
@@ -21,7 +21,7 @@ class AppMessageActionsStyle {
   static Future<void> save(MessageActionsStyle style) => _setting.save(style);
 
   static MessageActionsStyle _parse(String? val) =>
-      enumFromName(MessageActionsStyle.values, val, MessageActionsStyle.radial);
+      enumFromName(MessageActionsStyle.values, val, MessageActionsStyle.list);
 
   static String label(MessageActionsStyle style) {
     switch (style) {

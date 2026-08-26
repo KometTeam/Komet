@@ -70,6 +70,8 @@
 	<string>Доступ к галерее нужен, чтобы отправлять фото и видео в чатах.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Доступ к галерее нужен, чтобы сохранять полученные фото и видео.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Доступ к контактам нужен, чтобы показывать имена собеседников так, как они записаны в вашей телефонной книге.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -81,6 +83,32 @@
 				<string>max</string>
 			</array>
 		</dict>
+	</array>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>ru</string>
+		<string>en</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>telprompt</string>
+		<string>sms</string>
+		<string>mailto</string>
+		<string>maps</string>
+		<string>comgooglemaps</string>
+		<string>yandexmaps</string>
+		<string>yandexnavi</string>
 	</array>
 </dict>
 </plist>

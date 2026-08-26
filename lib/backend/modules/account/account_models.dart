@@ -282,10 +282,18 @@ enum AuthRequestType {
 
 enum LoginStatus { idle, loading, success, error }
 
+enum AccountNotice { resurrectingProfile }
+
 class WrongDeviceTokenException implements Exception {
   const WrongDeviceTokenException();
   @override
   String toString() => 'WrongDeviceTokenException';
+}
+
+class WrongPasswordException implements Exception {
+  const WrongPasswordException();
+  @override
+  String toString() => 'WrongPasswordException';
 }
 
 class RequestCodeResult {

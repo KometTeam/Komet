@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'small_spinner.dart';
+import 'springy_tap.dart';
+import '../../core/config/app_shape.dart';
+
 class PrimaryLoadingButton extends StatelessWidget {
   final ValueListenable<bool> loading;
   final VoidCallback? onPressed;
@@ -23,23 +27,18 @@ class PrimaryLoadingButton extends StatelessWidget {
     final fg = foreground ?? cs.onPrimary;
     return ValueListenableBuilder<bool>(
       valueListenable: loading,
-      builder: (context, isLoading, _) => FilledButton(
-        onPressed: isLoading ? null : onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: background ?? cs.primary,
-          foregroundColor: fg,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+      builder: (context, isLoading, _) => SpringyTap(
+        enabled: !isLoading,
+        child: FilledButton(
+          onPressed: isLoading ? null : onPressed,
+          style: FilledButton.styleFrom(
+            backgroundColor: background ?? cs.primary,
+            foregroundColor: fg,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: AppShape.buttonBorder,
           ),
+          child: isLoading ? SmallSpinner(size: 20, color: fg) : child,
         ),
-        child: isLoading
-            ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: fg),
-              )
-            : child,
       ),
     );
   }

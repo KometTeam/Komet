@@ -8,7 +8,9 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
+import androidx.core.app.ServiceCompat
 
 object CallState {
     @Volatile
@@ -20,7 +22,33 @@ class CallForegroundService : Service() {
     companion object {
         const val ACTION_START = "ru.komet.app.CALL_ONGOING_START"
         const val ACTION_STOP = "ru.komet.app.CALL_ONGOING_STOP"
+        const val ACTION_SCREEN_SHARE = "ru.komet.app.CALL_SCREEN_SHARE"
+        const val EXTRA_SCREEN_SHARE = "screenShare"
         const val ONGOING_ID = 424243
+
+        @Volatile
+        var screenShare = false
+
+        @Volatile
+        private var running: CallForegroundService? = null
+
+        fun setScreenShare(ctx: Context, enabled: Boolean, caller: String) {
+            screenShare = enabled
+            val intent = Intent(ctx, CallForegroundService::class.java).apply {
+                action = ACTION_SCREEN_SHARE
+                putExtra(CallConst.EXTRA_CALLER, caller)
+                putExtra(EXTRA_SCREEN_SHARE, enabled)
+            }
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    ctx.startForegroundService(intent)
+                } else {
+                    ctx.startService(intent)
+                }
+            } catch (e: Exception) {
+                Log.w("KometFcm", "screen share FGS update failed: ${e.message}")
+            }
+        }
 
         fun start(ctx: Context, caller: String) {
             CallState.inCall = true
@@ -41,6 +69,13 @@ class CallForegroundService : Service() {
 
         fun stop(ctx: Context) {
             CallState.inCall = false
+            screenShare = false
+            val service = running
+            if (service != null) {
+                service.shutdown()
+                return
+            }
+            NotificationManagerCompat.from(ctx).cancel(ONGOING_ID)
             try {
                 ctx.startService(
                     Intent(ctx, CallForegroundService::class.java).apply {
@@ -54,17 +89,30 @@ class CallForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        running = this
+    }
+
     override fun onDestroy() {
+        if (running === this) running = null
         CallState.inCall = false
         super.onDestroy()
     }
 
+    private fun shutdown() {
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
-                stopSelf()
+            ACTION_STOP -> shutdown()
+            ACTION_SCREEN_SHARE -> {
+                screenShare = intent.getBooleanExtra(EXTRA_SCREEN_SHARE, false)
+                val caller = intent.getStringExtra(CallConst.EXTRA_CALLER) ?: "Звонок"
+                CallNotifier.ensureChannel(this)
+                startAsForeground(caller)
             }
             else -> {
                 val caller = intent?.getStringExtra(CallConst.EXTRA_CALLER) ?: "Звонок"
@@ -103,15 +151,16 @@ class CallForegroundService : Service() {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    ONGOING_ID, notif,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
-                )
+                var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                if (screenShare) {
+                    types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                }
+                startForeground(ONGOING_ID, notif, types)
             } else {
                 startForeground(ONGOING_ID, notif)
             }
         } catch (e: Exception) {
-            Log.w("KometFcm", "startForeground(mic) failed: ${e.message}")
+            Log.w("KometFcm", "startForeground failed: ${e.message}")
             stopSelf()
         }
     }

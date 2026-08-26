@@ -9,15 +9,18 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/cloud_storage.dart';
-import '../../../backend/modules/upload_manager.dart';
+import '../../../backend/modules/upload_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
+import '../../../core/config/app_shape.dart';
 
 enum _EnvState { loading, notConfigured, ready }
 
@@ -29,7 +32,7 @@ class CloudStorageScreen extends StatefulWidget {
 }
 
 class _CloudStorageScreenState extends State<CloudStorageScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, ReloadOnReconnect {
   static const _translateFactor = 0.7;
   static const _horizontalPadding = 32.0;
   static const _hintSidePadding = 35.0;
@@ -50,6 +53,8 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   bool _isUploading = false;
   final ValueNotifier<double> _uploadProgress = ValueNotifier(0);
   bool _animateNewCard = false;
+  StreamSubscription<UploadJobEvent>? _uploadEventSub;
+  UploadJob? _uploadJob;
 
   @override
   void initState() {
@@ -58,47 +63,73 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     _pageController = PageController(viewportFraction: _cardViewportFraction);
     _pageController.addListener(_onPageScroll);
     _checkEnv();
-    _bindUploadManager();
+    _uploadEventSub = UploadService.instance.events.listen(_onUploadEvent);
   }
 
   void _onPageScroll() {
     _currentFilePage.value = _pageController.page?.round() ?? 0;
   }
 
-  void _bindUploadManager() {
-    final mgr = UploadManager.instance;
-    if (mgr.isActive) {
-      setState(() => _isUploading = true);
-      _mode.open();
+  void _syncUploadJob() {
+    final chatId = _envGroupId;
+    final job = chatId == null
+        ? null
+        : UploadService.instance.activeFileJob(chatId);
+    if (identical(job, _uploadJob)) return;
+
+    _uploadJob?.progress.removeListener(_onUploadProgress);
+    _uploadJob = job;
+
+    if (job == null) {
+      _uploadProgress.value = 0;
+      if (_isUploading) setState(() => _isUploading = false);
+      return;
     }
-    mgr.onProgress = (progress, _) {
-      if (!mounted) return;
-      if (!_isUploading) setState(() => _isUploading = true);
-      _uploadProgress.value = progress;
-    };
-    mgr.onDone = (file) {
-      if (!mounted) return;
-      _uploadProgress.value = 0;
-      setState(() => _isUploading = false);
-      _prependFile(file);
-    };
-    mgr.onError = (msg) {
-      if (!mounted) return;
-      _uploadProgress.value = 0;
-      setState(() => _isUploading = false);
+
+    job.progress.addListener(_onUploadProgress);
+    _onUploadProgress();
+    if (_isUploading) return;
+    setState(() => _isUploading = true);
+    _mode.open();
+  }
+
+  void _onUploadProgress() {
+    final values = _uploadJob?.progress.value;
+    if (values == null || values.isEmpty) return;
+    _uploadProgress.value = values.first;
+  }
+
+  Future<void> _onUploadEvent(UploadJobEvent event) async {
+    final chatId = _envGroupId;
+    final accountId = _accountId;
+    if (!mounted || chatId == null || accountId == null) return;
+    if (event.chatId != chatId || event.kind != UploadKind.file) return;
+
+    _syncUploadJob();
+
+    if (event is UploadJobFailed) {
       showCustomNotification(
         context,
-        AppLocalizations.of(context)!.devicesGenericError(msg),
+        AppLocalizations.of(context)!.devicesGenericError(event.reason),
       );
-    };
+      return;
+    }
+    if (event is! UploadJobDone) return;
+
+    final newest = await CloudStorageModule.fetchLatestFile(
+      messagesModule,
+      accountId,
+      chatId,
+      expectedFileId: event.fileId,
+    );
+    if (!mounted || newest == null) return;
+    _prependFile(newest);
   }
 
   @override
   void dispose() {
-    final mgr = UploadManager.instance;
-    mgr.onProgress = null;
-    mgr.onDone = null;
-    mgr.onError = null;
+    _uploadEventSub?.cancel();
+    _uploadJob?.progress.removeListener(_onUploadProgress);
     _mode.dispose();
     _pageController.dispose();
     _currentFilePage.dispose();
@@ -184,6 +215,17 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     }
   }
 
+  @override
+  void reloadAfterReconnect() {
+    final accountId = _accountId;
+    final groupId = _envGroupId;
+    if (accountId == null || groupId == null) {
+      _checkEnv();
+      return;
+    }
+    unawaited(_loadFiles(accountId, groupId));
+  }
+
   Future<void> _loadFiles(int accountId, int chatId) async {
     final files = await CloudStorageModule.fetchFiles(
       messagesModule,
@@ -192,6 +234,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     );
     if (!mounted) return;
     setState(() => _files = files.reversed.toList());
+    _syncUploadJob();
   }
 
   void _prependFile(CloudFile file) {
@@ -255,13 +298,17 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     _uploadProgress.value = 0;
     setState(() => _isUploading = true);
 
-    await UploadManager.instance.start(
-      chatId: chatId,
+    final service = UploadService.instance;
+    final sending = service.sendFile(
       accountId: accountId,
-      file: File(picked.path!),
+      chatId: chatId,
+      tempId: service.newTempId(),
+      source: File(picked.path!),
       filename: picked.name,
-      totalSize: picked.size,
+      size: picked.size,
     );
+    _syncUploadJob();
+    await sending;
   }
 
   void _showSendByIdSheet() {
@@ -275,8 +322,8 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
       backgroundColor: Colors.transparent,
       builder: (_) => _SendByIdSheet(
         onSend: (id) async {
-          final ok = await messagesModule.sendFileMessage(chatId, id);
-          if (!ok) return false;
+          final sentId = await messagesModule.sendFileMessage(chatId, id);
+          if (sentId == null) return false;
           final newest = await CloudStorageModule.fetchLatestFile(
             messagesModule,
             accountId,
@@ -333,7 +380,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
         ),
       ),
       body: switch (_envState) {
-        _EnvState.loading => const Center(child: CircularProgressIndicator()),
+        _EnvState.loading => const Center(child: SmallSpinner(size: 36)),
         _EnvState.notConfigured => _buildNotConfigured(cs),
         _EnvState.ready => _buildReady(cs),
       },
@@ -370,19 +417,10 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                   horizontal: 32,
                   vertical: 14,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                shape: AppShape.buttonBorder,
               ),
               child: _isCreatingEnv
-                  ? SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.onPrimary,
-                      ),
-                    )
+                  ? SmallSpinner(size: 18, color: cs.onPrimary)
                   : Text(
                       l10n.cloudStorageStart,
                       style: const TextStyle(
@@ -569,9 +607,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
                   horizontal: 32,
                   vertical: 14,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                shape: AppShape.buttonBorder,
               ),
               child: Text(
                 l10n.cloudStorageUpload,
@@ -998,7 +1034,9 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppShape.sheet),
+        ),
       ),
       padding: EdgeInsets.fromLTRB(
         24,
@@ -1053,14 +1091,7 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
               ),
               const SizedBox(width: 8),
               _loading
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.primary,
-                      ),
-                    )
+                  ? SmallSpinner(size: 20, color: cs.primary)
                   : IconButton(
                       icon: Icon(
                         isExpired ? Symbols.add_link : Symbols.content_copy,
@@ -1167,7 +1198,9 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppShape.sheet),
+        ),
       ),
       padding: EdgeInsets.fromLTRB(
         24,
@@ -1216,19 +1249,10 @@ class _SendByIdSheetState extends State<_SendByIdSheet> {
             onPressed: _sending ? null : _submit,
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: AppShape.buttonBorder,
             ),
             child: _sending
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: cs.onPrimary,
-                    ),
-                  )
+                ? SmallSpinner(size: 18, color: cs.onPrimary)
                 : Text(
                     l10n.cloudStorageSend,
                     style: const TextStyle(fontWeight: FontWeight.w600),

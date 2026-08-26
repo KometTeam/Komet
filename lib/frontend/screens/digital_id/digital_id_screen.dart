@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:m3e_collection/m3e_collection.dart'
+    show ExpressiveRefreshIndicator;
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../backend/modules/digital_id.dart';
-import '../../../backend/modules/webapp.dart';
 import '../../../core/utils/webview_support.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show digitalIdModule;
 import '../../../models/digital_id.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/error_view.dart';
-import '../webapp/web_app_screen.dart';
+import '../../widgets/small_spinner.dart';
 
 String _documentLabel(AppLocalizations l10n, String type) {
   return switch (type) {
@@ -38,7 +41,8 @@ class DigitalIdScreen extends StatefulWidget {
   State<DigitalIdScreen> createState() => _DigitalIdScreenState();
 }
 
-class _DigitalIdScreenState extends State<DigitalIdScreen> {
+class _DigitalIdScreenState extends State<DigitalIdScreen>
+    with ReloadOnReconnect {
   bool _loading = true;
   bool _busy = false;
   String? _error;
@@ -52,6 +56,9 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     super.initState();
     _load();
   }
+
+  @override
+  void reloadAfterReconnect() => _load();
 
   Future<void> _load() async {
     setState(() {
@@ -71,7 +78,12 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
           rethrow;
         }
       }
-      final cards = await digitalIdModule.getCardsList(passStatus: 'active');
+      List<DigitalIdAcmsCard> cards;
+      try {
+        cards = await digitalIdModule.getCardsList(passStatus: 'active');
+      } catch (_) {
+        cards = const [];
+      }
       if (!mounted) return;
       setState(() {
         _biometry = biometry;
@@ -114,17 +126,13 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
         );
         return;
       }
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => WebAppScreen(
-            title: AppLocalizations.of(context)!.digitalIdGosuslugiTitle,
-            loader: () async => WebAppLaunch(url: link.url),
-          ),
-        ),
-      );
-      if (!mounted) return;
-      await _load();
+      // Госуслуги (ЕСИА) открываем во ВНЕШНЕМ браузере — их антифрод режет
+      // встроенный webview. Возврат придёт диплинком max.ru?externalCallback=1
+      // (deep_link_service -> опкод 105), после чего экран перезагрузится.
+      final uri = Uri.tryParse(link.url);
+      if (uri != null) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
     } on DigitalIdException catch (e) {
       if (mounted) showCustomNotification(context, e.message);
     } catch (e) {
@@ -198,7 +206,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
 
   Widget _buildBody(ColorScheme cs) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: SmallSpinner(size: 36));
     }
     if (_error != null) {
       return ErrorView(message: _error!, onRetry: _load);
@@ -206,7 +214,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
     if (_docs == null) {
       return _buildOnboarding(cs);
     }
-    return RefreshIndicator(
+    return ExpressiveRefreshIndicator(
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -278,11 +286,7 @@ class _DigitalIdScreenState extends State<DigitalIdScreen> {
                   child: FilledButton.icon(
                     onPressed: _busy ? null : _linkGosuslugi,
                     icon: _busy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const SmallSpinner(size: 18)
                         : const Icon(Symbols.link, size: 18),
                     label: Text(
                       l10n.digitalIdLinkGosuslugiButton,

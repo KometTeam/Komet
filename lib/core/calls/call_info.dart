@@ -61,7 +61,8 @@ class CallParse {
     for (final line in const LineSplitter().convert(sdp)) {
       if (!line.startsWith('o=')) continue;
       final l = line.toLowerCase();
-      if (l.contains('mozilla') || l.contains('sdparta')) return 'Firefox (web)';
+      if (l.contains('mozilla') || l.contains('sdparta'))
+        return 'Firefox (web)';
       if (l.contains('gstreamer')) return 'GStreamer';
       return 'нативный libwebrtc';
     }

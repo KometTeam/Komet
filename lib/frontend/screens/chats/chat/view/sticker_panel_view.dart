@@ -20,14 +20,21 @@ class StickerPanelView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    stickers.maxHeight = media.size.height - media.padding.top - 160;
+
     return AnimatedBuilder(
       animation: stickers.anim,
       child: LottieHoldScope(
         isHeld: stickers.panelHold,
-        child: StickerPanel(
-          height: stickers.panelHeight,
-          onStickerTap: onStickerTap,
-          onEmojiTap: onEmojiTap,
+        child: ValueListenableBuilder<double>(
+          valueListenable: stickers.panelHeight,
+          builder: (context, height, _) => StickerPanel(
+            height: height,
+            onStickerTap: onStickerTap,
+            onEmojiTap: onEmojiTap,
+            onResize: stickers.resizeBy,
+          ),
         ),
       ),
       builder: (context, child) {

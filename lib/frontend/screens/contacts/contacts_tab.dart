@@ -1,44 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/config/debug_test.dart';
+import '../../../core/contacts/device_contacts_service.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../backend/modules/contacts.dart';
+import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../main.dart';
 import '../../../models/contact_info.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/small_spinner.dart';
+import '../../widgets/spectrum_tint.dart';
+import '../../widgets/springy_tap.dart';
 import '../chats/chat_info_screen.dart';
 import 'nfc_exchange_sheet.dart';
+import 'open_contact_profile.dart';
+import '../../../core/config/app_frost.dart';
+import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 
-Future<void> openContactDialogProfile(
-  BuildContext context, {
-  required int contactId,
-  required String name,
-  String? avatarUrl,
-}) async {
-  final accountId = await TokenStorage.getActiveAccountId();
-  final existing = accountId == null
-      ? null
-      : await AppDatabase.findDialogChatByParticipant(accountId, contactId);
-  final chatId = existing ?? ((accountId ?? 0) ^ contactId);
-  if (!context.mounted) return;
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ChatInfoScreen(
-        chatId: chatId,
-        name: name,
-        imageUrl: avatarUrl ?? '',
-        chatType: 'DIALOG',
-        dialogPeerId: contactId,
-      ),
-    ),
-  );
-}
+enum _SearchMode { phone, id }
 
 class ContactsTab extends StatefulWidget {
   const ContactsTab({super.key});
@@ -47,7 +32,7 @@ class ContactsTab extends StatefulWidget {
   State<ContactsTab> createState() => _ContactsTabState();
 }
 
-class _ContactsTabState extends State<ContactsTab> {
+class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
   List<CachedContact> _contacts = [];
   bool _isLoading = true;
 
@@ -56,6 +41,12 @@ class _ContactsTabState extends State<ContactsTab> {
     super.initState();
     _loadContacts();
     ContactsModule.revision.addListener(_loadContacts);
+    _loadDeviceContacts();
+  }
+
+  Future<void> _loadDeviceContacts() async {
+    final changed = await DeviceContactsService.ensureLoadedInteractive();
+    if (changed && mounted) setState(() {});
   }
 
   @override
@@ -69,7 +60,7 @@ class _ContactsTabState extends State<ContactsTab> {
       context: context,
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black54,
+      barrierColor: AppFrost.scrim(),
       transitionDuration: const Duration(milliseconds: 320),
       pageBuilder: (_, _, _) => const Align(
         alignment: Alignment.topCenter,
@@ -138,85 +129,89 @@ class _ContactsTabState extends State<ContactsTab> {
     final fullName =
         '${contact.firstName}${contact.lastName != null ? ' ${contact.lastName}' : ''}'
             .trim();
-    final nameToDisplay = fullName.isEmpty ? '+${contact.phone}' : fullName;
+    final book = DeviceContactsService.nameForPhone(contact.phone);
+    final nameToDisplay =
+        book ?? (fullName.isEmpty ? '+${contact.phone}' : fullName);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => openContactDialogProfile(
-          context,
-          contactId: contact.id,
-          name: nameToDisplay,
-          avatarUrl: contact.baseUrl,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: cs.primary.withValues(alpha: 0.1),
-                    width: 1,
+    return SpringyTap(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => openContactDialogProfile(
+            context,
+            contactId: contact.id,
+            name: nameToDisplay,
+            avatarUrl: contact.baseUrl,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: cs.primary.withValues(alpha: 0.1),
+                      width: 1,
+                    ),
+                  ),
+                  child: KometAvatar(
+                    name: nameToDisplay,
+                    imageUrl: contact.baseUrl,
+                    size: 48,
                   ),
                 ),
-                child: KometAvatar(
-                  name: nameToDisplay,
-                  imageUrl: contact.baseUrl,
-                  size: 48,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            nameToDisplay,
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              nameToDisplay,
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        if (contact.isVerified) ...[
-                          const SizedBox(width: 4),
-                          Icon(
-                            Symbols.verified,
-                            color: cs.primary,
-                            size: 16,
-                            weight: 600,
-                            fill: 1,
-                          ),
+                          if (contact.isVerified) ...[
+                            const SizedBox(width: 4),
+                            Icon(
+                              Symbols.verified,
+                              color: cs.primary,
+                              size: 16,
+                              weight: 600,
+                              fill: 1,
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      contact.updateTime > 0
-                          ? 'Был(а) недавно'
-                          : '+${contact.phone}',
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 14,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        contact.updateTime > 0
+                            ? 'Был(а) недавно'
+                            : '+${contact.phone}',
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -228,7 +223,7 @@ class _ContactsTabState extends State<ContactsTab> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: spectrumSurfaceColor(cs),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -248,7 +243,7 @@ class _ContactsTabState extends State<ContactsTab> {
                             color: cs.onSurface,
                             fontSize: 24,
                             fontWeight: FontWeight.w700,
-                            fontFamily: 'Outfit',
+                            fontFamily: displayFontOf(context),
                           ),
                         ),
                         const ConnectionStatusLine(),
@@ -268,7 +263,7 @@ class _ContactsTabState extends State<ContactsTab> {
             ),
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: SmallSpinner(size: 36))
                   : _contacts.isEmpty
                   ? Center(
                       child: Text(
@@ -305,6 +300,7 @@ class _SearchContactSheet extends StatefulWidget {
 
 class _SearchContactSheetState extends State<_SearchContactSheet> {
   final _controller = TextEditingController();
+  _SearchMode _mode = _SearchMode.phone;
   bool _loading = false;
   String? _error;
 
@@ -314,7 +310,82 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
     super.dispose();
   }
 
+  void _setMode(_SearchMode mode) {
+    if (_mode == mode || _loading) return;
+    setState(() {
+      _mode = mode;
+      _error = null;
+    });
+  }
+
   Future<void> _submit() async {
+    if (_mode == _SearchMode.phone) {
+      await _submitPhone();
+    } else {
+      await _submitId();
+    }
+  }
+
+  String? _phoneCandidate(String query) {
+    if (!RegExp(r'^[+\d\s\-()]+$').hasMatch(query)) return null;
+    final digits = query.replaceAll(RegExp(r'[^\d]'), '');
+    if (digits.length < 5) return null;
+    return query;
+  }
+
+  Future<void> _submitPhone() async {
+    final query = _phoneCandidate(_controller.text.trim());
+    if (query == null) {
+      setState(() => _error = 'Введите корректный номер телефона');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result = await ContactsModule.findByPhone(api, query);
+      if (!mounted) return;
+      if (result == null) {
+        setState(() {
+          _loading = false;
+          _error = 'Контакт с таким номером не найден';
+        });
+        return;
+      }
+      final navigator = Navigator.of(context);
+      final accountId = await TokenStorage.getActiveAccountId();
+      final existing = accountId == null
+          ? null
+          : await AppDatabase.findDialogChatByParticipant(accountId, result.id);
+      final chatId = existing ?? ((accountId ?? 0) ^ result.id);
+      if (!mounted) return;
+      navigator.pop();
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => ChatInfoScreen(
+            chatId: chatId,
+            name:
+                ContactCache.get(result.id) ??
+                result.name ??
+                'User #${result.id}',
+            imageUrl: result.avatarUrl ?? '',
+            chatType: 'DIALOG',
+            dialogPeerId: result.id,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Ошибка: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _submitId() async {
     final raw = _controller.text.trim();
     final id = int.tryParse(raw);
     if (id == null) {
@@ -341,6 +412,7 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
       }
       final raw = Map<String, dynamic>.from(contacts.first as Map);
       final info = ContactInfo.fromMap(raw);
+      ContactsModule.primeContactCache(raw);
       if (!mounted) return;
       final navigator = Navigator.of(context);
       final accountId = await TokenStorage.getActiveAccountId();
@@ -354,7 +426,7 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
         MaterialPageRoute(
           builder: (_) => ChatInfoScreen(
             chatId: chatId,
-            name: info.displayName ?? 'User #$id',
+            name: ContactCache.get(id) ?? info.displayName ?? 'User #$id',
             imageUrl: info.avatarUrl ?? '',
             chatType: 'DIALOG',
             dialogPeerId: id,
@@ -395,7 +467,7 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Поиск по ID',
+                      'Найти контакт',
                       style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 18,
@@ -409,11 +481,32 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
+              SegmentedButton<_SearchMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: _SearchMode.phone,
+                    label: Text('Номер'),
+                    icon: Icon(Symbols.call, size: 18),
+                  ),
+                  ButtonSegment(
+                    value: _SearchMode.id,
+                    label: Text('ID'),
+                    icon: Icon(Symbols.tag, size: 18),
+                  ),
+                ],
+                selected: {_mode},
+                onSelectionChanged: (s) => _setMode(s.first),
+                showSelectedIcon: false,
+                style: ButtonStyle(visualDensity: VisualDensity.compact),
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: _controller,
                 autofocus: true,
-                keyboardType: TextInputType.number,
+                keyboardType: _mode == _SearchMode.phone
+                    ? TextInputType.phone
+                    : TextInputType.number,
                 enabled: !_loading,
                 onSubmitted: (_) => _submit(),
                 onChanged: (_) {
@@ -421,13 +514,15 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
                 },
                 style: TextStyle(color: cs.onSurface, fontSize: 16),
                 decoration: InputDecoration(
-                  hintText: 'Введите ID контакта',
+                  hintText: _mode == _SearchMode.phone
+                      ? 'Введите номер телефона'
+                      : 'Введите ID контакта',
                   hintStyle: TextStyle(
                     color: cs.onSurfaceVariant,
                     fontSize: 16,
                   ),
                   prefixIcon: Icon(
-                    Symbols.tag,
+                    _mode == _SearchMode.phone ? Symbols.call : Symbols.tag,
                     color: cs.onSurfaceVariant,
                     size: 20,
                   ),
@@ -476,17 +571,11 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
               FilledButton(
                 onPressed: _loading ? null : _submit,
                 style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: AppShape.buttonBorder,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: _loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SmallSpinner(size: 20)
                     : const Text('Найти'),
               ),
             ],
