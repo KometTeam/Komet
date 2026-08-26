@@ -57,6 +57,7 @@ class CallController {
   Stream<void> get incomingCanceled => _canceled.stream;
 
   CallSession? _active;
+  StreamSubscription<CallSessionState>? _activeSub;
   CallSession? get activeSession => _active;
 
   IncomingCall? _pending;
@@ -161,10 +162,7 @@ class CallController {
       osVersion: _api?.callsOsVersion,
     );
     final session = CallSession(ws2Config: config, role: CallRole.caller);
-    _bind(session);
-    await session.start();
-    CallBridge.instance.notifyAccepted();
-    return session;
+    return _launch(session, session.start);
   }
 
   Future<CreatedCall> createConference() async {
@@ -189,10 +187,7 @@ class CallController {
       role: CallRole.joiner,
       isGroup: true,
     );
-    _bind(session);
-    await session.start();
-    CallBridge.instance.notifyAccepted();
-    return session;
+    return _launch(session, session.start);
   }
 
   Future<CallSession> acceptIncoming(IncomingCall call) async {
@@ -209,11 +204,14 @@ class CallController {
       params: call.params,
       role: CallRole.callee,
     );
-    _bind(session);
-    await session.start();
-    await session.accept();
-    CallBridge.instance.notifyAccepted(caller: call.callerName);
-    return session;
+    return _launch(
+      session,
+      () async {
+        await session.start();
+        await session.accept();
+      },
+      caller: call.callerName,
+    );
   }
 
   Future<void> rejectIncoming(IncomingCall call) async {
@@ -244,18 +242,45 @@ class CallController {
     return true;
   }
 
+  Future<CallSession> _launch(
+    CallSession session,
+    Future<void> Function() open, {
+    String? caller,
+  }) async {
+    _bind(session);
+    try {
+      await open();
+    } catch (_) {
+      await _release(session);
+      try {
+        await session.hangup();
+      } catch (_) {}
+      rethrow;
+    }
+    CallBridge.instance.notifyAccepted(caller: caller);
+    return session;
+  }
+
   void _bind(CallSession session) {
+    unawaited(_activeSub?.cancel());
     _active = session;
-    session.stateStream.listen((state) {
-      if (state == CallSessionState.ended && _active == session) {
-        _active = null;
-        CallBridge.instance.notifyEnded();
-        _ended.add(null);
-      }
+    _activeSub = session.stateStream.listen((state) {
+      if (state != CallSessionState.ended) return;
+      unawaited(_release(session));
     });
   }
 
+  Future<void> _release(CallSession session) async {
+    if (!identical(_active, session)) return;
+    _active = null;
+    await _activeSub?.cancel();
+    _activeSub = null;
+    CallBridge.instance.notifyEnded();
+    _ended.add(null);
+  }
+
   void dispose() {
+    _activeSub?.cancel();
     _pushSub?.cancel();
     _incoming.close();
     _ended.close();

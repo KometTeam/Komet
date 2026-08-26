@@ -83,6 +83,9 @@ class MainActivity : FlutterActivity() {
     private val shareHandler = Handler(Looper.getMainLooper())
 
     private companion object {
+        @Volatile
+        var keepAwake = false
+
         const val LOG_TAG = "VpnBypass"
         const val SHARE_TAG = "ShareIntake"
         const val NFC_TAG = "NfcExchange"
@@ -359,6 +362,10 @@ class MainActivity : FlutterActivity() {
                     )
                     result.success(null)
                 }
+                "dropOngoing" -> {
+                    CallForegroundService.stop(applicationContext)
+                    result.success(null)
+                }
                 "notifyEnded" -> {
                     CallRinger.stop()
                     NotificationManagerCompat.from(this).cancel(CallConst.NOTIF_ID)
@@ -389,6 +396,19 @@ class MainActivity : FlutterActivity() {
                             Log.w("KometFcm", "open FSI settings failed: ${e.message}")
                         }
                     }
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/screen",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setKeepAwake" -> {
+                    setKeepAwake(call.argument<Boolean>("enabled") == true)
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -498,6 +518,7 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         if (intent?.hasExtra(CallConst.EXTRA_CALL) == true) applyCallWindowFlags()
         super.onCreate(savedInstanceState)
+        applyKeepAwake()
         intent?.let { if (it.hasExtra(CallConst.EXTRA_CALL)) stashCall(it, emit = false) }
         stashChatOpen(intent, emit = false)
         stashShare(intent, emit = false)
@@ -557,6 +578,9 @@ class MainActivity : FlutterActivity() {
     private fun stashCall(intent: Intent, emit: Boolean) {
         val json = intent.getStringExtra(CallConst.EXTRA_CALL) ?: return
         val action = intent.getStringExtra(CallConst.EXTRA_ACTION) ?: CallConst.ACTION_RING
+        intent.removeExtra(CallConst.EXTRA_CALL)
+        intent.removeExtra(CallConst.EXTRA_ACTION)
+        intent.removeExtra(CallConst.EXTRA_CALLER)
         if (action == CallConst.ACTION_ANSWER) CallRinger.stop()
         val map = mapOf<String, Any?>("data" to json, "action" to action)
         val sink = CallEvents.sink
@@ -575,8 +599,7 @@ class MainActivity : FlutterActivity() {
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             )
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -593,9 +616,21 @@ class MainActivity : FlutterActivity() {
             @Suppress("DEPRECATION")
             window.clearFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
             )
+        }
+    }
+
+    private fun setKeepAwake(enabled: Boolean) {
+        keepAwake = enabled
+        runOnUiThread { applyKeepAwake() }
+    }
+
+    private fun applyKeepAwake() {
+        if (keepAwake) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 

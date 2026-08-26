@@ -2088,15 +2088,16 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
       if (_voiceRec.isRecording.value) {
         unawaited(_voiceRec.stop(cancel: true));
       }
       if (_note.isRecording.value) {
         unawaited(_note.stop(cancel: true));
       }
-      _saveDraft();
     }
+    if (state != AppLifecycleState.resumed) _saveDraft();
     super.didChangeAppLifecycleState(state);
   }
 

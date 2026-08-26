@@ -88,8 +88,11 @@ class AttachmentSheet extends StatefulWidget {
 }
 
 class _AttachmentSheetState extends State<AttachmentSheet> {
+  static const int _loadAhead = 24;
+
   static List<GalleryItem>? _cachedItems;
   static GalleryPermission _cachedPermission = GalleryPermission.granted;
+  static bool _cachedHasMore = false;
 
   final GallerySource _source = GallerySource.create();
   final ValueNotifier<Set<String>> _selected = ValueNotifier(<String>{});
@@ -108,6 +111,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   double _navDragAccumDx = 0;
 
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  int _loadToken = 0;
   GalleryPermission _permission = GalleryPermission.granted;
   List<GalleryItem> _items = const [];
 
@@ -118,6 +124,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     if (cached != null) {
       _items = cached;
       _permission = _cachedPermission;
+      _hasMore = _cachedHasMore;
       _loading = false;
       _loadGallery(silent: true);
     } else {
@@ -141,26 +148,60 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Future<void> _loadGallery({bool silent = false}) async {
+    final token = ++_loadToken;
     if (!silent) setState(() => _loading = true);
     final permission = await _source.ensurePermission();
-    if (!mounted) return;
+    if (!mounted || token != _loadToken) return;
     if (permission == GalleryPermission.denied) {
       _cachedItems = null;
+      _cachedHasMore = false;
       setState(() {
         _permission = permission;
         _items = const [];
+        _hasMore = false;
         _loading = false;
       });
       return;
     }
-    final items = await _source.load(limit: 120);
-    if (!mounted) return;
-    _cachedItems = items;
-    _cachedPermission = permission;
+    final loaded = _items.length;
+    final page = await _source.load(
+      offset: 0,
+      limit: loaded > GallerySource.pageSize ? loaded : GallerySource.pageSize,
+    );
+    if (!mounted || token != _loadToken) return;
+    _permission = permission;
+    _loading = false;
+    _publishItems(page.items, page.hasMore);
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || _loadingMore || !_hasMore) return;
+    final token = _loadToken;
+    final offset = _items.length;
+    _loadingMore = true;
+    final page = await _source.load(offset: offset);
+    _loadingMore = false;
+    if (!mounted || token != _loadToken || offset != _items.length) return;
+    if (page.items.isEmpty) {
+      _cachedHasMore = false;
+      setState(() => _hasMore = false);
+      return;
+    }
+    _publishItems([..._items, ...page.items], page.hasMore);
+  }
+
+  void _publishItems(List<GalleryItem> items, bool hasMore) {
+    final seen = <String>{};
+    final unique = [
+      for (final item in items)
+        if (seen.add(item.id)) item,
+    ];
+    _cachedItems = unique;
+    _cachedPermission = _permission;
+    _cachedHasMore = hasMore;
     setState(() {
-      _permission = permission;
-      _items = items;
-      _loading = false;
+      _items = unique;
+      _hasMore = hasMore;
     });
   }
 
@@ -619,12 +660,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
               ),
             ),
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                hpad,
-                spacing,
-                hpad,
-                bottomReserve + 6,
-              ),
+              padding: const EdgeInsets.fromLTRB(hpad, spacing, hpad, 0),
               sliver: SliverGrid(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
@@ -632,6 +668,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                   crossAxisSpacing: spacing,
                 ),
                 delegate: SliverChildBuilderDelegate((context, index) {
+                  if (index >= gridPhotos.length - _loadAhead) {
+                    unawaited(_loadMore());
+                  }
                   final item = gridPhotos[index];
                   return _GalleryTile(
                     key: ValueKey(item.id),
@@ -644,6 +683,18 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                     cs: cs,
                   );
                 }, childCount: gridPhotos.length),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  if (_hasMore)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: SmallSpinner(size: 22, color: cs.primary),
+                    ),
+                  SizedBox(height: bottomReserve + 6),
+                ],
               ),
             ),
           ],

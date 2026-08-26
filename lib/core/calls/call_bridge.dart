@@ -99,6 +99,15 @@ class CallBridge {
     }
   }
 
+  Future<void> dropOngoing() async {
+    if (!_android) return;
+    try {
+      await _method.invokeMethod<void>('dropOngoing');
+    } catch (e) {
+      logger.w('CallBridge.dropOngoing: $e');
+    }
+  }
+
   Future<void> notifyEnded() async {
     if (!_android) return;
     try {

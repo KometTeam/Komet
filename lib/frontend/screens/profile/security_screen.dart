@@ -19,6 +19,9 @@ import 'password_entry_screen.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
 
+const bool _showFamilyProtection = false;
+const bool _showSafeMode = false;
+
 class SecurityScreen extends StatefulWidget {
   const SecurityScreen({super.key});
 
@@ -165,9 +168,9 @@ class _SecurityScreenState extends State<SecurityScreen>
       child: Column(
         children: [
           _buildAppBar(context, cs),
-          _buildShimmerSection(cs, height: 104),
+          _buildShimmerSection(cs, height: _showFamilyProtection ? 104 : 56),
           const SizedBox(height: 12),
-          _buildShimmerSection(cs, height: 280),
+          _buildShimmerSection(cs, height: _showSafeMode ? 280 : 232),
           const SizedBox(height: 20),
           _buildShimmerSection(cs, height: 220),
           const SizedBox(height: 12),
@@ -258,15 +261,16 @@ class _SecurityScreenState extends State<SecurityScreen>
       child: Column(
         children: [
           _buildPasswordRow(cs),
-          _settingsRow(
-            cs,
-            icon: Symbols.shield,
-            label: l10n.securityFamilyProtection,
-            subtitle: _privacyConfig?.familyProtection == 'ON'
-                ? l10n.securityEnabledFem
-                : l10n.securityDisabledFem,
-            isLast: true,
-          ),
+          if (_showFamilyProtection)
+            _settingsRow(
+              cs,
+              icon: Symbols.shield,
+              label: l10n.securityFamilyProtection,
+              subtitle: _privacyConfig?.familyProtection == 'ON'
+                  ? l10n.securityEnabledFem
+                  : l10n.securityDisabledFem,
+              isLast: true,
+            ),
         ],
       ),
     );
@@ -337,14 +341,15 @@ class _SecurityScreenState extends State<SecurityScreen>
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.only(left: 58),
-          child: Divider(
-            height: 1,
-            thickness: 1,
-            color: cs.outlineVariant.withValues(alpha: 0.35),
+        if (_showFamilyProtection)
+          Padding(
+            padding: const EdgeInsets.only(left: 58),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: cs.outlineVariant.withValues(alpha: 0.35),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -358,59 +363,61 @@ class _SecurityScreenState extends State<SecurityScreen>
       depth: 6,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
-            child: Row(
-              children: [
-                Icon(
-                  Symbols.lock,
-                  color: cs.onSurfaceVariant,
-                  size: 22,
-                  weight: 400,
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.securityModeTitle,
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        l10n.securityModeSubtitle,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: isSafeMode,
-                  onChanged: (v) => showCustomNotification(
-                    context,
-                    l10n.securitySettingsUnavailable,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (isSafeMode) ...[
+          if (_showSafeMode)
             Padding(
-              padding: const EdgeInsets.only(left: 58),
-              child: Divider(
-                height: 1,
-                thickness: 1,
-                color: cs.outlineVariant.withValues(alpha: 0.35),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+              child: Row(
+                children: [
+                  Icon(
+                    Symbols.lock,
+                    color: cs.onSurfaceVariant,
+                    size: 22,
+                    weight: 400,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.securityModeTitle,
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          l10n.securityModeSubtitle,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: isSafeMode,
+                    onChanged: (v) => showCustomNotification(
+                      context,
+                      l10n.securitySettingsUnavailable,
+                    ),
+                  ),
+                ],
               ),
             ),
+          if (isSafeMode) ...[
+            if (_showSafeMode)
+              Padding(
+                padding: const EdgeInsets.only(left: 58),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: cs.outlineVariant.withValues(alpha: 0.35),
+                ),
+              ),
             _settingsRow(
               cs,
               label: l10n.securityFindByPhone,
@@ -465,14 +472,15 @@ class _SecurityScreenState extends State<SecurityScreen>
             ),
           ],
           if (!isSafeMode) ...[
-            Padding(
-              padding: const EdgeInsets.only(left: 20),
-              child: Divider(
-                height: 1,
-                thickness: 1,
-                color: cs.outlineVariant.withValues(alpha: 0.35),
+            if (_showSafeMode)
+              Padding(
+                padding: const EdgeInsets.only(left: 20),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: cs.outlineVariant.withValues(alpha: 0.35),
+                ),
               ),
-            ),
             _settingsRow(
               cs,
               icon: Symbols.phone,

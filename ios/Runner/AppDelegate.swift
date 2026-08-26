@@ -42,6 +42,7 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
       registerVideo(messenger)
       registerVideoNote(messenger)
       registerNotifications(messenger)
+      registerScreen(messenger)
     }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
@@ -148,6 +149,21 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
       return
     }
     body(recorder)
+  }
+
+  private func registerScreen(_ messenger: FlutterBinaryMessenger) {
+    method("ru.komet.app/screen", messenger) { call, result in
+      switch call.method {
+      case "setKeepAwake":
+        let enabled = ((call.arguments as? [String: Any])?["enabled"] as? NSNumber)?.boolValue ?? false
+        DispatchQueue.main.async {
+          UIApplication.shared.isIdleTimerDisabled = enabled
+          result(nil)
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   private func registerNotifications(_ messenger: FlutterBinaryMessenger) {

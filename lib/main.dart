@@ -624,6 +624,9 @@ class KometAppState extends State<KometApp>
     if (state != AppLifecycleState.resumed) return;
     api.wakeUp();
     SelfCheckService.instance.resume();
+    if (!CallController.instance.isBusy) {
+      unawaited(CallBridge.instance.dropOngoing());
+    }
     CallBridge.instance.checkInitialCall();
     unawaited(NotificationBridge.instance.checkInitialChat());
     unawaited(ShareIntentBridge.instance.checkInitialShare());

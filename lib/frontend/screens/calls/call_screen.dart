@@ -17,6 +17,7 @@ import '../../../core/calls/call_session.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/call_no_mute.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/screen_wake.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/call_video_view.dart';
 import '../../widgets/custom_notification.dart';
@@ -133,6 +134,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     ActiveCall.instance.enterScreen();
+    unawaited(ScreenWake.instance.acquire(this));
     _dotsController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -422,6 +424,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     ActiveCall.instance.leaveScreen();
+    unawaited(ScreenWake.instance.release(this));
     _stateSub?.cancel();
     _canceledSub?.cancel();
     _infoSub?.cancel();

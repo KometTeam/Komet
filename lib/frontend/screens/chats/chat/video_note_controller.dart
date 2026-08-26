@@ -16,6 +16,7 @@ import '../../../../core/config/app_video_note_quality.dart';
 import '../../../../core/media/native_video_note_recorder.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
+import '../../../../core/utils/screen_wake.dart';
 import '../../../widgets/custom_notification.dart';
 import '../../../widgets/lottie_slash_icon.dart';
 import 'voice_record_controller.dart';
@@ -97,6 +98,7 @@ class VideoNoteController {
     unawaited(AssetLottie(_flashIcon).load());
     if (_stub) {
       _camReady.value = true;
+      unawaited(ScreenWake.instance.acquire(this));
       _textureId.value = null;
       return;
     }
@@ -124,6 +126,7 @@ class VideoNoteController {
       }
       _textureId.value = _rec.textureId;
       _camReady.value = true;
+      unawaited(ScreenWake.instance.acquire(this));
     } catch (e) {
       logger.w('initNoteCamera: $e');
       await _disposeCamera();
@@ -156,6 +159,7 @@ class VideoNoteController {
 
   Future<void> _disposeCamera() async {
     _camReady.value = false;
+    unawaited(ScreenWake.instance.release(this));
     _textureId.value = null;
     if (!_stub) await _rec.dispose();
   }
@@ -304,6 +308,7 @@ class VideoNoteController {
   }
 
   void dispose() {
+    unawaited(ScreenWake.instance.release(this));
     _timer?.cancel();
     _rec.dispose();
     _textureId.dispose();
