@@ -118,7 +118,6 @@ import '../../widgets/liquid_glass.dart';
 import 'scheduled_messages_screen.dart';
 import 'chat_encryption_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
-import 'chat/retain_offset_physics.dart';
 import 'profile_action_sheets.dart';
 import '../../../core/media/media_playback.dart';
 import '../../widgets/media_playback_pill.dart';
@@ -652,10 +651,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _scrollDownVisible = false;
   final ValueNotifier<int> _newMessageCount = ValueNotifier(0);
   bool _clearCountScheduled = false;
-  bool _retainOffsetOnce = false;
-  late final ScrollPhysics _listPhysics = RetainOffsetScrollPhysics(
-    retain: _consumeRetainOffset,
-  );
+  final Set<String> _deferredIds = <String>{};
   int _listEpoch = 0;
   final List<({String id, double pixels, double alignment})> _returnStack = [];
   bool _returningToAnchor = false;
@@ -924,6 +920,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (cached != null && cached.messages.isNotEmpty) {
       setState(() {
         _messages = List<CachedMessage>.of(cached.messages);
+        _deferredIds.clear();
         _hasMoreHistory = !cached.reachedStart;
         _messagesRev.value++;
       });
@@ -947,6 +944,7 @@ class _ChatScreenState extends State<ChatScreen>
           .toList();
       setState(() {
         _messages = first;
+        _deferredIds.clear();
         _messagesRev.value++;
       });
       _mergePendingMedia();
@@ -1717,17 +1715,19 @@ class _ChatScreenState extends State<ChatScreen>
     _loadGroupSenderNames();
   }
 
-  bool _consumeRetainOffset() {
-    if (!_retainOffsetOnce) return false;
-    _retainOffsetOnce = false;
-    return true;
+  int get _visibleMessageCount {
+    if (_deferredIds.isEmpty) return _messages.length;
+    var visible = _messages.length;
+    while (visible > 0 && _deferredIds.contains(_messages[visible - 1].id)) {
+      visible--;
+    }
+    return visible;
   }
 
-  void _retainOffsetForNextLayout() {
-    _retainOffsetOnce = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _retainOffsetOnce = false;
-    });
+  void _flushDeferredMessages() {
+    if (_deferredIds.isEmpty) return;
+    _deferredIds.clear();
+    _bumpMessages();
   }
 
   String? _viewportAnchorId() {
@@ -1742,20 +1742,6 @@ class _ChatScreenState extends State<ChatScreen>
       if (dy >= 0 && dy <= height) newest = message.id;
     }
     return newest;
-  }
-
-  Future<void> _holdScrollAfterAppend(
-    String? anchorId,
-    double? anchorAt,
-  ) async {
-    if (anchorId == null || anchorAt == null) return;
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted || !_scrollController.hasClients) return;
-    if (_scrollController.position.userScrollDirection !=
-        ScrollDirection.idle) {
-      return;
-    }
-    _restoreContentOffset(anchorId, anchorAt);
   }
 
   double? _messageOffsetInList(String messageId) {
@@ -1993,6 +1979,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     final comments = [...loaded]..sort((a, b) => a.time.compareTo(b.time));
     _messages = post != null ? [post, ...comments] : comments;
+    _deferredIds.clear();
     _commentsHasMore = comments.isNotEmpty;
     _syncReactionNotifiersFromMessages();
     unawaited(_resolveCommentNames(comments));
@@ -2039,9 +2026,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (comment.senderId == _myId) return;
     if (_messages.any((m) => m.id == comment.id)) return;
     final nearBottom = _isNearListBottom();
-    final anchorId = nearBottom ? null : _viewportAnchorId();
-    final anchorAt = anchorId == null ? null : _messageContentOffset(anchorId);
-    if (!nearBottom) _retainOffsetForNextLayout();
+    if (!nearBottom) _deferredIds.add(comment.id);
     _messages.add(comment);
     _syncReactionNotifiersFromMessages();
     _bumpMessages();
@@ -2050,7 +2035,6 @@ class _ChatScreenState extends State<ChatScreen>
       _scrollToBottom();
     } else {
       _noteMissedMessage();
-      unawaited(_holdScrollAfterAppend(anchorId, anchorAt));
     }
   }
 
@@ -3022,11 +3006,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (message.senderId == _myId && !message.isControl) return;
         if (_messages.any((m) => m.id == message.id)) return;
         final nearBottom = _isNearBottom();
-        final anchorId = nearBottom ? null : _viewportAnchorId();
-        final anchorAt = anchorId == null
-            ? null
-            : _messageContentOffset(anchorId);
-        if (!nearBottom) _retainOffsetForNextLayout();
+        if (!nearBottom) _deferredIds.add(message.id);
         _lastSentId = message.id;
         _messages.add(message);
         _bumpMessages();
@@ -3037,7 +3017,6 @@ class _ChatScreenState extends State<ChatScreen>
           _scheduleReadMarker();
         } else {
           _noteMissedMessage();
-          unawaited(_holdScrollAfterAppend(anchorId, anchorAt));
           _reapplyPinIfNeeded();
         }
         _prank.checkTrigger(message);
@@ -3555,6 +3534,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     setState(() {
       _messages = [];
+      _deferredIds.clear();
       _hasMoreHistory = false;
       _combinedItemsCache = null;
     });
@@ -4420,6 +4400,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _scrollToBottom() {
+    _flushDeferredMessages();
     _returnStack.clear();
     _newMessageCount.value = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4463,7 +4444,9 @@ class _ChatScreenState extends State<ChatScreen>
         pos.userScrollDirection != ScrollDirection.idle) {
       _returnStack.clear();
     }
-    if (atBottom && _newMessageCount.value > 0) _clearNewMessageCountSoon();
+    if (atBottom && (_newMessageCount.value > 0 || _deferredIds.isNotEmpty)) {
+      _clearNewMessageCountSoon();
+    }
     final reveal = math.min(
       _scrollDownRevealExtent,
       pos.viewportDimension * _scrollDownRevealFactor,
@@ -4496,6 +4479,7 @@ class _ChatScreenState extends State<ChatScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _clearCountScheduled = false;
       if (!mounted || !_isNearBottom()) return;
+      _flushDeferredMessages();
       _newMessageCount.value = 0;
       _updateScrollDownVisible();
     });
@@ -4913,6 +4897,7 @@ class _ChatScreenState extends State<ChatScreen>
       onSettled?.call();
       return;
     }
+    if (_deferredIds.contains(messageId)) _flushDeferredMessages();
     final items = _buildCombinedItems();
     final pos = items.indexWhere(
       (it) => it is _MessageItem && it.message.id == messageId,
@@ -5107,9 +5092,11 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   List<Object> _buildCombinedItems() {
+    final visible = _visibleMessageCount;
     final key = Object.hash(
       _messagesRev.value,
       _messages.length,
+      visible,
       _unreadAnchorTime,
     );
     final cached = _combinedItemsCache;
@@ -5120,7 +5107,7 @@ class _ChatScreenState extends State<ChatScreen>
     final List<Object> items = [];
     final Set<int> usedDates = {};
 
-    for (int i = 0; i < _messages.length; i++) {
+    for (int i = 0; i < visible; i++) {
       final msg = _messages[i];
       final msgDate = DateTime.fromMillisecondsSinceEpoch(msg.time);
       final dayMillis = DateTime(
@@ -5698,6 +5685,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     final items = _buildCombinedItems();
+    final visibleCount = _visibleMessageCount;
 
     return Stack(
       key: _listKey,
@@ -5715,7 +5703,6 @@ class _ChatScreenState extends State<ChatScreen>
                   return CustomScrollView(
                     controller: _scrollController,
                     reverse: true,
-                    physics: _listPhysics,
                     cacheExtent: cacheExtent,
                     slivers: [
                       SliverPadding(
@@ -5756,8 +5743,7 @@ class _ChatScreenState extends State<ChatScreen>
                               final prevMessage = msgIndex > 0
                                   ? _messages[msgIndex - 1]
                                   : null;
-                              final nextMessage =
-                                  msgIndex < _messages.length - 1
+                              final nextMessage = msgIndex < visibleCount - 1
                                   ? _messages[msgIndex + 1]
                                   : null;
 
