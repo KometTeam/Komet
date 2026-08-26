@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/frontend/screens/chats/chat/chat_controller.dart';
-import 'package:komet/frontend/screens/chats/chat/retain_offset_physics.dart';
 
 const double _itemHeight = 60;
 const double _newestHeight = 84;
@@ -23,10 +22,14 @@ class _Harness {
   final ScrollController controller = ScrollController();
   final List<String> items = [for (var i = 0; i < 200; i++) 'm$i'];
   final Map<String, GlobalKey> keys = {};
+  int deferredTail = 0;
+
+  int get visibleCount => items.length - deferredTail;
 
   GlobalKey keyFor(String id) => keys.putIfAbsent(id, GlobalKey.new);
 
   Future<void> pump() async {
+    final visible = visibleCount;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -41,13 +44,13 @@ class _Harness {
                 SliverList(
                   delegate: SliverChildBuilderDelegate((context, index) {
                     if (index == 0) return const SizedBox(height: 0);
-                    final id = items[items.length - index];
+                    final id = items[visible - index];
                     return SizedBox(
                       key: keyFor(id),
                       height: id == 'newest' ? _newestHeight : _itemHeight,
                       child: Text(id),
                     );
-                  }, childCount: items.length + 1),
+                  }, childCount: visible + 1),
                 ),
               ],
             ),
@@ -157,19 +160,8 @@ void main() {
     expect(h.controller.position.pixels, 600);
   });
 
-  testWidgets('RetainOffsetScrollPhysics holds the view in place when a '
-      'message is appended', (tester) async {
-    var retainOnce = false;
-    final h = _Harness(
-      tester,
-      physics: RetainOffsetScrollPhysics(
-        retain: () {
-          if (!retainOnce) return false;
-          retainOnce = false;
-          return true;
-        },
-      ),
-    );
+  testWidgets('отложенный хвост не двигает вьюпорт вообще', (tester) async {
+    final h = _Harness(tester, physics: null);
     addTearDown(h.controller.dispose);
 
     await h.pump();
@@ -179,35 +171,33 @@ void main() {
     final anchor = h.anchorId();
     final beforeDy = h.dyOf(anchor);
 
-    retainOnce = true;
     h.items.add('newest');
+    h.deferredTail = 1;
     await h.pump();
 
-    expect(h.dyOf(anchor), closeTo(beforeDy, 0.5));
-    expect(h.controller.position.pixels, greaterThan(600));
+    expect(h.dyOf(anchor), beforeDy);
+    expect(h.controller.position.pixels, 600);
+    expect(find.text('newest'), findsNothing);
   });
 
-  testWidgets('RetainOffsetScrollPhysics stays inert while the flag is unset', (
+  testWidgets('сброс отложенного хвоста показывает новое сообщение', (
     tester,
   ) async {
-    final h = _Harness(
-      tester,
-      physics: RetainOffsetScrollPhysics(retain: () => false),
-    );
+    final h = _Harness(tester, physics: null);
     addTearDown(h.controller.dispose);
 
     await h.pump();
-    h.controller.jumpTo(600);
-    await tester.pump();
-
-    final anchor = h.anchorId();
-    final beforeDy = h.dyOf(anchor);
-
     h.items.add('newest');
+    h.deferredTail = 1;
     await h.pump();
 
-    expect(h.dyOf(anchor), lessThan(beforeDy - 1));
-    expect(h.controller.position.pixels, 600);
+    expect(find.text('newest'), findsNothing);
+
+    h.deferredTail = 0;
+    await h.pump();
+
+    expect(find.text('newest'), findsOneWidget);
+    expect(h.controller.position.pixels, 0);
   });
 
   testWidgets('вставка старее вьюпорта не двигает его вообще', (tester) async {
