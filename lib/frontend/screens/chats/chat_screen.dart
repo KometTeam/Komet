@@ -693,7 +693,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (!_commentsMode) ChatScreen._open.add(this);
     unawaited(PushService.clearChatNotification(widget.chatId));
     if (!_commentsMode) {
-      unawaited(NotificationBridge.instance.setActiveChat(widget.chatId));
+      unawaited(NotificationBridge.instance.pushActiveChat(widget.chatId));
     }
     unawaited(
       animojiModule
@@ -2100,7 +2100,7 @@ class _ChatScreenState extends State<ChatScreen>
   void dispose() {
     ChatScreen._open.remove(this);
     if (!_commentsMode) {
-      unawaited(NotificationBridge.instance.clearActiveChat(widget.chatId));
+      unawaited(NotificationBridge.instance.popActiveChat(widget.chatId));
     }
     _chatController.persistSessionCache();
     if (_previewChat) {

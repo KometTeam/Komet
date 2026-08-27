@@ -958,6 +958,7 @@ class MainActivity : FlutterActivity() {
         if (!keepEngineAlive()) {
             FlutterEngineCache.getInstance().remove(KEEP_ENGINE_ID)
             FkmChannel.detach()
+            ChatNotifications.activeChatId = 0L
         }
         super.cleanUpFlutterEngine(flutterEngine)
     }
