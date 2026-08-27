@@ -17,6 +17,7 @@ import '../webpush/max_web_socket.dart';
 import '../webpush/web_push_service.dart';
 import 'desktop_url_scheme.dart';
 import 'max_link.dart';
+import '../config/build_profile.dart';
 
 class DeepLinkService {
   DeepLinkService._();
@@ -138,6 +139,7 @@ class DeepLinkService {
   }
 
   bool _isExternalCallback(Uri uri) {
+    if (!BuildProfile.digitalId) return false;
     final scheme = uri.scheme.toLowerCase();
     if (scheme != 'https' && scheme != 'http' && scheme != 'max') return false;
     final host = uri.host.toLowerCase();

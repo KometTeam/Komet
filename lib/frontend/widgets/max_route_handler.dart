@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/config/build_profile.dart';
 import '../../core/utils/link_opener.dart';
 import '../screens/chats/chat_info_screen.dart';
 import '../screens/chats/chat_list_screen.dart';
@@ -137,6 +138,7 @@ Future<bool> openMaxRoute(
     case ':settings/dev/showroom':
     case ':settings/dev/threadsviewer':
     case ':settings/dev/integritylogsviewer':
+      if (!BuildProfile.devTools) break;
       return _push(context, const DebugMenuScreen());
 
     case ':current':

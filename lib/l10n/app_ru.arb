@@ -959,5 +959,17 @@
   "webPushStatusService": "Сервис",
   "webPushStatusToken": "Токен",
   "webPushStatusLinkedAt": "Привязан",
-  "webPushStatusDevice": "Устройство"
+  "webPushStatusDevice": "Устройство",
+  "securityDeleteProfileTitle": "Удалить профиль",
+  "securityDeleteProfileSubtitle": "Профиль и все данные удалятся через 30 дней",
+  "securityDeleteProfileConfirmTitle": "Удалить профиль?",
+  "securityDeleteProfileConfirmMessage": "Ваш профиль MAX будет удалён через 30 дней. До этого момента заявку можно отменить.",
+  "securityDeleteProfileConfirmAction": "Удалить",
+  "securityDeleteProfileScheduled": "Профиль будет удалён {date}",
+  "@securityDeleteProfileScheduled": {"placeholders": {"date": {"type": "String"}}},
+  "securityDeleteProfileKeep": "Не удалять профиль",
+  "securityDeleteProfileRequested": "Заявка на удаление принята",
+  "securityDeleteProfileCanceled": "Удаление профиля отменено",
+  "securityDeleteProfileError": "Не удалось отправить запрос: {error}",
+  "@securityDeleteProfileError": {"placeholders": {"error": {"type": "String"}}}
 }

@@ -53,6 +53,7 @@ import '../../../backend/api.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../core/config/build_profile.dart';
 import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_spectrum_background.dart';
@@ -1609,7 +1610,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       await openExternalUrl(context, url);
       return;
     }
-    if (!banner.isUpdate) return;
+    if (!banner.isUpdate || !BuildProfile.selfUpdate) return;
 
     final result = await UpdateChecker.checkNow();
     if (!mounted) return;

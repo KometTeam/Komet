@@ -2825,4 +2825,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webPushStatusDevice => 'Device';
+
+  @override
+  String get securityDeleteProfileTitle => 'Delete profile';
+
+  @override
+  String get securityDeleteProfileSubtitle =>
+      'The profile and all its data are removed after 30 days';
+
+  @override
+  String get securityDeleteProfileConfirmTitle => 'Delete profile?';
+
+  @override
+  String get securityDeleteProfileConfirmMessage =>
+      'Your MAX profile will be deleted in 30 days. You can cancel the request at any time before that.';
+
+  @override
+  String get securityDeleteProfileConfirmAction => 'Delete';
+
+  @override
+  String securityDeleteProfileScheduled(String date) {
+    return 'Profile will be deleted on $date';
+  }
+
+  @override
+  String get securityDeleteProfileKeep => 'Don\'t delete profile';
+
+  @override
+  String get securityDeleteProfileRequested => 'Deletion request accepted';
+
+  @override
+  String get securityDeleteProfileCanceled => 'Profile deletion canceled';
+
+  @override
+  String securityDeleteProfileError(String error) {
+    return 'Failed to send the request: $error';
+  }
 }

@@ -2837,4 +2837,40 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get webPushStatusDevice => 'Устройство';
+
+  @override
+  String get securityDeleteProfileTitle => 'Удалить профиль';
+
+  @override
+  String get securityDeleteProfileSubtitle =>
+      'Профиль и все данные удалятся через 30 дней';
+
+  @override
+  String get securityDeleteProfileConfirmTitle => 'Удалить профиль?';
+
+  @override
+  String get securityDeleteProfileConfirmMessage =>
+      'Ваш профиль MAX будет удалён через 30 дней. До этого момента заявку можно отменить.';
+
+  @override
+  String get securityDeleteProfileConfirmAction => 'Удалить';
+
+  @override
+  String securityDeleteProfileScheduled(String date) {
+    return 'Профиль будет удалён $date';
+  }
+
+  @override
+  String get securityDeleteProfileKeep => 'Не удалять профиль';
+
+  @override
+  String get securityDeleteProfileRequested => 'Заявка на удаление принята';
+
+  @override
+  String get securityDeleteProfileCanceled => 'Удаление профиля отменено';
+
+  @override
+  String securityDeleteProfileError(String error) {
+    return 'Не удалось отправить запрос: $error';
+  }
 }

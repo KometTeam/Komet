@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove"/>
     <application>
         <provider
             android:name="com.google.firebase.provider.FirebaseInitProvider"
@@ -18,22 +19,5 @@
         <receiver
             android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingReceiver"
             tools:node="remove" />
-        <activity android:name="ru.komet.app.MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="https" android:host="max.ru"/>
-                <data android:scheme="https" android:host="www.max.ru"/>
-                <data android:scheme="http" android:host="max.ru"/>
-                <data android:scheme="http" android:host="www.max.ru"/>
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="max"/>
-            </intent-filter>
-        </activity>
     </application>
 </manifest>

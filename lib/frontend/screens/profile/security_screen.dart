@@ -6,6 +6,7 @@ import '../../../backend/modules/account.dart'
     show PrivacyConfig, BlockedContact;
 import '../../../core/storage/app_database.dart';
 import '../../../core/config/app_colors.dart';
+import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
@@ -36,6 +37,8 @@ class _SecurityScreenState extends State<SecurityScreen>
   bool _is2faEnabled = false;
   PrivacyConfig? _privacyConfig;
   List<BlockedContact> _blockedContacts = [];
+  DateTime? _profileDeletionAt;
+  bool _deletionBusy = false;
   late AnimationController _shimmerController;
 
   @override
@@ -58,6 +61,9 @@ class _SecurityScreenState extends State<SecurityScreen>
   void reloadAfterReconnect() => _loadData();
 
   Future<void> _loadData() async {
+    final deletionAt = await accountModule.profileDeletionScheduledAt();
+    if (mounted) setState(() => _profileDeletionAt = deletionAt);
+
     try {
       final results = await Future.wait([
         accountModule.getPrivacyConfig(),
@@ -152,8 +158,14 @@ class _SecurityScreenState extends State<SecurityScreen>
                   ),
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                       child: _buildBlacklistSection(cs),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                      child: _buildDeleteProfileSection(cs),
                     ),
                   ),
                 ],
@@ -803,6 +815,81 @@ class _SecurityScreenState extends State<SecurityScreen>
     } catch (_) {}
   }
 
+  Future<void> _requestProfileDeletion() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.securityDeleteProfileConfirmTitle,
+      message: l10n.securityDeleteProfileConfirmMessage,
+      confirmLabel: l10n.securityDeleteProfileConfirmAction,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    await _applyProfileDeletion(true, l10n.securityDeleteProfileRequested);
+  }
+
+  Future<void> _cancelProfileDeletion() async {
+    final l10n = AppLocalizations.of(context)!;
+    await _applyProfileDeletion(false, l10n.securityDeleteProfileCanceled);
+  }
+
+  Future<void> _applyProfileDeletion(bool delete, String successText) async {
+    if (_deletionBusy) return;
+    setState(() => _deletionBusy = true);
+    try {
+      final scheduledAt = await accountModule.setProfileDeletion(delete);
+      if (!mounted) return;
+      setState(() => _profileDeletionAt = scheduledAt);
+      showCustomNotification(context, successText);
+    } catch (e) {
+      if (!mounted) return;
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.securityDeleteProfileError(e.toString()),
+      );
+    } finally {
+      if (mounted) setState(() => _deletionBusy = false);
+    }
+  }
+
+  Widget _buildDeleteProfileSection(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
+    final scheduledAt = _profileDeletionAt;
+    final pending = scheduledAt != null;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: AppShape.cardRadius,
+      depth: 6,
+      child: Column(
+        children: [
+          _settingsRow(
+            cs,
+            icon: pending ? Symbols.error : Symbols.person_remove,
+            label: pending
+                ? l10n.securityDeleteProfileScheduled(
+                    formatDateNumeric(scheduledAt),
+                  )
+                : l10n.securityDeleteProfileTitle,
+            subtitle: pending ? null : l10n.securityDeleteProfileSubtitle,
+            accentColor: cs.error,
+            showChevron: false,
+            isLast: !pending,
+            onTap: pending || _deletionBusy ? null : _requestProfileDeletion,
+          ),
+          if (pending)
+            _settingsRow(
+              cs,
+              icon: Symbols.undo,
+              label: l10n.securityDeleteProfileKeep,
+              showChevron: false,
+              isLast: true,
+              onTap: _deletionBusy ? null : _cancelProfileDeletion,
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBlacklistSection(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
     final count = _blockedContacts.length;
@@ -886,6 +973,7 @@ class _SecurityScreenState extends State<SecurityScreen>
     FontWeight? labelFontWeight = FontWeight.w500,
     bool insetDivider = true,
     bool isLast = false,
+    Color? accentColor,
     VoidCallback? onTap,
   }) {
     return Column(
@@ -909,7 +997,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                   if (icon != null) ...[
                     Icon(
                       icon,
-                      color: cs.onSurfaceVariant,
+                      color: accentColor ?? cs.onSurfaceVariant,
                       size: 22,
                       weight: 400,
                     ),
@@ -923,7 +1011,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                               Text(
                                 label,
                                 style: TextStyle(
-                                  color: cs.onSurface,
+                                  color: accentColor ?? cs.onSurface,
                                   fontSize: labelFontSize,
                                   fontWeight: labelFontWeight,
                                 ),
@@ -941,7 +1029,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                         : Text(
                             label,
                             style: TextStyle(
-                              color: cs.onSurface,
+                              color: accentColor ?? cs.onSurface,
                               fontSize: labelFontSize,
                               fontWeight: labelFontWeight,
                             ),

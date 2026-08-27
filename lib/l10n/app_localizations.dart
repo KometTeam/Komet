@@ -5353,6 +5353,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Device'**
   String get webPushStatusDevice;
+
+  /// No description provided for @securityDeleteProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete profile'**
+  String get securityDeleteProfileTitle;
+
+  /// No description provided for @securityDeleteProfileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The profile and all its data are removed after 30 days'**
+  String get securityDeleteProfileSubtitle;
+
+  /// No description provided for @securityDeleteProfileConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete profile?'**
+  String get securityDeleteProfileConfirmTitle;
+
+  /// No description provided for @securityDeleteProfileConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your MAX profile will be deleted in 30 days. You can cancel the request at any time before that.'**
+  String get securityDeleteProfileConfirmMessage;
+
+  /// No description provided for @securityDeleteProfileConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get securityDeleteProfileConfirmAction;
+
+  /// No description provided for @securityDeleteProfileScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile will be deleted on {date}'**
+  String securityDeleteProfileScheduled(String date);
+
+  /// No description provided for @securityDeleteProfileKeep.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t delete profile'**
+  String get securityDeleteProfileKeep;
+
+  /// No description provided for @securityDeleteProfileRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion request accepted'**
+  String get securityDeleteProfileRequested;
+
+  /// No description provided for @securityDeleteProfileCanceled.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile deletion canceled'**
+  String get securityDeleteProfileCanceled;
+
+  /// No description provided for @securityDeleteProfileError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to send the request: {error}'**
+  String securityDeleteProfileError(String error);
 }
 
 class _AppLocalizationsDelegate

@@ -60,15 +60,6 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="https" android:host="max.ru"/>
-                <data android:scheme="https" android:host="www.max.ru"/>
-                <data android:scheme="http" android:host="max.ru"/>
-                <data android:scheme="http" android:host="www.max.ru"/>
-            </intent-filter>
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -83,7 +74,6 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="komet"/>
-                <data android:scheme="max"/>
             </intent-filter>
             <intent-filter android:label="@string/share_target_label">
                 <action android:name="android.intent.action.SEND"/>
@@ -152,7 +142,7 @@
             android:exported="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Maintains the app's own persistent connection to the messaging server so that message notifications are delivered on builds without Google Play Services" />
+                android:value="User-enabled option that keeps the app's own authenticated connection to the messaging service open solely to deliver incoming message and call notifications. Firebase Cloud Messaging cannot be used for this app: push delivery is operated by the third-party messaging service, which sends pushes only to its own FCM sender, so the app cannot receive them. The service is off by default, is started only after the user turns it on, carries a persistent notification, and can be stopped from that notification at any time." />
         </service>
         <receiver
             android:name=".FkmDisableReceiver"

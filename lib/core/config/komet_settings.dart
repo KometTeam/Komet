@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'build_profile.dart';
+
 class KometSettings {
   static const _kViewDeleted = 'komet_view_deleted';
   static const _kViewRedacted = 'komet_view_redacted';
@@ -22,8 +24,12 @@ class KometSettings {
 
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    viewDeleted.value = prefs.getBool(_kViewDeleted) ?? false;
-    viewRedacted.value = prefs.getBool(_kViewRedacted) ?? false;
+    viewDeleted.value =
+        BuildProfile.hiddenContentViewers &&
+        (prefs.getBool(_kViewDeleted) ?? false);
+    viewRedacted.value =
+        BuildProfile.hiddenContentViewers &&
+        (prefs.getBool(_kViewRedacted) ?? false);
     fullTimestamp.value = prefs.getBool(_kFullTimestamp) ?? false;
     ghostMode.value = prefs.getBool(_kGhostMode) ?? false;
     antiRead.value = prefs.getBool(_kAntiRead) ?? false;

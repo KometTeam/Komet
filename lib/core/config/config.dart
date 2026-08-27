@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'build_profile.dart';
+
 abstract class ServerConfig {
   static const String defaultHost = 'api2.oneme.ru';
   static const int defaultPort = 443;
@@ -14,8 +16,8 @@ abstract class ServerConfig {
   static Future<({String host, int port, bool trustMincifryCa})>
   loadEndpoint() async {
     final prefs = await SharedPreferences.getInstance();
-    final rawHost = prefs.getString(prefHostKey);
-    final rawPort = prefs.getInt(prefPortKey);
+    final rawHost = BuildProfile.devTools ? prefs.getString(prefHostKey) : null;
+    final rawPort = BuildProfile.devTools ? prefs.getInt(prefPortKey) : null;
     final host = (rawHost != null && rawHost.trim().isNotEmpty)
         ? rawHost.trim()
         : defaultHost;

@@ -1215,5 +1215,17 @@
   "webPushStatusService": "Service",
   "webPushStatusToken": "Token",
   "webPushStatusLinkedAt": "Linked",
-  "webPushStatusDevice": "Device"
+  "webPushStatusDevice": "Device",
+  "securityDeleteProfileTitle": "Delete profile",
+  "securityDeleteProfileSubtitle": "The profile and all its data are removed after 30 days",
+  "securityDeleteProfileConfirmTitle": "Delete profile?",
+  "securityDeleteProfileConfirmMessage": "Your MAX profile will be deleted in 30 days. You can cancel the request at any time before that.",
+  "securityDeleteProfileConfirmAction": "Delete",
+  "securityDeleteProfileScheduled": "Profile will be deleted on {date}",
+  "@securityDeleteProfileScheduled": {"placeholders": {"date": {"type": "String"}}},
+  "securityDeleteProfileKeep": "Don't delete profile",
+  "securityDeleteProfileRequested": "Deletion request accepted",
+  "securityDeleteProfileCanceled": "Profile deletion canceled",
+  "securityDeleteProfileError": "Failed to send the request: {error}",
+  "@securityDeleteProfileError": {"placeholders": {"error": {"type": "String"}}}
 }

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/cache/self_presence.dart';
+import '../../../core/config/build_profile.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../core/config/app_show_extra_info.dart';
@@ -177,6 +178,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   }
 
   void _onVersionLabelTap() {
+    if (!BuildProfile.devTools) return;
     _scheduleVersionSecretTapReset();
     setState(() {
       _versionSecretTapCount++;
@@ -202,7 +204,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   }
 
   Future<void> _checkForUpdates() async {
-    if (_isCheckingForUpdates) return;
+    if (!BuildProfile.selfUpdate || _isCheckingForUpdates) return;
     setState(() => _isCheckingForUpdates = true);
 
     final result = await UpdateChecker.checkNow();
@@ -404,22 +406,23 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                         return _buildSection(
                           context,
                           items: [
-                            _SettingsItem(
-                              icon: Symbols.badge,
-                              label: 'Цифровой ID',
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        AppDigitalIdNative.current.value ||
-                                            !webViewSupported
-                                        ? const DigitalIdScreen()
-                                        : const DigitalIdWebScreen(),
-                                  ),
-                                );
-                              },
-                            ),
+                            if (BuildProfile.digitalId)
+                              _SettingsItem(
+                                icon: Symbols.badge,
+                                label: 'Цифровой ID',
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          AppDigitalIdNative.current.value ||
+                                              !webViewSupported
+                                          ? const DigitalIdScreen()
+                                          : const DigitalIdWebScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
                             _SettingsItem(
                               icon: Symbols.language,
                               label: 'Войти в Сферум',
@@ -503,18 +506,20 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                             );
                           },
                         ),
-                        _SettingsItem(
-                          icon: Symbols.shield_lock,
-                          label: AppLocalizations.of(context)!.profileMenuSpoof,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const SpoofScreen(),
-                              ),
-                            );
-                          },
-                        ),
+                        if (BuildProfile.spoofUi)
+                          _SettingsItem(
+                            icon: Symbols.shield_lock,
+                            label: AppLocalizations.of(context)!
+                                .profileMenuSpoof,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const SpoofScreen(),
+                                ),
+                              );
+                            },
+                          ),
                         _SettingsItem(
                           icon: Symbols.lock,
                           label: 'Безопасность',
@@ -606,15 +611,16 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                     child: _buildSection(
                       context,
                       items: [
-                        _SettingsItem(
-                          icon: Symbols.system_update,
-                          label: _isCheckingForUpdates
-                              ? l10n.updateChecking
-                              : l10n.updateCheck,
-                          onTap: _isCheckingForUpdates
-                              ? null
-                              : _checkForUpdates,
-                        ),
+                        if (BuildProfile.selfUpdate)
+                          _SettingsItem(
+                            icon: Symbols.system_update,
+                            label: _isCheckingForUpdates
+                                ? l10n.updateChecking
+                                : l10n.updateCheck,
+                            onTap: _isCheckingForUpdates
+                                ? null
+                                : _checkForUpdates,
+                          ),
                         _SettingsItem(
                           leading: Image.asset(
                             'assets/komet.png',
