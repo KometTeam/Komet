@@ -2822,11 +2822,11 @@ abstract class AppLocalizations {
   /// **'Almost done'**
   String get nfcExchangingSubtitle;
 
-  /// No description provided for @nfcPeerIdFallback.
+  /// No description provided for @contactIdFallback.
   ///
   /// In en, this message translates to:
   /// **'ID {id}'**
-  String nfcPeerIdFallback(String id);
+  String contactIdFallback(String id);
 
   /// No description provided for @nfcAdded.
   ///

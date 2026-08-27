@@ -1447,7 +1447,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get nfcExchangingSubtitle => 'Почти готово';
 
   @override
-  String nfcPeerIdFallback(String id) {
+  String contactIdFallback(String id) {
     return 'ID $id';
   }
 

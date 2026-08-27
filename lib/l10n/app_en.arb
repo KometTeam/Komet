@@ -538,8 +538,8 @@
   "nfcScanningSubtitle": "Both devices must keep this screen open",
   "nfcExchangingTitle": "Exchanging contacts…",
   "nfcExchangingSubtitle": "Almost done",
-  "nfcPeerIdFallback": "ID {id}",
-  "@nfcPeerIdFallback": {
+  "contactIdFallback": "ID {id}",
+  "@contactIdFallback": {
     "placeholders": {
       "id": {
         "type": "String"

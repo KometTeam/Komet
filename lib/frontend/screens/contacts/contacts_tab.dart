@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/config/debug_test.dart';
+import '../../../core/contacts/contact_labels.dart';
 import '../../../core/contacts/device_contacts_service.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
@@ -9,6 +10,7 @@ import '../../../core/storage/token_storage.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../main.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../models/contact_info.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
@@ -126,12 +128,16 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
     ColorScheme cs,
     CachedContact contact,
   ) {
-    final fullName =
-        '${contact.firstName}${contact.lastName != null ? ' ${contact.lastName}' : ''}'
-            .trim();
-    final book = DeviceContactsService.nameForPhone(contact.phone);
-    final nameToDisplay =
-        book ?? (fullName.isEmpty ? '+${contact.phone}' : fullName);
+    final labels = contactLabels(
+      idLabel: AppLocalizations.of(context)!.contactIdFallback('${contact.id}'),
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      phone: contact.phone,
+    );
+    final nameToDisplay = labels.title;
+    final subtitle = contact.updateTime > 0
+        ? 'Был(а) недавно'
+        : labels.subtitle;
 
     return SpringyTap(
       child: Material(
@@ -195,18 +201,18 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
                           ],
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        contact.updateTime > 0
-                            ? 'Был(а) недавно'
-                            : '+${contact.phone}',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 14,
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      ],
                     ],
                   ),
                 ),

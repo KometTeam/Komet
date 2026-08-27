@@ -1443,7 +1443,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nfcExchangingSubtitle => 'Almost done';
 
   @override
-  String nfcPeerIdFallback(String id) {
+  String contactIdFallback(String id) {
     return 'ID $id';
   }
 

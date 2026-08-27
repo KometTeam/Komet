@@ -65,6 +65,7 @@ import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import 'chat/chat_prank_controller.dart';
 import 'chat/chat_controller.dart';
+import 'chat/read_marker_gate.dart';
 import 'chat/voice_record_controller.dart';
 import 'chat/video_note_controller.dart';
 import 'chat/command_panel_controller.dart';
@@ -323,7 +324,9 @@ class _ChatScreenState extends State<ChatScreen>
   int _historyAutoloadSuppressCount = 0;
   bool get _historyAutoloadSuppressed => _historyAutoloadSuppressCount > 0;
   int _readMarkTime = 0;
-  Timer? _readMarkTimer;
+  late final ReadMarkerGate _readMarker = ReadMarkerGate(
+    onFlush: _updateReadMarker,
+  );
   final GlobalKey _listKey = GlobalKey();
   final GlobalKey _unreadSeparatorKey = GlobalKey();
   final Object _profileHeroTag = UniqueKey();
@@ -1106,7 +1109,9 @@ class _ChatScreenState extends State<ChatScreen>
           if (!mounted) return;
           setState(_markPositioned);
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _jumpCacheExtent.value = null;
+            if (!mounted) return;
+            _jumpCacheExtent.value = null;
+            _reapplyPinIfNeeded();
           });
         },
       );
@@ -1116,9 +1121,18 @@ class _ChatScreenState extends State<ChatScreen>
   void _reapplyPinIfNeeded() {
     final id = _pinnedMessageId;
     if (id == null || _userDidScroll || !_scrollController.hasClients) return;
+    _holdReadMarker();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _pinnedMessageId != id || _userDidScroll) return;
-      _alignLoadedMessage(id, _pinnedAlignment, 0);
+      if (!mounted || _pinnedMessageId != id || _userDidScroll) {
+        _releaseReadMarker();
+        return;
+      }
+      _alignLoadedMessage(
+        id,
+        _pinnedAlignment,
+        0,
+        onSettled: _releaseReadMarker,
+      );
     });
   }
 
@@ -1286,18 +1300,17 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  void _scheduleReadMarker() {
-    _readMarkTimer?.cancel();
-    _readMarkTimer = Timer(
-      const Duration(milliseconds: 350),
-      _updateReadMarker,
-    );
-  }
+  void _scheduleReadMarker() => _readMarker.schedule();
+
+  void _holdReadMarker() => _readMarker.hold();
+
+  void _releaseReadMarker() => _readMarker.release();
 
   void _updateReadMarker() {
     if (_commentsMode) return;
     if (!mounted || _myId == 0 || _messages.isEmpty) return;
     if (_awaitingPosition || !_initialPositionDone) return;
+    if (_readMarker.held) return;
     if (!_scrollController.hasClients) return;
     final listBox = _listKey.currentContext?.findRenderObject();
     if (listBox is! RenderBox) return;
@@ -1694,9 +1707,13 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted || added == 0) return;
 
     _syncReactionNotifiersFromMessages();
+    _holdReadMarker();
     _bumpMessages();
     await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
+    if (!mounted) {
+      _releaseReadMarker();
+      return;
+    }
 
     final id = anchorId;
     final at = anchorAt;
@@ -1708,8 +1725,13 @@ class _ChatScreenState extends State<ChatScreen>
         alignment ?? 0,
         0,
         epoch: _userGestureEpoch,
-        onSettled: () => _historyAutoloadSuppressCount--,
+        onSettled: () {
+          _historyAutoloadSuppressCount--;
+          _releaseReadMarker();
+        },
       );
+    } else {
+      _releaseReadMarker();
     }
     _loadForwardedSenderNames();
     _loadGroupSenderNames();
@@ -1873,6 +1895,7 @@ class _ChatScreenState extends State<ChatScreen>
     List<CachedMessage> decodedDesc, {
     bool markLoaded = false,
   }) {
+    final anchor = _captureViewportAnchor();
     final changed = _chatController.mergeMessages(decodedDesc);
     _requestCommentCounts();
 
@@ -1888,8 +1911,47 @@ class _ChatScreenState extends State<ChatScreen>
       _syncReactionNotifiersFromMessages();
       _pruneReactionNotifiers();
       _chatController.persistSessionCache();
+      _restoreViewportAfterMerge(anchor);
       _reapplyPinIfNeeded();
     }
+  }
+
+  ({String id, double at, double alignment})? _captureViewportAnchor() {
+    if (_pinnedMessageId != null && !_userDidScroll) return null;
+    if (!_scrollController.hasClients || _isNearBottom()) return null;
+    final id = _viewportAnchorId();
+    if (id == null) return null;
+    final at = _messageContentOffset(id);
+    final alignment = _messageAlignmentInList(id);
+    if (at == null || alignment == null) return null;
+    return (id: id, at: at, alignment: alignment);
+  }
+
+  void _restoreViewportAfterMerge(
+    ({String id, double at, double alignment})? anchor,
+  ) {
+    _holdReadMarker();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || anchor == null) {
+        _releaseReadMarker();
+        return;
+      }
+      if (_restoreContentOffset(anchor.id, anchor.at)) {
+        _releaseReadMarker();
+        return;
+      }
+      _historyAutoloadSuppressCount++;
+      _alignLoadedMessage(
+        anchor.id,
+        anchor.alignment,
+        0,
+        epoch: _userGestureEpoch,
+        onSettled: () {
+          _historyAutoloadSuppressCount--;
+          _releaseReadMarker();
+        },
+      );
+    });
   }
 
   void _requestCommentCounts() {
@@ -2118,7 +2180,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.removeListener(_recordScrollPixels);
     _scrollController.removeListener(_scheduleReadMarker);
     _scrollController.removeListener(_updateScrollDownVisible);
-    _readMarkTimer?.cancel();
+    _readMarker.dispose();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
     MediaPlayback.instance.leaveChat(widget.chatId);
     AppChatChrome.current.removeListener(_onVisualStyleChanged);
@@ -4814,6 +4876,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     final epoch = _userGestureEpoch;
     _historyAutoloadSuppressCount++;
+    _holdReadMarker();
     try {
       var stable = 0;
       for (var iter = 0; iter < 120; iter++) {
@@ -4871,6 +4934,7 @@ class _ChatScreenState extends State<ChatScreen>
       }
     } finally {
       _historyAutoloadSuppressCount--;
+      _releaseReadMarker();
     }
   }
 
@@ -4893,8 +4957,14 @@ class _ChatScreenState extends State<ChatScreen>
     bool notifyIfMissing = true,
     VoidCallback? onSettled,
   }) {
-    if (!_scrollController.hasClients) {
+    void settle() {
+      _releaseReadMarker();
       onSettled?.call();
+    }
+
+    _holdReadMarker();
+    if (!_scrollController.hasClients) {
+      settle();
       return;
     }
     if (_deferredIds.contains(messageId)) _flushDeferredMessages();
@@ -4906,7 +4976,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (notifyIfMissing) {
         showCustomNotification(context, 'Сообщение не загружено');
       }
-      onSettled?.call();
+      settle();
       return;
     }
 
@@ -4928,7 +4998,7 @@ class _ChatScreenState extends State<ChatScreen>
       });
     }
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _alignLoadedMessage(messageId, alignment, 0, onSettled: onSettled),
+      (_) => _alignLoadedMessage(messageId, alignment, 0, onSettled: settle),
     );
   }
 
@@ -5629,7 +5699,7 @@ class _ChatScreenState extends State<ChatScreen>
                   notification.dragDetails != null) {
                 _userGestureEpoch++;
               } else if (notification is ScrollEndNotification) {
-                _updateReadMarker();
+                _readMarker.flush();
               }
               return false;
             },

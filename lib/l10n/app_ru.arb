@@ -468,7 +468,7 @@
   "nfcScanningSubtitle": "Оба устройства должны держать этот экран открытым",
   "nfcExchangingTitle": "Идёт обмен контактами…",
   "nfcExchangingSubtitle": "Почти готово",
-  "nfcPeerIdFallback": "ID {id}",
+  "contactIdFallback": "ID {id}",
   "nfcAdded": "Добавлено",
   "nfcAddContact": "Добавить контакт",
   "chatInfoTabGeneralChats": "Общие чаты",

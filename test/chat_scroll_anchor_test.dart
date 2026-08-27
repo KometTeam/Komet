@@ -336,6 +336,60 @@ void main() {
     expect(h.controller.position.pixels, 600 + 60 * _itemHeight);
   });
 
+  testWidgets('слияние новых сообщений удерживает якорь на месте', (
+    tester,
+  ) async {
+    final h = _Harness(tester, physics: null);
+    addTearDown(h.controller.dispose);
+
+    await h.pump();
+    h.controller.jumpTo(600);
+    await tester.pump();
+
+    final anchor = h.anchorId();
+    final before = h.contentOffsetOf(anchor);
+    final beforeDy = h.dyOf(anchor);
+
+    h.items.addAll([for (var i = 0; i < 3; i++) 'merged$i']);
+    await h.pump();
+    expect(h.dyOf(anchor), lessThan(beforeDy - 1));
+
+    expect(h.restore(anchor, before), isTrue);
+    await tester.pump();
+
+    expect(h.dyOf(anchor), closeTo(beforeDy, 0.5));
+    expect(h.controller.position.pixels, 600 + 3 * _itemHeight);
+  });
+
+  testWidgets('слияние на 140 сообщений уносит якорь, выравнивание возвращает', (
+    tester,
+  ) async {
+    final h = _Harness(tester, physics: null);
+    addTearDown(h.controller.dispose);
+
+    await h.pump();
+    h.controller.jumpTo(600);
+    await tester.pump();
+
+    final anchor = h.anchorId();
+    final before = h.contentOffsetOf(anchor);
+    final beforeDy = h.dyOf(anchor);
+    final alignment = h.alignmentOf(anchor);
+
+    h.items.addAll([for (var i = 0; i < 140; i++) 'merged$i']);
+    await h.pump();
+
+    expect(h.dyOrNull(anchor), isNull);
+    expect(h.restore(anchor, before), isFalse);
+
+    final frames = await h.align(anchor, alignment);
+
+    expect(frames, greaterThanOrEqualTo(0));
+    expect(frames, lessThan(20));
+    expect(h.dyOf(anchor), closeTo(beforeDy, 0.5));
+    expect(h.controller.position.pixels, 600 + 140 * _itemHeight);
+  });
+
   group('дыру можно заполнять только с новой стороны', () {
     final gap = HistoryGap(edgeId: 'e', edgeTime: 1100, tailTime: 9000);
 
