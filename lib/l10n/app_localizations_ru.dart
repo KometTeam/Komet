@@ -218,16 +218,6 @@ class AppLocalizationsRu extends AppLocalizations {
       'Все данные генерируются случайно. Будьте осторожны.';
 
   @override
-  String get spoofDeviceTypeTitle => 'Тип устройства';
-
-  @override
-  String get spoofDeviceTypeDescription =>
-      'Определяет, какие устройства генерируются: Android или iOS';
-
-  @override
-  String get spoofDeviceTypeLabel => 'Тип устройства';
-
-  @override
   String get spoofMainSectionTitle => 'Основные данные';
 
   @override

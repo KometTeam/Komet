@@ -52,8 +52,12 @@ class _SpoofScreenState extends State<SpoofScreen> {
   final _deviceLocaleController = TextEditingController();
   final _pushDeviceTypeController = TextEditingController(text: 'GCM');
 
-  String _selectedDeviceType = 'ANDROID';
-  String _selectedArch = 'arm64-v8a';
+  static final List<_ChipOption<String>> _archOptions = SpoofingService
+      .supportedArchitectures
+      .map((arch) => _ChipOption(arch, arch, Symbols.memory))
+      .toList();
+
+  String _selectedArch = SpoofingService.defaultArchitecture;
   String _userAgent = '';
   bool _spoofingEnabled = false;
   SpoofProfile? _initialProfile;
@@ -124,7 +128,10 @@ class _SpoofScreenState extends State<SpoofScreen> {
     _appVersionController.text = profile.appVersion.isEmpty
         ? _hardcodedVersion
         : profile.appVersion;
-    _selectedArch = profile.arch.isEmpty ? 'arm64-v8a' : profile.arch;
+    _selectedArch =
+        SpoofingService.supportedArchitectures.contains(profile.arch)
+        ? profile.arch
+        : SpoofingService.defaultArchitecture;
     _buildNumberController.text = profile.buildNumber == 0
         ? '$_hardcodedBuildNumber'
         : '${profile.buildNumber}';
@@ -142,13 +149,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
     if (profile.clientSessionId != null) {
       _clientSessionIdController.text = '${profile.clientSessionId}';
     }
-
-    var type = profile.deviceType.isEmpty ? 'ANDROID' : profile.deviceType;
-    if (type == 'WEB' || type == 'IOS') type = 'ANDROID';
-    _selectedDeviceType = type;
-    if (type == 'DESKTOP') {
-      _selectedMethod = SpoofingMethod.full;
-    }
   }
 
   SpoofProfile _buildProfileFromControllers() {
@@ -161,7 +161,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
       locale: _localeController.text,
       deviceLocale: _deviceLocaleController.text,
       deviceId: _deviceIdController.text,
-      deviceType: _selectedDeviceType,
+      deviceType: SpoofingService.androidDeviceType,
       arch: _selectedArch,
       appVersion: _appVersionController.text,
       buildNumber:
@@ -212,32 +212,27 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _timezoneController.text = 'Europe/Moscow';
     }
 
+    _selectedArch = SpoofingService.defaultArchitecture;
+
     if (Platform.isAndroid) {
       final androidInfo = await deviceInfo.androidInfo;
-      _selectedDeviceType = 'ANDROID';
       _deviceNameController.text =
           '${androidInfo.manufacturer} ${androidInfo.model}';
       _osVersionController.text = 'Android ${androidInfo.version.release}';
-      _selectedArch = 'arm64-v8a';
     } else if (Platform.isIOS) {
       final iosInfo = await deviceInfo.iosInfo;
-      _selectedDeviceType = 'ANDROID';
-      _selectedArch = 'arm64-v8a';
       _deviceNameController.text = iosInfo.utsname.machine;
       _osVersionController.text = iosInfo.systemVersion;
     } else if (Platform.isLinux) {
       final linuxInfo = await deviceInfo.linuxInfo;
-      _selectedDeviceType = 'ANDROID';
       _deviceNameController.text = linuxInfo.prettyName;
       _osVersionController.text = linuxInfo.name;
     } else if (Platform.isWindows) {
       final windowsInfo = await deviceInfo.windowsInfo;
-      _selectedDeviceType = 'ANDROID';
       _deviceNameController.text = windowsInfo.productName;
       _osVersionController.text = windowsInfo.productName;
     } else if (Platform.isMacOS) {
       final macInfo = await deviceInfo.macOsInfo;
-      _selectedDeviceType = 'ANDROID';
       _deviceNameController.text = macInfo.model;
       _osVersionController.text = 'macOS ${macInfo.osRelease}';
     }
@@ -246,23 +241,14 @@ class _SpoofScreenState extends State<SpoofScreen> {
   }
 
   Future<void> _applyGeneratedData() async {
-    final type = _selectedMethod == SpoofingMethod.full
-        ? _selectedDeviceType
-        : 'ANDROID';
-    final filteredPresets = devicePresets
-        .where((p) => p.deviceType == type)
+    final androidPresets = devicePresets
+        .where((p) => p.deviceType == SpoofingService.androidDeviceType)
         .toList();
 
-    if (filteredPresets.isEmpty) return;
+    if (androidPresets.isEmpty) return;
 
-    final preset = filteredPresets[_random.nextInt(filteredPresets.length)];
+    final preset = androidPresets[_random.nextInt(androidPresets.length)];
     await _applyPreset(preset);
-  }
-
-  void _onDeviceTypeChanged(String type) {
-    if (type == _selectedDeviceType) return;
-    setState(() => _selectedDeviceType = type);
-    if (_spoofingEnabled) _applyGeneratedData();
   }
 
   Future<void> _applyPreset(DevicePreset preset) async {
@@ -275,8 +261,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
       _userAgent = preset.userAgent;
       _spoofingEnabled = true;
 
-      _selectedDeviceType = preset.deviceType;
-      _selectedArch = 'arm64-v8a';
+      _selectedArch = SpoofingService.defaultArchitecture;
       _buildNumberController.text = '$_hardcodedBuildNumber';
 
       if (_selectedMethod == SpoofingMethod.full) {
@@ -464,9 +449,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
                   _sectionHeader(l10n.spoofMethodTitle),
                   _buildSpoofingMethodCard(),
                   const SizedBox(height: 20),
-                  _sectionHeader(l10n.spoofDeviceTypeTitle),
-                  _buildDeviceTypeCard(),
-                  const SizedBox(height: 20),
                   _sectionHeader(l10n.spoofMainSectionTitle),
                   _buildMainDataCard(),
                   const SizedBox(height: 20),
@@ -589,10 +571,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
                   if (!confirmed || !mounted) return;
                 }
                 setState(() => _selectedMethod = next);
-                if (next == SpoofingMethod.partial &&
-                    _selectedDeviceType != 'ANDROID') {
-                  _onDeviceTypeChanged('ANDROID');
-                }
                 _syncDeviceLocale();
               },
             ),
@@ -601,57 +579,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
           descriptionWidget,
         ],
       ),
-    );
-  }
-
-  Widget _buildDeviceTypeCard() {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    return SettingsPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildDescriptionTile(
-            icon: Symbols.info,
-            color: theme.colorScheme.primary,
-            text: l10n.spoofDeviceTypeDescription,
-          ),
-          const SizedBox(height: 12),
-          if (_selectedMethod == SpoofingMethod.full)
-            _buildChipSelector<String>(
-              options: const [
-                _ChipOption('ANDROID', 'Android', Symbols.android),
-                _ChipOption('DESKTOP', 'Desktop', Symbols.desktop_windows),
-              ],
-              selected: _selectedDeviceType,
-              onSelected: _onDeviceTypeChanged,
-              trailing: [
-                _buildDisabledChip('iOS', Symbols.phone_iphone, theme),
-              ],
-            )
-          else
-            _buildChipSelector<String>(
-              options: const [
-                _ChipOption('ANDROID', 'Android', Symbols.android),
-              ],
-              selected: 'ANDROID',
-              onSelected: _onDeviceTypeChanged,
-              trailing: [
-                _buildDisabledChip('iOS', Symbols.phone_iphone, theme),
-                _buildDisabledChip('Desktop', Symbols.desktop_windows, theme),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDisabledChip(String label, IconData icon, ThemeData theme) {
-    return Chip(
-      label: Text(label),
-      avatar: Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
-      backgroundColor: theme.colorScheme.surfaceContainerHighest,
-      side: BorderSide(color: theme.colorScheme.outlineVariant),
     );
   }
 
@@ -832,13 +759,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
             ),
           ),
           _buildChipSelector<String>(
-            options: const [
-              _ChipOption('arm64-v8a', 'arm64-v8a', Symbols.memory),
-              _ChipOption('armeabi-v7a', 'armeabi-v7a', Symbols.memory),
-              _ChipOption('x86', 'x86', Symbols.memory),
-              _ChipOption('x86_64', 'x86_64', Symbols.memory),
-              _ChipOption('arm64', 'arm64', Symbols.memory),
-            ],
+            options: _archOptions,
             selected: _selectedArch,
             onSelected: (value) => setState(() => _selectedArch = value),
           ),
@@ -861,7 +782,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
     required List<_ChipOption<T>> options,
     required T selected,
     required ValueChanged<T> onSelected,
-    List<Widget> trailing = const [],
   }) {
     final cs = Theme.of(context).colorScheme;
     return Wrap(
@@ -897,7 +817,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           );
         }),
-        ...trailing,
       ],
     );
   }

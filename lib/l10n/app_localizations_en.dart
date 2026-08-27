@@ -216,16 +216,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'All data including timezone and locale is generated randomly. Use this method at your own risk!';
 
   @override
-  String get spoofDeviceTypeTitle => 'Device type';
-
-  @override
-  String get spoofDeviceTypeDescription =>
-      'Controls which devices are generated: Android or iOS';
-
-  @override
-  String get spoofDeviceTypeLabel => 'Device type';
-
-  @override
   String get spoofMainSectionTitle => 'Main data';
 
   @override

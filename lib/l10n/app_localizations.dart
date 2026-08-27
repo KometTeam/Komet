@@ -488,24 +488,6 @@ abstract class AppLocalizations {
   /// **'All data including timezone and locale is generated randomly. Use this method at your own risk!'**
   String get spoofMethodFullDescription;
 
-  /// No description provided for @spoofDeviceTypeTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Device type'**
-  String get spoofDeviceTypeTitle;
-
-  /// No description provided for @spoofDeviceTypeDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Controls which devices are generated: Android or iOS'**
-  String get spoofDeviceTypeDescription;
-
-  /// No description provided for @spoofDeviceTypeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Device type'**
-  String get spoofDeviceTypeLabel;
-
   /// No description provided for @spoofMainSectionTitle.
   ///
   /// In en, this message translates to:
