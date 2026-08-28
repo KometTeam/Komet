@@ -2863,4 +2863,41 @@ class AppLocalizationsRu extends AppLocalizations {
   String securityDeleteProfileError(String error) {
     return 'Не удалось отправить запрос: $error';
   }
+
+  @override
+  String get composerPasteAttachment => 'Вставить файл';
+
+  @override
+  String get pasteAttachTitleImage => 'Отправить изображение';
+
+  @override
+  String get pasteAttachTitleVideo => 'Отправить видео';
+
+  @override
+  String get pasteAttachTitleFile => 'Отправить файл';
+
+  @override
+  String pasteAttachTitleMany(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Отправить $count файла',
+      many: 'Отправить $count файлов',
+      few: 'Отправить $count файла',
+      one: 'Отправить 1 файл',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pasteAttachCaptionHint => 'Подпись';
+
+  @override
+  String get pasteAttachSend => 'Отправить';
+
+  @override
+  String get pasteAttachCancel => 'Отмена';
+
+  @override
+  String get pasteAttachFailed => 'В буфере обмена нечего вставить';
 }

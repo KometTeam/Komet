@@ -968,5 +968,15 @@
   "securityDeleteProfileRequested": "Заявка на удаление принята",
   "securityDeleteProfileCanceled": "Удаление профиля отменено",
   "securityDeleteProfileError": "Не удалось отправить запрос: {error}",
-  "@securityDeleteProfileError": {"placeholders": {"error": {"type": "String"}}}
+  "@securityDeleteProfileError": {"placeholders": {"error": {"type": "String"}}},
+  "composerPasteAttachment": "Вставить файл",
+  "pasteAttachTitleImage": "Отправить изображение",
+  "pasteAttachTitleVideo": "Отправить видео",
+  "pasteAttachTitleFile": "Отправить файл",
+  "pasteAttachTitleMany": "{count, plural, =1{Отправить 1 файл} few{Отправить {count} файла} many{Отправить {count} файлов} other{Отправить {count} файла}}",
+  "@pasteAttachTitleMany": {"placeholders": {"count": {"type": "int"}}},
+  "pasteAttachCaptionHint": "Подпись",
+  "pasteAttachSend": "Отправить",
+  "pasteAttachCancel": "Отмена",
+  "pasteAttachFailed": "В буфере обмена нечего вставить"
 }

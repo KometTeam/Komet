@@ -1224,5 +1224,15 @@
   "securityDeleteProfileRequested": "Deletion request accepted",
   "securityDeleteProfileCanceled": "Profile deletion canceled",
   "securityDeleteProfileError": "Failed to send the request: {error}",
-  "@securityDeleteProfileError": {"placeholders": {"error": {"type": "String"}}}
+  "@securityDeleteProfileError": {"placeholders": {"error": {"type": "String"}}},
+  "composerPasteAttachment": "Paste file",
+  "pasteAttachTitleImage": "Send image",
+  "pasteAttachTitleVideo": "Send video",
+  "pasteAttachTitleFile": "Send file",
+  "pasteAttachTitleMany": "{count, plural, =1{Send 1 file} other{Send {count} files}}",
+  "@pasteAttachTitleMany": {"placeholders": {"count": {"type": "int"}}},
+  "pasteAttachCaptionHint": "Caption",
+  "pasteAttachSend": "Send",
+  "pasteAttachCancel": "Cancel",
+  "pasteAttachFailed": "Nothing to paste from the clipboard"
 }

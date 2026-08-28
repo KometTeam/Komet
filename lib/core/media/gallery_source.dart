@@ -210,6 +210,9 @@ String _fileExtension(String path) {
 bool isVideoPath(String path) =>
     kGalleryVideoExtensions.contains(_fileExtension(path));
 
+bool isImagePath(String path) =>
+    kGalleryImageExtensions.contains(_fileExtension(path));
+
 class _DesktopGallerySource implements GallerySource {
   @override
   Future<GalleryPermission> ensurePermission() async =>

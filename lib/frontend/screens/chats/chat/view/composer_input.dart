@@ -17,6 +17,7 @@ import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/composer_morph_icon.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/liquid_glass.dart';
+import 'package:komet/frontend/widgets/paste_media_scope.dart';
 import 'package:komet/frontend/widgets/reply_preview.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
 
@@ -49,6 +50,7 @@ class ComposerInputBar extends StatelessWidget {
     this.onPickReplyChat,
     required this.formatElapsed,
     required this.contextMenuBuilder,
+    this.onPasteMedia,
     required this.isMuted,
     required this.onToggleMute,
     this.channelSubscribed = true,
@@ -88,6 +90,7 @@ class ComposerInputBar extends StatelessWidget {
   final VoidCallback? onPickReplyChat;
   final String Function(int ms) formatElapsed;
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
+  final Future<bool> Function()? onPasteMedia;
   final bool isMuted;
   final VoidCallback onToggleMute;
   final bool channelSubscribed;
@@ -287,33 +290,37 @@ class ComposerInputBar extends StatelessWidget {
                                           }
                                           return KeyEventResult.ignored;
                                         },
-                                        child: TextField(
-                                          controller: messageController,
-                                          focusNode: messageFocusNode,
-                                          style: TextStyle(
-                                            color: cs.onSurface,
-                                            fontSize: 16,
-                                          ),
-                                          maxLines: null,
-                                          keyboardType: TextInputType.multiline,
-                                          textCapitalization:
-                                              TextCapitalization.sentences,
-                                          textAlignVertical:
-                                              TextAlignVertical.center,
-                                          contextMenuBuilder:
-                                              contextMenuBuilder,
-                                          decoration: InputDecoration(
-                                            hintText: hintText,
-                                            hintStyle: TextStyle(
-                                              color: cs.onSurfaceVariant,
+                                        child: PasteMediaScope(
+                                          onPaste: onPasteMedia,
+                                          child: TextField(
+                                            controller: messageController,
+                                            focusNode: messageFocusNode,
+                                            style: TextStyle(
+                                              color: cs.onSurface,
                                               fontSize: 16,
                                             ),
-                                            border: InputBorder.none,
-                                            isDense: true,
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                  vertical: 10,
-                                                ),
+                                            maxLines: null,
+                                            keyboardType:
+                                                TextInputType.multiline,
+                                            textCapitalization:
+                                                TextCapitalization.sentences,
+                                            textAlignVertical:
+                                                TextAlignVertical.center,
+                                            contextMenuBuilder:
+                                                contextMenuBuilder,
+                                            decoration: InputDecoration(
+                                              hintText: hintText,
+                                              hintStyle: TextStyle(
+                                                color: cs.onSurfaceVariant,
+                                                fontSize: 16,
+                                              ),
+                                              border: InputBorder.none,
+                                              isDense: true,
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 10,
+                                                  ),
+                                            ),
                                           ),
                                         ),
                                       ),

@@ -2851,4 +2851,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String securityDeleteProfileError(String error) {
     return 'Failed to send the request: $error';
   }
+
+  @override
+  String get composerPasteAttachment => 'Paste file';
+
+  @override
+  String get pasteAttachTitleImage => 'Send image';
+
+  @override
+  String get pasteAttachTitleVideo => 'Send video';
+
+  @override
+  String get pasteAttachTitleFile => 'Send file';
+
+  @override
+  String pasteAttachTitleMany(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send $count files',
+      one: 'Send 1 file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pasteAttachCaptionHint => 'Caption';
+
+  @override
+  String get pasteAttachSend => 'Send';
+
+  @override
+  String get pasteAttachCancel => 'Cancel';
+
+  @override
+  String get pasteAttachFailed => 'Nothing to paste from the clipboard';
 }

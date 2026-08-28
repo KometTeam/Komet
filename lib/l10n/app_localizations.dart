@@ -5395,6 +5395,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to send the request: {error}'**
   String securityDeleteProfileError(String error);
+
+  /// No description provided for @composerPasteAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste file'**
+  String get composerPasteAttachment;
+
+  /// No description provided for @pasteAttachTitleImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Send image'**
+  String get pasteAttachTitleImage;
+
+  /// No description provided for @pasteAttachTitleVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Send video'**
+  String get pasteAttachTitleVideo;
+
+  /// No description provided for @pasteAttachTitleFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Send file'**
+  String get pasteAttachTitleFile;
+
+  /// No description provided for @pasteAttachTitleMany.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Send 1 file} other{Send {count} files}}'**
+  String pasteAttachTitleMany(int count);
+
+  /// No description provided for @pasteAttachCaptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Caption'**
+  String get pasteAttachCaptionHint;
+
+  /// No description provided for @pasteAttachSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get pasteAttachSend;
+
+  /// No description provided for @pasteAttachCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get pasteAttachCancel;
+
+  /// No description provided for @pasteAttachFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to paste from the clipboard'**
+  String get pasteAttachFailed;
 }
 
 class _AppLocalizationsDelegate

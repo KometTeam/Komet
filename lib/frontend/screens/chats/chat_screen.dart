@@ -18,6 +18,8 @@ import 'package:komet/frontend/screens/webapp/open_mini_app.dart';
 import 'package:komet/frontend/widgets/sending_clock_icon.dart';
 import 'package:komet/core/media/desktop_video_probe.dart';
 import 'package:komet/core/media/video_transcoder.dart';
+import 'package:komet/core/media/clipboard/clipboard_media.dart';
+import 'package:komet/core/media/clipboard/pasted_attachment.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -105,6 +107,7 @@ import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/lottie_image.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
+import '../../widgets/attachment/paste_preview_sheet.dart';
 import '../../widgets/sticker_pack_sheet.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_to_pop.dart';
@@ -334,6 +337,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _isLoading = true;
   bool _encryptionEnabled = false;
   final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
+  bool _pastePending = false;
   late final StickerPanelController _stickers;
   final ValueNotifier<UploadStatus> _uploadStatus = ValueNotifier(
     const UploadStatus(),
@@ -2767,8 +2771,15 @@ class _ChatScreenState extends State<ChatScreen>
                       ? null
                       : () => unawaited(_pickReplyChat()),
                   formatElapsed: formatVoiceElapsed,
-                  contextMenuBuilder: (ctx, state) =>
-                      _formatContextMenu(_messageController, ctx, state),
+                  contextMenuBuilder: (ctx, state) => _formatContextMenu(
+                    _messageController,
+                    ctx,
+                    state,
+                    extraItems: _pasteMenuItems(ctx, state),
+                  ),
+                  onPasteMedia: ClipboardMedia.supported
+                      ? _handlePasteMedia
+                      : null,
                   isMuted: chat?.isMuted ?? false,
                   onToggleMute: _toggleChatMute,
                   channelSubscribed: !_previewChat,
@@ -3819,8 +3830,9 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _formatContextMenu(
     RichMessageController controller,
     BuildContext context,
-    EditableTextState editableState,
-  ) {
+    EditableTextState editableState, {
+    List<ContextMenuButtonItem> extraItems = const [],
+  }) {
     final selection = controller.selection;
     final buttonItems = <ContextMenuButtonItem>[];
     if (selection.isValid && !selection.isCollapsed) {
@@ -3837,6 +3849,7 @@ class _ChatScreenState extends State<ChatScreen>
         );
       }
     }
+    buttonItems.addAll(extraItems);
     buttonItems.addAll(editableState.contextMenuButtonItems);
     return AdaptiveTextSelectionToolbar.buttonItems(
       anchors: editableState.contextMenuAnchors,
@@ -6873,6 +6886,81 @@ class _ChatScreenState extends State<ChatScreen>
       if (wire != null && mounted) {
         await messagesModule.sendMessage(_myId, widget.chatId, wire);
       }
+    }
+  }
+
+  List<ContextMenuButtonItem> _pasteMenuItems(
+    BuildContext context,
+    EditableTextState editableState,
+  ) {
+    if (!ClipboardMedia.supported) return const [];
+    return [
+      ContextMenuButtonItem(
+        label: AppLocalizations.of(context)!.composerPasteAttachment,
+        onPressed: () {
+          editableState.hideToolbar();
+          unawaited(_pasteClipboardMedia());
+        },
+      ),
+    ];
+  }
+
+  Future<bool> _handlePasteMedia() async {
+    if (!await ClipboardMedia.hasMedia()) return false;
+    unawaited(_pasteClipboardMedia());
+    return true;
+  }
+
+  Future<void> _pasteClipboardMedia() async {
+    if (_myId == 0 || _pastePending) return;
+    _pastePending = true;
+    try {
+      final payload = await ClipboardMedia.read();
+      if (!mounted) return;
+      final items = payload == null
+          ? const <PastedAttachment>[]
+          : await materializeClipboardMedia(payload);
+      if (!mounted) return;
+      if (items.isEmpty) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.pasteAttachFailed,
+        );
+        return;
+      }
+
+      final media = items.where((it) => it.isMedia).toList();
+      final documents = items.where((it) => !it.isMedia).toList();
+      if (_encryptionEnabled && documents.isNotEmpty) {
+        _refuseUnencrypted('Файлы');
+        if (media.isEmpty) return;
+        documents.clear();
+      }
+
+      final caption = await showPastePreviewSheet(
+        context,
+        items: [...media, ...documents],
+      );
+      if (caption == null || !mounted) return;
+
+      if (media.isNotEmpty) {
+        await _sendPhotos(
+          media
+              .map((it) => PickedPhoto(item: GalleryItem.fromFile(it.file)))
+              .toList(),
+          caption,
+        );
+      }
+      for (final document in documents) {
+        if (!mounted) return;
+        await _uploadAsFile(
+          source: document.file,
+          filename: document.name,
+          size: document.size,
+        );
+      }
+    } finally {
+      _pastePending = false;
     }
   }
 
