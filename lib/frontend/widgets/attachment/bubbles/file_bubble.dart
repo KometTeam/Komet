@@ -221,6 +221,12 @@ class FileBubble extends StatelessWidget {
               ),
             ],
           ),
+          if (audioFile)
+            _AudioFilePlaybackControl(
+              cacheName: cacheName,
+              color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+              textColor: ctx.dim,
+            ),
           ctx.meta(),
         ],
       ),
@@ -586,5 +592,90 @@ class FileBubble extends StatelessWidget {
         showCustomNotification(context, 'Ошибка воспроизведения');
       }
     }
+  }
+}
+
+class _AudioFilePlaybackControl extends StatelessWidget {
+  const _AudioFilePlaybackControl({
+    required this.cacheName,
+    required this.color,
+    required this.textColor,
+  });
+
+  final String cacheName;
+  final Color color;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AudioPlaybackController.isInitialized) {
+      return const SizedBox.shrink();
+    }
+    final playback = MediaPlayback.instance;
+    final audio = AudioPlaybackController.instance;
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        playback.audioFile,
+        audio.position,
+        audio.duration,
+      ]),
+      builder: (context, _) {
+        if (playback.audioFile.value?.cacheName != cacheName) {
+          return const SizedBox.shrink();
+        }
+        final duration = audio.duration.value;
+        final position =
+            audio.position.value > duration && duration > Duration.zero
+            ? duration
+            : audio.position.value;
+        final totalMilliseconds = duration.inMilliseconds;
+        final value = totalMilliseconds > 0
+            ? position.inMilliseconds.clamp(0, totalMilliseconds).toDouble()
+            : 0.0;
+        return Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            children: [
+              Text(
+                formatSecondsMmSs(position.inSeconds),
+                style: TextStyle(color: textColor, fontSize: 10),
+              ),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: color,
+                    inactiveTrackColor: color.withValues(alpha: 0.2),
+                    thumbColor: color,
+                    overlayColor: color.withValues(alpha: 0.12),
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 5,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 12,
+                    ),
+                  ),
+                  child: Slider(
+                    min: 0,
+                    max: totalMilliseconds > 0
+                        ? totalMilliseconds.toDouble()
+                        : 1,
+                    value: value,
+                    onChanged: totalMilliseconds > 0
+                        ? (next) =>
+                              audio.seek(Duration(milliseconds: next.round()))
+                        : null,
+                  ),
+                ),
+              ),
+              Text(
+                formatSecondsMmSs(duration.inSeconds),
+                style: TextStyle(color: textColor, fontSize: 10),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

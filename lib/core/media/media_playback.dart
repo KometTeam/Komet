@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
 
@@ -60,6 +61,7 @@ class MediaPlayback {
 
   final ValueNotifier<PlaybackKind?> primary = ValueNotifier(null);
   final ValueNotifier<AudioFileTrack?> audioFile = ValueNotifier(null);
+  bool _audioCompletionListenerAttached = false;
 
   final ValueNotifier<int?> visibleChatId = ValueNotifier(null);
 
@@ -207,6 +209,7 @@ class MediaPlayback {
     if (!AudioPlaybackController.isInitialized) {
       throw StateError('Audio playback is not initialized');
     }
+    _attachAudioCompletionListener();
     final current = audioFile.value;
     if (current?.cacheName == track.cacheName) {
       await AudioPlaybackController.instance.toggle();
@@ -241,5 +244,21 @@ class MediaPlayback {
       unawaited(AudioPlaybackController.instance.stop());
     }
     return true;
+  }
+
+  void _attachAudioCompletionListener() {
+    if (_audioCompletionListenerAttached) return;
+    _audioCompletionListenerAttached = true;
+    AudioPlaybackController.instance.processingState.addListener(
+      _onAudioProcessingStateChanged,
+    );
+  }
+
+  void _onAudioProcessingStateChanged() {
+    if (AudioPlaybackController.instance.processingState.value !=
+        AudioProcessingState.completed) {
+      return;
+    }
+    closeAudioFile();
   }
 }
