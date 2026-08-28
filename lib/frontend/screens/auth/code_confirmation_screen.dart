@@ -102,21 +102,54 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     if (recovering) return;
     setState(() => recovering = true);
     try {
-      if (api.state != SessionState.online) {
-        final back = await api.stateStream
-            .firstWhere((s) => s == SessionState.online)
-            .timeout(
-              const Duration(seconds: 12),
-              onTimeout: () => SessionState.disconnected,
-            );
-        if (back != SessionState.online) {
-          if (mounted) {
-            showCustomNotification(context, 'Нет соединения с сервером');
-          }
-          return;
+      if (!await _waitForOnline()) {
+        if (mounted) {
+          showCustomNotification(context, 'Нет соединения с сервером');
         }
+        return;
       }
-      final fresh = await accountModule.requestCode(widget.rawPhone);
+      if (!mounted) return;
+      setState(() {
+        sessionEpoch = api.sessionEpoch;
+        dropNotified = false;
+      });
+      showCustomNotification(context, 'Соединение восстановлено');
+    } catch (e) {
+      if (mounted) {
+        showCustomNotification(
+          context,
+          'Не удалось восстановить соединение: $e',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => recovering = false);
+    }
+  }
+
+  Future<bool> _waitForOnline() async {
+    if (api.state == SessionState.online) return true;
+    final back = await api.stateStream
+        .firstWhere((s) => s == SessionState.online)
+        .timeout(
+          const Duration(seconds: 12),
+          onTimeout: () => SessionState.disconnected,
+        );
+    return back == SessionState.online;
+  }
+
+  Future<void> _requestFreshCode(String notice, {bool resend = false}) async {
+    if (recovering) return;
+    setState(() => recovering = true);
+    try {
+      if (!await _waitForOnline()) {
+        if (mounted) {
+          showCustomNotification(context, 'Нет соединения с сервером');
+        }
+        return;
+      }
+      final fresh = resend
+          ? await accountModule.resendCode(widget.rawPhone)
+          : await accountModule.requestCode(widget.rawPhone);
       if (!mounted) return;
       setState(() {
         _token = fresh.token;
@@ -127,10 +160,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
       });
       _startTimer();
       _listenForSmsCode();
-      showCustomNotification(
-        context,
-        'Соединение восстановлено — выслали новый код',
-      );
+      showCustomNotification(context, notice);
     } catch (e) {
       if (mounted) {
         showCustomNotification(context, 'Не удалось обновить код: $e');
@@ -211,17 +241,16 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   }
 
   void _resendCode() {
-    if (_timerSeconds == 0) {
-      _startTimer();
-    }
+    if (_timerSeconds > 0 || recovering || _verifying) return;
+    unawaited(_requestFreshCode('Выслали новый код', resend: true));
   }
 
   Future<void> _verifyCode() async {
     if (_codeController.text.length != 6 || recovering || _verifying) return;
 
     if (sessionStale) {
-      recoverStaleSession();
-      return;
+      await recoverStaleSession();
+      if (!mounted || sessionStale) return;
     }
 
     setState(() => _verifying = true);
@@ -293,8 +322,12 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      if (!verified && (isSessionStateError(e) || sessionStale)) {
-        recoverStaleSession();
+      if (verified) {
+        _showError(e.toString());
+      } else if (isAuthSessionLostError(e)) {
+        await _requestFreshCode('Код устарел — выслали новый');
+      } else if (isSessionStateError(e) || sessionStale) {
+        await recoverStaleSession();
       } else {
         _showError(e.toString());
       }
