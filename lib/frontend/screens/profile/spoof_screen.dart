@@ -12,6 +12,7 @@ import '../../../core/config/device_presets.dart';
 import '../../../core/storage/device_identity.dart';
 import '../../../core/storage/spoofing_service.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/utils/device_locale.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/spoof_profile.dart';
 import '../../../main.dart';
@@ -182,7 +183,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
     final size = View.of(context).physicalSize;
 
     _appVersionController.text = _hardcodedVersion;
-    _localeController.text = Platform.localeName.split('_').first;
+    _localeController.text = deviceLanguageCode();
 
     final dpi = (160 * pixelRatio).round();
     String densityBucket;
@@ -278,7 +279,7 @@ class _SpoofScreenState extends State<SpoofScreen> {
       } catch (_) {
         timezone = 'Europe/Moscow';
       }
-      final locale = Platform.localeName.split('_').first;
+      final locale = deviceLanguageCode();
 
       if (mounted) {
         setState(() {
