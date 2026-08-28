@@ -57,6 +57,19 @@ class PrivacyModule extends AccountApiBase {
     return config;
   }
 
+  Future<PrivacyConfig> setSafeMode(bool value) => updatePrivacyConfig(
+    value
+        ? {
+            'INCOMING_CALL': 'CONTACTS',
+            'SEARCH_BY_PHONE': 'CONTACTS',
+            'SAFE_MODE_NO_PIN': true,
+            'CONTENT_LEVEL_ACCESS': true,
+            'CHATS_INVITE': 'CONTACTS',
+            'SAFE_MODE': true,
+          }
+        : {'SAFE_MODE_NO_PIN': false, 'SAFE_MODE': false},
+  );
+
   Future<PrivacyConfig> setChatsPushNotification(bool value) =>
       updatePrivacyConfig({'CHATS_PUSH_NOTIFICATION': value ? 'ON' : 'OFF'});
 

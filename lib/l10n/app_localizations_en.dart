@@ -1876,8 +1876,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get securityModeSubtitle => 'Hides personal information';
 
   @override
-  String get securitySettingsUnavailable =>
-      'Changing this setting is not available yet';
+  String get securityModeLocked => 'Turn off safe mode to change this setting';
+
+  @override
+  String get securityModeSheetSubtitle => 'No unwanted contact or content';
+
+  @override
+  String get securityModeSheetSearch =>
+      'People won\'t be able to find you by phone number';
+
+  @override
+  String get securityModeSheetCalls =>
+      'Only people from your contacts can call you';
+
+  @override
+  String get securityModeSheetInvites =>
+      'Only people you\'ve already talked to can add you to groups';
+
+  @override
+  String get securityModeSheetContent =>
+      'You\'ll only see safe posts and channels';
+
+  @override
+  String get securityModeSheetEnable => 'Turn on';
 
   @override
   String get securityFindByPhone => 'Find me by phone number';

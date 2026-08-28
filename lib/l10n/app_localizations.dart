@@ -3620,11 +3620,47 @@ abstract class AppLocalizations {
   /// **'Hides personal information'**
   String get securityModeSubtitle;
 
-  /// No description provided for @securitySettingsUnavailable.
+  /// No description provided for @securityModeLocked.
   ///
   /// In en, this message translates to:
-  /// **'Changing this setting is not available yet'**
-  String get securitySettingsUnavailable;
+  /// **'Turn off safe mode to change this setting'**
+  String get securityModeLocked;
+
+  /// No description provided for @securityModeSheetSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No unwanted contact or content'**
+  String get securityModeSheetSubtitle;
+
+  /// No description provided for @securityModeSheetSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'People won\'t be able to find you by phone number'**
+  String get securityModeSheetSearch;
+
+  /// No description provided for @securityModeSheetCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Only people from your contacts can call you'**
+  String get securityModeSheetCalls;
+
+  /// No description provided for @securityModeSheetInvites.
+  ///
+  /// In en, this message translates to:
+  /// **'Only people you\'ve already talked to can add you to groups'**
+  String get securityModeSheetInvites;
+
+  /// No description provided for @securityModeSheetContent.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll only see safe posts and channels'**
+  String get securityModeSheetContent;
+
+  /// No description provided for @securityModeSheetEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get securityModeSheetEnable;
 
   /// No description provided for @securityFindByPhone.
   ///

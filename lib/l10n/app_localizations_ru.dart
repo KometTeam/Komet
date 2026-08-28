@@ -1883,8 +1883,30 @@ class AppLocalizationsRu extends AppLocalizations {
   String get securityModeSubtitle => 'Скрывает личную информацию';
 
   @override
-  String get securitySettingsUnavailable =>
-      'Изменение настроек пока недоступно';
+  String get securityModeLocked =>
+      'Отключите безопасный режим, чтобы изменить эту настройку';
+
+  @override
+  String get securityModeSheetSubtitle => 'Без лишнего общения и контента';
+
+  @override
+  String get securityModeSheetSearch =>
+      'Вас не смогут найти по номеру телефона';
+
+  @override
+  String get securityModeSheetCalls =>
+      'Позвонить вам смогут только люди из вашего списка контактов';
+
+  @override
+  String get securityModeSheetInvites =>
+      'Пригласить вас в группу смогут только те, с кем вы уже общались';
+
+  @override
+  String get securityModeSheetContent =>
+      'Вы увидите только безопасные посты и каналы';
+
+  @override
+  String get securityModeSheetEnable => 'Включить';
 
   @override
   String get securityFindByPhone => 'Найти меня по номеру';

@@ -71,6 +71,8 @@ class AccountModule {
   Future<PrivacyConfig> updatePrivacyConfig(Map<String, dynamic> settings) =>
       _privacy.updatePrivacyConfig(settings);
 
+  Future<PrivacyConfig> setSafeMode(bool value) => _privacy.setSafeMode(value);
+
   Future<PrivacyConfig> setChatsPushNotification(bool value) =>
       _privacy.setChatsPushNotification(value);
 
