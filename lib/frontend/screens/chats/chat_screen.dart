@@ -18,6 +18,8 @@ import 'package:komet/frontend/screens/webapp/open_mini_app.dart';
 import 'package:komet/frontend/widgets/sending_clock_icon.dart';
 import 'package:komet/core/media/desktop_video_probe.dart';
 import 'package:komet/core/media/video_transcoder.dart';
+import 'package:komet/core/media/clipboard/clipboard_media.dart';
+import 'package:komet/core/media/clipboard/pasted_attachment.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -65,6 +67,7 @@ import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import 'chat/chat_prank_controller.dart';
 import 'chat/chat_controller.dart';
+import 'chat/read_marker_gate.dart';
 import 'chat/voice_record_controller.dart';
 import 'chat/video_note_controller.dart';
 import 'chat/command_panel_controller.dart';
@@ -104,6 +107,7 @@ import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/lottie_image.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
+import '../../widgets/attachment/paste_preview_sheet.dart';
 import '../../widgets/sticker_pack_sheet.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_to_pop.dart';
@@ -323,7 +327,9 @@ class _ChatScreenState extends State<ChatScreen>
   int _historyAutoloadSuppressCount = 0;
   bool get _historyAutoloadSuppressed => _historyAutoloadSuppressCount > 0;
   int _readMarkTime = 0;
-  Timer? _readMarkTimer;
+  late final ReadMarkerGate _readMarker = ReadMarkerGate(
+    onFlush: _updateReadMarker,
+  );
   final GlobalKey _listKey = GlobalKey();
   final GlobalKey _unreadSeparatorKey = GlobalKey();
   final Object _profileHeroTag = UniqueKey();
@@ -331,6 +337,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _isLoading = true;
   bool _encryptionEnabled = false;
   final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
+  bool _pastePending = false;
   late final StickerPanelController _stickers;
   final ValueNotifier<UploadStatus> _uploadStatus = ValueNotifier(
     const UploadStatus(),
@@ -693,7 +700,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (!_commentsMode) ChatScreen._open.add(this);
     unawaited(PushService.clearChatNotification(widget.chatId));
     if (!_commentsMode) {
-      unawaited(NotificationBridge.instance.setActiveChat(widget.chatId));
+      unawaited(NotificationBridge.instance.pushActiveChat(widget.chatId));
     }
     unawaited(
       animojiModule
@@ -1106,7 +1113,9 @@ class _ChatScreenState extends State<ChatScreen>
           if (!mounted) return;
           setState(_markPositioned);
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _jumpCacheExtent.value = null;
+            if (!mounted) return;
+            _jumpCacheExtent.value = null;
+            _reapplyPinIfNeeded();
           });
         },
       );
@@ -1116,9 +1125,18 @@ class _ChatScreenState extends State<ChatScreen>
   void _reapplyPinIfNeeded() {
     final id = _pinnedMessageId;
     if (id == null || _userDidScroll || !_scrollController.hasClients) return;
+    _holdReadMarker();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _pinnedMessageId != id || _userDidScroll) return;
-      _alignLoadedMessage(id, _pinnedAlignment, 0);
+      if (!mounted || _pinnedMessageId != id || _userDidScroll) {
+        _releaseReadMarker();
+        return;
+      }
+      _alignLoadedMessage(
+        id,
+        _pinnedAlignment,
+        0,
+        onSettled: _releaseReadMarker,
+      );
     });
   }
 
@@ -1286,18 +1304,17 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  void _scheduleReadMarker() {
-    _readMarkTimer?.cancel();
-    _readMarkTimer = Timer(
-      const Duration(milliseconds: 350),
-      _updateReadMarker,
-    );
-  }
+  void _scheduleReadMarker() => _readMarker.schedule();
+
+  void _holdReadMarker() => _readMarker.hold();
+
+  void _releaseReadMarker() => _readMarker.release();
 
   void _updateReadMarker() {
     if (_commentsMode) return;
     if (!mounted || _myId == 0 || _messages.isEmpty) return;
     if (_awaitingPosition || !_initialPositionDone) return;
+    if (_readMarker.held) return;
     if (!_scrollController.hasClients) return;
     final listBox = _listKey.currentContext?.findRenderObject();
     if (listBox is! RenderBox) return;
@@ -1694,9 +1711,13 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted || added == 0) return;
 
     _syncReactionNotifiersFromMessages();
+    _holdReadMarker();
     _bumpMessages();
     await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
+    if (!mounted) {
+      _releaseReadMarker();
+      return;
+    }
 
     final id = anchorId;
     final at = anchorAt;
@@ -1708,8 +1729,13 @@ class _ChatScreenState extends State<ChatScreen>
         alignment ?? 0,
         0,
         epoch: _userGestureEpoch,
-        onSettled: () => _historyAutoloadSuppressCount--,
+        onSettled: () {
+          _historyAutoloadSuppressCount--;
+          _releaseReadMarker();
+        },
       );
+    } else {
+      _releaseReadMarker();
     }
     _loadForwardedSenderNames();
     _loadGroupSenderNames();
@@ -1873,6 +1899,7 @@ class _ChatScreenState extends State<ChatScreen>
     List<CachedMessage> decodedDesc, {
     bool markLoaded = false,
   }) {
+    final anchor = _captureViewportAnchor();
     final changed = _chatController.mergeMessages(decodedDesc);
     _requestCommentCounts();
 
@@ -1888,8 +1915,47 @@ class _ChatScreenState extends State<ChatScreen>
       _syncReactionNotifiersFromMessages();
       _pruneReactionNotifiers();
       _chatController.persistSessionCache();
+      _restoreViewportAfterMerge(anchor);
       _reapplyPinIfNeeded();
     }
+  }
+
+  ({String id, double at, double alignment})? _captureViewportAnchor() {
+    if (_pinnedMessageId != null && !_userDidScroll) return null;
+    if (!_scrollController.hasClients || _isNearBottom()) return null;
+    final id = _viewportAnchorId();
+    if (id == null) return null;
+    final at = _messageContentOffset(id);
+    final alignment = _messageAlignmentInList(id);
+    if (at == null || alignment == null) return null;
+    return (id: id, at: at, alignment: alignment);
+  }
+
+  void _restoreViewportAfterMerge(
+    ({String id, double at, double alignment})? anchor,
+  ) {
+    _holdReadMarker();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || anchor == null) {
+        _releaseReadMarker();
+        return;
+      }
+      if (_restoreContentOffset(anchor.id, anchor.at)) {
+        _releaseReadMarker();
+        return;
+      }
+      _historyAutoloadSuppressCount++;
+      _alignLoadedMessage(
+        anchor.id,
+        anchor.alignment,
+        0,
+        epoch: _userGestureEpoch,
+        onSettled: () {
+          _historyAutoloadSuppressCount--;
+          _releaseReadMarker();
+        },
+      );
+    });
   }
 
   void _requestCommentCounts() {
@@ -2100,7 +2166,7 @@ class _ChatScreenState extends State<ChatScreen>
   void dispose() {
     ChatScreen._open.remove(this);
     if (!_commentsMode) {
-      unawaited(NotificationBridge.instance.clearActiveChat(widget.chatId));
+      unawaited(NotificationBridge.instance.popActiveChat(widget.chatId));
     }
     _chatController.persistSessionCache();
     if (_previewChat) {
@@ -2118,7 +2184,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.removeListener(_recordScrollPixels);
     _scrollController.removeListener(_scheduleReadMarker);
     _scrollController.removeListener(_updateScrollDownVisible);
-    _readMarkTimer?.cancel();
+    _readMarker.dispose();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
     MediaPlayback.instance.leaveChat(widget.chatId);
     AppChatChrome.current.removeListener(_onVisualStyleChanged);
@@ -2705,8 +2771,15 @@ class _ChatScreenState extends State<ChatScreen>
                       ? null
                       : () => unawaited(_pickReplyChat()),
                   formatElapsed: formatVoiceElapsed,
-                  contextMenuBuilder: (ctx, state) =>
-                      _formatContextMenu(_messageController, ctx, state),
+                  contextMenuBuilder: (ctx, state) => _formatContextMenu(
+                    _messageController,
+                    ctx,
+                    state,
+                    extraItems: _pasteMenuItems(ctx, state),
+                  ),
+                  onPasteMedia: ClipboardMedia.supported
+                      ? _handlePasteMedia
+                      : null,
                   isMuted: chat?.isMuted ?? false,
                   onToggleMute: _toggleChatMute,
                   channelSubscribed: !_previewChat,
@@ -3757,8 +3830,9 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _formatContextMenu(
     RichMessageController controller,
     BuildContext context,
-    EditableTextState editableState,
-  ) {
+    EditableTextState editableState, {
+    List<ContextMenuButtonItem> extraItems = const [],
+  }) {
     final selection = controller.selection;
     final buttonItems = <ContextMenuButtonItem>[];
     if (selection.isValid && !selection.isCollapsed) {
@@ -3775,6 +3849,7 @@ class _ChatScreenState extends State<ChatScreen>
         );
       }
     }
+    buttonItems.addAll(extraItems);
     buttonItems.addAll(editableState.contextMenuButtonItems);
     return AdaptiveTextSelectionToolbar.buttonItems(
       anchors: editableState.contextMenuAnchors,
@@ -4814,6 +4889,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     final epoch = _userGestureEpoch;
     _historyAutoloadSuppressCount++;
+    _holdReadMarker();
     try {
       var stable = 0;
       for (var iter = 0; iter < 120; iter++) {
@@ -4871,6 +4947,7 @@ class _ChatScreenState extends State<ChatScreen>
       }
     } finally {
       _historyAutoloadSuppressCount--;
+      _releaseReadMarker();
     }
   }
 
@@ -4893,8 +4970,14 @@ class _ChatScreenState extends State<ChatScreen>
     bool notifyIfMissing = true,
     VoidCallback? onSettled,
   }) {
-    if (!_scrollController.hasClients) {
+    void settle() {
+      _releaseReadMarker();
       onSettled?.call();
+    }
+
+    _holdReadMarker();
+    if (!_scrollController.hasClients) {
+      settle();
       return;
     }
     if (_deferredIds.contains(messageId)) _flushDeferredMessages();
@@ -4906,7 +4989,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (notifyIfMissing) {
         showCustomNotification(context, 'Сообщение не загружено');
       }
-      onSettled?.call();
+      settle();
       return;
     }
 
@@ -4928,7 +5011,7 @@ class _ChatScreenState extends State<ChatScreen>
       });
     }
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _alignLoadedMessage(messageId, alignment, 0, onSettled: onSettled),
+      (_) => _alignLoadedMessage(messageId, alignment, 0, onSettled: settle),
     );
   }
 
@@ -5629,7 +5712,7 @@ class _ChatScreenState extends State<ChatScreen>
                   notification.dragDetails != null) {
                 _userGestureEpoch++;
               } else if (notification is ScrollEndNotification) {
-                _updateReadMarker();
+                _readMarker.flush();
               }
               return false;
             },
@@ -5703,7 +5786,7 @@ class _ChatScreenState extends State<ChatScreen>
                   return CustomScrollView(
                     controller: _scrollController,
                     reverse: true,
-                    cacheExtent: cacheExtent,
+                    scrollCacheExtent: ScrollCacheExtent.pixels(cacheExtent),
                     slivers: [
                       SliverPadding(
                         padding: _messagesListPadding(context),
@@ -6689,8 +6772,9 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        if (mounted)
+        if (mounted) {
           showCustomNotification(context, 'Нет доступа к геолокации');
+        }
         return null;
       }
       return await Geolocator.getCurrentPosition(
@@ -6699,8 +6783,9 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         showCustomNotification(context, 'Не удалось получить геопозицию');
+      }
       return null;
     }
   }
@@ -6803,6 +6888,81 @@ class _ChatScreenState extends State<ChatScreen>
       if (wire != null && mounted) {
         await messagesModule.sendMessage(_myId, widget.chatId, wire);
       }
+    }
+  }
+
+  List<ContextMenuButtonItem> _pasteMenuItems(
+    BuildContext context,
+    EditableTextState editableState,
+  ) {
+    if (!ClipboardMedia.supported) return const [];
+    return [
+      ContextMenuButtonItem(
+        label: AppLocalizations.of(context)!.composerPasteAttachment,
+        onPressed: () {
+          editableState.hideToolbar();
+          unawaited(_pasteClipboardMedia());
+        },
+      ),
+    ];
+  }
+
+  Future<bool> _handlePasteMedia() async {
+    if (!await ClipboardMedia.hasMedia()) return false;
+    unawaited(_pasteClipboardMedia());
+    return true;
+  }
+
+  Future<void> _pasteClipboardMedia() async {
+    if (_myId == 0 || _pastePending) return;
+    _pastePending = true;
+    try {
+      final payload = await ClipboardMedia.read();
+      if (!mounted) return;
+      final items = payload == null
+          ? const <PastedAttachment>[]
+          : await materializeClipboardMedia(payload);
+      if (!mounted) return;
+      if (items.isEmpty) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.pasteAttachFailed,
+        );
+        return;
+      }
+
+      final media = items.where((it) => it.isMedia).toList();
+      final documents = items.where((it) => !it.isMedia).toList();
+      if (_encryptionEnabled && documents.isNotEmpty) {
+        _refuseUnencrypted('Файлы');
+        if (media.isEmpty) return;
+        documents.clear();
+      }
+
+      final caption = await showPastePreviewSheet(
+        context,
+        items: [...media, ...documents],
+      );
+      if (caption == null || !mounted) return;
+
+      if (media.isNotEmpty) {
+        await _sendPhotos(
+          media
+              .map((it) => PickedPhoto(item: GalleryItem.fromFile(it.file)))
+              .toList(),
+          caption,
+        );
+      }
+      for (final document in documents) {
+        if (!mounted) return;
+        await _uploadAsFile(
+          source: document.file,
+          filename: document.name,
+          size: document.size,
+        );
+      }
+    } finally {
+      _pastePending = false;
     }
   }
 
@@ -7533,7 +7693,7 @@ class _DeletingMessageAnimationState extends State<_DeletingMessageAnimation>
   Widget build(BuildContext context) {
     return SizeTransition(
       sizeFactor: _collapse,
-      axisAlignment: 0.0,
+      alignment: AlignmentDirectional.centerStart,
       child: FadeTransition(
         opacity: _opacity,
         child: ScaleTransition(

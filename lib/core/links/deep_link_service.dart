@@ -11,12 +11,16 @@ import '../../frontend/debug/log_export.dart';
 import '../../frontend/screens/digital_id/digital_id_web_screen.dart';
 import '../../frontend/widgets/custom_notification.dart';
 import '../../frontend/widgets/max_link_handler.dart';
+import '../../frontend/widgets/max_link_nav.dart';
+import '../storage/app_database.dart';
+import '../storage/token_storage.dart';
 import '../../frontend/widgets/swipe_route.dart';
 import '../../main.dart';
 import '../webpush/max_web_socket.dart';
 import '../webpush/web_push_service.dart';
 import 'desktop_url_scheme.dart';
 import 'max_link.dart';
+import '../config/build_profile.dart';
 
 class DeepLinkService {
   DeepLinkService._();
@@ -30,9 +34,11 @@ class DeepLinkService {
   bool _pendingLogExport = false;
   String? _pendingExternalCallback;
   WebPushSubscription? _pendingWebPush;
+  ({int? chatId, int? userId})? _pendingPushTarget;
   String? _lastExternalCallback;
   Timer? _externalCallbackRetry;
   Timer? _webPushRetry;
+  Timer? _pushTargetRetry;
   Timer? _logExportRetry;
   bool _ready = false;
   bool _started = false;
@@ -64,6 +70,12 @@ class DeepLinkService {
   void _onUri(Uri uri) {
     if (_isLogExportLink(uri)) {
       _pendingLogExport = true;
+      _flushPending();
+      return;
+    }
+    final target = _parsePushTarget(uri);
+    if (target != null) {
+      _pendingPushTarget = target;
       _flushPending();
       return;
     }
@@ -128,6 +140,19 @@ class DeepLinkService {
       }
     }
 
+    if (_pendingPushTarget != null) {
+      if (context == null || api.state != SessionState.online) {
+        _pushTargetRetry ??= Timer(const Duration(milliseconds: 300), () {
+          _pushTargetRetry = null;
+          _flushPending();
+        });
+      } else {
+        final target = _pendingPushTarget!;
+        _pendingPushTarget = null;
+        unawaited(_openPushTarget(context, target));
+      }
+    }
+
     if (!_ready || context == null) return;
     final pending = _pending;
     if (pending == null) return;
@@ -138,6 +163,7 @@ class DeepLinkService {
   }
 
   bool _isExternalCallback(Uri uri) {
+    if (!BuildProfile.digitalId) return false;
     final scheme = uri.scheme.toLowerCase();
     if (scheme != 'https' && scheme != 'http' && scheme != 'max') return false;
     final host = uri.host.toLowerCase();
@@ -158,6 +184,52 @@ class DeepLinkService {
         showCustomNotification(context, 'Не удалось завершить Цифровой ID: $e');
       }
     }
+  }
+
+  ({int? chatId, int? userId})? _parsePushTarget(Uri uri) {
+    if (uri.scheme.toLowerCase() != 'komet') return null;
+
+    final segments = <String>[
+      if (uri.host.isNotEmpty) uri.host,
+      ...uri.pathSegments,
+    ].where((s) => s.isNotEmpty).toList();
+    if (segments.length != 1 || segments.first != 'open') return null;
+
+    final params = uri.queryParameters;
+    final chatId = int.tryParse(params['chatId']?.trim() ?? '');
+    final userId = int.tryParse(
+      (params['userId'] ?? params['callerId'])?.trim() ?? '',
+    );
+    if (chatId == null && userId == null) return null;
+
+    return (chatId: chatId, userId: userId);
+  }
+
+  Future<void> _openPushTarget(
+    BuildContext context,
+    ({int? chatId, int? userId}) target,
+  ) async {
+    final chatId = target.chatId;
+    if (chatId != null && chatId != 0) {
+      await openChatById(context, chatId);
+      return;
+    }
+
+    final userId = target.userId;
+    if (userId == null || userId <= 0) return;
+
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) {
+      if (context.mounted) await openContactById(context, userId);
+      return;
+    }
+
+    final existing = await AppDatabase.findDialogChatByParticipant(
+      accountId,
+      userId,
+    );
+    if (!context.mounted) return;
+    await openChatById(context, existing ?? (accountId ^ userId));
   }
 
   WebPushSubscription? _parseWebPushLink(Uri uri) {
@@ -258,6 +330,8 @@ class DeepLinkService {
     _logExportRetry = null;
     _webPushRetry?.cancel();
     _webPushRetry = null;
+    _pushTargetRetry?.cancel();
+    _pushTargetRetry = null;
     _sub?.cancel();
     _sub = null;
     _stateSub?.cancel();

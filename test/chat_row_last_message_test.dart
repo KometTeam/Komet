@@ -35,7 +35,7 @@ Map<String, dynamic> _serverChat({Object? sender}) => {
     'id': _lastMsgId,
     'time': 1700000000000,
     'text': 'привет',
-    if (sender != null) 'sender': sender,
+    'sender': ?sender,
   },
 };
 

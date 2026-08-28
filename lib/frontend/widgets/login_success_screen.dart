@@ -123,8 +123,8 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 360),
           reverseTransitionDuration: const Duration(milliseconds: 200),
-          pageBuilder: (_, __, ___) => const AdaptiveShell(),
-          transitionsBuilder: (_, animation, __, child) {
+          pageBuilder: (_, _, _) => const AdaptiveShell(),
+          transitionsBuilder: (_, animation, _, child) {
             return FadeTransition(
               opacity: CurvedAnimation(
                 parent: animation,

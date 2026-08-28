@@ -63,6 +63,10 @@ android {
             dimension = "distribution"
             applicationId = "ru.oneme.app"
         }
+        create("store") {
+            dimension = "distribution"
+            applicationId = "ru.komet.app"
+        }
     }
 
     signingConfigs {

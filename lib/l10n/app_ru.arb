@@ -72,9 +72,6 @@
   "spoofMethodFull": "Полный",
   "spoofMethodPartialDescription": "Рекомендуемый метод. Используются случайные данные, но ваш реальный часовой пояс и локаль остаются настоящими для правдоподобности.",
   "spoofMethodFullDescription": "Все данные генерируются случайно. Будьте осторожны.",
-  "spoofDeviceTypeTitle": "Тип устройства",
-  "spoofDeviceTypeDescription": "Определяет, какие устройства генерируются: Android или iOS",
-  "spoofDeviceTypeLabel": "Тип устройства",
   "spoofMainSectionTitle": "Основные данные",
   "spoofFieldDeviceName": "Имя устройства",
   "spoofFieldOsVersion": "Версия ОС",
@@ -471,7 +468,7 @@
   "nfcScanningSubtitle": "Оба устройства должны держать этот экран открытым",
   "nfcExchangingTitle": "Идёт обмен контактами…",
   "nfcExchangingSubtitle": "Почти готово",
-  "nfcPeerIdFallback": "ID {id}",
+  "contactIdFallback": "ID {id}",
   "nfcAdded": "Добавлено",
   "nfcAddContact": "Добавить контакт",
   "chatInfoTabGeneralChats": "Общие чаты",
@@ -604,7 +601,13 @@
   "securityDisabledMasc": "Отключён",
   "securityModeTitle": "Безопасный режим",
   "securityModeSubtitle": "Скрывает личную информацию",
-  "securitySettingsUnavailable": "Изменение настроек пока недоступно",
+  "securityModeLocked": "Отключите безопасный режим, чтобы изменить эту настройку",
+  "securityModeSheetSubtitle": "Без лишнего общения и контента",
+  "securityModeSheetSearch": "Вас не смогут найти по номеру телефона",
+  "securityModeSheetCalls": "Позвонить вам смогут только люди из вашего списка контактов",
+  "securityModeSheetInvites": "Пригласить вас в группу смогут только те, с кем вы уже общались",
+  "securityModeSheetContent": "Вы увидите только безопасные посты и каналы",
+  "securityModeSheetEnable": "Включить",
   "securityFindByPhone": "Найти меня по номеру",
   "securityWhoCanCall": "Кто может мне звонить",
   "securityWhoCanInvite": "Кто может приглашать в чаты",
@@ -959,5 +962,72 @@
   "webPushStatusService": "Сервис",
   "webPushStatusToken": "Токен",
   "webPushStatusLinkedAt": "Привязан",
-  "webPushStatusDevice": "Устройство"
+  "webPushStatusDevice": "Устройство",
+  "securityDeleteProfileTitle": "Удалить профиль",
+  "securityDeleteProfileSubtitle": "Профиль и все данные удалятся через 30 дней",
+  "securityDeleteProfileConfirmTitle": "Удалить профиль?",
+  "securityDeleteProfileConfirmMessage": "Ваш профиль MAX будет удалён через 30 дней. До этого момента заявку можно отменить.",
+  "securityDeleteProfileConfirmAction": "Удалить",
+  "securityDeleteProfileScheduled": "Профиль будет удалён {date}",
+  "@securityDeleteProfileScheduled": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "securityDeleteProfileKeep": "Не удалять профиль",
+  "securityDeleteProfileRequested": "Заявка на удаление принята",
+  "securityDeleteProfileCanceled": "Удаление профиля отменено",
+  "securityDeleteProfileError": "Не удалось отправить запрос: {error}",
+  "@securityDeleteProfileError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "composerPasteAttachment": "Вставить файл",
+  "pasteAttachTitleImage": "Отправить изображение",
+  "pasteAttachTitleVideo": "Отправить видео",
+  "pasteAttachTitleFile": "Отправить файл",
+  "pasteAttachTitleMany": "{count, plural, =1{Отправить 1 файл} few{Отправить {count} файла} many{Отправить {count} файлов} other{Отправить {count} файла}}",
+  "@pasteAttachTitleMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pasteAttachCaptionHint": "Подпись",
+  "pasteAttachSend": "Отправить",
+  "pasteAttachCancel": "Отмена",
+  "pasteAttachFailed": "В буфере обмена нечего вставить",
+  "profileQrTitle": "Мой QR-код",
+  "profileQrHint": "Отсканируйте код, чтобы открыть профиль",
+  "profileQrUnavailable": "Не удалось получить ссылку на профиль",
+  "authLimitsLoginTitle": "Аккаунт временно ограничен",
+  "authLimitsLoginSubtitle": "Ограничения снимутся примерно {until}",
+  "@authLimitsLoginSubtitle": {
+    "placeholders": {
+      "until": {
+        "type": "DateTime",
+        "format": "d MMMM, HH:mm",
+        "isCustomDateFormat": "true"
+      }
+    }
+  },
+  "authLimitsLogin2faTitle": "Двухфакторная аутентификация",
+  "authLimitsLogin2faBody": "Нельзя установить или снять пароль для входа.",
+  "authLimitsLoginSessionsTitle": "Завершение сеансов",
+  "authLimitsLoginSessionsBody": "Нельзя завершить все сеансы сразу.",
+  "authLimitsSignupTitle": "Аккаунт может быть ограничен",
+  "authLimitsSignupSubtitle": "Ограничения выдают не всем, и сервер снимает их сам",
+  "authLimitsSignupMessagesTitle": "Сообщения",
+  "authLimitsSignupMessagesBody": "Возможно, писать получится только тем, у кого вы уже есть в контактах.",
+  "authLimitsSignupGroupsTitle": "Группы",
+  "authLimitsSignupGroupsBody": "Вступление в группы может быть недоступно.",
+  "authLimitsSignupMoreTitle": "Возможны и другие ограничения",
+  "authLimitsSignupMoreBody": "Полного списка сервер не сообщает — если действие не сработало, попробуйте позже.",
+  "authLimitsConfirm": "Понятно"
 }

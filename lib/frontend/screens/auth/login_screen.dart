@@ -24,6 +24,7 @@ import '../../../backend/api.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
 import '../../../core/config/app_frost.dart';
+import '../../../core/config/build_profile.dart';
 import '../../../core/config/app_shape.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -113,6 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _onLogoTap() {
+    if (!BuildProfile.devTools) return;
     _logoTapTimer?.cancel();
     _logoTapTimer = Timer(const Duration(milliseconds: 600), () {
       _logoTapCount = 0;
@@ -582,26 +584,27 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ListTile(
-                  leading: Icon(Symbols.security, color: cs.onSurface),
-                  title: Text(
-                    l10n.loginSpoofRedacted,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SpoofScreen(),
+                if (BuildProfile.spoofUi)
+                  ListTile(
+                    leading: Icon(Symbols.security, color: cs.onSurface),
+                    title: Text(
+                      l10n.loginSpoofRedacted,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
                       ),
-                    );
-                  },
-                ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SpoofScreen(),
+                        ),
+                      );
+                    },
+                  ),
                 ListTile(
                   leading: Icon(Symbols.vpn_lock, color: cs.onSurface),
                   title: Text(
@@ -671,28 +674,29 @@ class _LoginScreenState extends State<LoginScreen> {
                     Navigator.pop(context);
                   },
                 ),
-                ListTile(
-                  leading: Icon(Symbols.key, color: cs.onSurface),
-                  title: Text(
-                    l10n.loginSignInWithToken,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => TokenLoginScreen(
-                          returnToAccountId: widget.returnToAccountId,
-                        ),
+                if (BuildProfile.tokenLogin)
+                  ListTile(
+                    leading: Icon(Symbols.key, color: cs.onSurface),
+                    title: Text(
+                      l10n.loginSignInWithToken,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
                       ),
-                    );
-                  },
-                ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TokenLoginScreen(
+                            returnToAccountId: widget.returnToAccountId,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ListTile(
                   leading: Icon(Symbols.description, color: cs.onSurface),
                   title: Text(

@@ -17,12 +17,16 @@ class NotificationBridge {
   static const _retryDelay = Duration(milliseconds: 300);
   static const _maxRetries = 100;
 
+  final List<int> _activeChats = [];
+
   bool _started = false;
   bool _ready = false;
   int _pendingChatId = 0;
-  int _activeChatId = 0;
+  int _sentChatId = 0;
   int _retriesLeft = 0;
   Timer? _retry;
+
+  int get _activeChatId => _activeChats.isEmpty ? 0 : _activeChats.last;
 
   bool get _native {
     try {
@@ -58,25 +62,32 @@ class NotificationBridge {
     }
   }
 
-  Future<void> setActiveChat(int chatId) async {
+  Future<void> pushActiveChat(int chatId) async {
     if (!_native || chatId <= 0) return;
-    if (_activeChatId == chatId) return;
-    _activeChatId = chatId;
-    try {
-      await _method.invokeMethod<void>('setActiveChat', {'chatId': chatId});
-    } catch (e) {
-      logger.w('NotificationBridge.setActiveChat: $e');
-    }
+    _activeChats.add(chatId);
+    await _syncActiveChat();
   }
 
-  Future<void> clearActiveChat(int chatId) async {
-    if (!_native) return;
-    if (chatId > 0 && _activeChatId != chatId) return;
-    _activeChatId = 0;
+  Future<void> popActiveChat(int chatId) async {
+    if (!_native || chatId <= 0) return;
+    final index = _activeChats.lastIndexOf(chatId);
+    if (index < 0) return;
+    _activeChats.removeAt(index);
+    await _syncActiveChat();
+  }
+
+  Future<void> _syncActiveChat() async {
+    final chatId = _activeChatId;
+    if (chatId == _sentChatId) return;
+    _sentChatId = chatId;
     try {
-      await _method.invokeMethod<void>('clearActiveChat');
+      if (chatId > 0) {
+        await _method.invokeMethod<void>('setActiveChat', {'chatId': chatId});
+      } else {
+        await _method.invokeMethod<void>('clearActiveChat');
+      }
     } catch (e) {
-      logger.w('NotificationBridge.clearActiveChat: $e');
+      logger.w('NotificationBridge: активный чат не синхронизирован: $e');
     }
   }
 

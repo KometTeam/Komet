@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/build_profile.dart';
 import '../protocol/opcode_map.dart';
 import '../protocol/packet.dart';
 
@@ -122,11 +123,13 @@ class TrafficMonitor extends ChangeNotifier {
   String? get activeEndpoint => _activeEndpoint;
 
   Future<void> load() async {
+    if (!BuildProfile.trafficCapture) return;
     final prefs = await SharedPreferences.getInstance();
     captureEnabled.value = prefs.getBool(_prefKey) ?? _defaultEnabled;
   }
 
   Future<void> setEnabled(bool value) async {
+    if (!BuildProfile.trafficCapture) return;
     if (captureEnabled.value != value) {
       captureEnabled.value = value;
       notifyListeners();

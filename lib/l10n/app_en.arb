@@ -72,9 +72,6 @@
   "spoofMethodFull": "Full",
   "spoofMethodPartialDescription": "Recommended method. Random data is used, but your real timezone and locale are kept for plausibility.",
   "spoofMethodFullDescription": "All data including timezone and locale is generated randomly. Use this method at your own risk!",
-  "spoofDeviceTypeTitle": "Device type",
-  "spoofDeviceTypeDescription": "Controls which devices are generated: Android or iOS",
-  "spoofDeviceTypeLabel": "Device type",
   "spoofMainSectionTitle": "Main data",
   "spoofFieldDeviceName": "Device name",
   "spoofFieldOsVersion": "OS version",
@@ -541,8 +538,8 @@
   "nfcScanningSubtitle": "Both devices must keep this screen open",
   "nfcExchangingTitle": "Exchanging contacts…",
   "nfcExchangingSubtitle": "Almost done",
-  "nfcPeerIdFallback": "ID {id}",
-  "@nfcPeerIdFallback": {
+  "contactIdFallback": "ID {id}",
+  "@contactIdFallback": {
     "placeholders": {
       "id": {
         "type": "String"
@@ -776,7 +773,13 @@
   "securityDisabledMasc": "Disabled",
   "securityModeTitle": "Safe mode",
   "securityModeSubtitle": "Hides personal information",
-  "securitySettingsUnavailable": "Changing this setting is not available yet",
+  "securityModeLocked": "Turn off safe mode to change this setting",
+  "securityModeSheetSubtitle": "No unwanted contact or content",
+  "securityModeSheetSearch": "People won't be able to find you by phone number",
+  "securityModeSheetCalls": "Only people from your contacts can call you",
+  "securityModeSheetInvites": "Only people you've already talked to can add you to groups",
+  "securityModeSheetContent": "You'll only see safe posts and channels",
+  "securityModeSheetEnable": "Turn on",
   "securityFindByPhone": "Find me by phone number",
   "securityWhoCanCall": "Who can call me",
   "securityWhoCanInvite": "Who can invite me to chats",
@@ -1215,5 +1218,72 @@
   "webPushStatusService": "Service",
   "webPushStatusToken": "Token",
   "webPushStatusLinkedAt": "Linked",
-  "webPushStatusDevice": "Device"
+  "webPushStatusDevice": "Device",
+  "securityDeleteProfileTitle": "Delete profile",
+  "securityDeleteProfileSubtitle": "The profile and all its data are removed after 30 days",
+  "securityDeleteProfileConfirmTitle": "Delete profile?",
+  "securityDeleteProfileConfirmMessage": "Your MAX profile will be deleted in 30 days. You can cancel the request at any time before that.",
+  "securityDeleteProfileConfirmAction": "Delete",
+  "securityDeleteProfileScheduled": "Profile will be deleted on {date}",
+  "@securityDeleteProfileScheduled": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "securityDeleteProfileKeep": "Don't delete profile",
+  "securityDeleteProfileRequested": "Deletion request accepted",
+  "securityDeleteProfileCanceled": "Profile deletion canceled",
+  "securityDeleteProfileError": "Failed to send the request: {error}",
+  "@securityDeleteProfileError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "composerPasteAttachment": "Paste file",
+  "pasteAttachTitleImage": "Send image",
+  "pasteAttachTitleVideo": "Send video",
+  "pasteAttachTitleFile": "Send file",
+  "pasteAttachTitleMany": "{count, plural, =1{Send 1 file} other{Send {count} files}}",
+  "@pasteAttachTitleMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pasteAttachCaptionHint": "Caption",
+  "pasteAttachSend": "Send",
+  "pasteAttachCancel": "Cancel",
+  "pasteAttachFailed": "Nothing to paste from the clipboard",
+  "profileQrTitle": "My QR code",
+  "profileQrHint": "Scan the code to open the profile",
+  "profileQrUnavailable": "Could not get the profile link",
+  "authLimitsLoginTitle": "Account temporarily limited",
+  "authLimitsLoginSubtitle": "The limits should lift around {until}",
+  "@authLimitsLoginSubtitle": {
+    "placeholders": {
+      "until": {
+        "type": "DateTime",
+        "format": "MMMM d, HH:mm",
+        "isCustomDateFormat": "true"
+      }
+    }
+  },
+  "authLimitsLogin2faTitle": "Two-factor authentication",
+  "authLimitsLogin2faBody": "You can't set or remove the login password.",
+  "authLimitsLoginSessionsTitle": "Ending sessions",
+  "authLimitsLoginSessionsBody": "You can't end all sessions at once.",
+  "authLimitsSignupTitle": "Account may be limited",
+  "authLimitsSignupSubtitle": "New accounts aren't all limited, and the server lifts the limits itself",
+  "authLimitsSignupMessagesTitle": "Messages",
+  "authLimitsSignupMessagesBody": "You may only be able to write to people who already have you in their contacts.",
+  "authLimitsSignupGroupsTitle": "Groups",
+  "authLimitsSignupGroupsBody": "Joining groups may be unavailable.",
+  "authLimitsSignupMoreTitle": "Other limits are possible",
+  "authLimitsSignupMoreBody": "The server doesn't announce the full list — if something doesn't work, try again later.",
+  "authLimitsConfirm": "Got it"
 }

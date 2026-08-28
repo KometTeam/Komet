@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/config/build_profile.dart';
 import '../../core/config/debug_test.dart';
 import '../../core/utils/update_checker.dart';
 import '../screens/chats/chat_list_screen.dart';
 import '../screens/chats/chat_screen.dart';
+import 'auth_limits_sheet.dart';
 import 'update_dialog.dart';
 
 class AdaptiveShell extends StatefulWidget {
@@ -53,10 +55,17 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   void initState() {
     super.initState();
     _loadListWidth();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeCheckUpdate());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runStartupPrompts());
+  }
+
+  Future<void> _runStartupPrompts() async {
+    await showPendingAuthLimits(context);
+    if (!mounted) return;
+    await _maybeCheckUpdate();
   }
 
   Future<void> _maybeCheckUpdate() async {
+    if (!BuildProfile.selfUpdate) return;
     if (DebugTest.enabled) return;
     final update = await UpdateChecker.check();
     if (update == null || !mounted) return;

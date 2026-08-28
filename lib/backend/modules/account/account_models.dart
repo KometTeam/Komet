@@ -395,6 +395,7 @@ class LoginSyncParams {
   final int lastLogin;
   final String? configHash;
   final String? chatCacheFingerprint;
+  final bool serverConfigSeen;
 
   const LoginSyncParams({
     required this.chatsSync,
@@ -406,6 +407,7 @@ class LoginSyncParams {
     required this.lastLogin,
     this.configHash,
     this.chatCacheFingerprint,
+    this.serverConfigSeen = false,
   });
 
   static Future<LoginSyncParams?> fromDatabase(int accountId) async {
@@ -423,6 +425,7 @@ class LoginSyncParams {
       lastLogin: int.tryParse(lastLogin) ?? 0,
       configHash: values[SyncKey.configHash],
       chatCacheFingerprint: values[SyncKey.chatCacheFingerprint],
+      serverConfigSeen: values[SyncKey.serverConfigSeen] == '1',
     );
   }
 }

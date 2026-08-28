@@ -59,6 +59,22 @@ Future<(int, int)?> imageFileDimensions(File file) async {
 
 abstract class GallerySource {
   static const int pageSize = 120;
+  static const Duration maxInt32Duration = Duration(milliseconds: 0x7fffffff);
+
+  static FilterOptionGroup mediaFilter() => FilterOptionGroup(
+    imageOption: const FilterOption(
+      sizeConstraint: SizeConstraint(ignoreSize: true),
+    ),
+    videoOption: const FilterOption(
+      sizeConstraint: SizeConstraint(ignoreSize: true),
+      durationConstraint: DurationConstraint(
+        max: maxInt32Duration,
+        allowNullable: true,
+      ),
+    ),
+    createTimeCond: DateTimeCond.def().copyWith(ignore: true),
+    orders: const [OrderOption(type: OrderOptionType.createDate, asc: false)],
+  );
 
   Future<GalleryPermission> ensurePermission();
   Future<GalleryPage> load({int offset, int limit});
@@ -85,21 +101,6 @@ class _PhotoManagerSource implements GallerySource {
   AssetPathEntity? _album;
   int _total = 0;
 
-  static FilterOptionGroup _filter() => FilterOptionGroup(
-    imageOption: const FilterOption(
-      sizeConstraint: SizeConstraint(ignoreSize: true),
-    ),
-    videoOption: const FilterOption(
-      sizeConstraint: SizeConstraint(ignoreSize: true),
-      durationConstraint: DurationConstraint(
-        max: Duration(days: 365),
-        allowNullable: true,
-      ),
-    ),
-    createTimeCond: DateTimeCond.def().copyWith(ignore: true),
-    orders: const [OrderOption(type: OrderOptionType.createDate, asc: false)],
-  );
-
   @override
   Future<GalleryPage> load({
     int offset = 0,
@@ -109,7 +110,7 @@ class _PhotoManagerSource implements GallerySource {
       final paths = await PhotoManager.getAssetPathList(
         type: RequestType.common,
         onlyAll: true,
-        filterOption: _filter(),
+        filterOption: GallerySource.mediaFilter(),
       );
       if (paths.isEmpty) {
         _album = null;
@@ -208,6 +209,9 @@ String _fileExtension(String path) {
 
 bool isVideoPath(String path) =>
     kGalleryVideoExtensions.contains(_fileExtension(path));
+
+bool isImagePath(String path) =>
+    kGalleryImageExtensions.contains(_fileExtension(path));
 
 class _DesktopGallerySource implements GallerySource {
   @override
