@@ -10,7 +10,7 @@ Komet is a cross-platform Flutter messaging client (Android, iOS, macOS, Windows
 
 ```bash
 flutter pub get          # install dependencies
-flutter analyze          # lint / static analysis
+flutter analyze lib test tool native/komet_crypto/lib  # lint / static analysis (what CI runs)
 flutter run              # run on connected device (default: komet flavor)
 flutter run --flavor oneme -t lib/main.dart  # run oneme flavor (FCM)
 
@@ -29,7 +29,12 @@ flutter build windows --release
 
 Android builds require **Java 17**. Gradle memory is configured to `-Xmx4096m`.
 
-**Never run APK/AAB builds yourself** (`flutter build apk`, `flutter build appbundle`, gradle assemble tasks) — they are slow and the user builds them. Verify changes with `flutter analyze`; the build commands above are documentation only.
+**Never run APK/AAB builds yourself** (`flutter build apk`, `flutter build appbundle`, gradle assemble tasks) — they are slow and the user builds them. Verify changes with the scoped `flutter analyze` above; the build commands are documentation only.
+Always pass those directories: a bare `flutter analyze` also walks the vendored
+`native/komet_crypto/cargokit/build_tool` package, whose dependencies are never resolved, and reports
+~47 phantom errors. It is a nested package with its own `pubspec.yaml`, so `analyzer: exclude:` in
+`analysis_options.yaml` cannot reach it — scoping the command is the only way to skip it.
+Note also that `flutter analyze` treats **info**-level lints as fatal by default, so CI fails on any lint.
 
 ## Build Flavors
 
