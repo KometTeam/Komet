@@ -969,23 +969,65 @@
   "securityDeleteProfileConfirmMessage": "Ваш профиль MAX будет удалён через 30 дней. До этого момента заявку можно отменить.",
   "securityDeleteProfileConfirmAction": "Удалить",
   "securityDeleteProfileScheduled": "Профиль будет удалён {date}",
-  "@securityDeleteProfileScheduled": {"placeholders": {"date": {"type": "String"}}},
+  "@securityDeleteProfileScheduled": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "securityDeleteProfileKeep": "Не удалять профиль",
   "securityDeleteProfileRequested": "Заявка на удаление принята",
   "securityDeleteProfileCanceled": "Удаление профиля отменено",
   "securityDeleteProfileError": "Не удалось отправить запрос: {error}",
-  "@securityDeleteProfileError": {"placeholders": {"error": {"type": "String"}}},
+  "@securityDeleteProfileError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "composerPasteAttachment": "Вставить файл",
   "pasteAttachTitleImage": "Отправить изображение",
   "pasteAttachTitleVideo": "Отправить видео",
   "pasteAttachTitleFile": "Отправить файл",
   "pasteAttachTitleMany": "{count, plural, =1{Отправить 1 файл} few{Отправить {count} файла} many{Отправить {count} файлов} other{Отправить {count} файла}}",
-  "@pasteAttachTitleMany": {"placeholders": {"count": {"type": "int"}}},
+  "@pasteAttachTitleMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "pasteAttachCaptionHint": "Подпись",
   "pasteAttachSend": "Отправить",
   "pasteAttachCancel": "Отмена",
   "pasteAttachFailed": "В буфере обмена нечего вставить",
   "profileQrTitle": "Мой QR-код",
   "profileQrHint": "Отсканируйте код, чтобы открыть профиль",
-  "profileQrUnavailable": "Не удалось получить ссылку на профиль"
+  "profileQrUnavailable": "Не удалось получить ссылку на профиль",
+  "authLimitsLoginTitle": "Аккаунт временно ограничен",
+  "authLimitsLoginSubtitle": "Ограничения снимутся примерно {until}",
+  "@authLimitsLoginSubtitle": {
+    "placeholders": {
+      "until": {
+        "type": "DateTime",
+        "format": "d MMMM, HH:mm",
+        "isCustomDateFormat": "true"
+      }
+    }
+  },
+  "authLimitsLogin2faTitle": "Двухфакторная аутентификация",
+  "authLimitsLogin2faBody": "Нельзя установить или снять пароль для входа.",
+  "authLimitsLoginSessionsTitle": "Завершение сеансов",
+  "authLimitsLoginSessionsBody": "Нельзя завершить все сеансы сразу.",
+  "authLimitsSignupTitle": "Аккаунт может быть ограничен",
+  "authLimitsSignupSubtitle": "Ограничения выдают не всем, и сервер снимает их сам",
+  "authLimitsSignupMessagesTitle": "Сообщения",
+  "authLimitsSignupMessagesBody": "Возможно, писать получится только тем, у кого вы уже есть в контактах.",
+  "authLimitsSignupGroupsTitle": "Группы",
+  "authLimitsSignupGroupsBody": "Вступление в группы может быть недоступно.",
+  "authLimitsSignupMoreTitle": "Возможны и другие ограничения",
+  "authLimitsSignupMoreBody": "Полного списка сервер не сообщает — если действие не сработало, попробуйте позже.",
+  "authLimitsConfirm": "Понятно"
 }

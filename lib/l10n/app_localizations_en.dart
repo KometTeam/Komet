@@ -2916,4 +2916,62 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileQrUnavailable => 'Could not get the profile link';
+
+  @override
+  String get authLimitsLoginTitle => 'Account temporarily limited';
+
+  @override
+  String authLimitsLoginSubtitle(DateTime until) {
+    final intl.DateFormat untilDateFormat = intl.DateFormat(
+      'MMMM d, HH:mm',
+      localeName,
+    );
+    final String untilString = untilDateFormat.format(until);
+
+    return 'The limits should lift around $untilString';
+  }
+
+  @override
+  String get authLimitsLogin2faTitle => 'Two-factor authentication';
+
+  @override
+  String get authLimitsLogin2faBody =>
+      'You can\'t set or remove the login password.';
+
+  @override
+  String get authLimitsLoginSessionsTitle => 'Ending sessions';
+
+  @override
+  String get authLimitsLoginSessionsBody =>
+      'You can\'t end all sessions at once.';
+
+  @override
+  String get authLimitsSignupTitle => 'Account may be limited';
+
+  @override
+  String get authLimitsSignupSubtitle =>
+      'New accounts aren\'t all limited, and the server lifts the limits itself';
+
+  @override
+  String get authLimitsSignupMessagesTitle => 'Messages';
+
+  @override
+  String get authLimitsSignupMessagesBody =>
+      'You may only be able to write to people who already have you in their contacts.';
+
+  @override
+  String get authLimitsSignupGroupsTitle => 'Groups';
+
+  @override
+  String get authLimitsSignupGroupsBody => 'Joining groups may be unavailable.';
+
+  @override
+  String get authLimitsSignupMoreTitle => 'Other limits are possible';
+
+  @override
+  String get authLimitsSignupMoreBody =>
+      'The server doesn\'t announce the full list — if something doesn\'t work, try again later.';
+
+  @override
+  String get authLimitsConfirm => 'Got it';
 }

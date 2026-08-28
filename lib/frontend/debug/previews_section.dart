@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/storage/app_database.dart';
 import '../screens/calls/call_screen.dart';
+import '../widgets/auth_limits_sheet.dart';
 import '../widgets/glossy_pill.dart';
 import '../widgets/login_success_screen.dart';
 
@@ -155,6 +156,57 @@ class DebugPreviewsSection extends StatelessWidget {
                       ),
                     ),
                     Switch(value: micSignalOn, onChanged: onMicSignalChanged),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: GlossyPill(
+            color: cs.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(20),
+            depth: 6,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ограничения аккаунта',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Шиты, которые показываются после входа и регистрации',
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  spacing: 12,
+                  children: [
+                    Expanded(
+                      child: _DebugCallButton(
+                        label: 'После входа',
+                        icon: Symbols.lock_clock,
+                        onTap: () =>
+                            showAuthLimitsSheet(context, AuthEntry.login),
+                      ),
+                    ),
+                    Expanded(
+                      child: _DebugCallButton(
+                        label: 'После регистрации',
+                        icon: Symbols.hourglass_top,
+                        onTap: () => showAuthLimitsSheet(
+                          context,
+                          AuthEntry.registration,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],

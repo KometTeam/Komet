@@ -5503,6 +5503,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not get the profile link'**
   String get profileQrUnavailable;
+
+  /// No description provided for @authLimitsLoginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Account temporarily limited'**
+  String get authLimitsLoginTitle;
+
+  /// No description provided for @authLimitsLoginSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The limits should lift around {until}'**
+  String authLimitsLoginSubtitle(DateTime until);
+
+  /// No description provided for @authLimitsLogin2faTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-factor authentication'**
+  String get authLimitsLogin2faTitle;
+
+  /// No description provided for @authLimitsLogin2faBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t set or remove the login password.'**
+  String get authLimitsLogin2faBody;
+
+  /// No description provided for @authLimitsLoginSessionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ending sessions'**
+  String get authLimitsLoginSessionsTitle;
+
+  /// No description provided for @authLimitsLoginSessionsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t end all sessions at once.'**
+  String get authLimitsLoginSessionsBody;
+
+  /// No description provided for @authLimitsSignupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Account may be limited'**
+  String get authLimitsSignupTitle;
+
+  /// No description provided for @authLimitsSignupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New accounts aren\'t all limited, and the server lifts the limits itself'**
+  String get authLimitsSignupSubtitle;
+
+  /// No description provided for @authLimitsSignupMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get authLimitsSignupMessagesTitle;
+
+  /// No description provided for @authLimitsSignupMessagesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You may only be able to write to people who already have you in their contacts.'**
+  String get authLimitsSignupMessagesBody;
+
+  /// No description provided for @authLimitsSignupGroupsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get authLimitsSignupGroupsTitle;
+
+  /// No description provided for @authLimitsSignupGroupsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Joining groups may be unavailable.'**
+  String get authLimitsSignupGroupsBody;
+
+  /// No description provided for @authLimitsSignupMoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Other limits are possible'**
+  String get authLimitsSignupMoreTitle;
+
+  /// No description provided for @authLimitsSignupMoreBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The server doesn\'t announce the full list — if something doesn\'t work, try again later.'**
+  String get authLimitsSignupMoreBody;
+
+  /// No description provided for @authLimitsConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get authLimitsConfirm;
 }
 
 class _AppLocalizationsDelegate

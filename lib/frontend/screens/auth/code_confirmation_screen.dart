@@ -10,6 +10,7 @@ import '../../../backend/api.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/sms_code_listener.dart';
 import '../../../main.dart';
+import '../../widgets/auth_limits_sheet.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
 import '../../widgets/small_spinner.dart';
@@ -307,6 +308,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         context,
         loginResult.profile.baseUrl,
       );
+
+      if (!mounted) return;
+
+      await markAuthLimitsPending(AuthEntry.login);
 
       if (!mounted) return;
 

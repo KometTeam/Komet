@@ -2931,4 +2931,63 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get profileQrUnavailable => 'Не удалось получить ссылку на профиль';
+
+  @override
+  String get authLimitsLoginTitle => 'Аккаунт временно ограничен';
+
+  @override
+  String authLimitsLoginSubtitle(DateTime until) {
+    final intl.DateFormat untilDateFormat = intl.DateFormat(
+      'd MMMM, HH:mm',
+      localeName,
+    );
+    final String untilString = untilDateFormat.format(until);
+
+    return 'Ограничения снимутся примерно $untilString';
+  }
+
+  @override
+  String get authLimitsLogin2faTitle => 'Двухфакторная аутентификация';
+
+  @override
+  String get authLimitsLogin2faBody =>
+      'Нельзя установить или снять пароль для входа.';
+
+  @override
+  String get authLimitsLoginSessionsTitle => 'Завершение сеансов';
+
+  @override
+  String get authLimitsLoginSessionsBody =>
+      'Нельзя завершить все сеансы сразу.';
+
+  @override
+  String get authLimitsSignupTitle => 'Аккаунт может быть ограничен';
+
+  @override
+  String get authLimitsSignupSubtitle =>
+      'Ограничения выдают не всем, и сервер снимает их сам';
+
+  @override
+  String get authLimitsSignupMessagesTitle => 'Сообщения';
+
+  @override
+  String get authLimitsSignupMessagesBody =>
+      'Возможно, писать получится только тем, у кого вы уже есть в контактах.';
+
+  @override
+  String get authLimitsSignupGroupsTitle => 'Группы';
+
+  @override
+  String get authLimitsSignupGroupsBody =>
+      'Вступление в группы может быть недоступно.';
+
+  @override
+  String get authLimitsSignupMoreTitle => 'Возможны и другие ограничения';
+
+  @override
+  String get authLimitsSignupMoreBody =>
+      'Полного списка сервер не сообщает — если действие не сработало, попробуйте позже.';
+
+  @override
+  String get authLimitsConfirm => 'Понятно';
 }

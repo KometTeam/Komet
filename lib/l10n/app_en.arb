@@ -1225,23 +1225,65 @@
   "securityDeleteProfileConfirmMessage": "Your MAX profile will be deleted in 30 days. You can cancel the request at any time before that.",
   "securityDeleteProfileConfirmAction": "Delete",
   "securityDeleteProfileScheduled": "Profile will be deleted on {date}",
-  "@securityDeleteProfileScheduled": {"placeholders": {"date": {"type": "String"}}},
+  "@securityDeleteProfileScheduled": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "securityDeleteProfileKeep": "Don't delete profile",
   "securityDeleteProfileRequested": "Deletion request accepted",
   "securityDeleteProfileCanceled": "Profile deletion canceled",
   "securityDeleteProfileError": "Failed to send the request: {error}",
-  "@securityDeleteProfileError": {"placeholders": {"error": {"type": "String"}}},
+  "@securityDeleteProfileError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "composerPasteAttachment": "Paste file",
   "pasteAttachTitleImage": "Send image",
   "pasteAttachTitleVideo": "Send video",
   "pasteAttachTitleFile": "Send file",
   "pasteAttachTitleMany": "{count, plural, =1{Send 1 file} other{Send {count} files}}",
-  "@pasteAttachTitleMany": {"placeholders": {"count": {"type": "int"}}},
+  "@pasteAttachTitleMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "pasteAttachCaptionHint": "Caption",
   "pasteAttachSend": "Send",
   "pasteAttachCancel": "Cancel",
   "pasteAttachFailed": "Nothing to paste from the clipboard",
   "profileQrTitle": "My QR code",
   "profileQrHint": "Scan the code to open the profile",
-  "profileQrUnavailable": "Could not get the profile link"
+  "profileQrUnavailable": "Could not get the profile link",
+  "authLimitsLoginTitle": "Account temporarily limited",
+  "authLimitsLoginSubtitle": "The limits should lift around {until}",
+  "@authLimitsLoginSubtitle": {
+    "placeholders": {
+      "until": {
+        "type": "DateTime",
+        "format": "MMMM d, HH:mm",
+        "isCustomDateFormat": "true"
+      }
+    }
+  },
+  "authLimitsLogin2faTitle": "Two-factor authentication",
+  "authLimitsLogin2faBody": "You can't set or remove the login password.",
+  "authLimitsLoginSessionsTitle": "Ending sessions",
+  "authLimitsLoginSessionsBody": "You can't end all sessions at once.",
+  "authLimitsSignupTitle": "Account may be limited",
+  "authLimitsSignupSubtitle": "New accounts aren't all limited, and the server lifts the limits itself",
+  "authLimitsSignupMessagesTitle": "Messages",
+  "authLimitsSignupMessagesBody": "You may only be able to write to people who already have you in their contacts.",
+  "authLimitsSignupGroupsTitle": "Groups",
+  "authLimitsSignupGroupsBody": "Joining groups may be unavailable.",
+  "authLimitsSignupMoreTitle": "Other limits are possible",
+  "authLimitsSignupMoreBody": "The server doesn't announce the full list — if something doesn't work, try again later.",
+  "authLimitsConfirm": "Got it"
 }
