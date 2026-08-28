@@ -11,6 +11,9 @@ import '../../../../core/utils/file_download.dart';
 import '../../../../core/utils/media_cache.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
+import '../../../../core/media/audio_file_track.dart';
+import '../../../../core/media/audio_playback_controller.dart';
+import '../../../../core/media/media_playback.dart';
 import '../../../../core/crypto/chat_crypto_service.dart';
 import '../../../../core/crypto/encrypted_photo_cache.dart';
 import '../../../../models/attachment.dart';
@@ -43,6 +46,7 @@ class FileBubble extends StatelessWidget {
     final sizeStr = formatBytes(size);
     final fileId = file.fileId;
     final cacheName = '${fileId}_$name';
+    final audioFile = downloadKindForName(name) == DownloadKind.audio;
 
     final preview = file.preview;
     final previewUrl = preview?.baseUrl ?? preview?.previewData ?? '';
@@ -73,7 +77,7 @@ class FileBubble extends StatelessWidget {
                 ),
                 child: ctx.uploadProgress == null
                     ? Icon(
-                        Symbols.description,
+                        audioFile ? Symbols.audio_file : Symbols.description,
                         color: isMe
                             ? ctx.cs.onPrimaryContainer
                             : ctx.cs.primary,
@@ -166,14 +170,52 @@ class FileBubble extends StatelessWidget {
 
                   return ValueListenableBuilder<bool>(
                     valueListenable: MediaCache.presence(cacheName),
-                    builder: (context, cached, _) => circle(
-                      Icon(
-                        cached ? Symbols.check : Symbols.download,
-                        color: iconColor,
-                        size: 18,
-                      ),
-                      () => _downloadFile(ctx.context, file, name),
-                    ),
+                    builder: (context, cached, _) {
+                      if (!audioFile) {
+                        return circle(
+                          Icon(
+                            cached ? Symbols.check : Symbols.download,
+                            color: iconColor,
+                            size: 18,
+                          ),
+                          () => _downloadFile(ctx.context, file, name),
+                        );
+                      }
+                      final listenables = <Listenable>[
+                        MediaPlayback.instance.audioFile,
+                        if (AudioPlaybackController.isInitialized)
+                          AudioPlaybackController.instance.playing,
+                      ];
+                      return AnimatedBuilder(
+                        animation: Listenable.merge(listenables),
+                        builder: (context, _) {
+                          final active =
+                              MediaPlayback
+                                  .instance
+                                  .audioFile
+                                  .value
+                                  ?.cacheName ==
+                              cacheName;
+                          final playing =
+                              active &&
+                              AudioPlaybackController.isInitialized &&
+                              AudioPlaybackController.instance.playing.value;
+                          return circle(
+                            Icon(
+                              !cached
+                                  ? Symbols.download
+                                  : playing
+                                  ? Symbols.pause
+                                  : Symbols.play_arrow,
+                              color: iconColor,
+                              size: 18,
+                              fill: 1,
+                            ),
+                            () => _playAudioFile(ctx.context, file, name),
+                          );
+                        },
+                      );
+                    },
                   );
                 },
               ),
@@ -364,7 +406,7 @@ class FileBubble extends StatelessWidget {
       await DownloadHistory.record(
         DownloadMetadata(
           cacheName: cacheName,
-          name: kind == DownloadKind.file ? name : '',
+          name: name,
           kind: kind,
           sourceName: ctx.chatName ?? '',
           thumbnailUrl:
@@ -457,7 +499,7 @@ class FileBubble extends StatelessWidget {
       },
       download: DownloadMetadata(
         cacheName: cacheName,
-        name: kind == DownloadKind.file ? name : '',
+        name: name,
         kind: kind,
         sourceName: ctx.chatName ?? '',
         thumbnailUrl:
@@ -476,6 +518,73 @@ class FileBubble extends StatelessWidget {
         context,
         'Ошибка загрузки: ${result.error ?? 'не удалось открыть'}',
       );
+    }
+  }
+
+  Future<void> _playAudioFile(
+    BuildContext context,
+    FileAttachment file,
+    String name,
+  ) async {
+    final fileId = file.fileId;
+    if (fileId == null) {
+      showCustomNotification(context, 'Не удалось определить файл');
+      return;
+    }
+    Haptics.tap();
+    final cacheName = '${fileId}_$name';
+    final cached = (await MediaCache.existing(cacheName)) != null;
+    if (!cached) MediaDownloadProgress.set(cacheName, 0);
+    final result = await ensureCachedFile(
+      cacheName,
+      _fileUrl,
+      onProgress: (value) => MediaDownloadProgress.set(cacheName, value),
+      onReady: () {
+        if (!cached) MediaDownloadProgress.set(cacheName, null);
+      },
+      download: DownloadMetadata(
+        cacheName: cacheName,
+        name: name,
+        kind: DownloadKind.audio,
+        sourceName: ctx.chatName ?? '',
+        thumbnailUrl:
+            file.preview?.baseUrl ??
+            file.preview?.previewData ??
+            file.previewData,
+        expectedSize: file.size ?? 0,
+        chatId: ctx.message.chatId,
+        messageId: ctx.message.id,
+        messageTime: ctx.message.time,
+      ),
+    );
+    if (!context.mounted) return;
+    if (!result.ok || result.path == null) {
+      showCustomNotification(
+        context,
+        'Ошибка загрузки: ${result.error ?? 'не удалось загрузить'}',
+      );
+      return;
+    }
+    try {
+      await MediaPlayback.instance.activateAudioFile(
+        AudioFileTrack(
+          cacheName: cacheName,
+          path: result.path!,
+          name: name,
+          sourceName: ctx.chatName ?? '',
+          chatId: ctx.message.chatId,
+          messageId: ctx.message.id,
+          messageTime: ctx.message.time,
+          thumbnailUrl:
+              file.preview?.baseUrl ??
+              file.preview?.previewData ??
+              file.previewData,
+        ),
+      );
+    } catch (_) {
+      if (context.mounted) {
+        showCustomNotification(context, 'Ошибка воспроизведения');
+      }
     }
   }
 }

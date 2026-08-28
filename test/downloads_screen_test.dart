@@ -37,9 +37,11 @@ void main() {
     );
     addTearDown(() {
       DownloadHistory.resetForTesting();
+      MediaCache.resetForTesting();
       if (directory.existsSync()) directory.deleteSync(recursive: true);
     });
     PathProviderPlatform.instance = _SyntheticPathProvider(directory.path);
+    MediaCache.resetForTesting();
     SharedPreferences.setMockInitialValues({});
 
     await tester.runAsync(() async {

@@ -7,6 +7,7 @@ import '../../core/config/komet_settings.dart';
 import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
+import '../../core/media/media_playback.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/profile_deletion_store.dart';
 import '../../core/storage/spoofing_service.dart';
@@ -367,6 +368,7 @@ class AccountModule {
   }
 
   Future<ProfileData> switchAccount(int accountId) async {
+    MediaPlayback.instance.closeAudioFile();
     final profile = await AppDatabase.loadProfile(accountId);
     if (profile == null) {
       throw StateError('switchAccount: аккаунт $accountId не найден в базе');
@@ -455,6 +457,7 @@ class AccountModule {
   }
 
   Future<void> logout() async {
+    MediaPlayback.instance.closeAudioFile();
     final accountId = await TokenStorage.getActiveAccountId();
     try {
       await _logoutOnServer(accountId);
@@ -683,7 +686,9 @@ class AccountModule {
   Future<ProfileData> _resurrectProfile(int accountId) async {
     if (DebugTest.berserk) {
       await AppDatabase.deleteAccount(accountId);
-      logger.w('login: [BERSERK] профиль удалён из БД, форсирую регенерацию (id=$accountId)');
+      logger.w(
+        'login: [BERSERK] профиль удалён из БД, форсирую регенерацию (id=$accountId)',
+      );
     } else {
       final cached = await AppDatabase.loadProfile(accountId);
       if (cached != null) return cached;
@@ -694,11 +699,15 @@ class AccountModule {
     try {
       final fetched = await ContactsModule.fetchSelfProfile(_api, accountId);
       if (fetched != null) {
-        logger.i('login: профиль восстановлен через CONTACT_INFO (id=$accountId)');
+        logger.i(
+          'login: профиль восстановлен через CONTACT_INFO (id=$accountId)',
+        );
         return fetched;
       }
     } catch (e) {
-      logger.w('login: восстановление профиля через CONTACT_INFO не удалось: $e');
+      logger.w(
+        'login: восстановление профиля через CONTACT_INFO не удалось: $e',
+      );
     }
 
     logger.w('login: профиль недоступен, использую заглушку (id=$accountId)');

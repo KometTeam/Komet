@@ -23,7 +23,8 @@ import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
+import com.ryanheise.audioservice.AudioServicePlugin
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.EventChannel
@@ -50,7 +51,7 @@ import java.util.Collections
 import java.util.Random
 import java.util.concurrent.atomic.AtomicBoolean
 
-class MainActivity : FlutterActivity() {
+class MainActivity : AudioServiceActivity() {
 
     private val channelName = "ru.komet.app/vpn_bypass"
     private val iconPackage = MainActivity::class.java.name.substringBeforeLast('.')
@@ -942,21 +943,14 @@ class MainActivity : FlutterActivity() {
     private fun keepEngineAlive(): Boolean = CallState.inCall || FkmState.enabled
 
     override fun provideFlutterEngine(context: Context): FlutterEngine? {
-        val cache = FlutterEngineCache.getInstance()
-        val cached = cache.get(KEEP_ENGINE_ID)
-        if (cached != null) {
-            if (keepEngineAlive()) return cached
-            cache.remove(KEEP_ENGINE_ID)
-            cached.destroy()
-        }
+        AudioServicePlugin.setFlutterEngineId(KEEP_ENGINE_ID)
         return super.provideFlutterEngine(context)
     }
 
-    override fun shouldDestroyEngineWithHost(): Boolean = !keepEngineAlive()
+    override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         if (!keepEngineAlive()) {
-            FlutterEngineCache.getInstance().remove(KEEP_ENGINE_ID)
             FkmChannel.detach()
             ChatNotifications.activeChatId = 0L
         }

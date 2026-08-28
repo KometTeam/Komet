@@ -74,6 +74,7 @@ import 'backend/modules/webapp.dart';
 import 'backend/modules/digital_id.dart';
 import 'core/calls/call_bridge.dart';
 import 'core/calls/call_controller.dart';
+import 'core/media/audio_playback_controller.dart';
 import 'core/links/deep_link_service.dart';
 import 'frontend/screens/calls/call_screen.dart';
 import 'core/push/fkm_controller.dart';
@@ -190,6 +191,7 @@ void main(List<String> args) async {
     linux: true,
     macOS: true,
   );
+  await AudioPlaybackController.initialize();
   if (AppInstance.isNamed) {
     SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
   }
@@ -406,6 +408,7 @@ class KometAppState extends State<KometApp>
     _fontId = widget.initialFontId;
 
     WidgetsBinding.instance.addObserver(this);
+    AudioPlaybackController.instance.error.addListener(_onAudioPlaybackError);
     AppThemeModeConfig.current.addListener(_onThemeModeChanged);
     AppAmoled.current.addListener(_onAmoledChanged);
     AppThemeSchedule.current.addListener(_onScheduleChanged);
@@ -602,6 +605,9 @@ class KometAppState extends State<KometApp>
       _onWallpaperTintChanged,
     );
     WidgetsBinding.instance.removeObserver(this);
+    AudioPlaybackController.instance.error.removeListener(
+      _onAudioPlaybackError,
+    );
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
     vpnBypassEnabled.dispose();
@@ -610,6 +616,16 @@ class KometAppState extends State<KometApp>
     accentSeed.dispose();
     wallpaperSeed.dispose();
     super.dispose();
+  }
+
+  void _onAudioPlaybackError() {
+    final message = AudioPlaybackController.instance.error.value;
+    if (message == null || message.isEmpty) return;
+    final overlay = KometApp.navigatorKey.currentState?.overlay;
+    if (overlay != null) {
+      showCustomNotificationOnOverlay(overlay, 'Ошибка воспроизведения');
+    }
+    AudioPlaybackController.instance.error.value = null;
   }
 
   @override

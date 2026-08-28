@@ -26,6 +26,37 @@ Future<FileDownloadResult> openCachedFile(
   void Function()? onReady,
   DownloadMetadata? download,
 }) async {
+  final result = await ensureCachedFile(
+    cacheName,
+    resolveUrl,
+    onProgress: onProgress,
+    onReady: onReady,
+    download: download,
+  );
+  if (!result.ok || result.path == null) return result;
+  try {
+    final opened = await OpenFilex.open(result.path!);
+    return FileDownloadResult(
+      ok: opened.type == ResultType.done,
+      path: result.path,
+      error: opened.type == ResultType.done ? null : opened.message,
+    );
+  } catch (e) {
+    return FileDownloadResult(
+      ok: false,
+      path: result.path,
+      error: e.toString(),
+    );
+  }
+}
+
+Future<FileDownloadResult> ensureCachedFile(
+  String cacheName,
+  Future<String?> Function() resolveUrl, {
+  void Function(double progress)? onProgress,
+  void Function()? onReady,
+  DownloadMetadata? download,
+}) async {
   var readyFired = false;
   void ready() {
     if (readyFired) return;
@@ -59,12 +90,7 @@ Future<FileDownloadResult> openCachedFile(
         await DownloadHistory.record(download, file);
       } catch (_) {}
     }
-    final opened = await OpenFilex.open(file.path);
-    return FileDownloadResult(
-      ok: opened.type == ResultType.done,
-      path: file.path,
-      error: opened.type == ResultType.done ? null : opened.message,
-    );
+    return FileDownloadResult(ok: true, path: file.path);
   } catch (e) {
     ready();
     return FileDownloadResult(ok: false, error: e.toString());

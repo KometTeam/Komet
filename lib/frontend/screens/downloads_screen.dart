@@ -7,6 +7,8 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/utils/download_history.dart';
+import '../../core/media/audio_file_track.dart';
+import '../../core/media/media_playback.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/save_file_as.dart';
 import '../../l10n/app_localizations.dart';
@@ -52,6 +54,32 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           context,
           AppLocalizations.of(context)!.downloadsOpenFailed,
         );
+      }
+      return;
+    }
+    if (record.kind == DownloadKind.audio) {
+      try {
+        await MediaPlayback.instance.activateAudioFile(
+          AudioFileTrack(
+            cacheName: record.cacheName,
+            path: file.path,
+            name: record.name.trim().isEmpty
+                ? AppLocalizations.of(context)!.downloadsAudio
+                : record.name.trim(),
+            sourceName: record.sourceName,
+            chatId: record.chatId,
+            messageId: record.messageId,
+            messageTime: record.messageTime,
+            thumbnailUrl: record.thumbnailUrl,
+          ),
+        );
+      } catch (_) {
+        if (mounted) {
+          showCustomNotification(
+            context,
+            AppLocalizations.of(context)!.downloadsOpenFailed,
+          );
+        }
       }
       return;
     }

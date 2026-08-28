@@ -35,9 +35,12 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   static const Duration _duration = Duration(milliseconds: 1900);
 
   static const List<String> _greetings = [
-    'С большой силой приходит большая ответственность',
-    'All in your hands',
+    'Добро пожаловать в Komet!',
+    'Аварийный выход на высоте 30 тысяч футов. Иллюзия безопасности.',
     'Иногда забавные вещи могут быть уголовно наказуемы',
+    'Если вы видите это сообщение, значит меня уже нет в живых.',
+    'Где был Гондор когда...',
+    'Вы нашли пасхалку!'
   ];
 
   late final String _greeting;

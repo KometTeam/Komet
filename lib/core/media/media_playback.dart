@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
 
+import 'audio_file_track.dart';
+import 'audio_playback_controller.dart';
 import 'voice_audio_controller.dart';
 
-enum PlaybackKind { voice, videoNote }
+enum PlaybackKind { voice, videoNote, audioFile }
 
 class VoiceTrack {
   const VoiceTrack({
@@ -55,6 +59,7 @@ class MediaPlayback {
   static const List<double> speeds = [1.0, 1.5, 2.0];
 
   final ValueNotifier<PlaybackKind?> primary = ValueNotifier(null);
+  final ValueNotifier<AudioFileTrack?> audioFile = ValueNotifier(null);
 
   final ValueNotifier<int?> visibleChatId = ValueNotifier(null);
 
@@ -94,6 +99,7 @@ class MediaPlayback {
   }
 
   void activateVoice(VoiceTrack track) {
+    _clearAudioFile();
     _clearVideoNote();
     final previous = voice.value;
     if (previous != null && previous.audio != track.audio) {
@@ -156,6 +162,7 @@ class MediaPlayback {
   }
 
   void activateVideoNote(VideoNoteTrack track) {
+    _clearAudioFile();
     _clearVoice();
     final previous = videoNote.value;
     if (previous != null && previous.controller != track.controller) {
@@ -194,5 +201,45 @@ class MediaPlayback {
     if (_heldNotes.contains(controller)) return;
     if (videoNote.value?.controller == controller) return;
     controller.dispose();
+  }
+
+  Future<void> activateAudioFile(AudioFileTrack track) async {
+    if (!AudioPlaybackController.isInitialized) {
+      throw StateError('Audio playback is not initialized');
+    }
+    final current = audioFile.value;
+    if (current?.cacheName == track.cacheName) {
+      await AudioPlaybackController.instance.toggle();
+      return;
+    }
+    _clearVoice();
+    _clearVideoNote();
+    audioFile.value = track;
+    primary.value = PlaybackKind.audioFile;
+    try {
+      await AudioPlaybackController.instance.playTrack(track);
+    } catch (_) {
+      audioFile.value = null;
+      primary.value = null;
+      rethrow;
+    }
+  }
+
+  void closeAudioFile() {
+    if (!_clearAudioFile()) return;
+    primary.value = voice.value != null
+        ? PlaybackKind.voice
+        : videoNote.value != null
+        ? PlaybackKind.videoNote
+        : null;
+  }
+
+  bool _clearAudioFile() {
+    if (audioFile.value == null) return false;
+    audioFile.value = null;
+    if (AudioPlaybackController.isInitialized) {
+      unawaited(AudioPlaybackController.instance.stop());
+    }
+    return true;
   }
 }

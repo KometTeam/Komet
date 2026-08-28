@@ -22,6 +22,18 @@ class MediaCache {
   static final Set<String> _present = {};
   static final Map<String, ValueNotifier<bool>> _presence = {};
 
+  @visibleForTesting
+  static void resetForTesting() {
+    _dir = null;
+    _cachedSize = null;
+    _inFlight.clear();
+    _present.clear();
+    for (final notifier in _presence.values) {
+      notifier.dispose();
+    }
+    _presence.clear();
+  }
+
   static Future<Directory> _cacheDir() async {
     final cached = _dir;
     if (cached != null) return cached;
