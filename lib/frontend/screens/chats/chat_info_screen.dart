@@ -532,8 +532,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   void _onBodyScroll() {
     if (!mounted || widget.chatType != 'CHAT') return;
-    if (_selectedTab != AppLocalizations.of(context)!.chatInfoTabMembers)
+    if (_selectedTab != AppLocalizations.of(context)!.chatInfoTabMembers) {
       return;
+    }
     final controller = _bodyScrollController;
     if (controller == null || !controller.hasClients) return;
     final pos = controller.position;
@@ -1385,8 +1386,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         if (_peerDeleted) return l10n.chatInfoMemberDeleted;
         if (_isBot) return l10n.contactProfileBot;
         if (_isOnline) return l10n.contactProfileOnline;
-        if (_presenceStatus == 2 || _presenceStatus == 3)
+        if (_presenceStatus == 2 || _presenceStatus == 3) {
           return l10n.contactProfileRecentlyActive;
+        }
         if (_seenTime != null && _seenTime! > 0) {
           return formatLastSeen(_seenTime!);
         }

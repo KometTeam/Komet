@@ -5786,7 +5786,7 @@ class _ChatScreenState extends State<ChatScreen>
                   return CustomScrollView(
                     controller: _scrollController,
                     reverse: true,
-                    cacheExtent: cacheExtent,
+                    scrollCacheExtent: ScrollCacheExtent.pixels(cacheExtent),
                     slivers: [
                       SliverPadding(
                         padding: _messagesListPadding(context),
@@ -6772,8 +6772,9 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        if (mounted)
+        if (mounted) {
           showCustomNotification(context, 'Нет доступа к геолокации');
+        }
         return null;
       }
       return await Geolocator.getCurrentPosition(
@@ -6782,8 +6783,9 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         showCustomNotification(context, 'Не удалось получить геопозицию');
+      }
       return null;
     }
   }
@@ -7691,7 +7693,7 @@ class _DeletingMessageAnimationState extends State<_DeletingMessageAnimation>
   Widget build(BuildContext context) {
     return SizeTransition(
       sizeFactor: _collapse,
-      axisAlignment: 0.0,
+      alignment: AlignmentDirectional.centerStart,
       child: FadeTransition(
         opacity: _opacity,
         child: ScaleTransition(

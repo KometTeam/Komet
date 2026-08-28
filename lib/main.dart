@@ -115,6 +115,7 @@ final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
 
 const ProgressIndicatorThemeData _expressiveProgressTheme =
+    // ignore: deprecated_member_use
     ProgressIndicatorThemeData(year2023: false);
 
 const PageTransitionsTheme _appPageTransitions = PageTransitionsTheme(

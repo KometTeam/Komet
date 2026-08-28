@@ -38,13 +38,13 @@ Future<bool> openMaxRoute(
     case ':chats-search':
       final root = await popToAppRootAndSettle(context);
       if (ChatListScreen.openSearch()) return true;
-      if (root != null) notifyNeedsAccount(root);
+      if (root != null && root.mounted) notifyNeedsAccount(root);
       return true;
 
     case ':saved-messages':
       final root = await popToAppRootAndSettle(context);
       if (ChatListScreen.openSavedMessages()) return true;
-      if (root != null) notifyNeedsAccount(root);
+      if (root != null && root.mounted) notifyNeedsAccount(root);
       return true;
 
     case ':settings/folder':
@@ -147,7 +147,9 @@ Future<bool> openMaxRoute(
       return true;
   }
 
-  showCustomNotification(context, 'Ссылка не поддерживается: $route');
+  if (context.mounted) {
+    showCustomNotification(context, 'Ссылка не поддерживается: $route');
+  }
   return true;
 }
 

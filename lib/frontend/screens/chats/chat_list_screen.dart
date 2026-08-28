@@ -3367,8 +3367,9 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   bool _isBotDialog(int contactId, CachedChat chat) {
     if (contactId == 0 || contactId == _profile?.id) return false;
-    if (ContactCache.getOptions(contactId)?.contains('BOT') == true)
+    if (ContactCache.getOptions(contactId)?.contains('BOT') == true) {
       return true;
+    }
     return chat.options.contains('BOT');
   }
 
