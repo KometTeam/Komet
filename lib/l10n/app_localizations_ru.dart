@@ -2900,4 +2900,13 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get pasteAttachFailed => 'В буфере обмена нечего вставить';
+
+  @override
+  String get profileQrTitle => 'Мой QR-код';
+
+  @override
+  String get profileQrHint => 'Отсканируйте код, чтобы открыть профиль';
+
+  @override
+  String get profileQrUnavailable => 'Не удалось получить ссылку на профиль';
 }

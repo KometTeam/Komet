@@ -1234,5 +1234,8 @@
   "pasteAttachCaptionHint": "Caption",
   "pasteAttachSend": "Send",
   "pasteAttachCancel": "Cancel",
-  "pasteAttachFailed": "Nothing to paste from the clipboard"
+  "pasteAttachFailed": "Nothing to paste from the clipboard",
+  "profileQrTitle": "My QR code",
+  "profileQrHint": "Scan the code to open the profile",
+  "profileQrUnavailable": "Could not get the profile link"
 }

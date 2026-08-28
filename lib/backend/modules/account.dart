@@ -591,7 +591,9 @@ class AccountModule {
       payload['draftsSync'] = sync.draftsSync;
       payload['bannersSync'] = sync.bannersSync;
       payload['lastLogin'] = sync.lastLogin;
-      if (sync.configHash != null) payload['configHash'] = sync.configHash;
+      if (sync.serverConfigSeen && sync.configHash != null) {
+        payload['configHash'] = sync.configHash;
+      }
     } else {
       payload['presenceSync'] = -1;
       payload['chatsSync'] = -1;
@@ -731,6 +733,12 @@ class AccountModule {
     final config = data['config'] as Map?;
     final serverConfig = config?['server'] as Map?;
     if (serverConfig != null) {
+      await AppDatabase.setSyncValue(accountId, SyncKey.serverConfigSeen, '1');
+      await AppDatabase.setSyncValue(
+        accountId,
+        SyncKey.profileInviteLink,
+        serverConfig['invite-link']?.toString().trim() ?? '',
+      );
       await _persistEntryBannerApps(accountId, serverConfig);
     }
     final info = LoginInfo.fromPayload(data);

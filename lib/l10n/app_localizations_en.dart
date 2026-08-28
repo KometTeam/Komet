@@ -2886,4 +2886,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pasteAttachFailed => 'Nothing to paste from the clipboard';
+
+  @override
+  String get profileQrTitle => 'My QR code';
+
+  @override
+  String get profileQrHint => 'Scan the code to open the profile';
+
+  @override
+  String get profileQrUnavailable => 'Could not get the profile link';
 }

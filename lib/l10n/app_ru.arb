@@ -978,5 +978,8 @@
   "pasteAttachCaptionHint": "Подпись",
   "pasteAttachSend": "Отправить",
   "pasteAttachCancel": "Отмена",
-  "pasteAttachFailed": "В буфере обмена нечего вставить"
+  "pasteAttachFailed": "В буфере обмена нечего вставить",
+  "profileQrTitle": "Мой QR-код",
+  "profileQrHint": "Отсканируйте код, чтобы открыть профиль",
+  "profileQrUnavailable": "Не удалось получить ссылку на профиль"
 }

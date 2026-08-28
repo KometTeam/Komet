@@ -45,6 +45,7 @@ import 'edit_profile_screen.dart';
 import 'info_screen.dart';
 import 'komet_settings_screen.dart';
 import 'notifications_screen.dart';
+import 'profile_qr_sheet.dart';
 import 'security_screen.dart';
 import 'spoof_screen.dart';
 import '../../widgets/media_playback_pill.dart';
@@ -796,7 +797,11 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                         size: 26,
                         weight: 400,
                       ),
-                      onPressed: () {},
+                      onPressed: () => showProfileQrSheet(
+                        context,
+                        name: name,
+                        avatarUrl: _profile?.baseUrl,
+                      ),
                     ),
                     Expanded(
                       child: Opacity(

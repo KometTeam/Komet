@@ -5449,6 +5449,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing to paste from the clipboard'**
   String get pasteAttachFailed;
+
+  /// No description provided for @profileQrTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My QR code'**
+  String get profileQrTitle;
+
+  /// No description provided for @profileQrHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the code to open the profile'**
+  String get profileQrHint;
+
+  /// No description provided for @profileQrUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not get the profile link'**
+  String get profileQrUnavailable;
 }
 
 class _AppLocalizationsDelegate
