@@ -99,3 +99,38 @@ Four GitHub Actions workflows in `.github/workflows/`:
 - `flutter-main.yml` — PR lint + all-platform builds for main branch  
 - `build-android.yml` — production APKs + AAB (`komet` flavor), triggered on push to main
 - `build-android-fcm.yml` — production APKs + AAB (`oneme` flavor with FCM), triggered on push to main
+
+### Release distribution (S3)
+
+`release-dev.yml` (branch `dev/0.5.0`) mirrors every pre-release to a Timeweb S3
+bucket through `.github/scripts/publish-s3.sh`: artifacts land in
+`releases/<version>-dev.<build>/` and a `latest.json` manifest is written to the
+bucket root with `no-cache`. `release-main.yml` only publishes a GitHub Release —
+both workflows share one bucket and one manifest, so only one of them may own it.
+
+The manifest carries `version` and `build` read from `pubspec.yaml`, i.e. exactly
+what is compiled into the APK — not the git tag, whose build counter comes from the
+run number and would always look newer than the installed app.
+
+The bucket holds 1 GB and a full release set is ~500 MB, so old release prefixes
+are pruned *before* the upload (`PRUNE_BEFORE_UPLOAD`, default 1) — uploading first
+would peak at ~1 GB and hit the quota. The trade-off is a few minutes during which
+the previous manifest points at deleted files. `KEEP_RELEASES` (default 1) sets how
+many releases survive. App Bundles are skipped (`EXCLUDE_GLOBS`, default `*.aab`):
+they are 114 MB each, only Google Play consumes them, and they stay on GitHub.
+
+The in-app updater (`UpdateChecker`) reads that manifest and nothing else; GitHub
+Releases stay as a human-facing mirror. The bucket URL comes from the
+`S3_PUBLIC_BASE_URL` repo variable and is baked into builds as
+`--dart-define=KOMET_UPDATE_BASE_URL`; it defaults to `https://dl.komet.pw`
+(`lib/core/config/update_config.dart`), so local builds check for updates too.
+An empty URL makes the updater inert. `UpdateInstaller` verifies the downloaded
+APK against the `size` and `sha256` recorded in the manifest.
+
+The bucket must serve `s3:GetObject` anonymously — the updater sends no
+credentials.
+
+Required repo secrets: `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
+Required repo variables: `S3_BUCKET`, `S3_PUBLIC_BASE_URL`.
+Optional: `S3_ENDPOINT` (default `https://s3.twcstorage.ru`), `S3_REGION`
+(default `ru-1`), `S3_KEEP_RELEASES`.
