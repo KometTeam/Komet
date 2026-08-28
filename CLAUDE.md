@@ -86,6 +86,31 @@ A slash spec takes the plain and slashed codepoints; the generator lays both gly
 
 `LottieSlashIcon` plays the asset forward when `slashed` turns true and backward when it turns false, so a single asset covers both directions. The older `AnimatedSlashIcon` (clip wipe over two glyphs) stays where it is already used; new buttons use the Lottie one.
 
+## App icons
+
+Two launcher icons ship: the default comet and the `Minimal` meteor, switched at
+runtime by `AppIconConfig` (Android activity-alias, iOS alternate icon). Every
+launcher resource is *derived* from `assets/komet.png` / `assets/meteor.png` by a
+script in `tool/`, so the source art lives in exactly one place:
+
+| Script | Produces |
+|--------|----------|
+| `make_icon_bg.dart` | `*_icon.png` — the same art flattened on black |
+| `make_minimal_android.dart` / `make_minimal_adaptive.dart` / `make_minimal_ios.dart` | the `Minimal` launcher + adaptive layers |
+| `make_monochrome_android.dart` | `ic_launcher[_minimal]_monochrome.png` — alpha silhouettes for themed icons |
+| `make_appearances_ios.dart` | `Icon-App-{Dark,Tinted}-1024x1024@1x.png` + their `Contents.json` entries |
+
+**Themed icons.** Both adaptive icons carry a `<monochrome>` layer, so Android 13+
+launchers with *Themed icons* enabled recolour the icon from the wallpaper. The
+layer is only the alpha channel of the artwork filled black — the system supplies
+both colours, and the same 16% inset as the foreground keeps it aligned with the
+normal icon. The iOS 18 counterpart is the dark/tinted appearance pair on the
+primary `AppIcon`; alternate icons cannot carry appearance variants.
+
+`flutter_launcher_icons` (configured in `pubspec.yaml`) only generates the default
+icon and rewrites `mipmap-anydpi-v26/*.xml` without the insets or the monochrome
+layer, so re-run the `tool/` scripts and restore those XMLs after invoking it.
+
 ## Localization
 
 Two locales supported: English (`lib/l10n/app_en.arb`) and Russian (`lib/l10n/app_ru.arb`).  
