@@ -44,6 +44,7 @@ import 'attachment/bubbles/video_bubble.dart';
 import 'attachment/bubbles/file_bubble.dart';
 import 'attachment/bubbles/forwarded_bubble.dart';
 import 'lottie_image.dart';
+import 'text_with_meta.dart';
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
 
@@ -60,138 +61,6 @@ class ReactionAnimationEvent {
 }
 
 typedef ReactionAnimojiResolver = Animoji? Function(String emoji);
-
-class _TextWithMeta extends MultiChildRenderObjectWidget {
-  _TextWithMeta({required Widget text, required Widget meta})
-    : super(children: [text, meta]);
-
-  @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderTextWithMeta();
-}
-
-class _TextWithMetaParentData extends ContainerBoxParentData<RenderBox> {}
-
-class _RenderTextWithMeta extends RenderBox
-    with
-        ContainerRenderObjectMixin<RenderBox, _TextWithMetaParentData>,
-        RenderBoxContainerDefaultsMixin<RenderBox, _TextWithMetaParentData> {
-  static const double _gap = 8;
-  static const double _baselineNudge = 2;
-
-  RenderBox get _text => firstChild!;
-  RenderBox get _meta => lastChild!;
-
-  @override
-  void setupParentData(RenderBox child) {
-    if (child.parentData is! _TextWithMetaParentData) {
-      child.parentData = _TextWithMetaParentData();
-    }
-  }
-
-  RenderParagraph? _soleParagraph() {
-    RenderParagraph? found;
-    var seen = 0;
-    void visit(RenderObject node) {
-      if (node is RenderParagraph) {
-        found = node;
-        seen++;
-        return;
-      }
-      node.visitChildren(visit);
-    }
-
-    _text.visitChildren(visit);
-    if (_text is RenderParagraph) {
-      found = _text as RenderParagraph;
-      seen = 1;
-    }
-    return seen == 1 ? found : null;
-  }
-
-  @override
-  double computeMinIntrinsicWidth(double height) =>
-      _text.getMinIntrinsicWidth(height);
-
-  @override
-  double computeMaxIntrinsicWidth(double height) =>
-      _text.getMaxIntrinsicWidth(height) +
-      _gap +
-      _meta.getMaxIntrinsicWidth(height);
-
-  @override
-  double computeMinIntrinsicHeight(double width) =>
-      _text.getMinIntrinsicHeight(width);
-
-  @override
-  double computeMaxIntrinsicHeight(double width) =>
-      _text.getMaxIntrinsicHeight(width) + _meta.getMaxIntrinsicHeight(width);
-
-  @override
-  double? computeDistanceToActualBaseline(TextBaseline baseline) =>
-      BaselineOffset(_text.getDistanceToActualBaseline(baseline)).offset;
-
-  @override
-  void performLayout() {
-    _meta.layout(const BoxConstraints(), parentUsesSize: true);
-    final metaSize = _meta.size;
-
-    _text.layout(constraints.loosen(), parentUsesSize: true);
-    final textSize = _text.size;
-
-    final paragraph = _soleParagraph();
-    final needed = _gap + metaSize.width;
-
-    double width;
-    double height;
-    var metaOnOwnLine = false;
-
-    if (paragraph != null) {
-      final length = paragraph.text.toPlainText().length;
-      final caret = paragraph.getOffsetForCaret(
-        TextPosition(offset: length),
-        Rect.zero,
-      );
-      final lastLine = caret.dx;
-      final singleLine = caret.dy < 0.5;
-      if (lastLine + needed <= textSize.width) {
-        width = textSize.width;
-        height = textSize.height;
-      } else if (singleLine && lastLine + needed <= constraints.maxWidth) {
-        width = lastLine + needed;
-        height = textSize.height;
-      } else {
-        width = math.max(textSize.width, metaSize.width);
-        height = textSize.height + metaSize.height;
-        metaOnOwnLine = true;
-      }
-    } else {
-      width = math.max(textSize.width, metaSize.width);
-      height = textSize.height + metaSize.height;
-      metaOnOwnLine = true;
-    }
-
-    size = constraints.constrain(Size(width, height));
-
-    (_text.parentData! as _TextWithMetaParentData).offset = Offset.zero;
-    (_meta.parentData! as _TextWithMetaParentData).offset = Offset(
-      math.max(0, size.width - metaSize.width),
-      metaOnOwnLine
-          ? size.height - metaSize.height
-          : size.height - metaSize.height - _baselineNudge,
-    );
-  }
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    defaultPaint(context, offset);
-  }
-
-  @override
-  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
-    return defaultHitTestChildren(result, position: position);
-  }
-}
 
 class _CapIntrinsicWidth extends SingleChildRenderObjectWidget {
   final double cap;
@@ -772,6 +641,20 @@ class MessageBubble extends StatelessWidget {
 
   bool get _isSticker => _primaryAttachment is StickerAttachment;
 
+  bool get _mediaDictatesWidth {
+    final attachments = _contentAttachments;
+    if (attachments.isEmpty) return false;
+    if (attachments.any(
+      (a) =>
+          a is ContactAttachment || a is PollAttachment || a is ShareAttachment,
+    )) {
+      return false;
+    }
+    if (attachments.any((a) => a is PhotoAttachment)) return true;
+    final first = attachments.first;
+    return first is VideoAttachment && !first.isNote;
+  }
+
   static const int _jumboAnimojiLimit = 4;
 
   List<String>? get _jumboAnimojiUrls {
@@ -1105,6 +988,23 @@ class MessageBubble extends StatelessWidget {
         ? _buildSenderHeader(cs, padding == EdgeInsets.zero)
         : null;
 
+    final Widget? replyHeader = reply == null
+        ? null
+        : Padding(
+            padding: EdgeInsets.only(
+              left: padding == EdgeInsets.zero ? 8 : 0,
+              right: padding == EdgeInsets.zero ? 8 : 0,
+              bottom: 4,
+            ),
+            child: _buildReplyQuote(
+              context,
+              cs,
+              textColor,
+              reply,
+              maxBubbleWidth,
+            ),
+          );
+
     final Widget innerContent =
         contentType == MessageType.text &&
             jumboAnimoji == null &&
@@ -1136,30 +1036,26 @@ class MessageBubble extends StatelessWidget {
               ],
             ),
           )
+        : _mediaDictatesWidth && (senderHeader != null || replyHeader != null)
+        ? _HeaderAboveMatchWidth(
+            content: contentWithReactions,
+            header: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [?senderHeader, ?replyHeader],
+            ),
+          )
         : Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ?senderHeader,
-              if (reply == null)
+              if (replyHeader == null)
                 contentWithReactions
               else
                 _HeaderAboveMatchWidth(
                   content: contentWithReactions,
-                  header: Padding(
-                    padding: EdgeInsets.only(
-                      left: padding == EdgeInsets.zero ? 8 : 0,
-                      right: padding == EdgeInsets.zero ? 8 : 0,
-                      bottom: 4,
-                    ),
-                    child: _buildReplyQuote(
-                      context,
-                      cs,
-                      textColor,
-                      reply,
-                      maxBubbleWidth,
-                    ),
-                  ),
+                  header: replyHeader,
                 ),
             ],
           );
@@ -1907,7 +1803,7 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    return _TextWithMeta(text: textWidget, meta: metaRow);
+    return TextWithMeta(text: textWidget, meta: metaRow);
   }
 
   Widget _buildReplyQuote(

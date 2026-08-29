@@ -9,6 +9,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../../models/attachment.dart';
 import '../../photo_viewer.dart';
 import '../photo_hero.dart';
+import '../../text_with_meta.dart';
 import 'bubble_context.dart';
 
 class PhotoBubble extends StatelessWidget {
@@ -31,12 +32,18 @@ class PhotoBubble extends StatelessWidget {
     this.hasContentAbove = false,
   });
 
-  static double layoutWidth(List<PhotoAttachment> photos) {
+  static double layoutWidth(
+    List<PhotoAttachment> photos, {
+    bool hasCaption = false,
+  }) {
     if (photos.length != 1) return BubbleContext.photoMaxSize;
-    return _displaySize(photos.single).width;
+    return _displaySize(photos.single, hasCaption: hasCaption).width;
   }
 
-  static Size _displaySize(PhotoAttachment photo) {
+  static Size _displaySize(PhotoAttachment photo, {bool hasCaption = false}) {
+    final minWidth = hasCaption
+        ? BubbleContext.captionedMediaMinWidth
+        : BubbleContext.photoMinSize;
     final width = photo.width?.toDouble() ?? 200;
     final height = photo.height?.toDouble() ?? 200;
 
@@ -53,7 +60,7 @@ class PhotoBubble extends StatelessWidget {
     final upScale = math.max(
       1.0,
       math.max(
-        BubbleContext.photoMinSize / displayWidth,
+        minWidth / displayWidth,
         BubbleContext.photoMinSize / displayHeight,
       ),
     );
@@ -61,10 +68,7 @@ class PhotoBubble extends StatelessWidget {
     displayHeight *= upScale;
 
     return Size(
-      displayWidth.clamp(
-        BubbleContext.photoMinSize,
-        BubbleContext.photoMaxSize,
-      ),
+      displayWidth.clamp(minWidth, BubbleContext.photoMaxSize),
       displayHeight.clamp(
         BubbleContext.photoMinSize,
         BubbleContext.photoMaxSize,
@@ -110,7 +114,7 @@ class PhotoBubble extends StatelessWidget {
 
     if (count == 1) {
       return SizedBox(
-        width: layoutWidth(photos),
+        width: layoutWidth(photos, hasCaption: true),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,12 +127,10 @@ class PhotoBubble extends StatelessWidget {
                 top: BubbleContext.captionPaddingTop,
                 bottom: 6,
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(child: resolvedCaption),
-                  ctx.meta(),
-                ],
+              child: TextWithMeta(
+                text: resolvedCaption,
+                meta: ctx.meta(),
+                fillWidth: true,
               ),
             ),
           ],
@@ -148,12 +150,10 @@ class PhotoBubble extends StatelessWidget {
             top: BubbleContext.captionPaddingTop,
             bottom: 6,
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(child: resolvedCaption),
-              ctx.meta(),
-            ],
+          child: TextWithMeta(
+            text: resolvedCaption,
+            meta: ctx.meta(),
+            fillWidth: true,
           ),
         ),
       ],
@@ -166,7 +166,7 @@ class PhotoBubble extends StatelessWidget {
     required bool hasCaption,
     required bool hasContentAbove,
   }) {
-    final size = _displaySize(photo);
+    final size = _displaySize(photo, hasCaption: hasCaption);
     final constrainedWidth = size.width;
     final constrainedHeight = size.height;
     final dpr = MediaQuery.of(ctx.context).devicePixelRatio;

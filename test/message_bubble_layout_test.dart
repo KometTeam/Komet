@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:komet/core/config/komet_settings.dart';
+import 'package:komet/frontend/widgets/attachment/bubbles/bubble_context.dart';
+import 'package:komet/frontend/widgets/attachment/bubbles/photo_bubble.dart';
 import 'package:komet/frontend/widgets/message_bubble.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/models/attachment.dart';
 
 const int _me = 1;
 const int _peer = 7;
-const double _photoWidth = 180;
+const int _longNamePeer = 8;
+const String _longName = 'Эмма Гавва - автор каналов - Стихомама - Некто';
+const double _photoWidth = 240;
 const double _maxBubbleWidth = 324;
 
 CachedMessage _message({
@@ -68,6 +72,27 @@ CachedMessage _photoReply() => CachedMessage(
       },
     },
   },
+);
+
+CachedMessage _photoWithCaption(
+  String caption, {
+  int senderId = _peer,
+  double photoWidth = _photoWidth,
+}) => CachedMessage(
+  id: '1',
+  accountId: _me,
+  chatId: 2,
+  senderId: senderId,
+  text: caption,
+  time: DateTime(2026, 1, 1, 5, 46).millisecondsSinceEpoch,
+  status: 'sent',
+  attachments: [
+    PhotoAttachment(
+      baseUrl: 'https://example.com/synthetic.jpg',
+      width: photoWidth.toInt(),
+      height: 240,
+    ),
+  ],
 );
 
 Future<void> _pumpColumn(
@@ -167,7 +192,10 @@ Rect _clockRect(WidgetTester tester) {
 }
 
 void main() {
-  setUp(() => ContactCache.put(_peer, 'Пётр Синицын'));
+  setUp(() {
+    ContactCache.put(_peer, 'Пётр Синицын');
+    ContactCache.put(_longNamePeer, _longName);
+  });
 
   testWidgets('a long sender name pushes the clock to the bubble edge', (
     tester,
@@ -344,5 +372,69 @@ void main() {
 
     expect(clock.top, greaterThanOrEqualTo(body.bottom - 2));
     expect(clock.right, lessThanOrEqualTo(body.right + 1));
+  });
+
+  testWidgets('подпись к фото занимает всю ширину, часы не режут строки', (
+    tester,
+  ) async {
+    await _pumpBubble(
+      tester,
+      _photoWithCaption('Приглашаю к сотрудничеству, ${'словo ' * 12}конец'),
+      chatType: 'DIALOG',
+    );
+
+    final caption = _rectOf(
+      tester,
+      find.textContaining('Приглашаю', findRichText: true),
+    );
+    final clock = _clockRect(tester);
+
+    expect(
+      caption.width,
+      closeTo(
+        _photoWidth -
+            BubbleContext.captionPaddingHorizontal -
+            BubbleContext.captionPaddingRight,
+        0.5,
+      ),
+    );
+    const metaInset = 4.0;
+    expect(clock.right, closeTo(caption.right - metaInset, 1));
+  });
+
+  testWidgets('длинное имя отправителя не растягивает баббл шире фото', (
+    tester,
+  ) async {
+    await _pumpBubble(
+      tester,
+      _photoWithCaption('- Если дача для', senderId: _longNamePeer),
+    );
+
+    final photo = _rectOf(tester, find.byType(PhotoBubble));
+    final name = _rectOf(tester, find.text(_longName));
+
+    expect(photo.width, closeTo(_photoWidth, 0.5));
+    expect(name.right, lessThanOrEqualTo(photo.right + 1));
+  });
+
+  testWidgets('узкое фото с подписью не делает баббл уже минимума', (
+    tester,
+  ) async {
+    await _pumpBubble(
+      tester,
+      _photoWithCaption('Короткая подпись', photoWidth: 90),
+    );
+
+    final photo = _rectOf(tester, find.byType(PhotoBubble));
+
+    expect(photo.width, closeTo(BubbleContext.captionedMediaMinWidth, 0.5));
+  });
+
+  testWidgets('узкое фото без подписи остаётся узким', (tester) async {
+    await _pumpBubble(tester, _photoWithCaption('', photoWidth: 90));
+
+    final photo = _rectOf(tester, find.byType(PhotoBubble));
+
+    expect(photo.width, closeTo(BubbleContext.photoMinSize, 0.5));
   });
 }

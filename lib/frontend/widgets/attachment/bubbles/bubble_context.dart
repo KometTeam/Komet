@@ -62,6 +62,7 @@ class BubblePresentation {
 class BubbleContext {
   static const double photoMaxSize = 280.0;
   static const double photoMinSize = 100.0;
+  static const double captionedMediaMinWidth = 200.0;
   static const double photoBorderRadius = 12.0;
   static const double bubbleBorderRadius = 20.0;
   static const double captionPaddingHorizontal = 10.0;
