@@ -17,8 +17,6 @@ class PluginStore {
   static final PluginStore instance = PluginStore._();
   static const _stateKey = 'plugins_state_v1';
   static const _bundled = <String>[
-    'assets/plugins/anim',
-    'assets/plugins/epsh',
     'assets/plugins/fox',
     'assets/plugins/info',
     'assets/plugins/weather',
@@ -70,7 +68,9 @@ class PluginStore {
   Future<void> refresh() async {
     final descriptors = <PluginDescriptor>[];
     for (final assetPath in _bundled) {
-      descriptors.add(await _loadBundled(assetPath));
+      try {
+        descriptors.add(await _loadBundled(assetPath));
+      } catch (_) {}
     }
     final root = _root;
     if (root != null && await root.exists()) {

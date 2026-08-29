@@ -159,8 +159,6 @@ flutter:
     - assets/lottie/
     - assets/wallpapers/patterns/
     - assets/debug/
-    - assets/plugins/anim/
-    - assets/plugins/epsh/
     - assets/plugins/fox/
     - assets/plugins/info/
     - assets/plugins/weather/
