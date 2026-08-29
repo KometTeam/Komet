@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/cache/info_cache.dart';
 import 'core/config/build_profile.dart';
+import 'core/utils/app_foreground.dart';
 import 'core/utils/logger.dart';
 import 'core/cache/self_presence.dart';
 import 'core/storage/app_instance.dart';
@@ -630,13 +631,16 @@ class KometAppState extends State<KometApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final background =
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached;
+    AppForeground.update(foreground: !background);
     CallController.instance.appResumed = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.inactive && CallController.instance.isBusy) {
       unawaited(CallBridge.instance.ensureOngoing());
     }
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden ||
-        state == AppLifecycleState.detached) {
+    if (background) {
       DebugSessionLog.instance.flushNow();
       SelfCheckService.instance.pause();
     }

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 import '../protocol/opcode_map.dart';
+import 'app_foreground.dart';
 import 'format.dart';
 import 'log_redact.dart';
 
@@ -112,6 +113,7 @@ class DebugSessionLog {
   static const int _maxEntriesPerSession = 2000;
   static const int _maxLogLinesPerSession = 5000;
   static const Duration _flushDebounce = Duration(seconds: 3);
+  static const Duration _backgroundFlushDebounce = Duration(seconds: 60);
 
   static final RegExp _ansiEscape = RegExp(r'\x1B\[[0-9;]*m');
 
@@ -204,10 +206,13 @@ class DebugSessionLog {
   void _scheduleFlush() {
     _dirty = true;
     if (_currentFile == null) return;
-    _flushTimer ??= Timer(_flushDebounce, () {
-      _flushTimer = null;
-      _flush();
-    });
+    _flushTimer ??= Timer(
+      AppForeground.value ? _flushDebounce : _backgroundFlushDebounce,
+      () {
+        _flushTimer = null;
+        _flush();
+      },
+    );
   }
 
   Future<void> _flush() async {

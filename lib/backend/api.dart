@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:kolibri/kolibri.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -10,6 +8,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import '../core/cache/self_presence.dart';
 import '../core/config/config.dart';
 import '../core/config/countries.dart';
+import '../core/config/device_profile.dart';
 import '../core/config/komet_settings.dart';
 import '../core/config/proxy_config.dart';
 import '../core/protocol/opcode_map.dart';
@@ -20,6 +19,7 @@ import '../core/transport/dispatcher.dart';
 import '../core/transport/tls_config.dart';
 import '../core/transport/traffic_monitor.dart';
 import '../core/transport/vpn_bypass.dart';
+import '../core/utils/app_foreground.dart';
 import '../core/utils/debug_session_log.dart';
 import '../core/utils/device_locale.dart';
 import '../core/utils/logger.dart';
@@ -88,11 +88,17 @@ class Api {
   bool _autoReconnect = false;
   int _sessionEpoch = 0;
   bool? _lastInteractive;
+  Duration _sessionPingInterval = ServerConfig.pingInterval;
+  DateTime? _lastKeepalive;
+  bool _livenessArmedForeground = true;
 
   static const Duration _connectWatchdogTimeout = Duration(seconds: 75);
   static const Duration _shouldArmTimeout = Duration(seconds: 5);
   static const Duration _endpointTimeout = Duration(seconds: 5);
   static const Duration _livenessInterval = Duration(seconds: 5);
+  static const Duration _backgroundLivenessInterval = Duration(seconds: 30);
+  static const int _foregroundReconnectCapSec = 15;
+  static const int _backgroundReconnectCapSec = 60;
 
   int get sessionEpoch => _sessionEpoch;
 
@@ -110,6 +116,7 @@ class Api {
     logger.i('connect: старт (поколение $gen)');
     _armConnectWatchdog(gen);
 
+    KolibriSession? built;
     try {
       bool useBypass;
       try {
@@ -138,6 +145,7 @@ class Api {
       setTrustMincifryCa(enabled: endpoint.trustMincifryCa);
 
       final (session, wireLog) = await _buildSessionOptions(endpoint);
+      built = session;
       if (gen != _connectGen) return;
 
       logger.i(
@@ -155,7 +163,9 @@ class Api {
       _session = session;
       // Подписываемся на wire-лог ядра ДО connect(), чтобы поймать пакеты
       // SESSION_INIT-хендшейка (иначе они уходят до listen и теряются).
+      _wireLogSub?.cancel();
       _wireLogSub = wireLog.listen(_onWireLog);
+      _pushSub?.cancel();
       _pushSub = session.pushesMap().listen(_onPush);
       TrafficMonitor.instance.recordEvent(
         'connect',
@@ -203,6 +213,8 @@ class Api {
     } catch (e, st) {
       logger.e('connect: непредвиденная ошибка: $e\n$st');
       if (gen == _connectGen) await _resetStuckConnect(gen);
+    } finally {
+      if (built != null && !identical(_session, built)) _releaseSession(built);
     }
   }
 
@@ -260,6 +272,7 @@ class Api {
 
   void wakeUp() {
     if (!_autoReconnect) return;
+    if (_livenessTimer != null) _armLiveness();
     switch (_sessionState) {
       case SessionState.disconnected:
         _reconnectAttempts = 0;
@@ -372,11 +385,11 @@ class Api {
   Future<(KolibriSession, Stream<WireLogEvent>)> _buildSessionOptions(
     ({String host, int port, bool trustMincifryCa}) endpoint,
   ) async {
-    final deviceInfo = DeviceInfoPlugin();
+    final device = await DeviceProfile.load();
 
     String deviceType = 'ANDROID';
-    String osVersion = '';
-    String deviceName = 'Unknown';
+    String osVersion = device.osVersion;
+    String deviceName = device.deviceName;
     String architecture = SpoofingService.defaultArchitecture;
     String appVersion = SpoofingService.hardcodedAppVersion;
     int buildNumber = SpoofingService.hardcodedBuildNumber;
@@ -395,28 +408,9 @@ class Api {
     String instanceId = await DeviceIdentity.instanceId();
     int clientSessionId = DeviceIdentity.clientSessionId;
 
-    String? androidManufacturer;
-    String? androidModel;
-    int? androidSdkInt;
-
-    if (Platform.isLinux) {
-      final linuxInfo = await deviceInfo.linuxInfo;
-      osVersion = linuxInfo.name;
-    } else if (Platform.isIOS) {
-      final iosInfo = await deviceInfo.iosInfo;
-      osVersion = iosInfo.systemVersion;
-      deviceName = iosInfo.utsname.machine;
-    } else if (Platform.isAndroid) {
-      final androidInfo = await deviceInfo.androidInfo;
-      osVersion = 'Android ${androidInfo.version.release}';
-      deviceName = '${androidInfo.manufacturer} ${androidInfo.model}';
-      androidManufacturer = androidInfo.manufacturer;
-      androidModel = androidInfo.model;
-      androidSdkInt = androidInfo.version.sdkInt;
-    } else if (Platform.isWindows) {
-      final windowsInfo = await deviceInfo.windowsInfo;
-      osVersion = windowsInfo.productName;
-    }
+    final androidManufacturer = device.manufacturer;
+    final androidModel = device.model;
+    final androidSdkInt = device.sdkInt;
 
     String? spoofUserAgent;
     final spoofed = await SpoofingService.getSpoofedSessionData(
@@ -495,6 +489,10 @@ class Api {
 
     final insecureTls = await TlsConfig.isInsecureAllowed();
     final proxy = await _buildProxyUrl();
+    final pingInterval = AppForeground.value
+        ? ServerConfig.pingInterval
+        : ServerConfig.backgroundPingInterval;
+    _sessionPingInterval = pingInterval;
 
     return openSessionWithWireLog(
       host: endpoint.host,
@@ -513,7 +511,7 @@ class Api {
       deviceName: deviceName,
       deviceLocale: deviceLocale,
       clientSessionId: clientSessionId,
-      pingIntervalSecs: ServerConfig.pingInterval.inSeconds,
+      pingIntervalSecs: pingInterval.inSeconds,
       pingInteractive: !KometSettings.ghostMode.value,
       autoReconnect: false,
       insecureTls: insecureTls,
@@ -605,6 +603,7 @@ class Api {
   /// лог вёлся вручную из [sendRequest] по локальному счётчику, из-за чего
   /// хендшейк/пинги в дамп не попадали, а seq был смещён относительно провода.
   void _onWireLog(WireLogEvent e) {
+    if (!AppForeground.value && !TrafficMonitor.instance.enabled) return;
     final payload = _decodeWireJson(e.json);
     final cmd = _wireCmdCode(e.cmd);
     if (e.direction == 'out') {
@@ -698,13 +697,22 @@ class Api {
     _lastInteractive = null;
     final session = _session;
     _session = null;
-    if (session != null) {
-      try {
-        session.disconnect();
-      } catch (_) {}
-    }
+    if (session != null) _releaseSession(session);
     _dispatcher.clearPending();
     _handshakeSuccessController.add('disconnected');
+  }
+
+  /// Рвёт соединение и сразу освобождает Rust-объект: иначе tokio-рантайм
+  /// сессии (поток на ядро) живёт до сборки мусора Dart, а в фоне она может не
+  /// случиться часами — за ночь реконнектов набегает десяток живых рантаймов.
+  static void _releaseSession(KolibriSession session) {
+    if (session.isDisposed) return;
+    try {
+      session.disconnect();
+    } catch (_) {}
+    try {
+      session.dispose();
+    } catch (_) {}
   }
 
   Future<void> reconnectAndLogin() async {
@@ -720,12 +728,26 @@ class Api {
   /// Поллит состояние ядра (стрима состояний нет) — детект разрыва, плюс
   /// синхронизация interactive-флага пинга и присутствия.
   void _startLiveness() {
-    _livenessTimer?.cancel();
+    _lastKeepalive = null;
     _lastInteractive = !KometSettings.ghostMode.value;
-    _livenessTimer = Timer.periodic(_livenessInterval, (_) => _tickLiveness());
+    _armLiveness();
+  }
+
+  /// В фоне сессию достаточно проверять раз в полминуты: пятисекундный таймер
+  /// круглые сутки не даёт процессору уходить в глубокий сон.
+  void _armLiveness() {
+    _livenessTimer?.cancel();
+    _livenessArmedForeground = AppForeground.value;
+    _livenessTimer = Timer.periodic(
+      _livenessArmedForeground
+          ? _livenessInterval
+          : _backgroundLivenessInterval,
+      (_) => _tickLiveness(),
+    );
   }
 
   void _tickLiveness() {
+    if (_livenessArmedForeground != AppForeground.value) _armLiveness();
     final session = _session;
     if (session == null || _sessionState != SessionState.online) return;
     final st = session.state();
@@ -746,6 +768,33 @@ class Api {
     } else {
       SelfPresence.markOfflineFromPing();
     }
+    _topUpKeepalive(session, interactive: interactive);
+  }
+
+  /// Сессия, поднятая в фоне, живёт с редким пингом ядра, а сменить интервал
+  /// без переподключения ядро не умеет. Пока пользователь в приложении,
+  /// добираем пинги вручную до переднего интервала.
+  void _topUpKeepalive(KolibriSession session, {required bool interactive}) {
+    if (!AppForeground.value) return;
+    if (_sessionPingInterval <= ServerConfig.pingInterval) return;
+    final now = DateTime.now();
+    final last = _lastKeepalive;
+    if (last != null && now.difference(last) < ServerConfig.pingInterval) {
+      return;
+    }
+    _lastKeepalive = now;
+    unawaited(_sendKeepalive(session, interactive: interactive));
+  }
+
+  Future<void> _sendKeepalive(
+    KolibriSession session, {
+    required bool interactive,
+  }) async {
+    try {
+      await session
+          .requestMapFull(Opcode.ping, {'interactive': interactive})
+          .timeout(const Duration(seconds: 6));
+    } catch (_) {}
   }
 
   void sendPing({required bool interactive}) {
@@ -795,7 +844,13 @@ class Api {
   }
 
   void _scheduleReconnect() {
-    final delaySec = (2 * (1 << _reconnectAttempts.clamp(0, 3))).clamp(2, 15);
+    final capSec = AppForeground.value
+        ? _foregroundReconnectCapSec
+        : _backgroundReconnectCapSec;
+    final delaySec = (2 * (1 << _reconnectAttempts.clamp(0, 6))).clamp(
+      2,
+      capSec,
+    );
     _reconnectAttempts++;
     logger.i('Реконнект через $delaySecс (попытка $_reconnectAttempts)');
 
