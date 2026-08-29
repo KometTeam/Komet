@@ -197,6 +197,72 @@ void main() {
     });
   });
 
+  group('chatsForFolder', () {
+    List<int> ids(
+      List<CachedChat> chats,
+      ChatFolder folder, {
+      Set<int> archived = const {},
+    }) => FoldersModule.chatsForFolder(
+      chats,
+      folder,
+      myId: _me,
+      contactIds: const {_contactId},
+      archivedIds: archived,
+    ).map((c) => c.id).toList();
+
+    test('an archived chat stays in the folder it was added to by hand', () {
+      const folder = ChatFolder(id: 'f10', title: 'Свои', include: [10, 11]);
+      final chats = [_chat(id: 10, type: 'CHAT'), _chat(id: 11, type: 'CHAT')];
+
+      expect(ids(chats, folder, archived: {10, 11}), [10, 11]);
+    });
+
+    test('archiving hides a chat that only matched a type filter', () {
+      const folder = ChatFolder(
+        id: 'f11',
+        title: 'Каналы',
+        filters: [FolderFilter.channel],
+      );
+      final chats = [
+        _chat(id: 20, type: 'CHANNEL'),
+        _chat(id: 21, type: 'CHANNEL'),
+      ];
+
+      expect(ids(chats, folder, archived: {21}), [20]);
+    });
+
+    test('show-only filters still apply to an archived included chat', () {
+      const folder = ChatFolder(
+        id: 'f12',
+        title: 'Непрочитанные',
+        include: [30, 31],
+        filters: [FolderFilter.unread],
+      );
+      final chats = [
+        _chat(id: 30, type: 'CHAT', unreadCount: 2),
+        _chat(id: 31, type: 'CHAT'),
+      ];
+
+      expect(ids(chats, folder, archived: {30, 31}), [30]);
+    });
+
+    test('without an archive the result matches chatMatchesFolder', () {
+      const folder = ChatFolder(
+        id: 'f13',
+        title: 'Каналы и свои',
+        include: [41],
+        filters: [FolderFilter.channel],
+      );
+      final chats = [
+        _chat(id: 40, type: 'CHANNEL'),
+        _chat(id: 41, type: 'CHAT'),
+        _chat(id: 42, type: 'DIALOG'),
+      ];
+
+      expect(ids(chats, folder), [40, 41]);
+    });
+  });
+
   group('newFolderId', () {
     test('generates distinct uuid v4 ids', () {
       final a = FoldersModule.newFolderId();

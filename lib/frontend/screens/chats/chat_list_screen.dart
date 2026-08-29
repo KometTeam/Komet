@@ -284,6 +284,8 @@ class _ChatListScreenState extends State<ChatListScreen>
   ProfileData? _profile;
 
   List<CachedChat> _chats = [];
+  List<CachedChat> _chatsWithArchived = [];
+  Set<int> _archivedIds = const {};
   int _archivedCount = 0;
   int _archivedUnread = 0;
   bool _archiveHadChats = false;
@@ -1006,8 +1008,10 @@ class _ChatListScreenState extends State<ChatListScreen>
       final pageCount = folders.isEmpty ? 1 : folders.length;
       _syncFolderChatScrollControllersForCount(pageCount);
 
-      final filteredChats = loadedChats
+      final visibleChats = loadedChats
           .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
+          .toList();
+      final filteredChats = visibleChats
           .where(
             (c) => widget.archiveMode
                 ? archivedIds.contains(c.id)
@@ -1028,6 +1032,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         setState(() {
           _profile = p;
           _chats = filteredChats;
+          _chatsWithArchived = visibleChats;
+          _archivedIds = archivedIds;
           _archivedCount = archivedCount;
           _archivedUnread = archivedUnread;
           _contactIds = contactIds;
@@ -1192,6 +1198,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   List<CachedChat> _chatsForPageIndex(int pageIndex) {
     final baseKey = Object.hash(
       identityHashCode(_chats),
+      identityHashCode(_chatsWithArchived),
       identityHashCode(_folders),
       identityHashCode(_contactIds),
     );
@@ -1212,16 +1219,13 @@ class _ChatListScreenState extends State<ChatListScreen>
       final myId = _profile?.id ?? 0;
       base = FoldersModule.isAllChatsFolder(folder)
           ? _chats
-          : _chats
-                .where(
-                  (c) => FoldersModule.chatMatchesFolder(
-                    c,
-                    folder,
-                    myId: myId,
-                    contactIds: _contactIds,
-                  ),
-                )
-                .toList();
+          : FoldersModule.chatsForFolder(
+              _chatsWithArchived,
+              folder,
+              myId: myId,
+              contactIds: _contactIds,
+              archivedIds: _archivedIds,
+            );
     }
     final pinned = base.where((c) => (c.favIndex ?? 0) > 0).toList()
       ..sort((a, b) => a.favIndex!.compareTo(b.favIndex!));

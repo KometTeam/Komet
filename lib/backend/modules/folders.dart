@@ -192,6 +192,24 @@ class FoldersModule {
     return true;
   }
 
+  /// Чаты папки с учётом архива: архивный чат остаётся в папке, только если
+  /// добавлен в неё вручную. Правила по типу чата не должны вытаскивать его
+  /// из архива обратно, а вручную добавленный чат не должен пропадать из
+  /// папки только потому, что его убрали в архив.
+  static List<CachedChat> chatsForFolder(
+    Iterable<CachedChat> chats,
+    ChatFolder folder, {
+    required int myId,
+    required Set<int> contactIds,
+    required Set<int> archivedIds,
+  }) => chats
+      .where(
+        (c) =>
+            (!archivedIds.contains(c.id) || folder.include.contains(c.id)) &&
+            chatMatchesFolder(c, folder, myId: myId, contactIds: contactIds),
+      )
+      .toList();
+
   static List<ChatFolder> _parseFolderList(dynamic raw) {
     if (raw is! List) return [];
     return raw
