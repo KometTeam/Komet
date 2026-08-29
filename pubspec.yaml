@@ -101,6 +101,7 @@ dependencies:
   sensors_plus: ^7.1.0
   smart_auth: ^3.2.0
   flutter_svg: ^2.0.10
+  fjs: ^3.3.0
 
 dev_dependencies:
   flutter_test:
@@ -158,6 +159,11 @@ flutter:
     - assets/lottie/
     - assets/wallpapers/patterns/
     - assets/debug/
+    - assets/plugins/anim/
+    - assets/plugins/epsh/
+    - assets/plugins/fox/
+    - assets/plugins/info/
+    - assets/plugins/weather/
 
   fonts:
     - family: Inter

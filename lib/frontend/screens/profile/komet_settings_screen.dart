@@ -8,6 +8,7 @@ import '../../../core/config/komet_settings.dart';
 import '../../../main.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
+import 'plugins_screen.dart';
 
 class KometSettingsScreen extends StatelessWidget {
   const KometSettingsScreen({super.key});
@@ -35,6 +36,14 @@ class KometSettingsScreen extends StatelessWidget {
             ),
             SettingsCard(
               children: [
+                SettingsNavTile(
+                  icon: Symbols.extension,
+                  label: 'Плагины',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PluginsScreen()),
+                  ),
+                ),
                 if (BuildProfile.hiddenContentViewers) ...[
                   ValueListenableBuilder<bool>(
                     valueListenable: KometSettings.viewDeleted,

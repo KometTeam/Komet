@@ -30,6 +30,8 @@ import 'package:komet/frontend/widgets/animated_text_swap.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../../../main.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../backend/api.dart';
@@ -80,6 +82,7 @@ import 'chat/view/search_view.dart';
 import 'chat/view/composer_input.dart';
 import 'chat/view/sticker_panel_view.dart';
 import 'chat/view/command_panel_view.dart';
+import 'chat/view/command_arguments_form.dart';
 import 'chat/view/mention_panel_view.dart';
 import 'chat/mention_panel_controller.dart';
 import 'chat/view/selection_bar.dart';
@@ -95,8 +98,7 @@ import '../../../core/config/komet_settings.dart';
 import '../../../models/attachment.dart';
 import '../../../models/contact_info.dart';
 import '../../../models/sticker.dart';
-import '../../commands/command_registry.dart';
-import '../../commands/slash_command.dart';
+import '../../commands/commands.dart';
 import '../../widgets/rich_message_controller.dart';
 import '../../../core/utils/text_format.dart';
 import '../../widgets/confirm_dialog.dart';
@@ -334,6 +336,10 @@ class _ChatScreenState extends State<ChatScreen>
   final GlobalKey _unreadSeparatorKey = GlobalKey();
   final Object _profileHeroTag = UniqueKey();
   final ValueNotifier<bool> _hasText = ValueNotifier(false);
+  SlashCommand? _selectedCommand;
+  bool _commandExecuting = false;
+  Map<String, TextEditingController> _commandArgumentControllers = {};
+  Map<String, FocusNode> _commandArgumentFocusNodes = {};
   bool _isLoading = true;
   bool _encryptionEnabled = false;
   final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
@@ -2248,6 +2254,7 @@ class _ChatScreenState extends State<ChatScreen>
     _selectedIds.dispose();
     _textSelection.dispose();
     _textSelectionDrag.dispose();
+    _disposeCommandArguments();
     _messageController.dispose();
     _messageFocusNode.dispose();
     _stickers.dispose();
@@ -2289,13 +2296,70 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _onCommandSelected(SlashCommand c) {
-    final text = '${c.name} ';
-    _messageController.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-    _messageFocusNode.requestFocus();
+    final oldControllers = _commandArgumentControllers;
+    final oldFocusNodes = _commandArgumentFocusNodes;
+    _commandArgumentControllers = {};
+    _commandArgumentFocusNodes = {};
+    for (final argument in c.arguments) {
+      _commandArgumentControllers[argument.name] = TextEditingController();
+      _commandArgumentFocusNodes[argument.name] = FocusNode();
+    }
+    _messageController.clear();
+    _hasText.value = false;
+    setState(() => _selectedCommand = c);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _disposeCommandArgumentMaps(oldControllers, oldFocusNodes);
+      if (!mounted) return;
+      if (c.arguments.isEmpty) {
+        _messageFocusNode.unfocus();
+      } else {
+        _commandArgumentFocusNodes[c.arguments.first.name]?.requestFocus();
+      }
+    });
   }
+
+  void _cancelSelectedCommand() {
+    if (_selectedCommand == null) return;
+    _closeSelectedCommand(focusMessage: true);
+  }
+
+  void _disposeCommandArguments() {
+    _disposeCommandArgumentMaps(
+      _commandArgumentControllers,
+      _commandArgumentFocusNodes,
+    );
+    _commandArgumentControllers = {};
+    _commandArgumentFocusNodes = {};
+  }
+
+  void _closeSelectedCommand({bool focusMessage = false}) {
+    final controllers = _commandArgumentControllers;
+    final focusNodes = _commandArgumentFocusNodes;
+    _commandArgumentControllers = {};
+    _commandArgumentFocusNodes = {};
+    setState(() => _selectedCommand = null);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _disposeCommandArgumentMaps(controllers, focusNodes);
+      if (focusMessage && mounted) _messageFocusNode.requestFocus();
+    });
+  }
+
+  void _disposeCommandArgumentMaps(
+    Map<String, TextEditingController> controllers,
+    Map<String, FocusNode> focusNodes,
+  ) {
+    for (final controller in controllers.values) {
+      controller.dispose();
+    }
+    for (final node in focusNodes.values) {
+      node.dispose();
+    }
+  }
+
+  Map<String, dynamic> _selectedCommandArguments() => Map.unmodifiable({
+    for (final entry in _commandArgumentControllers.entries)
+      entry.key: entry.value.text.trim(),
+  });
 
   void _restoreDraft() {
     if (_myId == 0 || _commentsMode || _messageController.text.isNotEmpty) {
@@ -2710,6 +2774,15 @@ class _ChatScreenState extends State<ChatScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_selectedCommand != null)
+                CommandArgumentsForm(
+                  key: ValueKey(_selectedCommand!.name),
+                  command: _selectedCommand!,
+                  controllers: _commandArgumentControllers,
+                  focusNodes: _commandArgumentFocusNodes,
+                  onCancel: _cancelSelectedCommand,
+                  onSubmit: _sendMessage,
+                ),
               AnimatedBuilder(
                 animation: _attachAnim,
                 builder: (context, _) {
@@ -2785,10 +2858,15 @@ class _ChatScreenState extends State<ChatScreen>
                   channelSubscribed: !_previewChat,
                   channelSubscribing: _subscribing,
                   onSubscribe: _subscribeChannel,
-                  showStickerButton: !_commentsMode,
-                  showAttachButton: !_commentsMode,
-                  forceSend: _commentsMode,
-                  hintText: _commentsMode ? 'Комментарий' : 'Message',
+                  showStickerButton: !_commentsMode && _selectedCommand == null,
+                  showAttachButton: !_commentsMode && _selectedCommand == null,
+                  forceSend: _commentsMode || _selectedCommand != null,
+                  readOnly: _selectedCommand != null,
+                  hintText: _selectedCommand != null
+                      ? 'Заполните аргументы команды'
+                      : _commentsMode
+                      ? 'Комментарий'
+                      : 'Message',
                 ),
               ),
               StickerPanelView(
@@ -3930,6 +4008,11 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _sendMessage() async {
+    final selectedCommand = _selectedCommand;
+    if (selectedCommand != null) {
+      await _executeSelectedCommand(selectedCommand);
+      return;
+    }
     if (_forwardRequest == null) {
       await _sendTextMessage();
       return;
@@ -3953,20 +4036,18 @@ class _ChatScreenState extends State<ChatScreen>
     if (text.isEmpty || _myId == 0) return;
 
     if (AppCommands.current.value && text.startsWith('/')) {
-      final command = findSlashCommand(text);
+      final command = CommandRegistry.instance.find(text);
       if (command == null) {
         _messageController.clear();
         _hasText.value = false;
         showCustomNotification(context, 'ТАКОЙ КОМАНДЫ НЕТУ🚨🚨🚨');
         return;
       }
-      if (command.run != null) {
-        final args = commandArgs(text);
-        _messageController.clear();
-        _hasText.value = false;
-        unawaited(command.run!(_commandContext(args)));
-        return;
-      }
+      final args = commandArgs(text);
+      _messageController.clear();
+      _hasText.value = false;
+      unawaited(_executeCommand(command, args));
+      return;
     }
 
     if (chat?.confirmBeforeSend ?? false) {
@@ -4318,22 +4399,142 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  CommandContext _commandContext(String args) => CommandContext(
-    accountId: _myId,
-    chatId: widget.chatId,
-    otherUserId: _resolveOtherId(),
+  PluginCommandContext _commandContext(
+    SlashCommand command,
+    String args, {
+    Map<String, dynamic>? arguments,
+  }) => PluginCommandContext(
     args: args,
-    messages: messagesModule,
-    isOnline: () => api.state == SessionState.online,
-    isActive: () => mounted,
-    notify: (message, {duration}) {
-      if (mounted) showCustomNotification(context, message, duration: duration);
+    arguments: arguments ?? parseCommandArguments(args, command.arguments),
+    replyMessage: _pluginReplyMessage(),
+    onlineCheck: () => api.state == SessionState.online,
+    activeCheck: () => mounted,
+    sendTextCallback: _postCommandMessage,
+    editTextCallback: _updateCommandMessage,
+    sendPhotoCallback: _sendPluginPhoto,
+    sendFileCallback: _sendPluginFile,
+    notifyCallback: (message) async {
+      if (mounted) showCustomNotification(context, message);
     },
-    postMessage: _postCommandMessage,
-    updateMessage: _updateCommandMessage,
-    sendPhotos: _sendPhotos,
-    sendVideoNote: _sendVideoNote,
+    getPeerCallback: _pluginPeer,
   );
+
+  Map<String, dynamic>? _pluginReplyMessage() {
+    final message = _replyTo.value;
+    if (message == null) return null;
+    return {
+      'id': message.id,
+      'senderId': message.senderId,
+      'text': message.text,
+      'time': message.time,
+      'attachments': [
+        for (final attachment in message.attachments ?? const [])
+          {'type': attachment.type.name},
+      ],
+    };
+  }
+
+  Future<void> _sendPluginPhoto(
+    Uint8List bytes,
+    String filename,
+    String caption,
+  ) async {
+    final file = await _pluginTempFile(bytes, filename);
+    try {
+      await _sendPhotos(
+        [PickedPhoto(item: GalleryItem.fromFile(file))],
+        caption,
+        waitForUpload: true,
+      );
+    } finally {
+      if (await file.exists()) await file.delete();
+    }
+  }
+
+  Future<void> _sendPluginFile(Uint8List bytes, String filename) async {
+    final file = await _pluginTempFile(bytes, filename);
+    try {
+      await _uploadAsFile(source: file, filename: filename, size: bytes.length);
+    } finally {
+      if (await file.exists()) await file.delete();
+    }
+  }
+
+  Future<File> _pluginTempFile(Uint8List bytes, String filename) async {
+    final directory = await getTemporaryDirectory();
+    final extension = p.extension(filename);
+    final file = File(
+      p.join(
+        directory.path,
+        'komet_plugin_${DateTime.now().microsecondsSinceEpoch}$extension',
+      ),
+    );
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
+  }
+
+  Future<void> _executeCommand(SlashCommand command, String args) async {
+    try {
+      final commandContext = _commandContext(command, args);
+      final missing = command.missingArgument(commandContext.arguments);
+      if (missing != null) {
+        showCustomNotification(
+          context,
+          'Не указан аргумент ${missing.name}. Формат: ${command.usage}',
+        );
+        return;
+      }
+      await command.execute(commandContext);
+      if (!mounted) return;
+      _replyTo.value = null;
+      _replySourceChatId = null;
+    } catch (error) {
+      if (!mounted) return;
+      showCustomNotification(context, 'Ошибка плагина: $error');
+    }
+  }
+
+  Future<void> _executeSelectedCommand(SlashCommand command) async {
+    if (_commandExecuting) return;
+    final arguments = _selectedCommandArguments();
+    final missing = command.missingArgument(arguments);
+    if (missing != null) {
+      showCustomNotification(context, 'Заполните поле ${missing.name}');
+      _commandArgumentFocusNodes[missing.name]?.requestFocus();
+      return;
+    }
+    final args = serializeCommandArguments(command.arguments, arguments);
+    setState(() => _commandExecuting = true);
+    try {
+      await command.execute(
+        _commandContext(command, args, arguments: arguments),
+      );
+      if (!mounted) return;
+      _replyTo.value = null;
+      _replySourceChatId = null;
+      _closeSelectedCommand();
+    } catch (error) {
+      if (!mounted) return;
+      showCustomNotification(context, 'Ошибка плагина: $error');
+    } finally {
+      if (mounted) setState(() => _commandExecuting = false);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _pluginPeer() async {
+    final id = _resolveOtherId();
+    if (id == null) return null;
+    final contact = await ContactInfoFetch.get(id, forceRefresh: true);
+    if (contact == null) return null;
+    return {
+      'id': contact.id ?? id,
+      'displayName': contact.displayName,
+      'country': contact.raw['country']?.toString(),
+      'registrationTime': contact.raw['registrationTime'],
+      'updateTime': contact.raw['updateTime'],
+      'options': contact.options,
+    };
+  }
 
   Future<void> _scheduleMessage() async {
     final text = _messageController.text.trim();
@@ -6371,7 +6572,11 @@ class _ChatScreenState extends State<ChatScreen>
     if (mounted) setState(() => _keyboardReserve = 0);
   }
 
-  Future<void> _sendPhotos(List<PickedPhoto> picked, String caption) async {
+  Future<void> _sendPhotos(
+    List<PickedPhoto> picked,
+    String caption, {
+    bool waitForUpload = false,
+  }) async {
     if (_myId == 0) return;
     if (_encryptionEnabled) return _sendEncryptedPhotos(picked, caption);
     final videos = picked.where((ph) => ph.item.isVideo).toList();
@@ -6419,16 +6624,19 @@ class _ChatScreenState extends State<ChatScreen>
     Haptics.send();
     _scrollToBottom();
 
-    unawaited(
-      UploadService.instance.sendPhotos(
-        accountId: _myId,
-        chatId: widget.chatId,
-        tempId: tempId,
-        jobs: jobs,
-        caption: caption,
-        placeholder: placeholder,
-      ),
+    final upload = UploadService.instance.sendPhotos(
+      accountId: _myId,
+      chatId: widget.chatId,
+      tempId: tempId,
+      jobs: jobs,
+      caption: caption,
+      placeholder: placeholder,
     );
+    if (waitForUpload) {
+      await upload;
+    } else {
+      unawaited(upload);
+    }
   }
 
   Future<void> _sendVideo(

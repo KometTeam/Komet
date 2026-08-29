@@ -59,6 +59,7 @@ class ComposerInputBar extends StatelessWidget {
     this.showStickerButton = true,
     this.showAttachButton = true,
     this.forceSend = false,
+    this.readOnly = false,
     this.hintText = 'Message',
     this.bottomSafe = true,
     this.vignette = false,
@@ -99,6 +100,7 @@ class ComposerInputBar extends StatelessWidget {
   final bool showStickerButton;
   final bool showAttachButton;
   final bool forceSend;
+  final bool readOnly;
   final String hintText;
   final bool bottomSafe;
   final bool vignette;
@@ -295,6 +297,7 @@ class ComposerInputBar extends StatelessWidget {
                                           child: TextField(
                                             controller: messageController,
                                             focusNode: messageFocusNode,
+                                            readOnly: readOnly,
                                             style: TextStyle(
                                               color: cs.onSurface,
                                               fontSize: 16,
