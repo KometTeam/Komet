@@ -88,15 +88,11 @@ class Api {
   bool _autoReconnect = false;
   int _sessionEpoch = 0;
   bool? _lastInteractive;
-  Duration _sessionPingInterval = ServerConfig.pingInterval;
-  DateTime? _lastKeepalive;
-  bool _livenessArmedForeground = true;
 
   static const Duration _connectWatchdogTimeout = Duration(seconds: 75);
   static const Duration _shouldArmTimeout = Duration(seconds: 5);
   static const Duration _endpointTimeout = Duration(seconds: 5);
   static const Duration _livenessInterval = Duration(seconds: 5);
-  static const Duration _backgroundLivenessInterval = Duration(seconds: 30);
   static const int _foregroundReconnectCapSec = 15;
   static const int _backgroundReconnectCapSec = 60;
 
@@ -272,7 +268,6 @@ class Api {
 
   void wakeUp() {
     if (!_autoReconnect) return;
-    if (_livenessTimer != null) _armLiveness();
     switch (_sessionState) {
       case SessionState.disconnected:
         _reconnectAttempts = 0;
@@ -489,10 +484,6 @@ class Api {
 
     final insecureTls = await TlsConfig.isInsecureAllowed();
     final proxy = await _buildProxyUrl();
-    final pingInterval = AppForeground.value
-        ? ServerConfig.pingInterval
-        : ServerConfig.backgroundPingInterval;
-    _sessionPingInterval = pingInterval;
 
     return openSessionWithWireLog(
       host: endpoint.host,
@@ -511,7 +502,7 @@ class Api {
       deviceName: deviceName,
       deviceLocale: deviceLocale,
       clientSessionId: clientSessionId,
-      pingIntervalSecs: pingInterval.inSeconds,
+      pingIntervalSecs: ServerConfig.pingInterval.inSeconds,
       pingInteractive: !KometSettings.ghostMode.value,
       autoReconnect: false,
       insecureTls: insecureTls,
@@ -728,26 +719,12 @@ class Api {
   /// Поллит состояние ядра (стрима состояний нет) — детект разрыва, плюс
   /// синхронизация interactive-флага пинга и присутствия.
   void _startLiveness() {
-    _lastKeepalive = null;
-    _lastInteractive = !KometSettings.ghostMode.value;
-    _armLiveness();
-  }
-
-  /// В фоне сессию достаточно проверять раз в полминуты: пятисекундный таймер
-  /// круглые сутки не даёт процессору уходить в глубокий сон.
-  void _armLiveness() {
     _livenessTimer?.cancel();
-    _livenessArmedForeground = AppForeground.value;
-    _livenessTimer = Timer.periodic(
-      _livenessArmedForeground
-          ? _livenessInterval
-          : _backgroundLivenessInterval,
-      (_) => _tickLiveness(),
-    );
+    _lastInteractive = !KometSettings.ghostMode.value;
+    _livenessTimer = Timer.periodic(_livenessInterval, (_) => _tickLiveness());
   }
 
   void _tickLiveness() {
-    if (_livenessArmedForeground != AppForeground.value) _armLiveness();
     final session = _session;
     if (session == null || _sessionState != SessionState.online) return;
     final st = session.state();
@@ -768,33 +745,6 @@ class Api {
     } else {
       SelfPresence.markOfflineFromPing();
     }
-    _topUpKeepalive(session, interactive: interactive);
-  }
-
-  /// Сессия, поднятая в фоне, живёт с редким пингом ядра, а сменить интервал
-  /// без переподключения ядро не умеет. Пока пользователь в приложении,
-  /// добираем пинги вручную до переднего интервала.
-  void _topUpKeepalive(KolibriSession session, {required bool interactive}) {
-    if (!AppForeground.value) return;
-    if (_sessionPingInterval <= ServerConfig.pingInterval) return;
-    final now = DateTime.now();
-    final last = _lastKeepalive;
-    if (last != null && now.difference(last) < ServerConfig.pingInterval) {
-      return;
-    }
-    _lastKeepalive = now;
-    unawaited(_sendKeepalive(session, interactive: interactive));
-  }
-
-  Future<void> _sendKeepalive(
-    KolibriSession session, {
-    required bool interactive,
-  }) async {
-    try {
-      await session
-          .requestMapFull(Opcode.ping, {'interactive': interactive})
-          .timeout(const Duration(seconds: 6));
-    } catch (_) {}
   }
 
   void sendPing({required bool interactive}) {

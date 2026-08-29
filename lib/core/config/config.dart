@@ -10,7 +10,6 @@ abstract class ServerConfig {
   static const String prefPortKey = 'server_port_override';
   static const String prefTrustMincifryKey = 'server_trust_mincifry_ca';
   static const Duration pingInterval = Duration(seconds: 10);
-  static const Duration backgroundPingInterval = Duration(seconds: 60);
   static const Duration requestTimeout = Duration(seconds: 30);
   static const int maxReconnectAttempts = 50;
 
