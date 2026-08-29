@@ -3752,6 +3752,18 @@ abstract class AppLocalizations {
   /// **'Audio transcription'**
   String get securityAudioTranscription;
 
+  /// No description provided for @securityConfidentialityWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'These toggles do not exist in the original app, and they may be unavailable to you.\n\nIf the server refuses, it will drop the connection. (conection closed)'**
+  String get securityConfidentialityWarning;
+
+  /// No description provided for @securityConfidentialityDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get securityConfidentialityDecline;
+
   /// No description provided for @securityBlacklistTitle.
   ///
   /// In en, this message translates to:

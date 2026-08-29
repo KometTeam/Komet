@@ -1955,6 +1955,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get securityAudioTranscription => 'Транскрибация аудио';
 
   @override
+  String get securityConfidentialityWarning =>
+      'Этих тумблеров нету в оригинальном приложении, и они могут быть вам недоступны.\n\nВ случае отказа, сервер сбросит соединение. (conection closed)';
+
+  @override
+  String get securityConfidentialityDecline => 'Не';
+
+  @override
   String get securityBlacklistTitle => 'Чёрный список';
 
   @override

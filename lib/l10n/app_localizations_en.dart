@@ -1947,6 +1947,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get securityAudioTranscription => 'Audio transcription';
 
   @override
+  String get securityConfidentialityWarning =>
+      'These toggles do not exist in the original app, and they may be unavailable to you.\n\nIf the server refuses, it will drop the connection. (conection closed)';
+
+  @override
+  String get securityConfidentialityDecline => 'No';
+
+  @override
   String get securityBlacklistTitle => 'Blacklist';
 
   @override

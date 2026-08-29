@@ -623,6 +623,8 @@
   "securityAltKeyboard": "Альтернативная клавиатура",
   "securityUnsafeFiles": "Принимать опасные файлы",
   "securityAudioTranscription": "Транскрибация аудио",
+  "securityConfidentialityWarning": "Этих тумблеров нету в оригинальном приложении, и они могут быть вам недоступны.\n\nВ случае отказа, сервер сбросит соединение. (conection closed)",
+  "securityConfidentialityDecline": "Не",
   "securityBlacklistTitle": "Чёрный список",
   "securityBlacklistNotification": "Чёрный список: {count} контактов",
   "passwordEntryWrongPassword": "Неверный пароль",

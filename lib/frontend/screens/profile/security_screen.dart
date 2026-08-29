@@ -152,6 +152,20 @@ class _SecurityScreenState extends State<SecurityScreen>
     );
   }
 
+  Future<void> _updateConfidentialSetting(String key, bool value) async {
+    if (_isSaving) return;
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.securityConfirmTitle,
+      message: l10n.securityConfidentialityWarning,
+      confirmLabel: l10n.spoofDialogYes,
+      cancelLabel: l10n.securityConfidentialityDecline,
+    );
+    if (!confirmed || !mounted) return;
+    await _updateSetting(key, value);
+  }
+
   Future<void> _updateSetting(String key, dynamic value) async {
     if (_isSaving) return;
     setState(() => _isSaving = true);
@@ -735,12 +749,18 @@ class _SecurityScreenState extends State<SecurityScreen>
             label: l10n.securityReadReceipts,
             trailingWidget: Switch(
               value: showReadMark,
-              onChanged: (v) => _updateSetting('SHOW_READ_MARK', v),
+              onChanged: (v) => _updateConfidentialSetting(
+                'SHOW_READ_MARK',
+                v,
+              ),
             ),
             showChevron: false,
             verticalPadding: 14,
             isLast: false,
-            onTap: () => _updateSetting('SHOW_READ_MARK', !showReadMark),
+            onTap: () => _updateConfidentialSetting(
+              'SHOW_READ_MARK',
+              !showReadMark,
+            ),
           ),
           _settingsRow(
             cs,
@@ -748,12 +768,15 @@ class _SecurityScreenState extends State<SecurityScreen>
             label: l10n.securityAltKeyboard,
             trailingWidget: Switch(
               value: altKeyboard,
-              onChanged: (v) => _updateSetting('ALT_KEYBOARD', v),
+              onChanged: (v) => _updateConfidentialSetting('ALT_KEYBOARD', v),
             ),
             showChevron: false,
             verticalPadding: 14,
             isLast: false,
-            onTap: () => _updateSetting('ALT_KEYBOARD', !altKeyboard),
+            onTap: () => _updateConfidentialSetting(
+              'ALT_KEYBOARD',
+              !altKeyboard,
+            ),
           ),
           _settingsRow(
             cs,
@@ -761,12 +784,15 @@ class _SecurityScreenState extends State<SecurityScreen>
             label: l10n.securityUnsafeFiles,
             trailingWidget: Switch(
               value: unsafeFiles,
-              onChanged: (v) => _updateSetting('UNSAFE_FILES', v),
+              onChanged: (v) => _updateConfidentialSetting('UNSAFE_FILES', v),
             ),
             showChevron: false,
             verticalPadding: 14,
             isLast: false,
-            onTap: () => _updateSetting('UNSAFE_FILES', !unsafeFiles),
+            onTap: () => _updateConfidentialSetting(
+              'UNSAFE_FILES',
+              !unsafeFiles,
+            ),
           ),
           _settingsRow(
             cs,
@@ -774,13 +800,15 @@ class _SecurityScreenState extends State<SecurityScreen>
             label: l10n.securityAudioTranscription,
             trailingWidget: Switch(
               value: audioTranscription,
-              onChanged: (v) =>
-                  _updateSetting('AUDIO_TRANSCRIPTION_ENABLED', v),
+              onChanged: (v) => _updateConfidentialSetting(
+                'AUDIO_TRANSCRIPTION_ENABLED',
+                v,
+              ),
             ),
             showChevron: false,
             verticalPadding: 14,
             isLast: true,
-            onTap: () => _updateSetting(
+            onTap: () => _updateConfidentialSetting(
               'AUDIO_TRANSCRIPTION_ENABLED',
               !audioTranscription,
             ),
