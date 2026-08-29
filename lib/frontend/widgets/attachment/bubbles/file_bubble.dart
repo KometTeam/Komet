@@ -16,6 +16,7 @@ import '../../../../core/media/audio_playback_controller.dart';
 import '../../../../core/media/media_playback.dart';
 import '../../../../core/crypto/chat_crypto_service.dart';
 import '../../../../core/crypto/encrypted_photo_cache.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
 import '../../decrypted_photo.dart';
@@ -181,37 +182,24 @@ class FileBubble extends StatelessWidget {
                           () => _downloadFile(ctx.context, file, name),
                         );
                       }
-                      final listenables = <Listenable>[
-                        MediaPlayback.instance.audioFile,
-                        if (AudioPlaybackController.isInitialized)
-                          AudioPlaybackController.instance.playing,
-                      ];
-                      return AnimatedBuilder(
-                        animation: Listenable.merge(listenables),
-                        builder: (context, _) {
-                          final active =
-                              MediaPlayback
-                                  .instance
-                                  .audioFile
-                                  .value
-                                  ?.cacheName ==
-                              cacheName;
-                          final playing =
-                              active &&
-                              AudioPlaybackController.isInitialized &&
-                              AudioPlaybackController.instance.playing.value;
-                          return circle(
-                            Icon(
-                              !cached
-                                  ? Symbols.download
-                                  : playing
-                                  ? Symbols.pause
-                                  : Symbols.play_arrow,
-                              color: iconColor,
-                              size: 18,
-                              fill: 1,
+                      Widget button(IconData icon) => circle(
+                        Icon(icon, color: iconColor, size: 18, fill: 1),
+                        () => _playAudioFile(ctx.context, file, name),
+                      );
+                      return ValueListenableBuilder<AudioFileTrack?>(
+                        valueListenable: MediaPlayback.instance.audioFile,
+                        builder: (context, track, _) {
+                          if (!cached) return button(Symbols.download);
+                          if (track?.cacheName != cacheName ||
+                              !AudioPlaybackController.isInitialized) {
+                            return button(Symbols.play_arrow);
+                          }
+                          return ValueListenableBuilder<bool>(
+                            valueListenable:
+                                AudioPlaybackController.instance.playing,
+                            builder: (context, playing, _) => button(
+                              playing ? Symbols.pause : Symbols.play_arrow,
                             ),
-                            () => _playAudioFile(ctx.context, file, name),
                           );
                         },
                       );
@@ -366,6 +354,9 @@ class FileBubble extends StatelessWidget {
     child: ClipRRect(borderRadius: BorderRadius.circular(10), child: child),
   );
 
+  String? get _thumbnailUrl =>
+      file.preview?.baseUrl ?? file.preview?.previewData ?? file.previewData;
+
   Future<String?> _fileUrl() {
     final fileId = file.fileId;
     if (fileId == null) return Future.value(null);
@@ -415,10 +406,7 @@ class FileBubble extends StatelessWidget {
           name: name,
           kind: kind,
           sourceName: ctx.chatName ?? '',
-          thumbnailUrl:
-              file.preview?.baseUrl ??
-              file.preview?.previewData ??
-              file.previewData,
+          thumbnailUrl: _thumbnailUrl,
           expectedSize: file.size ?? 0,
           chatId: ctx.message.chatId,
           messageId: ctx.message.id,
@@ -508,10 +496,7 @@ class FileBubble extends StatelessWidget {
         name: name,
         kind: kind,
         sourceName: ctx.chatName ?? '',
-        thumbnailUrl:
-            file.preview?.baseUrl ??
-            file.preview?.previewData ??
-            file.previewData,
+        thumbnailUrl: _thumbnailUrl,
         expectedSize: file.size ?? 0,
         chatId: ctx.message.chatId,
         messageId: ctx.message.id,
@@ -539,6 +524,12 @@ class FileBubble extends StatelessWidget {
     }
     Haptics.tap();
     final cacheName = '${fileId}_$name';
+    final playback = MediaPlayback.instance;
+    if (playback.audioFile.value?.cacheName == cacheName &&
+        AudioPlaybackController.isInitialized) {
+      await AudioPlaybackController.instance.toggle();
+      return;
+    }
     final cached = (await MediaCache.existing(cacheName)) != null;
     if (!cached) MediaDownloadProgress.set(cacheName, 0);
     final result = await ensureCachedFile(
@@ -553,10 +544,7 @@ class FileBubble extends StatelessWidget {
         name: name,
         kind: DownloadKind.audio,
         sourceName: ctx.chatName ?? '',
-        thumbnailUrl:
-            file.preview?.baseUrl ??
-            file.preview?.previewData ??
-            file.previewData,
+        thumbnailUrl: _thumbnailUrl,
         expectedSize: file.size ?? 0,
         chatId: ctx.message.chatId,
         messageId: ctx.message.id,
@@ -571,8 +559,9 @@ class FileBubble extends StatelessWidget {
       );
       return;
     }
+    final l10n = AppLocalizations.of(context)!;
     try {
-      await MediaPlayback.instance.activateAudioFile(
+      await playback.activateAudioFile(
         AudioFileTrack(
           cacheName: cacheName,
           path: result.path!,
@@ -581,15 +570,13 @@ class FileBubble extends StatelessWidget {
           chatId: ctx.message.chatId,
           messageId: ctx.message.id,
           messageTime: ctx.message.time,
-          thumbnailUrl:
-              file.preview?.baseUrl ??
-              file.preview?.previewData ??
-              file.previewData,
+          thumbnailUrl: _thumbnailUrl,
         ),
+        notificationChannelName: l10n.audioPlaybackChannel,
       );
     } catch (_) {
       if (context.mounted) {
-        showCustomNotification(context, 'Ошибка воспроизведения');
+        showCustomNotification(context, l10n.audioPlaybackFailed);
       }
     }
   }
@@ -608,45 +595,54 @@ class _AudioFilePlaybackControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!AudioPlaybackController.isInitialized) {
-      return const SizedBox.shrink();
-    }
-    final playback = MediaPlayback.instance;
+    return ValueListenableBuilder<AudioFileTrack?>(
+      valueListenable: MediaPlayback.instance.audioFile,
+      builder: (context, track, _) =>
+          track?.cacheName != cacheName || !AudioPlaybackController.isInitialized
+          ? const SizedBox.shrink()
+          : _AudioFileScrubber(color: color, textColor: textColor),
+    );
+  }
+}
+
+class _AudioFileScrubber extends StatefulWidget {
+  const _AudioFileScrubber({required this.color, required this.textColor});
+
+  final Color color;
+  final Color textColor;
+
+  @override
+  State<_AudioFileScrubber> createState() => _AudioFileScrubberState();
+}
+
+class _AudioFileScrubberState extends State<_AudioFileScrubber> {
+  double? _dragMilliseconds;
+
+  @override
+  Widget build(BuildContext context) {
     final audio = AudioPlaybackController.instance;
     return AnimatedBuilder(
-      animation: Listenable.merge([
-        playback.audioFile,
-        audio.position,
-        audio.duration,
-      ]),
+      animation: Listenable.merge([audio.position, audio.duration]),
       builder: (context, _) {
-        if (playback.audioFile.value?.cacheName != cacheName) {
-          return const SizedBox.shrink();
-        }
-        final duration = audio.duration.value;
-        final position =
-            audio.position.value > duration && duration > Duration.zero
-            ? duration
-            : audio.position.value;
-        final totalMilliseconds = duration.inMilliseconds;
-        final value = totalMilliseconds > 0
-            ? position.inMilliseconds.clamp(0, totalMilliseconds).toDouble()
-            : 0.0;
+        final total = audio.duration.value.inMilliseconds;
+        final elapsed = _dragMilliseconds != null
+            ? _dragMilliseconds!.round()
+            : audio.position.value.inMilliseconds.clamp(0, total > 0 ? total : 0);
         return Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Row(
             children: [
               Text(
-                formatSecondsMmSs(position.inSeconds),
-                style: TextStyle(color: textColor, fontSize: 10),
+                formatSecondsMmSs(elapsed ~/ 1000),
+                style: TextStyle(color: widget.textColor, fontSize: 10),
               ),
               Expanded(
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: color,
-                    inactiveTrackColor: color.withValues(alpha: 0.2),
-                    thumbColor: color,
-                    overlayColor: color.withValues(alpha: 0.12),
+                    activeTrackColor: widget.color,
+                    inactiveTrackColor: widget.color.withValues(alpha: 0.2),
+                    thumbColor: widget.color,
+                    overlayColor: widget.color.withValues(alpha: 0.12),
                     trackHeight: 2,
                     thumbShape: const RoundSliderThumbShape(
                       enabledThumbRadius: 5,
@@ -657,20 +653,23 @@ class _AudioFilePlaybackControl extends StatelessWidget {
                   ),
                   child: Slider(
                     min: 0,
-                    max: totalMilliseconds > 0
-                        ? totalMilliseconds.toDouble()
-                        : 1,
-                    value: value,
-                    onChanged: totalMilliseconds > 0
-                        ? (next) =>
-                              audio.seek(Duration(milliseconds: next.round()))
+                    max: total > 0 ? total.toDouble() : 1,
+                    value: total > 0 ? elapsed.toDouble() : 0,
+                    onChanged: total > 0
+                        ? (next) => setState(() => _dragMilliseconds = next)
+                        : null,
+                    onChangeEnd: total > 0
+                        ? (next) {
+                            setState(() => _dragMilliseconds = null);
+                            audio.seek(Duration(milliseconds: next.round()));
+                          }
                         : null,
                   ),
                 ),
               ),
               Text(
-                formatSecondsMmSs(duration.inSeconds),
-                style: TextStyle(color: textColor, fontSize: 10),
+                formatSecondsMmSs(audio.duration.value.inSeconds),
+                style: TextStyle(color: widget.textColor, fontSize: 10),
               ),
             ],
           ),

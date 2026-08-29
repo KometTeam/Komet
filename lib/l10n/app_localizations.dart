@@ -5066,6 +5066,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t open the file'**
   String get downloadsOpenFailed;
 
+  /// No description provided for @audioPlaybackChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio playback'**
+  String get audioPlaybackChannel;
+
+  /// No description provided for @audioPlaybackFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t play the file'**
+  String get audioPlaybackFailed;
+
   /// No description provided for @downloadsClearHistory.
   ///
   /// In en, this message translates to:

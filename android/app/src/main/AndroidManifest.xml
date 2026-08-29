@@ -35,7 +35,7 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
     <application
         android:label="Komet"
-        android:name="${applicationName}"
+        android:name="ru.komet.app.KometApplication"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher">
         <activity

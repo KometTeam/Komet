@@ -24,9 +24,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.ryanheise.audioservice.AudioServiceActivity
-import com.ryanheise.audioservice.AudioServicePlugin
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -90,7 +88,6 @@ class MainActivity : AudioServiceActivity() {
         const val LOG_TAG = "VpnBypass"
         const val SHARE_TAG = "ShareIntake"
         const val NFC_TAG = "NfcExchange"
-        const val KEEP_ENGINE_ID = "komet_keep_engine"
         const val NFC_PHASE_MIN_MS = 350L
         const val NFC_PHASE_JITTER_MS = 400
         const val BLE_PERMS_REQUEST = 7711
@@ -942,11 +939,9 @@ class MainActivity : AudioServiceActivity() {
     // в обоих случаях в фоне должно жить то же соединение, что и в UI.
     private fun keepEngineAlive(): Boolean = CallState.inCall || FkmState.enabled
 
-    override fun provideFlutterEngine(context: Context): FlutterEngine? {
-        AudioServicePlugin.setFlutterEngineId(KEEP_ENGINE_ID)
-        return super.provideFlutterEngine(context)
-    }
-
+    // Движок общий с audio_service (AudioServiceActivity.provideFlutterEngine), и
+    // уничтожает его AudioServicePlugin.disposeFlutterEngine, когда останавливается
+    // медиа-сервис. Активити не должна рвать его из-под сервиса.
     override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -959,10 +954,6 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onDestroy() {
         shareExecutor.shutdown()
-        if (keepEngineAlive() && isFinishing) {
-            Log.d("KometFcm", "task removed, caching engine (call=${CallState.inCall} fkm=${FkmState.enabled})")
-            flutterEngine?.let { FlutterEngineCache.getInstance().put(KEEP_ENGINE_ID, it) }
-        }
         super.onDestroy()
     }
 

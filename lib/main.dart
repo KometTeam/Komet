@@ -191,7 +191,6 @@ void main(List<String> args) async {
     linux: true,
     macOS: true,
   );
-  await AudioPlaybackController.initialize();
   if (AppInstance.isNamed) {
     SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
   }
@@ -408,7 +407,7 @@ class KometAppState extends State<KometApp>
     _fontId = widget.initialFontId;
 
     WidgetsBinding.instance.addObserver(this);
-    AudioPlaybackController.instance.error.addListener(_onAudioPlaybackError);
+    AudioPlaybackController.error.addListener(_onAudioPlaybackError);
     AppThemeModeConfig.current.addListener(_onThemeModeChanged);
     AppAmoled.current.addListener(_onAmoledChanged);
     AppThemeSchedule.current.addListener(_onScheduleChanged);
@@ -605,9 +604,7 @@ class KometAppState extends State<KometApp>
       _onWallpaperTintChanged,
     );
     WidgetsBinding.instance.removeObserver(this);
-    AudioPlaybackController.instance.error.removeListener(
-      _onAudioPlaybackError,
-    );
+    AudioPlaybackController.error.removeListener(_onAudioPlaybackError);
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
     vpnBypassEnabled.dispose();
@@ -619,13 +616,16 @@ class KometAppState extends State<KometApp>
   }
 
   void _onAudioPlaybackError() {
-    final message = AudioPlaybackController.instance.error.value;
-    if (message == null || message.isEmpty) return;
+    final message = AudioPlaybackController.error.value;
+    if (message == null) return;
+    AudioPlaybackController.error.value = null;
     final overlay = KometApp.navigatorKey.currentState?.overlay;
-    if (overlay != null) {
-      showCustomNotificationOnOverlay(overlay, 'Ошибка воспроизведения');
-    }
-    AudioPlaybackController.instance.error.value = null;
+    if (overlay == null) return;
+    final text = message.isEmpty
+        ? AppLocalizations.of(overlay.context)?.audioPlaybackFailed
+        : message;
+    if (text == null || text.isEmpty) return;
+    showCustomNotificationOnOverlay(overlay, text);
   }
 
   @override

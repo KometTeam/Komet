@@ -2662,6 +2662,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get downloadsOpenFailed => 'Не удалось открыть файл';
 
   @override
+  String get audioPlaybackChannel => 'Воспроизведение аудио';
+
+  @override
+  String get audioPlaybackFailed => 'Не удалось воспроизвести файл';
+
+  @override
   String get downloadsClearHistory => 'Очистить историю загрузок';
 
   @override

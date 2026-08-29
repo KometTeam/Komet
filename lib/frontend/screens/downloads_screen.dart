@@ -72,6 +72,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
             messageTime: record.messageTime,
             thumbnailUrl: record.thumbnailUrl,
           ),
+          notificationChannelName: AppLocalizations.of(
+            context,
+          )!.audioPlaybackChannel,
         );
       } catch (_) {
         if (mounted) {

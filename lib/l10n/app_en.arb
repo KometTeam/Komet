@@ -1112,6 +1112,8 @@
   "downloadsAudio": "Audio",
   "downloadsFile": "File",
   "downloadsOpenFailed": "Couldn't open the file",
+  "audioPlaybackChannel": "Audio playback",
+  "audioPlaybackFailed": "Couldn't play the file",
   "downloadsClearHistory": "Clear download history",
   "downloadsClearTitle": "Clear download history?",
   "downloadsClearBody": "The files will stay on the device, but this list will be cleared.",

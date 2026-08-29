@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
+import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
 import '../calls/active_call.dart';
 import 'audio_file_track.dart';
@@ -37,6 +38,7 @@ class AudioPlaybackController {
   }
 
   static AudioPlaybackController? _instance;
+  static Future<AudioPlaybackController>? _pending;
 
   static AudioPlaybackController get instance {
     final value = _instance;
@@ -46,16 +48,32 @@ class AudioPlaybackController {
 
   static bool get isInitialized => _instance != null;
 
-  static Future<void> initialize() async {
-    if (_instance != null) return;
+  static final ValueNotifier<String?> error = ValueNotifier(null);
+
+  static Future<AudioPlaybackController> ensureInitialized(
+    String notificationChannelName,
+  ) async {
+    final ready = _instance;
+    if (ready != null) return ready;
+    final pending = _pending ??= _create(notificationChannelName);
+    try {
+      return await pending;
+    } catch (_) {
+      _pending = null;
+      rethrow;
+    }
+  }
+
+  static Future<AudioPlaybackController> _create(String channelName) async {
+    JustAudioMediaKit.ensureInitialized(linux: true, windows: true);
     final handler = switch (defaultTargetPlatform) {
       TargetPlatform.windows ||
       TargetPlatform.linux => BackgroundAudioHandler(),
       _ => await AudioService.init(
         builder: BackgroundAudioHandler.new,
-        config: const AudioServiceConfig(
-          androidNotificationChannelId: 'ru.komet.app.audio',
-          androidNotificationChannelName: 'Воспроизведение аудио',
+        config: AudioServiceConfig(
+          androidNotificationChannelId: 'komet.audio.playback',
+          androidNotificationChannelName: channelName,
           androidNotificationOngoing: false,
           androidStopForegroundOnPause: true,
         ),
@@ -63,11 +81,12 @@ class AudioPlaybackController {
     };
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
-    _instance = AudioPlaybackController._(handler);
+    return _instance = AudioPlaybackController._(handler);
   }
 
   final BackgroundAudioHandler _handler;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+  bool _pausedByCall = false;
 
   final ValueNotifier<bool> playing = ValueNotifier(false);
   final ValueNotifier<Duration> position = ValueNotifier(Duration.zero);
@@ -76,10 +95,10 @@ class AudioPlaybackController {
   final ValueNotifier<AudioProcessingState> processingState = ValueNotifier(
     AudioProcessingState.idle,
   );
-  final ValueNotifier<String?> error = ValueNotifier(null);
 
   Future<void> playTrack(AudioFileTrack track) async {
     error.value = null;
+    _pausedByCall = false;
     position.value = Duration.zero;
     bufferedPosition.value = Duration.zero;
     duration.value = Duration.zero;
@@ -87,15 +106,46 @@ class AudioPlaybackController {
     await _handler.play();
   }
 
-  Future<void> toggle() => playing.value ? _handler.pause() : _handler.play();
+  Future<void> toggle() {
+    _pausedByCall = false;
+    return playing.value ? _handler.pause() : _handler.play();
+  }
 
   Future<void> seek(Duration value) => _handler.seek(value);
 
-  Future<void> stop() => _handler.stop();
+  Future<void> stop() {
+    _pausedByCall = false;
+    return _handler.stop();
+  }
+
+  Future<void> dispose() async {
+    ActiveCall.instance.current.removeListener(_onActiveCallChanged);
+    for (final subscription in _subscriptions) {
+      await subscription.cancel();
+    }
+    _subscriptions.clear();
+    await _handler.dispose();
+    playing.dispose();
+    position.dispose();
+    bufferedPosition.dispose();
+    duration.dispose();
+    processingState.dispose();
+    if (identical(_instance, this)) {
+      _instance = null;
+      _pending = null;
+    }
+  }
 
   void _onActiveCallChanged() {
-    if (ActiveCall.instance.current.value != null && playing.value) {
+    if (ActiveCall.instance.current.value != null) {
+      if (!playing.value) return;
+      _pausedByCall = true;
       unawaited(_handler.pause());
+      return;
     }
+    if (!_pausedByCall) return;
+    _pausedByCall = false;
+    if (processingState.value == AudioProcessingState.idle) return;
+    unawaited(_handler.play());
   }
 }

@@ -75,4 +75,52 @@ void main() {
     expect(find.byIcon(Symbols.play_arrow), findsOneWidget);
     expect(find.byIcon(Symbols.download), findsNothing);
   });
+
+  testWidgets('нескачанный аудиофайл показывает кнопку загрузки', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'synthetic_audio_file_bubble_missing',
+    );
+    addTearDown(() {
+      MediaCache.resetForTesting();
+      if (directory.existsSync()) directory.deleteSync(recursive: true);
+    });
+    PathProviderPlatform.instance = _SyntheticPathProvider(directory.path);
+    MediaCache.resetForTesting();
+
+    final message = CachedMessage(
+      id: 'synthetic-message',
+      accountId: 1,
+      chatId: 2,
+      senderId: 7,
+      time: DateTime(2026, 1, 1).millisecondsSinceEpoch,
+      status: 'sent',
+      attachments: const [
+        FileAttachment(fileId: 43, name: 'missing.mp3', size: 128),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: MessageBubble(
+            message: message,
+            isMe: false,
+            myId: 1,
+            chatType: 'DIALOG',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byIcon(Symbols.audio_file), findsOneWidget);
+    expect(find.byIcon(Symbols.download), findsOneWidget);
+    expect(find.byIcon(Symbols.play_arrow), findsNothing);
+  });
 }

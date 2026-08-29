@@ -856,6 +856,8 @@
   "downloadsAudio": "Аудио",
   "downloadsFile": "Файл",
   "downloadsOpenFailed": "Не удалось открыть файл",
+  "audioPlaybackChannel": "Воспроизведение аудио",
+  "audioPlaybackFailed": "Не удалось воспроизвести файл",
   "downloadsClearHistory": "Очистить историю загрузок",
   "downloadsClearTitle": "Очистить историю загрузок?",
   "downloadsClearBody": "Файлы останутся на устройстве, но этот список будет очищен.",

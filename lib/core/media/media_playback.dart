@@ -205,14 +205,17 @@ class MediaPlayback {
     controller.dispose();
   }
 
-  Future<void> activateAudioFile(AudioFileTrack track) async {
-    if (!AudioPlaybackController.isInitialized) {
-      throw StateError('Audio playback is not initialized');
-    }
-    _attachAudioCompletionListener();
+  Future<void> activateAudioFile(
+    AudioFileTrack track, {
+    required String notificationChannelName,
+  }) async {
+    final audio = await AudioPlaybackController.ensureInitialized(
+      notificationChannelName,
+    );
+    _attachAudioCompletionListener(audio);
     final current = audioFile.value;
     if (current?.cacheName == track.cacheName) {
-      await AudioPlaybackController.instance.toggle();
+      await audio.toggle();
       return;
     }
     _clearVoice();
@@ -220,7 +223,7 @@ class MediaPlayback {
     audioFile.value = track;
     primary.value = PlaybackKind.audioFile;
     try {
-      await AudioPlaybackController.instance.playTrack(track);
+      await audio.playTrack(track);
     } catch (_) {
       audioFile.value = null;
       primary.value = null;
@@ -246,12 +249,10 @@ class MediaPlayback {
     return true;
   }
 
-  void _attachAudioCompletionListener() {
+  void _attachAudioCompletionListener(AudioPlaybackController audio) {
     if (_audioCompletionListenerAttached) return;
     _audioCompletionListenerAttached = true;
-    AudioPlaybackController.instance.processingState.addListener(
-      _onAudioProcessingStateChanged,
-    );
+    audio.processingState.addListener(_onAudioProcessingStateChanged);
   }
 
   void _onAudioProcessingStateChanged() {

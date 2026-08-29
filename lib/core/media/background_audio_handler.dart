@@ -7,15 +7,18 @@ import 'audio_file_track.dart';
 
 class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
   BackgroundAudioHandler() {
-    _player.playbackEventStream.listen((_) => _broadcastState());
-    _player.errorStream.listen(
-      (error) => errors.add(error.message ?? 'Ошибка воспроизведения'),
+    _subscriptions.add(
+      _player.playbackEventStream.listen((_) => _broadcastState()),
     );
-    _player.durationStream.listen(_updateDuration);
+    _subscriptions.add(
+      _player.errorStream.listen((error) => errors.add(error.message ?? '')),
+    );
+    _subscriptions.add(_player.durationStream.listen(_updateDuration));
   }
 
   final AudioPlayer _player = AudioPlayer();
   final StreamController<String> errors = StreamController.broadcast();
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
 
   Stream<Duration> get positionStream => _player.positionStream;
   Stream<Duration> get bufferedPositionStream => _player.bufferedPositionStream;
@@ -74,6 +77,15 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
     await super.stop();
   }
 
+  Future<void> dispose() async {
+    for (final subscription in _subscriptions) {
+      await subscription.cancel();
+    }
+    _subscriptions.clear();
+    await _player.dispose();
+    await errors.close();
+  }
+
   void _broadcastState() {
     playbackState.add(
       playbackState.value.copyWith(
@@ -87,7 +99,6 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
         updatePosition: _player.position,
         bufferedPosition: _player.bufferedPosition,
         speed: _player.speed,
-        queueIndex: 0,
       ),
     );
   }

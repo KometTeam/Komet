@@ -2649,6 +2649,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadsOpenFailed => 'Couldn\'t open the file';
 
   @override
+  String get audioPlaybackChannel => 'Audio playback';
+
+  @override
+  String get audioPlaybackFailed => 'Couldn\'t play the file';
+
+  @override
   String get downloadsClearHistory => 'Clear download history';
 
   @override
