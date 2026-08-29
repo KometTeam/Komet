@@ -62,7 +62,6 @@ import '../../../core/utils/emoji_keyword_index.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/route_settle.dart';
 import '../../../core/config/app_cache_extent.dart';
-import '../../../core/config/app_colors.dart';
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import 'chat/chat_prank_controller.dart';
@@ -98,6 +97,7 @@ import '../../../models/sticker.dart';
 import '../../commands/command_registry.dart';
 import '../../commands/slash_command.dart';
 import '../../widgets/rich_message_controller.dart';
+import '../../widgets/selection_check_circle.dart';
 import '../../../core/utils/text_format.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
@@ -7549,26 +7549,6 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
     }
   }
 
-  Widget _buildCheckCircle(bool selected, ColorScheme cs) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOut,
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: selected ? cs.primary : Colors.transparent,
-        border: Border.all(
-          color: selected ? cs.primary : cs.mutedText,
-          width: 2,
-        ),
-      ),
-      child: selected
-          ? Icon(Symbols.check, size: 16, weight: 700, color: cs.onPrimary)
-          : null,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (widget.message.isControl) return widget.child;
@@ -7613,12 +7593,33 @@ class _SelectableMessageRowState extends State<_SelectableMessageRow> {
                       ),
                     ),
                     if (t > 0)
-                      Positioned(
-                        left: 8,
-                        bottom: 10,
-                        child: Opacity(
-                          opacity: t,
-                          child: _buildCheckCircle(isSelected, cs),
+                      Positioned.fill(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final rowHeight = constraints.maxHeight;
+                            final diameter = SelectionCheckCircle.diameterFor(
+                              rowHeight,
+                            );
+                            return Padding(
+                              padding: EdgeInsetsDirectional.only(
+                                start: 8,
+                                bottom: SelectionCheckCircle.bottomInsetFor(
+                                  rowHeight,
+                                  diameter,
+                                ),
+                              ),
+                              child: Align(
+                                alignment: AlignmentDirectional.bottomStart,
+                                child: Opacity(
+                                  opacity: t,
+                                  child: SelectionCheckCircle(
+                                    selected: isSelected,
+                                    diameter: diameter,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                   ],
