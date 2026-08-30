@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+// #***! точка откуда вылетает системное поделиться, на айпаде без неё падает
 Rect shareOriginOf(BuildContext? context) {
   final box = context?.findRenderObject() as RenderBox?;
   if (box != null && box.hasSize && box.attached) {
     final rect = box.localToGlobal(Offset.zero) & box.size;
     if (!rect.isEmpty) return rect;
   }
+  // #***! виджета нет, берём центр экрана
   final view = WidgetsBinding.instance.platformDispatcher.views.first;
   final size = view.physicalSize / view.devicePixelRatio;
   return Rect.fromCenter(

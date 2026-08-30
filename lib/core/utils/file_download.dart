@@ -3,6 +3,7 @@ import 'package:open_filex/open_filex.dart';
 import 'download_history.dart';
 import 'media_cache.dart';
 
+// #***! итог скачивания, путь или ошибка
 class FileDownloadResult {
   final bool ok;
   final String? path;
@@ -11,6 +12,7 @@ class FileDownloadResult {
   const FileDownloadResult({required this.ok, this.path, this.error});
 }
 
+// #***! открыть файл, скачав если надо
 /// Открывает файл из кэша, скачивая его при отсутствии.
 ///
 /// [cacheName] — стабильное имя в кэше (например, `<fileId>_имя.ext`).
@@ -50,6 +52,7 @@ Future<FileDownloadResult> openCachedFile(
   }
 }
 
+// #***! скачивание в кэш, onReady зовётся как только файл на диске
 Future<FileDownloadResult> ensureCachedFile(
   String cacheName,
   Future<String?> Function() resolveUrl, {
@@ -57,6 +60,7 @@ Future<FileDownloadResult> ensureCachedFile(
   void Function()? onReady,
   DownloadMetadata? download,
 }) async {
+  // #***! ready зовётся из разных веток, защита от повтора
   var readyFired = false;
   void ready() {
     if (readyFired) return;

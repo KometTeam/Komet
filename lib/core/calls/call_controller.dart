@@ -11,6 +11,7 @@ import 'call_session.dart';
 import 'conversation_params.dart';
 import 'ws2_signaling.dart';
 
+// #***! входящий из пуша или с нативного экрана
 class IncomingCall {
   final String conversationId;
 
@@ -36,6 +37,7 @@ class IncomingCall {
   });
 }
 
+// #***! управление звонками поверх сессии
 class CallController {
   CallController._();
   static final CallController instance = CallController._();
@@ -44,10 +46,12 @@ class CallController {
   CallsModule? _calls;
   StreamSubscription<Packet>? _pushSub;
 
+  // #***! три стрима наружу
   final _incoming = StreamController<IncomingCall>.broadcast();
   final _ended = StreamController<void>.broadcast();
   final _canceled = StreamController<void>.broadcast();
 
+  // #***! приложение в фоне, звонок показывает натив а не мы
   bool appResumed = false;
 
   Stream<IncomingCall> get incomingCalls => _incoming.stream;
@@ -63,8 +67,10 @@ class CallController {
   IncomingCall? _pending;
   IncomingCall? get pendingIncoming => _pending;
 
+  // #***! занято, второй звонок не берём
   bool get isBusy => _active != null;
 
+  // #***! подписка на пуши звонков
   void init(Api api) {
     if (_api != null) return;
     _api = api;
@@ -72,6 +78,7 @@ class CallController {
     _pushSub = api.pushStream.listen(_onPush);
   }
 
+  // #***! разбор пуша входящего
   void _onPush(Packet packet) {
     if (packet.opcode != Opcode.notifCallStart) return;
     final payload = packet.payload;
@@ -104,6 +111,7 @@ class CallController {
     );
   }
 
+  // #***! звонок с натива, autoAccept значит там уже нажали принять
   void injectFromNative(Map<dynamic, dynamic> data, {bool autoAccept = false}) {
     final vcp = data['vcp']?.toString();
     if (vcp == null || vcp.isEmpty) return;
@@ -136,6 +144,7 @@ class CallController {
     );
   }
 
+  // #***! входящий наружу, юишка решит что показать
   void _emitIncoming(IncomingCall incoming) {
     if (_active != null) return;
     if (_pending?.conversationId == incoming.conversationId) return;
@@ -149,6 +158,7 @@ class CallController {
     _canceled.add(null);
   }
 
+  // #***! исходящий звонок
   Future<CallSession> startOutgoing(
     int calleeId, {
     bool isVideo = false,
@@ -165,6 +175,7 @@ class CallController {
     return _launch(session, session.start);
   }
 
+  // #***! конференция со ссылкой
   Future<CreatedCall> createConference() async {
     if (_active != null) throw StateError('уже идёт звонок');
     return _calls!.createConference();
@@ -173,6 +184,7 @@ class CallController {
   Future<CallLinkPreview?> previewCallLink(String url) =>
       _calls!.resolveCallLink(url);
 
+  // #***! вход по ссылке
   Future<CallSession> joinByLink(String token, {bool isVideo = false}) async {
     if (_active != null) throw StateError('уже идёт звонок');
     final params = await _calls!.joinByLink(token, isVideo: isVideo);
@@ -190,6 +202,7 @@ class CallController {
     return _launch(session, session.start);
   }
 
+  // #***! принятие входящего
   Future<CallSession> acceptIncoming(IncomingCall call) async {
     _pending = null;
     CallBridge.instance.cancelIncoming();
@@ -214,6 +227,7 @@ class CallController {
     );
   }
 
+  // #***! отклонение
   Future<void> rejectIncoming(IncomingCall call) async {
     _pending = null;
     CallBridge.instance.notifyEnded();
@@ -235,6 +249,7 @@ class CallController {
 
   Future<void> endActive() => _active?.hangup() ?? Future.value();
 
+  // #***! сигналим собеседнику про микрофон
   Future<bool> sendMicSignal(bool enabled) async {
     final session = _active;
     if (session == null) return false;
@@ -242,6 +257,7 @@ class CallController {
     return true;
   }
 
+  // #***! общий запуск сессии
   Future<CallSession> _launch(
     CallSession session,
     Future<void> Function() open, {
@@ -261,6 +277,7 @@ class CallController {
     return session;
   }
 
+  // #***! следим за состоянием, конец сессии освобождает контроллер
   void _bind(CallSession session) {
     unawaited(_activeSub?.cancel());
     _active = session;

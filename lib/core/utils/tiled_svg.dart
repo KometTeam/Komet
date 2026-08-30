@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+// #***! плиточный SVG узор для обоев
 class TiledSvgPattern extends StatefulWidget {
   final String asset;
   final Color color;
@@ -22,6 +23,7 @@ class TiledSvgPattern extends StatefulWidget {
 }
 
 class _TiledSvgPatternState extends State<TiledSvgPattern> {
+  // #***! растр кэшируем по путь@размер, рисовать SVG на каждый кадр дорого
   static final Map<String, ui.Image> _cache = {};
   static final Map<String, Future<ui.Image>> _pending = {};
 
@@ -46,6 +48,7 @@ class _TiledSvgPatternState extends State<TiledSvgPattern> {
     }
   }
 
+  // #***! сменилась плотность экрана, растеризуем заново
   Future<void> _resolve() async {
     final px = (widget.tileSize * _dpr).clamp(1, 4096).round();
     final key = '${widget.asset}@$px';
@@ -54,6 +57,7 @@ class _TiledSvgPatternState extends State<TiledSvgPattern> {
       if (_image != cached) setState(() => _image = cached);
       return;
     }
+    // #***! _pending схлопывает параллельные растеризации одной плитки
     final future = _pending.putIfAbsent(key, () => _rasterize(widget.asset, px));
     try {
       final image = await future;
@@ -65,6 +69,7 @@ class _TiledSvgPatternState extends State<TiledSvgPattern> {
     }
   }
 
+  // #***! SVG в картинку нужного размера
   static Future<ui.Image> _rasterize(String asset, int px) async {
     final info = await vg.loadPicture(SvgAssetLoader(asset), null);
     final recorder = ui.PictureRecorder();
@@ -97,6 +102,7 @@ class _TiledSvgPatternState extends State<TiledSvgPattern> {
   }
 }
 
+// #***! плитка размножается шейдером и красится темой
 class _PatternPainter extends CustomPainter {
   final ui.Image image;
   final Color color;

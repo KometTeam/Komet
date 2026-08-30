@@ -8,6 +8,7 @@ import '../api.dart';
 import 'chats.dart';
 import 'messages.dart';
 
+// #***! очередь неотправленных, досылает когда связь вернулась
 class OutboxService {
   OutboxService._();
 
@@ -17,6 +18,7 @@ class OutboxService {
   MessagesModule? _messages;
   bool _flushing = false;
 
+  // #***! подписка на сессию, онлайн значит пробуем разослать
   void init(Api api, MessagesModule messages) {
     if (_api != null) return;
     _api = api;
@@ -27,6 +29,7 @@ class OutboxService {
     if (api.state == SessionState.online) unawaited(flush());
   }
 
+  // #***! _flushing от параллельного прохода
   Future<void> flush() async {
     if (_flushing) return;
     final api = _api;
@@ -39,6 +42,7 @@ class OutboxService {
       final accountId = await TokenStorage.getActiveAccountId();
       if (accountId == null) return;
 
+      // #***! берём из базы pending и шлём по очереди
       final rows = await AppDatabase.loadPendingMessages(accountId);
       for (final row in rows) {
         if (api.state != SessionState.online) break;
@@ -60,6 +64,7 @@ class OutboxService {
             replySourceChatId: replySourceChatId,
             elements: elements,
           );
+          // #***! отправилось, сервер дал настоящий id а временный удаляем
           final sent = CachedMessage(
             id: actualId.isNotEmpty ? actualId : pending.id,
             accountId: accountId,
@@ -88,6 +93,7 @@ class OutboxService {
             status: 'sent',
             elements: elements.isEmpty ? null : elements,
           );
+        // #***! временную ошибку оставляем в очереди, окончательную помечаем и не трогаем
         } catch (e) {
           if (!isPermanentSendFailure(e)) {
             logger.w('Outbox: отправка ${pending.id} не удалась: $e');
@@ -115,6 +121,7 @@ class OutboxService {
     }
   }
 
+  // #***! детали и форматирование в сыром payload, вытаскиваем при переотправке
   int? _replyIdFromPayload(Map<String, dynamic>? payload) {
     if (payload == null) return null;
     final link = payload['link'];

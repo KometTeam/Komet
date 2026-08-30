@@ -8,8 +8,10 @@ import 'audio_file_track.dart';
 import 'audio_playback_controller.dart';
 import 'voice_audio_controller.dart';
 
+// #***! что играет сейчас, голосовое кружок или музыка
 enum PlaybackKind { voice, videoNote, audioFile }
 
+// #***! играющее голосовое плюс сообщение откуда оно
 class VoiceTrack {
   const VoiceTrack({
     required this.cacheName,
@@ -30,6 +32,7 @@ class VoiceTrack {
   final VoiceAudioController audio;
 }
 
+// #***! играющий кружок
 class VideoNoteTrack {
   const VideoNoteTrack({
     required this.cacheName,
@@ -52,17 +55,21 @@ class VideoNoteTrack {
   final Uint8List? preview;
 }
 
+// #***! единый диспетчер, одновременно играет только что то одно
 class MediaPlayback {
   MediaPlayback._();
 
   static final MediaPlayback instance = MediaPlayback._();
 
+  // #***! скорости которые перебирает кнопка
   static const List<double> speeds = [1.0, 1.5, 2.0];
 
+  // #***! primary говорит юишке какую плашку рисовать
   final ValueNotifier<PlaybackKind?> primary = ValueNotifier(null);
   final ValueNotifier<AudioFileTrack?> audioFile = ValueNotifier(null);
   bool _audioCompletionListenerAttached = false;
 
+  // #***! ушли из чата, играет дальше но плашка меняется
   final ValueNotifier<int?> visibleChatId = ValueNotifier(null);
 
   void enterChat(int chatId) => visibleChatId.value = chatId;
@@ -74,6 +81,7 @@ class MediaPlayback {
   final ValueNotifier<VoiceTrack?> voice = ValueNotifier(null);
   final ValueNotifier<double> voiceSpeed = ValueNotifier(speeds.first);
 
+  // #***! держатели не дают освободить контроллер пока его рисует виджет
   final Set<VoiceAudioController> _heldVoice = {};
 
   VoiceAudioController acquireVoice({
@@ -100,6 +108,7 @@ class MediaPlayback {
     _disposeVoiceIfIdle(audio);
   }
 
+  // #***! включили голосовое, кружок и музыка гаснут
   void activateVoice(VoiceTrack track) {
     _clearAudioFile();
     _clearVideoNote();
@@ -114,6 +123,7 @@ class MediaPlayback {
     track.audio.setSpeed(voiceSpeed.value);
   }
 
+  // #***! перебор скорости по кругу
   void cycleVoiceSpeed() {
     final next = speeds[(speeds.indexOf(voiceSpeed.value) + 1) % speeds.length];
     voiceSpeed.value = next;
@@ -134,12 +144,14 @@ class MediaPlayback {
     return true;
   }
 
+  // #***! освобождаем только когда никто не держит и он не активен
   void _disposeVoiceIfIdle(VoiceAudioController audio) {
     if (_heldVoice.contains(audio)) return;
     if (voice.value?.audio == audio) return;
     audio.dispose();
   }
 
+  // #***! то же для кружков
   final ValueNotifier<VideoNoteTrack?> videoNote = ValueNotifier(null);
   final ValueNotifier<double> videoNoteSpeed = ValueNotifier(speeds.first);
 

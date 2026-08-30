@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+// #***! откладывает тяжёлое до конца анимации иначе она дёргается
 class RouteSettle {
   RouteSettle({required this.isMounted});
 
+  // #***! запас поверх анимации на случай если статус не придёт
   static const Duration _safetyMargin = Duration(milliseconds: 250);
 
   final bool Function() isMounted;
@@ -17,6 +19,7 @@ class RouteSettle {
 
   bool get settled => _settled;
 
+  // #***! цепляемся к анимации после первого кадра
   void bind(BuildContext context) {
     if (_disposed || _settled || _bindScheduled || _animation != null) return;
     _bindScheduled = true;
@@ -31,6 +34,7 @@ class RouteSettle {
     });
   }
 
+  // #***! до конца анимации откладываем, после сразу
   void run(VoidCallback action) {
     if (_settled) {
       action();
@@ -39,6 +43,7 @@ class RouteSettle {
     _queued.add(action);
   }
 
+  // #***! таймер страховкой, статус не пришёл всё равно отпускаем очередь
   void settleNow() {
     if (_disposed || _settled) return;
     _settled = true;

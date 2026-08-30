@@ -3,6 +3,7 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 
+// #***! встроенные мини аппы со своими кнопками
 abstract class EntryBannerApps {
   static const String sferumKey = 'entry_banner_app_sferum';
   static const String digitalIdKey = 'entry_banner_app_digital_id';
@@ -13,11 +14,13 @@ abstract class EntryBannerApps {
   };
 }
 
+// #***! сервер зовёт эту опцию по разному
 const Set<String> kMiniAppOptions = {'HAS_WEBAPP', 'HAS_WEB_APP', 'WEBAPP'};
 
 bool hasMiniAppOption(Set<String>? options) =>
     options != null && options.any(kMiniAppOptions.contains);
 
+// #***! адрес запуска мини аппы плюс id запроса
 class WebAppLaunch {
   final String url;
   final String? queryId;
@@ -26,6 +29,7 @@ class WebAppLaunch {
   const WebAppLaunch({required this.url, required this.botId, this.queryId});
 }
 
+// #***! номер который разрешили дать боту, с подписью сервера
 class WebAppPhone {
   final String phone;
   final String hash;
@@ -38,6 +42,7 @@ class WebAppPhone {
   });
 }
 
+// #***! результат колбэка госуслуг
 class ExternalCallbackResult {
   final int botId;
   final String? startParam;
@@ -56,6 +61,7 @@ class ExternalCallbackResult {
     );
   }
 
+  // #***! нужное бывает завёрнуто в data result response, ищем рекурсивно
   static Map? _findResponseMap(dynamic value) {
     if (value is! Map) return null;
     if (value.containsKey('botId') || value.containsKey('bot_id')) return value;
@@ -73,15 +79,18 @@ int? _asInt(dynamic value) {
   return int.tryParse(value?.toString() ?? '');
 }
 
+// #***! запуск мини аппок ботов
 class WebAppModule {
   final Api _api;
 
   WebAppModule(this._api);
 
+  // #***! тот же device_id что в хэндшейке, к нему привязан цифровой ID
   /// device_id сессии (опкод 6 sessionInit, с учётом спуфинга) — тот же id,
   /// к которому сервер привязывает Цифровой ID.
   String? get sessionDeviceId => _api.deviceId;
 
+  // #***! сервер даёт подписанный url для вебвью
   Future<WebAppLaunch> fetchLaunch(
     int botId, {
     String? startParam,
@@ -109,6 +118,7 @@ class WebAppModule {
     return WebAppLaunch(url: url, botId: botId, queryId: queryId);
   }
 
+  // #***! номер боту только по явному действию юзера
   Future<WebAppPhone> requestPhone(int botId) async {
     if (_api.state != SessionState.online) {
       throw const WebAppUnavailable('Нет соединения с сервером');
@@ -134,6 +144,7 @@ class WebAppModule {
     return WebAppPhone(phone: phone, hash: hash, authDate: authDate);
   }
 
+  // #***! id ботов сферума и цифрового ID приходят в конфиге
   Future<WebAppLaunch> fetchSferum() async {
     final botId = await _resolveEntryApp(EntryBannerApps.sferumKey);
     if (botId == null) {
@@ -154,6 +165,7 @@ class WebAppModule {
     return fetchLaunch(botId);
   }
 
+  // #***! вернулись из браузера после госуслуг, докручиваем и переоткрываем
   Future<WebAppLaunch> handleExternalCallback(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null || uri.queryParameters['externalCallback'] != '1') {
@@ -174,6 +186,7 @@ class WebAppModule {
     return fetchLaunch(result.botId, startParam: result.startParam);
   }
 
+  // #***! id мини аппы лежит в sync_state после login
   Future<int?> _resolveEntryApp(String key) async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return null;

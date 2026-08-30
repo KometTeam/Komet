@@ -4,15 +4,18 @@ import '../../core/protocol/packet.dart';
 import '../../core/utils/logger.dart';
 import '../../models/sticker.dart';
 
+// #***! каталог стикеров, паки избранное недавние
 class StickersModule {
   final Api _api;
 
+  // #***! сервер пушит избранное с других устройств
   StickersModule(this._api) {
     _api.pushStream
         .where((p) => p.opcode == Opcode.notifAssetsUpdate)
         .listen(_handleAssetsPush);
   }
 
+  // #***! всё в памяти, между запусками перезапрашиваем
   final Map<int, StickerSet> _sets = {};
   final Map<int, StickerItem> _stickers = {};
   List<int> _orderedSetIds = [];
@@ -31,6 +34,7 @@ class StickersModule {
   StickerSet? cachedSet(int id) => _sets[id];
   bool isFavorite(int setId) => _favoriteSetIds.contains(setId);
 
+  // #***! схлопываем параллельные вызовы
   Future<void> ensureLoaded() {
     return _loading ??= _loadSections().catchError((Object e) {
       _loading = null;
@@ -45,6 +49,7 @@ class StickersModule {
     });
   }
 
+  // #***! избранные паки отдельным запросом и первыми
   Future<void> _loadFavorites() async {
     final favIds = <int>[];
     final fav = await _api.sendRequestMap(Opcode.assetsUpdate, {
@@ -64,6 +69,7 @@ class StickersModule {
     _favoriteSetIds = favIds;
   }
 
+  // #***! каталог, первая страница потом докрутка по marker
   Future<void> _loadSections() async {
     final newSetIds = <int>[];
     int marker = 0;
@@ -88,6 +94,7 @@ class StickersModule {
       }
     }
 
+    // #***! guard от бесконечного цикла если marker тот же
     var guard = 0;
     while (marker != 0 && guard < 50) {
       guard++;
@@ -106,6 +113,7 @@ class StickersModule {
 
     await ensureFavoritesLoaded();
 
+    // #***! сперва избранные потом остальные, без дублей
     final ordered = <int>[];
     final seen = <int>{};
     for (final id in [..._favoriteSetIds, ...newSetIds]) {
@@ -119,6 +127,7 @@ class StickersModule {
     await _ensureSetMetas(ordered);
   }
 
+  // #***! общий догруз с кэшем, пачками по 100
   Future<void> _fetchAndCache<T>({
     required String type,
     required List<int> ids,
@@ -151,6 +160,7 @@ class StickersModule {
     cache: _sets,
   );
 
+  // #***! стикеры пака
   Future<List<StickerItem>> ensureStickers(List<int> stickerIds) async {
     await _fetchAndCache<StickerItem>(
       type: 'STICKER',
@@ -170,6 +180,7 @@ class StickersModule {
     return _sets[setId];
   }
 
+  // #***! для поиска по эмодзи нужны все сразу
   Future<void> ensureAllStickersLoaded() {
     final ids = <int>{..._recentStickerIds};
     for (final set in _sets.values) {
@@ -178,6 +189,7 @@ class StickersModule {
     return ensureStickers(ids.toList());
   }
 
+  // #***! поиск стикера по эмодзи тегу
   List<StickerItem> searchByTags(Set<String> emojiTargets) {
     if (emojiTargets.isEmpty) return const [];
     final result = <StickerItem>[];
@@ -192,10 +204,12 @@ class StickersModule {
     return result;
   }
 
+  // #***! у эмодзи бывает вариационный селектор, без него теги сходятся
   static String _stripVariation(String s) => s.replaceAll('️', '');
 
   void cacheSet(StickerSet set) => _sets[set.id] = set;
 
+  // #***! открытие пака по ссылке
   Future<StickerSet?> resolveSetByLink(String link) async {
     final map = await _api.sendRequestMap(Opcode.linkInfo, {'link': link});
     if (map == null) return null;
@@ -211,6 +225,7 @@ class StickersModule {
     return _stickers[stickerId]?.setId;
   }
 
+  // #***! избранное правим локально сразу, пуш не ждём
   Future<bool> favoriteSet(int setId) async {
     final map = await _api.sendRequestMap(Opcode.assetsAdd, {
       'type': 'FAVORITE_STICKER_SET',
@@ -231,6 +246,7 @@ class StickersModule {
     return ok;
   }
 
+  // #***! пуш об избранном с другого устройства
   void _handleAssetsPush(Packet push) {
     final payload = push.payload;
     if (payload is! Map) return;
@@ -257,6 +273,7 @@ class StickersModule {
     }
   }
 
+  // #***! недавние приходят вперемешку, берём только стикеры
   void _parseRecents(dynamic list) {
     if (list is! List) return;
     final ids = <int>[];

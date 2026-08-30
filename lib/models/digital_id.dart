@@ -1,3 +1,4 @@
+// #***! итог проверки удостоверения, unknown это что то новое
 enum DigitalIdVerification {
   valid,
   invalid,
@@ -27,6 +28,7 @@ enum DigitalIdVerification {
   }
 }
 
+// #***! типы QR госуслуг
 enum DigitalIdQrType {
   m1('M1', 'max_confirm_age'),
   m2('M2', 'max_cert_large_family'),
@@ -43,6 +45,7 @@ enum DigitalIdQrType {
   final String alias;
 }
 
+// #***! адрес регистрации по кусочкам, сервер шлёт snake_case
 class DigitalIdAddress {
   final String? address;
   final String? flat;
@@ -68,6 +71,7 @@ class DigitalIdAddress {
     );
   }
 
+  // #***! склейка адреса в строку
   String get formatted {
     final parts = <String>[
       if (address != null && address!.isNotEmpty) address!,
@@ -79,6 +83,7 @@ class DigitalIdAddress {
   }
 }
 
+// #***! биометрия, привязан ли токен и к тому ли устройству
 class DigitalIdBiometryStatus {
   final bool hasBiometryToken;
   final String? deviceId;
@@ -99,6 +104,7 @@ class DigitalIdBiometryStatus {
   }
 }
 
+// #***! документ как есть, набор полей зависит от типа
 class DigitalIdDocument {
   final String type;
   final Map<String, dynamic> fields;
@@ -116,6 +122,7 @@ class DigitalIdDocument {
     );
   }
 
+  // #***! ходовые поля геттерами, остальное из fields
   String? get firstName => fields['first_name'] as String?;
   String? get lastName => fields['last_name'] as String?;
   String? get middleName => fields['middle_name'] as String?;
@@ -123,6 +130,7 @@ class DigitalIdDocument {
   String? get series => fields['series'] as String?;
 }
 
+// #***! профиль владельца плюс документы
 class DigitalIdProfile {
   final String? firstName;
   final String? lastName;
@@ -148,6 +156,7 @@ class DigitalIdProfile {
     this.documents = const [],
   });
 
+  // #***! битые документы пропускаем, профиль покажем
   factory DigitalIdProfile.fromMap(Map map) {
     final rawDocs = map['documents'];
     final documents = <DigitalIdDocument>[];
@@ -172,6 +181,7 @@ class DigitalIdProfile {
     );
   }
 
+  // #***! фамилия имя отчество
   String get fullName {
     final parts = <String>[
       if (lastName != null && lastName!.isNotEmpty) lastName!,
@@ -182,6 +192,7 @@ class DigitalIdProfile {
   }
 }
 
+// #***! документы конкретного юзера
 class DigitalIdUserDocs {
   final int userId;
   final DigitalIdProfile profile;
@@ -199,6 +210,7 @@ class DigitalIdUserDocs {
   }
 }
 
+// #***! ссылка на госуслуги плюс state для сверки
 class DigitalIdEsiaLink {
   final String? state;
   final String url;
@@ -213,6 +225,7 @@ class DigitalIdEsiaLink {
   }
 }
 
+// #***! QR документа, обычный и по госту
 class DigitalIdQr {
   final String qr;
   final String? qrGost;
@@ -227,6 +240,7 @@ class DigitalIdQr {
   }
 }
 
+// #***! универсальный QR профиля
 class DigitalIdUniversalQr {
   final String uidHash;
   final String? phone;
@@ -247,6 +261,7 @@ class DigitalIdUniversalQr {
   }
 }
 
+// #***! карточка организации в ACMS
 class DigitalIdAcmsCard {
   final String id;
   final String inn;

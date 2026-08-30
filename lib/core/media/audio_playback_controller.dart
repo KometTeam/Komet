@@ -9,6 +9,7 @@ import '../calls/active_call.dart';
 import 'audio_file_track.dart';
 import 'background_audio_handler.dart';
 
+// #***! плеер музыки с управлением из шторки
 class AudioPlaybackController {
   AudioPlaybackController._(this._handler) {
     _subscriptions.add(
@@ -37,6 +38,7 @@ class AudioPlaybackController {
     ActiveCall.instance.current.addListener(_onActiveCallChanged);
   }
 
+  // #***! синглтон с ленивой инициализацией, audio_service поднимать дорого
   static AudioPlaybackController? _instance;
   static Future<AudioPlaybackController>? _pending;
 
@@ -88,6 +90,7 @@ class AudioPlaybackController {
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   bool _pausedByCall = false;
 
+  // #***! состояние отдельными notifier, плашки плеера подписаны
   final ValueNotifier<bool> playing = ValueNotifier(false);
   final ValueNotifier<Duration> position = ValueNotifier(Duration.zero);
   final ValueNotifier<Duration> bufferedPosition = ValueNotifier(Duration.zero);
@@ -96,6 +99,7 @@ class AudioPlaybackController {
     AudioProcessingState.idle,
   );
 
+  // #***! запуск трека
   Future<void> playTrack(AudioFileTrack track) async {
     error.value = null;
     _pausedByCall = false;
@@ -136,6 +140,7 @@ class AudioPlaybackController {
     }
   }
 
+  // #***! на звонок ставим на паузу потом возвращаем
   void _onActiveCallChanged() {
     if (ActiveCall.instance.current.value != null) {
       if (!playing.value) return;

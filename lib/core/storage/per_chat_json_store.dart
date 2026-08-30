@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// #***! база для всех настроек на чат, всё одним джейсоном в prefs
 abstract class PerChatJsonStore<T> {
   PerChatJsonStore({
     required String prefsKey,
@@ -17,17 +18,20 @@ abstract class PerChatJsonStore<T> {
   final Object? Function(T value) _toJson;
 
   final Map<String, T> _values = {};
+  // #***! revision на каждую запись, списки подписаны
   final ValueNotifier<int> revision = ValueNotifier(0);
   bool _loaded = false;
 
   String _buildKey(int accountId, int chatId) => '$accountId/$chatId';
 
+  // #***! наследники ходят только через read/write
   @protected
   Iterable<MapEntry<String, T>> get allEntries => _values.entries;
 
   @protected
   void onBeforeWrite(String key, T? previous, T? next) {}
 
+  // #***! читаем один раз, битый джейсон молча игнорим чтоб не блокировать старт
   Future<void> load() async {
     if (_loaded) return;
     _loaded = true;
@@ -52,6 +56,7 @@ abstract class PerChatJsonStore<T> {
     return _values[_buildKey(accountId, chatId)];
   }
 
+  // #***! accountId 0 значит не залогинены, писать некуда
   @protected
   Future<void> write(int accountId, int chatId, T? value) async {
     if (accountId == 0) return;
@@ -66,6 +71,7 @@ abstract class PerChatJsonStore<T> {
     }
     revision.value++;
     final prefs = await SharedPreferences.getInstance();
+    // #***! перезаписываем весь джейсон, записей мало
     final serializable = <String, dynamic>{};
     _values.forEach((k, v) => serializable[k] = _toJson(v));
     await prefs.setString(_prefsKey, jsonEncode(serializable));

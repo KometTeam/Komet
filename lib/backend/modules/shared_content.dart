@@ -3,6 +3,7 @@ import '../../core/utils/logger.dart';
 import '../../models/attachment.dart';
 import '../api.dart';
 
+// #***! какие вложения умеет отдавать вкладка медиа
 const Map<String, AttachmentType> _attachTypeByName = {
   'PHOTO': AttachmentType.photo,
   'VIDEO': AttachmentType.video,
@@ -11,6 +12,7 @@ const Map<String, AttachmentType> _attachTypeByName = {
   'SHARE': AttachmentType.share,
 };
 
+// #***! одно медиа из истории вместе с сообщением
 class SharedMediaItem {
   final String messageId;
   final int chatId;
@@ -28,6 +30,7 @@ class SharedMediaItem {
     this.text,
   });
 
+  // #***! в сообщении бывает несколько фото, ключ из id сообщения и вложения
   String get dedupKey {
     final a = attachment;
     final String tail;
@@ -48,6 +51,7 @@ class SharedMediaItem {
   }
 }
 
+// #***! страница выдачи сервера
 class SharedMediaPage {
   final List<SharedMediaItem> items;
   final int total;
@@ -57,6 +61,7 @@ class SharedMediaPage {
   static const empty = SharedMediaPage(items: [], total: 0);
 }
 
+// #***! общий чат для карточки профиля
 class CommonChatEntry {
   final int id;
   final String type;
@@ -95,6 +100,7 @@ class CommonChatEntry {
   }
 }
 
+// #***! накопленная лента медиа
 class ChatMediaFeed {
   final List<SharedMediaItem> items;
   final int total;
@@ -107,6 +113,7 @@ class ChatMediaFeed {
   });
 }
 
+// #***! состояние подгрузки по чату
 class _ChatMediaIndex {
   final List<SharedMediaItem> items = [];
   final Set<String> seen = {};
@@ -116,6 +123,7 @@ class _ChatMediaIndex {
   Future<void>? inFlight;
 }
 
+// #***! тот же ключ но без готового SharedMediaItem
 String mediaDedupKey(String messageId, MessageAttachment attachment) {
   if (attachment is PhotoAttachment) {
     return '$messageId:p${attachment.photoId ?? attachment.baseUrl}';
@@ -126,10 +134,13 @@ String mediaDedupKey(String messageId, MessageAttachment attachment) {
   return '$messageId:${attachment.hashCode}';
 }
 
+// #***! медиа чата и общие чаты
 class SharedContentModule {
+  // #***! страница 60, не больше 40 страниц иначе на огромном чате уйдём в бесконечность
   static const int _mediaIndexPageSize = 60;
   static const int _mediaIndexMaxPages = 40;
 
+  // #***! индексы живут между открытиями чтоб не грузить заново
   static final Map<int, _ChatMediaIndex> _mediaIndexes = {};
 
   final Api _api;
@@ -138,6 +149,7 @@ class SharedContentModule {
 
   static void clearMediaIndex() => _mediaIndexes.clear();
 
+  // #***! листаем пока не найдём нужное, просмотрщик открывается с конкретной картинки
   Future<ChatMediaFeed?> mediaFeedFor({
     required int chatId,
     required String mediaKey,
@@ -153,6 +165,7 @@ class SharedContentModule {
     return null;
   }
 
+  // #***! подгрузка следующей страницы при скролле
   Future<ChatMediaFeed> loadMoreMedia({
     required int chatId,
     required Future<String?> Function() resolveAnchor,
@@ -164,6 +177,7 @@ class SharedContentModule {
     return _snapshot(index);
   }
 
+  // #***! пока не дошли до конца total берём с сервера
   ChatMediaFeed _snapshot(_ChatMediaIndex index) {
     final counted = index.items.length;
     final total = index.reachedEnd
@@ -176,6 +190,7 @@ class SharedContentModule {
     );
   }
 
+  // #***! inFlight чтоб два скролла не грузили одну страницу
   Future<void> _nextMediaPage(
     int chatId,
     _ChatMediaIndex index,
@@ -195,6 +210,7 @@ class SharedContentModule {
     }
   }
 
+  // #***! первая страница от последнего сообщения, дальше от последнего загруженного
   Future<void> _loadMediaPage(
     int chatId,
     _ChatMediaIndex index,
@@ -217,6 +233,7 @@ class SharedContentModule {
     index.started = true;
     if (page.total > index.total) index.total = page.total;
 
+    // #***! дубли по ключу, страницы на границах перекрываются
     final fresh = <SharedMediaItem>[];
     for (final item in page.items) {
       if (index.seen.add(item.dedupKey)) fresh.add(item);
@@ -228,11 +245,13 @@ class SharedContentModule {
 
     final oldest = index.items.isEmpty ? null : index.items.last;
     index.items.addAll(fresh);
+    // #***! пришло что то новее, пересортировываем иначе лента ломается
     if (oldest != null && fresh.first.time > oldest.time) {
       index.items.sort((a, b) => b.time.compareTo(a.time));
     }
   }
 
+  // #***! запрос страницы, одно сообщение даёт несколько элементов
   Future<SharedMediaPage> fetchMedia({
     required int chatId,
     required String anchorMessageId,
@@ -256,6 +275,7 @@ class SharedContentModule {
       final messages = data['messages'];
       if (messages is! List) return SharedMediaPage.empty;
 
+      // #***! фильтруем по типам, сервер кладёт и лишнее
       final wanted = attachTypes
           .map((t) => _attachTypeByName[t])
           .whereType<AttachmentType>()
@@ -298,6 +318,7 @@ class SharedContentModule {
     }
   }
 
+  // #***! общие чаты для карточки контакта
   Future<List<CommonChatEntry>> fetchCommonChats(int userId) async {
     try {
       final response = await _api.sendRequest(

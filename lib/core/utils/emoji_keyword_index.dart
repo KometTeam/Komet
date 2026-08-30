@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
+// #***! эмодзи и слова по которым его находят
 class _Entry {
   final String emoji;
   final List<String> tokens;
@@ -9,11 +10,13 @@ class _Entry {
   const _Entry(this.emoji, this.tokens);
 }
 
+// #***! поиск эмодзи по слову, словарь в assets грузится один раз
 class EmojiKeywordIndex {
   EmojiKeywordIndex._();
 
   static final EmojiKeywordIndex instance = EmojiKeywordIndex._();
 
+  // #***! вариационный селектор ломает сравнение, выкидываем
   static const _variationSelector = '️';
   static final _wordPattern = RegExp(r'[0-9a-zа-яё\-]{2,}', unicode: true);
 
@@ -35,6 +38,7 @@ class EmojiKeywordIndex {
   List<String> get all =>
       List.unmodifiable(_entries.map((e) => e.emoji));
 
+  // #***! поиск по строке запроса
   List<String> search(String query) {
     final targets = resolve(query);
     if (targets.isEmpty) return const [];
@@ -47,6 +51,7 @@ class EmojiKeywordIndex {
   static String normalize(String emoji) =>
       emoji.replaceAll(_variationSelector, '');
 
+  // #***! ядро поиска, сначала эмодзи в запросе потом совпадения по началу слова
   Set<String> resolve(String query) {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return const {};

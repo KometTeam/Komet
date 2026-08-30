@@ -1,3 +1,4 @@
+// #***! расширенная карточка чата
 class ChatInfo {
   final Map<String, dynamic> raw;
   final List<int> participantIds;
@@ -11,6 +12,7 @@ class ChatInfo {
     required this.owner,
   });
 
+  // #***! участники приходят картой, нам чаще нужны id
   factory ChatInfo.fromMap(Map<String, dynamic> map) {
     return ChatInfo(
       raw: map,
@@ -20,17 +22,21 @@ class ChatInfo {
     );
   }
 
+  // #***! админ или владелец
   bool isAdmin(int id) => adminIds.contains(id);
   bool isOwner(int id) => owner != null && id == owner;
 
+  // #***! булев флаг из options
   bool option(String name) {
     final opts = raw['options'];
     return opts is Map && opts[name] == true;
   }
 
+  // #***! ссылку видят админы или все если настроено
   bool canSeeInviteLink(int id) =>
       isAdmin(id) || isOwner(id) || option('MEMBERS_CAN_SEE_PRIVATE_LINK');
 
+  // #***! у админа бывает подпись должность
   String? adminAlias(int id) {
     final source = raw['adminParticipants'];
     if (source is! Map) return null;
@@ -46,6 +52,7 @@ class ChatInfo {
   String? get link => raw['link'] as String?;
   String? get description => raw['description'] as String?;
 
+  // #***! ключи то int то строка, приводим к int
   static List<int> _idKeys(Object? source) {
     if (source is! Map) return const [];
     final out = <int>[];

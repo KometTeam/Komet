@@ -7,6 +7,7 @@ import 'package:opus_dart/opus_dart.dart';
 import '../utils/logger.dart';
 import 'ogg_page_writer.dart';
 
+// #***! WAV в ogg/opus, в этом формате сервер берёт голосовые
 /// Кодирует PCM в Ogg/Opus через libopus (FFI) на платформах, где у системы нет
 /// своего Opus-энкодера (Windows). Сырые Opus-пакеты выдаёт [opus_dart], а
 /// Ogg-контейнер (страницы, лейсинг, CRC32, OpusHead/OpusTags) собирается здесь.
@@ -16,14 +17,18 @@ import 'ogg_page_writer.dart';
 class OpusOggEncoder {
   static const int _sampleRate = 48000;
   static const int _channels = 1;
+  // #***! preSkip 312 это задержка кодека, плеер обязан её знать
   static const int _preSkip = 312;
+  // #***! кадр 20 мс при 48 кГц
   static const int _frameSamples = 960; // 20 мс @ 48 кГц
+  // #***! serial произвольный, взяли Komt
   static const int _serial = 0x4b6f6d74; // 'Komt'
   static const String _vendor = 'libopus unknown';
 
   static bool _initialized = false;
   static bool _available = false;
 
+  // #***! нативного кодека может не быть, тогда голосовые не пишутся
   /// Лениво загружает libopus и инициализирует opus_dart: на Windows —
   /// вендоренную `opus.dll` рядом с exe, на Android — через
   /// `opus_flutter_android`, на iOS/macOS — статически слинкованную
@@ -52,6 +57,7 @@ class OpusOggEncoder {
     return _available;
   }
 
+  // #***! весь путь, WAV в PCM в пакеты опуса в Ogg
   /// Парсит WAV (16-bit PCM моно 48 кГц) и кодирует его в Ogg/Opus.
   /// Возвращает `null`, если кодек недоступен или WAV не распознан.
   static Future<Uint8List?> wavToOggOpus(Uint8List wav) async {
@@ -91,6 +97,7 @@ class OpusOggEncoder {
     return _buildOgg(packets, totalSamples: pcm.length);
   }
 
+  // #***! первые две страницы обязательные, OpusHead и OpusTags
   static Uint8List _buildOgg(
     List<Uint8List> packets, {
     required int totalSamples,
@@ -148,6 +155,7 @@ class OpusOggEncoder {
     return out.toBytes();
   }
 
+  // #***! заголовок с частотой каналами и preSkip
   static Uint8List _opusHead() {
     final b = BytesBuilder();
     b.add(_ascii('OpusHead'));
@@ -189,6 +197,7 @@ class OpusOggEncoder {
 
   static Uint8List _ascii(String s) => Uint8List.fromList(s.codeUnits);
 
+  // #***! из WAV берём только PCM, остальные чанки мимо
   static Int16List? _pcmFromWav(Uint8List bytes) {
     if (bytes.length < 12) return null;
     if (String.fromCharCodes(bytes, 0, 4) != 'RIFF' ||

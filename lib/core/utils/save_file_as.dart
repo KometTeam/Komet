@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
+// #***! итог сохранить как, отмену отличаем от ошибки
 class SaveFileAsResult {
   final bool saved;
   final bool cancelled;
@@ -17,6 +18,7 @@ class SaveFileAsResult {
   });
 }
 
+// #***! системный выбор папки потом копирование
 Future<SaveFileAsResult> saveFileAs({
   required File source,
   required String fileName,
@@ -44,6 +46,7 @@ Future<SaveFileAsResult> saveFileAs({
   }
 }
 
+// #***! такой файл уже есть, дописываем (2) как проводник
 Future<File> _availableTarget(String directory, String fileName) async {
   var target = File(p.join(directory, fileName));
   if (!await target.exists()) return target;

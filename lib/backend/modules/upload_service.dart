@@ -16,6 +16,7 @@ import 'upload_notification_service.dart';
 
 export 'upload_notification_service.dart' show UploadKind;
 
+// #***! события очереди наружу
 sealed class UploadJobEvent {
   const UploadJobEvent({
     required this.chatId,
@@ -60,6 +61,7 @@ class UploadJobFailed extends UploadJobEvent {
   final String reason;
 }
 
+// #***! ошибка загрузки с кодом причины
 class UploadFailure implements Exception {
   const UploadFailure(this.message);
 
@@ -76,6 +78,7 @@ class UploadBytes {
   final int total;
 }
 
+// #***! одна задача, slots это сколько файлов внутри
 class UploadJob {
   UploadJob._({
     required this.id,
@@ -119,6 +122,7 @@ class UploadJob {
   bool get scheduled => scheduledTime != null;
   int get slots => _slots;
 
+  // #***! прогресс по слоту, дальше считаем общий
   void report(int slot, int sent, int total) {
     if (slot < 0 || slot >= _slots) return;
     _sent[slot] = sent;
@@ -132,6 +136,7 @@ class UploadJob {
     _publish();
   }
 
+  // #***! залилось, добиваем до 100% чтоб полоска не висла на 99
   void markUploaded() {
     for (var i = 0; i < _slots; i++) {
       if (_total[i] <= 0) _total[i] = _sent[i] > 0 ? _sent[i] : 1;
@@ -140,6 +145,7 @@ class UploadJob {
     _publish();
   }
 
+  // #***! общий прогресс по байтам, размеров нет усредняем доли
   void _publish() {
     final fractions = List<double>.generate(_slots, (i) {
       if (_total[i] <= 0) return 0.0;
@@ -164,12 +170,15 @@ class UploadJob {
   }
 }
 
+// #***! фасад загрузок для юишки
 class UploadService {
   UploadService._();
 
   static final UploadService instance = UploadService._();
 
+  // #***! история завершённых чистится чтоб не росла вечно
   static const int _historyLimit = 60;
+  // #***! фото по три параллельно, каждое до трёх попыток
   static const int _photoConcurrency = 3;
   static const int _photoAttempts = 3;
 
@@ -184,6 +193,7 @@ class UploadService {
 
   Stream<UploadJobEvent> get events => _events.stream;
 
+  // #***! временный id до ответа сервера
   String newTempId() =>
       'temp_${++_tempIdCounter}_${DateTime.now().microsecondsSinceEpoch}';
 
@@ -199,6 +209,7 @@ class UploadService {
     return null;
   }
 
+  // #***! плейсхолдеры открытого чата, рисуются вместе с настоящими
   List<CachedMessage> pendingFor(int chatId) {
     final pending = <CachedMessage>[];
     for (final job in _jobs.values) {
@@ -212,6 +223,7 @@ class UploadService {
 
   bool didFail(String tempId) => _failed.contains(tempId);
 
+  // #***! альбом фото, собираем токены потом одно сообщение
   Future<void> sendPhotos({
     required int accountId,
     required int chatId,
@@ -248,6 +260,7 @@ class UploadService {
     );
   }
 
+  // #***! видео, url заливка чанками сообщение
   Future<void> sendVideo({
     required int accountId,
     required int chatId,
@@ -291,6 +304,7 @@ class UploadService {
     );
   }
 
+  // #***! голосовое
   Future<void> sendVoice({
     required int accountId,
     required int chatId,
@@ -320,6 +334,7 @@ class UploadService {
     );
   }
 
+  // #***! кружок
   Future<void> sendVideoNote({
     required int accountId,
     required int chatId,
@@ -347,6 +362,7 @@ class UploadService {
     );
   }
 
+  // #***! общее для голосового и кружка, записанный файл потом удаляем
   Future<void> _sendRecording({
     required int accountId,
     required int chatId,
@@ -391,6 +407,7 @@ class UploadService {
     );
   }
 
+  // #***! документ, id и токен помним в истории файлов для облака
   Future<void> sendFile({
     required int accountId,
     required int chatId,
@@ -460,6 +477,7 @@ class UploadService {
     );
   }
 
+  // #***! обёртка над стримом FileUploader в один Future
   Future<UploadDone> _uploadFile({
     required int chatId,
     required UploadJob job,
@@ -507,6 +525,7 @@ class UploadService {
     }
   }
 
+  // #***! прогон задачи, уведомление ошибка сохранение и событие
   Future<void> _run(
     UploadJob job,
     Future<CachedMessage?> Function(UploadJob job) upload,
@@ -523,6 +542,7 @@ class UploadService {
     String? failure;
     try {
       real = await upload(job);
+      // #***! для отложенного null это нормально, оно уйдёт позже
       if (real == null && !job.scheduled) failure = 'send_failed';
     } catch (e) {
       failure = e is UploadFailure ? e.message : e.toString();
@@ -549,6 +569,7 @@ class UploadService {
       return;
     }
 
+    // #***! отложенное просто наружу, в базу и кэш не пишем
     if (job.scheduled) {
       _events.add(
         UploadJobDone(
@@ -564,6 +585,7 @@ class UploadService {
       return;
     }
 
+    // #***! настоящее в базу, временное удаляем
     final message = real!;
     try {
       await AppDatabase.saveMessages([message.toDbRow()]);
@@ -588,6 +610,7 @@ class UploadService {
     );
   }
 
+  // #***! память о завершённых пока экран чата не подхватит
   void _remember(String tempId, CachedMessage? real) {
     if (_completed.length + _failed.length > _historyLimit) {
       _completed.clear();
@@ -600,6 +623,7 @@ class UploadService {
     }
   }
 
+  // #***! фото пулом воркеров, первая ошибка рубит весь альбом
   Future<List<String?>> _uploadPhotos(
     List<({File file, GalleryItem? item})> jobs,
     UploadJob job,
@@ -628,6 +652,7 @@ class UploadService {
     return tokens;
   }
 
+  // #***! перед заливкой пережимаем, три попытки с растущей паузой
   Future<String?> _uploadOnePhoto(
     ({File file, GalleryItem? item}) photo,
     int index,
@@ -662,12 +687,14 @@ class UploadService {
     return null;
   }
 
+  // #***! имя файла из пути иначе photo.jpg
   String _photoFilename(File file) {
     final segments = file.uri.pathSegments;
     final name = segments.isNotEmpty ? segments.last : '';
     return name.isNotEmpty ? name : 'photo.jpg';
   }
 
+  // #***! подменяем плейсхолдер в кэше чата чтоб не мигнуло
   void _replaceInSessionCache(
     int accountId,
     int chatId,

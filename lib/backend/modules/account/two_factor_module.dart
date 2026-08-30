@@ -4,10 +4,12 @@ import 'account_base.dart';
 import 'account_models.dart';
 import 'profile_module.dart';
 
+// #***! двухфакторка, пароль подсказка и почта
 class TwoFactorModule extends AccountApiBase {
   final ProfileModule _profile;
   TwoFactorModule(super.api, this._profile);
 
+  // #***! весь сценарий по trackId, им сервер связывает шаги
   Future<String> create2faTrack() async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.authCreateTrack, {'type': 0});
@@ -19,6 +21,7 @@ class TwoFactorModule extends AccountApiBase {
     return trackId;
   }
 
+  // #***! пароль и подсказку сервер сначала валидирует
   Future<void> set2faPassword(String trackId, String password) async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.authValidatePassword, {
@@ -43,6 +46,7 @@ class TwoFactorModule extends AccountApiBase {
     }
   }
 
+  // #***! код на почту, вернёт через сколько можно повторить
   Future<int> verify2faEmail(String trackId, String email) async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.authVerifyEmail, {
@@ -65,6 +69,7 @@ class TwoFactorModule extends AccountApiBase {
     return email;
   }
 
+  // #***! финал, expectedCapabilities говорит что поменяли
   Future<ProfileData> confirm2fa({
     required String trackId,
     required String password,
@@ -85,6 +90,7 @@ class TwoFactorModule extends AccountApiBase {
     );
   }
 
+  // #***! вход в панель 2FA, запрос тот же но смысл другой
   Future<String> enter2faPanel() async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.authCreateTrack, {'type': 0});
@@ -96,6 +102,7 @@ class TwoFactorModule extends AccountApiBase {
     return trackId;
   }
 
+  // #***! включена ли 2FA, почта и подсказка
   Future<TwoFactorDetails> get2faDetails(String trackId) async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.auth2faDetails, {
@@ -115,6 +122,7 @@ class TwoFactorModule extends AccountApiBase {
     return get2faDetails(trackId);
   }
 
+  // #***! проверка текущего пароля
   Future<void> check2faPassword(String trackId, String password) async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.authCheckPassword, {
@@ -128,6 +136,7 @@ class TwoFactorModule extends AccountApiBase {
     }
   }
 
+  // #***! смена пароля, валидация подсказка применение
   Future<ProfileData> update2faPassword({
     required String trackId,
     required String newPassword,
@@ -176,6 +185,7 @@ class TwoFactorModule extends AccountApiBase {
     );
   }
 
+  // #***! снятие 2FA, capability 5
   Future<ProfileData> remove2fa(String trackId) async {
     ensureOnline();
     final payload = <dynamic, dynamic>{

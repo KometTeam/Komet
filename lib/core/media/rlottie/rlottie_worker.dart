@@ -6,6 +6,7 @@ import 'package:ffi/ffi.dart';
 
 import 'rlottie_ffi.dart';
 
+// #***! задание воркеру
 class RenderJob {
   const RenderJob({
     required this.jobId,
@@ -22,6 +23,7 @@ class RenderJob {
   final String? libPath;
 }
 
+// #***! метаданные клипа
 class ClipMeta {
   const ClipMeta({
     required this.jobId,
@@ -36,6 +38,7 @@ class ClipMeta {
   final int durationMs;
 }
 
+// #***! кадр, TransferableTypedData отдаёт байты между изолятами без копий
 class RenderedFrame {
   const RenderedFrame({
     required this.jobId,
@@ -50,6 +53,7 @@ class RenderedFrame {
   final int px;
 }
 
+// #***! дальше служебные сообщения воркера
 class RenderDone {
   const RenderDone(this.jobId);
   final int jobId;
@@ -68,10 +72,12 @@ class CancelJob {
 
 const double _maxCacheFps = 30.0;
 
+// #***! точка входа воркера, рендерит кадры и шлёт обратно
 void rlottieWorkerMain(SendPort toMain) {
   final port = ReceivePort();
   toMain.send(port.sendPort);
 
+  // #***! отменённые пропускаем, стикер уехал с экрана
   final cancelled = <int>{};
   RlottieBindings? bindings;
   String? boundLibPath;

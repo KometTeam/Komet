@@ -1,8 +1,10 @@
+// #***! режим отладки с фейковыми данными
 class DebugTest {
   static bool enabled = false;
   static int contactCount = 0;
   static bool berserk = false;
 
+  // #***! отрицательный id чтоб фейк не совпал с настоящим
   static const int debugAccountId = -424242;
 
   static const bool _envEnabled = bool.fromEnvironment('DEBUG_TEST');
@@ -16,6 +18,7 @@ class DebugTest {
   static const String _berserkFlag = '--berserk';
   static const String _contactsFlag = '--contacts';
 
+  // #***! читаем и dart-define и аргументы, аргументы важнее
   static void parse(List<String> args) {
     if (_envEnabled) enabled = true;
     if (_envBerserk) berserk = true;

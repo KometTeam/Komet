@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../utils/logger.dart';
 
+// #***! распакованные кадры стикера с диска
 class DiskClip {
   DiskClip({
     required this.px,
@@ -24,12 +25,15 @@ class DiskClip {
   final List<Uint8List> frames;
 }
 
+// #***! кадры кэшируем на диск, рендерить заново слишком дорого
 class RlottieDiskCache {
   RlottieDiskCache._();
   static final RlottieDiskCache instance = RlottieDiskCache._();
 
+  // #***! magic и версия формата, сменил версию старые файлы игнорятся
   static const _magic = 0x4b524c46;
   static const _version = 2;
+  // #***! под кадры отдаём 256 МБ
   static const int _maxBytes = 256 * 1024 * 1024;
 
   Directory? _dir;
@@ -45,6 +49,7 @@ class RlottieDiskCache {
     }();
   }
 
+  // #***! ключ это url плюс размер, на каждый размер свои кадры
   String _key(String url, int px) {
     final digest = sha1.convert(url.codeUnits).toString().substring(0, 20);
     return '${digest}_$px.krlf';
@@ -55,6 +60,7 @@ class RlottieDiskCache {
     return File('${dir.path}/${_key(url, px)}');
   }
 
+  // #***! битый файл кэша игнорим и рендерим заново
   Future<DiskClip?> load(String url, int px) async {
     try {
       final file = await _file(url, px);
@@ -90,6 +96,7 @@ class RlottieDiskCache {
     }
   }
 
+  // #***! кодируем и декодируем в изоляте, файлы большие
   static Future<Uint8List> _encode(
     int px,
     int frameCount,
@@ -160,6 +167,7 @@ class RlottieDiskCache {
     });
   }
 
+  // #***! вытеснение по времени доступа
   Future<void> _evict() async {
     try {
       final dir = _dir ?? await _directory();

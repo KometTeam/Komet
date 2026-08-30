@@ -7,10 +7,13 @@ import 'package:path_provider/path_provider.dart';
 import '../utils/logger.dart';
 import 'per_chat_json_store.dart';
 
+// #***! chatId 0 это обои по умолчанию
 const int kGlobalWallpaperChatId = 0;
 
+// #***! обои, своя картинка или тема
 enum ChatWallpaperKind { image, theme }
 
+// #***! правки картинки, затемнение блюр параллакс сдвиг
 @immutable
 class WallpaperImageSettings {
   final double dim;
@@ -26,6 +29,7 @@ class WallpaperImageSettings {
   });
 }
 
+// #***! один объект на оба вида, у темы настройки картинки нулевые
 @immutable
 class ChatWallpaper {
   final ChatWallpaperKind kind;
@@ -57,6 +61,7 @@ class ChatWallpaper {
 
   bool get isImage => kind == ChatWallpaperKind.image;
 
+  // #***! в джейсон или путь с настройками или id темы
   Map<String, dynamic> _toJson() => isImage
       ? {
           'path': imagePath,
@@ -85,6 +90,7 @@ class ChatWallpaper {
   }
 }
 
+// #***! обои по чатам поверх общего хранилища
 class ChatWallpaperStore extends PerChatJsonStore<ChatWallpaper> {
   ChatWallpaperStore._()
     : super(
@@ -99,6 +105,7 @@ class ChatWallpaperStore extends PerChatJsonStore<ChatWallpaper> {
 
   ChatWallpaper? get(int accountId, int chatId) => read(accountId, chatId);
 
+  // #***! картинку копируем к себе, исходник из галереи может исчезнуть
   Future<ChatWallpaper?> setImage(
     int accountId,
     int chatId,
@@ -109,6 +116,7 @@ class ChatWallpaperStore extends PerChatJsonStore<ChatWallpaper> {
     final dir = await getApplicationDocumentsDirectory();
     final wpDir = Directory('${dir.path}/$_dirName');
     if (!await wpDir.exists()) await wpDir.create(recursive: true);
+    // #***! время в имени файла, иначе флаттер отдаст старую из кэша
     final stamp = DateTime.now().millisecondsSinceEpoch;
     final file = File('${wpDir.path}/${accountId}_${chatId}_$stamp.img');
     await file.writeAsBytes(bytes, flush: true);
@@ -136,6 +144,7 @@ class ChatWallpaperStore extends PerChatJsonStore<ChatWallpaper> {
   Future<void> clear(int accountId, int chatId) =>
       write(accountId, chatId, null);
 
+  // #***! старый файл удаляем иначе обои копятся на диске
   @override
   void onBeforeWrite(String key, ChatWallpaper? previous, ChatWallpaper? next) {
     if (previous != null &&

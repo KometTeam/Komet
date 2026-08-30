@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'update_checker.dart';
 
+// #***! чем кончилась установка
 enum UpdateInstallStatus {
   done,
   noAsset,
@@ -25,6 +26,7 @@ class UpdateInstallResult {
   bool get ok => status == UpdateInstallStatus.done;
 }
 
+// #***! приёмник для потокового sha256, хэшируем прямо при скачивании
 class _DigestSink implements Sink<Digest> {
   Digest? value;
 
@@ -35,9 +37,11 @@ class _DigestSink implements Sink<Digest> {
   void close() {}
 }
 
+// #***! скачивание и установка APK, только андроид
 abstract class UpdateInstaller {
   static bool get isSupported => Platform.isAndroid;
 
+  // #***! весь путь, выбрать скачать проверить отдать установщику
   static Future<UpdateInstallResult> downloadAndInstall(
     AppUpdateInfo info, {
     void Function(double progress)? onProgress,
@@ -75,6 +79,7 @@ abstract class UpdateInstaller {
     return const UpdateInstallResult(UpdateInstallStatus.done);
   }
 
+  // #***! APK под ABI устройства и флейвор, иначе универсальный
   static Future<UpdateAsset?> resolveApk(AppUpdateInfo info) async {
     if (!Platform.isAndroid || info.assets.isEmpty) return null;
 
@@ -91,6 +96,7 @@ abstract class UpdateInstaller {
     return info.assetWithSuffix('-$flavor-universal.apk');
   }
 
+  // #***! качаем в .part и переименовываем после проверки
   static Future<File> _download(
     UpdateAsset asset,
     String tag,
@@ -114,6 +120,7 @@ abstract class UpdateInstaller {
         );
       }
 
+      // #***! хэш на лету чтоб не читать файл второй раз
       final total = response.contentLength > 0
           ? response.contentLength
           : asset.size;
@@ -132,6 +139,7 @@ abstract class UpdateInstaller {
       await sink.close();
       hasher.close();
 
+      // #***! размер или sha не сошлись, файл битый установщику не отдаём
       if (asset.size > 0 && received != asset.size) {
         throw _ChecksumMismatch('size ${asset.size}', 'size $received');
       }
@@ -143,6 +151,7 @@ abstract class UpdateInstaller {
       if (await file.exists()) await file.delete();
       await part.rename(file.path);
       return file;
+    // #***! при любой ошибке недокачанное удаляем
     } catch (e) {
       if (await part.exists()) {
         try {

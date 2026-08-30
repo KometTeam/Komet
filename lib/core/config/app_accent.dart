@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// #***! акцентный цвет, null значит берём из обоев
 class AppAccent {
   static const prefKey = 'app_accent_seed';
 
+  // #***! готовые пресеты для настроек
   static const List<({String label, Color? seed})> presets = [
     (label: 'Системный', seed: null),
     (label: 'Сиреневый', seed: Color(0xFFC1C4FF)),
@@ -16,6 +18,7 @@ class AppAccent {
     (label: 'Фиолетовый', seed: Color(0xFF7E57C2)),
   ];
 
+  // #***! цвет одним int
   static Future<Color?> load() async {
     final prefs = await SharedPreferences.getInstance();
     final val = prefs.getInt(prefKey);

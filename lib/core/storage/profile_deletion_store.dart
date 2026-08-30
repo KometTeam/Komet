@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+// #***! когда запланировано удаление профиля
 abstract final class ProfileDeletionStore {
   static String _key(int accountId) => 'profile_delete_at_$accountId';
 

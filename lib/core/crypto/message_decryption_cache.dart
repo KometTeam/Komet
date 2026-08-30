@@ -6,8 +6,10 @@ import 'package:flutter/foundation.dart';
 import '../storage/chat_encryption_store.dart';
 import 'chat_crypto_service.dart';
 
+// #***! расшифровалось или ключ не тот
 enum MessageDecryptionState { decrypted, wrongKey }
 
+// #***! результат по одному сообщению
 @immutable
 class MessageDecryption {
   final String? plaintext;
@@ -23,6 +25,7 @@ class MessageDecryption {
   bool get isDecrypted => state == MessageDecryptionState.decrypted;
 }
 
+// #***! кэш расшифровок, при смене ключа сбрасывается целиком
 class MessageDecryptionCache {
   MessageDecryptionCache._() {
     ChatEncryptionStore.instance.revision.addListener(clear);
@@ -30,12 +33,14 @@ class MessageDecryptionCache {
 
   static final MessageDecryptionCache instance = MessageDecryptionCache._();
 
+  // #***! тысяча последних, дальше вытесняем
   static const int _maxEntries = 1000;
 
   final LinkedHashMap<String, ValueNotifier<MessageDecryption?>> _entries =
       LinkedHashMap();
   final Set<String> _inFlight = {};
 
+  // #***! пузырь подписывается сюда и перерисуется когда текст расшифруется
   ValueListenable<MessageDecryption?> listenableFor(String messageId) =>
       _entryFor(messageId);
 
@@ -50,15 +55,18 @@ class MessageDecryptionCache {
     }
   }
 
+  // #***! известный текст кладём сразу, например своё только что отправленное
   void seed(String messageId, String plaintext) {
     _entryFor(messageId).value = MessageDecryption.decrypted(plaintext);
   }
 
+  // #***! поменяли временный id на настоящий, переносим расшифровку
   void adopt(String fromMessageId, String toMessageId) {
     final value = _entries[fromMessageId]?.value;
     if (value != null) _entryFor(toMessageId).value = value;
   }
 
+  // #***! _inFlight чтоб не расшифровывать одно сообщение дважды
   void request({
     required int accountId,
     required int chatId,
@@ -86,6 +94,7 @@ class MessageDecryptionCache {
         _entryFor(messageId).value = MessageDecryption.decrypted(result.text!);
         return;
       }
+      // #***! ключа нет показываем как неверный ключ только если текст правда похож на шифр
       switch (result.failure) {
         case CryptoFailure.wrongKey:
           _entryFor(messageId).value = const MessageDecryption.wrongKey();

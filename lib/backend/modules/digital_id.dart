@@ -14,6 +14,7 @@ import '../../core/utils/logger.dart';
 import '../../models/digital_id.dart';
 import 'webapp.dart';
 
+// #***! ошибка цифрового ID, отдельно нет авторизации и нет госуслуг
 class DigitalIdException implements Exception {
   final String code;
   final String message;
@@ -28,7 +29,9 @@ class DigitalIdException implements Exception {
   String toString() => message;
 }
 
+// #***! нативный цифровой ID, ходит в HTTP мимо вебвью
 class DigitalIdModule {
+  // #***! отдельный хост, к сокету отношения не имеет
   static const String _baseUrl = 'https://ext-api.max.ru';
   static const String _deviceIdKey = 'digital_id_device_id';
   static const String _tokenKey = 'digital_id_biometry_token';
@@ -37,12 +40,14 @@ class DigitalIdModule {
   final HttpClient _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 20);
 
+  // #***! авторизация это WebAppData из адреса мини аппы
   String? _webAppData;
   String? _deviceId;
   String? _realUserAgent;
 
   DigitalIdModule(this._webApp);
 
+  // #***! берём и кэшируем WebAppData
   Future<String> _ensureWebAppData({bool forceRefresh = false}) async {
     if (!forceRefresh && _webAppData != null) return _webAppData!;
     final launch = await _webApp.fetchDigitalId();
@@ -57,6 +62,7 @@ class DigitalIdModule {
     return data;
   }
 
+  // #***! WebAppData во фрагменте и закодирован целиком, серверу нужен раскодированный
   String? _extractWebAppData(String url) {
     final hashIndex = url.indexOf('#');
     if (hashIndex < 0) return null;
@@ -76,6 +82,7 @@ class DigitalIdModule {
     }
   }
 
+  // #***! device_id должен совпасть с хэндшейком иначе device_mismatch
   Future<String> deviceId() async {
     // Тот же device_id, что уходит в handshake (опкод 6) — иначе сервер вернёт
     // device_mismatch. Сессия обычно уже поднята к моменту открытия Цифрового ID.
@@ -98,6 +105,7 @@ class DigitalIdModule {
     return generated;
   }
 
+  // #***! запасной device_id пока нет сессии
   Future<String> _generateDeviceId() async {
     final rnd = Random.secure();
     final bytes = List<int>.generate(16, (_) => rnd.nextInt(256));
@@ -112,6 +120,7 @@ class DigitalIdModule {
     return hex;
   }
 
+  // #***! представляемся тем же браузером что и вебвью
   Future<String> _resolveUserAgent() async {
     final spoofed = await SpoofingService.getWebViewUserAgent();
     if (spoofed != null && spoofed.isNotEmpty) return spoofed;
@@ -139,6 +148,7 @@ class DigitalIdModule {
         '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
   }
 
+  // #***! все HTTP запросы тут, заголовки повтор после 401 и ошибки
   Future<dynamic> _send(
     String method,
     String path, {
@@ -164,6 +174,7 @@ class DigitalIdModule {
       logger.i('[DID-native] $method $path -> ${response.statusCode}');
     }
 
+    // #***! 401 значит WebAppData протух, обновляем и повторяем один раз
     if (response.statusCode == 401 && retry) {
       await _ensureWebAppData(forceRefresh: true);
       return _send(method, path, body: body, retry: false);
@@ -175,6 +186,7 @@ class DigitalIdModule {
     return jsonDecode(text);
   }
 
+  // #***! код и текст ошибки из тела если оно похоже на джейсон
   DigitalIdException _errorFor(int statusCode, String body) {
     String code = 'HTTP_$statusCode';
     String message = 'Ошибка Цифрового ID ($statusCode)';
@@ -192,6 +204,7 @@ class DigitalIdModule {
     return DigitalIdException(code, message, statusCode: statusCode);
   }
 
+  // #***! ответы то в data то нет
   Map _unwrapData(dynamic decoded) {
     if (decoded is Map && decoded['data'] is Map) {
       return decoded['data'] as Map;
@@ -199,6 +212,7 @@ class DigitalIdModule {
     return decoded is Map ? decoded : const {};
   }
 
+  // #***! дальше по методу на эндпоинт
   Future<DigitalIdBiometryStatus> biometryStatus() async {
     final decoded = await _send('GET', '/v2/digital-id/biometry-status');
     return DigitalIdBiometryStatus.fromMap(_unwrapData(decoded));
@@ -216,6 +230,7 @@ class DigitalIdModule {
     return _unwrapData(decoded)['token'] as String? ?? '';
   }
 
+  // #***! документы асинхронно, refresh даёт state и по нему опрашиваем
   Future<String> refreshUserDocs(String token) async {
     final decoded = await _send(
       'POST',
@@ -256,6 +271,7 @@ class DigitalIdModule {
     return DigitalIdVerification.fromValue(status);
   }
 
+  // #***! shadow-mode, 404 значит фича выключена а не ошибка
   Future<bool> shadowMode(String deviceId) async {
     try {
       final decoded = await _send(
@@ -333,6 +349,7 @@ class DigitalIdModule {
     );
   }
 
+  // #***! удалили профиль, стираем и токен биометрии
   Future<void> deleteProfile() async {
     await _send('DELETE', '/v3/digital-id/delete-profile');
     final accountId = await TokenStorage.getActiveAccountId();
@@ -342,6 +359,7 @@ class DigitalIdModule {
     }
   }
 
+  // #***! токен биометрии в защищённом хранилище, старый переносим
   Future<String?> _storedToken() async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return null;
@@ -365,6 +383,7 @@ class DigitalIdModule {
     }
   }
 
+  // #***! токен создаём один раз
   Future<String> ensureBiometryToken({String? photoHash}) async {
     final existing = await _storedToken();
     if (existing != null) return existing;
@@ -374,6 +393,7 @@ class DigitalIdModule {
     return token;
   }
 
+  // #***! пять попыток по 2 секунды пока сервер готовит документы
   Future<DigitalIdUserDocs?> loadDocuments({
     bool createIfMissing = false,
     int attempts = 5,
@@ -396,6 +416,7 @@ class DigitalIdModule {
     return null;
   }
 
+  // #***! качаем страницу проверки из QR, разбирает вызывающий
   Future<Map<String, dynamic>?> fetchMobileIdVerification(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null || uri.scheme != 'https') return null;
@@ -421,6 +442,7 @@ class DigitalIdModule {
     }
   }
 
+  // #***! сброс при смене аккаунта
   void reset() {
     _webAppData = null;
     _deviceId = null;

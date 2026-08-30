@@ -5,10 +5,13 @@ import 'dart:typed_data';
 
 import 'video_transcoder.dart' show VideoInfo;
 
+// #***! на десктопе метаданные берём у ffprobe, плагина там нет
 class DesktopVideoProbe {
   static const Duration _timeout = Duration(seconds: 6);
+  // #***! кэшируем, ffprobe это запуск процесса и это дорого
   static const int _maxCache = 60;
 
+  // #***! наличие утилит проверяем один раз
   static bool get supported =>
       !Platform.isAndroid && !Platform.isIOS && !Platform.isFuchsia;
 
@@ -32,6 +35,7 @@ class DesktopVideoProbe {
     return _hasTools!;
   }
 
+  // #***! длительность
   static Future<Duration?> duration(String path) async {
     if (_durations.containsKey(path)) return _durations[path];
     if (!await _toolsAvailable()) return null;
@@ -57,6 +61,7 @@ class DesktopVideoProbe {
 
   static final Map<String, (int, int)?> _sizes = {};
 
+  // #***! размеры кадра
   static Future<(int, int)?> dimensions(String path) async {
     if (_sizes.containsKey(path)) return _sizes[path];
     if (!await _toolsAvailable()) return null;
@@ -84,6 +89,7 @@ class DesktopVideoProbe {
     return result;
   }
 
+  // #***! полная инфа, размеры длительность фпс
   static Future<VideoInfo?> info(String path) async {
     if (!await _toolsAvailable()) return null;
     try {
@@ -133,6 +139,7 @@ class DesktopVideoProbe {
     return double.tryParse(value) ?? 30;
   }
 
+  // #***! кадр в нужный момент для превью
   static Future<Uint8List?> frameAt(String path, int timeMs, int size) async {
     if (!await _toolsAvailable()) return null;
     return _grabFrame(path, size, (timeMs / 1000).toStringAsFixed(3));
@@ -179,6 +186,7 @@ class DesktopVideoProbe {
     return null;
   }
 
+  // #***! кэш ограничен, старое выкидываем
   static void _remember<T>(Map<String, T> cache, String key, T value) {
     if (cache.length > _maxCache) cache.clear();
     cache[key] = value;

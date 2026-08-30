@@ -3,12 +3,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/format.dart';
 
+// #***! расписание тёмной темы
 class ThemeSchedule {
   final TimeOfDay darkStart;
   final TimeOfDay darkEnd;
 
   const ThemeSchedule({required this.darkStart, required this.darkEnd});
 
+  // #***! интервал бывает через полночь, отсюда две ветки
   bool isDarkAt(DateTime now) {
     final nowMin = now.hour * 60 + now.minute;
     final startMin = darkStart.hour * 60 + darkStart.minute;
@@ -20,6 +22,7 @@ class ThemeSchedule {
     return nowMin >= startMin || nowMin < endMin;
   }
 
+  // #***! через сколько переключать, таймер ровно на этот срок
   Duration durationUntilNextSwitch(DateTime now) {
     final nowMin = now.hour * 60 + now.minute;
     final startMin = darkStart.hour * 60 + darkStart.minute;
@@ -35,6 +38,7 @@ class ThemeSchedule {
   }
 }
 
+// #***! настройка расписания, по дефолту с 22 до 7
 class AppThemeSchedule {
   static const prefKey = 'app_theme_schedule';
   static const _defaultStart = TimeOfDay(hour: 22, minute: 0);
@@ -51,6 +55,7 @@ class AppThemeSchedule {
     return value;
   }
 
+  // #***! храним строкой 22:00-07:00
   static Future<void> save(ThemeSchedule schedule) async {
     current.value = schedule;
     final prefs = await SharedPreferences.getInstance();
@@ -62,6 +67,7 @@ class AppThemeSchedule {
 
   static String _fmt(TimeOfDay t) => '${pad2(t.hour)}:${pad2(t.minute)}';
 
+  // #***! кривая строка откатывается к дефолту а не роняет старт
   static ThemeSchedule _parse(String? val) {
     if (val == null) {
       return const ThemeSchedule(

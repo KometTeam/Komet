@@ -1,3 +1,4 @@
+// #***! опкоды протокола, id команды в заголовке
 /// All protocol operation codes.
 ///
 /// Naming follows the server-side convention.
@@ -227,8 +228,10 @@ abstract class Opcode {
 
   // ── Human-readable names ───────────────────────────────────────────
 
+  // #***! имя опкода для логов
   static String name(int opcode) => _names[opcode] ?? 'UNKNOWN($opcode)';
 
+  // #***! таблица id -> имя, не забудь дописать
   static const Map<int, String> _names = {
     ping: 'PING',
     debug: 'DEBUG',

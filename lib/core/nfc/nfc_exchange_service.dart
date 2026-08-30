@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../utils/parse.dart';
 
+// #***! что случилось при обмене по NFC
 enum NfcEventType { received, exchanging, cancelled, error }
 
 class NfcEvent {
@@ -16,6 +17,7 @@ class NfcEvent {
   const NfcEvent(this.type, this.id, {this.phone, this.reason});
 }
 
+// #***! поддержка NFC и включён ли он
 class NfcStatus {
   final bool supported;
   final bool enabled;
@@ -25,6 +27,7 @@ class NfcStatus {
   bool get ready => supported && enabled;
 }
 
+// #***! обмен контактами телефонами, только андроид
 class NfcExchangeService {
   NfcExchangeService._();
   static final NfcExchangeService instance = NfcExchangeService._();
@@ -47,9 +50,11 @@ class NfcExchangeService {
     }
   }
 
+  // #***! события с натива отдельным каналом
   Stream<NfcEvent> get events =>
       _events.receiveBroadcastStream().map(_decodeEvent);
 
+  // #***! отдаём нативу свои id и телефон
   Future<void> start(int selfId, int selfPhone) =>
       _method.invokeMethod('start', {'selfId': selfId, 'selfPhone': selfPhone});
 
@@ -60,6 +65,7 @@ class NfcExchangeService {
     } catch (_) {}
   }
 
+  // #***! неизвестное событие считаем отменой
   NfcEvent _decodeEvent(dynamic raw) {
     final map = raw is Map ? raw : const {};
     final parsedId = parseIntOrNull(map['id']);

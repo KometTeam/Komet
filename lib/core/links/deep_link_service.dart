@@ -22,11 +22,13 @@ import 'desktop_url_scheme.dart';
 import 'max_link.dart';
 import '../config/build_profile.dart';
 
+// #***! диплинки komet:// и max:// и переходы из пушей
 class DeepLinkService {
   DeepLinkService._();
 
   static final DeepLinkService instance = DeepLinkService._();
 
+  // #***! app_links даёт и стартовую ссылку и все последующие
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _sub;
   StreamSubscription<SessionState>? _stateSub;
@@ -40,9 +42,11 @@ class DeepLinkService {
   Timer? _webPushRetry;
   Timer? _pushTargetRetry;
   Timer? _logExportRetry;
+  // #***! _ready когда дерево построено, до этого ссылки копим
   bool _ready = false;
   bool _started = false;
 
+  // #***! подписка на ссылки и сессию
   Future<void> init() async {
     if (_started) return;
     _started = true;
@@ -60,13 +64,16 @@ class DeepLinkService {
     } catch (_) {}
   }
 
+  // #***! юишка готова, открываем накопленное
   void markReady() {
     _ready = true;
     _flushPending();
   }
 
+  // #***! внешний вход, например тапнули по ссылке в тексте
   void handle(Uri uri) => _onUri(uri);
 
+  // #***! разбор ссылки и в очередь
   void _onUri(Uri uri) {
     if (_isLogExportLink(uri)) {
       _pendingLogExport = true;
@@ -99,6 +106,7 @@ class DeepLinkService {
     _flushPending();
   }
 
+  // #***! открываем когда есть контекст и живая сессия
   void _flushPending() {
     final context = KometApp.navigatorKey.currentContext;
 
@@ -162,6 +170,7 @@ class DeepLinkService {
     tryHandleMaxLink(context, pending);
   }
 
+  // #***! вернулись из браузера после госуслуг
   bool _isExternalCallback(Uri uri) {
     if (!BuildProfile.digitalId) return false;
     final scheme = uri.scheme.toLowerCase();
@@ -205,6 +214,7 @@ class DeepLinkService {
     return (chatId: chatId, userId: userId);
   }
 
+  // #***! переход из пуша в чат или сообщение
   Future<void> _openPushTarget(
     BuildContext context,
     ({int? chatId, int? userId}) target,
@@ -255,6 +265,7 @@ class DeepLinkService {
     );
   }
 
+  // #***! вебпуш несёт свою ссылку внутри payload
   Future<void> _handleWebPush(
     BuildContext context,
     WebPushSubscription subscription,
@@ -284,6 +295,7 @@ class DeepLinkService {
     }
   }
 
+  // #***! специальная ссылка для выгрузки лога
   bool _isLogExportLink(Uri uri) {
     final scheme = uri.scheme.toLowerCase();
     final host = uri.host.toLowerCase();

@@ -22,6 +22,7 @@ import 'chat_preview.dart';
 import 'folders.dart';
 import 'messages.dart' show ContactCache, CachedMessage;
 
+// #***! участники картой id -> время прочтения, в базе строкой
 Map<int, int> parseParticipants(dynamic raw) {
   try {
     final decoded = raw is String ? jsonDecode(raw) : raw;
@@ -39,10 +40,12 @@ Map<int, int> parseParticipants(dynamic raw) {
   return {};
 }
 
+// #***! время в старших битах id, младшие 16 это счётчик внутри миллисекунды
 /// Server message ids carry their timestamp in the high bits: the low 16 bits
 /// are an intra-millisecond sequence number.
 int messageIdToTime(int messageId) => messageId >> 16;
 
+// #***! упомянули нас или нет, от этого значок в списке
 bool messageMentionsUser(Map<dynamic, dynamic> message, int userId) {
   final elements = message['elements'];
   if (elements is! List) return false;
@@ -53,6 +56,7 @@ bool messageMentionsUser(Map<dynamic, dynamic> message, int userId) {
   return false;
 }
 
+// #***! чат как он лежит в базе плюс развёрнутое последнее сообщение
 class CachedChat {
   final int id;
   final int accountId;
@@ -117,12 +121,14 @@ class CachedChat {
            ? lastMsgText.replaceAll('\n', ' ')
            : lastMsgText;
 
+  // #***! дальше готовые ответы для юишки чтоб она сырое не разбирала
   bool get isOfficial => options.contains('OFFICIAL');
 
   late final ChatPreviewMedia? lastMsgMedia = ChatPreviewMedia.decode(
     lastMsgPreview,
   );
 
+  // #***! форматирование последнего сообщения строкой джейсона
   List<FormatRange> get lastMsgFormatRanges {
     final raw = lastMsgElements;
     if (raw == null || raw.isEmpty) return const [];
@@ -133,6 +139,7 @@ class CachedChat {
     }
   }
 
+  // #***! прочитано если у кого то отметка не старше нашего сообщения
   bool get lastMsgReadByOthers {
     final t = lastMsgTime;
     if (t == null) return false;
@@ -142,12 +149,14 @@ class CachedChat {
     return false;
   }
 
+  // #***! владелец тоже админ
   bool iAmAdmin(int myId) => owner == myId || admins.contains(myId);
 
   bool get hasPinnedMessage => pinnedMsgId != null;
 
   bool get isGroupChat => type == 'CHAT' || type == 'GROUP';
 
+  // #***! закрепляет админ или все если настроено
   bool canPinMessages(int myId) {
     if (!isGroupChat) return false;
     return iAmAdmin(myId) || options.contains('ALL_CAN_PIN_MESSAGE');
@@ -159,14 +168,17 @@ class CachedChat {
 
   bool get confirmBeforeSend => options.contains('CONFIRM_BEFORE_SEND');
 
+  // #***! 0 звук есть, минус навсегда, иначе время до которого молчим
   bool get isMuted {
     if (dontDisturbUntil == ChatsModule.muteOff) return false;
     if (dontDisturbUntil < 0) return true;
     return dontDisturbUntil > DateTime.now().millisecondsSinceEpoch;
   }
 
+  // #***! сообщение удалили а истории нет, рисуем плашку
   bool get isLastMsgDeleted => lastMsgText == ChatsModule.lastMsgPlaceholder;
 
+  // #***! упоминание новее нашей отметки значит непрочитанное
   bool get hasUnreadMention {
     final mentionId = lastMentionMsgId;
     if (mentionId == null || mentionId <= 0) return false;
@@ -204,6 +216,7 @@ class CachedChat {
     lastMentionMsgId: row['last_mention_msg_id'] as int?,
   );
 
+  // #***! options и admins в базе строками
   static Set<String> _decodeOptions(dynamic raw) {
     if (raw is! String || raw.isEmpty) return const {};
     return raw.split(',').where((s) => s.isNotEmpty).toSet();
@@ -218,6 +231,7 @@ class CachedChat {
         .toSet();
   }
 
+  // #***! обратно в строку таблицы
   Map<String, dynamic> toDbRow() => {
     'id': id,
     'account_id': accountId,
@@ -251,6 +265,7 @@ class CachedChat {
     'last_mention_msg_id': lastMentionMsgId,
   };
 
+  // #***! _keep отличает не передали от передали null, иначе поле не сбросить
   static const Object _keep = Object();
 
   CachedChat copyWith({
@@ -336,6 +351,7 @@ class CachedChat {
   }
 }
 
+// #***! найденный чат в поиске
 class ChatSearchHit {
   final int id;
   final String type;
@@ -352,6 +368,7 @@ class ChatSearchHit {
   });
 }
 
+// #***! участник для экрана списка
 class ChatMemberEntry {
   final int id;
   final String? name;
@@ -383,6 +400,7 @@ class ChatMembersPage {
   const ChatMembersPage({required this.members, required this.marker});
 }
 
+// #***! найденное сообщение в поиске
 class MessageSearchHit {
   final int chatId;
   final String? messageId;
@@ -400,6 +418,7 @@ class MessageSearchHit {
 }
 
 sealed class MessageEvent {
+  // #***! события чата для открытого экрана
   final int chatId;
   const MessageEvent(this.chatId);
 }
@@ -440,16 +459,20 @@ class MessageSentEvent extends MessageEvent {
   const MessageSentEvent(super.chatId, this.tempId, this.message);
 }
 
+// #***! главный модуль чатов, кэш пуши и все операции
 class ChatsModule {
+  // #***! 0 звук есть, -1 выключен навсегда
   static const int muteOff = 0;
   static const int muteForever = -1;
 
+  // #***! маркер что последнее сообщение удалили
   /// Sentinel в `lastMsgText` когда последнее сообщение в чате удалено,
   /// а кеша истории нет — UI должен отрисовать курсивную плашку.
   static const String lastMsgPlaceholder = '__komet_lastmsg_placeholder__';
 
   ChatsModule._();
 
+  // #***! события для открытого чата
   final _messageEventsController = StreamController<MessageEvent>.broadcast();
   Stream<MessageEvent> get messageEvents => _messageEventsController.stream;
 
@@ -459,6 +482,7 @@ class ChatsModule {
     _messageEventsController.add(MessageSentEvent(chatId, tempId, message));
   }
 
+  // #***! отметка прочтения и обнуление счётчика
   Future<void> markRead(
     Api api,
     int accountId,
@@ -492,6 +516,7 @@ class ChatsModule {
     _bump();
   }
 
+  // #***! прочитано до сообщения, при скролле по непрочитанным
   Future<void> markReadUpTo(
     Api api,
     int accountId,
@@ -529,6 +554,7 @@ class ChatsModule {
     _bump();
   }
 
+  // #***! пометить непрочитанным руками
   Future<int?> markUnread(Api api, int accountId, int chatId, int mark) async {
     int? unread;
     try {
@@ -552,6 +578,7 @@ class ChatsModule {
     return unread;
   }
 
+  // #***! своё сообщение сразу в строку чата, пуш не ждём
   Future<void> applyOutgoing(
     int accountId,
     int chatId, {
@@ -581,9 +608,11 @@ class ChatsModule {
     });
   }
 
+  // #***! chatsChanged на любое изменение, список чатов подписан
   final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   void _bump() => chatsChanged.value = chatsChanged.value + 1;
 
+  // #***! события меняющие состав участников
   static const Set<String> _membershipEvents = {
     'add',
     'joinByLink',
@@ -591,6 +620,7 @@ class ChatsModule {
     'remove',
   };
 
+  // #***! счётчик правим локально, свои действия сервер уже учёл
   void _applyMembershipControl(
     int accountId,
     int chatId,
@@ -614,11 +644,13 @@ class ChatsModule {
     _refreshChatInfo(chatId);
   }
 
+  // #***! перечитываем карточку чтоб права не устарели
   void _refreshChatInfo(int chatId) {
     ChatInfoFetch.invalidate(chatId);
     unawaited(ChatInfoFetch.get(chatId));
   }
 
+  // #***! шаблон прочитать поменять сохранить оповестить
   Future<bool> _updateChat(
     int accountId,
     int chatId,
@@ -635,6 +667,7 @@ class ChatsModule {
     return true;
   }
 
+  // #***! сырой payload в базе строкой
   static Map<String, dynamic>? _decodePayload(dynamic raw) {
     if (raw is String && raw.isNotEmpty) {
       try {
@@ -653,6 +686,7 @@ class ChatsModule {
   bool wasHistoryFetched(int chatId) => _historyFetched.contains(chatId);
   void markHistoryFetched(int chatId) => _historyFetched.add(chatId);
 
+  // #***! подписка на пуши и состояние сессии
   void attachGlobalPushHandlers(Api api) {
     _globalPushSub?.cancel();
     _globalStateSub?.cancel();
@@ -671,6 +705,7 @@ class ChatsModule {
     chatsChanged.dispose();
   }
 
+  // #***! при обрыве чистим кэши, пока нас не было всё устарело
   void _handleSessionState(SessionState state) {
     if (state == SessionState.disconnected) {
       ContactInfoFetch.clear();
@@ -680,6 +715,7 @@ class ChatsModule {
     }
   }
 
+  // #***! сменили аккаунт, всё локальное чужое
   void resetForAccountSwitch() {
     _historyFetched.clear();
     ContactInfoFetch.clear();
@@ -688,6 +724,7 @@ class ChatsModule {
     SharedContentModule.clearMediaIndex();
   }
 
+  // #***! пуши строго по одному, иначе гонки при записи в базу
   void _enqueueGlobalPush(Packet packet) {
     _pushQueue = _pushQueue.then((_) => _handleGlobalPush(packet)).catchError((
       Object e,
@@ -696,6 +733,7 @@ class ChatsModule {
     });
   }
 
+  // #***! роутер пушей по опкодам
   Future<void> _handleGlobalPush(Packet packet) async {
     switch (packet.opcode) {
       case Opcode.notifMessage:
@@ -711,6 +749,7 @@ class ChatsModule {
     }
   }
 
+  // #***! присутствие собеседника
   void _handlePresence(Packet packet) {
     final payload = packet.payload;
     if (payload is! Map) return;
@@ -721,6 +760,7 @@ class ChatsModule {
     PresenceFetch.apply(userId, Map<String, dynamic>.from(presence));
   }
 
+  // #***! сообщение удалили на сервере
   Future<void> _handleNotifMsgDelete(Packet packet) async {
     final payload = packet.payload;
     if (payload is! Map) return;
@@ -755,6 +795,7 @@ class ChatsModule {
     _bump();
   }
 
+  // #***! новое сообщение, комментарии отсеиваем у них свой модуль
   Future<void> _handleNotifMessage(Packet packet) async {
     final payload = packet.payload;
     if (payload is! Map) return;
@@ -786,6 +827,7 @@ class ChatsModule {
     final unread = payload['unread'] as int?;
 
     var rows = await AppDatabase.loadChat(accountId, chatId);
+    // #***! чата нет в базе, нас только что добавили, тянем карточку
     if (rows.isEmpty) {
       try {
         final chatInfo = await ChatInfoFetch.get(chatId);
@@ -958,6 +1000,7 @@ class ChatsModule {
     return null;
   }
 
+  // #***! пересобираем последнее сообщение из истории, пусто ставим маркер
   Future<void> _reconcileLastMessage(
     int accountId,
     int chatId,
@@ -1003,6 +1046,7 @@ class ChatsModule {
     await AppDatabase.saveChats([newRow]);
   }
 
+  // #***! после истории меняем маркер на настоящее сообщение
   /// Вызывается после успешного фетча истории чата —
   /// если в превью был placeholder, заменяем его на актуальное
   /// последнее сообщение из кеша.
@@ -1025,6 +1069,7 @@ class ChatsModule {
     _bump();
   }
 
+  // #***! сверяем что удалили на сервере
   Future<List<String>> reconcileDeletedFromFetch(
     int accountId,
     int chatId,
@@ -1073,6 +1118,7 @@ class ChatsModule {
     return newlyDeleted;
   }
 
+  // #***! пуш про реакции
   Future<void> _handleNotifMsgReactionsChanged(Packet packet) async {
     final payload = packet.payload;
     if (payload is! Map) return;
@@ -1120,6 +1166,7 @@ class ChatsModule {
     _bump();
   }
 
+  // #***! пуш про прочтение с другого устройства
   Future<void> _handleNotifMark(Packet packet) async {
     final payload = packet.payload;
     if (payload is! Map) return;
@@ -1143,6 +1190,7 @@ class ChatsModule {
     _bump();
   }
 
+  // #***! обновления контактов копим 250 мс, их прилетают сотни
   final Set<int> _pendingContactUpdates = {};
   Timer? _contactFlushTimer;
   Future<void>? _contactFlushFuture;
@@ -1218,6 +1266,7 @@ class ChatsModule {
     }
   }
 
+  // #***! карточка с сервера в кэш
   Future<CachedChat?> cacheServerChat(
     Map<dynamic, dynamic> chat,
     int accountId, {
@@ -1266,6 +1315,7 @@ class ChatsModule {
     return parsed;
   }
 
+  // #***! чаты из ответа login
   /// Парсит и кэширует чаты из payload opcode 19.
   ///
   /// Для диалогов разрезолвит имя и аватар из списка [contacts] того же
@@ -1306,6 +1356,7 @@ class ChatsModule {
     }
   }
 
+  // #***! пишем пачку с проверкой изменилось ли что
   Future<int> _persistChatMaps(
     List<dynamic> chats,
     int accountId,
@@ -1351,6 +1402,7 @@ class ChatsModule {
     return rows.length;
   }
 
+  // #***! остальные страницы в фоне после входа
   Future<void> paginateChats(
     Api api,
     int accountId,
@@ -1388,6 +1440,7 @@ class ChatsModule {
     }
   }
 
+  // #***! дальше чтение из базы, основной путь для юишки
   final Set<int> _repairedSenders = {};
 
   Future<List<CachedChat>> getChats(
@@ -1425,6 +1478,7 @@ class ChatsModule {
   Future<void> clearCache(int accountId) =>
       AppDatabase.clearChatsCache(accountId);
 
+  // #***! полная карточка с сервера
   Future<Map<String, dynamic>?> getChatInfo(Api api, int chatId) async {
     final packet = await api.sendRequest(Opcode.chatInfo, {
       'chatIds': [chatId],
@@ -1438,6 +1492,7 @@ class ChatsModule {
     return info;
   }
 
+  // #***! кто докуда дочитал
   Future<Map<int, int>> getReadMarks(Api api, int accountId, int chatId) async {
     try {
       final info = await getChatInfo(api, chatId);
@@ -1450,6 +1505,7 @@ class ChatsModule {
     return rows.isEmpty ? const {} : rows.first.participants;
   }
 
+  // #***! поиск чата по id юзера
   Future<dynamic> searchById(Api api, int userId) async {
     final packet = await api.sendRequest(Opcode.publicSearch, {
       'query': userId.toString(),
@@ -1459,6 +1515,7 @@ class ChatsModule {
     return packet.payload;
   }
 
+  // #***! поиск по сообщениям
   Future<List<MessageSearchHit>> searchMessages(
     Api api,
     String query, {
@@ -1479,6 +1536,7 @@ class ChatsModule {
     }
   }
 
+  // #***! поиск публичных чатов и каналов
   Future<List<ChatSearchHit>> searchPublic(
     Api api,
     String query, {
@@ -1500,6 +1558,7 @@ class ChatsModule {
     }
   }
 
+  // #***! подписка на канал
   Future<void> subscribeChat(
     Api api,
     int chatId, {
@@ -1515,6 +1574,7 @@ class ChatsModule {
     }
   }
 
+  // #***! вступление по ссылке
   Future<({CachedChat chat, int? subscribersCount})> joinChannel(
     Api api,
     String link,
@@ -1541,6 +1601,7 @@ class ChatsModule {
     return (chat: cached, subscribersCount: count is int ? count : null);
   }
 
+  // #***! проверить что чат в кэше, иначе дозапросить
   Future<bool> ensureChatCached(Api api, int accountId, int chatId) async {
     final rows = await AppDatabase.loadChat(accountId, chatId);
     if (rows.isNotEmpty) return true;
@@ -1555,6 +1616,7 @@ class ChatsModule {
     }
   }
 
+  // #***! создание группы
   Future<CachedChat?> createGroupChat(
     Api api, {
     required String title,
@@ -1568,6 +1630,7 @@ class ChatsModule {
     notify: notify,
   );
 
+  // #***! создание канала
   Future<CachedChat?> createChannel(
     Api api, {
     required String title,
@@ -1581,6 +1644,7 @@ class ChatsModule {
     notify: notify,
   );
 
+  // #***! общее создание, отличается набором опций
   Future<CachedChat?> _createChat(
     Api api, {
     required String chatType,
@@ -1628,6 +1692,7 @@ class ChatsModule {
     return cacheServerChat(chat, accountId);
   }
 
+  // #***! url под аватарку чата
   Future<String?> requestChatPhotoUploadUrl(Api api) async {
     final packet = await api.sendRequest(Opcode.photoUpload, {'count': 1});
     if (!packet.isOk) return null;
@@ -1647,6 +1712,7 @@ class ChatsModule {
     });
   }
 
+  // #***! настройки чата, кто что может
   Future<bool> setChatOptions(
     Api api, {
     required int chatId,
@@ -1674,6 +1740,7 @@ class ChatsModule {
     return true;
   }
 
+  // #***! закрепление сообщения
   Future<String?> setPinnedMessage(
     Api api, {
     required int chatId,
@@ -1707,6 +1774,7 @@ class ChatsModule {
     }
   }
 
+  // #***! переключение закрепа по текущему состоянию
   Future<String?> togglePin(
     Api api, {
     required List<int> chatIds,
@@ -1768,6 +1836,7 @@ class ChatsModule {
     }
   }
 
+  // #***! избранное берётся из папок, переносим в favIndex
   Future<void> applyFavorites(int accountId) async {
     try {
       final folders = await FoldersModule.loadFolders(accountId);
@@ -1802,6 +1871,7 @@ class ChatsModule {
     }
   }
 
+  // #***! мьют до времени или навсегда
   Future<String?> setChatMute(
     Api api, {
     required int chatId,
@@ -1833,6 +1903,7 @@ class ChatsModule {
     }
   }
 
+  // #***! удаление чата
   Future<String?> deleteChat(
     Api api, {
     required int chatId,
@@ -1860,6 +1931,7 @@ class ChatsModule {
     }
   }
 
+  // #***! очистка истории
   Future<String?> clearHistory(
     Api api, {
     required int chatId,
@@ -1889,6 +1961,7 @@ class ChatsModule {
     }
   }
 
+  // #***! выход из чата
   Future<bool> leaveChat(Api api, {required int chatId}) async {
     try {
       await api.sendRequest(Opcode.chatLeave, {'chatId': chatId});
@@ -1903,6 +1976,7 @@ class ChatsModule {
     }
   }
 
+  // #***! добавление участников
   Future<bool> addMembers(
     Api api, {
     required int chatId,
@@ -1945,6 +2019,7 @@ class ChatsModule {
     }
   }
 
+  // #***! страница участников
   Future<ChatMembersPage?> getChatMembers(
     Api api,
     int chatId, {
@@ -2024,6 +2099,7 @@ class ChatsModule {
     }
   }
 
+  // #***! принудительно обновить конкретные чаты
   Future<List<CachedChat>> refreshChats(Api api, List<int> chatIds) async {
     if (chatIds.isEmpty) return const [];
     try {
@@ -2063,4 +2139,5 @@ class ChatsModule {
   }
 }
 
+// #***! синглтон, вся юишка работает с одним
 final chats = ChatsModule._();

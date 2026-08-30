@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 
 import 'raw_clipboard_media.dart';
 
+// #***! мост к нативному буферу, ошибки канала это пусто
 class ClipboardChannel {
   const ClipboardChannel._();
 
@@ -15,6 +16,7 @@ class ClipboardChannel {
     }
   }
 
+  // #***! приоритет у файлов, есть пути картинку не разбираем
   static Future<RawClipboardMedia?> read() async {
     Map<Object?, Object?>? raw;
     try {

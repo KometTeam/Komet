@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../../core/storage/app_database.dart';
 
+// #***! модели аккаунта, авторизация приватность сессии
 int? _coerceAccountId(dynamic value) {
   if (value is int) return value;
   if (value is double) return value.toInt();
@@ -9,6 +10,7 @@ int? _coerceAccountId(dynamic value) {
   return null;
 }
 
+// #***! id аккаунта лежит в разных местах, ищем во всех
 int? extractAccountId(dynamic response) {
   if (response is! Map) return null;
 
@@ -48,6 +50,7 @@ int? extractAccountId(dynamic response) {
       _coerceAccountId(response['account_id']);
 }
 
+// #***! описание формы ответа для лога когда id не нашли
 String describeResponseShape(dynamic response) {
   if (response is! Map) return 'не-Map (${response.runtimeType})';
   final sb = StringBuffer('keys=${response.keys.toList()}');
@@ -66,6 +69,7 @@ String describeResponseShape(dynamic response) {
   return sb.toString();
 }
 
+// #***! приватность одним объектом, ключи как у сервера капсом
 class PrivacyConfig {
   final String searchByPhone;
   final String incomingCall;
@@ -119,6 +123,7 @@ class PrivacyConfig {
     required this.hash,
   });
 
+  // #***! незнакомое игнорим, пустое берём дефолтом
   factory PrivacyConfig.fromMap(Map<dynamic, dynamic> map) {
     return PrivacyConfig(
       searchByPhone: map['SEARCH_BY_PHONE']?.toString() ?? 'ALL',
@@ -149,6 +154,7 @@ class PrivacyConfig {
     );
   }
 
+  // #***! в базу строкой джейсона
   String toJson() => jsonEncode({
     'SEARCH_BY_PHONE': searchByPhone,
     'INCOMING_CALL': incomingCall,
@@ -185,6 +191,7 @@ class PrivacyConfig {
     }
   }
 
+  // #***! пустой конфиг до ответа сервера
   static PrivacyConfig empty() {
     return const PrivacyConfig(
       searchByPhone: 'ALL',
@@ -214,6 +221,7 @@ class PrivacyConfig {
   }
 }
 
+// #***! заблокированный контакт для настроек
 class BlockedContact {
   final int id;
   final String? firstName;
@@ -262,6 +270,7 @@ class BlockedContact {
   }
 }
 
+// #***! состояние 2FA
 class TwoFactorDetails {
   final bool enabled;
   final String? email;
@@ -270,6 +279,7 @@ class TwoFactorDetails {
   const TwoFactorDetails({required this.enabled, this.email, this.hint});
 }
 
+// #***! тип запроса кода
 enum AuthRequestType {
   startAuth('START_AUTH'),
   resend('RESEND'),
@@ -284,6 +294,7 @@ enum LoginStatus { idle, loading, success, error }
 
 enum AccountNotice { resurrectingProfile }
 
+// #***! протухший токен FCM, надо перевыпустить
 class WrongDeviceTokenException implements Exception {
   const WrongDeviceTokenException();
   @override
@@ -296,6 +307,7 @@ class WrongPasswordException implements Exception {
   String toString() => 'WrongPasswordException';
 }
 
+// #***! временный токен сценария авторизации
 class RequestCodeResult {
   final String token;
 
@@ -316,17 +328,20 @@ class PresetAvatarCategory {
   const PresetAvatarCategory({required this.name, required this.avatars});
 }
 
+// #***! ответ на код, тут же решается вход это или регистрация
 class VerifyCodeResult {
   final Map<dynamic, dynamic> payload;
 
   const VerifyCodeResult({required this.payload});
 
+  // #***! токены вложенно в tokenAttrs
   String? get loginToken => _nestedToken('LOGIN');
 
   String? get registerToken => _nestedToken('REGISTER');
 
   bool get isRegistration => registerToken != null && loginToken == null;
 
+  // #***! при регистрации сервер даёт готовые аватарки
   List<PresetAvatarCategory> get presetAvatars {
     final raw = payload['presetAvatars'];
     if (raw is! List) return const [];
@@ -356,6 +371,7 @@ class VerifyCodeResult {
     return categories;
   }
 
+  // #***! аккаунт с 2FA, дальше пароль
   bool get requiresPassword => payload['passwordChallenge'] != null;
 
   Map<dynamic, dynamic>? get passwordChallenge {
@@ -385,6 +401,7 @@ class TwoFactorResult {
   const TwoFactorResult({required this.loginToken, required this.accountId});
 }
 
+// #***! маркеры синхры для login, докуда мы уже знаем
 class LoginSyncParams {
   final int chatsSync;
   final int contactsSync;
@@ -410,6 +427,7 @@ class LoginSyncParams {
     this.serverConfigSeen = false,
   });
 
+  // #***! нет lastLogin значит первый вход
   static Future<LoginSyncParams?> fromDatabase(int accountId) async {
     final values = await AppDatabase.getAllSyncValues(accountId);
     final lastLogin = values[SyncKey.lastLogin];
@@ -430,6 +448,7 @@ class LoginSyncParams {
   }
 }
 
+// #***! активная сессия на другом устройстве
 class SessionInfo {
   final int? id;
   final String client;
@@ -460,6 +479,7 @@ class SessionInfo {
     );
   }
 
+  // #***! сервер не всегда даёт id, ключ собираем из всех полей
   int get uniqueId => Object.hash(id, client, time, info);
 
   @override
@@ -478,6 +498,7 @@ class SessionInfo {
   int get hashCode => Object.hash(id, client, location, current, time, info);
 }
 
+// #***! итог успешного входа
 class LoginResult {
   final ProfileData profile;
   final String? updatedToken;

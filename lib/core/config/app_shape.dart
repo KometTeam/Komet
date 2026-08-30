@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// #***! радиусы всего приложения, менять только тут
 class AppShape {
   static const double card = 20;
   static const double button = 14;
@@ -7,6 +8,7 @@ class AppShape {
   static const double dialog = 24;
   static const double pill = 100;
 
+  // #***! готовые BorderRadius чтоб не собирать на каждом билде
   static const BorderRadius cardRadius = BorderRadius.all(
     Radius.circular(card),
   );

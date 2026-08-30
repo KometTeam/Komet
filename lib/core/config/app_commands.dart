@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! слэш команды в поле ввода, экспериментальное
 class AppCommands {
   static const prefKey = 'dev_commands';
   static const bool defaultValue = false;

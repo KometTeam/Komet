@@ -11,6 +11,7 @@ import 'rlottie_disk_cache.dart';
 import 'rlottie_ffi.dart';
 import 'rlottie_worker.dart';
 
+// #***! один анимированный стикер, кадры готовыми ui.Image
 class RlottieClip {
   RlottieClip({required this.key, required this.px});
 
@@ -24,6 +25,7 @@ class RlottieClip {
   List<ui.Image?> _images = const [];
   ui.Image? _lastImage;
 
+  // #***! ready это сколько кадров подряд готово, виджет подписан
   final ValueNotifier<int> ready = ValueNotifier(0);
 
   bool complete = false;
@@ -33,6 +35,7 @@ class RlottieClip {
 
   bool get playable => frameCount > 0;
 
+  // #***! кадра нет, показываем последний готовый чтоб не мигало
   ui.Image? frameAt(int index) {
     if (index < 0 || index >= _images.length) return _lastImage;
     return _images[index] ?? _lastImage;
@@ -42,6 +45,7 @@ class RlottieClip {
     _images = List<ui.Image?>.filled(count, null);
   }
 
+  // #***! кадры складываются подряд, ready двигается по сплошной части
   void _setFrame(int index, ui.Image image) {
     if (index < 0 || index >= _images.length) {
       image.dispose();
@@ -68,6 +72,7 @@ class RlottieClip {
   }
 }
 
+// #***! задание в работе
 class _Job {
   _Job(this.clip, this.url, this.completer);
   final RlottieClip clip;
@@ -76,15 +81,18 @@ class _Job {
   List<Uint8List?> rawFrames = const [];
 }
 
+// #***! движок анимированных стикеров, пул изолятов и кэш
 class RlottieEngine {
   RlottieEngine._();
   static final RlottieEngine instance = RlottieEngine._();
 
   static String? debugLibraryPath;
 
+  // #***! под кадры в памяти 192 МБ, дальше LRU
   static const int _maxBytes = 192 * 1024 * 1024;
   static const int _modelCacheBytes = 20 * 1024 * 1024;
 
+  // #***! _loading схлопывает параллельные запросы одного стикера
   final Map<String, RlottieClip> _clips = {};
   final Map<String, Future<RlottieClip?>> _loading = {};
   final Map<int, _Job> _jobs = {};
@@ -92,6 +100,7 @@ class RlottieEngine {
   int _totalBytes = 0;
   int _clock = 0;
   int _nextJobId = 1;
+  // #***! _rrIndex раскидывает задания по воркерам по кругу
   int _rrIndex = 0;
 
   bool? _available;
@@ -100,6 +109,7 @@ class RlottieEngine {
   int _tick() => ++_clock;
   String _keyFor(String url, int px) => '$url@$px';
 
+  // #***! без нативки движок недоступен
   bool get available {
     return _available ??= () {
       final bindings = RlottieBindings.open(path: debugLibraryPath);
@@ -114,6 +124,7 @@ class RlottieEngine {
     return pool[_rrIndex++ % pool.length];
   }
 
+  // #***! пул изолятов поднимается при первом стикере
   Future<List<SendPort>> _spawnPool() async {
     final count = (Platform.numberOfProcessors - 1).clamp(1, 3);
     final ports = <SendPort>[];
@@ -128,6 +139,7 @@ class RlottieEngine {
     return ports;
   }
 
+  // #***! роутер сообщений от воркеров
   void _onWorkerMessage(dynamic message) {
     if (message is ClipMeta) {
       _onMeta(message);
@@ -203,6 +215,7 @@ class RlottieEngine {
     }
   }
 
+  // #***! кэш в памяти, потом диск, потом рендер
   Future<RlottieClip?> acquire(String url, int px, {String? inlineJson}) async {
     if (!available) return null;
     final key = _keyFor(url, px);
@@ -270,6 +283,7 @@ class RlottieEngine {
     return completer.future;
   }
 
+  // #***! кадры с диска декодируем по одному чтоб стикер заиграл раньше
   Future<void> _decodeDiskProgressive(RlottieClip clip, DiskClip disk) async {
     for (var i = 0; i < disk.frameCount; i++) {
       if (!identical(_clips[clip.key], clip)) return;
@@ -292,6 +306,7 @@ class RlottieEngine {
     return completer.future;
   }
 
+  // #***! джейсон анимации качаем обычным кэшем файлов
   Future<String?> _fetchJson(String url) async {
     try {
       final file = await DefaultCacheManager().getSingleFile(url);
@@ -302,18 +317,21 @@ class RlottieEngine {
     }
   }
 
+  // #***! прогрев, рендерим пока стикер ещё не на экране
   Future<void> prewarm(String url, int px) async {
     if (!available) return;
     final clip = await acquire(url, px);
     if (clip != null) release(clip);
   }
 
+  // #***! клип живёт пока его кто то использует
   void release(RlottieClip clip) {
     if (clip.active > 0) clip.active--;
     clip.lastUsed = _tick();
     _evictIfNeeded();
   }
 
+  // #***! LRU когда кадры в памяти перевалили за лимит
   void _evictIfNeeded() {
     if (_totalBytes <= _maxBytes) return;
     final candidates = _clips.values.where((c) => c.active <= 0).toList()

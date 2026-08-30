@@ -9,9 +9,12 @@ import 'token_storage.dart';
 import '../utils/ids.dart';
 import '../utils/logger.dart';
 
+// #***! подмена устройства, профиль свой у каждого аккаунта
 class SpoofingService {
+  // #***! версия которой представляемся, от неё зависит функционал
   static const String hardcodedAppVersion = '26.23.2';
   static const int hardcodedBuildNumber = 6779;
+  // #***! незалогиненный профиль живёт под pending пока не узнаем id
   static const String pendingScope = 'pending';
   static const String androidDeviceType = 'ANDROID';
   static const String defaultArchitecture = 'arm64-v8a';
@@ -22,6 +25,7 @@ class SpoofingService {
     'x86_64',
   ];
 
+  // #***! ключи старой схемы, при чтении переносим и удаляем
   static const String _legacyEnabledKey = 'spoofing_enabled';
   static const List<String> _legacyKeys = [
     'spoofing_enabled',
@@ -44,6 +48,7 @@ class SpoofingService {
 
   static final Random _rng = Random.secure();
 
+  // #***! один аккаунт один профиль, ключ от id
   static String _profileKey(String scope) => 'spoof_profile_$scope';
 
   static Future<String> activeScope() async {
@@ -66,6 +71,7 @@ class SpoofingService {
     await prefs.remove(_profileKey('$accountId'));
   }
 
+  // #***! после логина переносим pending на настоящий id
   static Future<void> commitPendingSpoof(int accountId) async {
     final prefs = await SharedPreferences.getInstance();
     final pending = await _read(prefs, pendingScope);
@@ -77,6 +83,7 @@ class SpoofingService {
     await prefs.remove(_profileKey(pendingScope));
   }
 
+  // #***! новому аккаунту свободный пресет, два одинаковых устройства выглядят подозрительно
   static Future<SpoofProfile> prepareNewAccountSpoof(
     List<int> existingAccountIds,
   ) async {
@@ -97,6 +104,7 @@ class SpoofingService {
     final pool = fresh.isNotEmpty
         ? fresh
         : devicePresets.where(isAndroid).toList();
+    // #***! свободные кончились, берём любой
     final preset = pool[_rng.nextInt(pool.length)];
     final shortLocale = preset.locale.split(RegExp(r'[-_]')).first;
 
@@ -126,6 +134,7 @@ class SpoofingService {
     return profile;
   }
 
+  // #***! вот это и уезжает в хэндшейк, пустое заменяем хардкодом
   static Future<Map<String, dynamic>?> getSpoofedSessionData({
     String? scope,
   }) async {
@@ -156,6 +165,7 @@ class SpoofingService {
     };
   }
 
+  // #***! вебвью должно быть тем же устройством что и сокет
   static Future<String?> getWebViewUserAgent() async {
     final prefs = await SharedPreferences.getInstance();
     final profile = await _read(prefs, await activeScope());
@@ -168,6 +178,7 @@ class SpoofingService {
     return _deriveUserAgent(profile);
   }
 
+  // #***! пресета нет, собираем юзерагент из полей
   static String _deriveUserAgent(SpoofProfile profile) {
     final model = profile.deviceName.isEmpty ? 'K' : profile.deviceName;
     final android = profile.osVersion.isEmpty
@@ -177,6 +188,7 @@ class SpoofingService {
         '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
   }
 
+  // #***! чтение с миграцией, сначала новый формат потом старый
   static Future<SpoofProfile?> _read(
     SharedPreferences prefs,
     String scope,
@@ -198,6 +210,7 @@ class SpoofingService {
     return null;
   }
 
+  // #***! версию и архитектуру подтягиваем к текущим чтоб профиль не палился
   static Future<SpoofProfile> _migrateProfile(
     SharedPreferences prefs,
     String scope,
@@ -222,6 +235,7 @@ class SpoofingService {
     return migrated;
   }
 
+  // #***! разовый перенос со старой схемы поле = ключ
   static Future<SpoofProfile?> _migrateLegacy(
     SharedPreferences prefs,
     String scope,

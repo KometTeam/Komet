@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! пузырь тянется под текст или всегда фиксированный
 enum BubbleBehavior { mutable, immutable }
 
+// #***! настройка формы пузырей
 class AppBubbleBehavior {
   static const prefKey = 'app_bubble_behavior';
 
@@ -23,6 +25,7 @@ class AppBubbleBehavior {
   static BubbleBehavior _parse(String? val) =>
       enumFromName(BubbleBehavior.values, val, BubbleBehavior.mutable);
 
+  // #***! подписи для настроек
   static String label(BubbleBehavior behavior) {
     switch (behavior) {
       case BubbleBehavior.mutable:

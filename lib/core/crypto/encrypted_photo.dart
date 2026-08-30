@@ -7,10 +7,13 @@ import '../utils/logger.dart';
 import '../utils/media_cache.dart';
 import 'chat_crypto_service.dart';
 
+// #***! шифрованное фото уходит на сервер как png
 const String kEncryptedPhotoExtension = '.png';
 
+// #***! расшифрованное в кэше под своим именем
 String decryptedCacheName(String cacheName) => 'decrypted_$cacheName';
 
+// #***! файл или причина неудачи
 class EncryptedPhotoResult {
   final File? file;
   final CryptoFailure? failure;
@@ -21,6 +24,7 @@ class EncryptedPhotoResult {
   bool get isOk => file != null;
 }
 
+// #***! перед шифрованием гоним в png, жпег после перекодирования байт в байт не совпадёт
 /// Re-encodes an arbitrary image into lossless PNG. Encryption needs a format
 /// that survives byte-for-byte; a re-encoded JPEG would not.
 Future<File?> reencodeAsPng(File source, String destPath) async {
@@ -41,12 +45,14 @@ Future<File?> reencodeAsPng(File source, String destPath) async {
   }
 }
 
+// #***! временная папка под промежуточные файлы
 Future<Directory> _scratchDir() async {
   final dir = Directory('${(await getTemporaryDirectory()).path}/komet_enc');
   if (!await dir.exists()) await dir.create(recursive: true);
   return dir;
 }
 
+// #***! фото в png потом в шифрованный шум, готово к отправке
 /// Picked image → PNG → encrypted noise PNG, ready to upload as a file.
 Future<EncryptedPhotoResult> prepareEncryptedPhoto({
   required int accountId,
@@ -74,6 +80,7 @@ Future<EncryptedPhotoResult> prepareEncryptedPhoto({
   return EncryptedPhotoResult.ok(File(encPath));
 }
 
+// #***! скачанный шум обратно в фото, кладём в кэш просмотрщика
 /// Downloaded noise PNG → original photo, cached for the viewer.
 Future<EncryptedPhotoResult> openEncryptedPhoto({
   required int accountId,

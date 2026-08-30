@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../config/app_media_cache.dart';
 import '../storage/app_instance.dart';
 
+// #***! дисковый кэш медиа, имя детерминированное поэтому повторно не качаем
 /// Постоянный дисковый кэш скачанных медиа (файлы, видео).
 ///
 /// Хранит файлы в `<appSupport>/media_cache/` под детерминированным именем
@@ -16,6 +17,7 @@ class MediaCache {
   /// вытесняются старые файлы (LRU).
   static int get maxBytes => AppMediaCacheLimit.current.value;
 
+  // #***! размер держим в памяти, каталог не пересканируем
   static Directory? _dir;
   static int? _cachedSize;
   static final Map<String, Future<File?>> _inFlight = {};
@@ -34,6 +36,7 @@ class MediaCache {
     _presence.clear();
   }
 
+  // #***! у каждой копии приложения свой каталог
   static Future<Directory> _cacheDir() async {
     final cached = _dir;
     if (cached != null) return cached;
@@ -63,6 +66,7 @@ class MediaCache {
     return files;
   }
 
+  // #***! попадание обновляет mtime, на нём держится LRU
   /// Существует ли непустой кэш-файл [name].
   ///
   /// При попадании обновляет mtime файла — это делает вытеснение LRU
@@ -80,6 +84,7 @@ class MediaCache {
     return null;
   }
 
+  // #***! скачивание с защитой от параллельных запросов
   /// Возвращает кэш-файл [name], скачивая [url] при отсутствии.
   ///
   /// Загрузка идёт во временный `.part` и переименовывается атомарно —
@@ -104,6 +109,7 @@ class MediaCache {
     }
   }
 
+  // #***! качаем в .part и переименовываем, недокачанное не станет валидным кэшем
   static Future<File?> _download(
     String name,
     String url,
@@ -150,6 +156,7 @@ class MediaCache {
     }
   }
 
+  // #***! размер считаем инкрементально
   /// Суммарный размер кэша в байтах.
   ///
   /// Результат держится в памяти и поддерживается инкрементально при
@@ -195,6 +202,7 @@ class MediaCache {
     return freed;
   }
 
+  // #***! под лимитом выходим сразу, каталог обходим только при превышении
   /// Вытесняет старые файлы (по mtime), пока размер превышает [maxBytes].
   ///
   /// Под лимитом — ранний выход без сканирования каталога (частый случай).
@@ -217,6 +225,7 @@ class MediaCache {
       }
     }
 
+    // #***! сортируем по времени доступа и удаляем старое
     files.sort(
       (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
     );
@@ -232,6 +241,7 @@ class MediaCache {
     _cachedSize = total;
   }
 
+  // #***! флаг файл скачан для иконки в пузыре
   /// Реактивный флаг наличия файла [name] в кэше (для UI-иконки «скачано»).
   static ValueListenable<bool> presence(String name) {
     final key = _sanitize(name);
@@ -255,6 +265,7 @@ class MediaCache {
     }
   }
 
+  // #***! запрещённые символы в имени в подчёркивания
   static String _sanitize(String name) {
     final cleaned = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
     return cleaned.isEmpty ? 'file' : cleaned;

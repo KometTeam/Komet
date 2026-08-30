@@ -8,6 +8,7 @@ import '../links/deep_link_service.dart';
 import '../../frontend/widgets/custom_notification.dart';
 import '../../frontend/widgets/max_link_handler.dart';
 
+// #***! схемы которые вебвью открывает сам, остальное уводит из приложения
 const Set<String> _webViewSchemes = {
   'http',
   'https',
@@ -23,8 +24,10 @@ bool leavesWebView(String? scheme) {
   return !_webViewSchemes.contains(scheme.toLowerCase());
 }
 
+// #***! свои схемы ловим внутри, системе не отдаём
 const Set<String> _appSchemes = {'komet', 'max'};
 
+// #***! открытие ссылки, сначала наша схема потом max потом браузер
 Future<void> openExternalUrl(BuildContext context, String url) async {
   final appUri = Uri.tryParse(url.trim());
   if (appUri != null && _appSchemes.contains(appUri.scheme.toLowerCase())) {
@@ -46,6 +49,7 @@ Future<void> openExternalUrl(BuildContext context, String url) async {
   }
 }
 
+// #***! карта, пробуем нативные по очереди иначе яндекс в браузере
 Future<void> openLocationOnMap(
   BuildContext context,
   double latitude,
@@ -68,6 +72,7 @@ Future<void> openLocationOnMap(
   );
 }
 
+// #***! на иосе сначала яндекс потом системные, на андроиде хватает geo:
 List<Uri> _nativeMapUris(double latitude, double longitude, int zoom) {
   if (Platform.isIOS) {
     return [

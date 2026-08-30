@@ -1,3 +1,4 @@
+// #***! анимодзи, эмодзи со своей lottie анимацией
 class Animoji {
   final int id;
   final String emoji;
@@ -15,6 +16,7 @@ class Animoji {
     this.lottiePlayUrl,
   });
 
+  // #***! прислали мусор, вернём null и не упадём
   static Animoji? fromMap(Map<dynamic, dynamic> map) {
     final id = map['id'];
     final emoji = map['emoji']?.toString();

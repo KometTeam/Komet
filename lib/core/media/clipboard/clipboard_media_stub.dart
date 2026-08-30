@@ -1,5 +1,6 @@
 import 'clipboard_media_types.dart';
 
+// #***! заглушка, буфер всегда пуст
 class ClipboardMedia {
   const ClipboardMedia._();
 

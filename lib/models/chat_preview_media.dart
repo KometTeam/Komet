@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+// #***! что показать в списке чатов вместо текста
 enum ChatPreviewKind {
   photo,
   video,
@@ -19,6 +20,7 @@ enum ChatPreviewKind {
   other,
 }
 
+// #***! в базу пишем строкой чтоб порядок значений не сломал старое
 const Map<ChatPreviewKind, String> _kindToCode = {
   ChatPreviewKind.photo: 'photo',
   ChatPreviewKind.video: 'video',
@@ -38,10 +40,12 @@ const Map<ChatPreviewKind, String> _kindToCode = {
   ChatPreviewKind.other: 'other',
 };
 
+// #***! обратная карта из прямой, руками не дублируем
 final Map<String, ChatPreviewKind> _codeToKind = {
   for (final e in _kindToCode.entries) e.value: e.key,
 };
 
+// #***! мини превью в списке чатов
 class ChatPreviewThumb {
   final String source;
   final bool video;
@@ -58,6 +62,7 @@ class ChatPreviewThumb {
   }
 }
 
+// #***! что рисуется в подписи чата
 class ChatPreviewMedia {
   final ChatPreviewKind kind;
   final List<ChatPreviewThumb> thumbs;
@@ -71,8 +76,10 @@ class ChatPreviewMedia {
     this.detail,
   });
 
+  // #***! нет label и detail значит подпись рисуем сами
   bool get captioned => label == null && detail == null;
 
+  // #***! ключи в один символ, это в каждой строке таблицы чатов
   Map<String, dynamic> toMap() => {
     'k': _kindToCode[kind],
     if (thumbs.isNotEmpty) 't': [for (final thumb in thumbs) thumb.toMap()],
@@ -80,8 +87,10 @@ class ChatPreviewMedia {
     if (detail != null) 'd': detail,
   };
 
+  // #***! в базе строкой
   String encode() => jsonEncode(toMap());
 
+  // #***! битая строка не должна ронять список чатов
   static ChatPreviewMedia? decode(String? raw) {
     if (raw == null || raw.isEmpty) return null;
     try {

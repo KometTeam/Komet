@@ -5,10 +5,13 @@ import 'package:path_provider/path_provider.dart';
 import '../gallery_source.dart';
 import 'clipboard_media.dart';
 
+// #***! вставленные картинки лежат сутки
 const Duration _pasteRetention = Duration(hours: 24);
 
+// #***! как показать вставленное
 enum PastedAttachmentKind { image, video, file }
 
+// #***! файл из буфера готовый к отправке
 class PastedAttachment {
   const PastedAttachment({
     required this.file,
@@ -25,6 +28,7 @@ class PastedAttachment {
   bool get isMedia => kind != PastedAttachmentKind.file;
 }
 
+// #***! содержимое буфера в файлы на диске
 Future<List<PastedAttachment>> materializeClipboardMedia(
   ClipboardMediaPayload payload,
 ) async {
@@ -51,6 +55,7 @@ Future<List<PastedAttachment>> materializeClipboardMedia(
   return result;
 }
 
+// #***! картинку сначала сохраняем иначе её не отправить
 Future<PastedAttachment?> _storePastedImage(ClipboardImageData image) async {
   try {
     final dir = Directory(
@@ -74,12 +79,14 @@ Future<PastedAttachment?> _storePastedImage(ClipboardImageData image) async {
   }
 }
 
+// #***! тип по расширению
 PastedAttachmentKind _kindOf(String path) {
   if (isVideoPath(path)) return PastedAttachmentKind.video;
   if (isImagePath(path)) return PastedAttachmentKind.image;
   return PastedAttachmentKind.file;
 }
 
+// #***! старые вставки чистим иначе папка растёт
 Future<void> _prune(Directory dir) async {
   final cutoff = DateTime.now().subtract(_pasteRetention);
   try {

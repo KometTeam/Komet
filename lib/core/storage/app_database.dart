@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactorySqflitePlugin;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+// #***! профиль как строка таблицы profile
 class ProfileData {
   final int id;
   final String firstName;
@@ -91,6 +92,7 @@ class ProfileData {
     );
   }
 
+  // #***! profileOptions в базе строкой а от сервера списком
   static List<int>? _parseProfileOptions(dynamic raw) {
     if (raw is! List) return null;
     final options = raw
@@ -129,6 +131,7 @@ class ProfileData {
     );
   }
 
+  // #***! обратно в строку для sqflite
   Map<String, dynamic> toDbRow({bool isActive = false}) => {
     'id': id,
     'first_name': firstName,
@@ -145,6 +148,7 @@ class ProfileData {
   };
 }
 
+// #***! ключи sync_state, докуда мы досинхронизировались
 abstract class SyncKey {
   static const chatsSync = 'chats_sync';
   static const contactsSync = 'contacts_sync';
@@ -161,11 +165,13 @@ abstract class SyncKey {
   static const profileInviteLink = 'profile_invite_link';
 }
 
+// #***! вся локальная база, профили чаты контакты сообщения
 class AppDatabase {
   static Database? _db;
 
   static String? _mobileDbDir;
 
+  // #***! зовётся один раз на старте до первого обращения
   static Future<void> init() async {
     if (Platform.isAndroid || Platform.isIOS) {
       _mobileDbDir = await databaseFactorySqflitePlugin.getDatabasesPath();
@@ -176,6 +182,7 @@ class AppDatabase {
 
   static Completer<Database>? _initCompleter;
 
+  // #***! ленивое открытие с защитой от гонки чтоб базу не открыли дважды
   static Future<Database> get _instance async {
     if (_db != null) return _db!;
     if (_initCompleter != null) return _initCompleter!.future;
@@ -191,6 +198,7 @@ class AppDatabase {
     return _db!;
   }
 
+  // #***! на десктопе в support, на мобилках в системной папке баз
   static Future<String> _databasesDir() async {
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       final dir = await getApplicationSupportDirectory();
@@ -200,6 +208,7 @@ class AppDatabase {
         .getDatabasesPath();
   }
 
+  // #***! разовый перенос со старого пути
   static Future<void> _migrateLegacyDb(String target) async {
     if (AppInstance.isNamed) return;
     if (!(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) return;
@@ -216,6 +225,7 @@ class AppDatabase {
     }
   }
 
+  // #***! версия 23, поднял версию дописывай миграцию ниже
   static Future<Database> _open() async {
     final dbPath = await _databasesDir();
     await Directory(dbPath).create(recursive: true);
@@ -223,6 +233,7 @@ class AppDatabase {
     await _migrateLegacyDb(target);
     return openDatabase(
       target,
+      // #***! каждый if oldVersion < N это шаг миграции, идут по порядку
       version: 23,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
@@ -367,6 +378,7 @@ class AppDatabase {
     );
   }
 
+  // #***! создание таблиц с нуля для свежей установки
   static Future<void> _createTables(Database db) async {
     await db.execute('''
       CREATE TABLE profile (
@@ -395,6 +407,7 @@ class AppDatabase {
     await _createChatParticipantsIndex(db);
   }
 
+  // #***! в sqlite нет ADD COLUMN IF NOT EXISTS, делаем сами
   static Future<void> _addColumnIfMissing(
     Database db,
     String table,
@@ -407,6 +420,7 @@ class AppDatabase {
     await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
   }
 
+  // #***! индексы под частые выборки, без них список чатов тормозит
   static Future<void> _createIndexes(Database db) async {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(account_id, chat_id, time DESC)',
@@ -426,6 +440,7 @@ class AppDatabase {
     );
   }
 
+  // #***! участники отдельной таблицей чтоб искать диалог по собеседнику
   static List<int> _participantIdsFromRaw(Object? raw) {
     if (raw is! String || raw.isEmpty) return const [];
     try {
@@ -442,6 +457,7 @@ class AppDatabase {
     }
   }
 
+  // #***! дозаполняем участников для баз где таблицы ещё не было
   static Future<void> _backfillChatParticipants(Database db) async {
     final chats = await db.query(
       'chats_cache',
@@ -464,6 +480,7 @@ class AppDatabase {
     await batch.commit(noResult: true);
   }
 
+  // #***! схемы таблиц строками, их же жуют onCreate и миграции
   static const _contactsSchema = '''
     CREATE TABLE contacts (
       id           INTEGER PRIMARY KEY,
@@ -572,6 +589,7 @@ class AppDatabase {
     )
   ''';
 
+  // #***! дальше операции с данными
   static Future<void> saveProfile(
     ProfileData profile, {
     bool isActive = true,
@@ -814,6 +832,7 @@ class AppDatabase {
 
   // Chats cache
 
+  // #***! чаты пачкой в одной транзакции, по одному было бы на порядок медленнее
   static Future<void> saveChats(List<Map<String, dynamic>> rows) async {
     if (rows.isEmpty) return;
     try {
@@ -859,6 +878,7 @@ class AppDatabase {
     }
   }
 
+  // #***! чиним имена отправителей после неполной синхры
   static Future<void> repairLastMessageSenders(int accountId) async {
     try {
       final db = await _instance;
@@ -891,6 +911,7 @@ class AppDatabase {
     );
   }
 
+  // #***! в списке значит активный и не скрытый
   static bool chatRowIsInList(Map<String, dynamic> row) {
     final value = row['in_list'];
     return value is! int || value != 0;
@@ -916,6 +937,7 @@ class AppDatabase {
     );
   }
 
+  // #***! общий счётчик непрочитанных для бейджа
   static Future<int> sumUnread(
     int accountId, {
     int? excludeChatId,
@@ -941,6 +963,7 @@ class AppDatabase {
     return (result.first['total'] as int?) ?? 0;
   }
 
+  // #***! поиск диалога по собеседнику, ради этого и таблица участников
   static Future<int?> findDialogChatByParticipant(
     int accountId,
     int contactId,
@@ -968,6 +991,7 @@ class AppDatabase {
     );
   }
 
+  // #***! экранируем LIKE иначе поиск по % вернёт всё
   static String _escapeLike(String value) => value
       .replaceAll('\\', '\\\\')
       .replaceAll('%', '\\%')
@@ -1044,6 +1068,7 @@ class AppDatabase {
     );
   }
 
+  // #***! контакты пачкой как и чаты
   static Future<void> saveContacts(List<Map<String, dynamic>> rows) async {
     final db = await _instance;
     final batch = db.batch();
@@ -1105,6 +1130,7 @@ class AppDatabase {
     );
   }
 
+  // #***! сообщения пачкой
   static Future<void> saveMessages(List<Map<String, dynamic>> rows) async {
     final db = await _instance;
     await db.transaction((txn) async {
@@ -1120,6 +1146,7 @@ class AppDatabase {
     });
   }
 
+  // #***! дальше выборки истории, с конца до сообщения между и вокруг
   static Future<List<Map<String, dynamic>>> loadMessages(
     int accountId,
     int chatId, {
@@ -1180,6 +1207,7 @@ class AppDatabase {
     );
   }
 
+  // #***! вокруг нужно для перехода по ответу, грузим окно с обеих сторон
   static Future<List<Map<String, dynamic>>> loadMessagesAround(
     int accountId,
     int chatId, {
@@ -1209,6 +1237,7 @@ class AppDatabase {
     return [...newer.reversed, ...older];
   }
 
+  // #***! удалённое не стираем а помечаем, с настройкой его ещё можно глянуть
   static Future<void> markMessageDeleted(
     int accountId,
     int chatId,
@@ -1297,6 +1326,7 @@ class AppDatabase {
     );
   }
 
+  // #***! неотправленные, их подхватит outbox при коннекте
   static Future<List<Map<String, dynamic>>> loadPendingMessages(
     int accountId,
   ) async {

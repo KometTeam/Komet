@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../utils/logger.dart';
 import 'desktop_video_probe.dart';
 
+// #***! метаданные видео
 class VideoInfo {
   final int width;
   final int height;
@@ -25,6 +26,7 @@ class VideoInfo {
   });
 }
 
+// #***! задание на перекодирование
 class VideoExportSpec {
   final String input;
   final String output;
@@ -59,12 +61,14 @@ class VideoExportSpec {
     this.bitrate,
   });
 
+  // #***! геометрия поменялась значит без перекодирования никак
   bool get hasGeometry =>
       rotationDegrees.abs() > 0.01 ||
       flipH ||
       (crop != null && crop != const Rect.fromLTRB(0, 0, 1, 1));
 }
 
+// #***! перекодирование, на мобилках нативно на десктопе ffmpeg
 class VideoTranscoder {
   static const _channel = MethodChannel('ru.komet.app/video');
 
@@ -73,6 +77,7 @@ class VideoTranscoder {
   static Process? _desktopProcess;
   static bool _desktopCancelled = false;
 
+  // #***! на десктопе всё зависит от наличия ffmpeg
   static bool get supported =>
       _native || (DesktopVideoProbe.supported && _ffmpegReady);
 
@@ -85,6 +90,7 @@ class VideoTranscoder {
     return _ffmpegReady;
   }
 
+  // #***! метаданные исходника
   static Future<VideoInfo?> probe(String path) async {
     if (_native) {
       try {
@@ -108,6 +114,7 @@ class VideoTranscoder {
     return DesktopVideoProbe.info(path);
   }
 
+  // #***! кадры для превью и таймлайна редактора
   static Future<List<Uint8List?>> frames(
     String path,
     List<int> timesMs, {
@@ -148,6 +155,7 @@ class VideoTranscoder {
     );
   }
 
+  // #***! основной экспорт
   static Future<bool> export(
     VideoExportSpec spec, {
     void Function(double progress)? onProgress,
@@ -157,6 +165,7 @@ class VideoTranscoder {
     return _exportFfmpeg(spec, onProgress);
   }
 
+  // #***! отмена, на десктопе просто убиваем ffmpeg
   static Future<void> cancel() async {
     if (_native) {
       try {
@@ -191,6 +200,7 @@ class VideoTranscoder {
     }
   }
 
+  // #***! параметры для нативного кодировщика
   static Map<String, dynamic> _nativeArgs(VideoExportSpec spec) {
     final crop = spec.crop;
     return {
@@ -217,6 +227,7 @@ class VideoTranscoder {
     };
   }
 
+  // #***! сборка командной строки ffmpeg
   static Future<bool> _exportFfmpeg(
     VideoExportSpec spec,
     void Function(double)? onProgress,
@@ -330,6 +341,7 @@ class VideoTranscoder {
     }
   }
 
+  // #***! цветной фильтр отдаём отдельным .cube файлом
   static Future<File> _writeCubeLut(List<double> m) async {
     const n = 17;
     final buffer = StringBuffer('LUT_3D_SIZE $n\n');

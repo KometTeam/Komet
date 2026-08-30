@@ -9,6 +9,7 @@ import 'app_foreground.dart';
 import 'format.dart';
 import 'log_redact.dart';
 
+// #***! файл в архиве экспорта
 class DebugExportFile {
   final String name;
   final String content;
@@ -16,6 +17,7 @@ class DebugExportFile {
   DebugExportFile(this.name, this.content);
 }
 
+// #***! запрос с ответом, сматчены по seq
 class _LogEntry {
   final int opcode;
   final int seq;
@@ -33,6 +35,7 @@ class _LogEntry {
     required this.request,
   });
 
+  // #***! в файл сессии джейсоном
   Map<String, dynamic> toJson() => {
     'opcode': opcode,
     'seq': seq,
@@ -62,6 +65,7 @@ class _LogEntry {
   }
 }
 
+// #***! одна сессия, запросы плюс строки лога
 class _SessionData {
   final DateTime startedAt;
   final List<_LogEntry> entries;
@@ -104,14 +108,18 @@ class _SessionData {
   }
 }
 
+// #***! отладочный лог, пишется на диск и выгружается архивом из дев меню
 class DebugSessionLog {
   DebugSessionLog._();
   static final DebugSessionLog instance = DebugSessionLog._();
 
+  // #***! старше суток и лишние сверх 30 удаляем
   static const Duration _retention = Duration(hours: 24);
   static const int _maxStoredSessions = 30;
+  // #***! потолки на сессию чтоб файл не рос бесконечно
   static const int _maxEntriesPerSession = 2000;
   static const int _maxLogLinesPerSession = 5000;
+  // #***! в фоне пишем раз в минуту а не в три секунды, батарея
   static const Duration _flushDebounce = Duration(seconds: 3);
   static const Duration _backgroundFlushDebounce = Duration(seconds: 60);
 
@@ -128,6 +136,7 @@ class DebugSessionLog {
   bool _dirty = false;
   Timer? _flushTimer;
 
+  // #***! каталог сессий и ротация
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
@@ -148,6 +157,7 @@ class DebugSessionLog {
     }
   }
 
+  // #***! чистим ANSI цвета иначе в файле мусор
   void recordLogLine(String line) {
     final clean = line.replaceAll(_ansiEscape, '');
     _logLines.add(clean);
@@ -158,6 +168,7 @@ class DebugSessionLog {
     _scheduleFlush();
   }
 
+  // #***! исходящий запрос, payload чистим от секретов
   void recordRequest(int opcode, int seq, dynamic payload) {
     _entries.add(
       _LogEntry(
@@ -174,6 +185,7 @@ class DebugSessionLog {
     _scheduleFlush();
   }
 
+  // #***! ответ подшиваем к запросу по seq
   void recordResponse(int seq, int cmd, dynamic payload) {
     final entry = _findPending(seq);
     if (entry == null) return;
@@ -183,6 +195,7 @@ class DebugSessionLog {
     _scheduleFlush();
   }
 
+  // #***! ошибку тоже подшиваем
   void recordError(int seq, Object error) {
     final entry = _findPending(seq);
     if (entry == null) return;
@@ -191,6 +204,7 @@ class DebugSessionLog {
     _scheduleFlush();
   }
 
+  // #***! ищем с конца, seq переиспользуются нужен последний неотвеченный
   _LogEntry? _findPending(int seq) {
     for (var i = _entries.length - 1; i >= 0; i--) {
       final entry = _entries[i];
@@ -203,6 +217,7 @@ class DebugSessionLog {
     return null;
   }
 
+  // #***! пишем с задержкой иначе файл переписывается на каждый пакет
   void _scheduleFlush() {
     _dirty = true;
     if (_currentFile == null) return;
@@ -215,6 +230,7 @@ class DebugSessionLog {
     );
   }
 
+  // #***! снимок сессии целиком одним джейсоном
   Future<void> _flush() async {
     final file = _currentFile;
     if (file == null || !_dirty) return;
@@ -237,6 +253,7 @@ class DebugSessionLog {
     await _flush();
   }
 
+  // #***! ротация, удаляем протухшие и лишние
   Future<void> _rotate() async {
     final files = await _sessionFiles();
     final cutoff = DateTime.now().subtract(_retention).millisecondsSinceEpoch;
@@ -277,6 +294,7 @@ class DebugSessionLog {
     return int.tryParse(digits) ?? 0;
   }
 
+  // #***! сборка архива для выгрузки
   Future<List<DebugExportFile>?> buildExportFiles({String? endpoint}) async {
     final cutoff = DateTime.now().subtract(_retention);
     final sessions = <_SessionData>[];
@@ -334,6 +352,7 @@ class DebugSessionLog {
     return files;
   }
 
+  // #***! сессия в читаемый текст
   String _buildSessionText(int index, _SessionData session) {
     final buffer = StringBuffer();
     buffer.writeln('==================================================');
@@ -399,6 +418,7 @@ class DebugSessionLog {
   }
 }
 
+// #***! числовой cmd в имя
 String _cmdName(int? cmd) {
   switch (cmd) {
     case 0:

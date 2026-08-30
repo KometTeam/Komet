@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! микрофон для звонков, пусто значит системный
 class AppMicrophone {
   static const prefKey = 'call_microphone_id';
   static const String defaultValue = '';
@@ -17,6 +18,7 @@ class AppMicrophone {
 
   static ValueNotifier<String> get current => _setting.current;
 
+  // #***! пустое наружу отдаём как null
   static String? get deviceId =>
       _setting.current.value.isEmpty ? null : _setting.current.value;
 

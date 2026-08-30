@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+// #***! счётчик участников в памяти чтоб шапка обновлялась без запроса
 class ChatMembersStore {
   ChatMembersStore._();
 
@@ -8,6 +9,7 @@ class ChatMembersStore {
   final Map<int, int> _counts = {};
   final Map<int, ValueNotifier<int?>> _notifiers = {};
 
+  // #***! на каждый чат свой notifier, перерисуется только его шапка
   ValueListenable<int?> listenable(int chatId) => _notifiers.putIfAbsent(
     chatId,
     () => ValueNotifier<int?>(_counts[chatId]),
@@ -22,6 +24,7 @@ class ChatMembersStore {
     _notifiers[chatId]?.value = count;
   }
 
+  // #***! кто то вошёл или вышел, правим счётчик без сервера
   void adjust(int chatId, int delta) {
     final current = _counts[chatId];
     if (current == null || delta == 0) return;
@@ -29,6 +32,7 @@ class ChatMembersStore {
     setCount(chatId, next < 0 ? 0 : next);
   }
 
+  // #***! в пуше пришёл свежий participantsCount, берём его
   void applyChatPayload(Object? chat) {
     if (chat is! Map) return;
     final id = chat['id'];

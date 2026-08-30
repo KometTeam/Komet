@@ -8,8 +8,10 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/utils/ids.dart';
 import '../../core/utils/logger.dart';
 
+// #***! как звонок выглядит в истории
 enum CallStatus { missed, canceled, outgoing, incoming }
 
+// #***! всё для медиа сессии, адрес сервера звонков и наши id
 class OutgoingCallParams {
   final String conversationId;
 
@@ -29,6 +31,7 @@ class OutgoingCallParams {
   });
 }
 
+// #***! созданная конференция
 class CreatedCall {
   final String conversationId;
   final String joinToken;
@@ -45,6 +48,7 @@ class CreatedCall {
   String get url => CallLink.url(joinToken);
 }
 
+// #***! превью звонка по ссылке до входа
 class CallLinkPreview {
   final String? conferenceId;
   final String? callName;
@@ -59,6 +63,7 @@ class CallLinkPreview {
   });
 }
 
+// #***! строка в журнале звонков
 class CallLogEntry {
   final String id;
   final int accountId;
@@ -94,11 +99,13 @@ class _CallerEndpointMissingException implements Exception {
 
 typedef _CallerEndpoint = ({String endpoint, int callsUserId, int? external});
 
+// #***! сигналка звонков, сама медиа сессия в core/calls
 class CallsModule {
   final Api _api;
 
   CallsModule(this._api);
 
+  // #***! адрес спрятан в джейсон строке внутри ответа и поле зовётся по разному
   _CallerEndpoint _parseCallerEndpoint(
     Map payload,
     List<String> keys, {
@@ -123,6 +130,7 @@ class CallsModule {
     throw _CallerEndpointMissingException('$context: no endpoint');
   }
 
+  // #***! личный звонок
   Future<OutgoingCallParams> initiateCall(
     int calleeId, {
     bool isVideo = false,
@@ -153,6 +161,7 @@ class CallsModule {
     );
   }
 
+  // #***! конференция со ссылкой
   Future<CreatedCall> createConference() async {
     final conversationId = uuidV4();
     logger.i('[call] VIDEO_CHAT_START conv=$conversationId');
@@ -184,6 +193,7 @@ class CallsModule {
     );
   }
 
+  // #***! отдельный запрос ссылки если сервер не отдал сразу
   Future<String?> createJoinLink(String conversationId) async {
     if (conversationId.isEmpty) return null;
 
@@ -195,6 +205,7 @@ class CallsModule {
     return link is String && link.isNotEmpty ? link : null;
   }
 
+  // #***! представляемся официальным SDK, свои значения не принимает
   String _internalParams() => jsonEncode({
     'platform': 'ANDROID',
     'sdkVersion': '0.2.1.3',
@@ -206,6 +217,7 @@ class CallsModule {
     'hexCapability': Ws2Config.defaultCapabilities,
   });
 
+  // #***! разбор ссылки до входа, имя и сколько внутри
   Future<CallLinkPreview?> resolveCallLink(String url) async {
     final token = CallLink.normalizeToken(url);
     final payload = await _api.sendRequestMap(Opcode.linkInfo, {
@@ -224,6 +236,7 @@ class CallsModule {
     );
   }
 
+  // #***! вход по ссылке, поле с параметрами зовётся иначе
   Future<OutgoingCallParams> joinByLink(
     String token, {
     bool isVideo = false,
@@ -254,6 +267,7 @@ class CallsModule {
     );
   }
 
+  // #***! журнал звонков
   Future<List<CallLogEntry>> fetchHistory(
     int accountId,
     int currentUserId,
@@ -269,6 +283,7 @@ class CallsModule {
     );
   }
 
+  // #***! имена тех кого нет в контактах
   Future<Map<int, Map<String, dynamic>>> resolveContacts(List<int> ids) async {
     if (ids.isEmpty) return const {};
     final out = <int, Map<String, dynamic>>{};
@@ -299,6 +314,7 @@ class CallsModule {
     });
   }
 
+  // #***! разбор истории, запись это сообщение с вложением CALL
   static Future<List<CallLogEntry>> parseHistoryPayload(
     Map<dynamic, dynamic> payload,
     int accountId,
@@ -327,6 +343,7 @@ class CallsModule {
 
       if (callAttach == null) continue;
 
+      // #***! у исходящего собеседник в contactIds, у входящего отправитель
       final senderId = (msg['sender'] as int?) ?? 0;
       final isOutgoing = senderId == currentUserId;
 
@@ -350,6 +367,7 @@ class CallsModule {
       ));
     }
 
+    // #***! на сервер идём только за теми кого нет локально
     bool localResolved(int id) {
       final c = contactsMap[id];
       return c != null && c.firstName.isNotEmpty;
@@ -382,6 +400,7 @@ class CallsModule {
           name = resolved;
           avatarUrl = (info?['baseUrl'] as String?) ?? contact?.baseUrl;
         } else {
+          // #***! имя не нашлось, значит групповой
           name = 'Групповой звонок';
           isGroup = true;
         }
@@ -421,6 +440,7 @@ class CallsModule {
     return null;
   }
 
+  // #***! статус из направления, типа сброса и длительности
   static CallStatus _parseCallStatus(
     Map<dynamic, dynamic> callAttach,
     bool isOutgoing,

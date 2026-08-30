@@ -12,6 +12,7 @@ import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 
+// #***! снимок папок, список порядок и маркер синхры
 class _FoldersSnapshot {
   final List<ChatFolder> folders;
   final List<String> order;
@@ -24,6 +25,7 @@ class _FoldersSnapshot {
   });
 }
 
+// #***! папки чатов, хранение фильтры и запросы
 class FoldersModule {
   static const _syncKey = 'chat_folders_snapshot';
   static const _listReadyKey = 'chat_folders_list_ready';
@@ -31,6 +33,7 @@ class FoldersModule {
   static const String allChatsFolderId = 'all.chat.folder';
   static const int titleMaxLength = 20;
 
+  // #***! revision на любое изменение, вкладки подписаны
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
   static StreamSubscription<Packet>? _pushSub;
@@ -43,6 +46,7 @@ class FoldersModule {
         .listen(_enqueuePush);
   }
 
+  // #***! пуши в очередь, два подряд не должны писать снимок одновременно
   static void _enqueuePush(Packet packet) {
     _pushQueue = _pushQueue
         .then((_) => _handleFoldersPush(packet))
@@ -58,6 +62,7 @@ class FoldersModule {
     await chats.applyFavorites(accountId);
   }
 
+  // #***! флаг что список папок уже получали, до него вкладки не рисуем чтоб не мигали
   static Future<void> markFoldersListReady(int accountId) async {
     await AppDatabase.setSyncValue(accountId, _listReadyKey, '1');
   }
@@ -69,6 +74,7 @@ class FoldersModule {
     return snap != null && snap.isNotEmpty;
   }
 
+  // #***! папку все чаты сервер помечает не всегда, ловим ещё и по названию
   static bool isAllChatsFolder(ChatFolder f) {
     if (f.id == allChatsFolderId) return true;
     final t = f.title.trim().toLowerCase();
@@ -83,6 +89,7 @@ class FoldersModule {
     return folders.first.id;
   }
 
+  // #***! id новой папки это обычный uuid
   static String newFolderId() {
     final random = Random.secure();
     final bytes = List<int>.generate(16, (_) => random.nextInt(256));
@@ -93,6 +100,7 @@ class FoldersModule {
         '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 
+  // #***! порядок от сервера, незнакомые в конец
   static void _sortInPlace(List<ChatFolder> folders, List<String> order) {
     if (order.isEmpty) return;
     final orderIndex = <String, int>{};
@@ -109,6 +117,7 @@ class FoldersModule {
     });
   }
 
+  // #***! фильтр по типу чата
   static bool _matchesType(
     int filter,
     CachedChat chat, {
@@ -117,6 +126,7 @@ class FoldersModule {
   }) {
     final isDialog = chat.type == 'DIALOG';
     final isBot = isDialog && chat.options.contains('BOT');
+    // #***! id диалога это xor двух id, отсюда и достаём собеседника
     final peerId = isDialog ? chat.id ^ myId : null;
     final isSelf = peerId != null && peerId == myId;
     final isContact =
@@ -139,6 +149,7 @@ class FoldersModule {
     return false;
   }
 
+  // #***! фильтр по нашей роли
   static bool _matchesRole(int filter, CachedChat chat, int myId) {
     switch (filter) {
       case FolderFilter.owner:
@@ -149,6 +160,7 @@ class FoldersModule {
     return false;
   }
 
+  // #***! фильтр ограничение, непрочитанные беззвучные и прочее
   static bool _matchesRestriction(int filter, CachedChat chat) {
     switch (filter) {
       case FolderFilter.unread:
@@ -163,6 +175,7 @@ class FoldersModule {
     return true;
   }
 
+  // #***! итоговая проверка, вручную добавленный проходит мимо фильтров
   static bool chatMatchesFolder(
     CachedChat chat,
     ChatFolder folder, {
@@ -180,6 +193,7 @@ class FoldersModule {
       if (!matchesType) return false;
     }
 
+    // #***! роли по или, ограничения по и
     final roleFilters = folder.filters.where(FolderFilter.roles.contains);
     if (roleFilters.isNotEmpty &&
         !roleFilters.any((f) => _matchesRole(f, chat, myId))) {
@@ -192,6 +206,7 @@ class FoldersModule {
     return true;
   }
 
+  // #***! архивный остаётся в папке только если добавлен руками
   /// Чаты папки с учётом архива: архивный чат остаётся в папке, только если
   /// добавлен в неё вручную. Правила по типу чата не должны вытаскивать его
   /// из архива обратно, а вручную добавленный чат не должен пропадать из
@@ -210,6 +225,7 @@ class FoldersModule {
       )
       .toList();
 
+  // #***! битую папку пропускаем
   static List<ChatFolder> _parseFolderList(dynamic raw) {
     if (raw is! List) return [];
     return raw
@@ -234,6 +250,7 @@ class FoldersModule {
 
   static int? _parseSync(dynamic raw) => raw is int ? raw : null;
 
+  // #***! снимок одним джейсоном в sync_state
   static Future<_FoldersSnapshot> _loadSnapshot(int accountId) async {
     final raw = await AppDatabase.getSyncValue(accountId, _syncKey);
     if (raw == null || raw.isEmpty) return const _FoldersSnapshot();
@@ -252,6 +269,7 @@ class FoldersModule {
     }
   }
 
+  // #***! при сохранении чиним порядок, исчезнувшие вон новые в конец
   static Future<void> _saveSnapshot(
     int accountId,
     _FoldersSnapshot snapshot,
@@ -287,6 +305,7 @@ class FoldersModule {
     return (await _loadSnapshot(accountId)).folderSync;
   }
 
+  // #***! общий вход для ответов и пушей, replace значит полная замена
   static Future<void> applyPayload(
     int accountId,
     Map<dynamic, dynamic> payload, {
@@ -296,6 +315,7 @@ class FoldersModule {
     final folderRaw = payload['folder'];
     final orderRaw = payload['foldersOrder'];
     final syncRaw = payload['folderSync'];
+    // #***! в пуше может не быть ничего интересного
     if (foldersRaw == null &&
         folderRaw == null &&
         orderRaw == null &&
@@ -315,6 +335,7 @@ class FoldersModule {
         : _merge(current.folders, incoming);
 
     final order = _parseOrder(orderRaw) ?? current.order;
+    // #***! сервер прислал новый порядок, папок вне его больше нет
     if (orderRaw is List && order.isNotEmpty) {
       final known = order.toSet();
       final fresh = incoming.map((f) => f.id).toSet();
@@ -334,6 +355,7 @@ class FoldersModule {
     );
   }
 
+  // #***! слияние по id, пришедшая перетирает нашу
   static List<ChatFolder> _merge(
     List<ChatFolder> current,
     List<ChatFolder> incoming,
@@ -350,6 +372,7 @@ class FoldersModule {
     return merged;
   }
 
+  // #***! папки приходят в конфиге login, это полный список
   static Future<void> applyFromLoginConfig(
     int accountId,
     Map<dynamic, dynamic> config,
@@ -365,6 +388,7 @@ class FoldersModule {
     await markFoldersListReady(accountId);
   }
 
+  // #***! создание и изменение это один опкод, отличается наличием id
   static Future<ChatFolder> createFolder(
     Api api,
     int accountId, {
@@ -408,6 +432,7 @@ class FoldersModule {
     );
   }
 
+  // #***! снимок обновляем ответом сервера, он мог что то поправить
   static Future<ChatFolder> _sendUpdate(
     Api api,
     int accountId, {
@@ -446,6 +471,7 @@ class FoldersModule {
     return updateFolder(api, accountId, folder, favorites: favorites);
   }
 
+  // #***! удаляем локально сразу чтоб вкладка исчезла без задержки
   static Future<void> deleteFolders(
     Api api,
     int accountId,
@@ -474,6 +500,7 @@ class FoldersModule {
     }
   }
 
+  // #***! перетаскивание вкладок
   static Future<void> reorderFolders(
     Api api,
     int accountId,
@@ -501,6 +528,7 @@ class FoldersModule {
     );
   }
 
+  // #***! догрузка папок, что сервер не вернул считаем удалённым
   static Future<List<ChatFolder>> fetchFoldersByIds(
     Api api,
     int accountId,
@@ -532,6 +560,7 @@ class FoldersModule {
     return folders;
   }
 
+  // #***! полная пересинхра, флаг готовности ставим даже при ошибке
   static Future<void> syncFromServer(Api api, int accountId) async {
     try {
       final packet = await api.sendRequest(Opcode.foldersGet, {

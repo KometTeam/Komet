@@ -2,12 +2,14 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
+// #***! константы BMP
 const int _biBitfields = 3;
 const int _biAlphaBitfields = 6;
 const int _fileHeaderSize = 14;
 const int _coreHeaderSize = 12;
 const int _infoHeaderSize = 40;
 
+// #***! винда отдаёт картинку как DIB, это BMP без файлового заголовка
 Uint8List? dibToPng(Uint8List dib) {
   final bmp = _wrapDibAsBmp(dib);
   if (bmp == null) return null;
@@ -20,6 +22,7 @@ Uint8List? dibToPng(Uint8List dib) {
   }
 }
 
+// #***! дописываем 14 байт заголовка, смещение пикселей считаем по палитре и маскам
 Uint8List? _wrapDibAsBmp(Uint8List dib) {
   if (dib.length < _coreHeaderSize) return null;
   final source = ByteData.sublistView(dib);

@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
+// #***! аватарка до 1024 px и примерно 900 КБ
 const int _avatarMaxDimension = 1024;
 const int _avatarTargetBytes = 900 * 1024;
 
 /// Maximum accepted size for a user-picked avatar before compression.
 const int kMaxAvatarBytes = 8 * 1024 * 1024;
 
+// #***! сжимаем в изоляте иначе кадры пропадают
 Future<Uint8List?> compressAvatar(Uint8List input) => compute(_encodeAvatar, input);
 
 Future<Uint8List?> encodeRgbaToJpeg(Uint8List rgba, int width, int height) =>
@@ -25,6 +27,7 @@ Uint8List? _encodeRgba((Uint8List, int, int) args) {
   return img.encodeJpg(image, quality: 90);
 }
 
+// #***! качество снижаем шагами пока не влезем
 Uint8List? _encodeAvatar(Uint8List input) {
   final decoded = img.decodeImage(input);
   if (decoded == null) return null;

@@ -1,3 +1,4 @@
+// #***! cmd в заголовке 0 запрос 1 ок 2 не найдено 3 ошибка
 /// Типы команд в протоколе
 abstract class CmdType {
   static const int request =
@@ -9,6 +10,7 @@ abstract class CmdType {
   static const int error = 3; // ответ: ошибка
 }
 
+// #***! распакованный пакет, остальное в расте
 /// Распакованный пакет.
 ///
 /// Провод (фрейминг, MsgPack, сжатие) живёт в Rust-ядре kolibri; здесь пакет —
@@ -38,6 +40,7 @@ class Packet {
       'Packet(ver=$api cmd=$cmd seq=$seq opcode=$opcode payload=$payload)';
 }
 
+// #***! ошибка от сервера, errorKey машинный код
 class PacketError implements Exception {
   final String message;
   final String? errorKey;
@@ -46,16 +49,19 @@ class PacketError implements Exception {
   String toString() => message;
 }
 
+// #***! токен отклонён, надо перелогиниться
 class SessionExpiredException extends PacketError {
   const SessionExpiredException(super.message);
 }
 
+// #***! пробовать ли ещё, not.ready это временно
 bool isPermanentSendFailure(Object error) {
   if (error is! PacketError) return false;
   if (error is SessionExpiredException) return false;
   return !(error.errorKey?.contains('not.ready') ?? false);
 }
 
+// #***! достаём текст ошибки из payload
 String messageFromErrorPayload(dynamic payload) {
   if (payload is Map) {
     final msg = payload['message'];
@@ -76,15 +82,18 @@ String messageFromErrorPayload(dynamic payload) {
   return s.isNotEmpty ? s : 'Неизвестная ошибка';
 }
 
+// #***! сырой шаблон Key: юзеру не показываем
 bool _isRawServerTemplate(String text) =>
     text.startsWith('Key: ') || text.startsWith('key: ');
 
+// #***! протухла ли авторизация
 bool isSessionExpiredPayload(dynamic payload) {
   return payload is Map &&
       (payload['message'] == 'FAIL_LOGIN_TOKEN' ||
           payload['message'] == 'FAIL_WRONG_PASSWORD');
 }
 
+// #***! ошибка превращается в исключение
 void throwIfPacketError(Packet packet) {
   if (!packet.isError) return;
   final payload = packet.payload;
@@ -94,6 +103,7 @@ void throwIfPacketError(Packet packet) {
   throw PacketError(messageFromErrorPayload(payload));
 }
 
+// #***! сессия отвалилась, ловим по тексту кода то нет
 bool isSessionStateError(Object error) {
   if (error is SessionExpiredException) return true;
   final text = error.toString().toLowerCase();
@@ -103,6 +113,7 @@ bool isSessionStateError(Object error) {
       text.contains('сессия не онлайн');
 }
 
+// #***! потеряна авторизационная сессия
 bool isAuthSessionLostError(Object error) {
   if (error is SessionExpiredException) return true;
   final text = error.toString().toLowerCase();

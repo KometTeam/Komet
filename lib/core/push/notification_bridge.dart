@@ -8,6 +8,7 @@ import '../../frontend/widgets/max_link_nav.dart';
 import '../../main.dart';
 import '../utils/logger.dart';
 
+// #***! открытие чата по тапу на уведомление
 class NotificationBridge {
   NotificationBridge._();
   static final NotificationBridge instance = NotificationBridge._();
@@ -17,6 +18,7 @@ class NotificationBridge {
   static const _retryDelay = Duration(milliseconds: 300);
   static const _maxRetries = 100;
 
+  // #***! стек открытых чатов, натив не уведомляет про то что на экране
   final List<int> _activeChats = [];
 
   bool _started = false;
@@ -36,6 +38,7 @@ class NotificationBridge {
     }
   }
 
+  // #***! подписка на уведомления и сессию
   void init() {
     if (_started || !_native) return;
     _started = true;
@@ -53,6 +56,7 @@ class NotificationBridge {
     _flushPending();
   }
 
+  // #***! запустили тапом по уведомлению, забираем чат который натив придержал
   Future<void> checkInitialChat() async {
     if (!_native) return;
     try {
@@ -62,6 +66,7 @@ class NotificationBridge {
     }
   }
 
+  // #***! вошли в чат, говорим нативу чтоб не уведомлял
   Future<void> pushActiveChat(int chatId) async {
     if (!_native || chatId <= 0) return;
     _activeChats.add(chatId);
@@ -91,6 +96,7 @@ class NotificationBridge {
     }
   }
 
+  // #***! событие это просто id чата
   void _onEvent(Object? event) {
     final chatId = event is int ? event : int.tryParse(event?.toString() ?? '');
     if (chatId == null || chatId <= 0) return;
@@ -99,6 +105,7 @@ class NotificationBridge {
     _flushPending();
   }
 
+  // #***! ждём дерево и сессию иначе ретраим, открытый чат не переоткрываем
   void _flushPending() {
     final chatId = _pendingChatId;
     if (chatId <= 0) return;

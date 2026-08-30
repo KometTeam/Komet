@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! градиент на нижней таблетке
 class AppPillGradient {
   static const prefKey = 'app_pill_gradient';
 

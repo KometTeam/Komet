@@ -1,9 +1,11 @@
+// #***! сколько раз поставили одну реакцию
 class ReactionCounter {
   final String reaction;
   final int count;
   const ReactionCounter({required this.reaction, required this.count});
 }
 
+// #***! сводка реакций плюс наша
 class ReactionInfo {
   final List<ReactionCounter> counters;
   final String? yourReaction;
@@ -15,6 +17,7 @@ class ReactionInfo {
     this.totalCount = 0,
   });
 
+  // #***! пусто значит null, юишка не нарисует пустую панель
   static ReactionInfo? fromMap(Map? map) {
     if (map == null) return null;
     final rawCounters = map['counters'];
@@ -41,5 +44,6 @@ class ReactionInfo {
     );
   }
 
+  // #***! счётчиков нет, панель не показываем
   bool get isEmpty => counters.isEmpty;
 }

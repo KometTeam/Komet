@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../utils/tiled_svg.dart';
 
+// #***! встроенные обои, градиент плюс SVG узор
 @immutable
 class ChatWallpaperTheme {
   final String id;
@@ -31,14 +32,17 @@ class ChatWallpaperTheme {
   Gradient get gradient =>
       LinearGradient(colors: colors, begin: begin, end: end);
 
+  // #***! цвет пузыря под обои
   Color get bubbleTint => colors.first;
 
+  // #***! один виджет и для фона и для превью, отличается масштабом плитки
   Widget buildBackground() => _ChatWallpaperThemeView(theme: this);
 
   Widget buildPreview() =>
       _ChatWallpaperThemeView(theme: this, tileScale: 0.42);
 }
 
+// #***! градиент, сверху узор
 class _ChatWallpaperThemeView extends StatelessWidget {
   final ChatWallpaperTheme theme;
   final double tileScale;
@@ -65,6 +69,7 @@ class _ChatWallpaperThemeView extends StatelessWidget {
 
 const String _kPatternDir = 'assets/wallpapers/patterns';
 
+// #***! сами пресеты, dark false значит текст и узор чёрные
 const List<ChatWallpaperTheme> kChatWallpaperThemes = <ChatWallpaperTheme>[
   ChatWallpaperTheme(
     id: 'ocean',
@@ -160,6 +165,7 @@ const List<ChatWallpaperTheme> kChatWallpaperThemes = <ChatWallpaperTheme>[
   ),
 ];
 
+// #***! поиск по id, незнакомый значит обои выпилили из сборки
 ChatWallpaperTheme? chatWallpaperThemeById(String? id) {
   if (id == null) return null;
   for (final theme in kChatWallpaperThemes) {

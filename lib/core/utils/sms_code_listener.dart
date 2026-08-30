@@ -3,7 +3,9 @@ import 'package:smart_auth/smart_auth.dart';
 
 typedef SmsCodeCallback = void Function(String code);
 
+// #***! автоподстановка кода из смс, только андроид
 class SmsCodeListener {
+  // #***! ловим ровно шесть цифр
   static const String _matcher = r'\d{6}';
 
   final SmartAuth _smartAuth = SmartAuth.instance;
@@ -12,6 +14,7 @@ class SmsCodeListener {
 
   bool get _supported => Platform.isAndroid;
 
+  // #***! диалог согласия показывают сами гугл сервисы
   Future<void> start(SmsCodeCallback onCode) async {
     if (!_supported || _listening || _disposed) return;
     _listening = true;

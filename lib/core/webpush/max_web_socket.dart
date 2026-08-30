@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import '../utils/logger.dart';
 import 'max_web_protocol.dart';
 
+// #***! ошибка веб сессии с кодом
 class MaxWebException implements Exception {
   final String message;
   final String? code;
@@ -15,6 +16,7 @@ class MaxWebException implements Exception {
   String toString() => code == null ? message : '$code: $message';
 }
 
+// #***! данные браузера которым представляемся
 class MaxWebDevice {
   final String deviceId;
   final String appVersion;
@@ -36,6 +38,7 @@ class MaxWebDevice {
     required this.userAgent,
   });
 
+  // #***! тот же юзерагент что и в веб версии
   Map<String, Object?> toHandshakeUserAgent() => <String, Object?>{
     'deviceType': 'WEB',
     'pushDeviceType': 'WEBPUSH',
@@ -51,7 +54,9 @@ class MaxWebDevice {
   };
 }
 
+// #***! отдельный вебсокет к веб API, нужен для привязки вебпушей
 class MaxWebSocketSession {
+  // #***! адрес и Origin как у настоящей веб версии, иначе сервер откажет
   static const String endpoint = 'wss://api.oneme.ru/websocket';
   static const String origin = 'https://web.max.ru';
   static const Duration requestTimeout = Duration(seconds: 30);
@@ -63,12 +68,14 @@ class MaxWebSocketSession {
 
   WebSocket? _socket;
   StreamSubscription<dynamic>? _subscription;
+  // #***! ответы по seq как в основном протоколе
   final Map<int, Completer<Object?>> _pending = <int, Completer<Object?>>{};
   int _seq = 0;
   bool _closed = false;
 
   MaxWebSocketSession({required this.device});
 
+  // #***! подключение и хэндшейк
   Future<Object?> connect() async {
     final socket = await WebSocket.connect(
       endpoint,
@@ -91,6 +98,7 @@ class MaxWebSocketSession {
     });
   }
 
+  // #***! запрос с ожиданием ответа
   Future<Object?> request(int opcode, Object? payload) {
     final socket = _socket;
     if (socket == null || _closed) {
@@ -122,6 +130,7 @@ class MaxWebSocketSession {
     );
   }
 
+  // #***! разбор кадра и раздача ожидающим
   void _onFrame(dynamic raw) {
     if (raw is! List<int>) return;
 
@@ -171,6 +180,7 @@ class MaxWebSocketSession {
     return MaxWebException('опкод ${frame.opcode}: ошибка сервера (cmd=${frame.cmd})');
   }
 
+  // #***! при обрыве рубим все ожидающие
   void _failAll(MaxWebException error) {
     for (final completer in _pending.values) {
       if (!completer.isCompleted) completer.completeError(error);

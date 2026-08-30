@@ -15,6 +15,7 @@ class MsgpackWriter {
 
   void nil() => raw(0xC0);
 
+  // #***! свой мини MessagePack, сервер SFU принимает команды только в нём
   void boolean(bool value) => raw(value ? 0xC3 : 0xC2);
 
   void integer(int value) {
@@ -87,6 +88,7 @@ class MsgpackWriter {
   }
 }
 
+// #***! чтение MessagePack из ответа
 class MsgpackReader {
   final Uint8List _data;
   int _pos = 0;
@@ -172,6 +174,7 @@ class MsgpackReader {
   }
 }
 
+// #***! раскладка одного видеоокна
 class SfuLayoutItem {
   final String trackKey;
   final int width;
@@ -184,7 +187,9 @@ class SfuLayoutItem {
   });
 }
 
+// #***! служебный канал SFU, раскладка слоты и уровни звука
 class SfuCommandChannel {
+  // #***! коды команд и уведомлений SFU
   static const int _commandDisplayLayout = 0;
   static const int _fitMode = 0;
 
@@ -195,6 +200,7 @@ class SfuCommandChannel {
   RTCDataChannel? _command;
   int _sequence = 1;
 
+  // #***! сервер шлёт короткие алиасы вместо ключей треков, держим таблицу
   final Map<int, String> _aliases = {};
   final _slots = StreamController<Map<String, int>>.broadcast();
   final _levels = StreamController<Map<String, int>>.broadcast();
@@ -202,6 +208,7 @@ class SfuCommandChannel {
   Stream<Map<String, int>> get slotUpdates => _slots.stream;
   Stream<Map<String, int>> get audioLevels => _levels.stream;
 
+  // #***! привязка к открытому каналу
   void bind(RTCDataChannel channel) {
     if (channel.label == 'producerCommand') {
       _command = channel;
@@ -214,6 +221,7 @@ class SfuCommandChannel {
 
   bool get ready => _command?.state == RTCDataChannelState.RTCDataChannelOpen;
 
+  // #***! говорим серверу какие видео и в каком размере нужны, от этого битрейт
   Future<bool> sendDisplayLayout(
     List<SfuLayoutItem> items, {
     bool snapshot = true,
@@ -262,6 +270,7 @@ class SfuCommandChannel {
     }
   }
 
+  // #***! ответ на нашу команду
   void _onCommandReply(RTCDataChannelMessage message) {
     if (!message.isBinary) return;
     final bytes = message.binary;
@@ -287,6 +296,7 @@ class SfuCommandChannel {
 
   int _dumped = 0;
 
+  // #***! уведомления, алиасы слоты и уровни для подсветки говорящего
   void _onNotification(RTCDataChannelMessage message) {
     if (!message.isBinary) return;
     if (_dumped < 12) {

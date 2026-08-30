@@ -1,9 +1,11 @@
 import 'app_database.dart';
 import 'token_storage.dart';
 
+// #***! куда мини аппа кладёт данные, база или защищённое хранилище
 enum WebAppStorageBackend { device, secure }
 
 class WebAppStorage {
+  // #***! лимиты ключей на бота чтоб не забил всё
   static const int deviceKeyLimit = 512;
   static const int secureKeyLimit = 128;
 
@@ -16,6 +18,7 @@ class WebAppStorage {
   static String _biometryTokenKey(int accountId, int botId) =>
       'webapp_bio_${accountId}_$botId';
 
+  // #***! secure в keychain, device в базу
   static Future<String?> read(
     int accountId,
     int botId,
@@ -28,6 +31,7 @@ class WebAppStorage {
     return AppDatabase.getWebAppValue(accountId, botId, key);
   }
 
+  // #***! новый ключ сверяем с лимитом, перезапись лимит не трогает
   static Future<bool> save(
     int accountId,
     int botId,
@@ -77,6 +81,7 @@ class WebAppStorage {
     await AppDatabase.clearWebAppValues(accountId, botId);
   }
 
+  // #***! токен биометрии только в защищённом
   static Future<String?> biometryToken(int accountId, int botId) =>
       TokenStorage.readSecure(_biometryTokenKey(accountId, botId));
 
@@ -89,6 +94,7 @@ class WebAppStorage {
   static Future<void> removeBiometryToken(int accountId, int botId) =>
       TokenStorage.deleteSecure(_biometryTokenKey(accountId, botId));
 
+  // #***! флаги про доступ это обычные данные, держим в базе
   static Future<(bool, bool)> biometryAccess(int accountId, int botId) =>
       AppDatabase.getWebAppBiometryAccess(accountId, botId);
 

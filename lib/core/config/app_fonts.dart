@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'custom_font_service.dart';
 
+// #***! шрифт заголовков, отдельный от основного
 const String kDisplayFontFamily = 'Outfit';
 
+// #***! расширение темы, так шрифт заголовков доезжает через Theme.of
 @immutable
 class AppDisplayFont extends ThemeExtension<AppDisplayFont> {
   final String? family;
@@ -22,6 +24,7 @@ class AppDisplayFont extends ThemeExtension<AppDisplayFont> {
 String? displayFontOf(BuildContext context) =>
     Theme.of(context).extension<AppDisplayFont>()?.family ?? kDisplayFontFamily;
 
+// #***! шрифт в списке выбора, metricScale выравнивает размер разных гарнитур
 class AppFont {
   final String id;
   final String label;
@@ -36,10 +39,12 @@ class AppFont {
     this.metricScale = 1.0,
   });
 
+  // #***! системный это без семейства, кастомные с префиксом g:
   bool get isSystem => fontFamily == null;
   bool get isCustom => id.startsWith(AppFonts.customPrefix);
 }
 
+// #***! реестр шрифтов
 class AppFonts {
   static const String prefKey = 'app_font';
   static const String scalePrefKey = 'app_font_scale';
@@ -49,6 +54,7 @@ class AppFonts {
   static const double maxScale = 1.35;
   static const double defaultScale = 1.0;
 
+  // #***! встроенные в assets, остальное качается с гугла
   static const List<AppFont> builtIn = [
     AppFont(id: 'system', label: 'Системный'),
     AppFont(
@@ -69,6 +75,7 @@ class AppFonts {
 
   static String customId(String family) => '$customPrefix$family';
 
+  // #***! по id собираем шрифт, кастомный на лету встроенный из списка
   static AppFont resolve(String id) {
     if (id.startsWith(customPrefix)) {
       final family = id.substring(customPrefix.length);
@@ -82,6 +89,7 @@ class AppFonts {
     return builtIn.firstWhere((f) => f.id == id, orElse: () => fallback);
   }
 
+  // #***! итоговый масштаб, ползунок плюс метрика гарнитуры
   static double effectiveScale(String id, double userScale) =>
       userScale * resolve(id).metricScale;
 
@@ -104,6 +112,7 @@ class AppFonts {
   static double clampScale(double scale) =>
       scale.clamp(minScale, maxScale).toDouble();
 
+  // #***! принимаем и имя и ссылку на гугл фонтс
   static String? familyFromInput(String input) {
     var value = input.trim();
     if (value.isEmpty) return null;

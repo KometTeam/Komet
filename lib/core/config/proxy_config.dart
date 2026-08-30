@@ -5,8 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../storage/token_storage.dart';
 import '../utils/logger.dart';
 
+// #***! тип прокси, none значит выключен
 enum ProxyType { none, socks5, httpConnect }
 
+// #***! настройки прокси пачкой
 class ProxySettings {
   final ProxyType type;
   final String host;
@@ -22,6 +24,7 @@ class ProxySettings {
     this.password,
   });
 
+  // #***! прокси рабочий только с непустым хостом
   bool get isEnabled => type != ProxyType.none && host.isNotEmpty;
 
   bool get hasCredentials =>
@@ -31,6 +34,7 @@ class ProxySettings {
       password!.isNotEmpty;
 }
 
+// #***! логин и пароль в защищённом хранилище, остальное в prefs
 abstract class ProxyConfig {
   static const String _prefType = 'proxy_type';
   static const String _prefHost = 'proxy_host';
@@ -40,6 +44,7 @@ abstract class ProxyConfig {
 
   static const Duration _secureReadTimeout = Duration(seconds: 5);
 
+  // #***! защищённое хранилище на части прошивок виснет, читаем с таймаутом
   static Future<String?> _readSecureSafe(String key) async {
     try {
       return await TokenStorage.readSecure(key).timeout(_secureReadTimeout);
@@ -49,6 +54,7 @@ abstract class ProxyConfig {
     }
   }
 
+  // #***! раньше пароль лежал в открытых prefs, переносим и стираем
   static Future<void> _migrateLegacySecure(String key, String value) async {
     try {
       await TokenStorage.writeSecure(key, value).timeout(_secureReadTimeout);
@@ -59,6 +65,7 @@ abstract class ProxyConfig {
     }
   }
 
+  // #***! typeIndex подрезаем, сохранённое может быть из версии с другим набором
   static Future<ProxySettings> load() async {
     final prefs = await SharedPreferences.getInstance();
     final typeIndex = prefs.getInt(_prefType) ?? 0;
@@ -94,6 +101,7 @@ abstract class ProxyConfig {
     );
   }
 
+  // #***! при сохранении чистим старые открытые ключи
   static Future<void> save(ProxySettings settings) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_prefType, settings.type.index);

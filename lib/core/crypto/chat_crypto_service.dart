@@ -8,8 +8,10 @@ import '../utils/logger.dart';
 
 const int kMaxEncryptedMessageLength = 1000;
 
+// #***! почему не вышло
 enum CryptoFailure { noKey, wrongKey, notEncrypted, malformed, unavailable }
 
+// #***! текст либо причина неудачи
 class CryptoResult {
   final String? text;
   final CryptoFailure? failure;
@@ -20,6 +22,7 @@ class CryptoResult {
   bool get isOk => text != null;
 }
 
+// #***! шифрование сообщений и картинок, сама крипта в расте
 class ChatCryptoService {
   ChatCryptoService._() {
     ChatEncryptionStore.instance.revision.addListener(clearKeys);
@@ -27,6 +30,7 @@ class ChatCryptoService {
 
   static final ChatCryptoService instance = ChatCryptoService._();
 
+  // #***! ключи в памяти по аккаунт/чат, _pending схлопывает параллельный вывод
   final Map<String, Uint8List> _keys = {};
   final Map<String, Future<Uint8List?>> _pending = {};
   Future<void>? _init;
@@ -39,6 +43,7 @@ class ChatCryptoService {
     _pending.clear();
   }
 
+  // #***! нативка может не собраться, тогда фича выключена
   Future<bool> _ensureInitialized() async {
     if (_unavailable) return false;
     try {
@@ -52,6 +57,7 @@ class ChatCryptoService {
     }
   }
 
+  // #***! ключ выводится из парольной фразы и это дорого, отсюда кэш
   Future<Uint8List?> _keyFor(int accountId, int chatId) {
     final cacheKey = _cacheKey(accountId, chatId);
     final cached = _keys[cacheKey];
@@ -82,11 +88,13 @@ class ChatCryptoService {
     }
   }
 
+  // #***! включено ли шифрование в чате
   bool isEnabled(int accountId, int chatId) =>
       ChatEncryptionStore.instance.isEnabled(accountId, chatId);
 
   Future<void> warmKey(int accountId, int chatId) => _keyFor(accountId, chatId);
 
+  // #***! шифрование и расшифровка текста
   Future<CryptoResult> encrypt(
     int accountId,
     int chatId,
@@ -122,6 +130,7 @@ class ChatCryptoService {
     }
   }
 
+  // #***! картинки файл в файл, мимо памяти
   Future<CryptoFailure?> encryptImageFile(
     int accountId,
     int chatId,
@@ -170,6 +179,7 @@ class ChatCryptoService {
     }
   }
 
+  // #***! похоже ли это вообще на наш шифр, чтоб отличить чужой ключ от обычного текста
   Future<bool> looksEncryptedImage(String path) async {
     if (!await _ensureInitialized()) return false;
     try {

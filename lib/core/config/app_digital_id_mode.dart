@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! цифровой ID нативно вместо вебвью
 class AppDigitalIdNative {
   static const prefKey = 'app_digital_id_native';
 

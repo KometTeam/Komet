@@ -1,9 +1,11 @@
+// #***! вид баннера, текст ссылка или обновление
 abstract class BannerType {
   static const int text = 0;
   static const int link = 1;
   static const int update = 2;
 }
 
+// #***! битовые флаги поведения, одним числом в settings
 abstract class BannerSettings {
   static const int textAnimation = 1;
   static const int hideCloseButton = 2;
@@ -11,6 +13,7 @@ abstract class BannerSettings {
   static const int iconThemeColor = 8;
 }
 
+// #***! баннер сверху списка чатов
 class InformerBanner {
   final String id;
   final String title;
@@ -36,17 +39,20 @@ class InformerBanner {
     this.type = BannerType.text,
   });
 
+  // #***! разбор битовой маски
   bool get animatesText => settings & BannerSettings.textAnimation != 0;
   bool get hidesCloseButton => settings & BannerSettings.hideCloseButton != 0;
   bool get closesOnClick => settings & BannerSettings.hideOnClick != 0;
   bool get tintsIconWithTheme =>
       settings & BannerSettings.iconThemeColor != 0;
 
+  // #***! кликабельный, ссылка или обновление
   bool get isLink =>
       type == BannerType.link && url != null && url!.trim().isNotEmpty;
   bool get isUpdate => type == BannerType.update;
   bool get isClickable => isLink || isUpdate;
 
+  // #***! без id или текста баннер бесполезен
   static InformerBanner? fromMap(Map<dynamic, dynamic> map) {
     final id = map['id']?.toString();
     if (id == null || id.isEmpty) return null;
@@ -67,6 +73,7 @@ class InformerBanner {
     );
   }
 
+  // #***! сохраняем локально чтоб показать до ответа сервера
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
@@ -80,6 +87,7 @@ class InformerBanner {
     'type': type,
   };
 
+  // #***! числа иногда строкой
   static int? _int(dynamic value) {
     if (value is int) return value;
     if (value is num) return value.toInt();
@@ -88,6 +96,7 @@ class InformerBanner {
   }
 }
 
+// #***! наша память по баннеру, сколько показали и когда закрыли
 class BannerShowState {
   final int showCounter;
   final int? showAt;
@@ -102,6 +111,7 @@ class BannerShowState {
         closedAt: closedAt ?? this.closedAt,
       );
 
+  // #***! closedTime исторический, трогать нельзя
   static BannerShowState fromJson(Map<dynamic, dynamic> map) => BannerShowState(
     showCounter: InformerBanner._int(map['showCounter']) ?? 0,
     showAt: InformerBanner._int(map['showAt']),

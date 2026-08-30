@@ -1,3 +1,4 @@
+// #***! устройство для подмены, чем представимся серверу
 class DevicePreset {
   final String deviceType;
   final String userAgent;
@@ -18,6 +19,7 @@ class DevicePreset {
   });
 }
 
+// #***! пресеты для спуфинга, реальные модели с настоящими юзерагентами
 final List<DevicePreset> devicePresets = [
   DevicePreset(
     deviceType: 'ANDROID',

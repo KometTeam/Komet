@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
 
+// #***! реальные данные устройства для юзерагента
 /// Данные устройства для user-agent, неизменные за время жизни процесса.
 /// Читаются с платформы один раз: на каждый реконнект их запрашивать незачем.
 class DeviceProfile {
@@ -19,6 +20,7 @@ class DeviceProfile {
   final String? model;
   final int? sdkInt;
 
+  // #***! читаем один раз за процесс, на каждый реконнект незачем
   static DeviceProfile? _cached;
 
   static Future<DeviceProfile> load() async {
@@ -29,6 +31,7 @@ class DeviceProfile {
     return profile;
   }
 
+  // #***! у каждой платформы свой источник, на незнакомой пусто
   static Future<DeviceProfile> _read() async {
     final deviceInfo = DeviceInfoPlugin();
     if (Platform.isAndroid) {

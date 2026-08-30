@@ -5,9 +5,11 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
 import 'account_base.dart';
 
+// #***! имя аватарка и удаление фото
 class ProfileModule extends AccountApiBase {
   ProfileModule(super.api);
 
+  // #***! разбор ответа, профиль сразу в базу активным
   Future<ProfileData> _applyProfileResponse(Packet packet) async {
     if (packet.isError) {
       throw Exception(packet.payload?.toString() ?? 'Server error');
@@ -48,6 +50,7 @@ class ProfileModule extends AccountApiBase {
     return _applyProfileResponse(packet);
   }
 
+  // #***! сервер даёт одноразовый url под аватарку
   Future<String> getAvatarUploadUrl() async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.photoUpload, {
@@ -72,6 +75,7 @@ class ProfileModule extends AccountApiBase {
     return _applyProfileResponse(packet);
   }
 
+  // #***! часть правок сервер подтверждает пушем, ждём до 15 сек
   Future<ProfileData> processProfileUpdate(
     Future<Packet> requestFuture,
     String tag,

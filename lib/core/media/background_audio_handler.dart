@@ -5,6 +5,7 @@ import 'package:just_audio/just_audio.dart';
 
 import 'audio_file_track.dart';
 
+// #***! обвязка audio_service, рисует уведомление и ловит кнопки наушников
 class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
   BackgroundAudioHandler() {
     _subscriptions.add(
@@ -23,6 +24,7 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
   Stream<Duration> get positionStream => _player.positionStream;
   Stream<Duration> get bufferedPositionStream => _player.bufferedPositionStream;
 
+  // #***! загрузка трека с метаданными для шторки
   Future<void> load(AudioFileTrack track) async {
     final item = MediaItem(
       id: track.cacheName,
@@ -86,6 +88,7 @@ class BackgroundAudioHandler extends BaseAudioHandler with SeekHandler {
     await errors.close();
   }
 
+  // #***! состояние транслируем системе чтоб уведомление совпадало с плеером
   void _broadcastState() {
     playbackState.add(
       playbackState.value.copyWith(

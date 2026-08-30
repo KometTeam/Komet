@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/update_config.dart';
 
+// #***! файл релиза, имя ссылка размер и sha256
 class UpdateAsset {
   final String name;
   final String url;
@@ -36,6 +37,7 @@ class UpdateAsset {
   }
 }
 
+// #***! манифест с бакета
 class AppUpdateInfo {
   final String version;
   final int? build;
@@ -53,6 +55,7 @@ class AppUpdateInfo {
     required this.assets,
   });
 
+  // #***! APK выбираем по суффиксу имени
   UpdateAsset? assetWithSuffix(String suffix) {
     for (final asset in assets) {
       if (asset.name.endsWith(suffix)) return asset;
@@ -60,6 +63,7 @@ class AppUpdateInfo {
     return null;
   }
 
+  // #***! пустые поля дефолтим, кривой манифест игнорим целиком
   static AppUpdateInfo? tryParse(Map<String, dynamic> manifest) {
     final version = (manifest['version'] as String?)?.trim();
     if (version == null || version.isEmpty) return null;
@@ -90,6 +94,7 @@ class AppUpdateInfo {
   }
 }
 
+// #***! итог ручной проверки
 enum UpdateCheckStatus { updateAvailable, upToDate, failed }
 
 class UpdateCheckResult {
@@ -106,14 +111,17 @@ class UpdateCheckResult {
   const UpdateCheckResult.failed() : this._(UpdateCheckStatus.failed);
 }
 
+// #***! проверка обновлений, манифест с S3 и сравнение версий
 abstract class UpdateChecker {
   static const String _userAgent = 'KometUpdateChecker';
 
   static const String _lastCheckKey = 'update_last_check_ms';
   static const String _skippedTagKey = 'update_skipped_tag';
+  // #***! сами проверяем не чаще раза в 6 часов
   static const Duration _checkInterval = Duration(hours: 6);
   static const Duration _timeout = Duration(seconds: 15);
 
+  // #***! тянет манифест и отдаёт обновление только если оно новее
   static Future<AppUpdateInfo?> fetchLatest() async {
     if (!UpdateConfig.isConfigured) return null;
 
@@ -139,6 +147,7 @@ abstract class UpdateChecker {
     return remote;
   }
 
+  // #***! автопроверка, уважает интервал и пропустить эту версию
   static Future<AppUpdateInfo?> check({bool force = false}) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -170,6 +179,7 @@ abstract class UpdateChecker {
     return update;
   }
 
+  // #***! ручная проверка из настроек, без интервала и пропусков
   /// Runs a user-initiated check without applying the automatic-check interval
   /// or the "skip this version" preference.
   static Future<UpdateCheckResult> checkNow() async {
@@ -188,11 +198,13 @@ abstract class UpdateChecker {
     }
   }
 
+  // #***! пропустить версию помним по тегу
   static Future<void> skip(String tag) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_skippedTagKey, tag);
   }
 
+  // #***! манифест с no-cache иначе CDN отдаст старый
   static Future<Map<String, dynamic>?> _fetchManifest() async {
     final uri = UpdateConfig.manifestUri;
     final client = HttpClient()..connectionTimeout = _timeout;
@@ -221,6 +233,7 @@ abstract class UpdateChecker {
     }
   }
 
+  // #***! в versionCode зашит код ABI, снимаем иначе сравнение врёт
   static const int _abiVersionCodeMultiplier = 1000;
 
   static int? _normalizeBuild(int? build) {
@@ -231,6 +244,7 @@ abstract class UpdateChecker {
     return build;
   }
 
+  // #***! новее по версии или при равной по номеру сборки
   static bool _isNewer({
     required String currentBase,
     required int? currentBuild,
@@ -246,6 +260,7 @@ abstract class UpdateChecker {
     return false;
   }
 
+  // #***! сравнение версий по числам без библиотеки
   static int _compareSemver(String a, String b) {
     final pa = _parts(a);
     final pb = _parts(b);

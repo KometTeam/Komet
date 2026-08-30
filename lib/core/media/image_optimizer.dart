@@ -7,12 +7,14 @@ import 'package:path_provider/path_provider.dart';
 
 import 'gallery_source.dart';
 
+// #***! сервер не берёт фото больше 5 МБ
 const int kPhotoUploadLimitBytes = 5 * 1024 * 1024;
 
 const int _photoMaxDimension = 2560;
 const int _photoJpegQuality = 85;
 const int _photoTargetBytes = 4700 * 1024;
 
+// #***! HEIC перекодируем всегда, сервер его не понимает
 const Set<String> _heicExtensions = {'.heic', '.heif'};
 
 bool isHeicPath(String path) {
@@ -21,6 +23,7 @@ bool isHeicPath(String path) {
   return _heicExtensions.contains(path.substring(dot).toLowerCase());
 }
 
+// #***! влезает в лимит отдаём как есть чтоб не терять качество
 Future<File> optimizePhotoForUpload(File source, {GalleryItem? item}) async {
   final heic = isHeicPath(source.path);
   var length = 0;
@@ -32,6 +35,7 @@ Future<File> optimizePhotoForUpload(File source, {GalleryItem? item}) async {
     return source;
   }
 
+  // #***! сначала нативный кодек галереи, он быстрее и качественнее
   if (item != null) {
     final native = await item.encodeForUpload(
       maxDimension: _photoMaxDimension,
@@ -61,6 +65,7 @@ Future<File?> _encodeWithImagePackage(File source) async {
   return writePhotoJpeg(jpeg);
 }
 
+// #***! качество снижаем шагами пока не влезем
 Uint8List? _encodePhotoIsolate((Uint8List, int, int, int) args) {
   final (bytes, maxDim, quality, target) = args;
   final decoded = img.decodeImage(bytes);

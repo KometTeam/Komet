@@ -2,8 +2,10 @@ import 'dart:io';
 
 import '../utils/logger.dart';
 
+// #***! схемы которые вешаем на себя
 const List<String> _schemes = ['komet', 'max'];
 
+// #***! регистрация схем в системе, на мобилках это манифест
 abstract class DesktopUrlScheme {
   static Future<void> register() async {
     try {
@@ -17,6 +19,7 @@ abstract class DesktopUrlScheme {
     }
   }
 
+  // #***! на винде пишем реестр текущего юзера
   static Future<void> _registerWindows() async {
     final exe = Platform.resolvedExecutable;
     for (final scheme in _schemes) {
@@ -36,6 +39,7 @@ abstract class DesktopUrlScheme {
     }
   }
 
+  // #***! на линуксе .desktop файл и назначаем обработчиком
   static Future<void> _registerLinux() async {
     final home = Platform.environment['HOME'];
     if (home == null || home.isEmpty) return;
@@ -65,6 +69,7 @@ abstract class DesktopUrlScheme {
     await _run('update-desktop-database', [appsDir.path]);
   }
 
+  // #***! ошибки игнорим, без регистрации просто не будет диплинков
   static Future<void> _run(String executable, List<String> args) async {
     try {
       await Process.run(executable, args);

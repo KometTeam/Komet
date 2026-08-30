@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! скругления как в мобильном телеге или как в десктопном
 enum BubbleStyle { mobile, desktop }
 
+// #***! настройка стиля пузыря
 class AppBubbleShape {
   static const prefKey = 'app_bubble_shape';
 
@@ -23,6 +25,7 @@ class AppBubbleShape {
   static BubbleStyle _parse(String? val) =>
       enumFromName(BubbleStyle.values, val, BubbleStyle.mobile);
 
+  // #***! подписи для настроек
   static String label(BubbleStyle style) {
     switch (style) {
       case BubbleStyle.mobile:

@@ -7,8 +7,10 @@ import '../config/build_profile.dart';
 import '../protocol/opcode_map.dart';
 import '../protocol/packet.dart';
 
+// #***! направление записи, запрос ответ или событие
 enum TrafficDirection { outgoing, incoming, event }
 
+// #***! одна строка лога трафика
 class TrafficEntry {
   final TrafficDirection direction;
   final DateTime time;
@@ -35,6 +37,7 @@ class TrafficEntry {
   String get prettyPayload => prettyJson(payload);
 }
 
+// #***! payload в читаемый json
 String prettyJson(dynamic value) {
   if (value == null) return 'null';
   try {
@@ -46,6 +49,7 @@ String prettyJson(dynamic value) {
 
 const _redacted = '***';
 
+// #***! эти поля в экспорт не пускаем
 const _sensitiveExportFields = {
   'token',
   'accesstoken',
@@ -70,11 +74,13 @@ const _sensitiveExportFields = {
   'caption',
 };
 
+// #***! чувствительный ли ключ
 bool _isSensitiveExportKey(Object? key) {
   if (key is! String) return false;
   return _sensitiveExportFields.contains(key.toLowerCase());
 }
 
+// #***! вырезаем чувствительное перед экспортом
 dynamic _redactForExport(dynamic value) {
   if (value is Map) {
     final out = {};
@@ -87,6 +93,7 @@ dynamic _redactForExport(dynamic value) {
   return value;
 }
 
+// #***! payload в json, бинарь в <bytes: N>
 dynamic _sanitize(dynamic value) {
   if (value is Map) {
     final out = <String, dynamic>{};
@@ -99,6 +106,7 @@ dynamic _sanitize(dynamic value) {
   return value.toString();
 }
 
+// #***! перехват трафика для дев меню
 /// Перехватчик сокет-трафика для меню разработчика.
 ///
 /// Захват включается только пока открыт экран монитора ([enabled]),
@@ -122,6 +130,7 @@ class TrafficMonitor extends ChangeNotifier {
   List<TrafficEntry> get entries => List.unmodifiable(_entries);
   String? get activeEndpoint => _activeEndpoint;
 
+  // #***! флаг захвата помним между запусками
   Future<void> load() async {
     if (!BuildProfile.trafficCapture) return;
     final prefs = await SharedPreferences.getInstance();
@@ -138,11 +147,13 @@ class TrafficMonitor extends ChangeNotifier {
     await prefs.setBool(_prefKey, value);
   }
 
+  // #***! чистка по кнопке
   void clear() {
     _entries.clear();
     notifyListeners();
   }
 
+  // #***! файл экспорта без токенов и телефонов
   /// Сериализует захваченный трафик для экспорта.
   /// Чувствительные поля payload (токены, телефоны, коды и т.п.)
   /// маскируются через [redactForLog] — файлом можно делиться.
@@ -173,6 +184,7 @@ class TrafficMonitor extends ChangeNotifier {
     };
   }
 
+  // #***! хук исходящего
   void recordOutgoing(int opcode, dynamic payload, int seq, int byteSize) {
     if (!enabled) return;
     _add(
@@ -189,6 +201,7 @@ class TrafficMonitor extends ChangeNotifier {
     );
   }
 
+  // #***! хук входящего
   void recordIncoming(Packet packet, int byteSize) {
     if (!enabled) return;
     _add(
@@ -205,6 +218,7 @@ class TrafficMonitor extends ChangeNotifier {
     );
   }
 
+  // #***! событие транспорта
   void recordEvent(String label, {String? detail, String? endpoint}) {
     if (endpoint != null) _activeEndpoint = endpoint;
     if (!enabled) return;
@@ -218,6 +232,7 @@ class TrafficMonitor extends ChangeNotifier {
     );
   }
 
+  // #***! кольцо на 1000 записей
   void _add(TrafficEntry entry) {
     _entries.add(entry);
     if (_entries.length > _maxEntries) {
@@ -228,6 +243,7 @@ class TrafficMonitor extends ChangeNotifier {
 
   bool _notifyScheduled = false;
 
+  // #***! схлопываем в микротаск чтоб юишка не умерла
   void _scheduleNotify() {
     if (_notifyScheduled) return;
     _notifyScheduled = true;

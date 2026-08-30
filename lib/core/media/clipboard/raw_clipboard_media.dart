@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+// #***! сырой ответ натива, пути или байты картинки
 class RawClipboardMedia {
   const RawClipboardMedia({this.paths = const <String>[], this.png, this.dib});
 
