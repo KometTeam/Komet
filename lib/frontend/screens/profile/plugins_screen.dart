@@ -41,7 +41,7 @@ class _PluginsScreenState extends State<PluginsScreen> {
       if (bytes == null || bytes.isEmpty) {
         throw const FormatException('Не удалось прочитать выбранный файл');
       }
-      await _confirmAndInstall(_installer.preview(bytes));
+      await _confirmAndInstall(await _installer.preview(bytes));
     } catch (error) {
       if (mounted) {
         showCustomNotification(context, 'Не удалось открыть .kinet: $error');
@@ -94,6 +94,26 @@ class _PluginsScreenState extends State<PluginsScreen> {
                 const SizedBox(height: 12),
                 Text(preview.manifest.description),
               ],
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    preview.signatureStatus == PluginSignatureStatus.verified
+                        ? Symbols.verified_user
+                        : Symbols.gpp_maybe,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      preview.signatureStatus == PluginSignatureStatus.verified
+                          ? 'Подпись Ed25519 проверена\n${preview.signerFingerprint}'
+                          : 'Плагин не подписан',
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
               const Text(
                 'Плагин получит разрешения:',
@@ -206,8 +226,19 @@ class _PluginsScreenState extends State<PluginsScreen> {
       ),
     );
     if (confirmed != true) return;
-    await PluginStore.instance.uninstall(plugin.manifest.id);
-    if (mounted) showCustomNotification(context, 'Плагин удалён');
+    _setBusy(plugin.manifest.id, true);
+    try {
+      await PluginStore.instance.uninstall(plugin.manifest.id);
+      if (mounted) {
+        showCustomNotification(context, 'Плагин и его данные удалены');
+      }
+    } catch (error) {
+      if (mounted) {
+        showCustomNotification(context, 'Не удалось удалить: $error');
+      }
+    } finally {
+      _setBusy(plugin.manifest.id, false);
+    }
   }
 
   void _setBusy(String id, bool busy) {
@@ -249,7 +280,12 @@ class _PluginsScreenState extends State<PluginsScreen> {
                     leading: const Icon(Symbols.extension),
                     title: Text(plugin.manifest.name),
                     subtitle: Text(
-                      '${plugin.manifest.version} · ${plugin.manifest.commands.map((item) => item.name).join(', ')}',
+                      '${plugin.manifest.version} · ${plugin.manifest.commands.map((item) => item.name).join(', ')}\n'
+                      '${switch (plugin.signatureStatus) {
+                        PluginSignatureStatus.bundled => 'Встроенный плагин Komet',
+                        PluginSignatureStatus.verified => 'Подписан · ${plugin.signerFingerprint}',
+                        PluginSignatureStatus.unsigned => 'Не подписан',
+                      }}',
                     ),
                     trailing: Switch(
                       value: plugin.enabled,

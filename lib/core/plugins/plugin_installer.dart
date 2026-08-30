@@ -10,7 +10,8 @@ class PluginInstaller {
   static const _timeout = Duration(seconds: 20);
   static const _maxBytes = 5 * 1024 * 1024;
 
-  PluginPackagePreview preview(List<int> bytes) => PluginPackage.preview(bytes);
+  Future<PluginPackagePreview> preview(List<int> bytes) =>
+      PluginPackage.preview(bytes);
 
   Future<PluginPackagePreview> download(Uri uri) async {
     if (uri.scheme != 'https') {
@@ -35,7 +36,7 @@ class PluginInstaller {
           throw const FormatException('.kinet слишком большой');
         }
       }
-      return preview(bytes);
+      return await preview(bytes);
     } finally {
       client.close(force: true);
     }

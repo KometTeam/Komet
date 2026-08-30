@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 
 import 'plugin_manifest.dart';
 import 'plugin_models.dart';
+import 'plugin_signing.dart';
 
 const int _maxPackageBytes = 5 * 1024 * 1024;
 const int _maxExtractedBytes = 10 * 1024 * 1024;
@@ -17,9 +18,18 @@ class PluginPackage {
   final PluginManifest manifest;
   final Map<String, Uint8List> files;
 
-  static PluginPackagePreview preview(List<int> bytes) {
+  static Future<PluginPackagePreview> preview(List<int> bytes) async {
     final package = decode(bytes);
-    return PluginPackagePreview(manifest: package.manifest, bytes: bytes);
+    final verification = await PluginSigning.verify(
+      package.manifest,
+      package.files,
+    );
+    return PluginPackagePreview(
+      manifest: package.manifest,
+      bytes: bytes,
+      signatureStatus: verification.status,
+      signerFingerprint: verification.fingerprint,
+    );
   }
 
   static PluginPackage decode(List<int> bytes) {

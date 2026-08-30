@@ -147,6 +147,7 @@ class PluginManifest {
     required this.permissions,
     required this.commands,
     this.updateUrl,
+    this.signature,
   });
 
   final String id;
@@ -159,6 +160,7 @@ class PluginManifest {
   final Set<PluginPermission> permissions;
   final List<PluginCommandManifest> commands;
   final Uri? updateUrl;
+  final PluginSignatureManifest? signature;
 
   factory PluginManifest.fromJson(Map<String, dynamic> json) {
     final schemaVersion = json['schemaVersion'];
@@ -230,6 +232,16 @@ class PluginManifest {
         throw const FormatException('updateUrl должен использовать HTTPS');
       }
     }
+    PluginSignatureManifest? signature;
+    final rawSignature = json['signature'];
+    if (rawSignature != null) {
+      if (rawSignature is! Map) {
+        throw const FormatException('Некорректная подпись плагина');
+      }
+      signature = PluginSignatureManifest.fromJson(
+        Map<String, dynamic>.from(rawSignature),
+      );
+    }
     return PluginManifest(
       id: id,
       name: _requiredString(json, 'name'),
@@ -241,6 +253,7 @@ class PluginManifest {
       permissions: Set.unmodifiable(permissions),
       commands: List.unmodifiable(commands),
       updateUrl: updateUrl,
+      signature: signature,
     );
   }
 
@@ -264,6 +277,43 @@ class PluginManifest {
     'permissions': permissions.map((permission) => permission.id).toList(),
     'commands': commands.map((command) => command.toJson()).toList(),
     if (updateUrl != null) 'updateUrl': updateUrl.toString(),
+    if (signature != null) 'signature': signature!.toJson(),
+  };
+
+  Map<String, dynamic> toUnsignedJson() {
+    final json = toJson();
+    json.remove('signature');
+    return json;
+  }
+}
+
+class PluginSignatureManifest {
+  const PluginSignatureManifest({
+    required this.algorithm,
+    required this.publicKey,
+    required this.value,
+  });
+
+  final String algorithm;
+  final String publicKey;
+  final String value;
+
+  factory PluginSignatureManifest.fromJson(Map<String, dynamic> json) {
+    final algorithm = _requiredString(json, 'algorithm');
+    if (algorithm != 'ed25519') {
+      throw FormatException('Неподдерживаемый алгоритм подписи: $algorithm');
+    }
+    return PluginSignatureManifest(
+      algorithm: algorithm,
+      publicKey: _requiredString(json, 'publicKey'),
+      value: _requiredString(json, 'value'),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'algorithm': algorithm,
+    'publicKey': publicKey,
+    'value': value,
   };
 }
 

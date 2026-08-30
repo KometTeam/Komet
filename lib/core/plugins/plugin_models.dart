@@ -2,6 +2,8 @@ import 'plugin_manifest.dart';
 
 enum PluginOrigin { bundled, installed }
 
+enum PluginSignatureStatus { unsigned, verified, bundled }
+
 class PluginDescriptor {
   const PluginDescriptor({
     required this.manifest,
@@ -9,6 +11,8 @@ class PluginDescriptor {
     required this.enabled,
     required this.grantedPermissions,
     required this.loadModules,
+    required this.signatureStatus,
+    this.signerFingerprint,
   });
 
   final PluginManifest manifest;
@@ -16,6 +20,8 @@ class PluginDescriptor {
   final bool enabled;
   final Set<PluginPermission> grantedPermissions;
   final Future<Map<String, String>> Function() loadModules;
+  final PluginSignatureStatus signatureStatus;
+  final String? signerFingerprint;
 
   PluginDescriptor copyWith({bool? enabled}) => PluginDescriptor(
     manifest: manifest,
@@ -23,6 +29,8 @@ class PluginDescriptor {
     enabled: enabled ?? this.enabled,
     grantedPermissions: grantedPermissions,
     loadModules: loadModules,
+    signatureStatus: signatureStatus,
+    signerFingerprint: signerFingerprint,
   );
 }
 
@@ -34,10 +42,17 @@ class PluginCommandDescriptor {
 }
 
 class PluginPackagePreview {
-  const PluginPackagePreview({required this.manifest, required this.bytes});
+  const PluginPackagePreview({
+    required this.manifest,
+    required this.bytes,
+    required this.signatureStatus,
+    this.signerFingerprint,
+  });
 
   final PluginManifest manifest;
   final List<int> bytes;
+  final PluginSignatureStatus signatureStatus;
+  final String? signerFingerprint;
 }
 
 class PluginUpdateInfo {

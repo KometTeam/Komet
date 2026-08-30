@@ -53,6 +53,7 @@ import '../../../core/storage/chat_members_store.dart';
 import '../../../core/crypto/chat_crypto_service.dart';
 import '../../../core/crypto/encrypted_photo.dart';
 import '../../../core/crypto/message_decryption_cache.dart';
+import '../../../core/plugins/plugin_outgoing_text.dart';
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/storage/draft_store.dart';
@@ -3977,7 +3978,7 @@ class _ChatScreenState extends State<ChatScreen>
     return result;
   }
 
-  Future<String?> _encryptOutgoing(String text) async {
+  Future<String?> _encryptOutgoing(String text, {bool notify = true}) async {
     if (!_encryptionEnabled || _myId == 0) return text;
     final result = await ChatCryptoService.instance.encrypt(
       _myId,
@@ -3986,7 +3987,7 @@ class _ChatScreenState extends State<ChatScreen>
     );
     if (result.isOk) {
       if (result.text!.length > kMaxEncryptedMessageLength) {
-        if (mounted) {
+        if (mounted && notify) {
           showCustomNotification(
             context,
             'Слишком длинное сообщение. Разделите на несколько',
@@ -3996,7 +3997,7 @@ class _ChatScreenState extends State<ChatScreen>
       }
       return result.text;
     }
-    if (mounted) {
+    if (mounted && notify) {
       showCustomNotification(
         context,
         result.failure == CryptoFailure.noKey
@@ -4332,6 +4333,11 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<String> _postCommandMessage(String text) async {
     if (!mounted || _myId == 0) return '';
+    final outgoing = await preparePluginOutgoingText(
+      text,
+      (plaintext) => _encryptOutgoing(plaintext, notify: false),
+    );
+    if (!mounted) return '';
     final tempId = _nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
     final online = api.state == SessionState.online;
@@ -4340,10 +4346,13 @@ class _ChatScreenState extends State<ChatScreen>
       accountId: _myId,
       chatId: widget.chatId,
       senderId: _myId,
-      text: text,
+      text: outgoing.wireText,
       time: now,
       status: online ? 'sending' : 'pending',
     );
+    if (outgoing.encrypted) {
+      MessageDecryptionCache.instance.seed(tempId, outgoing.plaintext);
+    }
     _messages.add(composed);
     _bumpMessages();
     _scrollToBottom();
@@ -4354,7 +4363,7 @@ class _ChatScreenState extends State<ChatScreen>
         widget.chatId,
         messageId: tempId,
         time: now,
-        text: text,
+        text: outgoing.wireText,
         status: composed.status ?? 'sending',
       ),
     );
@@ -4363,12 +4372,15 @@ class _ChatScreenState extends State<ChatScreen>
       final actualId = await messagesModule.sendMessage(
         _myId,
         widget.chatId,
-        text,
+        outgoing.wireText,
       );
       final realId = actualId.isNotEmpty ? actualId : tempId;
       final i = _messages.indexWhere((m) => m.id == tempId);
       if (i != -1) {
         final sent = _replaceMessage(i, id: realId, status: 'sent');
+        if (outgoing.encrypted) {
+          MessageDecryptionCache.instance.adopt(tempId, realId);
+        }
         unawaited(_persistOutgoing(sent, removeId: tempId));
         unawaited(
           chats.applyOutgoing(
@@ -4376,7 +4388,7 @@ class _ChatScreenState extends State<ChatScreen>
             widget.chatId,
             messageId: realId,
             time: now,
-            text: text,
+            text: outgoing.wireText,
             status: 'sent',
           ),
         );
@@ -4389,13 +4401,29 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _updateCommandMessage(String id, String text) async {
     if (id.isEmpty) return;
+    final outgoing = await preparePluginOutgoingText(
+      text,
+      (plaintext) => _encryptOutgoing(plaintext, notify: false),
+    );
+    if (!mounted) return;
     final i = _messages.indexWhere((m) => m.id == id);
     if (i != -1) {
-      final edited = _replaceMessage(i, text: text, status: 'EDITED');
+      final edited = _replaceMessage(
+        i,
+        text: outgoing.wireText,
+        status: 'EDITED',
+      );
+      if (outgoing.encrypted) {
+        MessageDecryptionCache.instance.seed(id, outgoing.plaintext);
+      }
       unawaited(_persistOutgoing(edited));
     }
     if (!id.startsWith('temp_')) {
-      await messagesModule.editMessage(widget.chatId, id, text: text);
+      await messagesModule.editMessage(
+        widget.chatId,
+        id,
+        text: outgoing.wireText,
+      );
     }
   }
 
@@ -4452,6 +4480,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _sendPluginFile(Uint8List bytes, String filename) async {
+    if (_encryptionEnabled) {
+      throw StateError('Файлы плагинов пока нельзя зашифровать');
+    }
     final file = await _pluginTempFile(bytes, filename);
     try {
       await _uploadAsFile(source: file, filename: filename, size: bytes.length);

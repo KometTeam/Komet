@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import 'plugin_host.dart';
 import 'plugin_manifest.dart';
+import 'plugin_media_downloader.dart';
 import 'plugin_models.dart';
 import 'plugin_storage.dart';
 
@@ -292,26 +293,7 @@ class PluginRuntime {
       throw const FormatException('Нужно указать url или base64');
     }
     _require(plugin, PluginPermission.network);
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 10);
-    try {
-      final request = await client.getUrl(_httpsUri(url));
-      request.followRedirects = false;
-      final response = await request.close().timeout(
-        const Duration(seconds: 20),
-      );
-      if (response.isRedirect) {
-        await response.drain<void>();
-        throw const HttpException('HTTP redirects are disabled for plugins');
-      }
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        await response.drain<void>();
-        throw HttpException('HTTP ${response.statusCode}');
-      }
-      return _readLimited(response, maxBytes);
-    } finally {
-      client.close(force: true);
-    }
+    return PluginMediaDownloader.download(_httpsUri(url), maxBytes: maxBytes);
   }
 
   static Future<Uint8List> _readLimited(

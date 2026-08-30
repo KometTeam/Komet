@@ -10,6 +10,8 @@ import '../storage/app_instance.dart';
 import 'plugin_manifest.dart';
 import 'plugin_models.dart';
 import 'plugin_package.dart';
+import 'plugin_signing.dart';
+import 'plugin_storage.dart';
 
 class PluginStore {
   PluginStore._();
@@ -17,8 +19,8 @@ class PluginStore {
   static final PluginStore instance = PluginStore._();
   static const _stateKey = 'plugins_state_v1';
   static const _bundled = <String>[
-    'assets/plugins/fox',
     'assets/plugins/info',
+    'assets/plugins/nekos',
     'assets/plugins/weather',
   ];
 
@@ -104,14 +106,31 @@ class PluginStore {
           '$assetPath/${manifest.main}',
         ),
       },
+      signatureStatus: PluginSignatureStatus.bundled,
+      signerFingerprint: 'KOMET:BUNDLED',
     );
   }
 
   Future<PluginDescriptor> _loadInstalled(Directory directory) async {
-    final manifest = PluginManifest.decode(
-      await File(p.join(directory.path, 'manifest.json')).readAsString(),
-    );
+    final manifestFile = File(p.join(directory.path, 'manifest.json'));
+    final manifestBytes = await manifestFile.readAsBytes();
+    final manifest = PluginManifest.decode(utf8.decode(manifestBytes));
     final state = _pluginState(manifest.id);
+    var signerFingerprint = state['signerFingerprint']?.toString();
+    if (manifest.signature != null) {
+      final files = await _loadInstalledBytes(directory);
+      files['manifest.json'] = manifestBytes;
+      final verification = await PluginSigning.verify(manifest, files);
+      if (signerFingerprint != null &&
+          verification.fingerprint != signerFingerprint) {
+        throw const FormatException(
+          'Ключ подписи установленного плагина изменён',
+        );
+      }
+      signerFingerprint = verification.fingerprint;
+    } else if (signerFingerprint != null) {
+      throw const FormatException('Подпись установленного плагина удалена');
+    }
     final granted = <PluginPermission>{};
     final rawGranted = state['granted'];
     if (rawGranted is List) {
@@ -128,6 +147,10 @@ class PluginStore {
       enabled: _enabled(manifest.id, fallback: true),
       grantedPermissions: Set.unmodifiable(granted),
       loadModules: () => _loadInstalledModules(directory),
+      signatureStatus: signerFingerprint == null
+          ? PluginSignatureStatus.unsigned
+          : PluginSignatureStatus.verified,
+      signerFingerprint: signerFingerprint,
     );
   }
 
@@ -143,17 +166,43 @@ class PluginStore {
     return modules;
   }
 
+  Future<Map<String, Uint8List>> _loadInstalledBytes(
+    Directory directory,
+  ) async {
+    final files = <String, Uint8List>{};
+    await for (final entity in directory.list(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.js')) continue;
+      final relative = p
+          .relative(entity.path, from: directory.path)
+          .replaceAll('\\', '/');
+      files[relative] = await entity.readAsBytes();
+    }
+    return files;
+  }
+
   Future<PluginDescriptor> install(
     List<int> bytes, {
     required Set<PluginPermission> grantedPermissions,
     Uri? sourceUrl,
   }) async {
     final package = PluginPackage.decode(bytes);
+    final verification = await PluginSigning.verify(
+      package.manifest,
+      package.files,
+    );
     if (isBundledId(package.manifest.id)) {
       throw const FormatException('Этот id зарезервирован Komet');
     }
     if (!package.manifest.permissions.containsAll(grantedPermissions)) {
       throw const FormatException('Выданы неизвестные разрешения');
+    }
+    final previousState = _pluginState(package.manifest.id);
+    final previousPublicKey = previousState['signerPublicKey']?.toString();
+    final signerPublicKey = package.manifest.signature?.publicKey;
+    if (previousPublicKey != null && signerPublicKey != previousPublicKey) {
+      throw const FormatException(
+        'Обновление должно быть подписано прежним ключом автора',
+      );
     }
     final root = _root;
     if (root == null) throw StateError('PluginStore не инициализирован');
@@ -189,6 +238,8 @@ class PluginStore {
             .map((permission) => permission.id)
             .toList(),
         if (sourceUrl != null) 'sourceUrl': sourceUrl.toString(),
+        'signerFingerprint': ?verification.fingerprint,
+        'signerPublicKey': ?signerPublicKey,
       };
       await _persistState();
       await refresh();
@@ -221,6 +272,7 @@ class PluginStore {
       if (await directory.exists()) await directory.delete(recursive: true);
     }
     _state.remove(pluginId);
+    await PluginStorage(pluginId).clear();
     await _persistState();
     await refresh();
   }

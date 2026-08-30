@@ -1,6 +1,8 @@
 import java.util.Properties
 import java.io.FileInputStream
 
+val debugAbi = providers.gradleProperty("komet.debugAbi").get()
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -81,6 +83,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            ndk {
+                abiFilters += debugAbi
+            }
+        }
         release {
             signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")
@@ -95,6 +102,7 @@ android {
             useLegacyPackaging = true
         }
     }
+
 }
 
 flutter {
