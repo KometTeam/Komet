@@ -161,7 +161,7 @@ class _CallsTabState extends State<CallsTab>
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: call.isGroup ? null : () => _callBack(call),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(

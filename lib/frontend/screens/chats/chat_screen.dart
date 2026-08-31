@@ -903,16 +903,14 @@ class _ChatScreenState extends State<ChatScreen>
     try {
       final chatRows = await chats.getChat(_myId, widget.chatId);
       if (!mounted) return;
-      if (chatRows.isNotEmpty) {
-        final channelSubscribed =
-            widget.chatType != 'CHANNEL' ||
-            await AppDatabase.isChatInList(_myId, widget.chatId);
+      if (widget.chatType == 'CHANNEL') {
+        final preview = !await AppDatabase.isChatInList(_myId, widget.chatId);
         if (!mounted) return;
+        if (preview != _previewChat) setState(() => _previewChat = preview);
+      }
+      if (chatRows.isNotEmpty) {
         setState(() {
           chat = chatRows.first;
-          if (widget.chatType == 'CHANNEL') {
-            _previewChat = !channelSubscribed;
-          }
         });
         _bumpMessages();
         _seedPresenceFromChat();
