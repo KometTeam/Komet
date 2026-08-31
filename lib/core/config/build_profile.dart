@@ -17,4 +17,5 @@ abstract final class BuildProfile {
   static const bool pranks = !isStore;
   static const bool hiddenContentViewers = !isStore;
   static const bool digitalId = !isStore;
+  static const bool sessionCityLookup = !isStore;
 }
