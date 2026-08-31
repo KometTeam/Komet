@@ -1,12 +1,16 @@
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/config/chat_wallpaper_themes.dart';
 import 'package:komet/core/config/app_colors.dart';
 import 'package:komet/core/storage/chat_wallpaper_store.dart';
+import 'package:komet/core/utils/image_utils.dart';
 import 'chat_wallpaper_view.dart';
+import 'custom_notification.dart';
 import '../../core/config/app_fonts.dart';
 
 enum WallpaperPickType { none, theme, gallery }
@@ -20,6 +24,24 @@ class WallpaperPick {
     : type = WallpaperPickType.gallery,
       theme = null;
   const WallpaperPick.theme(this.theme) : type = WallpaperPickType.theme;
+}
+
+// #***! путь, а не байты: withData грузит файл в java-кучу и валит процесс на OOM
+Future<Uint8List?> pickWallpaperBytes(BuildContext context) async {
+  final result = await FilePicker.platform.pickFiles(type: FileType.image);
+  final path = result?.files.firstOrNull?.path;
+  if (path == null) return null;
+  if (await File(path).length() > kMaxWallpaperBytes) {
+    if (context.mounted) {
+      showCustomNotification(context, 'Картинка слишком большая (макс 16 МБ)');
+    }
+    return null;
+  }
+  final bytes = await compressWallpaperFile(path);
+  if (bytes == null && context.mounted) {
+    showCustomNotification(context, 'Не удалось обработать изображение');
+  }
+  return bytes;
 }
 
 Future<WallpaperPick?> showChatWallpaperSheet(

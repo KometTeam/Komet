@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
@@ -5,11 +7,23 @@ import 'package:image/image.dart' as img;
 const int _avatarMaxDimension = 1024;
 const int _avatarTargetBytes = 900 * 1024;
 
+// #***! обои ужимаем под экран, иначе полный кадр декодится при каждом открытии чата
+const int _wallpaperMaxDimension = 1440;
+const int _wallpaperQuality = 88;
+
 /// Maximum accepted size for a user-picked avatar before compression.
 const int kMaxAvatarBytes = 8 * 1024 * 1024;
 
-// #***! сжимаем в изоляте иначе кадры пропадают
-Future<Uint8List?> compressAvatar(Uint8List input) => compute(_encodeAvatar, input);
+/// Maximum accepted size for a user-picked chat wallpaper before compression.
+const int kMaxWallpaperBytes = 16 * 1024 * 1024;
+
+// #***! сжимаем в изоляте иначе кадры пропадают, файл читаем тоже там:
+// главный изолят не должен держать полный кадр
+Future<Uint8List?> compressAvatarFile(String path) =>
+    compute(_encodeAvatarFile, path);
+
+Future<Uint8List?> compressWallpaperFile(String path) =>
+    compute(_encodeWallpaperFile, path);
 
 Future<Uint8List?> encodeRgbaToJpeg(Uint8List rgba, int width, int height) =>
     compute(_encodeRgba, (rgba, width, height));
@@ -27,19 +41,37 @@ Uint8List? _encodeRgba((Uint8List, int, int) args) {
   return img.encodeJpg(image, quality: 90);
 }
 
-// #***! качество снижаем шагами пока не влезем
-Uint8List? _encodeAvatar(Uint8List input) {
+img.Image? _decodeFitted(Uint8List input, int maxDimension) {
   final decoded = img.decodeImage(input);
   if (decoded == null) return null;
   final oriented = img.bakeOrientation(decoded);
-  final image = oriented.width > _avatarMaxDimension || oriented.height > _avatarMaxDimension
-      ? img.copyResize(
-          oriented,
-          width: oriented.width >= oriented.height ? _avatarMaxDimension : null,
-          height: oriented.height > oriented.width ? _avatarMaxDimension : null,
-          interpolation: img.Interpolation.average,
-        )
-      : oriented;
+  if (oriented.width <= maxDimension && oriented.height <= maxDimension) {
+    return oriented;
+  }
+  return img.copyResize(
+    oriented,
+    width: oriented.width >= oriented.height ? maxDimension : null,
+    height: oriented.height > oriented.width ? maxDimension : null,
+    interpolation: img.Interpolation.average,
+  );
+}
+
+Uint8List? _encodeAvatarFile(String path) =>
+    _encodeAvatar(File(path).readAsBytesSync());
+
+Uint8List? _encodeWallpaperFile(String path) {
+  final image = _decodeFitted(
+    File(path).readAsBytesSync(),
+    _wallpaperMaxDimension,
+  );
+  if (image == null) return null;
+  return img.encodeJpg(image, quality: _wallpaperQuality);
+}
+
+// #***! качество снижаем шагами пока не влезем
+Uint8List? _encodeAvatar(Uint8List input) {
+  final image = _decodeFitted(input, _avatarMaxDimension);
+  if (image == null) return null;
   var quality = 88;
   var out = img.encodeJpg(image, quality: quality);
   while (out.lengthInBytes > _avatarTargetBytes && quality > 35) {

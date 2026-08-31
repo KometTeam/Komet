@@ -135,7 +135,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
       if (_avatar != null) {
         final url = await chats.requestChatPhotoUploadUrl(api);
         if (url != null) {
-          final bytes = await compressAvatar(await _avatar!.readAsBytes());
+          final bytes = await compressAvatarFile(_avatar!.path);
           if (bytes == null) {
             if (mounted) {
               showCustomNotification(context, 'Не удалось обработать аватарку');
