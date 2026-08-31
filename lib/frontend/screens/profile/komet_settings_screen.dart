@@ -96,8 +96,9 @@ class KometSettingsScreen extends StatelessWidget {
                     icon: Symbols.visibility_lock,
                     label: 'Show hidden chats',
                     subtitle:
-                        'Показывать скрытые чаты (например, от групповых '
-                        'звонков), которые обычно не отображаются в списке',
+                        'Показывать скрытые чаты, которые обычно не '
+                        'отображаются в списке: от групповых звонков, '
+                        'закрытые каналы и покинутые чаты',
                     value: value,
                     onChanged: KometSettings.setShowHiddenChats,
                   ),

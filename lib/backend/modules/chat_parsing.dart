@@ -375,3 +375,20 @@ bool sameChatContent(CachedChat a, CachedChat b) {
   }
   return true;
 }
+
+// #***! 0 это превью без членства, 1 обычный чат, 2 скрытый
+abstract final class ChatListState {
+  static const int notInList = 0;
+  static const int visible = 1;
+  static const int hidden = 2;
+}
+
+// #***! живым считаем только ACTIVE, закрытые и покинутые сервер удалять не даёт
+int chatListStateForStatus(Object? status, {int? previous}) {
+  if (status is String && status.isNotEmpty) {
+    return status == 'ACTIVE' ? ChatListState.visible : ChatListState.hidden;
+  }
+  return previous == ChatListState.hidden
+      ? ChatListState.hidden
+      : ChatListState.visible;
+}

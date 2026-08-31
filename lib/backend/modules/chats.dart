@@ -1271,19 +1271,22 @@ class ChatsModule {
     Map<dynamic, dynamic> chat,
     int accountId, {
     Map<int, CachedChat>? preloadedExisting,
+    Map<int, int>? preloadedListState,
     bool inList = true,
   }) async {
     final cachedAt = DateTime.now().millisecondsSinceEpoch;
     final id = chat['id'];
     ChatMembersStore.instance.applyChatPayload(chat);
     Map<int, CachedChat> existing = const {};
-    Map<String, dynamic>? existingRow;
+    int? previousListState;
     if (preloadedExisting != null) {
       existing = preloadedExisting;
+      if (id is int) previousListState = preloadedListState?[id];
     } else if (id is int) {
       final rows = await AppDatabase.loadChat(accountId, id);
       if (rows.isNotEmpty) {
-        existingRow = rows.first;
+        final existingRow = rows.first;
+        previousListState = existingRow['in_list'] as int?;
         existing = {id: CachedChat.fromDbRow(existingRow)};
       }
     }
@@ -1302,9 +1305,11 @@ class ChatsModule {
       return null;
     }
     final ex = existing[parsed.id];
-    final listState = !inList ? 0 : (chat['status'] == 'HIDDEN' ? 2 : 1);
+    final listState = !inList
+        ? ChatListState.notInList
+        : chatListStateForStatus(chat['status'], previous: previousListState);
     final membershipUnchanged =
-        existingRow == null || existingRow['in_list'] == listState;
+        previousListState == null || previousListState == listState;
     if (ex != null && sameChatContent(ex, parsed) && membershipUnchanged) {
       return parsed;
     }
@@ -1374,6 +1379,10 @@ class ChatsModule {
       for (final row in existingRows)
         row['id'] as int: CachedChat.fromDbRow(row),
     };
+    final existingListState = {
+      for (final row in existingRows)
+        row['id'] as int: row['in_list'] as int,
+    };
 
     final rows = <Map<String, dynamic>>[];
     for (final c in chats.whereType<Map>()) {
@@ -1391,7 +1400,10 @@ class ChatsModule {
       );
       if (parsed == null) continue;
       final row = parsed.toDbRow();
-      row['in_list'] = map['status'] == 'HIDDEN' ? 2 : 1;
+      row['in_list'] = chatListStateForStatus(
+        map['status'],
+        previous: existingListState[parsed.id],
+      );
       rows.add(row);
     }
 
@@ -2117,6 +2129,10 @@ class ChatsModule {
         for (final row in existingRows)
           row['id'] as int: CachedChat.fromDbRow(row),
       };
+      final preloadedListState = {
+        for (final row in existingRows)
+          row['id'] as int: row['in_list'] as int,
+      };
       final out = <CachedChat>[];
       for (final c in list) {
         if (c is Map) {
@@ -2124,6 +2140,7 @@ class ChatsModule {
             c,
             accountId,
             preloadedExisting: preloadedExisting,
+            preloadedListState: preloadedListState,
           );
           if (cached != null) out.add(cached);
         }

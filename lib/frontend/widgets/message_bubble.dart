@@ -574,6 +574,12 @@ class MessageBubble extends StatelessWidget {
 
   ForwardedMessageAttachment? get _forwarded => message.forwardedAttachment;
 
+  List<MessageAttachment> get _renderableAttachments =>
+      message.attachments
+          ?.where((a) => a is! InlineKeyboardAttachment)
+          .toList() ??
+      const [];
+
   List<MessageAttachment> get _contentAttachments {
     final forwarded = _forwarded;
     if (forwarded != null) {
@@ -585,10 +591,7 @@ class MessageBubble extends StatelessWidget {
               .toList() ??
           const [];
     }
-    return message.attachments
-            ?.where((a) => a is! InlineKeyboardAttachment)
-            .toList() ??
-        const [];
+    return _renderableAttachments;
   }
 
   MessageAttachment? get _primaryAttachment {
@@ -1985,8 +1988,8 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildAttachmentContent(BubbleContext ctx) {
-    final attachments = message.attachments;
-    if (attachments == null || attachments.isEmpty) {
+    final attachments = _renderableAttachments;
+    if (attachments.isEmpty) {
       return _buildTextContent(ctx);
     }
 
@@ -2115,7 +2118,10 @@ class MessageBubble extends StatelessWidget {
           child: _buildVoiceAttachment(ctx, attachment as AudioAttachment),
         );
       default:
-        return _buildTextContent(ctx);
+        return Padding(
+          padding: _paddingFor(MessageType.text, ctx.shape),
+          child: _buildTextContent(ctx),
+        );
     }
   }
 
