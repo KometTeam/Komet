@@ -1954,7 +1954,10 @@ class MessagesModule {
         'token': token,
         'videoId': videoId,
       });
-      if (!response.isOk) return const {};
+      if (!response.isOk) {
+        logger.w('getVideoSources $videoId: ${response.payload}');
+        return const {};
+      }
       final data = response.payload;
       if (data is! Map) return const {};
 
@@ -1979,8 +1982,12 @@ class MessagesModule {
           sources['Источник'] = external;
         }
       }
+      if (sources.isEmpty) {
+        logger.w('getVideoSources $videoId: сервер не отдал ссылок: $data');
+      }
       return sources;
-    } catch (_) {
+    } catch (e) {
+      logger.w('getVideoSources $videoId: $e');
       return const {};
     }
   }

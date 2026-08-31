@@ -6,11 +6,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../../core/media/preview_image.dart';
+import '../../../../core/utils/format.dart';
 import '../../../../models/attachment.dart';
 import '../../photo_viewer.dart';
 import '../photo_hero.dart';
 import '../../text_with_meta.dart';
 import 'bubble_context.dart';
+import 'video_bubble.dart';
 
 class PhotoBubble extends StatelessWidget {
   static const Radius _bigRadius = Radius.circular(
@@ -22,30 +25,63 @@ class PhotoBubble extends StatelessWidget {
   );
 
   final BubbleContext ctx;
-  final List<PhotoAttachment> photos;
+  final List<MessageAttachment> media;
   final bool hasContentAbove;
 
   const PhotoBubble({
     super.key,
     required this.ctx,
-    required this.photos,
+    required this.media,
     this.hasContentAbove = false,
   });
 
-  static double layoutWidth(
-    List<PhotoAttachment> photos, {
-    bool hasCaption = false,
-  }) {
-    if (photos.length != 1) return BubbleContext.photoMaxSize;
-    return _displaySize(photos.single, hasCaption: hasCaption).width;
+  // #***! альбом собирает фото и обычные видео, кружки живут отдельно
+  static bool isAlbumMedia(MessageAttachment item) =>
+      item is PhotoAttachment || (item is VideoAttachment && !item.isNote);
+
+  static int? _intrinsicWidth(MessageAttachment item) => switch (item) {
+    PhotoAttachment(:final width) => width,
+    VideoAttachment(:final width) => width,
+    _ => null,
+  };
+
+  static int? _intrinsicHeight(MessageAttachment item) => switch (item) {
+    PhotoAttachment(:final height) => height,
+    VideoAttachment(:final height) => height,
+    _ => null,
+  };
+
+  static String? _localPathOf(MessageAttachment item) => switch (item) {
+    PhotoAttachment(:final localPath) => localPath,
+    VideoAttachment(:final localPath) => localPath,
+    _ => null,
+  };
+
+  // #***! у видео обложка отдельным полем, baseUrl это уже сам файл
+  static String _previewUrlOf(MessageAttachment item) {
+    if (item is VideoAttachment) {
+      final thumb = item.thumbnail;
+      if (thumb != null && thumb.isNotEmpty) return thumb;
+      return item.baseUrl ?? '';
+    }
+    if (item is PhotoAttachment) return item.baseUrl ?? '';
+    return '';
   }
 
-  static Size _displaySize(PhotoAttachment photo, {bool hasCaption = false}) {
+  static double layoutWidth(
+    List<MessageAttachment> media, {
+    bool hasCaption = false,
+  }) {
+    if (media.length != 1) return BubbleContext.photoMaxSize;
+    return _displaySize(media.single, hasCaption: hasCaption).width;
+  }
+
+  static Size _displaySize(MessageAttachment item, {bool hasCaption = false}) {
     final minWidth = hasCaption
         ? BubbleContext.captionedMediaMinWidth
         : BubbleContext.photoMinSize;
-    final width = photo.width?.toDouble() ?? 200;
-    final height = photo.height?.toDouble() ?? 200;
+    final width = _intrinsicWidth(item)?.toDouble() ?? 200;
+    final height = _intrinsicHeight(item)?.toDouble() ?? 200;
 
     final downScale = math.min(
       1.0,
@@ -81,22 +117,22 @@ class PhotoBubble extends StatelessWidget {
     final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
     final resolvedCaption = hasMessageCaption ? ctx.caption() : null;
     final hasCaption = resolvedCaption != null;
-    final count = photos.length;
+    final count = media.length;
 
     Widget photosWidget;
     if (count == 1) {
       photosWidget = _buildSinglePhoto(
         ctx,
-        photos[0],
+        media[0],
         hasCaption: hasCaption,
         hasContentAbove: hasContentAbove,
       );
     } else if (count == 2) {
-      photosWidget = _buildTwoPhotos(ctx, photos[0], photos[1]);
+      photosWidget = _buildTwoPhotos(ctx, media[0], media[1]);
     } else if (count == 3) {
-      photosWidget = _buildThreePhotos(ctx, photos);
+      photosWidget = _buildThreePhotos(ctx, media);
     } else {
-      photosWidget = _buildPhotoGrid(ctx, photos);
+      photosWidget = _buildPhotoGrid(ctx, media);
     }
 
     if (!hasCaption) {
@@ -114,7 +150,7 @@ class PhotoBubble extends StatelessWidget {
 
     if (count == 1) {
       return SizedBox(
-        width: layoutWidth(photos, hasCaption: true),
+        width: layoutWidth(media, hasCaption: true),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,7 +198,7 @@ class PhotoBubble extends StatelessWidget {
 
   Widget _buildSinglePhoto(
     BubbleContext ctx,
-    PhotoAttachment photo, {
+    MessageAttachment photo, {
     required bool hasCaption,
     required bool hasContentAbove,
   }) {
@@ -203,6 +239,7 @@ class PhotoBubble extends StatelessWidget {
             memWidth: memWidth,
             memHeight: memHeight,
           ),
+          ..._videoBadges(photo, compact: false),
           if (ctx.uploadProgress != null)
             _buildUploadOverlay(ctx.uploadProgress!, 0),
           if (ctx.uploadProgress == null)
@@ -210,7 +247,7 @@ class PhotoBubble extends StatelessWidget {
               child: Builder(
                 builder: (tileContext) => GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _openPhotoViewer(
+                  onTap: () => _openMedia(
                     ctx.context,
                     0,
                     tileContext: tileContext,
@@ -228,13 +265,13 @@ class PhotoBubble extends StatelessWidget {
 
   Widget _buildPhotoImage(
     BubbleContext ctx,
-    PhotoAttachment photo,
+    MessageAttachment photo,
     double width,
     double height, {
     required int memWidth,
     required int memHeight,
   }) {
-    final localPath = photo.localPath;
+    final localPath = _localPathOf(photo);
     if (localPath != null) {
       return Image.file(
         File(localPath),
@@ -247,8 +284,9 @@ class PhotoBubble extends StatelessWidget {
             _buildPhotoPlaceholder(ctx.cs, width, height),
       );
     }
-    final imageUrl = photo.baseUrl ?? '';
-    if (imageUrl.isNotEmpty) {
+    final embedded = dataUriImage(photo, photo.previewData);
+    final imageUrl = _previewUrlOf(photo);
+    if (imageUrl.isNotEmpty && !imageUrl.startsWith('data:')) {
       return CachedNetworkImage(
         imageUrl: imageUrl,
         width: width,
@@ -258,10 +296,70 @@ class PhotoBubble extends StatelessWidget {
         memCacheHeight: memHeight,
         fadeInDuration: Duration.zero,
         placeholderFadeInDuration: Duration.zero,
-        errorWidget: (_, _, _) => _buildPhotoPlaceholder(ctx.cs, width, height),
+        errorWidget: (_, _, _) => embedded == null
+            ? _buildPhotoPlaceholder(ctx.cs, width, height)
+            : Image(
+                image: embedded,
+                width: width,
+                height: height,
+                fit: BoxFit.cover,
+              ),
+      );
+    }
+    if (embedded != null) {
+      return Image(
+        image: embedded,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) =>
+            _buildPhotoPlaceholder(ctx.cs, width, height),
       );
     }
     return _buildPhotoPlaceholder(ctx.cs, width, height);
+  }
+
+  // #***! плитка видео отличается от фото только кружком плеера и длительностью
+  List<Widget> _videoBadges(MessageAttachment item, {required bool compact}) {
+    if (item is! VideoAttachment) return const [];
+    final side = compact ? 36.0 : 48.0;
+    final durationMs = item.duration;
+    return [
+      Positioned.fill(
+        child: Center(
+          child: Container(
+            width: side,
+            height: side,
+            decoration: const BoxDecoration(
+              color: Colors.black54,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Symbols.play_arrow,
+              color: Colors.white,
+              size: side * 0.625,
+            ),
+          ),
+        ),
+      ),
+      if (durationMs != null && durationMs > 0)
+        Positioned(
+          left: 6,
+          bottom: 6,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              formatSecondsMmSs((durationMs / 1000).round()),
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+        ),
+    ];
   }
 
   Widget _buildUploadOverlay(
@@ -312,8 +410,8 @@ class PhotoBubble extends StatelessWidget {
 
   Widget _buildTwoPhotos(
     BubbleContext ctx,
-    PhotoAttachment p1,
-    PhotoAttachment p2,
+    MessageAttachment p1,
+    MessageAttachment p2,
   ) {
     final matchTop =
         ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleTop;
@@ -337,7 +435,7 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildThreePhotos(BubbleContext ctx, List<PhotoAttachment> photos) {
+  Widget _buildThreePhotos(BubbleContext ctx, List<MessageAttachment> photos) {
     final matchTop =
         ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleTop;
     final matchBottom =
@@ -370,7 +468,7 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildPhotoGrid(BubbleContext ctx, List<PhotoAttachment> photos) {
+  Widget _buildPhotoGrid(BubbleContext ctx, List<MessageAttachment> photos) {
     final displayCount = photos.length > 4 ? 4 : photos.length;
     final remaining = photos.length - 4;
 
@@ -409,7 +507,7 @@ class PhotoBubble extends StatelessWidget {
 
   Widget _buildGridTile(
     BubbleContext ctx,
-    List<PhotoAttachment> photos,
+    List<MessageAttachment> photos,
     int index,
     int remaining,
   ) {
@@ -424,10 +522,13 @@ class PhotoBubble extends StatelessWidget {
     return _buildPhotoTile(ctx, photos[index], index);
   }
 
-  Widget _buildPhotoTile(BubbleContext ctx, PhotoAttachment photo, int index) =>
-      AspectRatio(aspectRatio: 1, child: _buildFillTile(ctx, photo, index));
+  Widget _buildPhotoTile(
+    BubbleContext ctx,
+    MessageAttachment photo,
+    int index,
+  ) => AspectRatio(aspectRatio: 1, child: _buildFillTile(ctx, photo, index));
 
-  Widget _buildFillTile(BubbleContext ctx, PhotoAttachment photo, int index) {
+  Widget _buildFillTile(BubbleContext ctx, MessageAttachment photo, int index) {
     final cachePx =
         (BubbleContext.photoMaxSize /
                 2 *
@@ -443,6 +544,7 @@ class PhotoBubble extends StatelessWidget {
           memWidth: cachePx,
           memHeight: cachePx,
         ),
+        ..._videoBadges(photo, compact: true),
         if (ctx.uploadProgress != null)
           _buildUploadOverlay(ctx.uploadProgress!, index),
         if (ctx.uploadProgress == null)
@@ -456,7 +558,7 @@ class PhotoBubble extends StatelessWidget {
       child: Builder(
         builder: (tileContext) => GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => _openPhotoViewer(
+          onTap: () => _openMedia(
             ctx.context,
             index,
             tileContext: tileContext,
@@ -471,7 +573,7 @@ class PhotoBubble extends StatelessWidget {
 
   Widget _buildPhotoTileWithOverlay(
     BubbleContext ctx,
-    PhotoAttachment photo,
+    MessageAttachment photo,
     String overlay,
     int index,
   ) {
@@ -541,11 +643,11 @@ class PhotoBubble extends StatelessWidget {
   }
 
   static ImageProvider? _photoProvider(
-    PhotoAttachment photo, {
+    MessageAttachment photo, {
     required int memWidth,
     required int memHeight,
   }) {
-    final localPath = photo.localPath;
+    final localPath = _localPathOf(photo);
     if (localPath != null) {
       return ResizeImage.resizeIfNeeded(
         memWidth,
@@ -553,8 +655,10 @@ class PhotoBubble extends StatelessWidget {
         FileImage(File(localPath)),
       );
     }
-    final url = photo.baseUrl ?? '';
-    if (url.isEmpty) return null;
+    final url = _previewUrlOf(photo);
+    if (url.isEmpty || url.startsWith('data:')) {
+      return dataUriImage(photo, photo.previewData);
+    }
     return ResizeImage.resizeIfNeeded(
       memWidth,
       memHeight,
@@ -562,14 +666,15 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  static Size? _photoSize(PhotoAttachment photo) {
-    final width = photo.width ?? 0;
-    final height = photo.height ?? 0;
+  static Size? _photoSize(MessageAttachment photo) {
+    final width = _intrinsicWidth(photo) ?? 0;
+    final height = _intrinsicHeight(photo) ?? 0;
     if (width <= 0 || height <= 0) return null;
     return Size(width.toDouble(), height.toDouble());
   }
 
-  void _openPhotoViewer(
+  // #***! просмотрщик листает только фото, видео из альбома уходит в плеер
+  void _openMedia(
     BuildContext context,
     int index, {
     required BuildContext tileContext,
@@ -577,7 +682,13 @@ class PhotoBubble extends StatelessWidget {
     required int memWidth,
     required int memHeight,
   }) {
-    final photo = photos[index];
+    final photo = media[index];
+    if (photo is VideoAttachment) {
+      openVideoPlayer(ctx, photo);
+      return;
+    }
+    final photos = media.whereType<PhotoAttachment>().toList();
+    final photoIndex = photos.indexOf(photo as PhotoAttachment);
     final hero = PhotoHeroController(
       origin: () => photoHeroRectOf(tileContext),
       image: _photoProvider(photo, memWidth: memWidth, memHeight: memHeight),
@@ -589,7 +700,7 @@ class PhotoBubble extends StatelessWidget {
         hero: hero,
         builder: (_) => PhotoViewerScreen(
           photos: photos,
-          initialIndex: index,
+          initialIndex: photoIndex < 0 ? 0 : photoIndex,
           chatId: ctx.chatId,
           message: ctx.message,
           actions: ctx.photoActions,

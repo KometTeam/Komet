@@ -557,19 +557,23 @@ class MessageBubble extends StatelessWidget {
   });
 
   bool _computeHasPhotoWithCaption() {
-    final attachments = _contentAttachments;
-    if (attachments.isEmpty) return false;
-    final hasPhoto = attachments.any((a) => a is PhotoAttachment);
-    final hasCaption = _contentText?.isNotEmpty ?? false;
-    return hasPhoto && hasCaption;
+    if (!_rendersAlbum) return false;
+    return _contentText?.isNotEmpty ?? false;
   }
 
   bool _computeHasMultiplePhotosNoCaption() {
-    final attachments = _contentAttachments;
-    if (attachments.isEmpty) return false;
-    final photoCount = attachments.whereType<PhotoAttachment>().length;
     final hasCaption = _contentText?.isNotEmpty ?? false;
-    return photoCount >= 2 && !hasCaption;
+    return _albumMedia.length >= 2 && !hasCaption;
+  }
+
+  // #***! фото и видео идут одним альбомом, одиночное видео рисует VideoBubble
+  List<MessageAttachment> get _albumMedia =>
+      _contentAttachments.where(PhotoBubble.isAlbumMedia).toList();
+
+  bool get _rendersAlbum {
+    final album = _albumMedia;
+    if (album.length >= 2) return true;
+    return album.length == 1 && album.single is PhotoAttachment;
   }
 
   ForwardedMessageAttachment? get _forwarded => message.forwardedAttachment;
@@ -1422,32 +1426,31 @@ class MessageBubble extends StatelessWidget {
         _contentType == MessageType.voice;
     final ctx = makeCtx(metaInFooter: carriesMeta);
 
+    final content = _buildContent(ctx);
+    final footer = Padding(
+      padding: inset,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: _ReactionsWrap(spacing: 4, runSpacing: 4, children: chips),
+          ),
+          if (carriesMeta) ...[const SizedBox(width: 8), ctx.footerMeta()],
+        ],
+      ),
+    );
+
+    // #***! у медиа ширину диктует само медиа, реакции переносим по строкам
+    // чтобы длинный ряд чипов не растягивал бабл шире картинки
+    if (_mediaDictatesWidth) {
+      return _StackMatchTopWidth(top: content, bottom: footer);
+    }
+
     return IntrinsicWidth(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildContent(ctx),
-          Padding(
-            padding: inset,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: _ReactionsWrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: chips,
-                  ),
-                ),
-                if (carriesMeta) ...[
-                  const SizedBox(width: 8),
-                  ctx.footerMeta(),
-                ],
-              ],
-            ),
-          ),
-        ],
+        children: [content, footer],
       ),
     );
   }
@@ -2082,14 +2085,18 @@ class MessageBubble extends StatelessWidget {
       return ShareBubble(ctx: ctx, share: shares.first);
     }
 
-    final photos = attachments.whereType<PhotoAttachment>().toList();
-    if (photos.isEmpty) {
-      return _buildGenericAttachment(ctx, attachments.first);
+    final album = attachments.where(PhotoBubble.isAlbumMedia).toList();
+    if (album.length < 2 &&
+        !(album.length == 1 && album.single is PhotoAttachment)) {
+      return _buildGenericAttachment(
+        ctx,
+        album.isEmpty ? attachments.first : album.single,
+      );
     }
 
     return PhotoBubble(
       ctx: ctx,
-      photos: photos,
+      media: album,
       hasContentAbove: hasContentAbove,
     );
   }

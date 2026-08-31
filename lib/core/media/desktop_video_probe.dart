@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../utils/logger.dart';
 import 'video_transcoder.dart' show VideoInfo;
 
 // #***! на десктопе метаданные берём у ffprobe, плагина там нет
@@ -182,7 +183,12 @@ class DesktopVideoProbe {
       if (data is List<int> && data.isNotEmpty) {
         return Uint8List.fromList(data);
       }
-    } catch (_) {}
+      logger.w(
+        'ffmpeg не отдал кадр $seek: код ${out.exitCode}, ${out.stderr}',
+      );
+    } catch (e) {
+      logger.w('ffmpeg не отдал кадр $seek: $e');
+    }
     return null;
   }
 

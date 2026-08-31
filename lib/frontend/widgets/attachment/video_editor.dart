@@ -402,6 +402,7 @@ class _VideoQualityEditorState extends State<VideoQualityEditor> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final out = widget.geometry.naturalOutput;
+    final inset = _QualitySlider.insetFor(context);
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -450,22 +451,29 @@ class _VideoQualityEditorState extends State<VideoQualityEditor> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      padding: EdgeInsets.fromLTRB(inset, 8, inset, 0),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            l10n.videoEditorQualityLow,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
+                          Expanded(
+                            child: Text(
+                              l10n.videoEditorQualityLow,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
-                          Text(
-                            l10n.videoEditorQualityHigh,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              l10n.videoEditorQualityHigh,
+                              textAlign: TextAlign.end,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                         ],
@@ -474,6 +482,7 @@ class _VideoQualityEditorState extends State<VideoQualityEditor> {
                     _QualitySlider(
                       count: widget.options.length,
                       index: _index,
+                      inset: inset,
                       onChanged: (value) => setState(() => _index = value),
                     ),
                     Row(
@@ -519,23 +528,35 @@ class _VideoQualityEditorState extends State<VideoQualityEditor> {
 class _QualitySlider extends StatelessWidget {
   final int count;
   final int index;
+  final double inset;
   final ValueChanged<int> onChanged;
 
   const _QualitySlider({
     required this.count,
     required this.index,
+    required this.inset,
     required this.onChanged,
   });
+
+  static const double _minInset = 16.0;
+  static const double _height = 48.0;
+
+  // #***! концы дорожки уводим из зоны системных жестов, иначе крайние
+  // значения на телефоне с жестовой навигацией нечем зацепить
+  static double insetFor(BuildContext context) {
+    final gesture = MediaQuery.of(context).systemGestureInsets;
+    return math.max(_minInset, math.max(gesture.left, gesture.right) + 8);
+  }
 
   @override
   Widget build(BuildContext context) {
     final accent = MediaAccent.of(context);
     return SizedBox(
-      height: 40,
+      height: _height,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          const inset = 16.0;
-          final span = math.max(1.0, constraints.maxWidth - inset * 2);
+          final width = constraints.maxWidth;
+          final span = math.max(1.0, width - inset * 2);
           void pick(double dx) {
             if (count <= 1) return;
             final t = ((dx - inset) / span).clamp(0.0, 1.0);
@@ -547,7 +568,10 @@ class _QualitySlider extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             onTapDown: (d) => pick(d.localPosition.dx),
             onHorizontalDragUpdate: (d) => pick(d.localPosition.dx),
+            // #***! без явного размера CustomPaint схлопывается в ноль ширины,
+            // дорожка рисуется мимо и по ней нечем попасть
             child: CustomPaint(
+              size: Size(width, _height),
               painter: _QualitySliderPainter(
                 count: count,
                 index: index,
