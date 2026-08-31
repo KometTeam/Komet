@@ -77,17 +77,15 @@ class FormattedMessageText extends StatefulWidget {
             child: SizedBox(
               width: box,
               height: box,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Text(content, style: style.copyWith(fontSize: fontSize)),
-                  LottieImage(
-                    lottieUrl: animojiUrl,
-                    size: box,
-                    memCacheWidth: 96,
-                    shimmer: false,
-                  ),
-                ],
+              child: LottieImage(
+                lottieUrl: animojiUrl,
+                size: box,
+                memCacheWidth: 96,
+                shimmer: false,
+                placeholder: Text(
+                  content,
+                  style: style.copyWith(fontSize: fontSize),
+                ),
               ),
             ),
           ),
@@ -290,21 +288,16 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
             child: SizedBox(
               width: box,
               height: box,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Text(
-                    content,
-                    style: widget.style.copyWith(fontSize: fontSize * 1.15),
-                  ),
-                  LottieImage(
-                    lottieUrl: segment.animojiUrl,
-                    size: box,
-                    memCacheWidth: 120,
-                    shimmer: false,
-                    eager: true,
-                  ),
-                ],
+              child: LottieImage(
+                lottieUrl: segment.animojiUrl,
+                size: box,
+                memCacheWidth: 120,
+                shimmer: false,
+                eager: true,
+                placeholder: Text(
+                  content,
+                  style: widget.style.copyWith(fontSize: fontSize * 1.15),
+                ),
               ),
             ),
           ),
