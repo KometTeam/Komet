@@ -130,6 +130,7 @@ class _DevicesScreenState extends State<DevicesScreen>
   }
 
   Future<void> _lookupIp(int id, String location) async {
+    if (!BuildProfile.ipGeoLookup) return;
     if (_ipDetails.containsKey(id)) {
       setState(() => _expandedSessions.add(id));
       return;
@@ -543,7 +544,7 @@ class _DevicesScreenState extends State<DevicesScreen>
                       ),
                     ),
                   const SizedBox(height: 8),
-                  if (!isExpanded)
+                  if (!isExpanded && BuildProfile.ipGeoLookup)
                     InkWell(
                       onTap: isLoading ? null : () => _lookupIp(id, location),
                       borderRadius: BorderRadius.circular(12),
