@@ -52,7 +52,7 @@ jobs:
           PLAY_KEY_ALIAS: ${{ secrets.PLAY_KEY_ALIAS }}
         run: |
           if [ -z "$PLAY_KEYSTORE_BASE64" ]; then
-            echo "PLAY_KEYSTORE_BASE64 secret not set — refusing to produce an unsigned Play bundle."
+            echo "PLAY_KEYSTORE_BASE64 secret not set — refusing to produce unsigned Play artifacts."
             exit 1
           fi
           echo "$PLAY_KEYSTORE_BASE64" | base64 -d > android/app/komet-upload.jks
@@ -63,8 +63,8 @@ jobs:
             echo "storeFile=komet-upload.jks"
           } > android/key.properties
 
-      - name: Build App Bundle
-        run: flutter build appbundle --release --flavor store --obfuscate --split-debug-info=build/symbols
+      - name: Build Universal APK
+        run: flutter build apk --release --flavor store --obfuscate --split-debug-info=build/symbols
 
       - name: Verify store manifest
         run: |
@@ -85,6 +85,44 @@ jobs:
             exit 1
           fi
           echo "Store manifest is clean."
+
+      - name: Build Split APKs
+        run: flutter build apk --release --split-per-abi --flavor store --obfuscate --split-debug-info=build/symbols
+
+      - name: Build App Bundle
+        run: flutter build appbundle --release --flavor store --obfuscate --split-debug-info=build/symbols
+
+      - name: Upload Universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-universal
+          path: build/app/outputs/flutter-apk/app-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload arm64-v8a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-arm64-v8a
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload armeabi-v7a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-armeabi-v7a
+          path: build/app/outputs/flutter-apk/app-armeabi-v7a-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-x86_64
+          path: build/app/outputs/flutter-apk/app-x86_64-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload App Bundle
         uses: actions/upload-artifact@v4
