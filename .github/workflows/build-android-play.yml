@@ -44,23 +44,39 @@ jobs:
           echo "org.gradle.parallel=true" >> ~/.gradle/gradle.properties
           echo "org.gradle.configureondemand=true" >> ~/.gradle/gradle.properties
 
-      - name: Setup upload key
+      - name: Setup signing key
         env:
           PLAY_KEYSTORE_BASE64: ${{ secrets.PLAY_KEYSTORE_BASE64 }}
           PLAY_KEYSTORE_PASSWORD: ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
           PLAY_KEY_PASSWORD: ${{ secrets.PLAY_KEY_PASSWORD }}
           PLAY_KEY_ALIAS: ${{ secrets.PLAY_KEY_ALIAS }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          if [ -z "$PLAY_KEYSTORE_BASE64" ]; then
-            echo "PLAY_KEYSTORE_BASE64 secret not set — refusing to produce unsigned Play artifacts."
+          if [ -n "$PLAY_KEYSTORE_BASE64" ]; then
+            echo "Signing with the Play upload key."
+            KEYSTORE="$PLAY_KEYSTORE_BASE64"
+            STORE_PASS="$PLAY_KEYSTORE_PASSWORD"
+            KEY_PASS="$PLAY_KEY_PASSWORD"
+            ALIAS="$PLAY_KEY_ALIAS"
+          elif [ -n "$KEYSTORE_BASE64" ]; then
+            echo "::warning::PLAY_KEYSTORE_BASE64 is not set — signing with the release key. Google Play rejects the bundle unless this key is the registered upload key."
+            KEYSTORE="$KEYSTORE_BASE64"
+            STORE_PASS="$KEYSTORE_PASSWORD"
+            KEY_PASS="$KEY_PASSWORD"
+            ALIAS="$KEY_ALIAS"
+          else
+            echo "::error::Neither PLAY_KEYSTORE_BASE64 nor KEYSTORE_BASE64 is set — refusing to produce unsigned store artifacts."
             exit 1
           fi
-          echo "$PLAY_KEYSTORE_BASE64" | base64 -d > android/app/komet-upload.jks
+          echo "$KEYSTORE" | base64 -d > android/app/komet-store.jks
           {
-            echo "storePassword=$PLAY_KEYSTORE_PASSWORD"
-            echo "keyPassword=$PLAY_KEY_PASSWORD"
-            echo "keyAlias=$PLAY_KEY_ALIAS"
-            echo "storeFile=komet-upload.jks"
+            echo "storePassword=$STORE_PASS"
+            echo "keyPassword=$KEY_PASS"
+            echo "keyAlias=$ALIAS"
+            echo "storeFile=komet-store.jks"
           } > android/key.properties
 
       - name: Build Universal APK
