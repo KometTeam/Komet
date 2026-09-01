@@ -1,0 +1,141 @@
+name: Build Android (Google Play)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-play:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.3'
+          channel: 'stable'
+          cache: true
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Configure Gradle
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> ~/.gradle/gradle.properties
+          echo "kotlin.daemon.jvmargs=-Xmx1536m" >> ~/.gradle/gradle.properties
+          echo "org.gradle.caching=true" >> ~/.gradle/gradle.properties
+          echo "org.gradle.parallel=true" >> ~/.gradle/gradle.properties
+          echo "org.gradle.configureondemand=true" >> ~/.gradle/gradle.properties
+
+      - name: Setup upload key
+        env:
+          PLAY_KEYSTORE_BASE64: ${{ secrets.PLAY_KEYSTORE_BASE64 }}
+          PLAY_KEYSTORE_PASSWORD: ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
+          PLAY_KEY_PASSWORD: ${{ secrets.PLAY_KEY_PASSWORD }}
+          PLAY_KEY_ALIAS: ${{ secrets.PLAY_KEY_ALIAS }}
+        run: |
+          if [ -z "$PLAY_KEYSTORE_BASE64" ]; then
+            echo "PLAY_KEYSTORE_BASE64 secret not set — refusing to produce unsigned Play artifacts."
+            exit 1
+          fi
+          echo "$PLAY_KEYSTORE_BASE64" | base64 -d > android/app/komet-upload.jks
+          {
+            echo "storePassword=$PLAY_KEYSTORE_PASSWORD"
+            echo "keyPassword=$PLAY_KEY_PASSWORD"
+            echo "keyAlias=$PLAY_KEY_ALIAS"
+            echo "storeFile=komet-upload.jks"
+          } > android/key.properties
+
+      - name: Build Universal APK
+        run: flutter build apk --release --flavor store --obfuscate --split-debug-info=build/symbols
+
+      - name: Verify store manifest
+        run: |
+          set -e
+          MANIFEST=build/app/intermediates/merged_manifests/storeRelease/processStoreReleaseManifest/AndroidManifest.xml
+          test -f "$MANIFEST" || MANIFEST=$(find build/app/intermediates -name AndroidManifest.xml -path '*storeRelease*' | head -1)
+          echo "Checking $MANIFEST"
+          if grep -q "REQUEST_INSTALL_PACKAGES" "$MANIFEST"; then
+            echo "::error::REQUEST_INSTALL_PACKAGES is present in the store manifest"
+            exit 1
+          fi
+          if grep -q 'android:host="max.ru"' "$MANIFEST"; then
+            echo "::error::max.ru intent filter is present in the store manifest"
+            exit 1
+          fi
+          if grep -q "firebaseinitprovider" "$MANIFEST"; then
+            echo "::error::Firebase is still initialized in the store manifest"
+            exit 1
+          fi
+          echo "Store manifest is clean."
+
+      - name: Build Split APKs
+        run: flutter build apk --release --split-per-abi --flavor store --obfuscate --split-debug-info=build/symbols
+
+      - name: Build App Bundle
+        run: flutter build appbundle --release --flavor store --obfuscate --split-debug-info=build/symbols
+
+      - name: Upload Universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-universal
+          path: build/app/outputs/flutter-apk/app-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload arm64-v8a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-arm64-v8a
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload armeabi-v7a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-armeabi-v7a
+          path: build/app/outputs/flutter-apk/app-armeabi-v7a-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-x86_64
+          path: build/app/outputs/flutter-apk/app-x86_64-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload App Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-aab
+          path: build/app/outputs/bundle/storeRelease/app-store-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-symbols
+          path: build/symbols
+          if-no-files-found: error
+          retention-days: 90
