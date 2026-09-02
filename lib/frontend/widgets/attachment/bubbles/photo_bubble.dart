@@ -202,39 +202,52 @@ class PhotoBubble extends StatelessWidget {
     required int memWidth,
   }) {
     final preview = dataUriImage(photo, photo.previewData);
+    Widget box(Widget child) {
+      if (width.isFinite && height.isFinite) return child;
+      return SizedBox.expand(child: child);
+    }
+
     final placeholder = preview == null
-        ? _buildPhotoPlaceholder(ctx.cs, width, height)
-        : Image(
-            image: preview,
-            width: width.isFinite ? width : null,
-            height: height.isFinite ? height : null,
-            fit: BoxFit.cover,
-            gaplessPlayback: true,
+        ? _buildPhotoPlaceholder(
+            ctx.cs,
+            width.isFinite ? width : double.infinity,
+            height.isFinite ? height : double.infinity,
+          )
+        : box(
+            Image(
+              image: preview,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+            ),
           );
     final localPath = photo.localPath;
     if (localPath != null) {
-      return Image.file(
-        File(localPath),
-        width: width.isFinite ? width : null,
-        height: height.isFinite ? height : null,
-        fit: BoxFit.cover,
-        cacheWidth: memWidth,
-        gaplessPlayback: true,
-        errorBuilder: (_, _, _) => placeholder,
+      return box(
+        Image.file(
+          File(localPath),
+          width: width.isFinite ? width : null,
+          height: height.isFinite ? height : null,
+          fit: BoxFit.cover,
+          cacheWidth: memWidth,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => placeholder,
+        ),
       );
     }
     final imageUrl = photo.baseUrl ?? '';
     if (imageUrl.isNotEmpty) {
-      return CachedNetworkImage(
-        imageUrl: imageUrl,
-        width: width.isFinite ? width : null,
-        height: height.isFinite ? height : null,
-        fit: BoxFit.cover,
-        memCacheWidth: memWidth,
-        fadeInDuration: Duration.zero,
-        placeholderFadeInDuration: Duration.zero,
-        placeholder: (_, _) => placeholder,
-        errorWidget: (_, _, _) => placeholder,
+      return box(
+        CachedNetworkImage(
+          imageUrl: imageUrl,
+          width: width.isFinite ? width : null,
+          height: height.isFinite ? height : null,
+          fit: BoxFit.cover,
+          memCacheWidth: memWidth,
+          fadeInDuration: Duration.zero,
+          placeholderFadeInDuration: Duration.zero,
+          placeholder: (_, _) => placeholder,
+          errorWidget: (_, _, _) => placeholder,
+        ),
       );
     }
     return placeholder;
@@ -299,19 +312,22 @@ class PhotoBubble extends StatelessWidget {
     return SizedBox(
       width: BubbleContext.photoMaxSize,
       child: ClipRRect(
-      borderRadius: _multiPhotoCornerRadius(
-        matchTop: matchTop,
-        matchBottom: matchBottom,
-        isMe: ctx.isMe,
+        borderRadius: _multiPhotoCornerRadius(
+          matchTop: matchTop,
+          matchBottom: matchBottom,
+          isMe: ctx.isMe,
+        ),
+        child: AspectRatio(
+          aspectRatio: 2,
+          child: Row(
+            children: [
+              Expanded(child: _buildFillTile(ctx, p1, 0)),
+              const SizedBox(width: 2),
+              Expanded(child: _buildFillTile(ctx, p2, 1)),
+            ],
+          ),
+        ),
       ),
-      child: Row(
-        children: [
-          Expanded(child: _buildPhotoTile(ctx, p1, 0)),
-          const SizedBox(width: 2),
-          Expanded(child: _buildPhotoTile(ctx, p2, 1)),
-        ],
-      ),
-    ),
     );
   }
 
@@ -360,34 +376,55 @@ class PhotoBubble extends StatelessWidget {
     final matchBottom =
         ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleBottom;
 
-    final rows = <Widget>[];
-    for (var i = 0; i < displayCount; i += 2) {
-      if (rows.isNotEmpty) rows.add(const SizedBox(height: 2));
-      rows.add(
-        Row(
-          children: [
-            Expanded(child: _buildGridTile(ctx, photos, i, remaining)),
-            const SizedBox(width: 2),
-            Expanded(
-              child: i + 1 < displayCount
-                  ? _buildGridTile(ctx, photos, i + 1, remaining)
-                  : const SizedBox.shrink(),
-            ),
-          ],
-        ),
-      );
-    }
-
     return SizedBox(
       width: BubbleContext.photoMaxSize,
       child: ClipRRect(
-      borderRadius: _multiPhotoCornerRadius(
-        matchTop: matchTop,
-        matchBottom: matchBottom,
-        isMe: ctx.isMe,
+        borderRadius: _multiPhotoCornerRadius(
+          matchTop: matchTop,
+          matchBottom: matchBottom,
+          isMe: ctx.isMe,
+        ),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Column(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildGridTile(ctx, photos, 0, remaining),
+                    ),
+                    const SizedBox(width: 2),
+                    Expanded(
+                      child: displayCount > 1
+                          ? _buildGridTile(ctx, photos, 1, remaining)
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              ),
+              if (displayCount > 2) ...[
+                const SizedBox(height: 2),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildGridTile(ctx, photos, 2, remaining),
+                      ),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: displayCount > 3
+                            ? _buildGridTile(ctx, photos, 3, remaining)
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: rows),
-    ),
     );
   }
 
@@ -405,7 +442,7 @@ class PhotoBubble extends StatelessWidget {
         index,
       );
     }
-    return _buildPhotoTile(ctx, photos[index], index);
+    return _buildFillTile(ctx, photos[index], index);
   }
 
   Widget _buildPhotoTile(BubbleContext ctx, PhotoAttachment photo, int index) =>
@@ -418,6 +455,7 @@ class PhotoBubble extends StatelessWidget {
                 MediaQuery.of(ctx.context).devicePixelRatio)
             .round();
     return Stack(
+      fit: StackFit.expand,
       children: [
         _buildPhotoImage(
           ctx,
@@ -462,18 +500,17 @@ class PhotoBubble extends StatelessWidget {
                 2 *
                 MediaQuery.of(ctx.context).devicePixelRatio)
             .round();
-    return AspectRatio(
-      aspectRatio: 1,
-      child: Stack(
-        children: [
-          _buildPhotoImage(
-            ctx,
-            photo,
-            double.infinity,
-            double.infinity,
-            memWidth: cachePx,
-          ),
-          Positioned.fill(
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _buildPhotoImage(
+          ctx,
+          photo,
+          double.infinity,
+          double.infinity,
+          memWidth: cachePx,
+        ),
+        Positioned.fill(
             child: Container(
               color: Colors.black45,
               child: Center(
@@ -493,8 +530,7 @@ class PhotoBubble extends StatelessWidget {
           if (ctx.uploadProgress == null)
             _buildTileTapTarget(ctx, index, cachePx),
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildPhotoPlaceholder(
