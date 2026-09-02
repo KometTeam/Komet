@@ -5956,6 +5956,7 @@ class _ChatScreenState extends State<ChatScreen>
                             },
                             childCount:
                                 items.length + 1 + (_isLoadingMore ? 1 : 0),
+                            addRepaintBoundaries: false,
                           ),
                         ),
                       ),

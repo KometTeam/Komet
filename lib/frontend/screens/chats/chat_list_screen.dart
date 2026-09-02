@@ -2370,12 +2370,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                           inactiveWidth: inactiveWidth,
                           bubbleLeftForIndex: bubbleLeftForPageT,
                         );
-                        return Transform.translate(
-                          offset: Offset(
-                            -pageDisplayT * pageW * SpectrumTuning.parallax,
-                            0,
+                        return TickerMode(
+                          enabled: pageDisplayT < 0.5,
+                          child: Transform.translate(
+                            offset: Offset(
+                              -pageDisplayT * pageW * SpectrumTuning.parallax,
+                              0,
+                            ),
+                            child: child,
                           ),
-                          child: child,
                         );
                       },
                     ),
@@ -3204,8 +3207,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         onLongPress: (widget.forwardMode || _shareMode)
             ? null
             : () => _toggleSelection(id),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+        child: ColoredBox(
           color: isSelected
               ? cs.primary.withValues(alpha: 0.08)
               : isPinned

@@ -48,21 +48,14 @@ class _AnimatedChatTileState extends State<AnimatedChatTile>
         if (mounted) setState(() => _entering = false);
       });
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _lastContentY = _measureContentY();
-    });
   }
 
   @override
   void didUpdateWidget(covariant AnimatedChatTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.revision == _lastRevision) return;
-    _lastRevision = widget.revision;
-    // Skip slide-to-slot animation: measuring the viewport during a fling
-    // makes the list hitch, and incoming messages bump revision often.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _lastContentY = _measureContentY();
-    });
+    if (widget.revision != _lastRevision) {
+      _lastRevision = widget.revision;
+    }
   }
 
   double? _measureContentY() {
