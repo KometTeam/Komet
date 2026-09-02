@@ -2731,7 +2731,7 @@ class _ChatScreenState extends State<ChatScreen>
                   showStickerButton: !_commentsMode,
                   showAttachButton: !_commentsMode,
                   forceSend: _commentsMode,
-                  hintText: _commentsMode ? 'Комментарий' : 'Message',
+                  hintText: _commentsMode ? 'Комментарий' : 'Сообщение',
                 ),
               ),
               StickerPanelView(

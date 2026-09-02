@@ -103,7 +103,7 @@ class ChatPreviewLine extends StatelessWidget {
     final forwarded = label != null && label.startsWith(_forwardMark);
 
     final bodyStyle = style.copyWith(
-      fontStyle: italic || labelled ? FontStyle.italic : style.fontStyle,
+      fontStyle: italic ? FontStyle.italic : style.fontStyle,
     );
 
     final spans = <InlineSpan>[];

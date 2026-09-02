@@ -1355,6 +1355,16 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   String _formatTime(int? timestamp) => formatChatListTime(timestamp);
 
+  String _localizedPreview(String text) {
+    switch (text.trim()) {
+      case 'Message':
+      case 'message':
+        return 'Сообщение';
+      default:
+        return text;
+    }
+  }
+
   void _onStoriesRevealTick() {
     if (!mounted) return;
     final t = Curves.easeOutCubic.transform(_storiesRevealController.value);
@@ -2103,7 +2113,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     final isPlaceholder = chat.isLastMsgDeleted;
                     final previewText = isPlaceholder
                         ? 'зайдите в чат для подгрузки'
-                        : (chat.lastMsgTextOneLine ?? '');
+                        : _localizedPreview(chat.lastMsgTextOneLine ?? '');
                     return _animateChatTile(
                       chat.id.toString(),
                       _buildChatItem(
@@ -2119,7 +2129,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         isVerified: isVerified,
                         isPinned: isPinned,
                         chatType: "DIALOG",
-                        messageItalic: isPlaceholder,
+                        messageItalic: false,
                         draft: _draftFor(chat.id),
                         ownStatus: _ownStatusFor(chat, isPlaceholder),
                         ownRead: chat.lastMsgReadByOthers,
@@ -2159,7 +2169,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ? AppLocalizations.of(
                             context,
                           )!.savedMessagesEmptyPreview
-                        : (chat.lastMsgTextOneLine ?? '');
+                        : _localizedPreview(chat.lastMsgTextOneLine ?? '');
 
                     return _animateChatTile(
                       chat.id.toString(),
@@ -2177,7 +2187,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         isVerified: chat.isOfficial,
                         isPinned: isPinned,
                         chatType: chat.type,
-                        messageItalic: isPlaceholder || isSavedWelcome,
+                        messageItalic: false,
                         draft: chat.id == 0 ? null : _draftFor(chat.id),
                         ownStatus: _ownStatusFor(chat, isPlaceholder),
                         ownRead: chat.lastMsgReadByOthers,
@@ -2995,7 +3005,6 @@ class _ChatListScreenState extends State<ChatListScreen>
           style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w400,
-            fontStyle: FontStyle.italic,
             height: 1.2,
           ),
         ),

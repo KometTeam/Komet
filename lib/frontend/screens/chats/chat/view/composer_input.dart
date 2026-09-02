@@ -56,7 +56,7 @@ class ComposerInputBar extends StatelessWidget {
     this.showStickerButton = true,
     this.showAttachButton = true,
     this.forceSend = false,
-    this.hintText = 'Message',
+    this.hintText = 'Сообщение',
     this.bottomSafe = true,
     this.vignette = false,
   });
