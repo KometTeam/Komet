@@ -1768,9 +1768,6 @@ class MessageBubble extends StatelessWidget {
         decoration: BoxDecoration(
           color: isYours ? cs.primary.withValues(alpha: 0.28) : _reactionChipBg,
           borderRadius: _reactionChipRadius,
-          border: isYours
-              ? Border.all(color: cs.primary.withValues(alpha: 0.45), width: 1)
-              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
