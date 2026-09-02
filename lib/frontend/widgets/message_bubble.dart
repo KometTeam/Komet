@@ -476,7 +476,7 @@ class _ReactionAnimojiGlyph extends StatefulWidget {
 }
 
 class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
-  static const double _size = 18;
+  static const double _size = 22;
   static const double _effectSize = _size * 2;
 
   int? _playingToken;
@@ -615,9 +615,9 @@ class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
 }
 
 class MessageBubble extends StatelessWidget {
-  static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.18);
+  static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.28);
   static const BorderRadius _reactionChipRadius = BorderRadius.all(
-    Radius.circular(10),
+    Radius.circular(14),
   );
 
   static Color bubbleTextColor(BuildContext context) =>
@@ -1523,8 +1523,8 @@ class MessageBubble extends StatelessWidget {
               children: [
                 Expanded(
                   child: _ReactionsWrap(
-                    spacing: 4,
-                    runSpacing: 4,
+                    spacing: 6,
+                    runSpacing: 6,
                     children: chips,
                   ),
                 ),
@@ -1647,7 +1647,7 @@ class MessageBubble extends StatelessWidget {
     if (chips.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: inset,
-      child: Wrap(spacing: 4, runSpacing: 4, children: chips),
+      child: Wrap(spacing: 6, runSpacing: 6, children: chips),
     );
   }
 
@@ -1673,10 +1673,14 @@ class MessageBubble extends StatelessWidget {
       }
 
       Widget chip = Container(
-        padding: EdgeInsets.fromLTRB(7, 2, avatar != null ? 3 : 7, 2),
+        height: 28,
+        padding: EdgeInsets.fromLTRB(8, 0, avatar != null ? 4 : 8, 0),
         decoration: BoxDecoration(
-          color: isYours ? cs.primary.withValues(alpha: 0.22) : _reactionChipBg,
+          color: isYours ? cs.primary.withValues(alpha: 0.28) : _reactionChipBg,
           borderRadius: _reactionChipRadius,
+          border: isYours
+              ? Border.all(color: cs.primary.withValues(alpha: 0.45), width: 1)
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1690,15 +1694,16 @@ class MessageBubble extends StatelessWidget {
                 animation: reactionAnimation,
               )
             else
-              Text(c.reaction, style: const TextStyle(fontSize: 13)),
+              Text(c.reaction, style: const TextStyle(fontSize: 18, height: 1)),
             if (c.count > 1) ...[
-              const SizedBox(width: 3),
+              const SizedBox(width: 4),
               Text(
                 c.count.toString(),
                 style: TextStyle(
-                  color: isYours ? cs.primary : cs.onSurfaceVariant,
-                  fontSize: 11,
+                  color: isYours ? cs.primary : cs.onSurface,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
+                  height: 1,
                 ),
               ),
             ],
@@ -1725,7 +1730,7 @@ class MessageBubble extends StatelessWidget {
       reactionAnimojiResolver?.call(emoji) ?? animojiModule.findByEmoji(emoji);
 
   Widget _reactionAvatar(ColorScheme cs, String? url, String? name) {
-    const double diameter = 17;
+    const double diameter = 20;
     if (url != null && url.isNotEmpty) {
       return CircleAvatar(
         radius: diameter / 2,
@@ -1745,7 +1750,7 @@ class MessageBubble extends StatelessWidget {
       backgroundColor: cs.primaryContainer,
       child: Text(
         letter,
-        style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+        style: TextStyle(fontSize: 11, color: cs.onPrimaryContainer),
       ),
     );
   }
@@ -1877,8 +1882,8 @@ class MessageBubble extends StatelessWidget {
               children: [
                 Expanded(
                   child: _ReactionsWrap(
-                    spacing: 4,
-                    runSpacing: 4,
+                    spacing: 6,
+                    runSpacing: 6,
                     children: reactionChips,
                   ),
                 ),
