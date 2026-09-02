@@ -220,7 +220,6 @@ class _ChatListScreenState extends State<ChatListScreen>
   Set<int> _contactIds = <int>{};
 
   int _currentNavIndex = 0;
-  double _lastInactiveWidth = 80;
 
   static const List<PillNavItem> _chatsNavItems = [
     PillNavItem(icon: Symbols.chat_bubble, label: 'Чаты'),
@@ -1549,48 +1548,6 @@ class _ChatListScreenState extends State<ChatListScreen>
     return _currentNavIndex.toDouble();
   }
 
-  void _beginNavIslandDrag() {
-    if (_isSelectionMode) return;
-    _navPageAnimController.stop();
-    _navPageAnimController.value = 1.0;
-    _navDragDx.value = 0;
-    setState(() {
-      _navDragging = true;
-      _navDragBaseLeft = _currentNavIndex * _lastInactiveWidth + 6;
-    });
-  }
-
-  void _updateNavIslandDrag(double dx) {
-    if (!_navDragging) return;
-    _navDragDx.value += dx;
-  }
-
-  void _endNavIslandDrag() {
-    if (!_navDragging) return;
-    final minLeft = 6.0;
-    final maxLeft = 3 * _lastInactiveWidth + 6;
-    final left = (_navDragBaseLeft + _navDragDx.value).clamp(minLeft, maxLeft);
-    final next = ((left - 6 + _lastInactiveWidth / 2) / _lastInactiveWidth)
-        .round()
-        .clamp(0, 3);
-    _navDragDx.value = 0;
-    final from = _currentNavIndex;
-    setState(() {
-      _navDragging = false;
-    });
-    if (next != from) {
-      _onNavTabSelected(next);
-    } else if (next == 0) {
-      _scheduleInformerPresentation();
-    }
-  }
-
-  void _cancelNavIslandDrag() {
-    if (!_navDragging) return;
-    _navDragDx.value = 0;
-    setState(() => _navDragging = false);
-  }
-
   void _onAppThemeChanged() {
     if (mounted) setState(() {});
   }
@@ -2289,27 +2246,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   ) {
     final geometry = PillNavGeometry.fromInnerWidth(navInnerW, 4);
     final inactiveWidth = geometry.inactiveWidth;
-    final bubbleW = geometry.activeWidth - 12;
-
     double bubbleLeftForIndex(int index) => index * inactiveWidth + 6;
-
-    final minBubbleLeft = bubbleLeftForIndex(0);
-    final maxBubbleLeft = bubbleLeftForIndex(3);
-
-    int indexForBubbleLeft(double left) {
-      final cx = left + bubbleW / 2;
-      var best = 0;
-      var bestD = double.infinity;
-      for (var i = 0; i < 4; i++) {
-        final c = bubbleLeftForIndex(i) + bubbleW / 2;
-        final d = (c - cx).abs();
-        if (d < bestD) {
-          bestD = d;
-          best = i;
-        }
-      }
-      return best;
-    }
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
@@ -2318,14 +2255,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       right: 20,
       bottom: _isSelectionMode ? -100 : bottomInset + 12.0,
       child: RepaintBoundary(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragStart: (_) => _beginNavIslandDrag(),
-          onHorizontalDragUpdate: (details) =>
-              _updateNavIslandDrag(details.delta.dx),
-          onHorizontalDragEnd: (_) => _endNavIslandDrag(),
-          onHorizontalDragCancel: _cancelNavIslandDrag,
-          child: AnimatedBuilder(
+        child: AnimatedBuilder(
             animation: Listenable.merge([
               _navPageAnimController,
               _navDragDx,
@@ -2385,7 +2315,6 @@ class _ChatListScreenState extends State<ChatListScreen>
             final totalWeight = 4.55;
             final unitWidth = navInnerW / totalWeight;
             final inactiveWidth = unitWidth * 1.0;
-            _lastInactiveWidth = inactiveWidth;
             double bubbleLeftForPageT(int index) {
               double lo = 0;
               for (int i = 0; i < index; i++) {
@@ -2423,13 +2352,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ),
                   ),
                 ClipRect(
-                  child: GestureDetector(
-                    onHorizontalDragStart: (_) => _beginNavIslandDrag(),
-                    onHorizontalDragUpdate: (d) =>
-                        _updateNavIslandDrag(d.delta.dx),
-                    onHorizontalDragEnd: (_) => _endNavIslandDrag(),
-                    onHorizontalDragCancel: _cancelNavIslandDrag,
-                    child: SizedBox(
+                  child: SizedBox(
                     width: pageW,
                     height: pageH,
                     child: OverflowBox(
