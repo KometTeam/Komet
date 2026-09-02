@@ -1879,7 +1879,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
-              height: 34,
+              height: 48,
               color: cs.surface,
               child: ScrollConfiguration(
                 behavior: ScrollConfiguration.of(context).copyWith(
@@ -1904,9 +1904,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                           if (needsScroll) {
                             return ListView(
                               scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 2,
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                4,
+                                20,
+                                12,
                               ),
                               physics: const BouncingScrollPhysics(),
                               children: [
@@ -1918,9 +1920,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                             );
                           } else {
                             return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 2,
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                4,
+                                20,
+                                12,
                               ),
                               child: Row(
                                 children: [
@@ -1984,7 +1988,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           parent: const AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
           if (_shouldShowArchiveEntry(pageIndex))
             SliverToBoxAdapter(child: _buildArchiveEntry(cs)),
           if (chats.isEmpty && !_isInitialLoading)
@@ -2010,11 +2014,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                   if (hasSeparator && index == pinnedCount) {
                     return Padding(
                       key: const ValueKey('pinned_divider'),
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Divider(
-                        height: 1,
-                        thickness: 0.5,
-                        color: cs.outlineVariant.withValues(alpha: 0.5),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: ColoredBox(
+                        color: cs.outline.withValues(alpha: 0.22),
+                        child: const SizedBox(
+                          height: 0.5,
+                          width: double.infinity,
+                        ),
                       ),
                     );
                   }
@@ -2024,6 +2030,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                       : index;
                   final chat = chats[chatIndex];
                   final isPinned = (chat.favIndex ?? 0) > 0;
+                  final isLastPinned = isPinned && chatIndex == pinnedCount - 1;
+                  final isLastChat = chatIndex == chats.length - 1;
+                  final showDivider =
+                      !isLastChat && !(hasSeparator && isLastPinned);
 
                   if (chat.type.isNotEmpty &&
                       chat.type == "DIALOG" &&
@@ -2077,6 +2087,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           isBot: _isBotDialog(secondId, chat),
                         ),
                         hasMiniApp: _hasMiniApp(secondId, chat),
+                        showDivider: showDivider,
                       ),
                     );
                   } else {
@@ -2133,6 +2144,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         titleIcon: chat.id == 0
                             ? null
                             : chatKindIcon(chat.type, isBot: false),
+                        showDivider: showDivider,
                       ),
                     );
                   }
@@ -2617,56 +2629,68 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _buildArchiveEntry(ColorScheme cs) {
-    return InkWell(
-      onTap: () {
-        if (_isSelectionMode) return;
-        pushSwipeable(context, (_) => const ChatListScreen(archiveMode: true));
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: cs.surfaceContainerHighest,
-              child: Icon(
-                Symbols.archive,
-                color: cs.onSurfaceVariant,
-                weight: 500,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Архив',
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            if (_archivedUnread > 0)
-              Container(
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: cs.primary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _archivedUnread > 99 ? '99+' : '$_archivedUnread',
-                  style: TextStyle(
-                    color: cs.onPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () {
+            if (_isSelectionMode) return;
+            pushSwipeable(
+              context,
+              (_) => const ChatListScreen(archiveMode: true),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  child: Icon(
+                    Symbols.archive,
+                    color: cs.onSurfaceVariant,
+                    weight: 500,
                   ),
                 ),
-              ),
-            Icon(Symbols.chevron_right, color: cs.outline),
-          ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Архив',
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (_archivedUnread > 0)
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _archivedUnread > 99 ? '99+' : '$_archivedUnread',
+                      style: TextStyle(
+                        color: cs.onPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                Icon(Symbols.chevron_right, color: cs.outline),
+              ],
+            ),
+          ),
         ),
-      ),
+        _iosChatHairline(cs),
+      ],
     );
   }
 
@@ -2965,6 +2989,16 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  Widget _iosChatHairline(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 80),
+      child: ColoredBox(
+        color: cs.outline.withValues(alpha: 0.22),
+        child: const SizedBox(height: 0.5, width: double.infinity),
+      ),
+    );
+  }
+
   Widget _countBadge(ColorScheme cs, String label, {required bool muted}) {
     return Container(
       constraints: const BoxConstraints(minWidth: 20),
@@ -3011,6 +3045,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     ChatPreviewMedia? previewMedia,
     IconData? titleIcon,
     bool hasMiniApp = false,
+    bool showDivider = false,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
@@ -3182,10 +3217,15 @@ class _ChatListScreenState extends State<ChatListScreen>
           duration: const Duration(milliseconds: 200),
           color: isSelected
               ? cs.primary.withValues(alpha: 0.08)
+              : isPinned
+              ? cs.surfaceContainerHighest.withValues(alpha: 0.38)
               : Colors.transparent,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-            child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Stack(
@@ -3289,15 +3329,6 @@ class _ChatListScreenState extends State<ChatListScreen>
                                   weight: 400,
                                 ),
                               ],
-                              if (isPinned) ...[
-                                const SizedBox(width: 4),
-                                Icon(
-                                  Symbols.keep,
-                                  color: cs.outlineVariant,
-                                  size: 14,
-                                  weight: 400,
-                                ),
-                              ],
                               const SizedBox(width: 8),
                               Text(
                                 time,
@@ -3323,6 +3354,17 @@ class _ChatListScreenState extends State<ChatListScreen>
                               ),
                               ?statusIcon,
                               const SizedBox(width: 8),
+                              if (isPinned) ...[
+                                Icon(
+                                  Symbols.keep,
+                                  color: cs.outline,
+                                  size: 16,
+                                  weight: 500,
+                                  fill: 1,
+                                ),
+                                if (hasMention || unreadCount > 0)
+                                  const SizedBox(width: 6),
+                              ],
                               if (hasMention) ...[
                                 _countBadge(cs, '@', muted: isMuted),
                                 const SizedBox(width: 4),
@@ -3358,6 +3400,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
               ],
             ),
+              ),
+              if (showDivider) _iosChatHairline(cs),
+            ],
           ),
         ),
       ),
