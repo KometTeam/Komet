@@ -11,12 +11,6 @@ on:
       - 'android/**'
       - 'pubspec.yaml'
       - '.github/workflows/build-android-fcm.yml'
-  pull_request:
-    paths:
-      - 'lib/**'
-      - 'android/**'
-      - 'pubspec.yaml'
-      - '.github/workflows/build-android-fcm.yml'
 
 jobs:
   build-android-fcm:

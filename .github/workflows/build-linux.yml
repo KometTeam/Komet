@@ -11,12 +11,6 @@ on:
       - 'linux/**'
       - 'pubspec.yaml'
       - '.github/workflows/build-linux.yml'
-  pull_request:
-    paths:
-      - 'lib/**'
-      - 'linux/**'
-      - 'pubspec.yaml'
-      - '.github/workflows/build-linux.yml'
 
 env:
   FLUTTER_VERSION: '3.44.3'
