@@ -930,7 +930,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, _pillMargin),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, _pillMargin),
           child: ValueListenableBuilder<Set<String>>(
             valueListenable: _selected,
             builder: (context, selected, _) {

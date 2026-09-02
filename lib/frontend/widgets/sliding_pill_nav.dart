@@ -66,7 +66,7 @@ class SlidingPillNav extends StatelessWidget {
     required this.onTap,
     this.animationDuration = Duration.zero,
     this.onItemLongPress,
-    this.iconSize = 22,
+    this.iconSize = 24,
     this.labelGap = 6,
     this.backgroundColor,
     this.borderColor,
@@ -138,7 +138,7 @@ class SlidingPillNav extends StatelessWidget {
 
     return Container(
       height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: useGradient || liquid ? null : base,
         gradient: useGradient ? GlossyDecor.fillGradient(base) : null,
@@ -202,10 +202,10 @@ class SlidingPillNav extends StatelessWidget {
           AnimatedPositioned(
             duration: animationDuration,
             curve: Curves.easeOutCubic,
-            left: position * geometry.inactiveWidth + 4,
-            top: 8,
-            bottom: 8,
-            width: geometry.activeWidth - 8,
+            left: position * geometry.inactiveWidth + 6,
+            top: 6,
+            bottom: 6,
+            width: geometry.activeWidth - 12,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: cs.primary,
@@ -282,7 +282,15 @@ class _PillNavCell extends StatelessWidget {
         active: selected,
       );
     }
-    return Icon(item.icon, color: color, size: iconSize, fill: 1);
+    return Icon(
+      item.icon,
+      color: color,
+      size: iconSize,
+      fill: selected ? 1 : 0,
+      weight: selected ? 600 : 500,
+      grade: 200,
+      opticalSize: 24,
+    );
   }
 
   @override

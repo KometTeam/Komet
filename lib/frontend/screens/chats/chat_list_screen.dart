@@ -2230,9 +2230,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   ) {
     final geometry = PillNavGeometry.fromInnerWidth(navInnerW, 4);
     final inactiveWidth = geometry.inactiveWidth;
-    final bubbleW = geometry.activeWidth - 8;
+    final bubbleW = geometry.activeWidth - 12;
 
-    double bubbleLeftForIndex(int index) => index * inactiveWidth + 4;
+    double bubbleLeftForIndex(int index) => index * inactiveWidth + 6;
 
     final minBubbleLeft = bubbleLeftForIndex(0);
     final maxBubbleLeft = bubbleLeftForIndex(3);
@@ -2255,9 +2255,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
-      left: 8,
-      right: 8,
-      bottom: _isSelectionMode ? -100 : bottomInset + 10.0,
+      left: 20,
+      right: 20,
+      bottom: _isSelectionMode ? -100 : bottomInset + 12.0,
       child: RepaintBoundary(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -2304,7 +2304,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               minBubbleLeft,
                               maxBubbleLeft,
                             ) -
-                            4) /
+                            6) /
                         inactiveWidth
                   : _currentNavIndex.toDouble();
               return SlidingPillNav(
@@ -2314,8 +2314,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ? Duration.zero
                     : const Duration(milliseconds: 350),
                 geometry: geometry,
-                iconSize: 20,
-                labelGap: 4,
+                iconSize: 24,
+                labelGap: 6,
                 backdropKey: _frostBackdrop,
                 onTap: _onNavTabSelected,
                 onItemLongPress: (index, pos) {
@@ -2355,7 +2355,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
             final pageW = constraints.maxWidth;
             final pageH = constraints.maxHeight;
-            final navInnerW = pageW - 20;
+            final navInnerW = pageW - 40;
             final totalWeight = 5.2;
             final unitWidth = navInnerW / totalWeight;
             final inactiveWidth = unitWidth * 1.0;
@@ -2364,7 +2364,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               for (int i = 0; i < index; i++) {
                 lo += inactiveWidth;
               }
-              return lo + 4;
+              return lo + 6;
             }
 
             return Stack(
