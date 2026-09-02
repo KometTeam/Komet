@@ -1680,7 +1680,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 6, 20, 3),
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -1827,7 +1827,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               ),
                             ),
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
+                            padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: (widget.forwardMode || _shareMode)
@@ -1837,11 +1837,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 color: cs.surfaceContainerHighest,
                                 borderRadius: BorderRadius.circular(50),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
+                                  horizontal: 14,
                                 ),
                                 depth: 6,
                                 child: SizedBox(
-                                  height: 44,
+                                  height: 36,
                                   child: Row(
                                     children: [
                                       Icon(
@@ -1875,7 +1875,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
-              height: 48,
+              height: 36,
               color: cs.surface,
               child: ScrollConfiguration(
                 behavior: ScrollConfiguration.of(context).copyWith(
@@ -1889,7 +1889,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ? FolderStripShimmer(shimmer: _shimmerController)
                     : LayoutBuilder(
                         builder: (context, constraints) {
-                          final availableWidth = constraints.maxWidth - 40;
+                          final availableWidth = constraints.maxWidth - 32;
                           final folderCount = _folders.length;
                           final minWidthPerFolder = 80.0;
                           final totalMinWidth =
@@ -1901,10 +1901,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                             return ListView(
                               scrollDirection: Axis.horizontal,
                               padding: const EdgeInsets.fromLTRB(
-                                20,
-                                4,
-                                20,
-                                12,
+                                16,
+                                2,
+                                16,
+                                2,
                               ),
                               physics: const BouncingScrollPhysics(),
                               children: [
@@ -1917,10 +1917,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                           } else {
                             return Padding(
                               padding: const EdgeInsets.fromLTRB(
-                                20,
-                                4,
-                                20,
-                                12,
+                                16,
+                                2,
+                                16,
+                                2,
                               ),
                               child: Row(
                                 children: [
@@ -1984,7 +1984,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           parent: const AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
           if (_shouldShowArchiveEntry(pageIndex))
             SliverToBoxAdapter(child: _buildArchiveEntry(cs)),
           if (chats.isEmpty && !_isInitialLoading)
@@ -2779,7 +2779,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     ];
     return ListView.builder(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: otherIndices.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
@@ -2877,7 +2877,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: GlossyPill(
         color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(50),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         depth: 4,
         child: Center(
           child: Text(
@@ -2885,7 +2885,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             textAlign: TextAlign.center,
             style: TextStyle(
               color: isSelected ? cs.onPrimaryContainer : cs.primary,
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
           ),
