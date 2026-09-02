@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../config/app_bubble_behavior.dart';
 import '../config/app_bubble_shape.dart';
 
-const double kBubbleBigRadius = 20;
+const double kBubbleBigRadius = 24;
 const double kBubbleSmallRadius = 4;
 
 const Radius _big = Radius.circular(kBubbleBigRadius);
