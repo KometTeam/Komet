@@ -11,12 +11,6 @@ on:
       - 'ios/**'
       - 'pubspec.yaml'
       - '.github/workflows/build-ios.yml'
-  pull_request:
-    paths:
-      - 'lib/**'
-      - 'ios/**'
-      - 'pubspec.yaml'
-      - '.github/workflows/build-ios.yml'
 
 env:
   FLUTTER_VERSION: '3.44.3'

@@ -11,12 +11,6 @@ on:
       - 'macos/**'
       - 'pubspec.yaml'
       - '.github/workflows/build-macos.yml'
-  pull_request:
-    paths:
-      - 'lib/**'
-      - 'macos/**'
-      - 'pubspec.yaml'
-      - '.github/workflows/build-macos.yml'
 
 env:
   FLUTTER_VERSION: '3.44.3'
