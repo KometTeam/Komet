@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 
@@ -25,8 +26,8 @@ class _SpringyTapState extends State<SpringyTap>
   static const Duration _pressDuration = Duration(milliseconds: 90);
 
   static final SpringDescription _spring = SpringDescription.withDampingRatio(
-    ratio: 0.8,
-    stiffness: 350,
+    ratio: 0.85,
+    stiffness: 400,
     mass: 1,
   );
 
@@ -36,6 +37,8 @@ class _SpringyTapState extends State<SpringyTap>
   );
 
   Timer? _pressTimer;
+  Offset? _downPosition;
+  bool _dragged = false;
 
   @override
   void dispose() {
@@ -45,6 +48,7 @@ class _SpringyTapState extends State<SpringyTap>
   }
 
   void _press() {
+    if (_dragged) return;
     _controller.stop();
     _controller.animateTo(
       widget.pressedScale,
@@ -54,44 +58,66 @@ class _SpringyTapState extends State<SpringyTap>
   }
 
   void _release() {
+    _downPosition = null;
+    _dragged = false;
     if (_controller.value == 1.0 && !_controller.isAnimating) return;
     _controller.animateWith(
-      SpringSimulation(_spring, _controller.value, 1.0, 1.5),
+      SpringSimulation(_spring, _controller.value, 1.0, 0),
     );
   }
 
-  Future<void> _pulse() async {
-    _controller.stop();
-    await _controller.animateTo(
-      widget.pressedScale,
-      duration: _pressDuration,
-      curve: Curves.easeOut,
-    );
-    if (mounted) _release();
-  }
-
-  void _onDown(PointerDownEvent _) {
+  void _cancelPending() {
     _pressTimer?.cancel();
+    _pressTimer = null;
+    _downPosition = null;
+    _dragged = false;
+  }
+
+  void _onDown(PointerDownEvent event) {
+    _pressTimer?.cancel();
+    _downPosition = event.position;
+    _dragged = false;
     _pressTimer = Timer(_pressDelay, () {
       _pressTimer = null;
       _press();
     });
   }
 
-  void _onUp(PointerUpEvent _) {
-    if (_pressTimer != null) {
-      _pressTimer!.cancel();
+  void _onMove(PointerMoveEvent event) {
+    final start = _downPosition;
+    if (start == null || _dragged) return;
+    if ((event.position - start).distance > kTouchSlop) {
+      _dragged = true;
+      _pressTimer?.cancel();
       _pressTimer = null;
-      unawaited(_pulse());
-    } else {
       _release();
     }
+  }
+
+  void _onUp(PointerUpEvent _) {
+    final wasPending = _pressTimer != null;
+    _pressTimer?.cancel();
+    _pressTimer = null;
+    if (wasPending || _dragged) {
+      _cancelPending();
+      if (_controller.value != 1.0 || _controller.isAnimating) {
+        _controller.stop();
+        _controller.value = 1.0;
+      }
+      return;
+    }
+    _release();
   }
 
   void _onCancel(PointerCancelEvent _) {
     _pressTimer?.cancel();
     _pressTimer = null;
-    _release();
+    if (_controller.value != 1.0 || _controller.isAnimating) {
+      _controller.stop();
+      _controller.value = 1.0;
+    }
+    _downPosition = null;
+    _dragged = false;
   }
 
   @override
@@ -100,6 +126,7 @@ class _SpringyTapState extends State<SpringyTap>
     return Listener(
       behavior: HitTestBehavior.deferToChild,
       onPointerDown: _onDown,
+      onPointerMove: _onMove,
       onPointerUp: _onUp,
       onPointerCancel: _onCancel,
       child: ScaleTransition(scale: _controller, child: widget.child),

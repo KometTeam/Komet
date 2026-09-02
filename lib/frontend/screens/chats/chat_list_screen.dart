@@ -23,7 +23,6 @@ import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
-import '../../widgets/springy_tap.dart';
 import '../../widgets/informer_banner_tile.dart';
 import '../../../backend/modules/share_sender.dart';
 import '../../../core/utils/logger.dart';
@@ -3154,9 +3153,8 @@ class _ChatListScreenState extends State<ChatListScreen>
               ),
             ),
           );
-    return SpringyTap(
+    return InkWell(
       key: ValueKey('chat_$id'),
-      child: InkWell(
         onTap: () {
           if (widget.forwardMode) {
             Navigator.of(context).pop(
@@ -3405,7 +3403,6 @@ class _ChatListScreenState extends State<ChatListScreen>
             ],
           ),
         ),
-      ),
     );
   }
 
