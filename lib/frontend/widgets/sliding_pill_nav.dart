@@ -76,14 +76,15 @@ class SlidingPillNav extends StatelessWidget {
 
   static const double height = 68;
 
-  double _interpWidth(int tab) {
+  double _interpWidth(int tab) => _interpWidthFor(geometry, tab);
+
+  double _interpWidthFor(PillNavGeometry geo, int tab) {
     final maxIndex = items.length - 1;
     final rt = position.clamp(0.0, maxIndex.toDouble());
     final i0 = rt.floor();
     final i1 = rt.ceil();
     final frac = i0 == i1 ? 0.0 : rt - i0;
-    double at(int sel) =>
-        (tab == sel ? geometry.activeWidth : geometry.inactiveWidth) - 0.5;
+    double at(int sel) => tab == sel ? geo.activeWidth : geo.inactiveWidth;
     return at(i0) + (at(i1) - at(i0)) * frac;
   }
 
@@ -138,7 +139,8 @@ class SlidingPillNav extends StatelessWidget {
 
     return Container(
       height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.all(6),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: useGradient || liquid ? null : base,
         gradient: useGradient ? GlossyDecor.fillGradient(base) : null,
@@ -149,73 +151,75 @@ class SlidingPillNav extends StatelessWidget {
                   ? Border.all(color: borderColor!, width: 0.5)
                   : null),
       ),
-      child: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          if (liquid)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: LiquidGlassSurface(
-                  borderRadius: BorderRadius.circular(34),
-                  tint: base,
-                ),
-              ),
-            ),
-          if (frosted)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(34),
-                  child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(
-                      sigmaX: AppFrost.sigma,
-                      sigmaY: AppFrost.sigma,
-                    ),
-                    backdropGroupKey: backdropKey,
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ),
-            ),
-          if (useGradient)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(34),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: GlossyDecor.topSheen(base),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final geo = PillNavGeometry.fromInnerWidth(
+            constraints.maxWidth,
+            items.length,
+          );
+          final maxIndex = items.length - 1;
+          final t = position.clamp(0.0, maxIndex.toDouble());
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (liquid)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: LiquidGlassSurface(
+                      borderRadius: BorderRadius.circular(28),
+                      tint: base,
                     ),
                   ),
                 ),
+              if (frosted)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(
+                          sigmaX: AppFrost.sigma,
+                          sigmaY: AppFrost.sigma,
+                        ),
+                        backdropGroupKey: backdropKey,
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                ),
+              if (useGradient)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: GlossyDecor.topSheen(base),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              AnimatedPositioned(
+                duration: animationDuration,
+                curve: Curves.easeOutCubic,
+                left: t * geo.inactiveWidth,
+                top: 0,
+                bottom: 0,
+                width: geo.activeWidth,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: cs.brightness == Brightness.light
+                        ? cs.primary.withValues(alpha: 0.14)
+                        : cs.onSurface.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                ),
               ),
-            ),
-          AnimatedPositioned(
-            duration: animationDuration,
-            curve: Curves.easeOutCubic,
-            left: position * geometry.inactiveWidth + 6,
-            top: 6,
-            bottom: 6,
-            width: geometry.activeWidth - 12,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: cs.brightness == Brightness.light
-                    ? cs.primary.withValues(alpha: 0.14)
-                    : cs.onSurface.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(26),
-              ),
-            ),
-          ),
-          SizedBox(
-            width: geometry.navInnerW,
-            child: Row(
-              children: List.generate(items.length, (i) {
-                return AnimatedContainer(
-                  duration: animationDuration,
-                  curve: Curves.easeOutCubic,
-                  width: _interpWidth(i),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(26),
+              Row(
+                children: List.generate(items.length, (i) {
+                  return SizedBox(
+                    width: _interpWidthFor(geo, i),
                     child: _PillNavCell(
                       item: items[i],
                       selected: i == visualSel,
@@ -230,12 +234,12 @@ class SlidingPillNav extends StatelessWidget {
                           ? null
                           : (pos) => onItemLongPress!(i, pos),
                     ),
-                  ),
-                );
-              }),
-            ),
-          ),
-        ],
+                  );
+                }),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
