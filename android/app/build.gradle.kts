@@ -82,19 +82,22 @@ android {
         }
     }
 
+    // format proeban? da i huy s nim))
     buildTypes {
-        debug {
+    debug {
+        if (!project.hasProperty("split-per-abi")) {
             ndk {
                 abiFilters += debugAbi
             }
         }
-        release {
-            signingConfig = if (hasReleaseSigning) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+    }
+    release {
+        signingConfig = if (hasReleaseSigning) {
+            signingConfigs.getByName("release")
+        } else {
+            signingConfigs.getByName("debug")
         }
+    }
     }
 
     packaging {
