@@ -48,19 +48,14 @@ class _AnimatedChatTileState extends State<AnimatedChatTile>
         if (mounted) setState(() => _entering = false);
       });
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _lastContentY = _measureContentY();
-    });
   }
 
   @override
   void didUpdateWidget(covariant AnimatedChatTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.revision == _lastRevision) return;
-    _lastRevision = widget.revision;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _runMove();
-    });
+    if (widget.revision != _lastRevision) {
+      _lastRevision = widget.revision;
+    }
   }
 
   double? _measureContentY() {
@@ -102,10 +97,7 @@ class _AnimatedChatTileState extends State<AnimatedChatTile>
         builder: (context, child) {
           if (_entering) {
             final t = Curves.easeOut.transform(c.value);
-            return Opacity(
-              opacity: t,
-              child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
-            );
+            return Opacity(opacity: t, child: child);
           }
           if (_moveDy != 0) {
             final t = 1 - Curves.easeOutCubic.transform(c.value);
@@ -160,7 +152,7 @@ class _ActivitySubtitleState extends State<ActivitySubtitle> {
             _lastLabel,
             style: TextStyle(
               color: cs.primary,
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.w500,
               height: 1.2,
             ),

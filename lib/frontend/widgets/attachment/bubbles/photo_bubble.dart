@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../../core/media/preview_image.dart';
 import '../../../../models/attachment.dart';
 import '../../photo_viewer.dart';
 import '../photo_hero.dart';
@@ -37,38 +37,9 @@ class PhotoBubble extends StatelessWidget {
   }
 
   static Size _displaySize(PhotoAttachment photo) {
-    final width = photo.width?.toDouble() ?? 200;
-    final height = photo.height?.toDouble() ?? 200;
-
-    final downScale = math.min(
-      1.0,
-      math.min(
-        BubbleContext.photoMaxSize / width,
-        BubbleContext.photoMaxSize / height,
-      ),
-    );
-    var displayWidth = width * downScale;
-    var displayHeight = height * downScale;
-
-    final upScale = math.max(
-      1.0,
-      math.max(
-        BubbleContext.photoMinSize / displayWidth,
-        BubbleContext.photoMinSize / displayHeight,
-      ),
-    );
-    displayWidth *= upScale;
-    displayHeight *= upScale;
-
-    return Size(
-      displayWidth.clamp(
-        BubbleContext.photoMinSize,
-        BubbleContext.photoMaxSize,
-      ),
-      displayHeight.clamp(
-        BubbleContext.photoMinSize,
-        BubbleContext.photoMaxSize,
-      ),
+    return BubbleContext.fitMediaSize(
+      photo.width?.toDouble() ?? 0,
+      photo.height?.toDouble() ?? 0,
     );
   }
 
@@ -189,7 +160,6 @@ class PhotoBubble extends StatelessWidget {
       bottomRight: bottomR,
     );
     final memWidth = (constrainedWidth * dpr).round();
-    final memHeight = (constrainedHeight * dpr).round();
 
     return ClipRRect(
       borderRadius: radius,
@@ -201,7 +171,6 @@ class PhotoBubble extends StatelessWidget {
             constrainedWidth,
             constrainedHeight,
             memWidth: memWidth,
-            memHeight: memHeight,
           ),
           if (ctx.uploadProgress != null)
             _buildUploadOverlay(ctx.uploadProgress!, 0),
@@ -216,7 +185,6 @@ class PhotoBubble extends StatelessWidget {
                     tileContext: tileContext,
                     radius: radius,
                     memWidth: memWidth,
-                    memHeight: memHeight,
                   ),
                 ),
               ),
@@ -232,36 +200,44 @@ class PhotoBubble extends StatelessWidget {
     double width,
     double height, {
     required int memWidth,
-    required int memHeight,
   }) {
+    final preview = dataUriImage(photo, photo.previewData);
+    final placeholder = preview == null
+        ? _buildPhotoPlaceholder(ctx.cs, width, height)
+        : Image(
+            image: preview,
+            width: width.isFinite ? width : null,
+            height: height.isFinite ? height : null,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+          );
     final localPath = photo.localPath;
     if (localPath != null) {
       return Image.file(
         File(localPath),
-        width: width,
-        height: height,
+        width: width.isFinite ? width : null,
+        height: height.isFinite ? height : null,
         fit: BoxFit.cover,
         cacheWidth: memWidth,
         gaplessPlayback: true,
-        errorBuilder: (_, _, _) =>
-            _buildPhotoPlaceholder(ctx.cs, width, height),
+        errorBuilder: (_, _, _) => placeholder,
       );
     }
     final imageUrl = photo.baseUrl ?? '';
     if (imageUrl.isNotEmpty) {
       return CachedNetworkImage(
         imageUrl: imageUrl,
-        width: width,
-        height: height,
+        width: width.isFinite ? width : null,
+        height: height.isFinite ? height : null,
         fit: BoxFit.cover,
         memCacheWidth: memWidth,
-        memCacheHeight: memHeight,
         fadeInDuration: Duration.zero,
         placeholderFadeInDuration: Duration.zero,
-        errorWidget: (_, _, _) => _buildPhotoPlaceholder(ctx.cs, width, height),
+        placeholder: (_, _) => placeholder,
+        errorWidget: (_, _, _) => placeholder,
       );
     }
-    return _buildPhotoPlaceholder(ctx.cs, width, height);
+    return placeholder;
   }
 
   Widget _buildUploadOverlay(
@@ -320,20 +296,22 @@ class PhotoBubble extends StatelessWidget {
     final matchBottom =
         ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleBottom;
 
-    return ClipRRect(
+    return SizedBox(
+      width: BubbleContext.photoMaxSize,
+      child: ClipRRect(
       borderRadius: _multiPhotoCornerRadius(
         matchTop: matchTop,
         matchBottom: matchBottom,
         isMe: ctx.isMe,
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Expanded(child: _buildPhotoTile(ctx, p1, 0)),
           const SizedBox(width: 2),
           Expanded(child: _buildPhotoTile(ctx, p2, 1)),
         ],
       ),
+    ),
     );
   }
 
@@ -343,7 +321,9 @@ class PhotoBubble extends StatelessWidget {
     final matchBottom =
         ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleBottom;
 
-    return ClipRRect(
+    return SizedBox(
+      width: BubbleContext.photoMaxSize,
+      child: ClipRRect(
       borderRadius: _multiPhotoCornerRadius(
         matchTop: matchTop,
         matchBottom: matchBottom,
@@ -367,6 +347,7 @@ class PhotoBubble extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -397,13 +378,16 @@ class PhotoBubble extends StatelessWidget {
       );
     }
 
-    return ClipRRect(
+    return SizedBox(
+      width: BubbleContext.photoMaxSize,
+      child: ClipRRect(
       borderRadius: _multiPhotoCornerRadius(
         matchTop: matchTop,
         matchBottom: matchBottom,
         isMe: ctx.isMe,
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: rows),
+    ),
     );
   }
 
@@ -441,7 +425,6 @@ class PhotoBubble extends StatelessWidget {
           double.infinity,
           double.infinity,
           memWidth: cachePx,
-          memHeight: cachePx,
         ),
         if (ctx.uploadProgress != null)
           _buildUploadOverlay(ctx.uploadProgress!, index),
@@ -462,7 +445,6 @@ class PhotoBubble extends StatelessWidget {
             tileContext: tileContext,
             radius: BorderRadius.zero,
             memWidth: cachePx,
-            memHeight: cachePx,
           ),
         ),
       ),
@@ -490,7 +472,6 @@ class PhotoBubble extends StatelessWidget {
             double.infinity,
             double.infinity,
             memWidth: cachePx,
-            memHeight: cachePx,
           ),
           Positioned.fill(
             child: Container(
@@ -543,7 +524,6 @@ class PhotoBubble extends StatelessWidget {
   static ImageProvider? _photoProvider(
     PhotoAttachment photo, {
     required int memWidth,
-    required int memHeight,
   }) {
     final localPath = photo.localPath;
     if (localPath != null) {
@@ -557,7 +537,7 @@ class PhotoBubble extends StatelessWidget {
     if (url.isEmpty) return null;
     return ResizeImage.resizeIfNeeded(
       memWidth,
-      memHeight,
+      null,
       CachedNetworkImageProvider(url),
     );
   }
@@ -575,12 +555,11 @@ class PhotoBubble extends StatelessWidget {
     required BuildContext tileContext,
     required BorderRadius radius,
     required int memWidth,
-    required int memHeight,
   }) {
     final photo = photos[index];
     final hero = PhotoHeroController(
       origin: () => photoHeroRectOf(tileContext),
-      image: _photoProvider(photo, memWidth: memWidth, memHeight: memHeight),
+      image: _photoProvider(photo, memWidth: memWidth),
       size: _photoSize(photo),
       radius: radius,
     );

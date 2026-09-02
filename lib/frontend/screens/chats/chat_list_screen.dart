@@ -23,7 +23,6 @@ import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
-import '../../widgets/springy_tap.dart';
 import '../../widgets/informer_banner_tile.dart';
 import '../../../backend/modules/share_sender.dart';
 import '../../../core/utils/logger.dart';
@@ -723,7 +722,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
     _navPageAnimController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350),
+      duration: const Duration(milliseconds: 280),
       value: 1.0,
     );
     _shimmerController = AnimationController(
@@ -1024,6 +1023,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       _didInitialChatLoad = true;
 
       if (mounted) {
+        final previousIds = [for (final c in _chats) c.id];
         setState(() {
           _profile = p;
           _chats = filteredChats;
@@ -1031,7 +1031,9 @@ class _ChatListScreenState extends State<ChatListScreen>
           _archivedUnread = archivedUnread;
           _contactIds = contactIds;
           _enteringChatIds = entering;
-          _chatListRevision++;
+          if (!_sameIdOrder(previousIds, filteredChats.map((c) => c.id))) {
+            _chatListRevision++;
+          }
           _folders = folders;
           _foldersListKnown = foldersKnown;
           if (_selectedFolderId != null &&
@@ -1230,6 +1232,18 @@ class _ChatListScreenState extends State<ChatListScreen>
     return result;
   }
 
+  bool _sameIdOrder(Iterable<int> a, Iterable<int> b) {
+    final aa = a.iterator;
+    final bb = b.iterator;
+    while (true) {
+      final an = aa.moveNext();
+      final bn = bb.moveNext();
+      if (an != bn) return false;
+      if (!an) return true;
+      if (aa.current != bb.current) return false;
+    }
+  }
+
   void _syncFolderChatScrollControllers() {
     _syncFolderChatScrollControllersForCount(_folderPageCount);
   }
@@ -1334,10 +1348,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
   }
 
-  String _formatTime(int? timestamp) {
-    if (timestamp == null || timestamp == 0) return '';
-    return formatClock(DateTime.fromMillisecondsSinceEpoch(timestamp));
-  }
+  String _formatTime(int? timestamp) => formatChatListTime(timestamp);
 
   void _onStoriesRevealTick() {
     if (!mounted) return;
@@ -1362,7 +1373,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         _pullRatio = 1.0;
         _storiesDockedOpen = true;
         _storiesRevealLayoutSettleUntil = DateTime.now().add(
-          const Duration(milliseconds: 520),
+          const Duration(milliseconds: 180),
         );
       }
       _storiesUi.notify();
@@ -1380,13 +1391,13 @@ class _ChatListScreenState extends State<ChatListScreen>
       _storiesDockedOpen = true;
       _storiesUi.notify();
       _storiesRevealLayoutSettleUntil = DateTime.now().add(
-        const Duration(milliseconds: 520),
+        const Duration(milliseconds: 180),
       );
       return;
     }
     _revealAnimBegin = from;
     _storiesRevealController.duration = Duration(
-      milliseconds: (260 + 240 * (1.0 - from)).round(),
+      milliseconds: (220 + 160 * (1.0 - from)).round(),
     );
     _storiesRevealController.reset();
     _storiesRevealController.forward(from: 0);
@@ -1400,7 +1411,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
     if (_storiesAnimClosing && _storiesRevealController.isAnimating) return;
     _storiesLockdownUntil = DateTime.now().add(
-      const Duration(milliseconds: 800),
+      const Duration(milliseconds: 220),
     );
     _storiesRevealController.stop();
     _storiesAnimClosing = true;
@@ -1415,7 +1426,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
     _closeAnimBegin = from;
     _storiesRevealController.duration = Duration(
-      milliseconds: (260 + 240 * from).round(),
+      milliseconds: (200 + 140 * from).round(),
     );
     _storiesRevealController.reset();
     _storiesRevealController.forward(from: 0);
@@ -1535,7 +1546,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
     _navPageAnimStart = fromT;
     _navPageAnimEnd = index.toDouble();
-    setState(() => _currentNavIndex = index);
+    _currentNavIndex = index;
     _navPageAnimController.forward(from: 0);
     if (index == 0) _scheduleInformerPresentation();
   }
@@ -1661,6 +1672,158 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  Widget _buildTitleAndSearch(ColorScheme cs) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    if (_shareMode)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: IconButton(
+                          key: const ValueKey('share-back'),
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(
+                            Symbols.arrow_back,
+                            color: cs.onSurface,
+                            weight: 500,
+                          ),
+                          onPressed: () => Navigator.of(context).maybePop(),
+                        ),
+                      ),
+                    if (AppStories.current.value &&
+                        !_shareMode &&
+                        _pullRatio < 0.8 &&
+                        storiesModule.hasAny)
+                      Opacity(
+                        opacity: 1.0 - _pullRatio,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _openStories(0),
+                          child: SizedBox(
+                            width:
+                                (FoldedStoryStack.widthFor(
+                                      storiesModule.previews.length,
+                                    ) +
+                                    8) *
+                                (1.0 - _pullRatio),
+                            height: FoldedStoryStack.outerSize,
+                            child: OverflowBox(
+                              alignment: Alignment.centerLeft,
+                              maxWidth: FoldedStoryStack.widthFor(
+                                storiesModule.previews.length,
+                              ),
+                              child: FoldedStoryStack(
+                                previews: storiesModule.previews,
+                                opacity: 1.0 - _pullRatio,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    Flexible(
+                      child: Text(
+                        _shareMode && _selectedChats.isNotEmpty
+                            ? '${_selectedChats.length} '
+                                '${pluralRu(_selectedChats.length, 'получатель', 'получателя', 'получателей')}'
+                            : connectionStatusLabel(_sessionState) ??
+                                (_profile?.firstName ?? 'Чат'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: displayFontOf(context),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!widget.forwardMode &&
+                      !widget.archiveMode &&
+                      !_shareMode)
+                    IconButton(
+                      key: const ValueKey('downloads-button'),
+                      tooltip: AppLocalizations.of(context)!.downloadsTooltip,
+                      icon: Icon(
+                        Symbols.download_for_offline,
+                        color: cs.outline,
+                        weight: 400,
+                      ),
+                      onPressed: () => unawaited(_openDownloads()),
+                    ),
+                  PopupMenuButton<int>(
+                    icon: Icon(
+                      Symbols.more_vert,
+                      color: cs.outline,
+                      weight: 400,
+                    ),
+                    offset: const Offset(0, 48),
+                    elevation: 4,
+                    color: cs.surfaceContainerHigh,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    onSelected: _onOverflowMenuSelected,
+                    itemBuilder: (context) => [
+                      _buildPopupMenuItem(1, 'Избранное', Symbols.bookmark),
+                      _buildPopupMenuItem(2, 'Прочитать всё', Symbols.done_all),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: (widget.forwardMode || _shareMode) ? null : _openSearch,
+            child: GlossyPill(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(50),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              depth: 6,
+              child: SizedBox(
+                height: 36,
+                child: Row(
+                  children: [
+                    Icon(
+                      Symbols.search,
+                      color: cs.outline,
+                      size: 20,
+                      weight: 400,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      widget.forwardMode ? 'Пересылка...' : 'Поиск',
+                      style: TextStyle(color: cs.outline, fontSize: 15),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPinnedChatsHeader(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return ColoredBox(
@@ -1673,205 +1836,30 @@ class _ChatListScreenState extends State<ChatListScreen>
             listenable: _storiesUi,
             builder: (context, _) => ClipRect(
               clipBehavior: Clip.hardEdge,
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                child: _shouldCollapseSearch
-                    ? const SizedBox(width: double.infinity, height: 52)
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 6, 20, 3),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Row(
-                                    children: [
-                                      if (_shareMode)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            right: 4,
-                                          ),
-                                          child: IconButton(
-                                            key: const ValueKey('share-back'),
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            icon: Icon(
-                                              Symbols.arrow_back,
-                                              color: cs.onSurface,
-                                              weight: 500,
-                                            ),
-                                            onPressed: () => Navigator.of(
-                                              context,
-                                            ).maybePop(),
-                                          ),
-                                        ),
-                                      if (AppStories.current.value &&
-                                          !_shareMode &&
-                                          _pullRatio < 0.8 &&
-                                          storiesModule.hasAny)
-                                        Opacity(
-                                          opacity: 1.0 - _pullRatio,
-                                          child: GestureDetector(
-                                            behavior: HitTestBehavior.opaque,
-                                            onTap: () => _openStories(0),
-                                            child: SizedBox(
-                                              width:
-                                                  (FoldedStoryStack.widthFor(
-                                                        storiesModule
-                                                            .previews
-                                                            .length,
-                                                      ) +
-                                                      8) *
-                                                  (1.0 - _pullRatio),
-                                              height:
-                                                  FoldedStoryStack.outerSize,
-                                              child: OverflowBox(
-                                                alignment: Alignment.centerLeft,
-                                                maxWidth:
-                                                    FoldedStoryStack.widthFor(
-                                                      storiesModule
-                                                          .previews
-                                                          .length,
-                                                    ),
-                                                child: FoldedStoryStack(
-                                                  previews:
-                                                      storiesModule.previews,
-                                                  opacity: 1.0 - _pullRatio,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      Flexible(
-                                        child: Text(
-                                          _shareMode &&
-                                                  _selectedChats.isNotEmpty
-                                              ? '${_selectedChats.length} '
-                                                    '${pluralRu(_selectedChats.length, 'получатель', 'получателя', 'получателей')}'
-                                              : connectionStatusLabel(
-                                                      _sessionState,
-                                                    ) ??
-                                                    (_profile?.firstName ??
-                                                        'Чат'),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: cs.onSurface,
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w600,
-                                            fontFamily: displayFontOf(context),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (!widget.forwardMode &&
-                                        !widget.archiveMode &&
-                                        !_shareMode)
-                                      IconButton(
-                                        key: const ValueKey('downloads-button'),
-                                        tooltip: AppLocalizations.of(
-                                          context,
-                                        )!.downloadsTooltip,
-                                        icon: Icon(
-                                          Symbols.download_for_offline,
-                                          color: cs.outline,
-                                          weight: 400,
-                                        ),
-                                        onPressed: () =>
-                                            unawaited(_openDownloads()),
-                                      ),
-                                    PopupMenuButton<int>(
-                                      icon: Icon(
-                                        Symbols.more_vert,
-                                        color: cs.outline,
-                                        weight: 400,
-                                      ),
-                                      offset: const Offset(0, 48),
-                                      elevation: 4,
-                                      color: cs.surfaceContainerHigh,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      onSelected: _onOverflowMenuSelected,
-                                      itemBuilder: (context) => [
-                                        _buildPopupMenuItem(
-                                          1,
-                                          'Избранное',
-                                          Symbols.bookmark,
-                                        ),
-                                        _buildPopupMenuItem(
-                                          2,
-                                          'Прочитать всё',
-                                          Symbols.done_all,
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (AppStories.current.value)
-                            SizedBox(
-                              height: 96 * _pullRatio,
-                              child: Opacity(
-                                opacity: _pullRatio,
-                                child: _buildStoriesRow(),
-                              ),
-                            ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 3, 20, 8),
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: (widget.forwardMode || _shareMode)
-                                  ? null
-                                  : _openSearch,
-                              child: GlossyPill(
-                                color: cs.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(50),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                depth: 6,
-                                child: SizedBox(
-                                  height: 44,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Symbols.search,
-                                        color: cs.outline,
-                                        size: 20,
-                                        weight: 400,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        widget.forwardMode
-                                            ? 'Пересылка...'
-                                            : 'Поиск',
-                                        style: TextStyle(
-                                          color: cs.outline,
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: _shouldCollapseSearch
+                        ? const SizedBox(width: double.infinity, height: 52)
+                        : _buildTitleAndSearch(cs),
+                  ),
+                  if (AppStories.current.value)
+                    SizedBox(
+                      height: 96 * _pullRatio,
+                      child: IgnorePointer(
+                        ignoring: _pullRatio < 0.95,
+                        child: Opacity(
+                          opacity: _pullRatio.clamp(0.0, 1.0),
+                          child: _buildStoriesRow(),
+                        ),
                       ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -1879,7 +1867,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
-              height: 48,
+              height: 36,
               color: cs.surface,
               child: ScrollConfiguration(
                 behavior: ScrollConfiguration.of(context).copyWith(
@@ -1893,7 +1881,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ? FolderStripShimmer(shimmer: _shimmerController)
                     : LayoutBuilder(
                         builder: (context, constraints) {
-                          final availableWidth = constraints.maxWidth - 40;
+                          final availableWidth = constraints.maxWidth - 32;
                           final folderCount = _folders.length;
                           final minWidthPerFolder = 80.0;
                           final totalMinWidth =
@@ -1905,10 +1893,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                             return ListView(
                               scrollDirection: Axis.horizontal,
                               padding: const EdgeInsets.fromLTRB(
-                                20,
-                                4,
-                                20,
-                                12,
+                                16,
+                                2,
+                                16,
+                                2,
                               ),
                               physics: const BouncingScrollPhysics(),
                               children: [
@@ -1921,10 +1909,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                           } else {
                             return Padding(
                               padding: const EdgeInsets.fromLTRB(
-                                20,
-                                4,
-                                20,
-                                12,
+                                16,
+                                2,
+                                16,
+                                2,
                               ),
                               child: Row(
                                 children: [
@@ -1988,7 +1976,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           parent: const AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
           if (_shouldShowArchiveEntry(pageIndex))
             SliverToBoxAdapter(child: _buildArchiveEntry(cs)),
           if (chats.isEmpty && !_isInitialLoading)
@@ -2230,9 +2218,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   ) {
     final geometry = PillNavGeometry.fromInnerWidth(navInnerW, 4);
     final inactiveWidth = geometry.inactiveWidth;
-    final bubbleW = geometry.activeWidth - 8;
+    final bubbleW = geometry.activeWidth - 12;
 
-    double bubbleLeftForIndex(int index) => index * inactiveWidth + 4;
+    double bubbleLeftForIndex(int index) => index * inactiveWidth + 6;
 
     final minBubbleLeft = bubbleLeftForIndex(0);
     final maxBubbleLeft = bubbleLeftForIndex(3);
@@ -2255,9 +2243,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
-      left: 8,
-      right: 8,
-      bottom: _isSelectionMode ? -100 : bottomInset + 10.0,
+      left: 20,
+      right: 20,
+      bottom: _isSelectionMode ? -100 : bottomInset + 12.0,
       child: RepaintBoundary(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -2304,7 +2292,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               minBubbleLeft,
                               maxBubbleLeft,
                             ) -
-                            4) /
+                            6) /
                         inactiveWidth
                   : _currentNavIndex.toDouble();
               return SlidingPillNav(
@@ -2314,8 +2302,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ? Duration.zero
                     : const Duration(milliseconds: 350),
                 geometry: geometry,
-                iconSize: 20,
-                labelGap: 4,
+                iconSize: 24,
+                labelGap: 6,
                 backdropKey: _frostBackdrop,
                 onTap: _onNavTabSelected,
                 onItemLongPress: (index, pos) {
@@ -2355,8 +2343,8 @@ class _ChatListScreenState extends State<ChatListScreen>
             final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
             final pageW = constraints.maxWidth;
             final pageH = constraints.maxHeight;
-            final navInnerW = pageW - 20;
-            final totalWeight = 5.2;
+            final navInnerW = pageW - 40;
+            final totalWeight = 4.55;
             final unitWidth = navInnerW / totalWeight;
             final inactiveWidth = unitWidth * 1.0;
             double bubbleLeftForPageT(int index) {
@@ -2364,7 +2352,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               for (int i = 0; i < index; i++) {
                 lo += inactiveWidth;
               }
-              return lo + 4;
+              return lo + 6;
             }
 
             return Stack(
@@ -2382,12 +2370,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                           inactiveWidth: inactiveWidth,
                           bubbleLeftForIndex: bubbleLeftForPageT,
                         );
-                        return Transform.translate(
-                          offset: Offset(
-                            -pageDisplayT * pageW * SpectrumTuning.parallax,
-                            0,
+                        return TickerMode(
+                          enabled: pageDisplayT < 0.5,
+                          child: Transform.translate(
+                            offset: Offset(
+                              -pageDisplayT * pageW * SpectrumTuning.parallax,
+                              0,
+                            ),
+                            child: child,
                           ),
-                          child: child,
                         );
                       },
                     ),
@@ -2641,11 +2632,11 @@ class _ChatListScreenState extends State<ChatListScreen>
             );
           },
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Row(
               children: [
                 CircleAvatar(
-                  radius: 24,
+                  radius: 30,
                   backgroundColor: cs.surfaceContainerHighest,
                   child: Icon(
                     Symbols.archive,
@@ -2659,7 +2650,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     'Архив',
                     style: TextStyle(
                       color: cs.onSurface,
-                      fontSize: 16,
+                      fontSize: 17,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2783,7 +2774,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     ];
     return ListView.builder(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: otherIndices.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
@@ -2881,7 +2872,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: GlossyPill(
         color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(50),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         depth: 4,
         child: Center(
           child: Text(
@@ -2889,7 +2880,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             textAlign: TextAlign.center,
             style: TextStyle(
               color: isSelected ? cs.onPrimaryContainer : cs.primary,
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -2932,12 +2923,14 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _animateChatTile(String id, Widget child) {
-    return AnimatedChatTile(
-      key: ValueKey('chat_$id'),
-      id: id,
-      revision: _chatListRevision,
-      isNew: _enteringChatIds.contains(id),
-      child: child,
+    return RepaintBoundary(
+      child: AnimatedChatTile(
+        key: ValueKey('chat_$id'),
+        id: id,
+        revision: _chatListRevision,
+        isNew: _enteringChatIds.contains(id),
+        child: child,
+      ),
     );
   }
 
@@ -2964,7 +2957,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             ),
           ],
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 15,
             fontWeight: FontWeight.w400,
             fontStyle: FontStyle.italic,
             height: 1.2,
@@ -2982,7 +2975,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       italic: messageItalic,
       style: TextStyle(
         color: cs.outline,
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: FontWeight.w400,
         height: 1.2,
       ),
@@ -2991,7 +2984,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   Widget _iosChatHairline(ColorScheme cs) {
     return Padding(
-      padding: const EdgeInsets.only(left: 80),
+      padding: const EdgeInsets.only(left: 88),
       child: ColoredBox(
         color: cs.outline.withValues(alpha: 0.22),
         child: const SizedBox(height: 0.5, width: double.infinity),
@@ -3111,7 +3104,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final story = (_isSelectionMode || widget.forwardMode)
         ? null
         : _storyPreviewFor(storyOwnerId);
-    final avatarRadius = story == null ? 24.0 : 20.0;
+    final avatarRadius = story == null ? 30.0 : 26.0;
 
     final CircleAvatar rawAvatar = CircleAvatar(
       radius: avatarRadius,
@@ -3128,7 +3121,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               name.isNotEmpty ? name[0].toUpperCase() : '?',
               style: TextStyle(
                 color: cs.onSurfaceVariant,
-                fontSize: story == null ? 20 : 17,
+                fontSize: story == null ? 22 : 18,
               ),
             )
           : null,
@@ -3154,9 +3147,10 @@ class _ChatListScreenState extends State<ChatListScreen>
               ),
             ),
           );
-    return SpringyTap(
+    return InkWell(
       key: ValueKey('chat_$id'),
-      child: InkWell(
+      splashFactory: NoSplash.splashFactory,
+      overlayColor: const WidgetStatePropertyAll(Colors.transparent),
         onTap: () {
           if (widget.forwardMode) {
             Navigator.of(context).pop(
@@ -3213,8 +3207,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         onLongPress: (widget.forwardMode || _shareMode)
             ? null
             : () => _toggleSelection(id),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+        child: ColoredBox(
           color: isSelected
               ? cs.primary.withValues(alpha: 0.08)
               : isPinned
@@ -3224,7 +3217,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -3271,7 +3264,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 const SizedBox(width: 12),
                 Expanded(
                   child: SizedBox(
-                    height: 48,
+                    height: 54,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -3299,9 +3292,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         name,
                                         style: TextStyle(
                                           color: cs.onSurface,
-                                          fontSize: 16,
+                                          fontSize: 17,
                                           fontWeight: FontWeight.w600,
-                                          height: 1.1,
+                                          height: 1.15,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -3334,7 +3327,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 time,
                                 style: TextStyle(
                                   color: cs.outline,
-                                  fontSize: 12,
+                                  fontSize: 14,
                                 ),
                               ),
                             ],
@@ -3405,7 +3398,6 @@ class _ChatListScreenState extends State<ChatListScreen>
             ],
           ),
         ),
-      ),
     );
   }
 

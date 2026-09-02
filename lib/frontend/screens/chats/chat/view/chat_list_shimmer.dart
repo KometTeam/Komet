@@ -79,7 +79,7 @@ class FolderStripShimmer extends StatelessWidget {
           opacity: opacity,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             physics: const BouncingScrollPhysics(),
             children: [
               _pill(cs, 88),

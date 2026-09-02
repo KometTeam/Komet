@@ -30,7 +30,9 @@ class CallsTab extends StatefulWidget {
 }
 
 class _CallsTabState extends State<CallsTab>
-    with ReloadOnReconnect, SpectrumSurface {
+    with ReloadOnReconnect, SpectrumSurface, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   List<CallLogEntry> _calls = [];
   final Set<String> _removing = {};
   bool _isLoading = true;
@@ -467,6 +469,7 @@ class _CallsTabState extends State<CallsTab>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final cs = Theme.of(context).colorScheme;
 
     final filteredCalls = _selectedTabIndex == 1

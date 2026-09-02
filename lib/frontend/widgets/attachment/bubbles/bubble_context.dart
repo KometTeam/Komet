@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -68,6 +70,27 @@ class BubbleContext {
   static const double captionPaddingRight = 6.0;
   static const double captionPaddingTop = 6.0;
   static const double compactTimePadding = 8.0;
+
+  /// Fit a media frame into [photoMinSize]…[photoMaxSize] without
+  /// stretching. Independent clamps on width and height squash 16:9
+  /// video into a square and turn panoramas into the wrong crop box.
+  static Size fitMediaSize(double width, double height) {
+    var w = width;
+    var h = height;
+    if (w <= 0 || h <= 0) {
+      return const Size(photoMaxSize * 0.75, photoMaxSize * 0.75);
+    }
+    final down = math.min(1.0, math.min(photoMaxSize / w, photoMaxSize / h));
+    w *= down;
+    h *= down;
+    final longer = math.max(w, h);
+    if (longer < photoMinSize) {
+      final up = photoMinSize / longer;
+      w *= up;
+      h *= up;
+    }
+    return Size(w, h);
+  }
 
   final BuildContext context;
   final ColorScheme cs;

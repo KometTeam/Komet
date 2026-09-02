@@ -116,27 +116,21 @@ class ComposerInputBar extends StatelessWidget {
       if (!channelSubscribed) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 8.0,
-            ),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
             child: GlossyPill(
               onTap: channelSubscribing ? null : onSubscribe,
               color: cs.primary,
-              borderRadius: BorderRadius.circular(28),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              depth: 8,
-              borderSide: BorderSide(
-                color: cs.outlineVariant.withValues(alpha: 0.5),
-                width: 0.5,
-              ),
+              borderRadius: BorderRadius.circular(22),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              depth: 6,
               child: SizedBox(
                 width: double.infinity,
+                height: 24,
                 child: Center(
                   child: channelSubscribing
                       ? SizedBox(
-                          width: 22,
-                          height: 22,
+                          width: 18,
+                          height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: cs.onPrimary,
@@ -146,7 +140,7 @@ class ComposerInputBar extends StatelessWidget {
                           'Подписаться',
                           style: TextStyle(
                             color: cs.onPrimary,
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -156,38 +150,8 @@ class ComposerInputBar extends StatelessWidget {
           ),
         );
       }
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-          child: GlossyPill(
-            onTap: onToggleMute,
-            color: Color.alphaBlend(
-              cs.surfaceContainerHighest.withValues(alpha: 0.92),
-              cs.surface,
-            ),
-            borderRadius: BorderRadius.circular(28),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            depth: 8,
-            borderSide: BorderSide(
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-              width: 0.5,
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              child: Center(
-                child: Text(
-                  isMuted ? 'Включить уведомления' : 'Отключить уведомления',
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
+      // Subscribed: no bottom bar. Mute lives in the ⋮ menu, like Telegram.
+      return const SizedBox.shrink();
     }
 
     final bar = SafeArea(

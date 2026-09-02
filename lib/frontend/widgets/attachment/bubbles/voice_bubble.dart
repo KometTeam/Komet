@@ -59,7 +59,7 @@ class VoiceMessageBubble extends StatefulWidget {
   State<VoiceMessageBubble> createState() => _VoiceMessageBubbleState();
 }
 
-const double _transcriptionMaxHeight = 132;
+
 
 class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   bool _transcriptionVisible = false;
@@ -385,20 +385,12 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                   curve: Curves.easeOut,
                   alignment: Alignment.topLeft,
                   child: _transcriptionVisible
-                      ? ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxHeight: _transcriptionMaxHeight,
-                          ),
-                          child: SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(),
-                            child: Text(
-                              _transcriptionText ?? '',
-                              style: TextStyle(
-                                color: widget.textColor.withValues(alpha: 0.8),
-                                fontSize: 12,
-                                height: 1.3,
-                              ),
-                            ),
+                      ? Text(
+                          _transcriptionText ?? '',
+                          style: TextStyle(
+                            color: widget.textColor.withValues(alpha: 0.85),
+                            fontSize: 14,
+                            height: 1.35,
                           ),
                         )
                       : const SizedBox.shrink(),

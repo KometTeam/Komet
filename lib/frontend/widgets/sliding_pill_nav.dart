@@ -41,7 +41,7 @@ class PillNavGeometry {
   factory PillNavGeometry.equal(double itemWidth, int itemCount) =>
       PillNavGeometry(itemWidth * itemCount, itemWidth, itemWidth);
 
-  static const double _activeWeight = 2.2;
+  static const double _activeWeight = 1.55;
 }
 
 class SlidingPillNav extends StatelessWidget {
@@ -66,7 +66,7 @@ class SlidingPillNav extends StatelessWidget {
     required this.onTap,
     this.animationDuration = Duration.zero,
     this.onItemLongPress,
-    this.iconSize = 22,
+    this.iconSize = 24,
     this.labelGap = 6,
     this.backgroundColor,
     this.borderColor,
@@ -138,7 +138,7 @@ class SlidingPillNav extends StatelessWidget {
 
     return Container(
       height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: useGradient || liquid ? null : base,
         gradient: useGradient ? GlossyDecor.fillGradient(base) : null,
@@ -202,13 +202,13 @@ class SlidingPillNav extends StatelessWidget {
           AnimatedPositioned(
             duration: animationDuration,
             curve: Curves.easeOutCubic,
-            left: position * geometry.inactiveWidth + 4,
-            top: 8,
-            bottom: 8,
-            width: geometry.activeWidth - 8,
+            left: position * geometry.inactiveWidth + 6,
+            top: 6,
+            bottom: 6,
+            width: geometry.activeWidth - 12,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: cs.primary,
+                color: cs.onSurface.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(26),
               ),
             ),
@@ -272,7 +272,7 @@ class _PillNavCell extends StatelessWidget {
   });
 
   Widget _buildIcon() {
-    final color = selected ? cs.onPrimary : cs.onSurface;
+    final color = selected ? cs.primary : cs.onSurfaceVariant;
     final asset = item.animationAsset;
     if (asset != null) {
       return AnimatedLottieIcon(
@@ -282,14 +282,19 @@ class _PillNavCell extends StatelessWidget {
         active: selected,
       );
     }
-    return Icon(item.icon, color: color, size: iconSize, fill: 1);
+    return Icon(
+      item.icon,
+      color: color,
+      size: iconSize,
+      fill: selected ? 1 : 0,
+      weight: selected ? 600 : 500,
+      grade: 200,
+      opticalSize: 24,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final opacityDuration = animationDuration == Duration.zero
-        ? Duration.zero
-        : const Duration(milliseconds: 200);
     return GestureDetector(
       onTap: onTap,
       onLongPressStart: onLongPress == null
@@ -299,38 +304,42 @@ class _PillNavCell extends StatelessWidget {
       child: Center(
         child: iconsOnly
             ? _buildIcon()
-            : FittedBox(
+            : selected
+            ? FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _buildIcon(),
-                    AnimatedContainer(
-                      duration: animationDuration,
-                      curve: Curves.easeOutCubic,
-                      width: selected ? null : 0,
-                      child: AnimatedOpacity(
-                        duration: opacityDuration,
-                        opacity: selected ? 1.0 : 0.0,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(width: labelGap),
-                            Text(
-                              item.label,
-                              style: TextStyle(
-                                color: cs.onPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                    SizedBox(width: labelGap),
+                    Text(
+                      item.label,
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildIcon(),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
               ),
       ),
     );

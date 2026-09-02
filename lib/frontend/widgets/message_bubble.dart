@@ -476,8 +476,8 @@ class _ReactionAnimojiGlyph extends StatefulWidget {
 }
 
 class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
-  static const double _size = 18;
-  static const double _effectSize = _size * 2;
+  static const double _size = 22;
+  static const double _effectSize = _size * 2.8;
 
   int? _playingToken;
   bool _bodyPlaying = false;
@@ -580,7 +580,7 @@ class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
         repeat: false,
       );
     } else {
-      body = Text(widget.emoji, style: const TextStyle(fontSize: 13));
+      body = Text(widget.emoji, style: const TextStyle(fontSize: 18, height: 1));
     }
 
     return SizedBox(
@@ -614,10 +614,102 @@ class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
   }
 }
 
+}
+
+class _ReactionPop extends StatefulWidget {
+  final String messageId;
+  final String emoji;
+  final ValueListenable<ReactionAnimationEvent?>? animation;
+  final Widget child;
+
+  const _ReactionPop({
+    required this.messageId,
+    required this.emoji,
+    required this.animation,
+    required this.child,
+  });
+
+  @override
+  State<_ReactionPop> createState() => _ReactionPopState();
+}
+
+class _ReactionPopState extends State<_ReactionPop>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+  int? _token;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.34).chain(
+          CurveTween(curve: Curves.easeOutCubic),
+        ),
+        weight: 36,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.34, end: 0.92).chain(
+          CurveTween(curve: Curves.easeInOutCubic),
+        ),
+        weight: 28,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.92, end: 1.0).chain(
+          CurveTween(curve: Curves.easeOutBack),
+        ),
+        weight: 36,
+      ),
+    ]).animate(_controller);
+    widget.animation?.addListener(_onAnimation);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReactionPop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.animation, widget.animation)) {
+      oldWidget.animation?.removeListener(_onAnimation);
+      widget.animation?.addListener(_onAnimation);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.animation?.removeListener(_onAnimation);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onAnimation() {
+    final event = widget.animation?.value;
+    if (event == null ||
+        event.messageId != widget.messageId ||
+        event.token == _token) {
+      return;
+    }
+    if (EmojiKeywordIndex.normalize(event.emoji) !=
+        EmojiKeywordIndex.normalize(widget.emoji)) {
+      return;
+    }
+    _token = event.token;
+    _controller.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(scale: _scale, child: widget.child);
+  }
+}
+
 class MessageBubble extends StatelessWidget {
-  static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.18);
+  static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.28);
   static const BorderRadius _reactionChipRadius = BorderRadius.all(
-    Radius.circular(10),
+    Radius.circular(14),
   );
 
   static Color bubbleTextColor(BuildContext context) =>
@@ -1523,8 +1615,8 @@ class MessageBubble extends StatelessWidget {
               children: [
                 Expanded(
                   child: _ReactionsWrap(
-                    spacing: 4,
-                    runSpacing: 4,
+                    spacing: 6,
+                    runSpacing: 6,
                     children: chips,
                   ),
                 ),
@@ -1647,7 +1739,7 @@ class MessageBubble extends StatelessWidget {
     if (chips.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: inset,
-      child: Wrap(spacing: 4, runSpacing: 4, children: chips),
+      child: Wrap(spacing: 6, runSpacing: 6, children: chips),
     );
   }
 
@@ -1673,10 +1765,14 @@ class MessageBubble extends StatelessWidget {
       }
 
       Widget chip = Container(
-        padding: EdgeInsets.fromLTRB(7, 2, avatar != null ? 3 : 7, 2),
+        height: 28,
+        padding: EdgeInsets.fromLTRB(8, 0, avatar != null ? 4 : 8, 0),
         decoration: BoxDecoration(
-          color: isYours ? cs.primary.withValues(alpha: 0.22) : _reactionChipBg,
+          color: isYours ? cs.primary.withValues(alpha: 0.28) : _reactionChipBg,
           borderRadius: _reactionChipRadius,
+          border: isYours
+              ? Border.all(color: cs.primary.withValues(alpha: 0.45), width: 1)
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1690,15 +1786,16 @@ class MessageBubble extends StatelessWidget {
                 animation: reactionAnimation,
               )
             else
-              Text(c.reaction, style: const TextStyle(fontSize: 13)),
+              Text(c.reaction, style: const TextStyle(fontSize: 18, height: 1)),
             if (c.count > 1) ...[
-              const SizedBox(width: 3),
+              const SizedBox(width: 4),
               Text(
                 c.count.toString(),
                 style: TextStyle(
-                  color: isYours ? cs.primary : cs.onSurfaceVariant,
-                  fontSize: 11,
+                  color: isYours ? cs.primary : cs.onSurface,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
+                  height: 1,
                 ),
               ),
             ],
@@ -1716,7 +1813,14 @@ class MessageBubble extends StatelessWidget {
         );
       }
 
-      chips.add(chip);
+      chips.add(
+        _ReactionPop(
+          messageId: message.id,
+          emoji: c.reaction,
+          animation: reactionAnimation,
+          child: chip,
+        ),
+      );
     }
     return chips;
   }
@@ -1725,7 +1829,7 @@ class MessageBubble extends StatelessWidget {
       reactionAnimojiResolver?.call(emoji) ?? animojiModule.findByEmoji(emoji);
 
   Widget _reactionAvatar(ColorScheme cs, String? url, String? name) {
-    const double diameter = 17;
+    const double diameter = 20;
     if (url != null && url.isNotEmpty) {
       return CircleAvatar(
         radius: diameter / 2,
@@ -1745,7 +1849,7 @@ class MessageBubble extends StatelessWidget {
       backgroundColor: cs.primaryContainer,
       child: Text(
         letter,
-        style: TextStyle(fontSize: 9, color: cs.onPrimaryContainer),
+        style: TextStyle(fontSize: 11, color: cs.onPrimaryContainer),
       ),
     );
   }
@@ -1877,8 +1981,8 @@ class MessageBubble extends StatelessWidget {
               children: [
                 Expanded(
                   child: _ReactionsWrap(
-                    spacing: 4,
-                    runSpacing: 4,
+                    spacing: 6,
+                    runSpacing: 6,
                     children: reactionChips,
                   ),
                 ),

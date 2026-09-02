@@ -3293,6 +3293,13 @@ class _ChatScreenState extends State<ChatScreen>
     return hasMiniAppOption(chat?.options);
   }
 
+  bool get _isPersonOrGroupThread {
+    if (_commentsMode) return false;
+    if (_peerIsBot) return false;
+    final type = chat?.type ?? widget.chatType;
+    return type == 'DIALOG' || type == 'CHAT' || type == 'GROUP';
+  }
+
   Future<void> _openMiniApp() async {
     final peerId = _resolveOtherId();
     if (peerId == null) return;
@@ -3335,16 +3342,18 @@ class _ChatScreenState extends State<ChatScreen>
           label: 'Изменить обои',
           onTap: _openWallpaperSheet,
         ),
-        ChatMenuItem(
-          icon: Symbols.mop,
-          label: 'Очистить историю',
-          onTap: _clearHistory,
-        ),
-        ChatMenuItem(
-          icon: _encryptionEnabled ? Symbols.lock : Symbols.lock_open,
-          label: 'Шифрование сообщений',
-          onTap: _openEncryptionSettings,
-        ),
+        if (_isPersonOrGroupThread)
+          ChatMenuItem(
+            icon: Symbols.mop,
+            label: 'Очистить историю',
+            onTap: _clearHistory,
+          ),
+        if (_isPersonOrGroupThread)
+          ChatMenuItem(
+            icon: _encryptionEnabled ? Symbols.lock : Symbols.lock_open,
+            label: 'Шифрование сообщений',
+            onTap: _openEncryptionSettings,
+          ),
         ChatMenuItem(
           icon: Symbols.delete,
           label: 'Удалить чат',
@@ -5947,6 +5956,7 @@ class _ChatScreenState extends State<ChatScreen>
                             },
                             childCount:
                                 items.length + 1 + (_isLoadingMore ? 1 : 0),
+                            addRepaintBoundaries: false,
                           ),
                         ),
                       ),
