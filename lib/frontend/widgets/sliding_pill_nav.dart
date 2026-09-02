@@ -148,15 +148,6 @@ class SlidingPillNav extends StatelessWidget {
             : (borderColor != null
                   ? Border.all(color: borderColor!, width: 0.5)
                   : null),
-        boxShadow: frosted
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: liquid ? 0.28 : 0.5),
-                  blurRadius: liquid ? 26 : 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
       ),
       child: Stack(
         clipBehavior: Clip.hardEdge,
@@ -208,7 +199,9 @@ class SlidingPillNav extends StatelessWidget {
             width: geometry.activeWidth - 12,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: cs.onSurface.withValues(alpha: 0.10),
+                color: cs.brightness == Brightness.light
+                    ? cs.primary.withValues(alpha: 0.14)
+                    : cs.onSurface.withValues(alpha: 0.16),
                 borderRadius: BorderRadius.circular(26),
               ),
             ),
