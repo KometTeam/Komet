@@ -1672,7 +1672,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  Widget _buildTitleAndSearch(ColorScheme cs) {
+  Widget _buildTitleRow(ColorScheme cs) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1789,7 +1789,12 @@ class _ChatListScreenState extends State<ChatListScreen>
             ],
           ),
         ),
-        Padding(
+      ],
+    );
+  }
+
+  Widget _buildSearchBar(ColorScheme cs) {
+    return Padding(
           padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -1819,9 +1824,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               ),
             ),
           ),
-        ),
-      ],
-    );
+        );
   }
 
   Widget _buildPinnedChatsHeader(BuildContext context) {
@@ -1840,14 +1843,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    alignment: Alignment.topCenter,
-                    child: _shouldCollapseSearch
-                        ? const SizedBox(width: double.infinity, height: 52)
-                        : _buildTitleAndSearch(cs),
-                  ),
+                  _buildTitleRow(cs),
                   if (AppStories.current.value)
                     SizedBox(
                       height: 96 * _pullRatio,
@@ -1859,6 +1855,14 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                       ),
                     ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: _shouldCollapseSearch
+                        ? const SizedBox.shrink()
+                        : _buildSearchBar(cs),
+                  ),
                 ],
               ),
             ),
