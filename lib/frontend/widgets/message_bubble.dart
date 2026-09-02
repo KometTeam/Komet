@@ -614,8 +614,6 @@ class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
   }
 }
 
-}
-
 class _ReactionPop extends StatefulWidget {
   final String messageId;
   final String emoji;
