@@ -19,12 +19,15 @@ class VideoBubble extends StatelessWidget {
 
   const VideoBubble({super.key, required this.ctx, required this.video});
 
-  static double layoutWidth(VideoAttachment video) {
-    return (video.width?.toDouble() ?? 200.0).clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
+  static Size displaySize(VideoAttachment video) {
+    return BubbleContext.fitMediaSize(
+      video.width?.toDouble() ?? 0,
+      video.height?.toDouble() ?? 0,
     );
   }
+
+  static double layoutWidth(VideoAttachment video) =>
+      displaySize(video).width;
 
   @override
   Widget build(BuildContext context) {
@@ -56,12 +59,9 @@ class VideoBubble extends StatelessWidget {
         ? video.baseUrl!
         : (video.previewData ?? '');
 
-    final h = video.height;
-    final width = layoutWidth(video);
-    final height = (h?.toDouble() ?? 150.0).clamp(
-      BubbleContext.photoMinSize,
-      BubbleContext.photoMaxSize,
-    );
+    final size = displaySize(video);
+    final width = size.width;
+    final height = size.height;
     final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
 
     Widget placeholder() => Container(
