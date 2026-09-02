@@ -2637,11 +2637,11 @@ class _ChatListScreenState extends State<ChatListScreen>
             );
           },
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Row(
               children: [
                 CircleAvatar(
-                  radius: 24,
+                  radius: 30,
                   backgroundColor: cs.surfaceContainerHighest,
                   child: Icon(
                     Symbols.archive,
@@ -2655,7 +2655,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     'Архив',
                     style: TextStyle(
                       color: cs.onSurface,
-                      fontSize: 16,
+                      fontSize: 17,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2960,7 +2960,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             ),
           ],
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 15,
             fontWeight: FontWeight.w400,
             fontStyle: FontStyle.italic,
             height: 1.2,
@@ -2978,7 +2978,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       italic: messageItalic,
       style: TextStyle(
         color: cs.outline,
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: FontWeight.w400,
         height: 1.2,
       ),
@@ -2987,7 +2987,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   Widget _iosChatHairline(ColorScheme cs) {
     return Padding(
-      padding: const EdgeInsets.only(left: 80),
+      padding: const EdgeInsets.only(left: 88),
       child: ColoredBox(
         color: cs.outline.withValues(alpha: 0.22),
         child: const SizedBox(height: 0.5, width: double.infinity),
@@ -3107,7 +3107,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final story = (_isSelectionMode || widget.forwardMode)
         ? null
         : _storyPreviewFor(storyOwnerId);
-    final avatarRadius = story == null ? 24.0 : 20.0;
+    final avatarRadius = story == null ? 30.0 : 26.0;
 
     final CircleAvatar rawAvatar = CircleAvatar(
       radius: avatarRadius,
@@ -3124,7 +3124,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               name.isNotEmpty ? name[0].toUpperCase() : '?',
               style: TextStyle(
                 color: cs.onSurfaceVariant,
-                fontSize: story == null ? 20 : 17,
+                fontSize: story == null ? 22 : 18,
               ),
             )
           : null,
@@ -3219,7 +3219,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -3266,7 +3266,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 const SizedBox(width: 12),
                 Expanded(
                   child: SizedBox(
-                    height: 48,
+                    height: 54,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -3294,9 +3294,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         name,
                                         style: TextStyle(
                                           color: cs.onSurface,
-                                          fontSize: 16,
+                                          fontSize: 17,
                                           fontWeight: FontWeight.w600,
-                                          height: 1.1,
+                                          height: 1.15,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -3329,7 +3329,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 time,
                                 style: TextStyle(
                                   color: cs.outline,
-                                  fontSize: 12,
+                                  fontSize: 14,
                                 ),
                               ),
                             ],

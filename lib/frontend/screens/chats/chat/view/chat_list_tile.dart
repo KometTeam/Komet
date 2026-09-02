@@ -160,7 +160,7 @@ class _ActivitySubtitleState extends State<ActivitySubtitle> {
             _lastLabel,
             style: TextStyle(
               color: cs.primary,
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.w500,
               height: 1.2,
             ),
