@@ -11,12 +11,6 @@ on:
       - 'windows/**'
       - 'pubspec.yaml'
       - '.github/workflows/build-windows.yml'
-  pull_request:
-    paths:
-      - 'lib/**'
-      - 'windows/**'
-      - 'pubspec.yaml'
-      - '.github/workflows/build-windows.yml'
 
 env:
   FLUTTER_VERSION: '3.44.3'

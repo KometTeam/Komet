@@ -11,12 +11,6 @@ on:
       - 'android/**'
       - 'pubspec.yaml'
       - '.github/workflows/build-android.yml'
-  pull_request:
-    paths:
-      - 'lib/**'
-      - 'android/**'
-      - 'pubspec.yaml'
-      - '.github/workflows/build-android.yml'
 
 jobs:
   build-android:
