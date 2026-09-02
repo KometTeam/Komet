@@ -2356,7 +2356,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             final pageW = constraints.maxWidth;
             final pageH = constraints.maxHeight;
             final navInnerW = pageW - 40;
-            final totalWeight = 5.2;
+            final totalWeight = 4.55;
             final unitWidth = navInnerW / totalWeight;
             final inactiveWidth = unitWidth * 1.0;
             double bubbleLeftForPageT(int index) {
