@@ -98,6 +98,8 @@ import '../stories/story_viewer_screen.dart';
 import '../downloads_screen.dart';
 import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_theme_mode.dart';
+import '../../../core/config/app_amoled.dart';
 
 const String _savedWelcomeKey = 'welcome.saved.dialog.message';
 
@@ -768,6 +770,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     ChatEncryptionStore.instance.revision.addListener(_onEncryptionChanged);
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
+    AppThemeModeConfig.current.addListener(_onAppThemeChanged);
+    AppAmoled.current.addListener(_onAppThemeChanged);
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.addListener(_requestReload);
     KometSettings.showHiddenChats.addListener(_requestReload);
@@ -1485,6 +1489,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     ChatEncryptionStore.instance.revision.removeListener(_onEncryptionChanged);
     DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
+    AppThemeModeConfig.current.removeListener(_onAppThemeChanged);
+    AppAmoled.current.removeListener(_onAppThemeChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.removeListener(_requestReload);
     KometSettings.showHiddenChats.removeListener(_requestReload);
@@ -1573,6 +1579,10 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (!_navDragging) return;
     _navDragDx.value = 0;
     setState(() => _navDragging = false);
+  }
+
+  void _onAppThemeChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onNavTabSelected(int index) {
@@ -1881,13 +1891,15 @@ class _ChatListScreenState extends State<ChatListScreen>
         children: [
           ListenableBuilder(
             listenable: _storiesUi,
-            builder: (context, _) => ClipRect(
+            builder: (context, _) {
+              final themeCs = Theme.of(context).colorScheme;
+              return ClipRect(
               clipBehavior: Clip.hardEdge,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildTitleRow(cs),
+                  _buildTitleRow(themeCs),
                   if (AppStories.current.value)
                     SizedBox(
                       height: 96 * _pullRatio,
@@ -1905,11 +1917,12 @@ class _ChatListScreenState extends State<ChatListScreen>
                     alignment: Alignment.topCenter,
                     child: _shouldCollapseSearch
                         ? const SizedBox.shrink()
-                        : _buildSearchBar(cs),
+                        : _buildSearchBar(themeCs),
                   ),
                 ],
               ),
-            ),
+            );
+            },
           ),
           if (_folders.length > 1)
             AnimatedContainer(
@@ -2422,6 +2435,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             _navDragDx,
                           ]),
                           child: Row(
+                            key: ValueKey(Theme.of(context).brightness),
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               RepaintBoundary(
