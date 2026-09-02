@@ -218,6 +218,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   Set<int> _contactIds = <int>{};
 
   int _currentNavIndex = 0;
+  double _lastInactiveWidth = 80;
 
   static const List<PillNavItem> _chatsNavItems = [
     PillNavItem(icon: Symbols.chat_bubble, label: 'Чаты'),
@@ -1532,6 +1533,48 @@ class _ChatListScreenState extends State<ChatListScreen>
     return _currentNavIndex.toDouble();
   }
 
+  void _beginNavIslandDrag() {
+    if (_isSelectionMode) return;
+    _navPageAnimController.stop();
+    _navPageAnimController.value = 1.0;
+    _navDragDx.value = 0;
+    setState(() {
+      _navDragging = true;
+      _navDragBaseLeft = _currentNavIndex * _lastInactiveWidth + 6;
+    });
+  }
+
+  void _updateNavIslandDrag(double dx) {
+    if (!_navDragging) return;
+    _navDragDx.value += dx;
+  }
+
+  void _endNavIslandDrag() {
+    if (!_navDragging) return;
+    final minLeft = 6.0;
+    final maxLeft = 3 * _lastInactiveWidth + 6;
+    final left = (_navDragBaseLeft + _navDragDx.value).clamp(minLeft, maxLeft);
+    final next = ((left - 6 + _lastInactiveWidth / 2) / _lastInactiveWidth)
+        .round()
+        .clamp(0, 3);
+    _navDragDx.value = 0;
+    final from = _currentNavIndex;
+    setState(() {
+      _navDragging = false;
+    });
+    if (next != from) {
+      _onNavTabSelected(next);
+    } else if (next == 0) {
+      _scheduleInformerPresentation();
+    }
+  }
+
+  void _cancelNavIslandDrag() {
+    if (!_navDragging) return;
+    _navDragDx.value = 0;
+    setState(() => _navDragging = false);
+  }
+
   void _onNavTabSelected(int index) {
     if (index == _currentNavIndex && !_navPageAnimController.isAnimating) {
       return;
@@ -1548,6 +1591,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     _navPageAnimEnd = index.toDouble();
     _currentNavIndex = index;
     _navPageAnimController.forward(from: 0);
+    if (mounted) setState(() {});
     if (index == 0) _scheduleInformerPresentation();
   }
 
@@ -2253,58 +2297,25 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: RepaintBoundary(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onHorizontalDragStart: (_) {
-            if (_isSelectionMode) return;
-            _navPageAnimController.stop();
-            _navPageAnimController.value = 1.0;
-            _navDragDx.value = 0;
-            setState(() {
-              _navDragging = true;
-              _navDragBaseLeft = bubbleLeftForIndex(_currentNavIndex);
-            });
-          },
-          onHorizontalDragUpdate: (details) {
-            if (!_navDragging) return;
-            _navDragDx.value += details.delta.dx;
-          },
-          onHorizontalDragEnd: (_) {
-            if (!_navDragging) return;
-            final left = (_navDragBaseLeft + _navDragDx.value).clamp(
-              minBubbleLeft,
-              maxBubbleLeft,
-            );
-            final next = indexForBubbleLeft(left);
-            _navDragDx.value = 0;
-            setState(() {
-              _currentNavIndex = next;
-              _navDragging = false;
-            });
-            if (next == 0) _scheduleInformerPresentation();
-          },
-          onHorizontalDragCancel: () {
-            if (!_navDragging) return;
-            _navDragDx.value = 0;
-            setState(() {
-              _navDragging = false;
-            });
-          },
-          child: ValueListenableBuilder<double>(
-            valueListenable: _navDragDx,
-            builder: (context, navDragDx, _) {
-              final position = _navDragging
-                  ? ((_navDragBaseLeft + navDragDx).clamp(
-                              minBubbleLeft,
-                              maxBubbleLeft,
-                            ) -
-                            6) /
-                        inactiveWidth
-                  : _currentNavIndex.toDouble();
+          onHorizontalDragStart: (_) => _beginNavIslandDrag(),
+          onHorizontalDragUpdate: (details) =>
+              _updateNavIslandDrag(details.delta.dx),
+          onHorizontalDragEnd: (_) => _endNavIslandDrag(),
+          onHorizontalDragCancel: _cancelNavIslandDrag,
+          child: AnimatedBuilder(
+            animation: Listenable.merge([
+              _navPageAnimController,
+              _navDragDx,
+            ]),
+            builder: (context, _) {
+              final position = _effectivePageNavRowT(
+                inactiveWidth: inactiveWidth,
+                bubbleLeftForIndex: bubbleLeftForIndex,
+              );
               return SlidingPillNav(
                 items: _chatsNavItems,
                 position: position,
-                animationDuration: _navDragging
-                    ? Duration.zero
-                    : const Duration(milliseconds: 350),
+                animationDuration: Duration.zero,
                 geometry: geometry,
                 iconSize: 24,
                 labelGap: 6,
@@ -2351,6 +2362,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             final totalWeight = 4.55;
             final unitWidth = navInnerW / totalWeight;
             final inactiveWidth = unitWidth * 1.0;
+            _lastInactiveWidth = inactiveWidth;
             double bubbleLeftForPageT(int index) {
               double lo = 0;
               for (int i = 0; i < index; i++) {
@@ -2388,7 +2400,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ),
                   ),
                 ClipRect(
-                  child: SizedBox(
+                  child: GestureDetector(
+                    onHorizontalDragStart: (_) => _beginNavIslandDrag(),
+                    onHorizontalDragUpdate: (d) =>
+                        _updateNavIslandDrag(d.delta.dx),
+                    onHorizontalDragEnd: (_) => _endNavIslandDrag(),
+                    onHorizontalDragCancel: _cancelNavIslandDrag,
+                    child: SizedBox(
                     width: pageW,
                     height: pageH,
                     child: OverflowBox(
