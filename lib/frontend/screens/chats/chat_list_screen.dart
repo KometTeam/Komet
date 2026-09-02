@@ -1333,10 +1333,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
   }
 
-  String _formatTime(int? timestamp) {
-    if (timestamp == null || timestamp == 0) return '';
-    return formatClock(DateTime.fromMillisecondsSinceEpoch(timestamp));
-  }
+  String _formatTime(int? timestamp) => formatChatListTime(timestamp);
 
   void _onStoriesRevealTick() {
     if (!mounted) return;
