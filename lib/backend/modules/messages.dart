@@ -422,7 +422,9 @@ class ReplyInfo {
         case AttachmentType.audio:
           return 'Голосовое сообщение';
         case AttachmentType.file:
-          return 'Файл';
+          final att = a.first;
+          final name = att is FileAttachment ? att.name?.trim() : null;
+          return name == null || name.isEmpty ? 'Файл' : name;
         case AttachmentType.sticker:
           return 'Стикер';
         case AttachmentType.contact:

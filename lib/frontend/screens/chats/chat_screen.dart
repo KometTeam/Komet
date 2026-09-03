@@ -18,6 +18,8 @@ import 'package:komet/frontend/screens/webapp/open_mini_app.dart';
 import 'package:komet/frontend/widgets/sending_clock_icon.dart';
 import 'package:komet/core/media/desktop_video_probe.dart';
 import 'package:komet/core/media/video_transcoder.dart';
+import 'package:komet/core/media/clipboard/clipboard_media.dart';
+import 'package:komet/core/media/clipboard/pasted_attachment.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -65,6 +67,7 @@ import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
 import 'chat/chat_prank_controller.dart';
 import 'chat/chat_controller.dart';
+import 'chat/read_marker_gate.dart';
 import 'chat/voice_record_controller.dart';
 import 'chat/video_note_controller.dart';
 import 'chat/command_panel_controller.dart';
@@ -104,6 +107,7 @@ import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/lottie_image.dart';
 import '../../widgets/attachment_panel.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
+import '../../widgets/attachment/paste_preview_sheet.dart';
 import '../../widgets/sticker_pack_sheet.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_to_pop.dart';
@@ -118,7 +122,6 @@ import '../../widgets/liquid_glass.dart';
 import 'scheduled_messages_screen.dart';
 import 'chat_encryption_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
-import 'chat/retain_offset_physics.dart';
 import 'profile_action_sheets.dart';
 import '../../../core/media/media_playback.dart';
 import '../../widgets/media_playback_pill.dart';
@@ -324,7 +327,9 @@ class _ChatScreenState extends State<ChatScreen>
   int _historyAutoloadSuppressCount = 0;
   bool get _historyAutoloadSuppressed => _historyAutoloadSuppressCount > 0;
   int _readMarkTime = 0;
-  Timer? _readMarkTimer;
+  late final ReadMarkerGate _readMarker = ReadMarkerGate(
+    onFlush: _updateReadMarker,
+  );
   final GlobalKey _listKey = GlobalKey();
   final GlobalKey _unreadSeparatorKey = GlobalKey();
   final Object _profileHeroTag = UniqueKey();
@@ -332,6 +337,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _isLoading = true;
   bool _encryptionEnabled = false;
   final ValueNotifier<bool> _showAttachmentPanel = ValueNotifier(false);
+  bool _pastePending = false;
   late final StickerPanelController _stickers;
   final ValueNotifier<UploadStatus> _uploadStatus = ValueNotifier(
     const UploadStatus(),
@@ -652,10 +658,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _scrollDownVisible = false;
   final ValueNotifier<int> _newMessageCount = ValueNotifier(0);
   bool _clearCountScheduled = false;
-  bool _retainOffsetOnce = false;
-  late final ScrollPhysics _listPhysics = RetainOffsetScrollPhysics(
-    retain: _consumeRetainOffset,
-  );
+  final Set<String> _deferredIds = <String>{};
   int _listEpoch = 0;
   final List<({String id, double pixels, double alignment})> _returnStack = [];
   bool _returningToAnchor = false;
@@ -697,7 +700,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (!_commentsMode) ChatScreen._open.add(this);
     unawaited(PushService.clearChatNotification(widget.chatId));
     if (!_commentsMode) {
-      unawaited(NotificationBridge.instance.setActiveChat(widget.chatId));
+      unawaited(NotificationBridge.instance.pushActiveChat(widget.chatId));
     }
     unawaited(
       animojiModule
@@ -924,6 +927,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (cached != null && cached.messages.isNotEmpty) {
       setState(() {
         _messages = List<CachedMessage>.of(cached.messages);
+        _deferredIds.clear();
         _hasMoreHistory = !cached.reachedStart;
         _messagesRev.value++;
       });
@@ -947,6 +951,7 @@ class _ChatScreenState extends State<ChatScreen>
           .toList();
       setState(() {
         _messages = first;
+        _deferredIds.clear();
         _messagesRev.value++;
       });
       _mergePendingMedia();
@@ -1108,7 +1113,9 @@ class _ChatScreenState extends State<ChatScreen>
           if (!mounted) return;
           setState(_markPositioned);
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _jumpCacheExtent.value = null;
+            if (!mounted) return;
+            _jumpCacheExtent.value = null;
+            _reapplyPinIfNeeded();
           });
         },
       );
@@ -1118,9 +1125,18 @@ class _ChatScreenState extends State<ChatScreen>
   void _reapplyPinIfNeeded() {
     final id = _pinnedMessageId;
     if (id == null || _userDidScroll || !_scrollController.hasClients) return;
+    _holdReadMarker();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _pinnedMessageId != id || _userDidScroll) return;
-      _alignLoadedMessage(id, _pinnedAlignment, 0);
+      if (!mounted || _pinnedMessageId != id || _userDidScroll) {
+        _releaseReadMarker();
+        return;
+      }
+      _alignLoadedMessage(
+        id,
+        _pinnedAlignment,
+        0,
+        onSettled: _releaseReadMarker,
+      );
     });
   }
 
@@ -1288,18 +1304,17 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  void _scheduleReadMarker() {
-    _readMarkTimer?.cancel();
-    _readMarkTimer = Timer(
-      const Duration(milliseconds: 350),
-      _updateReadMarker,
-    );
-  }
+  void _scheduleReadMarker() => _readMarker.schedule();
+
+  void _holdReadMarker() => _readMarker.hold();
+
+  void _releaseReadMarker() => _readMarker.release();
 
   void _updateReadMarker() {
     if (_commentsMode) return;
     if (!mounted || _myId == 0 || _messages.isEmpty) return;
     if (_awaitingPosition || !_initialPositionDone) return;
+    if (_readMarker.held) return;
     if (!_scrollController.hasClients) return;
     final listBox = _listKey.currentContext?.findRenderObject();
     if (listBox is! RenderBox) return;
@@ -1696,9 +1711,13 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted || added == 0) return;
 
     _syncReactionNotifiersFromMessages();
+    _holdReadMarker();
     _bumpMessages();
     await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
+    if (!mounted) {
+      _releaseReadMarker();
+      return;
+    }
 
     final id = anchorId;
     final at = anchorAt;
@@ -1710,24 +1729,31 @@ class _ChatScreenState extends State<ChatScreen>
         alignment ?? 0,
         0,
         epoch: _userGestureEpoch,
-        onSettled: () => _historyAutoloadSuppressCount--,
+        onSettled: () {
+          _historyAutoloadSuppressCount--;
+          _releaseReadMarker();
+        },
       );
+    } else {
+      _releaseReadMarker();
     }
     _loadForwardedSenderNames();
     _loadGroupSenderNames();
   }
 
-  bool _consumeRetainOffset() {
-    if (!_retainOffsetOnce) return false;
-    _retainOffsetOnce = false;
-    return true;
+  int get _visibleMessageCount {
+    if (_deferredIds.isEmpty) return _messages.length;
+    var visible = _messages.length;
+    while (visible > 0 && _deferredIds.contains(_messages[visible - 1].id)) {
+      visible--;
+    }
+    return visible;
   }
 
-  void _retainOffsetForNextLayout() {
-    _retainOffsetOnce = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _retainOffsetOnce = false;
-    });
+  void _flushDeferredMessages() {
+    if (_deferredIds.isEmpty) return;
+    _deferredIds.clear();
+    _bumpMessages();
   }
 
   String? _viewportAnchorId() {
@@ -1742,20 +1768,6 @@ class _ChatScreenState extends State<ChatScreen>
       if (dy >= 0 && dy <= height) newest = message.id;
     }
     return newest;
-  }
-
-  Future<void> _holdScrollAfterAppend(
-    String? anchorId,
-    double? anchorAt,
-  ) async {
-    if (anchorId == null || anchorAt == null) return;
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted || !_scrollController.hasClients) return;
-    if (_scrollController.position.userScrollDirection !=
-        ScrollDirection.idle) {
-      return;
-    }
-    _restoreContentOffset(anchorId, anchorAt);
   }
 
   double? _messageOffsetInList(String messageId) {
@@ -1887,6 +1899,7 @@ class _ChatScreenState extends State<ChatScreen>
     List<CachedMessage> decodedDesc, {
     bool markLoaded = false,
   }) {
+    final anchor = _captureViewportAnchor();
     final changed = _chatController.mergeMessages(decodedDesc);
     _requestCommentCounts();
 
@@ -1902,8 +1915,47 @@ class _ChatScreenState extends State<ChatScreen>
       _syncReactionNotifiersFromMessages();
       _pruneReactionNotifiers();
       _chatController.persistSessionCache();
+      _restoreViewportAfterMerge(anchor);
       _reapplyPinIfNeeded();
     }
+  }
+
+  ({String id, double at, double alignment})? _captureViewportAnchor() {
+    if (_pinnedMessageId != null && !_userDidScroll) return null;
+    if (!_scrollController.hasClients || _isNearBottom()) return null;
+    final id = _viewportAnchorId();
+    if (id == null) return null;
+    final at = _messageContentOffset(id);
+    final alignment = _messageAlignmentInList(id);
+    if (at == null || alignment == null) return null;
+    return (id: id, at: at, alignment: alignment);
+  }
+
+  void _restoreViewportAfterMerge(
+    ({String id, double at, double alignment})? anchor,
+  ) {
+    _holdReadMarker();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || anchor == null) {
+        _releaseReadMarker();
+        return;
+      }
+      if (_restoreContentOffset(anchor.id, anchor.at)) {
+        _releaseReadMarker();
+        return;
+      }
+      _historyAutoloadSuppressCount++;
+      _alignLoadedMessage(
+        anchor.id,
+        anchor.alignment,
+        0,
+        epoch: _userGestureEpoch,
+        onSettled: () {
+          _historyAutoloadSuppressCount--;
+          _releaseReadMarker();
+        },
+      );
+    });
   }
 
   void _requestCommentCounts() {
@@ -1993,6 +2045,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     final comments = [...loaded]..sort((a, b) => a.time.compareTo(b.time));
     _messages = post != null ? [post, ...comments] : comments;
+    _deferredIds.clear();
     _commentsHasMore = comments.isNotEmpty;
     _syncReactionNotifiersFromMessages();
     unawaited(_resolveCommentNames(comments));
@@ -2039,9 +2092,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (comment.senderId == _myId) return;
     if (_messages.any((m) => m.id == comment.id)) return;
     final nearBottom = _isNearListBottom();
-    final anchorId = nearBottom ? null : _viewportAnchorId();
-    final anchorAt = anchorId == null ? null : _messageContentOffset(anchorId);
-    if (!nearBottom) _retainOffsetForNextLayout();
+    if (!nearBottom) _deferredIds.add(comment.id);
     _messages.add(comment);
     _syncReactionNotifiersFromMessages();
     _bumpMessages();
@@ -2050,7 +2101,6 @@ class _ChatScreenState extends State<ChatScreen>
       _scrollToBottom();
     } else {
       _noteMissedMessage();
-      unawaited(_holdScrollAfterAppend(anchorId, anchorAt));
     }
   }
 
@@ -2116,7 +2166,7 @@ class _ChatScreenState extends State<ChatScreen>
   void dispose() {
     ChatScreen._open.remove(this);
     if (!_commentsMode) {
-      unawaited(NotificationBridge.instance.clearActiveChat(widget.chatId));
+      unawaited(NotificationBridge.instance.popActiveChat(widget.chatId));
     }
     _chatController.persistSessionCache();
     if (_previewChat) {
@@ -2134,7 +2184,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.removeListener(_recordScrollPixels);
     _scrollController.removeListener(_scheduleReadMarker);
     _scrollController.removeListener(_updateScrollDownVisible);
-    _readMarkTimer?.cancel();
+    _readMarker.dispose();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
     MediaPlayback.instance.leaveChat(widget.chatId);
     AppChatChrome.current.removeListener(_onVisualStyleChanged);
@@ -2721,8 +2771,15 @@ class _ChatScreenState extends State<ChatScreen>
                       ? null
                       : () => unawaited(_pickReplyChat()),
                   formatElapsed: formatVoiceElapsed,
-                  contextMenuBuilder: (ctx, state) =>
-                      _formatContextMenu(_messageController, ctx, state),
+                  contextMenuBuilder: (ctx, state) => _formatContextMenu(
+                    _messageController,
+                    ctx,
+                    state,
+                    extraItems: _pasteMenuItems(ctx, state),
+                  ),
+                  onPasteMedia: ClipboardMedia.supported
+                      ? _handlePasteMedia
+                      : null,
                   isMuted: chat?.isMuted ?? false,
                   onToggleMute: _toggleChatMute,
                   channelSubscribed: !_previewChat,
@@ -3022,11 +3079,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (message.senderId == _myId && !message.isControl) return;
         if (_messages.any((m) => m.id == message.id)) return;
         final nearBottom = _isNearBottom();
-        final anchorId = nearBottom ? null : _viewportAnchorId();
-        final anchorAt = anchorId == null
-            ? null
-            : _messageContentOffset(anchorId);
-        if (!nearBottom) _retainOffsetForNextLayout();
+        if (!nearBottom) _deferredIds.add(message.id);
         _lastSentId = message.id;
         _messages.add(message);
         _bumpMessages();
@@ -3037,7 +3090,6 @@ class _ChatScreenState extends State<ChatScreen>
           _scheduleReadMarker();
         } else {
           _noteMissedMessage();
-          unawaited(_holdScrollAfterAppend(anchorId, anchorAt));
           _reapplyPinIfNeeded();
         }
         _prank.checkTrigger(message);
@@ -3564,6 +3616,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     setState(() {
       _messages = [];
+      _deferredIds.clear();
       _hasMoreHistory = false;
       _combinedItemsCache = null;
     });
@@ -3786,8 +3839,9 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _formatContextMenu(
     RichMessageController controller,
     BuildContext context,
-    EditableTextState editableState,
-  ) {
+    EditableTextState editableState, {
+    List<ContextMenuButtonItem> extraItems = const [],
+  }) {
     final selection = controller.selection;
     final buttonItems = <ContextMenuButtonItem>[];
     if (selection.isValid && !selection.isCollapsed) {
@@ -3804,6 +3858,7 @@ class _ChatScreenState extends State<ChatScreen>
         );
       }
     }
+    buttonItems.addAll(extraItems);
     buttonItems.addAll(editableState.contextMenuButtonItems);
     return AdaptiveTextSelectionToolbar.buttonItems(
       anchors: editableState.contextMenuAnchors,
@@ -4429,6 +4484,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _scrollToBottom() {
+    _flushDeferredMessages();
     _returnStack.clear();
     _newMessageCount.value = 0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4472,7 +4528,9 @@ class _ChatScreenState extends State<ChatScreen>
         pos.userScrollDirection != ScrollDirection.idle) {
       _returnStack.clear();
     }
-    if (atBottom && _newMessageCount.value > 0) _clearNewMessageCountSoon();
+    if (atBottom && (_newMessageCount.value > 0 || _deferredIds.isNotEmpty)) {
+      _clearNewMessageCountSoon();
+    }
     final reveal = math.min(
       _scrollDownRevealExtent,
       pos.viewportDimension * _scrollDownRevealFactor,
@@ -4505,6 +4563,7 @@ class _ChatScreenState extends State<ChatScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _clearCountScheduled = false;
       if (!mounted || !_isNearBottom()) return;
+      _flushDeferredMessages();
       _newMessageCount.value = 0;
       _updateScrollDownVisible();
     });
@@ -4839,6 +4898,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     final epoch = _userGestureEpoch;
     _historyAutoloadSuppressCount++;
+    _holdReadMarker();
     try {
       var stable = 0;
       for (var iter = 0; iter < 120; iter++) {
@@ -4896,6 +4956,7 @@ class _ChatScreenState extends State<ChatScreen>
       }
     } finally {
       _historyAutoloadSuppressCount--;
+      _releaseReadMarker();
     }
   }
 
@@ -4918,10 +4979,17 @@ class _ChatScreenState extends State<ChatScreen>
     bool notifyIfMissing = true,
     VoidCallback? onSettled,
   }) {
-    if (!_scrollController.hasClients) {
+    void settle() {
+      _releaseReadMarker();
       onSettled?.call();
+    }
+
+    _holdReadMarker();
+    if (!_scrollController.hasClients) {
+      settle();
       return;
     }
+    if (_deferredIds.contains(messageId)) _flushDeferredMessages();
     final items = _buildCombinedItems();
     final pos = items.indexWhere(
       (it) => it is _MessageItem && it.message.id == messageId,
@@ -4930,7 +4998,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (notifyIfMissing) {
         showCustomNotification(context, 'Сообщение не загружено');
       }
-      onSettled?.call();
+      settle();
       return;
     }
 
@@ -4952,7 +5020,7 @@ class _ChatScreenState extends State<ChatScreen>
       });
     }
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _alignLoadedMessage(messageId, alignment, 0, onSettled: onSettled),
+      (_) => _alignLoadedMessage(messageId, alignment, 0, onSettled: settle),
     );
   }
 
@@ -5116,9 +5184,11 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   List<Object> _buildCombinedItems() {
+    final visible = _visibleMessageCount;
     final key = Object.hash(
       _messagesRev.value,
       _messages.length,
+      visible,
       _unreadAnchorTime,
     );
     final cached = _combinedItemsCache;
@@ -5129,7 +5199,7 @@ class _ChatScreenState extends State<ChatScreen>
     final List<Object> items = [];
     final Set<int> usedDates = {};
 
-    for (int i = 0; i < _messages.length; i++) {
+    for (int i = 0; i < visible; i++) {
       final msg = _messages[i];
       final msgDate = DateTime.fromMillisecondsSinceEpoch(msg.time);
       final dayMillis = DateTime(
@@ -5651,7 +5721,7 @@ class _ChatScreenState extends State<ChatScreen>
                   notification.dragDetails != null) {
                 _userGestureEpoch++;
               } else if (notification is ScrollEndNotification) {
-                _updateReadMarker();
+                _readMarker.flush();
               }
               return false;
             },
@@ -5707,6 +5777,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     final items = _buildCombinedItems();
+    final visibleCount = _visibleMessageCount;
 
     return Stack(
       key: _listKey,
@@ -5724,8 +5795,7 @@ class _ChatScreenState extends State<ChatScreen>
                   return CustomScrollView(
                     controller: _scrollController,
                     reverse: true,
-                    physics: _listPhysics,
-                    cacheExtent: cacheExtent,
+                    scrollCacheExtent: ScrollCacheExtent.pixels(cacheExtent),
                     slivers: [
                       SliverPadding(
                         padding: _messagesListPadding(context),
@@ -5765,8 +5835,7 @@ class _ChatScreenState extends State<ChatScreen>
                               final prevMessage = msgIndex > 0
                                   ? _messages[msgIndex - 1]
                                   : null;
-                              final nextMessage =
-                                  msgIndex < _messages.length - 1
+                              final nextMessage = msgIndex < visibleCount - 1
                                   ? _messages[msgIndex + 1]
                                   : null;
 
@@ -6713,8 +6782,9 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        if (mounted)
+        if (mounted) {
           showCustomNotification(context, 'Нет доступа к геолокации');
+        }
         return null;
       }
       return await Geolocator.getCurrentPosition(
@@ -6723,8 +6793,9 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         showCustomNotification(context, 'Не удалось получить геопозицию');
+      }
       return null;
     }
   }
@@ -6827,6 +6898,81 @@ class _ChatScreenState extends State<ChatScreen>
       if (wire != null && mounted) {
         await messagesModule.sendMessage(_myId, widget.chatId, wire);
       }
+    }
+  }
+
+  List<ContextMenuButtonItem> _pasteMenuItems(
+    BuildContext context,
+    EditableTextState editableState,
+  ) {
+    if (!ClipboardMedia.supported) return const [];
+    return [
+      ContextMenuButtonItem(
+        label: AppLocalizations.of(context)!.composerPasteAttachment,
+        onPressed: () {
+          editableState.hideToolbar();
+          unawaited(_pasteClipboardMedia());
+        },
+      ),
+    ];
+  }
+
+  Future<bool> _handlePasteMedia() async {
+    if (!await ClipboardMedia.hasMedia()) return false;
+    unawaited(_pasteClipboardMedia());
+    return true;
+  }
+
+  Future<void> _pasteClipboardMedia() async {
+    if (_myId == 0 || _pastePending) return;
+    _pastePending = true;
+    try {
+      final payload = await ClipboardMedia.read();
+      if (!mounted) return;
+      final items = payload == null
+          ? const <PastedAttachment>[]
+          : await materializeClipboardMedia(payload);
+      if (!mounted) return;
+      if (items.isEmpty) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.pasteAttachFailed,
+        );
+        return;
+      }
+
+      final media = items.where((it) => it.isMedia).toList();
+      final documents = items.where((it) => !it.isMedia).toList();
+      if (_encryptionEnabled && documents.isNotEmpty) {
+        _refuseUnencrypted('Файлы');
+        if (media.isEmpty) return;
+        documents.clear();
+      }
+
+      final caption = await showPastePreviewSheet(
+        context,
+        items: [...media, ...documents],
+      );
+      if (caption == null || !mounted) return;
+
+      if (media.isNotEmpty) {
+        await _sendPhotos(
+          media
+              .map((it) => PickedPhoto(item: GalleryItem.fromFile(it.file)))
+              .toList(),
+          caption,
+        );
+      }
+      for (final document in documents) {
+        if (!mounted) return;
+        await _uploadAsFile(
+          source: document.file,
+          filename: document.name,
+          size: document.size,
+        );
+      }
+    } finally {
+      _pastePending = false;
     }
   }
 
@@ -7557,7 +7703,7 @@ class _DeletingMessageAnimationState extends State<_DeletingMessageAnimation>
   Widget build(BuildContext context) {
     return SizeTransition(
       sizeFactor: _collapse,
-      axisAlignment: 0.0,
+      alignment: AlignmentDirectional.centerStart,
       child: FadeTransition(
         opacity: _opacity,
         child: ScaleTransition(

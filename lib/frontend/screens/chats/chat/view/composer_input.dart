@@ -17,6 +17,8 @@ import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/composer_morph_icon.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/liquid_glass.dart';
+import 'package:komet/frontend/widgets/paste_media_scope.dart';
+import 'package:komet/frontend/widgets/reply_preview.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
 
 class ComposerInputBar extends StatelessWidget {
@@ -48,6 +50,7 @@ class ComposerInputBar extends StatelessWidget {
     this.onPickReplyChat,
     required this.formatElapsed,
     required this.contextMenuBuilder,
+    this.onPasteMedia,
     required this.isMuted,
     required this.onToggleMute,
     this.channelSubscribed = true,
@@ -87,6 +90,7 @@ class ComposerInputBar extends StatelessWidget {
   final VoidCallback? onPickReplyChat;
   final String Function(int ms) formatElapsed;
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
+  final Future<bool> Function()? onPasteMedia;
   final bool isMuted;
   final VoidCallback onToggleMute;
   final bool channelSubscribed;
@@ -250,33 +254,37 @@ class ComposerInputBar extends StatelessWidget {
                                           }
                                           return KeyEventResult.ignored;
                                         },
-                                        child: TextField(
-                                          controller: messageController,
-                                          focusNode: messageFocusNode,
-                                          style: TextStyle(
-                                            color: cs.onSurface,
-                                            fontSize: 16,
-                                          ),
-                                          maxLines: null,
-                                          keyboardType: TextInputType.multiline,
-                                          textCapitalization:
-                                              TextCapitalization.sentences,
-                                          textAlignVertical:
-                                              TextAlignVertical.center,
-                                          contextMenuBuilder:
-                                              contextMenuBuilder,
-                                          decoration: InputDecoration(
-                                            hintText: hintText,
-                                            hintStyle: TextStyle(
-                                              color: cs.onSurfaceVariant,
+                                        child: PasteMediaScope(
+                                          onPaste: onPasteMedia,
+                                          child: TextField(
+                                            controller: messageController,
+                                            focusNode: messageFocusNode,
+                                            style: TextStyle(
+                                              color: cs.onSurface,
                                               fontSize: 16,
                                             ),
-                                            border: InputBorder.none,
-                                            isDense: true,
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                  vertical: 10,
-                                                ),
+                                            maxLines: null,
+                                            keyboardType:
+                                                TextInputType.multiline,
+                                            textCapitalization:
+                                                TextCapitalization.sentences,
+                                            textAlignVertical:
+                                                TextAlignVertical.center,
+                                            contextMenuBuilder:
+                                                contextMenuBuilder,
+                                            decoration: InputDecoration(
+                                              hintText: hintText,
+                                              hintStyle: TextStyle(
+                                                color: cs.onSurfaceVariant,
+                                                fontSize: 16,
+                                              ),
+                                              border: InputBorder.none,
+                                              isDense: true,
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 10,
+                                                  ),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -654,6 +662,10 @@ class ComposerInputBar extends StatelessWidget {
       attachments: first.attachments,
     );
     final preview = info.previewText();
+    final visual = ReplyPreview.of(
+      text: first.text,
+      attachments: first.attachments,
+    );
     final title = messages.length == 1
         ? first.senderId == myId
               ? 'Пересылка от вас'
@@ -669,6 +681,7 @@ class ComposerInputBar extends StatelessWidget {
           const SizedBox(width: 10),
           Container(width: 2, height: 34, color: cs.primary),
           const SizedBox(width: 10),
+          _previewThumb(cs, visual),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -684,13 +697,7 @@ class ComposerInputBar extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (preview.isNotEmpty)
-                  Text(
-                    preview,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                  ),
+                if (preview.isNotEmpty) _previewLine(cs, visual, preview),
               ],
             ),
           ),
@@ -729,6 +736,10 @@ class ComposerInputBar extends StatelessWidget {
           attachments: reply.attachments,
         );
         final preview = info.previewText();
+        final visual = ReplyPreview.of(
+          text: reply.text,
+          attachments: reply.attachments,
+        );
         final row = Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
           child: Row(
@@ -737,6 +748,7 @@ class ComposerInputBar extends StatelessWidget {
               const SizedBox(width: 10),
               Container(width: 2, height: 34, color: cs.primary),
               const SizedBox(width: 10),
+              _previewThumb(cs, visual),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -752,16 +764,7 @@ class ComposerInputBar extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (preview.isNotEmpty)
-                      Text(
-                        preview,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 13,
-                        ),
-                      ),
+                    if (preview.isNotEmpty) _previewLine(cs, visual, preview),
                   ],
                 ),
               ),
@@ -775,6 +778,45 @@ class ComposerInputBar extends StatelessWidget {
         );
         return _previewSurface(cs, row);
       },
+    );
+  }
+
+  static const double _previewThumbSide = 34;
+
+  Widget _previewThumb(ColorScheme cs, ReplyPreview preview) {
+    if (!preview.hasMedia) return const SizedBox.shrink();
+    const size = Size(_previewThumbSide, _previewThumbSide);
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: preview.thumbnail(size: size, cs: cs, radius: 6),
+    );
+  }
+
+  Widget _previewLine(ColorScheme cs, ReplyPreview preview, String text) {
+    final icon = preview.hasMedia ? null : preview.icon;
+    final style = TextStyle(color: cs.onSurfaceVariant, fontSize: 13);
+    if (icon == null) {
+      return Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: cs.onSurfaceVariant),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        ),
+      ],
     );
   }
 

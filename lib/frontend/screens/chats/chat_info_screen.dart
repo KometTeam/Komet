@@ -532,8 +532,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   void _onBodyScroll() {
     if (!mounted || widget.chatType != 'CHAT') return;
-    if (_selectedTab != AppLocalizations.of(context)!.chatInfoTabMembers)
+    if (_selectedTab != AppLocalizations.of(context)!.chatInfoTabMembers) {
       return;
+    }
     final controller = _bodyScrollController;
     if (controller == null || !controller.hasClients) return;
     final pos = controller.position;
@@ -919,16 +920,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   Widget _headerAvatar(ColorScheme cs, double radius, double t) {
     final expanded = t > 0.5;
-    final openHistory = _headerHasPhoto
-        ? () => AvatarHistoryScreen.open(
-            context,
-            contactId: _otherId ?? widget.dialogPeerId ?? 0,
-            name: widget.name,
-            currentAvatarUrl: _avatarPages.isEmpty
-                ? widget.imageUrl
-                : _avatarPages[_avatarIndex.clamp(0, _avatarPages.length - 1)],
-          )
-        : null;
+    final openHistory = _headerHasPhoto ? _openAvatarHistory : null;
     final openStories = _storyPreview == null ? null : _openStories;
 
     return KeyedSubtree(
@@ -959,6 +951,18 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           ],
         ),
       ),
+    );
+  }
+
+  void _openAvatarHistory() {
+    final pages = _avatarPages;
+    final at = pages.isEmpty ? 0 : _avatarIndex.clamp(0, pages.length - 1);
+    AvatarHistoryScreen.open(
+      context,
+      contactId: _otherId ?? widget.dialogPeerId ?? 0,
+      name: widget.name,
+      currentAvatarUrl: widget.imageUrl,
+      initialUrl: pages.isEmpty ? null : pages[at],
     );
   }
 
@@ -1382,8 +1386,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         if (_peerDeleted) return l10n.chatInfoMemberDeleted;
         if (_isBot) return l10n.contactProfileBot;
         if (_isOnline) return l10n.contactProfileOnline;
-        if (_presenceStatus == 2 || _presenceStatus == 3)
+        if (_presenceStatus == 2 || _presenceStatus == 3) {
           return l10n.contactProfileRecentlyActive;
+        }
         if (_seenTime != null && _seenTime! > 0) {
           return formatLastSeen(_seenTime!);
         }
@@ -2817,15 +2822,27 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   void _applyAvatarPhotos(ContactPhotos photos) {
     final urls = <String>[];
-    if (widget.imageUrl.isNotEmpty) urls.add(widget.imageUrl);
     for (final url in photos.urls) {
       if (url.isNotEmpty && !urls.contains(url)) urls.add(url);
     }
+    final current = widget.imageUrl;
+    final extra = current.isNotEmpty && !urls.contains(current);
+    if (extra) urls.insert(0, current);
     if (urls.isEmpty || listEquals(urls, _avatarPages)) return;
+    final anchor = _avatarIndex < _avatarPages.length
+        ? _avatarPages[_avatarIndex]
+        : null;
+    final at = anchor == null ? -1 : urls.indexOf(anchor);
+    final next = at >= 0 ? at : _avatarIndex.clamp(0, urls.length - 1);
     setState(() {
       _avatarPages = urls;
-      _avatarTotal = math.max(photos.total, urls.length);
-      _avatarIndex = _avatarIndex.clamp(0, urls.length - 1);
+      _avatarTotal = math.max(photos.total + (extra ? 1 : 0), urls.length);
+      _avatarIndex = next;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_avatarPageController.hasClients) return;
+      if (_avatarPageController.page?.round() == next) return;
+      _avatarPageController.jumpToPage(next);
     });
   }
 

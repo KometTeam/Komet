@@ -21,6 +21,7 @@ import '../core/transport/tls_config.dart';
 import '../core/transport/traffic_monitor.dart';
 import '../core/transport/vpn_bypass.dart';
 import '../core/utils/debug_session_log.dart';
+import '../core/utils/device_locale.dart';
 import '../core/utils/logger.dart';
 
 enum SessionState { disconnected, connecting, connected, online }
@@ -376,7 +377,7 @@ class Api {
     String deviceType = 'ANDROID';
     String osVersion = '';
     String deviceName = 'Unknown';
-    String architecture = 'arm64-v8a';
+    String architecture = SpoofingService.defaultArchitecture;
     String appVersion = SpoofingService.hardcodedAppVersion;
     int buildNumber = SpoofingService.hardcodedBuildNumber;
     String screen = '420dpi 420dpi 1080x2340';
@@ -387,8 +388,8 @@ class Api {
     }
     final timeZoneName = await FlutterTimezone.getLocalTimezone();
     String timezone = timeZoneName.identifier;
-    String locale = 'ru';
-    String deviceLocale = Platform.localeName.substring(0, 2);
+    String locale = defaultLanguageCode;
+    String deviceLocale = deviceLanguageCode();
     String deviceId = await DeviceIdentity.deviceId();
     String pushDeviceType = 'GCM';
     String instanceId = await DeviceIdentity.instanceId();

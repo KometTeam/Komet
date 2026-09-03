@@ -14,6 +14,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/cache/info_cache.dart';
+import 'core/config/build_profile.dart';
 import 'core/utils/logger.dart';
 import 'core/cache/self_presence.dart';
 import 'core/storage/app_instance.dart';
@@ -113,9 +114,8 @@ final bannersModule = accountModule.banners;
 final RouteObserver<PageRoute<dynamic>> appRouteObserver =
     RouteObserver<PageRoute<dynamic>>();
 
-bool isOnemeFlavor = false;
-
 const ProgressIndicatorThemeData _expressiveProgressTheme =
+    // ignore: deprecated_member_use
     ProgressIndicatorThemeData(year2023: false);
 
 const PageTransitionsTheme _appPageTransitions = PageTransitionsTheme(
@@ -246,8 +246,7 @@ void main(List<String> args) async {
   final trafficCaptureFuture = TrafficMonitor.instance.load();
   final debugLogFuture = DebugSessionLog.instance.init();
 
-  final packageInfo = await packageInfoFuture;
-  isOnemeFlavor = packageInfo.packageName == 'ru.oneme.app';
+  await packageInfoFuture;
 
   final initialLocale = await localeFuture;
 
@@ -262,8 +261,12 @@ void main(List<String> args) async {
   if (KometSettings.ghostMode.value) SelfPresence.markOffline();
   await ContactCache.load();
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
-  final initialVpnBypass = prefs.getBool(VpnBypassService.prefKey) ?? false;
-  final initialTlsInsecure = prefs.getBool(TlsConfig.prefKey) ?? false;
+  final initialVpnBypass =
+      BuildProfile.insecureTransport &&
+      (prefs.getBool(VpnBypassService.prefKey) ?? false);
+  final initialTlsInsecure =
+      BuildProfile.insecureTransport &&
+      (prefs.getBool(TlsConfig.prefKey) ?? false);
   final initialFontId =
       prefs.getString(AppFonts.prefKey) ?? AppFonts.fallback.id;
   final initialFontScale = AppFonts.clampScale(
@@ -436,7 +439,7 @@ class KometAppState extends State<KometApp>
         OutboxService.instance.init(api, messagesModule);
         SelfCheckService.instance.init(api);
         SelfCheckService.instance.checkNow();
-        if (isOnemeFlavor) {
+        if (BuildProfile.firebasePush) {
           await PushService.instance.init(api: api, account: accountModule);
           await PushService.instance.onLoginSuccess();
           await _ensureFullScreenIntentPermission();

@@ -4,13 +4,45 @@ import 'dart:io';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/update_config.dart';
+
+class UpdateAsset {
+  final String name;
+  final String url;
+  final int size;
+  final String sha256;
+
+  const UpdateAsset({
+    required this.name,
+    required this.url,
+    required this.size,
+    required this.sha256,
+  });
+
+  static UpdateAsset? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final name = raw['name'];
+    final url = raw['url'];
+    if (name is! String || url is! String) return null;
+    if (name.isEmpty || url.isEmpty) return null;
+    final size = raw['size'];
+    final digest = raw['sha256'];
+    return UpdateAsset(
+      name: name,
+      url: url,
+      size: size is int ? size : 0,
+      sha256: digest is String ? digest.trim().toLowerCase() : '',
+    );
+  }
+}
+
 class AppUpdateInfo {
   final String version;
   final int? build;
   final String tag;
   final String url;
   final String notes;
-  final Map<String, String> assets;
+  final List<UpdateAsset> assets;
 
   const AppUpdateInfo({
     required this.version,
@@ -20,6 +52,42 @@ class AppUpdateInfo {
     required this.notes,
     required this.assets,
   });
+
+  UpdateAsset? assetWithSuffix(String suffix) {
+    for (final asset in assets) {
+      if (asset.name.endsWith(suffix)) return asset;
+    }
+    return null;
+  }
+
+  static AppUpdateInfo? tryParse(Map<String, dynamic> manifest) {
+    final version = (manifest['version'] as String?)?.trim();
+    if (version == null || version.isEmpty) return null;
+
+    final rawBuild = manifest['build'];
+    final build = rawBuild is int ? rawBuild : int.tryParse('${rawBuild ?? ''}');
+
+    final tag = (manifest['tag'] as String?)?.trim();
+    final url = (manifest['url'] as String?)?.trim();
+
+    final rawAssets = manifest['assets'];
+    final assets = <UpdateAsset>[];
+    if (rawAssets is List) {
+      for (final entry in rawAssets) {
+        final asset = UpdateAsset.tryParse(entry);
+        if (asset != null) assets.add(asset);
+      }
+    }
+
+    return AppUpdateInfo(
+      version: version,
+      build: build,
+      tag: tag == null || tag.isEmpty ? 'v$version' : tag,
+      url: url == null || url.isEmpty ? UpdateConfig.downloadsPage : url,
+      notes: (manifest['notes'] as String?)?.trim() ?? '',
+      assets: assets,
+    );
+  }
 }
 
 enum UpdateCheckStatus { updateAvailable, upToDate, failed }
@@ -39,8 +107,6 @@ class UpdateCheckResult {
 }
 
 abstract class UpdateChecker {
-  static const String _owner = 'KometTeam';
-  static const String _repo = 'Komet';
   static const String _userAgent = 'KometUpdateChecker';
 
   static const String _lastCheckKey = 'update_last_check_ms';
@@ -49,36 +115,28 @@ abstract class UpdateChecker {
   static const Duration _timeout = Duration(seconds: 15);
 
   static Future<AppUpdateInfo?> fetchLatest() async {
+    if (!UpdateConfig.isConfigured) return null;
+
     final info = await PackageInfo.fromPlatform();
     final currentBase = info.version;
     final currentBuild = _normalizeBuild(int.tryParse(info.buildNumber));
 
-    final release = await _fetchLatestRelease();
-    if (release == null) return null;
+    final manifest = await _fetchManifest();
+    if (manifest == null) return null;
 
-    final tag = (release['tag_name'] as String?)?.trim();
-    if (tag == null || tag.isEmpty) return null;
-
-    final remoteBase = _baseVersion(tag);
-    final remoteBuild = _buildNumber(tag);
+    final remote = AppUpdateInfo.tryParse(manifest);
+    if (remote == null) return null;
 
     if (!_isNewer(
       currentBase: currentBase,
       currentBuild: currentBuild,
-      remoteBase: remoteBase,
-      remoteBuild: remoteBuild,
+      remoteBase: remote.version,
+      remoteBuild: _normalizeBuild(remote.build),
     )) {
       return null;
     }
 
-    return AppUpdateInfo(
-      version: remoteBase,
-      build: remoteBuild,
-      tag: tag,
-      url: (release['html_url'] as String?) ?? _releasesPage,
-      notes: (release['body'] as String?)?.trim() ?? '',
-      assets: _parseAssets(release['assets']),
-    );
+    return remote;
   }
 
   static Future<AppUpdateInfo?> check({bool force = false}) async {
@@ -115,6 +173,9 @@ abstract class UpdateChecker {
   /// Runs a user-initiated check without applying the automatic-check interval
   /// or the "skip this version" preference.
   static Future<UpdateCheckResult> checkNow() async {
+    if (!UpdateConfig.isConfigured) {
+      return const UpdateCheckResult.failed();
+    }
     try {
       final update = await fetchLatest();
       final prefs = await SharedPreferences.getInstance();
@@ -132,66 +193,32 @@ abstract class UpdateChecker {
     await prefs.setString(_skippedTagKey, tag);
   }
 
-  static String get _releasesPage =>
-      'https://github.com/$_owner/$_repo/releases';
-
-  static Future<Map<String, dynamic>?> _fetchLatestRelease() async {
-    final uri = Uri.parse(
-      'https://api.github.com/repos/$_owner/$_repo/releases?per_page=10',
-    );
+  static Future<Map<String, dynamic>?> _fetchManifest() async {
+    final uri = UpdateConfig.manifestUri;
     final client = HttpClient()..connectionTimeout = _timeout;
     try {
       final req = await client.getUrl(uri);
       req.headers
         ..set(HttpHeaders.userAgentHeader, _userAgent)
-        ..set(HttpHeaders.acceptHeader, 'application/vnd.github+json');
+        ..set(HttpHeaders.acceptHeader, 'application/json')
+        ..set(HttpHeaders.cacheControlHeader, 'no-cache');
       final resp = await req.close().timeout(_timeout);
       if (resp.statusCode != HttpStatus.ok) {
         await resp.drain<void>();
-        throw HttpException(
-          'GitHub returned HTTP ${resp.statusCode}',
-          uri: uri,
-        );
+        throw HttpException('Update manifest returned HTTP ${resp.statusCode}', uri: uri);
       }
       final body = await resp
           .transform(const Utf8Decoder())
           .join()
           .timeout(_timeout);
       final decoded = jsonDecode(body);
-      if (decoded is! List) {
-        throw const FormatException('Invalid GitHub releases response');
+      if (decoded is! Map) {
+        throw const FormatException('Invalid update manifest');
       }
-      for (final entry in decoded) {
-        if (entry is! Map) continue;
-        if (entry['draft'] == true) continue;
-        return entry.cast<String, dynamic>();
-      }
-      return null;
+      return decoded.cast<String, dynamic>();
     } finally {
       client.close(force: true);
     }
-  }
-
-  static Map<String, String> _parseAssets(dynamic raw) {
-    final result = <String, String>{};
-    if (raw is! List) return result;
-    for (final entry in raw) {
-      if (entry is! Map) continue;
-      final name = entry['name'] as String?;
-      final url = entry['browser_download_url'] as String?;
-      if (name != null && url != null) result[name] = url;
-    }
-    return result;
-  }
-
-  static String _baseVersion(String tag) {
-    var s = tag.trim();
-    if (s.startsWith('v') || s.startsWith('V')) s = s.substring(1);
-    final dash = s.indexOf('-');
-    if (dash >= 0) s = s.substring(0, dash);
-    final plus = s.indexOf('+');
-    if (plus >= 0) s = s.substring(0, plus);
-    return s;
   }
 
   static const int _abiVersionCodeMultiplier = 1000;
@@ -202,12 +229,6 @@ abstract class UpdateChecker {
       return build % _abiVersionCodeMultiplier;
     }
     return build;
-  }
-
-  static int? _buildNumber(String tag) {
-    final matches = RegExp(r'\d+').allMatches(tag).toList();
-    if (matches.isEmpty) return null;
-    return int.tryParse(matches.last.group(0)!);
   }
 
   static bool _isNewer({

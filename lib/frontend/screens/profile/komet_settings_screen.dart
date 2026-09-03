@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../widgets/connection_status.dart';
 
+import '../../../core/config/build_profile.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../main.dart';
 import '../../widgets/section_header.dart';
@@ -34,26 +35,29 @@ class KometSettingsScreen extends StatelessWidget {
             ),
             SettingsCard(
               children: [
-                ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.viewDeleted,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.delete_history,
-                    label: 'View deleted message',
-                    subtitle: 'Показывать удалённые сообщения',
-                    value: value,
-                    onChanged: KometSettings.setViewDeleted,
+                if (BuildProfile.hiddenContentViewers) ...[
+                  ValueListenableBuilder<bool>(
+                    valueListenable: KometSettings.viewDeleted,
+                    builder: (context, value, _) => SettingsToggleTile(
+                      icon: Symbols.delete_history,
+                      label: 'View deleted message',
+                      subtitle: 'Показывать удалённые сообщения',
+                      value: value,
+                      onChanged: KometSettings.setViewDeleted,
+                    ),
                   ),
-                ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.viewRedacted,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.history_edu,
-                    label: 'View redacted message history',
-                    subtitle: 'Показывать историю у редактированных сообщений',
-                    value: value,
-                    onChanged: KometSettings.setViewRedacted,
+                  ValueListenableBuilder<bool>(
+                    valueListenable: KometSettings.viewRedacted,
+                    builder: (context, value, _) => SettingsToggleTile(
+                      icon: Symbols.history_edu,
+                      label: 'View redacted message history',
+                      subtitle:
+                          'Показывать историю у редактированных сообщений',
+                      value: value,
+                      onChanged: KometSettings.setViewRedacted,
+                    ),
                   ),
-                ),
+                ],
                 ValueListenableBuilder<bool>(
                   valueListenable: KometSettings.fullTimestamp,
                   builder: (context, value, _) => SettingsToggleTile(

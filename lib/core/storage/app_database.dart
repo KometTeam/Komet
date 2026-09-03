@@ -157,6 +157,8 @@ abstract class SyncKey {
   static const chatCacheFingerprint = 'chat_cache_fingerprint';
   static const serverTime = 'server_time';
   static const loginInfo = 'login_info';
+  static const serverConfigSeen = 'server_config_seen';
+  static const profileInviteLink = 'profile_invite_link';
 }
 
 class AppDatabase {

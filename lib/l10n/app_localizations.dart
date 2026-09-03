@@ -488,24 +488,6 @@ abstract class AppLocalizations {
   /// **'All data including timezone and locale is generated randomly. Use this method at your own risk!'**
   String get spoofMethodFullDescription;
 
-  /// No description provided for @spoofDeviceTypeTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Device type'**
-  String get spoofDeviceTypeTitle;
-
-  /// No description provided for @spoofDeviceTypeDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Controls which devices are generated: Android or iOS'**
-  String get spoofDeviceTypeDescription;
-
-  /// No description provided for @spoofDeviceTypeLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Device type'**
-  String get spoofDeviceTypeLabel;
-
   /// No description provided for @spoofMainSectionTitle.
   ///
   /// In en, this message translates to:
@@ -2840,11 +2822,11 @@ abstract class AppLocalizations {
   /// **'Almost done'**
   String get nfcExchangingSubtitle;
 
-  /// No description provided for @nfcPeerIdFallback.
+  /// No description provided for @contactIdFallback.
   ///
   /// In en, this message translates to:
   /// **'ID {id}'**
-  String nfcPeerIdFallback(String id);
+  String contactIdFallback(String id);
 
   /// No description provided for @nfcAdded.
   ///
@@ -3638,11 +3620,47 @@ abstract class AppLocalizations {
   /// **'Hides personal information'**
   String get securityModeSubtitle;
 
-  /// No description provided for @securitySettingsUnavailable.
+  /// No description provided for @securityModeLocked.
   ///
   /// In en, this message translates to:
-  /// **'Changing this setting is not available yet'**
-  String get securitySettingsUnavailable;
+  /// **'Turn off safe mode to change this setting'**
+  String get securityModeLocked;
+
+  /// No description provided for @securityModeSheetSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No unwanted contact or content'**
+  String get securityModeSheetSubtitle;
+
+  /// No description provided for @securityModeSheetSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'People won\'t be able to find you by phone number'**
+  String get securityModeSheetSearch;
+
+  /// No description provided for @securityModeSheetCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Only people from your contacts can call you'**
+  String get securityModeSheetCalls;
+
+  /// No description provided for @securityModeSheetInvites.
+  ///
+  /// In en, this message translates to:
+  /// **'Only people you\'ve already talked to can add you to groups'**
+  String get securityModeSheetInvites;
+
+  /// No description provided for @securityModeSheetContent.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll only see safe posts and channels'**
+  String get securityModeSheetContent;
+
+  /// No description provided for @securityModeSheetEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get securityModeSheetEnable;
 
   /// No description provided for @securityFindByPhone.
   ///
@@ -5353,6 +5371,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Device'**
   String get webPushStatusDevice;
+
+  /// No description provided for @securityDeleteProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete profile'**
+  String get securityDeleteProfileTitle;
+
+  /// No description provided for @securityDeleteProfileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The profile and all its data are removed after 30 days'**
+  String get securityDeleteProfileSubtitle;
+
+  /// No description provided for @securityDeleteProfileConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete profile?'**
+  String get securityDeleteProfileConfirmTitle;
+
+  /// No description provided for @securityDeleteProfileConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your MAX profile will be deleted in 30 days. You can cancel the request at any time before that.'**
+  String get securityDeleteProfileConfirmMessage;
+
+  /// No description provided for @securityDeleteProfileConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get securityDeleteProfileConfirmAction;
+
+  /// No description provided for @securityDeleteProfileScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile will be deleted on {date}'**
+  String securityDeleteProfileScheduled(String date);
+
+  /// No description provided for @securityDeleteProfileKeep.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t delete profile'**
+  String get securityDeleteProfileKeep;
+
+  /// No description provided for @securityDeleteProfileRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Deletion request accepted'**
+  String get securityDeleteProfileRequested;
+
+  /// No description provided for @securityDeleteProfileCanceled.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile deletion canceled'**
+  String get securityDeleteProfileCanceled;
+
+  /// No description provided for @securityDeleteProfileError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to send the request: {error}'**
+  String securityDeleteProfileError(String error);
+
+  /// No description provided for @composerPasteAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste file'**
+  String get composerPasteAttachment;
+
+  /// No description provided for @pasteAttachTitleImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Send image'**
+  String get pasteAttachTitleImage;
+
+  /// No description provided for @pasteAttachTitleVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Send video'**
+  String get pasteAttachTitleVideo;
+
+  /// No description provided for @pasteAttachTitleFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Send file'**
+  String get pasteAttachTitleFile;
+
+  /// No description provided for @pasteAttachTitleMany.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Send 1 file} other{Send {count} files}}'**
+  String pasteAttachTitleMany(int count);
+
+  /// No description provided for @pasteAttachCaptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Caption'**
+  String get pasteAttachCaptionHint;
+
+  /// No description provided for @pasteAttachSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get pasteAttachSend;
+
+  /// No description provided for @pasteAttachCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get pasteAttachCancel;
+
+  /// No description provided for @pasteAttachFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to paste from the clipboard'**
+  String get pasteAttachFailed;
+
+  /// No description provided for @profileQrTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My QR code'**
+  String get profileQrTitle;
+
+  /// No description provided for @profileQrHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the code to open the profile'**
+  String get profileQrHint;
+
+  /// No description provided for @profileQrUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not get the profile link'**
+  String get profileQrUnavailable;
+
+  /// No description provided for @authLimitsLoginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Account temporarily limited'**
+  String get authLimitsLoginTitle;
+
+  /// No description provided for @authLimitsLoginSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The limits should lift around {until}'**
+  String authLimitsLoginSubtitle(DateTime until);
+
+  /// No description provided for @authLimitsLogin2faTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-factor authentication'**
+  String get authLimitsLogin2faTitle;
+
+  /// No description provided for @authLimitsLogin2faBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t set or remove the login password.'**
+  String get authLimitsLogin2faBody;
+
+  /// No description provided for @authLimitsLoginSessionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ending sessions'**
+  String get authLimitsLoginSessionsTitle;
+
+  /// No description provided for @authLimitsLoginSessionsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t end all sessions at once.'**
+  String get authLimitsLoginSessionsBody;
+
+  /// No description provided for @authLimitsSignupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Account may be limited'**
+  String get authLimitsSignupTitle;
+
+  /// No description provided for @authLimitsSignupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New accounts aren\'t all limited, and the server lifts the limits itself'**
+  String get authLimitsSignupSubtitle;
+
+  /// No description provided for @authLimitsSignupMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get authLimitsSignupMessagesTitle;
+
+  /// No description provided for @authLimitsSignupMessagesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You may only be able to write to people who already have you in their contacts.'**
+  String get authLimitsSignupMessagesBody;
+
+  /// No description provided for @authLimitsSignupGroupsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get authLimitsSignupGroupsTitle;
+
+  /// No description provided for @authLimitsSignupGroupsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Joining groups may be unavailable.'**
+  String get authLimitsSignupGroupsBody;
+
+  /// No description provided for @authLimitsSignupMoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Other limits are possible'**
+  String get authLimitsSignupMoreTitle;
+
+  /// No description provided for @authLimitsSignupMoreBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The server doesn\'t announce the full list — if something doesn\'t work, try again later.'**
+  String get authLimitsSignupMoreBody;
+
+  /// No description provided for @authLimitsConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get authLimitsConfirm;
 }
 
 class _AppLocalizationsDelegate

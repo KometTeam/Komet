@@ -178,14 +178,16 @@ Future<bool> shareTextToChat(BuildContext context, String text) async {
 Future<bool> openFolderChatList(BuildContext context, String folderId) async {
   final root = await popToAppRootAndSettle(context);
   if (ChatListScreen.selectFolder(folderId)) return true;
-  if (root != null) showCustomNotification(root, 'Папка не найдена');
+  if (root != null && root.mounted) {
+    showCustomNotification(root, 'Папка не найдена');
+  }
   return true;
 }
 
 Future<bool> openRootTab(BuildContext context, int index) async {
   final root = await popToAppRootAndSettle(context);
   if (ChatListScreen.selectTab(index)) return true;
-  if (root != null) notifyNeedsAccount(root);
+  if (root != null && root.mounted) notifyNeedsAccount(root);
   return true;
 }
 

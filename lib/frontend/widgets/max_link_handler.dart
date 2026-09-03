@@ -5,8 +5,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../backend/modules/chats.dart';
 import '../../backend/modules/links.dart';
-import '../../core/cache/info_cache.dart';
 import '../../core/links/max_link.dart';
+import '../../core/links/profile_link.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/share_origin.dart';
 import '../../main.dart';
@@ -115,13 +115,10 @@ Future<int?> _botIdOf(ResolvedLink? resolved) async {
 }
 
 Future<bool> _shareOwnLink(BuildContext context) async {
-  final myId = await currentAccountId();
-  if (myId == 0) return false;
-  final info = await ContactInfoFetch.get(myId);
+  final link = await ownProfileLink();
   if (!context.mounted) return true;
 
-  final link = (info?.raw['link'] as String?)?.trim();
-  if (link == null || link.isEmpty) {
+  if (link == null) {
     showCustomNotification(context, 'У профиля нет публичной ссылки');
     return true;
   }

@@ -218,16 +218,6 @@ class AppLocalizationsRu extends AppLocalizations {
       'Все данные генерируются случайно. Будьте осторожны.';
 
   @override
-  String get spoofDeviceTypeTitle => 'Тип устройства';
-
-  @override
-  String get spoofDeviceTypeDescription =>
-      'Определяет, какие устройства генерируются: Android или iOS';
-
-  @override
-  String get spoofDeviceTypeLabel => 'Тип устройства';
-
-  @override
   String get spoofMainSectionTitle => 'Основные данные';
 
   @override
@@ -1457,7 +1447,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get nfcExchangingSubtitle => 'Почти готово';
 
   @override
-  String nfcPeerIdFallback(String id) {
+  String contactIdFallback(String id) {
     return 'ID $id';
   }
 
@@ -1893,8 +1883,30 @@ class AppLocalizationsRu extends AppLocalizations {
   String get securityModeSubtitle => 'Скрывает личную информацию';
 
   @override
-  String get securitySettingsUnavailable =>
-      'Изменение настроек пока недоступно';
+  String get securityModeLocked =>
+      'Отключите безопасный режим, чтобы изменить эту настройку';
+
+  @override
+  String get securityModeSheetSubtitle => 'Без лишнего общения и контента';
+
+  @override
+  String get securityModeSheetSearch =>
+      'Вас не смогут найти по номеру телефона';
+
+  @override
+  String get securityModeSheetCalls =>
+      'Позвонить вам смогут только люди из вашего списка контактов';
+
+  @override
+  String get securityModeSheetInvites =>
+      'Пригласить вас в группу смогут только те, с кем вы уже общались';
+
+  @override
+  String get securityModeSheetContent =>
+      'Вы увидите только безопасные посты и каналы';
+
+  @override
+  String get securityModeSheetEnable => 'Включить';
 
   @override
   String get securityFindByPhone => 'Найти меня по номеру';
@@ -2837,4 +2849,145 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get webPushStatusDevice => 'Устройство';
+
+  @override
+  String get securityDeleteProfileTitle => 'Удалить профиль';
+
+  @override
+  String get securityDeleteProfileSubtitle =>
+      'Профиль и все данные удалятся через 30 дней';
+
+  @override
+  String get securityDeleteProfileConfirmTitle => 'Удалить профиль?';
+
+  @override
+  String get securityDeleteProfileConfirmMessage =>
+      'Ваш профиль MAX будет удалён через 30 дней. До этого момента заявку можно отменить.';
+
+  @override
+  String get securityDeleteProfileConfirmAction => 'Удалить';
+
+  @override
+  String securityDeleteProfileScheduled(String date) {
+    return 'Профиль будет удалён $date';
+  }
+
+  @override
+  String get securityDeleteProfileKeep => 'Не удалять профиль';
+
+  @override
+  String get securityDeleteProfileRequested => 'Заявка на удаление принята';
+
+  @override
+  String get securityDeleteProfileCanceled => 'Удаление профиля отменено';
+
+  @override
+  String securityDeleteProfileError(String error) {
+    return 'Не удалось отправить запрос: $error';
+  }
+
+  @override
+  String get composerPasteAttachment => 'Вставить файл';
+
+  @override
+  String get pasteAttachTitleImage => 'Отправить изображение';
+
+  @override
+  String get pasteAttachTitleVideo => 'Отправить видео';
+
+  @override
+  String get pasteAttachTitleFile => 'Отправить файл';
+
+  @override
+  String pasteAttachTitleMany(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Отправить $count файла',
+      many: 'Отправить $count файлов',
+      few: 'Отправить $count файла',
+      one: 'Отправить 1 файл',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pasteAttachCaptionHint => 'Подпись';
+
+  @override
+  String get pasteAttachSend => 'Отправить';
+
+  @override
+  String get pasteAttachCancel => 'Отмена';
+
+  @override
+  String get pasteAttachFailed => 'В буфере обмена нечего вставить';
+
+  @override
+  String get profileQrTitle => 'Мой QR-код';
+
+  @override
+  String get profileQrHint => 'Отсканируйте код, чтобы открыть профиль';
+
+  @override
+  String get profileQrUnavailable => 'Не удалось получить ссылку на профиль';
+
+  @override
+  String get authLimitsLoginTitle => 'Аккаунт временно ограничен';
+
+  @override
+  String authLimitsLoginSubtitle(DateTime until) {
+    final intl.DateFormat untilDateFormat = intl.DateFormat(
+      'd MMMM, HH:mm',
+      localeName,
+    );
+    final String untilString = untilDateFormat.format(until);
+
+    return 'Ограничения снимутся примерно $untilString';
+  }
+
+  @override
+  String get authLimitsLogin2faTitle => 'Двухфакторная аутентификация';
+
+  @override
+  String get authLimitsLogin2faBody =>
+      'Нельзя установить или снять пароль для входа.';
+
+  @override
+  String get authLimitsLoginSessionsTitle => 'Завершение сеансов';
+
+  @override
+  String get authLimitsLoginSessionsBody =>
+      'Нельзя завершить все сеансы сразу.';
+
+  @override
+  String get authLimitsSignupTitle => 'Аккаунт может быть ограничен';
+
+  @override
+  String get authLimitsSignupSubtitle =>
+      'Ограничения выдают не всем, и сервер снимает их сам';
+
+  @override
+  String get authLimitsSignupMessagesTitle => 'Сообщения';
+
+  @override
+  String get authLimitsSignupMessagesBody =>
+      'Возможно, писать получится только тем, у кого вы уже есть в контактах.';
+
+  @override
+  String get authLimitsSignupGroupsTitle => 'Группы';
+
+  @override
+  String get authLimitsSignupGroupsBody =>
+      'Вступление в группы может быть недоступно.';
+
+  @override
+  String get authLimitsSignupMoreTitle => 'Возможны и другие ограничения';
+
+  @override
+  String get authLimitsSignupMoreBody =>
+      'Полного списка сервер не сообщает — если действие не сработало, попробуйте позже.';
+
+  @override
+  String get authLimitsConfirm => 'Понятно';
 }

@@ -77,7 +77,7 @@ class ConnectionStatusLine extends StatelessWidget {
         switchOutCurve: Curves.easeIn,
         transitionBuilder: (child, animation) => SizeTransition(
           sizeFactor: animation,
-          axisAlignment: -1,
+          alignment: AlignmentDirectional.topStart,
           child: FadeTransition(opacity: animation, child: child),
         ),
         child: label == null

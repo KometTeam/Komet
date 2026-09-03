@@ -10,7 +10,7 @@ Komet is a cross-platform Flutter messaging client (Android, iOS, macOS, Windows
 
 ```bash
 flutter pub get          # install dependencies
-flutter analyze          # lint / static analysis
+flutter analyze lib test tool native/komet_crypto/lib  # lint / static analysis (what CI runs)
 flutter run              # run on connected device (default: komet flavor)
 flutter run --flavor oneme -t lib/main.dart  # run oneme flavor (FCM)
 
@@ -29,7 +29,12 @@ flutter build windows --release
 
 Android builds require **Java 17**. Gradle memory is configured to `-Xmx4096m`.
 
-**Never run APK/AAB builds yourself** (`flutter build apk`, `flutter build appbundle`, gradle assemble tasks) — they are slow and the user builds them. Verify changes with `flutter analyze`; the build commands above are documentation only.
+**Never run APK/AAB builds yourself** (`flutter build apk`, `flutter build appbundle`, gradle assemble tasks) — they are slow and the user builds them. Verify changes with the scoped `flutter analyze` above; the build commands are documentation only.
+Always pass those directories: a bare `flutter analyze` also walks the vendored
+`native/komet_crypto/cargokit/build_tool` package, whose dependencies are never resolved, and reports
+~47 phantom errors. It is a nested package with its own `pubspec.yaml`, so `analyzer: exclude:` in
+`analysis_options.yaml` cannot reach it — scoping the command is the only way to skip it.
+Note also that `flutter analyze` treats **info**-level lints as fatal by default, so CI fails on any lint.
 
 ## Build Flavors
 
@@ -86,6 +91,31 @@ A slash spec takes the plain and slashed codepoints; the generator lays both gly
 
 `LottieSlashIcon` plays the asset forward when `slashed` turns true and backward when it turns false, so a single asset covers both directions. The older `AnimatedSlashIcon` (clip wipe over two glyphs) stays where it is already used; new buttons use the Lottie one.
 
+## App icons
+
+Two launcher icons ship: the default comet and the `Minimal` meteor, switched at
+runtime by `AppIconConfig` (Android activity-alias, iOS alternate icon). Every
+launcher resource is *derived* from `assets/komet.png` / `assets/meteor.png` by a
+script in `tool/`, so the source art lives in exactly one place:
+
+| Script | Produces |
+|--------|----------|
+| `make_icon_bg.dart` | `*_icon.png` — the same art flattened on black |
+| `make_minimal_android.dart` / `make_minimal_adaptive.dart` / `make_minimal_ios.dart` | the `Minimal` launcher + adaptive layers |
+| `make_monochrome_android.dart` | `ic_launcher[_minimal]_monochrome.png` — alpha silhouettes for themed icons |
+| `make_appearances_ios.dart` | `Icon-App-{Dark,Tinted}-1024x1024@1x.png` + their `Contents.json` entries |
+
+**Themed icons.** Both adaptive icons carry a `<monochrome>` layer, so Android 13+
+launchers with *Themed icons* enabled recolour the icon from the wallpaper. The
+layer is only the alpha channel of the artwork filled black — the system supplies
+both colours, and the same 16% inset as the foreground keeps it aligned with the
+normal icon. The iOS 18 counterpart is the dark/tinted appearance pair on the
+primary `AppIcon`; alternate icons cannot carry appearance variants.
+
+`flutter_launcher_icons` (configured in `pubspec.yaml`) only generates the default
+icon and rewrites `mipmap-anydpi-v26/*.xml` without the insets or the monochrome
+layer, so re-run the `tool/` scripts and restore those XMLs after invoking it.
+
 ## Localization
 
 Two locales supported: English (`lib/l10n/app_en.arb`) and Russian (`lib/l10n/app_ru.arb`).  
@@ -99,3 +129,38 @@ Four GitHub Actions workflows in `.github/workflows/`:
 - `flutter-main.yml` — PR lint + all-platform builds for main branch  
 - `build-android.yml` — production APKs + AAB (`komet` flavor), triggered on push to main
 - `build-android-fcm.yml` — production APKs + AAB (`oneme` flavor with FCM), triggered on push to main
+
+### Release distribution (S3)
+
+`release-dev.yml` (branch `dev/0.5.0`) mirrors every pre-release to a Timeweb S3
+bucket through `.github/scripts/publish-s3.sh`: artifacts land in
+`releases/<version>-dev.<build>/` and a `latest.json` manifest is written to the
+bucket root with `no-cache`. `release-main.yml` only publishes a GitHub Release —
+both workflows share one bucket and one manifest, so only one of them may own it.
+
+The manifest carries `version` and `build` read from `pubspec.yaml`, i.e. exactly
+what is compiled into the APK — not the git tag, whose build counter comes from the
+run number and would always look newer than the installed app.
+
+The bucket holds 1 GB and a full release set is ~500 MB, so old release prefixes
+are pruned *before* the upload (`PRUNE_BEFORE_UPLOAD`, default 1) — uploading first
+would peak at ~1 GB and hit the quota. The trade-off is a few minutes during which
+the previous manifest points at deleted files. `KEEP_RELEASES` (default 1) sets how
+many releases survive. App Bundles are skipped (`EXCLUDE_GLOBS`, default `*.aab`):
+they are 114 MB each, only Google Play consumes them, and they stay on GitHub.
+
+The in-app updater (`UpdateChecker`) reads that manifest and nothing else; GitHub
+Releases stay as a human-facing mirror. The bucket URL comes from the
+`S3_PUBLIC_BASE_URL` repo variable and is baked into builds as
+`--dart-define=KOMET_UPDATE_BASE_URL`; it defaults to `https://dl.komet.pw`
+(`lib/core/config/update_config.dart`), so local builds check for updates too.
+An empty URL makes the updater inert. `UpdateInstaller` verifies the downloaded
+APK against the `size` and `sha256` recorded in the manifest.
+
+The bucket must serve `s3:GetObject` anonymously — the updater sends no
+credentials.
+
+Required repo secrets: `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
+Required repo variables: `S3_BUCKET`, `S3_PUBLIC_BASE_URL`.
+Optional: `S3_ENDPOINT` (default `https://s3.twcstorage.ru`), `S3_REGION`
+(default `ru-1`), `S3_KEEP_RELEASES`.

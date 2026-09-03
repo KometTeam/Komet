@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/modules/messages.dart';
+import 'package:komet/core/config/komet_settings.dart';
 import 'package:komet/frontend/widgets/message_bubble.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/models/attachment.dart';
@@ -294,6 +295,39 @@ void main() {
 
     expect(clock.left, closeTo(body.right + 8, 1));
     expect(clock.center.dy, closeTo(body.center.dy, 4));
+  });
+
+  testWidgets('часы с секундами ни на какой длине не наезжают на текст', (
+    tester,
+  ) async {
+    KometSettings.fullTimestamp.value = true;
+    addTearDown(() => KometSettings.fullTimestamp.value = false);
+
+    for (var n = 8; n <= 44; n++) {
+      await _pumpBubble(
+        tester,
+        _message(text: 'ф' * n, senderId: 404),
+        chatType: 'DIALOG',
+      );
+
+      final clock = _clockRect(tester);
+      final body = _rectOf(
+        tester,
+        find.textContaining('ф', findRichText: true),
+      );
+      final singleLine = body.height < 30;
+      if (!singleLine) continue;
+
+      final besideText = clock.left + 1 >= body.right;
+      final belowText = clock.top + 1 >= body.bottom;
+      expect(
+        besideText || belowText,
+        isTrue,
+        reason:
+            'ф x $n: часы $clock перекрывают строку $body '
+            '(ширина пузыря ${clock.right - body.left})',
+      );
+    }
   });
 
   testWidgets('the clock drops below wrapped text instead of widening it', (

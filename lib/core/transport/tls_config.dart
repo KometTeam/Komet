@@ -1,6 +1,7 @@
 import 'package:kolibri/kolibri.dart' show setTrustMincifryCa;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/build_profile.dart';
 import '../config/config.dart';
 
 abstract class TlsConfig {
@@ -16,11 +17,13 @@ abstract class TlsConfig {
   }
 
   static Future<bool> isInsecureAllowed() async {
+    if (!BuildProfile.insecureTransport) return false;
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(prefKey) ?? false;
   }
 
   static Future<void> setInsecureAllowed(bool value) async {
+    if (!BuildProfile.insecureTransport) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(prefKey, value);
   }
