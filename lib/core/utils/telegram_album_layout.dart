@@ -220,6 +220,17 @@ AlbumLayout _layoutFour(
   }
 
   if (pattern.startsWith('w')) {
+    final allWide = pattern == 'wwww';
+    if (allWide) {
+      final rowH = math.min((maxW - kAlbumGap) / 2, maxH / 2);
+      final half = (maxW - kAlbumGap) / 2;
+      return _fromRects(maxW, [
+        _Rect(0, 0, half, rowH),
+        _Rect(half + kAlbumGap, 0, half, rowH),
+        _Rect(0, rowH + kAlbumGap, half, rowH),
+        _Rect(half + kAlbumGap, rowH + kAlbumGap, half, rowH),
+      ]);
+    }
     final topH = math.min(maxW / ratios[0], maxH * 0.5);
     final rest = ratios.sublist(1);
     final bottomH = math.min(
@@ -253,24 +264,31 @@ AlbumLayout _layoutFour(
 
 AlbumLayout _layoutMulti(List<double> ratios, double maxW, double maxH) {
   final n = ratios.length;
-  final target = math.min(maxW / 0.8, maxH);
+  final avg = ratios.fold(0.0, (a, b) => a + b) / n;
+  final maxPerLine = avg >= 1.15 ? 2 : 3;
+  final minLine = math.max(72.0, maxW * 0.26);
+  final target = math.min(maxW * 1.05, maxH);
   _Attempt? best;
 
   void consider(List<int> counts) {
-    final attempt = _attempt(ratios, counts, maxW);
+    if (counts.any((c) => c > maxPerLine)) return;
+    final attempt = _attempt(ratios, counts, maxW, minLine);
     if (attempt == null) return;
     final score =
-        (attempt.height - target).abs() + attempt.variance * 40;
+        (attempt.height - target).abs() +
+        attempt.variance * 30 +
+        (counts.where((c) => c >= 4).length * 80);
     if (best == null || score < best!.score) {
       best = attempt..score = score;
     }
   }
 
-  for (var lines = 2; lines <= math.min(4, n); lines++) {
-    _walkCounts(n, lines, consider);
+  final maxLines = math.min(n, avg >= 1.15 ? (n + 1) ~/ 2 : 4);
+  for (var lines = 2; lines <= maxLines; lines++) {
+    _walkCounts(n, lines, maxPerLine, consider);
   }
 
-  final chosen = best ?? _fallbackRows(ratios, maxW);
+  final chosen = best ?? _fallbackRows(ratios, maxW, maxPerLine);
   return _fromRects(maxW, chosen.rects);
 }
 
@@ -283,17 +301,23 @@ class _Attempt {
   _Attempt(this.rects, this.height, this.variance, {this.score = 0});
 }
 
-void _walkCounts(int n, int lines, void Function(List<int> counts) emit) {
+void _walkCounts(
+  int n,
+  int lines,
+  int maxPerLine,
+  void Function(List<int> counts) emit,
+) {
   final counts = List<int>.filled(lines, 1);
   var left = n - lines;
+  final extraCap = maxPerLine - 1;
 
   void rec(int index) {
     if (index == lines - 1) {
       counts[index] = 1 + left;
-      if (counts[index] <= 4) emit(List<int>.from(counts));
+      if (counts[index] <= maxPerLine) emit(List<int>.from(counts));
       return;
     }
-    final maxTake = math.min(3, left);
+    final maxTake = math.min(extraCap, left);
     for (var extra = 0; extra <= maxTake; extra++) {
       counts[index] = 1 + extra;
       left -= extra;
@@ -305,7 +329,12 @@ void _walkCounts(int n, int lines, void Function(List<int> counts) emit) {
   rec(0);
 }
 
-_Attempt? _attempt(List<double> ratios, List<int> counts, double maxW) {
+_Attempt? _attempt(
+  List<double> ratios,
+  List<int> counts,
+  double maxW,
+  double minLine,
+) {
   final rects = <_Rect>[];
   var y = 0.0;
   var i = 0;
@@ -314,7 +343,7 @@ _Attempt? _attempt(List<double> ratios, List<int> counts, double maxW) {
     final slice = ratios.sublist(i, i + count);
     final height = (maxW - kAlbumGap * (count - 1)) /
         slice.fold(0.0, (a, b) => a + b);
-    if (height < 36 || height > 240) return null;
+    if (height < minLine || height > maxW) return null;
     heights.add(height);
     var x = 0.0;
     for (var c = 0; c < count; c++) {
@@ -334,15 +363,15 @@ _Attempt? _attempt(List<double> ratios, List<int> counts, double maxW) {
   return _Attempt(rects, y - kAlbumGap, variance / heights.length);
 }
 
-_Attempt _fallbackRows(List<double> ratios, double maxW) {
+_Attempt _fallbackRows(List<double> ratios, double maxW, int maxPerLine) {
   final counts = <int>[];
   var left = ratios.length;
   while (left > 0) {
-    final take = left == 4 ? 2 : math.min(3, left);
+    final take = math.min(maxPerLine, left);
     counts.add(take);
     left -= take;
   }
-  return _attempt(ratios, counts, maxW) ??
+  return _attempt(ratios, counts, maxW, 1.0) ??
       _Attempt([_Rect(0, 0, maxW, maxW)], maxW, 0);
 }
 

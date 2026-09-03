@@ -27,7 +27,10 @@ class PhotoBubble extends StatelessWidget {
     this.hasContentAbove = false,
   });
 
-  static AlbumLayout layoutOf(List<PhotoAttachment> photos) {
+  static AlbumLayout layoutOf(
+    List<PhotoAttachment> photos, {
+    double maxWidth = BubbleContext.photoMaxSize,
+  }) {
     return layoutTelegramAlbum(
       [
         for (final photo in photos)
@@ -36,7 +39,7 @@ class PhotoBubble extends StatelessWidget {
             photo.height?.toDouble() ?? 0,
           ),
       ],
-      maxWidth: BubbleContext.photoMaxSize,
+      maxWidth: maxWidth,
     );
   }
 
@@ -63,7 +66,13 @@ class PhotoBubble extends StatelessWidget {
     final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
     final resolvedCaption = hasMessageCaption ? ctx.caption() : null;
     final hasCaption = resolvedCaption != null;
-    final layout = layoutOf(photos);
+    final maxW = MediaQuery.sizeOf(context).width;
+    final layout = layoutOf(
+      photos,
+      maxWidth: photos.length == 1
+          ? BubbleContext.photoMaxSize
+          : (maxW * 0.75).clamp(240.0, BubbleContext.photoMaxSize),
+    );
     final clip = albumClipRadius(
       _bubbleRadius(),
       hasCaption: hasCaption,

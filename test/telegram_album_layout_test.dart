@@ -92,6 +92,22 @@ void main() {
     _assertPacked(layout);
   });
 
+  test('eight landscapes stay two per row so tiles stay large', () {
+    final layout = layoutTelegramAlbum(
+      List.generate(8, (_) => _s(1600, 900)),
+      maxWidth: 280,
+    );
+    expect(layout.tiles, hasLength(8));
+    final rowCounts = <double, int>{};
+    for (final tile in layout.tiles) {
+      final key = (tile.top * 10).round() / 10;
+      rowCounts[key] = (rowCounts[key] ?? 0) + 1;
+      expect(tile.height, greaterThanOrEqualTo(70));
+    }
+    expect(rowCounts.values.every((count) => count <= 2), isTrue);
+    _assertPacked(layout);
+  });
+
   test('six photos all stay visible without a +N tile', () {
     final layout = layoutTelegramAlbum(
       List.generate(6, (_) => _s(1200, 900)),
