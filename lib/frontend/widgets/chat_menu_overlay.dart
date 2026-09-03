@@ -10,6 +10,7 @@ class ChatMenuItem {
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
+  final List<ChatMenuItem>? submenu;
   final bool showChevron;
   final bool dividerAfter;
   final bool destructive;
@@ -18,10 +19,13 @@ class ChatMenuItem {
     required this.icon,
     required this.label,
     this.onTap,
+    this.submenu,
     this.showChevron = false,
     this.dividerAfter = false,
     this.destructive = false,
   });
+
+  bool get hasSubmenu => submenu != null && submenu!.isNotEmpty;
 }
 
 void showChatMenu({
@@ -132,6 +136,15 @@ class _MenuLayout extends SingleChildLayoutDelegate {
 
 class _ChatMenuLayerState extends State<_ChatMenuLayer>
     with SingleTickerProviderStateMixin, AnimatedOverlayPopup<_ChatMenuLayer> {
+  late List<ChatMenuItem> _items;
+  final List<List<ChatMenuItem>> _stack = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _items = widget.items;
+  }
+
   @override
   Duration get overlayForwardDuration => const Duration(milliseconds: 220);
 
@@ -143,7 +156,19 @@ class _ChatMenuLayerState extends State<_ChatMenuLayer>
 
   void _onItemTap(ChatMenuItem item) {
     Haptics.tap();
+    if (item.hasSubmenu) {
+      setState(() {
+        _stack.add(_items);
+        _items = item.submenu!;
+      });
+      return;
+    }
     closeOverlay().then((_) => item.onTap?.call());
+  }
+
+  void _popSubmenu() {
+    if (_stack.isEmpty) return;
+    setState(() => _items = _stack.removeLast());
   }
 
   @override
@@ -204,7 +229,16 @@ class _ChatMenuLayerState extends State<_ChatMenuLayer>
                 ),
               ],
               SizedBox(height: widget.compact ? 4 : 6),
-              for (final item in widget.items) ...[
+              if (_stack.isNotEmpty)
+                _ChatMenuRow(
+                  item: const ChatMenuItem(
+                    icon: Symbols.arrow_back,
+                    label: 'Назад',
+                  ),
+                  compact: widget.compact,
+                  onTap: _popSubmenu,
+                ),
+              for (final item in _items) ...[
                 _ChatMenuRow(
                   item: item,
                   compact: widget.compact,
@@ -272,7 +306,7 @@ class _ChatMenuRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (item.showChevron)
+            if (item.showChevron || item.hasSubmenu)
               Icon(
                 Symbols.chevron_right,
                 size: 22,

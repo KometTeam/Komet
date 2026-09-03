@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -215,8 +216,15 @@ class _DesktopChatChromeState extends State<DesktopChatChrome> {
       );
     }
     if (widget.onSecondaryTapDown != null) {
-      child = GestureDetector(
-        onSecondaryTapDown: widget.onSecondaryTapDown,
+      child = Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (event) {
+          if (event.kind != PointerDeviceKind.mouse) return;
+          if (event.buttons != kSecondaryMouseButton) return;
+          widget.onSecondaryTapDown!(
+            TapDownDetails(globalPosition: event.position),
+          );
+        },
         child: child,
       );
     }

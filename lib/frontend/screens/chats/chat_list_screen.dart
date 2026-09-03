@@ -3148,12 +3148,20 @@ class _ChatListScreenState extends State<ChatListScreen>
               _shareMode ||
               chat == null)
           ? null
-          : (details) => _openDesktopChatMenu(
-              chat,
-              name: name,
-              peerId: peerId,
-              globalPosition: details.globalPosition,
-            ),
+          : (details) {
+              _activateDesktopChat(
+                chat,
+                name: name,
+                imageUrl: imageUrl,
+                chatType: chatType,
+              );
+              _openDesktopChatMenu(
+                chat,
+                name: name,
+                peerId: peerId,
+                globalPosition: details.globalPosition,
+              );
+            },
       child: InkWell(
       key: ValueKey('chat_$id'),
       splashFactory: NoSplash.splashFactory,
@@ -3403,6 +3411,25 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  void _activateDesktopChat(
+    CachedChat chat, {
+    required String name,
+    required String imageUrl,
+    required String chatType,
+  }) {
+    if (widget.onChatSelected == null || chat.id == widget.activeChatId) {
+      return;
+    }
+    widget.onChatSelected!(
+      DesktopChatSelection(
+        chatId: chat.id,
+        name: name,
+        imageUrl: imageUrl,
+        chatType: chatType,
+      ),
+    );
+  }
+
   void _openDesktopChatMenu(
     CachedChat chat, {
     required String name,
@@ -3427,7 +3454,18 @@ class _ChatListScreenState extends State<ChatListScreen>
             icon: Symbols.create_new_folder,
             label: 'Добавить в папку',
             showChevron: true,
-            onTap: () => _openFolderSubmenu(chat, folders, globalPosition),
+            submenu: [
+              for (final folder in folders)
+                ChatMenuItem(
+                  icon: folder.include.contains(chat.id)
+                      ? Symbols.folder_check
+                      : Symbols.folder,
+                  label: folder.emoji == null || folder.emoji!.isEmpty
+                      ? folder.title
+                      : '${folder.emoji} ${folder.title}',
+                  onTap: () => unawaited(_toggleChatInFolder(chat, folder)),
+                ),
+            ],
           ),
         ChatMenuItem(
           icon: pinned ? Symbols.keep_off : Symbols.keep,
@@ -3446,7 +3484,39 @@ class _ChatListScreenState extends State<ChatListScreen>
           showChevron: !muted,
           onTap: muted
               ? () => unawaited(_muteSingleChat(chat, ChatsModule.muteOff))
-              : () => _openMuteSubmenu(chat, globalPosition),
+              : null,
+          submenu: muted
+              ? null
+              : [
+                  ChatMenuItem(
+                    icon: Symbols.schedule,
+                    label: 'На 1 час',
+                    onTap: () => unawaited(
+                      _muteSingleChat(chat, _muteUntilHours(1)),
+                    ),
+                  ),
+                  ChatMenuItem(
+                    icon: Symbols.schedule,
+                    label: 'На 8 часов',
+                    onTap: () => unawaited(
+                      _muteSingleChat(chat, _muteUntilHours(8)),
+                    ),
+                  ),
+                  ChatMenuItem(
+                    icon: Symbols.calendar_today,
+                    label: 'На 1 день',
+                    onTap: () => unawaited(
+                      _muteSingleChat(chat, _muteUntilHours(24)),
+                    ),
+                  ),
+                  ChatMenuItem(
+                    icon: Symbols.notifications_off,
+                    label: 'Навсегда',
+                    onTap: () => unawaited(
+                      _muteSingleChat(chat, ChatsModule.muteForever),
+                    ),
+                  ),
+                ],
         ),
         if (!isSaved)
           ChatMenuItem(
@@ -3492,68 +3562,6 @@ class _ChatListScreenState extends State<ChatListScreen>
           ),
       ],
     );
-  }
-
-  void _openFolderSubmenu(
-    CachedChat chat,
-    List<ChatFolder> folders,
-    Offset globalPosition,
-  ) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showChatMenu(
-        context: context,
-        compact: true,
-        anchorRect: Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 1, 1),
-        items: [
-          for (final folder in folders)
-            ChatMenuItem(
-              icon: folder.include.contains(chat.id)
-                  ? Symbols.folder_check
-                  : Symbols.folder,
-              label: folder.emoji == null || folder.emoji!.isEmpty
-                  ? folder.title
-                  : '${folder.emoji} ${folder.title}',
-              onTap: () => unawaited(_toggleChatInFolder(chat, folder)),
-            ),
-        ],
-      );
-    });
-  }
-
-  void _openMuteSubmenu(CachedChat chat, Offset globalPosition) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showChatMenu(
-        context: context,
-        compact: true,
-        anchorRect: Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 1, 1),
-        items: [
-          ChatMenuItem(
-            icon: Symbols.schedule,
-            label: 'На 1 час',
-            onTap: () => unawaited(_muteSingleChat(chat, _muteUntilHours(1))),
-          ),
-          ChatMenuItem(
-            icon: Symbols.schedule,
-            label: 'На 8 часов',
-            onTap: () => unawaited(_muteSingleChat(chat, _muteUntilHours(8))),
-          ),
-          ChatMenuItem(
-            icon: Symbols.calendar_today,
-            label: 'На 1 день',
-            onTap: () => unawaited(_muteSingleChat(chat, _muteUntilHours(24))),
-          ),
-          ChatMenuItem(
-            icon: Symbols.notifications_off,
-            label: 'Навсегда',
-            onTap: () => unawaited(
-              _muteSingleChat(chat, ChatsModule.muteForever),
-            ),
-          ),
-        ],
-      );
-    });
   }
 
   int _muteUntilHours(int hours) =>
