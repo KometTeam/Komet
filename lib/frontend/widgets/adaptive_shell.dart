@@ -139,7 +139,10 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
             children: [
               SizedBox(
                 width: effectiveListWidth,
-                child: ChatListScreen(onChatSelected: _onChatSelected),
+                child: ChatListScreen(
+                  onChatSelected: _onChatSelected,
+                  activeChatId: _selected?.chatId,
+                ),
               ),
               _ResizeDivider(
                 hitWidth: _dividerHitWidth,

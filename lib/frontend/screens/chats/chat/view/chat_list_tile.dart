@@ -165,3 +165,61 @@ class _ActivitySubtitleState extends State<ActivitySubtitle> {
     );
   }
 }
+
+class DesktopChatChrome extends StatefulWidget {
+  final bool pinned;
+  final bool active;
+  final bool selected;
+  final bool enableHover;
+  final GestureTapDownCallback? onSecondaryTapDown;
+  final Widget child;
+
+  const DesktopChatChrome({
+    super.key,
+    required this.pinned,
+    required this.active,
+    required this.selected,
+    required this.enableHover,
+    required this.child,
+    this.onSecondaryTapDown,
+  });
+
+  @override
+  State<DesktopChatChrome> createState() => _DesktopChatChromeState();
+}
+
+class _DesktopChatChromeState extends State<DesktopChatChrome> {
+  bool _hovered = false;
+
+  Color _fill(ColorScheme cs) {
+    if (widget.selected) return cs.primary.withValues(alpha: 0.08);
+    if (widget.active) return cs.primary.withValues(alpha: 0.14);
+    if (widget.pinned) {
+      return cs.surfaceContainerHighest.withValues(
+        alpha: _hovered ? 0.46 : 0.38,
+      );
+    }
+    if (_hovered) return cs.onSurface.withValues(alpha: 0.05);
+    return Colors.transparent;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    Widget child = ColoredBox(color: _fill(cs), child: widget.child);
+    if (widget.enableHover) {
+      child = MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: child,
+      );
+    }
+    if (widget.onSecondaryTapDown != null) {
+      child = GestureDetector(
+        onSecondaryTapDown: widget.onSecondaryTapDown,
+        child: child,
+      );
+    }
+    return child;
+  }
+}

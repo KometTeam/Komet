@@ -18,7 +18,10 @@ import '../../../core/crypto/message_decryption_cache.dart';
 import '../../widgets/decrypted_text.dart';
 import '../../widgets/encryption_lock_badge.dart';
 import '../../widgets/online_dot.dart';
-import '../../widgets/custom_notification.dart';
+import '../../widgets/chat_menu_overlay.dart';
+import '../../widgets/confirm_dialog.dart';
+import 'profile_action_sheets.dart';
+import '../../../core/storage/hidden_story_authors.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
@@ -163,6 +166,7 @@ Future<ForwardTarget?> openForwardScreen({
 
 class ChatListScreen extends StatefulWidget {
   final ValueChanged<DesktopChatSelection>? onChatSelected;
+  final int? activeChatId;
   final bool forwardMode;
   final int forwardMessageCount;
   final bool archiveMode;
@@ -171,6 +175,7 @@ class ChatListScreen extends StatefulWidget {
   const ChatListScreen({
     super.key,
     this.onChatSelected,
+    this.activeChatId,
     this.forwardMode = false,
     this.forwardMessageCount = 1,
     this.archiveMode = false,
@@ -719,6 +724,8 @@ class _ChatListScreenState extends State<ChatListScreen>
       ChatListScreen._root = this;
     }
     _initShare();
+    unawaited(HiddenStoryAuthors.load());
+    HiddenStoryAuthors.ids.addListener(_onHiddenStoriesChanged);
     _fabController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -869,8 +876,13 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   StoryPreview? _storyPreviewFor(int ownerId) {
     if (!AppStories.current.value || ownerId == 0) return null;
+    if (HiddenStoryAuthors.isHidden(ownerId)) return null;
     final preview = storiesModule.previewFor(ownerId);
     return (preview == null || preview.isEmpty) ? null : preview;
+  }
+
+  void _onHiddenStoriesChanged() {
+    if (mounted) setState(() {});
   }
 
   void _openStoriesForOwner(int ownerId, [Offset? origin]) {
@@ -1502,6 +1514,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     AppThemeModeConfig.current.removeListener(_onAppThemeChanged);
     AppAmoled.current.removeListener(_onAppThemeChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
+    HiddenStoryAuthors.ids.removeListener(_onHiddenStoriesChanged);
     KometSettings.hideAllChatsFolder.removeListener(_requestReload);
     KometSettings.showHiddenChats.removeListener(_requestReload);
     ContactsModule.revision.removeListener(_requestReload);
@@ -2105,6 +2118,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                         ),
                         hasMiniApp: _hasMiniApp(secondId, chat),
                         showDivider: showDivider,
+                        chat: chat,
+                        peerId: secondId,
                       ),
                     );
                   } else {
@@ -2162,6 +2177,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ? null
                             : chatKindIcon(chat.type, isBot: false),
                         showDivider: showDivider,
+                        chat: chat,
                       ),
                     );
                   }
@@ -2739,7 +2755,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         : previews.indexWhere((p) => p.owner.ownerId == me);
     final otherIndices = <int>[
       for (var i = 0; i < previews.length; i++)
-        if (i != myIndex) i,
+        if (i != myIndex && !HiddenStoryAuthors.isHidden(previews[i].owner.ownerId))
+          i,
     ];
     return ListView.builder(
       scrollDirection: Axis.horizontal,
@@ -3007,6 +3024,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     IconData? titleIcon,
     bool hasMiniApp = false,
     bool showDivider = false,
+    CachedChat? chat,
+    int peerId = 0,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
@@ -3014,6 +3033,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       _profile?.id ?? 0,
       int.tryParse(id) ?? 0,
     );
+    final isActive =
+        widget.activeChatId != null &&
+        widget.activeChatId.toString() == id;
     final Widget? statusIcon = (ownStatus != null && draft == null)
         ? _ownStatusIcon(cs, ownStatus, ownRead)
         : null;
@@ -3115,7 +3137,24 @@ class _ChatListScreenState extends State<ChatListScreen>
               ),
             ),
           );
-    return InkWell(
+    final desktopPane = widget.onChatSelected != null;
+    return DesktopChatChrome(
+      pinned: isPinned,
+      active: isActive,
+      selected: isSelected,
+      enableHover: desktopPane && !widget.forwardMode && !_shareMode,
+      onSecondaryTapDown: (!desktopPane ||
+              widget.forwardMode ||
+              _shareMode ||
+              chat == null)
+          ? null
+          : (details) => _openDesktopChatMenu(
+              chat,
+              name: name,
+              peerId: peerId,
+              globalPosition: details.globalPosition,
+            ),
+      child: InkWell(
       key: ValueKey('chat_$id'),
       splashFactory: NoSplash.splashFactory,
       overlayColor: const WidgetStatePropertyAll(Colors.transparent),
@@ -3175,13 +3214,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         onLongPress: (widget.forwardMode || _shareMode)
             ? null
             : () => _toggleSelection(id),
-        child: ColoredBox(
-          color: isSelected
-              ? cs.primary.withValues(alpha: 0.08)
-              : isPinned
-              ? cs.surfaceContainerHighest.withValues(alpha: 0.38)
-              : Colors.transparent,
-          child: Column(
+        child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
@@ -3366,6 +3399,317 @@ class _ChatListScreenState extends State<ChatListScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _openDesktopChatMenu(
+    CachedChat chat, {
+    required String name,
+    required int peerId,
+    required Offset globalPosition,
+  }) {
+    final isChannel = chat.type == 'CHANNEL';
+    final isDialog = chat.type == 'DIALOG';
+    final isSaved = chat.id == 0;
+    final pinned = (chat.favIndex ?? 0) > 0;
+    final muted = chat.isMuted;
+    final folders = _folders
+        .where((f) => !FoldersModule.isAllChatsFolder(f))
+        .toList();
+    showChatMenu(
+      context: context,
+      compact: true,
+      anchorRect: Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 1, 1),
+      items: [
+        if (folders.isNotEmpty && !isSaved)
+          ChatMenuItem(
+            icon: Symbols.create_new_folder,
+            label: 'Добавить в папку',
+            showChevron: true,
+            onTap: () => _openFolderSubmenu(chat, folders, globalPosition),
+          ),
+        ChatMenuItem(
+          icon: pinned ? Symbols.keep_off : Symbols.keep,
+          label: pinned ? 'Открепить' : 'Закрепить',
+          onTap: () => unawaited(_pinSingleChat(chat, pin: !pinned)),
+        ),
+        if (!isSaved)
+          ChatMenuItem(
+            icon: Symbols.mark_chat_unread,
+            label: 'Отметить непрочитанным',
+            onTap: () => unawaited(_markChatUnread(chat)),
+          ),
+        ChatMenuItem(
+          icon: muted ? Symbols.notifications_active : Symbols.notifications_off,
+          label: muted ? 'Включить уведомления' : 'Отключить уведомления',
+          showChevron: !muted,
+          onTap: muted
+              ? () => unawaited(_muteSingleChat(chat, ChatsModule.muteOff))
+              : () => _openMuteSubmenu(chat, globalPosition),
+        ),
+        if (!isSaved)
+          ChatMenuItem(
+            icon: Symbols.mop,
+            label: 'Стереть переписку',
+            onTap: () => unawaited(_clearSingleHistory(chat)),
+          ),
+        if (isDialog && peerId != 0 && !isSaved)
+          ChatMenuItem(
+            icon: Symbols.hide_source,
+            label: HiddenStoryAuthors.isHidden(peerId)
+                ? 'Показать истории автора'
+                : 'Скрыть истории автора',
+            onTap: () => unawaited(_toggleHiddenStories(peerId, name)),
+          ),
+        if (isChannel && !isSaved)
+          ChatMenuItem(
+            icon: Symbols.logout,
+            label: 'Отписаться от канала',
+            destructive: true,
+            onTap: () => unawaited(_leaveSingleChannel(chat, name)),
+          ),
+        if (isChannel && !isSaved)
+          ChatMenuItem(
+            icon: Symbols.flag,
+            label: 'Пожаловаться',
+            destructive: true,
+            onTap: () {},
+          ),
+        if (!isChannel && isDialog && peerId != 0 && !isSaved)
+          ChatMenuItem(
+            icon: Symbols.block,
+            label: 'Заблокировать',
+            destructive: true,
+            onTap: () => unawaited(_blockSinglePeer(peerId, name)),
+          ),
+        if (!isChannel && !isSaved)
+          ChatMenuItem(
+            icon: Symbols.delete,
+            label: 'Удалить чат',
+            destructive: true,
+            onTap: () => unawaited(_deleteSingleChat(chat)),
+          ),
+      ],
+    );
+  }
+
+  void _openFolderSubmenu(
+    CachedChat chat,
+    List<ChatFolder> folders,
+    Offset globalPosition,
+  ) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showChatMenu(
+        context: context,
+        compact: true,
+        anchorRect: Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 1, 1),
+        items: [
+          for (final folder in folders)
+            ChatMenuItem(
+              icon: folder.include.contains(chat.id)
+                  ? Symbols.folder_check
+                  : Symbols.folder,
+              label: folder.emoji == null || folder.emoji!.isEmpty
+                  ? folder.title
+                  : '${folder.emoji} ${folder.title}',
+              onTap: () => unawaited(_toggleChatInFolder(chat, folder)),
+            ),
+        ],
+      );
+    });
+  }
+
+  void _openMuteSubmenu(CachedChat chat, Offset globalPosition) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showChatMenu(
+        context: context,
+        compact: true,
+        anchorRect: Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 1, 1),
+        items: [
+          ChatMenuItem(
+            icon: Symbols.schedule,
+            label: 'На 1 час',
+            onTap: () => unawaited(_muteSingleChat(chat, _muteUntilHours(1))),
+          ),
+          ChatMenuItem(
+            icon: Symbols.schedule,
+            label: 'На 8 часов',
+            onTap: () => unawaited(_muteSingleChat(chat, _muteUntilHours(8))),
+          ),
+          ChatMenuItem(
+            icon: Symbols.calendar_today,
+            label: 'На 1 день',
+            onTap: () => unawaited(_muteSingleChat(chat, _muteUntilHours(24))),
+          ),
+          ChatMenuItem(
+            icon: Symbols.notifications_off,
+            label: 'Навсегда',
+            onTap: () => unawaited(
+              _muteSingleChat(chat, ChatsModule.muteForever),
+            ),
+          ),
+        ],
+      );
+    });
+  }
+
+  int _muteUntilHours(int hours) =>
+      DateTime.now().add(Duration(hours: hours)).millisecondsSinceEpoch;
+
+  Future<void> _pinSingleChat(CachedChat chat, {required bool pin}) async {
+    final err = await chats.togglePin(api, chatIds: [chat.id], pin: pin);
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      err ?? (pin ? 'Чат закреплён' : 'Чат откреплён'),
+    );
+  }
+
+  Future<void> _markChatUnread(CachedChat chat) async {
+    final myId = _profile?.id;
+    if (myId == null) return;
+    final unread = await chats.markUnread(
+      api,
+      myId,
+      chat.id,
+      chat.lastMsgTime + 1,
+    );
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      unread == null ? 'Не удалось пометить непрочитанным' : 'Чат непрочитан',
+    );
+  }
+
+  Future<void> _muteSingleChat(CachedChat chat, int until) async {
+    final err = await chats.setChatMute(
+      api,
+      chatId: chat.id,
+      dontDisturbUntil: until,
+    );
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      err ??
+          (until == ChatsModule.muteOff
+              ? 'Уведомления включены'
+              : 'Уведомления отключены'),
+    );
+  }
+
+  Future<void> _toggleChatInFolder(CachedChat chat, ChatFolder folder) async {
+    final myId = _profile?.id;
+    if (myId == null) return;
+    final include = List<int>.from(folder.include);
+    final adding = !include.contains(chat.id);
+    if (adding) {
+      include.add(chat.id);
+    } else {
+      include.remove(chat.id);
+    }
+    try {
+      await FoldersModule.updateFolder(api, myId, folder, include: include);
+      if (!mounted) return;
+      showCustomNotification(
+        context,
+        adding
+            ? 'Добавлено в «${folder.title}»'
+            : 'Убрано из «${folder.title}»',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showCustomNotification(context, 'Не удалось обновить папку');
+    }
+  }
+
+  Future<void> _clearSingleHistory(CachedChat chat) async {
+    final choice = await showBlurredConfirm(
+      context,
+      title: 'Стереть переписку',
+      message:
+          'Все сообщения в этом чате будут удалены без возможности восстановления.',
+      confirmLabel: 'Стереть',
+      cancelLabel: 'Отмена',
+      destructive: true,
+    );
+    if (!mounted || !choice.confirmed) return;
+    final err = await chats.clearHistory(
+      api,
+      chatId: chat.id,
+      lastEventTime: chat.lastEventTime,
+      forAll: false,
+    );
+    if (!mounted) return;
+    showCustomNotification(context, err ?? 'Переписка очищена');
+  }
+
+  Future<void> _toggleHiddenStories(int peerId, String name) async {
+    if (HiddenStoryAuthors.isHidden(peerId)) {
+      await HiddenStoryAuthors.show(peerId);
+      if (!mounted) return;
+      showCustomNotification(context, 'Истории $name снова видны');
+      return;
+    }
+    await HiddenStoryAuthors.hide(peerId);
+    if (!mounted) return;
+    showCustomNotification(context, 'Истории $name скрыты');
+  }
+
+  Future<void> _blockSinglePeer(int peerId, String name) async {
+    final choice = await showBlurredConfirm(
+      context,
+      title: 'Заблокировать',
+      message: 'Заблокировать $name? Сообщения больше не будут приходить.',
+      confirmLabel: 'Заблокировать',
+      cancelLabel: 'Отмена',
+      destructive: true,
+    );
+    if (!mounted || !choice.confirmed) return;
+    final ok = await ContactsModule.setBlocked(api, peerId, true);
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      ok ? '$name в чёрном списке' : 'Не удалось заблокировать',
+    );
+  }
+
+  Future<void> _deleteSingleChat(CachedChat chat) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Удалить чат',
+      message: 'Чат будет удалён вместе со всей перепиской.',
+      confirmLabel: 'Удалить',
+      destructive: true,
+    );
+    if (!mounted || !confirmed) return;
+    final err = await chats.deleteChat(
+      api,
+      chatId: chat.id,
+      lastEventTime: chat.lastEventTime,
+      forAll: false,
+    );
+    if (!mounted) return;
+    showCustomNotification(context, err ?? 'Чат удалён');
+  }
+
+  Future<void> _leaveSingleChannel(CachedChat chat, String name) async {
+    final choice = await showBlurredConfirm(
+      context,
+      title: 'Отписаться от канала',
+      message: 'Вы больше не будете получать посты из «$name».',
+      confirmLabel: 'Отписаться',
+      cancelLabel: 'Отмена',
+      destructive: true,
+    );
+    if (!mounted || !choice.confirmed) return;
+    final ok = await chats.leaveChat(api, chatId: chat.id);
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      ok ? 'Вы отписались от канала' : 'Не удалось отписаться',
     );
   }
 
