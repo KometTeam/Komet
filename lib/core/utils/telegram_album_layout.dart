@@ -180,7 +180,7 @@ AlbumLayout _layoutThree(
   final topH = math.min(maxW / ratios[0], maxH * 0.62);
   final bottomH = math.min(
     (maxW - kAlbumGap) / (ratios[1] + ratios[2]),
-    math.max(48, maxH - topH - kAlbumGap),
+    math.max(48.0, maxH - topH - kAlbumGap),
   );
   final w1 = bottomH * ratios[1];
   final w2 = maxW - w1 - kAlbumGap;
@@ -224,7 +224,7 @@ AlbumLayout _layoutFour(
     final rest = ratios.sublist(1);
     final bottomH = math.min(
       (maxW - kAlbumGap * 2) / rest.fold(0.0, (a, b) => a + b),
-      math.max(48, maxH - topH - kAlbumGap),
+      math.max(48.0, maxH - topH - kAlbumGap),
     );
     var x = 0.0;
     final rects = <_Rect>[_Rect(0, 0, maxW, topH)];
@@ -371,8 +371,8 @@ AlbumLayout _fromRects(double maxW, List<_Rect> raw) {
         index: i,
         left: raw[i].left,
         top: raw[i].top,
-        width: math.max(1, raw[i].width),
-        height: math.max(1, raw[i].height),
+        width: math.max(1.0, raw[i].width),
+        height: math.max(1.0, raw[i].height),
         leftEdge: raw[i].left <= 0.6,
         rightEdge: raw[i].right >= maxRight - 0.6,
         topEdge: raw[i].top <= 0.6,
