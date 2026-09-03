@@ -977,8 +977,6 @@ class MessageBubble extends StatelessWidget {
     BubbleStyle bubbleStyle,
     BubbleBehavior bubbleBehavior,
     BubbleShape shape,
-    bool hasPhotoWithCaption,
-    bool hasMultiplePhotosNoCaption,
   ) {
     final isTop =
         shape == BubbleShape.singleTop || shape == BubbleShape.singleMiddle;
@@ -990,8 +988,6 @@ class MessageBubble extends StatelessWidget {
       isBottom: isBottom,
       style: bubbleStyle,
       behavior: bubbleBehavior,
-      hasPhotoWithCaption: hasPhotoWithCaption,
-      hasMultiplePhotosNoCaption: hasMultiplePhotosNoCaption,
     );
   }
 
@@ -1269,8 +1265,6 @@ class MessageBubble extends StatelessWidget {
                   AppBubbleShape.current.value,
                   AppBubbleBehavior.current.value,
                   shape,
-                  hasPhotoCap,
-                  hasMultiPhotos,
                 ),
         ),
         padding: containerPadding,
