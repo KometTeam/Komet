@@ -16,18 +16,23 @@ CachedMessage _album(List<PhotoAttachment> photos) => CachedMessage(
   attachments: photos,
 );
 
-List<PhotoAttachment> _remote(int count) => List.generate(
-  count,
-  (i) => PhotoAttachment(
-    baseUrl: 'https://example.com/$i.jpg',
-    width: 1200,
-    height: 1600,
-  ),
-);
+List<PhotoAttachment> _remote(int count, {int width = 1200, int height = 1200}) =>
+    List.generate(
+      count,
+      (i) => PhotoAttachment(
+        baseUrl: 'https://example.com/$i.jpg',
+        width: width,
+        height: height,
+      ),
+    );
 
 List<PhotoAttachment> _local(int count) => List.generate(
   count,
-  (i) => PhotoAttachment(localPath: '/tmp/photo$i.jpg', width: 1200, height: 1600),
+  (i) => PhotoAttachment(
+    localPath: '/tmp/photo$i.jpg',
+    width: 1200,
+    height: 1200,
+  ),
 );
 
 Future<void> _pumpBubble(WidgetTester tester, CachedMessage message) async {
@@ -70,11 +75,11 @@ Size _bubbleSize(WidgetTester tester) => tester.getSize(
 );
 
 void main() {
-  testWidgets('album grid ignores safe area insets', (tester) async {
+  testWidgets('square album grid ignores safe area insets', (tester) async {
     await _pumpBubble(tester, _album(_remote(4)));
 
     final size = _bubbleSize(tester);
-    expect(size.height, closeTo(size.width, 1));
+    expect(size.height, closeTo(size.width, 2));
   });
 
   testWidgets('tapping an album photo opens the viewer at its index', (
@@ -90,17 +95,18 @@ void main() {
     expect(_viewerIndex(tester), 2);
   });
 
-  testWidgets('the +N tile opens the viewer', (tester) async {
+  testWidgets('all six album photos stay tappable', (tester) async {
     await _pumpBubble(tester, _album(_remote(6)));
 
-    expect(find.text('+2'), findsOneWidget);
+    expect(find.text('+2'), findsNothing);
+    expect(find.byType(GestureDetector), findsAtLeastNWidgets(6));
 
-    await tester.tap(find.byType(GestureDetector).at(3));
+    await tester.tap(find.byType(GestureDetector).at(5));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.byType(PhotoViewerScreen), findsOneWidget);
-    expect(_viewerIndex(tester), 3);
+    expect(_viewerIndex(tester), 5);
   });
 
   testWidgets('photos still uploading open from their local file', (
