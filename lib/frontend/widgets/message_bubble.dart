@@ -22,6 +22,7 @@ import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
 import 'formatted_message_text.dart';
+import 'reply_preview.dart';
 import 'text_entity_actions.dart';
 import 'sending_clock_icon.dart';
 import 'photo_viewer.dart';
@@ -156,11 +157,11 @@ class _RenderTextWithMeta extends RenderBox
       if (lastLine + needed <= textSize.width) {
         width = textSize.width;
         height = textSize.height;
-      } else if (singleLine) {
+      } else if (singleLine && lastLine + needed <= constraints.maxWidth) {
         width = lastLine + needed;
         height = textSize.height;
       } else {
-        width = textSize.width;
+        width = math.max(textSize.width, metaSize.width);
         height = textSize.height + metaSize.height;
         metaOnOwnLine = true;
       }
@@ -1211,7 +1212,13 @@ class MessageBubble extends StatelessWidget {
                 if (reply != null) ...[
                   _CapIntrinsicWidth(
                     cap: maxBubbleWidth * _replyWidthShare,
-                    child: _buildReplyQuote(context, cs, textColor, reply),
+                    child: _buildReplyQuote(
+                      context,
+                      cs,
+                      textColor,
+                      reply,
+                      maxBubbleWidth,
+                    ),
                   ),
                   const SizedBox(height: 4),
                 ],
@@ -1235,7 +1242,13 @@ class MessageBubble extends StatelessWidget {
                       right: padding == EdgeInsets.zero ? 8 : 0,
                       bottom: 4,
                     ),
-                    child: _buildReplyQuote(context, cs, textColor, reply),
+                    child: _buildReplyQuote(
+                      context,
+                      cs,
+                      textColor,
+                      reply,
+                      maxBubbleWidth,
+                    ),
                   ),
                 ),
             ],
@@ -2001,6 +2014,7 @@ class MessageBubble extends StatelessWidget {
     ColorScheme cs,
     Color textColor,
     ReplyInfo reply,
+    double maxBubbleWidth,
   ) {
     final accent = _senderColor(reply.senderId);
     final name = reply.senderId == myId
@@ -2030,6 +2044,36 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
+    final preview = ReplyPreview.of(
+      text: reply.text,
+      attachments: reply.attachments,
+    );
+
+    final Widget? body;
+    if (preview.hasMedia) {
+      final maxSide = math.max(
+        72.0,
+        math.min(150.0, maxBubbleWidth * _replyWidthShare - 24),
+      );
+      final size = preview.box(maxSide: maxSide);
+      body = Padding(
+        padding: const EdgeInsets.only(top: 2, bottom: 1),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: SizedBox(
+            width: size.width,
+            height: size.height,
+            child: preview.thumbnail(size: size, cs: cs),
+          ),
+        ),
+      );
+    } else if (rawPreview.isNotEmpty) {
+      body = _replyQuoteText(cs, textColor, preview.icon, rawPreview, quotedId);
+    } else {
+      body = null;
+    }
+
     final quote = Container(
       padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
       decoration: BoxDecoration(
@@ -2051,30 +2095,7 @@ class MessageBubble extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          if (rawPreview.isNotEmpty)
-            DecryptedContent(
-              accountId: message.accountId,
-              chatId: message.chatId,
-              messageId: quotedId ?? '',
-              cipherText: quotedId == null ? '' : rawPreview,
-              builder: (decryption) => Text(
-                decryption?.state == MessageDecryptionState.wrongKey
-                    ? 'неверный ключ'
-                    : (decryption?.plaintext ?? rawPreview),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: decryption?.state == MessageDecryptionState.wrongKey
-                      ? cs.error
-                      : textColor.withValues(alpha: 0.85),
-                  fontSize: 13,
-                  fontStyle:
-                      decryption?.state == MessageDecryptionState.wrongKey
-                      ? FontStyle.italic
-                      : null,
-                ),
-              ),
-            ),
+          ?body,
         ],
       ),
     );
@@ -2089,6 +2110,48 @@ class MessageBubble extends StatelessWidget {
       );
     }
     return quote;
+  }
+
+  Widget _replyQuoteText(
+    ColorScheme cs,
+    Color textColor,
+    IconData? icon,
+    String rawPreview,
+    String? quotedId,
+  ) {
+    return DecryptedContent(
+      accountId: message.accountId,
+      chatId: message.chatId,
+      messageId: quotedId ?? '',
+      cipherText: quotedId == null ? '' : rawPreview,
+      builder: (decryption) {
+        final wrongKey = decryption?.state == MessageDecryptionState.wrongKey;
+        final color = wrongKey ? cs.error : textColor.withValues(alpha: 0.85);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null && !wrongKey) ...[
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+            ],
+            Flexible(
+              child: Text(
+                wrongKey
+                    ? 'неверный ключ'
+                    : (decryption?.plaintext ?? rawPreview),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 13,
+                  fontStyle: wrongKey ? FontStyle.italic : null,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildForwardedInlineText(

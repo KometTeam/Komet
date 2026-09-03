@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/config/build_profile.dart';
 import '../../core/utils/link_opener.dart';
 import '../screens/chats/chat_info_screen.dart';
 import '../screens/chats/chat_list_screen.dart';
@@ -37,13 +38,13 @@ Future<bool> openMaxRoute(
     case ':chats-search':
       final root = await popToAppRootAndSettle(context);
       if (ChatListScreen.openSearch()) return true;
-      if (root != null) notifyNeedsAccount(root);
+      if (root != null && root.mounted) notifyNeedsAccount(root);
       return true;
 
     case ':saved-messages':
       final root = await popToAppRootAndSettle(context);
       if (ChatListScreen.openSavedMessages()) return true;
-      if (root != null) notifyNeedsAccount(root);
+      if (root != null && root.mounted) notifyNeedsAccount(root);
       return true;
 
     case ':settings/folder':
@@ -137,6 +138,7 @@ Future<bool> openMaxRoute(
     case ':settings/dev/showroom':
     case ':settings/dev/threadsviewer':
     case ':settings/dev/integritylogsviewer':
+      if (!BuildProfile.devTools) break;
       return _push(context, const DebugMenuScreen());
 
     case ':current':
@@ -145,7 +147,9 @@ Future<bool> openMaxRoute(
       return true;
   }
 
-  showCustomNotification(context, 'Ссылка не поддерживается: $route');
+  if (context.mounted) {
+    showCustomNotification(context, 'Ссылка не поддерживается: $route');
+  }
   return true;
 }
 

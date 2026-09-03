@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -158,6 +159,10 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   final Map<String, Map<String, String>> _videoSourceCache = {};
   final Map<String, Future<Map<String, String>>> _videoSourceLoads = {};
   final TransformationController _heroTransform = TransformationController();
+  final Map<String, TransformationController> _pageTransforms = {};
+  int _pointers = 0;
+  bool _zoomed = false;
+  bool _swipeEnabled = true;
   bool _feedLoaded = false;
   bool _feedFailed = false;
   bool _loadingMore = false;
@@ -170,6 +175,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   void initState() {
     super.initState();
     _heroTransform.addListener(_syncHero);
+    _heroTransform.addListener(_syncZoom);
     _items = _localItems();
     _index = widget.video == null
         ? (_items.length - 1 - widget.initialIndex).clamp(0, _items.length - 1)
@@ -190,10 +196,41 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         _heroTransform.value.getMaxScaleOnAxis() <= 1.01;
   }
 
+  TransformationController _transformFor(String id) {
+    if (id == _heroId) return _heroTransform;
+    return _pageTransforms.putIfAbsent(id, () {
+      final transform = TransformationController();
+      transform.addListener(_syncZoom);
+      return transform;
+    });
+  }
+
+  void _syncZoom() {
+    final zoomed = _transformFor(_current.id).value.getMaxScaleOnAxis() > 1.01;
+    if (zoomed == _zoomed) return;
+    _zoomed = zoomed;
+    _syncSwipe();
+  }
+
+  void _updatePointers(int delta) {
+    final next = _pointers + delta;
+    _pointers = next < 0 ? 0 : next;
+    _syncSwipe();
+  }
+
+  void _syncSwipe() {
+    final enabled = _pointers < 2 && !_zoomed;
+    if (enabled == _swipeEnabled) return;
+    setState(() => _swipeEnabled = enabled);
+  }
+
   @override
   void dispose() {
     _controller.dispose();
     _heroTransform.dispose();
+    for (final transform in _pageTransforms.values) {
+      transform.dispose();
+    }
     for (final session in _videoSessions.values) {
       session.dispose();
     }
@@ -396,6 +433,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     setState(() => _index = index);
     _activateVideoSessions();
     _syncHero();
+    _syncZoom();
     if (index >= _items.length - _prefetchThreshold) unawaited(_loadMore());
   }
 
@@ -685,16 +723,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
           autofocus: true,
           child: Stack(
             children: [
-              Positioned.fill(
-                child: PageView.builder(
-                  key: ValueKey(_pager),
-                  controller: _controller,
-                  reverse: true,
-                  itemCount: _items.length,
-                  onPageChanged: _onPageChanged,
-                  itemBuilder: (_, i) => _buildPage(i),
-                ),
-              ),
+              Positioned.fill(child: _buildPager()),
               Positioned.fill(
                 child: IgnorePointer(
                   ignoring: !_chromeVisible,
@@ -762,6 +791,36 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     );
   }
 
+  Widget _buildPager() {
+    final media = MediaQuery.of(context);
+    final deviceSlop = media.gestureSettings.touchSlop ?? kTouchSlop;
+    final swipeSlop = deviceSlop > kPanSlop ? deviceSlop : kPanSlop;
+    final swipeMedia = media.copyWith(
+      gestureSettings: DeviceGestureSettings(touchSlop: swipeSlop),
+    );
+
+    return Listener(
+      onPointerDown: (_) => _updatePointers(1),
+      onPointerUp: (_) => _updatePointers(-1),
+      onPointerCancel: (_) => _updatePointers(-1),
+      child: MediaQuery(
+        data: swipeMedia,
+        child: PageView.builder(
+          key: ValueKey(_pager),
+          controller: _controller,
+          reverse: true,
+          physics: _swipeEnabled ? null : const NeverScrollableScrollPhysics(),
+          itemCount: _items.length,
+          onPageChanged: _onPageChanged,
+          itemBuilder: (_, i) => MediaQuery(
+            data: _zoomed ? media : swipeMedia,
+            child: _buildPage(i),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPage(int i) {
     final item = _items[i];
     final video = item.video;
@@ -781,7 +840,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       child: InteractiveViewer(
         minScale: 1,
         maxScale: 5,
-        transformationController: isHero ? _heroTransform : null,
+        transformationController: _transformFor(item.id),
         child: Center(
           child: RotatedBox(
             quarterTurns: _quarterTurns[item.id] ?? 0,

@@ -8,6 +8,7 @@ import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/profile_deletion_store.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
@@ -69,6 +70,8 @@ class AccountModule {
 
   Future<PrivacyConfig> updatePrivacyConfig(Map<String, dynamic> settings) =>
       _privacy.updatePrivacyConfig(settings);
+
+  Future<PrivacyConfig> setSafeMode(bool value) => _privacy.setSafeMode(value);
 
   Future<PrivacyConfig> setChatsPushNotification(bool value) =>
       _privacy.setChatsPushNotification(value);
@@ -415,7 +418,40 @@ class AccountModule {
     await AppDatabase.deleteAccount(accountId);
     await TokenStorage.deleteAccount(accountId);
     await SpoofingService.clearAccountSpoof(accountId);
+    await ProfileDeletionStore.clear(accountId);
     logger.i('Аккаунт $accountId удалён локально');
+  }
+
+  Future<DateTime?> profileDeletionScheduledAt() async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return null;
+    return ProfileDeletionStore.scheduledAt(accountId);
+  }
+
+  Future<DateTime?> setProfileDeletion(bool delete) async {
+    _ensureOnline();
+
+    final packet = await _api.sendRequest(Opcode.profileDelete, {
+      'delete': delete,
+      'type': 0,
+    });
+    final data = _requireMapPayload(packet, 'setProfileDeletion');
+
+    final raw = data['timestamp'];
+    final millis = raw is int ? raw : 0;
+
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId != null) {
+      await ProfileDeletionStore.save(accountId, millis);
+    }
+
+    logger.i(
+      'Профиль: заявка на удаление '
+      '${delete ? 'создана' : 'отменена'} (timestamp=$millis)',
+    );
+
+    if (millis <= 0) return null;
+    return DateTime.fromMillisecondsSinceEpoch(millis);
   }
 
   Future<void> logout() async {
@@ -557,7 +593,9 @@ class AccountModule {
       payload['draftsSync'] = sync.draftsSync;
       payload['bannersSync'] = sync.bannersSync;
       payload['lastLogin'] = sync.lastLogin;
-      if (sync.configHash != null) payload['configHash'] = sync.configHash;
+      if (sync.serverConfigSeen && sync.configHash != null) {
+        payload['configHash'] = sync.configHash;
+      }
     } else {
       payload['presenceSync'] = -1;
       payload['chatsSync'] = -1;
@@ -697,6 +735,12 @@ class AccountModule {
     final config = data['config'] as Map?;
     final serverConfig = config?['server'] as Map?;
     if (serverConfig != null) {
+      await AppDatabase.setSyncValue(accountId, SyncKey.serverConfigSeen, '1');
+      await AppDatabase.setSyncValue(
+        accountId,
+        SyncKey.profileInviteLink,
+        serverConfig['invite-link']?.toString().trim() ?? '',
+      );
       await _persistEntryBannerApps(accountId, serverConfig);
     }
     final info = LoginInfo.fromPayload(data);

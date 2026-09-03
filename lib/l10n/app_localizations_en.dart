@@ -216,16 +216,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'All data including timezone and locale is generated randomly. Use this method at your own risk!';
 
   @override
-  String get spoofDeviceTypeTitle => 'Device type';
-
-  @override
-  String get spoofDeviceTypeDescription =>
-      'Controls which devices are generated: Android or iOS';
-
-  @override
-  String get spoofDeviceTypeLabel => 'Device type';
-
-  @override
   String get spoofMainSectionTitle => 'Main data';
 
   @override
@@ -1453,7 +1443,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nfcExchangingSubtitle => 'Almost done';
 
   @override
-  String nfcPeerIdFallback(String id) {
+  String contactIdFallback(String id) {
     return 'ID $id';
   }
 
@@ -1886,8 +1876,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get securityModeSubtitle => 'Hides personal information';
 
   @override
-  String get securitySettingsUnavailable =>
-      'Changing this setting is not available yet';
+  String get securityModeLocked => 'Turn off safe mode to change this setting';
+
+  @override
+  String get securityModeSheetSubtitle => 'No unwanted contact or content';
+
+  @override
+  String get securityModeSheetSearch =>
+      'People won\'t be able to find you by phone number';
+
+  @override
+  String get securityModeSheetCalls =>
+      'Only people from your contacts can call you';
+
+  @override
+  String get securityModeSheetInvites =>
+      'Only people you\'ve already talked to can add you to groups';
+
+  @override
+  String get securityModeSheetContent =>
+      'You\'ll only see safe posts and channels';
+
+  @override
+  String get securityModeSheetEnable => 'Turn on';
 
   @override
   String get securityFindByPhone => 'Find me by phone number';
@@ -2825,4 +2836,142 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webPushStatusDevice => 'Device';
+
+  @override
+  String get securityDeleteProfileTitle => 'Delete profile';
+
+  @override
+  String get securityDeleteProfileSubtitle =>
+      'The profile and all its data are removed after 30 days';
+
+  @override
+  String get securityDeleteProfileConfirmTitle => 'Delete profile?';
+
+  @override
+  String get securityDeleteProfileConfirmMessage =>
+      'Your MAX profile will be deleted in 30 days. You can cancel the request at any time before that.';
+
+  @override
+  String get securityDeleteProfileConfirmAction => 'Delete';
+
+  @override
+  String securityDeleteProfileScheduled(String date) {
+    return 'Profile will be deleted on $date';
+  }
+
+  @override
+  String get securityDeleteProfileKeep => 'Don\'t delete profile';
+
+  @override
+  String get securityDeleteProfileRequested => 'Deletion request accepted';
+
+  @override
+  String get securityDeleteProfileCanceled => 'Profile deletion canceled';
+
+  @override
+  String securityDeleteProfileError(String error) {
+    return 'Failed to send the request: $error';
+  }
+
+  @override
+  String get composerPasteAttachment => 'Paste file';
+
+  @override
+  String get pasteAttachTitleImage => 'Send image';
+
+  @override
+  String get pasteAttachTitleVideo => 'Send video';
+
+  @override
+  String get pasteAttachTitleFile => 'Send file';
+
+  @override
+  String pasteAttachTitleMany(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send $count files',
+      one: 'Send 1 file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pasteAttachCaptionHint => 'Caption';
+
+  @override
+  String get pasteAttachSend => 'Send';
+
+  @override
+  String get pasteAttachCancel => 'Cancel';
+
+  @override
+  String get pasteAttachFailed => 'Nothing to paste from the clipboard';
+
+  @override
+  String get profileQrTitle => 'My QR code';
+
+  @override
+  String get profileQrHint => 'Scan the code to open the profile';
+
+  @override
+  String get profileQrUnavailable => 'Could not get the profile link';
+
+  @override
+  String get authLimitsLoginTitle => 'Account temporarily limited';
+
+  @override
+  String authLimitsLoginSubtitle(DateTime until) {
+    final intl.DateFormat untilDateFormat = intl.DateFormat(
+      'MMMM d, HH:mm',
+      localeName,
+    );
+    final String untilString = untilDateFormat.format(until);
+
+    return 'The limits should lift around $untilString';
+  }
+
+  @override
+  String get authLimitsLogin2faTitle => 'Two-factor authentication';
+
+  @override
+  String get authLimitsLogin2faBody =>
+      'You can\'t set or remove the login password.';
+
+  @override
+  String get authLimitsLoginSessionsTitle => 'Ending sessions';
+
+  @override
+  String get authLimitsLoginSessionsBody =>
+      'You can\'t end all sessions at once.';
+
+  @override
+  String get authLimitsSignupTitle => 'Account may be limited';
+
+  @override
+  String get authLimitsSignupSubtitle =>
+      'New accounts aren\'t all limited, and the server lifts the limits itself';
+
+  @override
+  String get authLimitsSignupMessagesTitle => 'Messages';
+
+  @override
+  String get authLimitsSignupMessagesBody =>
+      'You may only be able to write to people who already have you in their contacts.';
+
+  @override
+  String get authLimitsSignupGroupsTitle => 'Groups';
+
+  @override
+  String get authLimitsSignupGroupsBody => 'Joining groups may be unavailable.';
+
+  @override
+  String get authLimitsSignupMoreTitle => 'Other limits are possible';
+
+  @override
+  String get authLimitsSignupMoreBody =>
+      'The server doesn\'t announce the full list — if something doesn\'t work, try again later.';
+
+  @override
+  String get authLimitsConfirm => 'Got it';
 }

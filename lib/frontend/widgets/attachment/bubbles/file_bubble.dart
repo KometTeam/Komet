@@ -47,6 +47,7 @@ class FileBubble extends StatelessWidget {
     final preview = file.preview;
     final previewUrl = preview?.baseUrl ?? preview?.previewData ?? '';
     final previewWidget = _preview(
+      name: name,
       cacheName: cacheName,
       previewUrl: previewUrl,
       encrypted: fileId != null && _isEncryptedImage(name),
@@ -191,8 +192,25 @@ class FileBubble extends StatelessWidget {
     );
   }
 
+  static const Set<String> _coverExtensions = {
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.webp',
+    '.bmp',
+    '.heic',
+    '.heif',
+  };
+
   static bool _isViewableImage(String name) =>
       name.toLowerCase().endsWith('.png');
+
+  static bool _hasCover(String name) {
+    final dot = name.lastIndexOf('.');
+    if (dot < 0) return false;
+    return _coverExtensions.contains(name.substring(dot).toLowerCase());
+  }
 
   bool _isEncryptedImage(String name) =>
       _isViewableImage(name) &&
@@ -202,6 +220,7 @@ class FileBubble extends StatelessWidget {
       );
 
   Widget? _preview({
+    required String name,
     required String cacheName,
     required String previewUrl,
     required bool encrypted,
@@ -216,7 +235,7 @@ class FileBubble extends StatelessWidget {
         builder: (view) => _encryptedPreview(view, previewUrl),
       );
     }
-    if (previewUrl.isEmpty) return null;
+    if (previewUrl.isEmpty || !_hasCover(name)) return null;
     return _networkPreview(previewUrl);
   }
 
@@ -255,11 +274,16 @@ class FileBubble extends StatelessWidget {
   Widget _networkPreview(String url) => _framed(
     CachedNetworkImage(
       imageUrl: url,
-      width: _previewWidth,
-      height: _previewHeight,
-      fit: BoxFit.cover,
       memCacheWidth: 480,
       fadeInDuration: const Duration(milliseconds: 120),
+      imageBuilder: (context, image) => Image(
+        image: image,
+        width: _previewWidth,
+        height: _previewHeight,
+        fit: BoxFit.cover,
+      ),
+      placeholder: (_, _) =>
+          const SizedBox(width: _previewWidth, height: _previewHeight),
       errorWidget: (_, _, _) => const SizedBox.shrink(),
     ),
   );

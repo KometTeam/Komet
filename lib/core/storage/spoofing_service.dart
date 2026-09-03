@@ -13,6 +13,14 @@ class SpoofingService {
   static const String hardcodedAppVersion = '26.23.2';
   static const int hardcodedBuildNumber = 6779;
   static const String pendingScope = 'pending';
+  static const String androidDeviceType = 'ANDROID';
+  static const String defaultArchitecture = 'arm64-v8a';
+  static const List<String> supportedArchitectures = [
+    'arm64-v8a',
+    'armeabi-v7a',
+    'x86',
+    'x86_64',
+  ];
 
   static const String _legacyEnabledKey = 'spoofing_enabled';
   static const List<String> _legacyKeys = [
@@ -82,7 +90,7 @@ class SpoofingService {
       }
     }
 
-    bool isAndroid(DevicePreset p) => p.deviceType == 'ANDROID';
+    bool isAndroid(DevicePreset p) => p.deviceType == androidDeviceType;
     final fresh = devicePresets
         .where((p) => isAndroid(p) && !used.contains(p.deviceName))
         .toList();
@@ -101,8 +109,8 @@ class SpoofingService {
       locale: shortLocale,
       deviceLocale: shortLocale,
       deviceId: _hex(8),
-      deviceType: preset.deviceType,
-      arch: 'arm64-v8a',
+      deviceType: androidDeviceType,
+      arch: defaultArchitecture,
       appVersion: hardcodedAppVersion,
       buildNumber: hardcodedBuildNumber,
       pushDeviceType: 'GCM',
@@ -137,7 +145,7 @@ class SpoofingService {
       'app_version': profile.appVersion.isEmpty
           ? hardcodedAppVersion
           : profile.appVersion,
-      'arch': profile.arch.isEmpty ? 'arm64-v8a' : profile.arch,
+      'arch': profile.arch.isEmpty ? defaultArchitecture : profile.arch,
       'build_number': profile.buildNumber == 0
           ? hardcodedBuildNumber
           : profile.buildNumber,
@@ -161,23 +169,10 @@ class SpoofingService {
   }
 
   static String _deriveUserAgent(SpoofProfile profile) {
-    final deviceType = profile.deviceType.isEmpty
-        ? 'ANDROID'
-        : profile.deviceType;
-    final osVersion = profile.osVersion;
     final model = profile.deviceName.isEmpty ? 'K' : profile.deviceName;
-
-    if (deviceType == 'IOS' || deviceType == 'iOS') {
-      final version = osVersion
-          .replaceAll(RegExp(r'[^0-9.]'), '')
-          .replaceAll('.', '_');
-      return 'Mozilla/5.0 (iPhone; CPU iPhone OS '
-          '${version.isEmpty ? '17_0' : version} like Mac OS X) '
-          'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 '
-          'Mobile/15E148 Safari/604.1';
-    }
-
-    final android = osVersion.isEmpty ? 'Android 14' : osVersion;
+    final android = profile.osVersion.isEmpty
+        ? 'Android 14'
+        : profile.osVersion;
     return 'Mozilla/5.0 (Linux; $android; $model) AppleWebKit/537.36 '
         '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
   }
@@ -192,7 +187,7 @@ class SpoofingService {
         final profile = SpoofProfile.fromJson(
           jsonDecode(raw) as Map<String, dynamic>,
         );
-        return _migrateVersion(prefs, scope, profile);
+        return _migrateProfile(prefs, scope, profile);
       } catch (e) {
         logger.w('spoof profile read failed: $e');
       }
@@ -203,18 +198,25 @@ class SpoofingService {
     return null;
   }
 
-  static Future<SpoofProfile> _migrateVersion(
+  static Future<SpoofProfile> _migrateProfile(
     SharedPreferences prefs,
     String scope,
     SpoofProfile profile,
   ) async {
+    final arch = supportedArchitectures.contains(profile.arch)
+        ? profile.arch
+        : defaultArchitecture;
     if (profile.appVersion == hardcodedAppVersion &&
-        profile.buildNumber == hardcodedBuildNumber) {
+        profile.buildNumber == hardcodedBuildNumber &&
+        profile.deviceType == androidDeviceType &&
+        profile.arch == arch) {
       return profile;
     }
     final migrated = profile.copyWith(
       appVersion: hardcodedAppVersion,
       buildNumber: hardcodedBuildNumber,
+      deviceType: androidDeviceType,
+      arch: arch,
     );
     await prefs.setString(_profileKey(scope), jsonEncode(migrated.toJson()));
     return migrated;
@@ -235,8 +237,8 @@ class SpoofingService {
       locale: prefs.getString('spoof_locale') ?? '',
       deviceLocale: prefs.getString('spoof_devicelocale') ?? '',
       deviceId: prefs.getString('spoof_deviceid') ?? '',
-      deviceType: prefs.getString('spoof_devicetype') ?? 'ANDROID',
-      arch: prefs.getString('spoof_arch') ?? 'arm64-v8a',
+      deviceType: androidDeviceType,
+      arch: prefs.getString('spoof_arch') ?? defaultArchitecture,
       appVersion: prefs.getString('spoof_appversion') ?? hardcodedAppVersion,
       buildNumber: prefs.getInt('spoof_buildnumber') ?? hardcodedBuildNumber,
       pushDeviceType: prefs.getString('spoof_pushdevicetype') ?? 'GCM',

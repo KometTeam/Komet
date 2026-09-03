@@ -5,6 +5,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/animated_slash_icon.dart';
+import '../../widgets/auth_limits_sheet.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
 import '../../widgets/small_spinner.dart';
@@ -83,6 +84,10 @@ class _Password2FAScreenState extends State<Password2FAScreen>
         context,
         loginResult.profile.baseUrl,
       );
+
+      if (!mounted) return;
+
+      await markAuthLimitsPending(AuthEntry.login);
 
       if (!mounted) return;
 

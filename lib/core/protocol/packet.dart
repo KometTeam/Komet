@@ -102,3 +102,10 @@ bool isSessionStateError(Object error) {
       text.contains('авторизационная сессия') ||
       text.contains('сессия не онлайн');
 }
+
+bool isAuthSessionLostError(Object error) {
+  if (error is SessionExpiredException) return true;
+  final text = error.toString().toLowerCase();
+  return text.contains('сессия не найдена') ||
+      text.contains('авторизационная сессия');
+}

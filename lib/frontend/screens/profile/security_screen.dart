@@ -6,12 +6,15 @@ import '../../../backend/modules/account.dart'
     show PrivacyConfig, BlockedContact;
 import '../../../core/storage/app_database.dart';
 import '../../../core/config/app_colors.dart';
+import '../../../core/utils/haptics.dart';
+import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/info_action_sheet.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import 'blacklist_screen.dart';
@@ -20,7 +23,6 @@ import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
 
 const bool _showFamilyProtection = false;
-const bool _showSafeMode = false;
 
 class SecurityScreen extends StatefulWidget {
   const SecurityScreen({super.key});
@@ -36,6 +38,8 @@ class _SecurityScreenState extends State<SecurityScreen>
   bool _is2faEnabled = false;
   PrivacyConfig? _privacyConfig;
   List<BlockedContact> _blockedContacts = [];
+  DateTime? _profileDeletionAt;
+  bool _deletionBusy = false;
   late AnimationController _shimmerController;
 
   @override
@@ -58,6 +62,9 @@ class _SecurityScreenState extends State<SecurityScreen>
   void reloadAfterReconnect() => _loadData();
 
   Future<void> _loadData() async {
+    final deletionAt = await accountModule.profileDeletionScheduledAt();
+    if (mounted) setState(() => _profileDeletionAt = deletionAt);
+
     try {
       final results = await Future.wait([
         accountModule.getPrivacyConfig(),
@@ -88,6 +95,61 @@ class _SecurityScreenState extends State<SecurityScreen>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _setSafeMode(bool value) async {
+    if (_isSaving) return;
+    if (value && !await _confirmSafeMode()) return;
+    if (!mounted) return;
+    Haptics.selection();
+    setState(() => _isSaving = true);
+    try {
+      final newConfig = await accountModule.setSafeMode(value);
+      if (mounted) {
+        setState(() => _privacyConfig = newConfig);
+      }
+    } catch (e) {
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.securitySaveError(e.toString()),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<bool> _confirmSafeMode() {
+    final l10n = AppLocalizations.of(context)!;
+    return showInfoActionSheet(
+      context,
+      headerIcon: Symbols.encrypted,
+      headerGlow: true,
+      title: l10n.securityModeTitle,
+      subtitle: l10n.securityModeSheetSubtitle,
+      items: [
+        InfoActionSheetItem(
+          icon: Symbols.search,
+          title: l10n.securityModeSheetSearch,
+        ),
+        InfoActionSheetItem(
+          icon: Symbols.call,
+          title: l10n.securityModeSheetCalls,
+        ),
+        InfoActionSheetItem(
+          icon: Symbols.group_add,
+          title: l10n.securityModeSheetInvites,
+        ),
+        InfoActionSheetItem(
+          icon: Symbols.visibility_off,
+          title: l10n.securityModeSheetContent,
+        ),
+      ],
+      confirmLabel: l10n.securityModeSheetEnable,
+    );
   }
 
   Future<void> _updateSetting(String key, dynamic value) async {
@@ -152,8 +214,14 @@ class _SecurityScreenState extends State<SecurityScreen>
                   ),
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                       child: _buildBlacklistSection(cs),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                      child: _buildDeleteProfileSection(cs),
                     ),
                   ),
                 ],
@@ -170,7 +238,7 @@ class _SecurityScreenState extends State<SecurityScreen>
           _buildAppBar(context, cs),
           _buildShimmerSection(cs, height: _showFamilyProtection ? 104 : 56),
           const SizedBox(height: 12),
-          _buildShimmerSection(cs, height: _showSafeMode ? 280 : 232),
+          _buildShimmerSection(cs, height: 340),
           const SizedBox(height: 20),
           _buildShimmerSection(cs, height: 220),
           const SizedBox(height: 12),
@@ -363,9 +431,125 @@ class _SecurityScreenState extends State<SecurityScreen>
       depth: 6,
       child: Column(
         children: [
-          if (_showSafeMode)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+          _buildSafeModeRow(cs, isSafeMode),
+          _settingsRow(
+            cs,
+            icon: Symbols.phone,
+            label: l10n.securityWhoCanCall,
+            trailingText: _getPrivacyLabel(
+              _privacyConfig?.incomingCall ?? 'CONTACTS',
+            ),
+            lockedBySafeMode: isSafeMode,
+            onTap: () => _showOptionSheet(
+              context,
+              cs,
+              title: l10n.securityWhoCanCall,
+              currentValue: _privacyConfig?.incomingCall ?? 'CONTACTS',
+              options: [
+                ('ALL', l10n.securityPrivacyAll),
+                ('CONTACTS', l10n.securityPrivacyContacts),
+              ],
+              onSelect: (value) => _updateSetting('INCOMING_CALL', value),
+            ),
+          ),
+          _settingsRow(
+            cs,
+            icon: Symbols.group,
+            label: l10n.securityWhoCanInvite,
+            trailingText: _getPrivacyLabel(
+              _privacyConfig?.chatsInvite ?? 'CONTACTS',
+            ),
+            lockedBySafeMode: isSafeMode,
+            onTap: () => _showOptionSheet(
+              context,
+              cs,
+              title: l10n.securityWhoCanInvite,
+              currentValue: _privacyConfig?.chatsInvite ?? 'CONTACTS',
+              options: [
+                ('ALL', l10n.securityPrivacyAll),
+                ('CONTACTS', l10n.securityPrivacyContacts),
+              ],
+              onSelect: (value) => _updateSetting('CHATS_INVITE', value),
+            ),
+          ),
+          _settingsRow(
+            cs,
+            icon: Symbols.contact_phone,
+            label: l10n.securityFindByPhone,
+            trailingText: _getPrivacyLabel(
+              _privacyConfig?.searchByPhone ?? 'ALL',
+            ),
+            lockedBySafeMode: isSafeMode,
+            onTap: () => _showOptionSheet(
+              context,
+              cs,
+              title: l10n.securityFindByPhone,
+              currentValue: _privacyConfig?.searchByPhone ?? 'ALL',
+              options: [
+                ('ALL', l10n.securityPrivacyAll),
+                ('CONTACTS', l10n.securityPrivacyContacts),
+              ],
+              onSelect: (value) => _updateSetting('SEARCH_BY_PHONE', value),
+            ),
+          ),
+          if (isSafeMode)
+            _settingsRow(
+              cs,
+              icon: Symbols.filter_alt,
+              label: l10n.securityShowContact,
+              trailingText: _privacyConfig?.contentLevelAccess == true
+                  ? l10n.securityContentSafe
+                  : l10n.securityContentAll,
+              lockedBySafeMode: true,
+            ),
+          _settingsRow(
+            cs,
+            icon: Symbols.visibility_off,
+            label: l10n.securityShowOnlineStatus,
+            trailingText: _privacyConfig?.hidden == true
+                ? l10n.securityPrivacyNobody
+                : l10n.securityPrivacyContacts,
+            onTap: () => _showHiddenStatusSheet(context, cs),
+          ),
+          _settingsRow(
+            cs,
+            icon: Symbols.contact_page,
+            label: l10n.securityShowMyNumber,
+            trailingText: _getPrivacyLabel(
+              _privacyConfig?.phoneNumberPrivacy ?? 'ALL',
+            ),
+            isLast: true,
+            onTap: () => _showOptionSheet(
+              context,
+              cs,
+              title: l10n.securityShowMyNumber,
+              currentValue: _privacyConfig?.phoneNumberPrivacy ?? 'ALL',
+              options: [
+                ('ALL', l10n.securityPrivacyAll),
+                ('CONTACTS', l10n.securityPrivacyContacts),
+                ('NOBODY', l10n.securityPrivacyNobody),
+              ],
+              onSelect: (value) => _updateSetting('PHONE_NUMBER_PRIVACY', value),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSafeModeRow(ColorScheme cs, bool isSafeMode) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _isSaving ? null : () => _setSafeMode(!isSafeMode),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 17,
+              ),
               child: Row(
                 children: [
                   Icon(
@@ -400,182 +584,22 @@ class _SecurityScreenState extends State<SecurityScreen>
                   ),
                   Switch(
                     value: isSafeMode,
-                    onChanged: (v) => showCustomNotification(
-                      context,
-                      l10n.securitySettingsUnavailable,
-                    ),
+                    onChanged: _isSaving ? null : _setSafeMode,
                   ),
                 ],
               ),
             ),
-          if (isSafeMode) ...[
-            if (_showSafeMode)
-              Padding(
-                padding: const EdgeInsets.only(left: 58),
-                child: Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: cs.outlineVariant.withValues(alpha: 0.35),
-                ),
-              ),
-            _settingsRow(
-              cs,
-              label: l10n.securityFindByPhone,
-              trailingText: _getPrivacyLabel(
-                _privacyConfig?.searchByPhone ?? 'ALL',
-              ),
-              verticalPadding: 16,
-              labelFontSize: 15,
-              labelFontWeight: null,
-              chevronSize: 18,
-              insetDivider: false,
-              isLast: false,
-            ),
-            _settingsRow(
-              cs,
-              label: l10n.securityWhoCanCall,
-              trailingText: _getPrivacyLabel(
-                _privacyConfig?.incomingCall ?? 'CONTACTS',
-              ),
-              verticalPadding: 16,
-              labelFontSize: 15,
-              labelFontWeight: null,
-              chevronSize: 18,
-              insetDivider: false,
-              isLast: false,
-            ),
-            _settingsRow(
-              cs,
-              label: l10n.securityWhoCanInvite,
-              trailingText: _getPrivacyLabel(
-                _privacyConfig?.chatsInvite ?? 'CONTACTS',
-              ),
-              verticalPadding: 16,
-              labelFontSize: 15,
-              labelFontWeight: null,
-              chevronSize: 18,
-              insetDivider: false,
-              isLast: false,
-            ),
-            _settingsRow(
-              cs,
-              label: l10n.securityShowContact,
-              trailingText: _privacyConfig?.contentLevelAccess == true
-                  ? l10n.securityContentSafe
-                  : l10n.securityContentAll,
-              verticalPadding: 16,
-              labelFontSize: 15,
-              labelFontWeight: null,
-              chevronSize: 18,
-              insetDivider: false,
-              isLast: true,
-            ),
-          ],
-          if (!isSafeMode) ...[
-            if (_showSafeMode)
-              Padding(
-                padding: const EdgeInsets.only(left: 20),
-                child: Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: cs.outlineVariant.withValues(alpha: 0.35),
-                ),
-              ),
-            _settingsRow(
-              cs,
-              icon: Symbols.phone,
-              label: l10n.securityWhoCanCall,
-              trailingText: _getPrivacyLabel(
-                _privacyConfig?.incomingCall ?? 'CONTACTS',
-              ),
-              isLast: false,
-              onTap: () => _showOptionSheet(
-                context,
-                cs,
-                title: l10n.securityWhoCanCall,
-                currentValue: _privacyConfig?.incomingCall ?? 'CONTACTS',
-                options: [
-                  ('ALL', l10n.securityPrivacyAll),
-                  ('CONTACTS', l10n.securityPrivacyContacts),
-                ],
-                onSelect: (value) => _updateSetting('INCOMING_CALL', value),
-              ),
-            ),
-            _settingsRow(
-              cs,
-              icon: Symbols.group,
-              label: l10n.securityWhoCanInvite,
-              trailingText: _getPrivacyLabel(
-                _privacyConfig?.chatsInvite ?? 'CONTACTS',
-              ),
-              isLast: false,
-              onTap: () => _showOptionSheet(
-                context,
-                cs,
-                title: l10n.securityWhoCanInvite,
-                currentValue: _privacyConfig?.chatsInvite ?? 'CONTACTS',
-                options: [
-                  ('ALL', l10n.securityPrivacyAll),
-                  ('CONTACTS', l10n.securityPrivacyContacts),
-                ],
-                onSelect: (value) => _updateSetting('CHATS_INVITE', value),
-              ),
-            ),
-            _settingsRow(
-              cs,
-              icon: Symbols.contact_phone,
-              label: l10n.securityFindByPhone,
-              trailingText: _getPrivacyLabel(
-                _privacyConfig?.searchByPhone ?? 'ALL',
-              ),
-              isLast: false,
-              onTap: () => _showOptionSheet(
-                context,
-                cs,
-                title: l10n.securityFindByPhone,
-                currentValue: _privacyConfig?.searchByPhone ?? 'ALL',
-                options: [
-                  ('ALL', l10n.securityPrivacyAll),
-                  ('CONTACTS', l10n.securityPrivacyContacts),
-                ],
-                onSelect: (value) => _updateSetting('SEARCH_BY_PHONE', value),
-              ),
-            ),
-            _settingsRow(
-              cs,
-              icon: Symbols.visibility_off,
-              label: l10n.securityShowOnlineStatus,
-              trailingText: _privacyConfig?.hidden == true
-                  ? l10n.securityPrivacyNobody
-                  : l10n.securityPrivacyContacts,
-              isLast: false,
-              onTap: () => _showHiddenStatusSheet(context, cs),
-            ),
-            _settingsRow(
-              cs,
-              icon: Symbols.contact_page,
-              label: l10n.securityShowMyNumber,
-              trailingText: _getPrivacyLabel(
-                _privacyConfig?.phoneNumberPrivacy ?? 'ALL',
-              ),
-              isLast: true,
-              onTap: () => _showOptionSheet(
-                context,
-                cs,
-                title: l10n.securityShowMyNumber,
-                currentValue: _privacyConfig?.phoneNumberPrivacy ?? 'ALL',
-                options: [
-                  ('ALL', l10n.securityPrivacyAll),
-                  ('CONTACTS', l10n.securityPrivacyContacts),
-                  ('NOBODY', l10n.securityPrivacyNobody),
-                ],
-                onSelect: (value) =>
-                    _updateSetting('PHONE_NUMBER_PRIVACY', value),
-              ),
-            ),
-          ],
-        ],
-      ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 58),
+          child: Divider(
+            height: 1,
+            thickness: 1,
+            color: cs.outlineVariant.withValues(alpha: 0.35),
+          ),
+        ),
+      ],
     );
   }
 
@@ -615,7 +639,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                   child: InkWell(
                     onTap: () {
                       Navigator.pop(context);
-                      onSelect(option.$1);
+                      if (!isSelected) onSelect(option.$1);
                     },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -649,55 +673,32 @@ class _SecurityScreenState extends State<SecurityScreen>
     );
   }
 
-  Future<void> _showHiddenStatusSheet(
-    BuildContext context,
-    ColorScheme cs,
-  ) async {
+  void _showHiddenStatusSheet(BuildContext context, ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
-    final currentValue = _privacyConfig?.hidden == true ? 'NONE' : 'CONTACTS';
-
-    if (currentValue == 'NONE') {
-      final confirmed = await showConfirmDialog(
-        context,
-        title: l10n.securityConfirmTitle,
-        message: l10n.securityHiddenStatusWarning,
-        confirmLabel: l10n.spoofDialogYes,
-      );
-      if (confirmed) _updateSetting('HIDDEN', false);
-      return;
-    }
 
     _showOptionSheet(
       context,
       cs,
       title: l10n.securityShowOnlineStatus,
-      currentValue: currentValue,
+      currentValue: _privacyConfig?.hidden == true ? 'NONE' : 'CONTACTS',
       options: [
         ('CONTACTS', l10n.securityPrivacyContacts),
         ('NONE', l10n.securityPrivacyNobody),
       ],
-      onSelect: (value) {
+      onSelect: (value) async {
         if (value == 'CONTACTS') {
           _updateSetting('HIDDEN', false);
-        } else {
-          _showHiddenStatusConfirmDialog(context, cs);
+          return;
         }
+        final confirmed = await showConfirmDialog(
+          context,
+          title: l10n.securityConfirmTitle,
+          message: l10n.securityHiddenStatusWarning,
+          confirmLabel: l10n.spoofDialogYes,
+        );
+        if (confirmed) _updateSetting('HIDDEN', true);
       },
     );
-  }
-
-  Future<void> _showHiddenStatusConfirmDialog(
-    BuildContext context,
-    ColorScheme cs,
-  ) async {
-    final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showConfirmDialog(
-      context,
-      title: l10n.securityConfirmTitle,
-      message: l10n.securityHiddenStatusWarning,
-      confirmLabel: l10n.spoofDialogYes,
-    );
-    if (confirmed) _updateSetting('HIDDEN', true);
   }
 
   Widget _buildInfoLabel(ColorScheme cs) {
@@ -803,6 +804,81 @@ class _SecurityScreenState extends State<SecurityScreen>
     } catch (_) {}
   }
 
+  Future<void> _requestProfileDeletion() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.securityDeleteProfileConfirmTitle,
+      message: l10n.securityDeleteProfileConfirmMessage,
+      confirmLabel: l10n.securityDeleteProfileConfirmAction,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    await _applyProfileDeletion(true, l10n.securityDeleteProfileRequested);
+  }
+
+  Future<void> _cancelProfileDeletion() async {
+    final l10n = AppLocalizations.of(context)!;
+    await _applyProfileDeletion(false, l10n.securityDeleteProfileCanceled);
+  }
+
+  Future<void> _applyProfileDeletion(bool delete, String successText) async {
+    if (_deletionBusy) return;
+    setState(() => _deletionBusy = true);
+    try {
+      final scheduledAt = await accountModule.setProfileDeletion(delete);
+      if (!mounted) return;
+      setState(() => _profileDeletionAt = scheduledAt);
+      showCustomNotification(context, successText);
+    } catch (e) {
+      if (!mounted) return;
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.securityDeleteProfileError(e.toString()),
+      );
+    } finally {
+      if (mounted) setState(() => _deletionBusy = false);
+    }
+  }
+
+  Widget _buildDeleteProfileSection(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
+    final scheduledAt = _profileDeletionAt;
+    final pending = scheduledAt != null;
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: AppShape.cardRadius,
+      depth: 6,
+      child: Column(
+        children: [
+          _settingsRow(
+            cs,
+            icon: pending ? Symbols.error : Symbols.person_remove,
+            label: pending
+                ? l10n.securityDeleteProfileScheduled(
+                    formatDateNumeric(scheduledAt),
+                  )
+                : l10n.securityDeleteProfileTitle,
+            subtitle: pending ? null : l10n.securityDeleteProfileSubtitle,
+            accentColor: cs.error,
+            showChevron: false,
+            isLast: !pending,
+            onTap: pending || _deletionBusy ? null : _requestProfileDeletion,
+          ),
+          if (pending)
+            _settingsRow(
+              cs,
+              icon: Symbols.undo,
+              label: l10n.securityDeleteProfileKeep,
+              showChevron: false,
+              isLast: true,
+              onTap: _deletionBusy ? null : _cancelProfileDeletion,
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBlacklistSection(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
     final count = _blockedContacts.length;
@@ -886,14 +962,19 @@ class _SecurityScreenState extends State<SecurityScreen>
     FontWeight? labelFontWeight = FontWeight.w500,
     bool insetDivider = true,
     bool isLast = false,
+    bool lockedBySafeMode = false,
+    Color? accentColor,
     VoidCallback? onTap,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onTap ?? () => showCustomNotification(context, label),
+            onTap: lockedBySafeMode
+                ? () => showCustomNotification(context, l10n.securityModeLocked)
+                : (onTap ?? () => showCustomNotification(context, label)),
             borderRadius: isLast
                 ? const BorderRadius.vertical(
                     bottom: Radius.circular(AppShape.card),
@@ -909,7 +990,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                   if (icon != null) ...[
                     Icon(
                       icon,
-                      color: cs.onSurfaceVariant,
+                      color: accentColor ?? cs.onSurfaceVariant,
                       size: 22,
                       weight: 400,
                     ),
@@ -923,7 +1004,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                               Text(
                                 label,
                                 style: TextStyle(
-                                  color: cs.onSurface,
+                                  color: accentColor ?? cs.onSurface,
                                   fontSize: labelFontSize,
                                   fontWeight: labelFontWeight,
                                 ),
@@ -941,7 +1022,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                         : Text(
                             label,
                             style: TextStyle(
-                              color: cs.onSurface,
+                              color: accentColor ?? cs.onSurface,
                               fontSize: labelFontSize,
                               fontWeight: labelFontWeight,
                             ),
@@ -959,7 +1040,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                   if (showChevron) ...[
                     const SizedBox(width: 4),
                     Icon(
-                      Symbols.chevron_right,
+                      lockedBySafeMode ? Symbols.lock : Symbols.chevron_right,
                       color: cs.outline,
                       size: chevronSize,
                       weight: 400,

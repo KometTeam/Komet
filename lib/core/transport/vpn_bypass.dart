@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/logger.dart';
+import '../config/build_profile.dart';
 
 class VpnBypassResult {
   final bool enabled;
@@ -51,11 +52,13 @@ class VpnBypassService {
   bool get _supported => Platform.isAndroid;
 
   Future<bool> isEnabled() async {
+    if (!BuildProfile.insecureTransport) return false;
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(prefKey) ?? false;
   }
 
   Future<void> setEnabled(bool value) async {
+    if (!BuildProfile.insecureTransport) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(prefKey, value);
   }
