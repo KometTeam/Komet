@@ -18,6 +18,7 @@ import '../../../core/crypto/message_decryption_cache.dart';
 import '../../widgets/decrypted_text.dart';
 import '../../widgets/encryption_lock_badge.dart';
 import '../../widgets/online_dot.dart';
+import '../../widgets/custom_notification.dart';
 import '../../widgets/chat_menu_overlay.dart';
 import '../../widgets/confirm_dialog.dart';
 import 'profile_action_sheets.dart';
@@ -3407,7 +3408,6 @@ class _ChatListScreenState extends State<ChatListScreen>
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -3583,7 +3583,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       api,
       myId,
       chat.id,
-      chat.lastMsgTime + 1,
+      (chat.lastMsgTime ?? 0) + 1,
     );
     if (!mounted) return;
     showCustomNotification(
