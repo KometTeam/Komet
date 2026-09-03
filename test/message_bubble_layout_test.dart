@@ -9,7 +9,7 @@ import 'package:komet/models/attachment.dart';
 const int _me = 1;
 const int _peer = 7;
 const double _photoWidth = 180;
-const double _maxBubbleWidth = 324;
+const double _maxBubbleWidth = 346;
 
 CachedMessage _message({
   required String text,

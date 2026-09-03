@@ -36,6 +36,13 @@ void main() {
     expect(layout.width, lessThanOrEqualTo(280));
   });
 
+  test('portrait photo keeps a wide frame for side blur', () {
+    final layout = layoutTelegramAlbum([_s(900, 1600)], maxWidth: 280);
+    expect(layout.width, closeTo(280, 0.5));
+    expect(layout.height, greaterThan(200));
+    expect(layout.width / layout.height, greaterThan(0.7));
+  });
+
   test('two similar landscapes stack like Telegram', () {
     final layout = layoutTelegramAlbum(
       [_s(1600, 900), _s(1920, 1080)],

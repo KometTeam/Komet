@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -71,7 +72,7 @@ class PhotoBubble extends StatelessWidget {
       photos,
       maxWidth: photos.length == 1
           ? BubbleContext.photoMaxSize
-          : (maxW * 0.75).clamp(240.0, BubbleContext.photoMaxSize),
+          : (maxW * 0.80).clamp(240.0, BubbleContext.photoMaxSize),
     );
     final clip = albumClipRadius(
       _bubbleRadius(),
@@ -144,6 +145,7 @@ class PhotoBubble extends StatelessWidget {
                   photos[tile.index],
                   tile.index,
                   tile.width,
+                  tile.height,
                 ),
               ),
           ],
@@ -158,6 +160,7 @@ class PhotoBubble extends StatelessWidget {
     double width,
     double height, {
     required int memWidth,
+    BoxFit fit = BoxFit.cover,
   }) {
     final preview = dataUriImage(photo, photo.previewData);
     Widget box(Widget child) {
@@ -174,7 +177,7 @@ class PhotoBubble extends StatelessWidget {
         : box(
             Image(
               image: preview,
-              fit: BoxFit.cover,
+              fit: fit,
               gaplessPlayback: true,
             ),
           );
@@ -185,7 +188,7 @@ class PhotoBubble extends StatelessWidget {
           File(localPath),
           width: width.isFinite ? width : null,
           height: height.isFinite ? height : null,
-          fit: BoxFit.cover,
+          fit: fit,
           cacheWidth: memWidth,
           gaplessPlayback: true,
           errorBuilder: (_, _, _) => placeholder,
@@ -199,7 +202,7 @@ class PhotoBubble extends StatelessWidget {
           imageUrl: imageUrl,
           width: width.isFinite ? width : null,
           height: height.isFinite ? height : null,
-          fit: BoxFit.cover,
+          fit: fit,
           memCacheWidth: memWidth,
           fadeInDuration: Duration.zero,
           placeholderFadeInDuration: Duration.zero,
@@ -244,23 +247,74 @@ class PhotoBubble extends StatelessWidget {
     PhotoAttachment photo,
     int index,
     double tileWidth,
+    double tileHeight,
   ) {
     final cachePx =
         (tileWidth * MediaQuery.of(ctx.context).devicePixelRatio).round();
+    final media = _buildPhotoImage(
+      ctx,
+      photo,
+      double.infinity,
+      double.infinity,
+      memWidth: cachePx,
+      fit: BoxFit.cover,
+    );
+    final framed = _needsSideBlur(photo, tileWidth, tileHeight)
+        ? _blurFilledMedia(
+            _buildPhotoImage(
+              ctx,
+              photo,
+              double.infinity,
+              double.infinity,
+              memWidth: cachePx,
+              fit: BoxFit.cover,
+            ),
+            _buildPhotoImage(
+              ctx,
+              photo,
+              double.infinity,
+              double.infinity,
+              memWidth: cachePx,
+              fit: BoxFit.contain,
+            ),
+          )
+        : media;
     return Stack(
       fit: StackFit.expand,
       children: [
-        _buildPhotoImage(
-          ctx,
-          photo,
-          double.infinity,
-          double.infinity,
-          memWidth: cachePx,
-        ),
+        framed,
         if (ctx.uploadProgress != null)
           _buildUploadOverlay(ctx.uploadProgress!, index),
         if (ctx.uploadProgress == null)
           _buildTileTapTarget(ctx, index, cachePx),
+      ],
+    );
+  }
+
+  bool _needsSideBlur(
+    PhotoAttachment photo,
+    double tileWidth,
+    double tileHeight,
+  ) {
+    if (tileWidth <= 0 || tileHeight <= 0) return false;
+    final pw = photo.width?.toDouble() ?? 0;
+    final ph = photo.height?.toDouble() ?? 0;
+    final photoRatio = pw > 0 && ph > 0 ? pw / ph : 1.0;
+    return photoRatio < (tileWidth / tileHeight) * 0.92;
+  }
+
+  Widget _blurFilledMedia(Widget backdrop, Widget foreground) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRect(
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+            child: Transform.scale(scale: 1.16, child: backdrop),
+          ),
+        ),
+        const ColoredBox(color: Color(0x3A000000)),
+        foreground,
       ],
     );
   }

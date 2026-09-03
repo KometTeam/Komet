@@ -106,6 +106,9 @@ AlbumLayout _layoutSingle(AlbumMediaSize item, double maxW, double maxH) {
   final down = math.min(1.0, math.min(maxW / w, maxH / h));
   w *= down;
   h *= down;
+  if (w / h < 0.95 && w < maxW * 0.72) {
+    w = maxW;
+  }
   return AlbumLayout(
     width: w,
     height: h,

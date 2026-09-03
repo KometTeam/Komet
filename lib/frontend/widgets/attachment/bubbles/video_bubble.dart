@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -74,13 +76,13 @@ class VideoBubble extends StatelessWidget {
     final localThumb = dataUriImage(video, video.previewData);
     final uploading = ctx.uploadProgress;
 
-    Widget previewImage() {
+    Widget previewImage({BoxFit fit = BoxFit.cover}) {
       if (previewUrl.isNotEmpty && !previewUrl.startsWith('data:')) {
         return CachedNetworkImage(
           imageUrl: previewUrl,
           width: width,
           height: height,
-          fit: BoxFit.cover,
+          fit: fit,
           memCacheWidth: (width * dpr).round(),
           fadeInDuration: Duration.zero,
           placeholderFadeInDuration: Duration.zero,
@@ -90,7 +92,7 @@ class VideoBubble extends StatelessWidget {
                   image: localThumb,
                   width: width,
                   height: height,
-                  fit: BoxFit.cover,
+                  fit: fit,
                 ),
         );
       }
@@ -99,7 +101,7 @@ class VideoBubble extends StatelessWidget {
           image: localThumb,
           width: width,
           height: height,
-          fit: BoxFit.cover,
+          fit: fit,
           gaplessPlayback: true,
           errorBuilder: (_, _, _) => placeholder(),
         );
@@ -107,11 +109,38 @@ class VideoBubble extends StatelessWidget {
       return placeholder();
     }
 
+    final videoW = video.width?.toDouble() ?? 0;
+    final videoH = video.height?.toDouble() ?? 0;
+    final isNarrow = videoW > 0 && videoH > 0 && videoW / videoH < 0.95;
+
+    final framedPreview = isNarrow
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              ClipRect(
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                  child: Transform.scale(
+                    scale: 1.16,
+                    child: previewImage(),
+                  ),
+                ),
+              ),
+              const ColoredBox(color: Color(0x3A000000)),
+              previewImage(fit: BoxFit.contain),
+            ],
+          )
+        : previewImage();
+
     final preview = ClipRRect(
       borderRadius: BorderRadius.circular(BubbleContext.photoBorderRadius),
-      child: Stack(
-        children: [
-          previewImage(),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            framedPreview,
           if (uploading != null)
             Positioned.fill(
               child: ColoredBox(
@@ -167,6 +196,7 @@ class VideoBubble extends StatelessWidget {
               ),
             ),
         ],
+        ),
       ),
     );
 

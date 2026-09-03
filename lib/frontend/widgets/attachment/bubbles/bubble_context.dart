@@ -62,7 +62,7 @@ class BubblePresentation {
 }
 
 class BubbleContext {
-  static const double photoMaxSize = 320.0;
+  static const double photoMaxSize = 400.0;
   static const double photoMinSize = 100.0;
   static const double photoBorderRadius = 12.0;
   static const double bubbleBorderRadius = 24.0;
@@ -88,6 +88,9 @@ class BubbleContext {
       final up = photoMinSize / longer;
       w *= up;
       h *= up;
+    }
+    if (w / h < 0.95 && w < photoMaxSize * 0.72) {
+      w = photoMaxSize;
     }
     return Size(w, h);
   }

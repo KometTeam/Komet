@@ -58,6 +58,7 @@ import '../../../core/storage/archived_chats_store.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/cache/message_session_cache.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../core/utils/chat_layout.dart';
 import '../../../core/utils/emoji_keyword_index.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/route_settle.dart';
@@ -2849,7 +2850,7 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
 
-    final base = wrapChrome(content);
+    final base = wrapChrome(_centerChatColumn(content));
     return AnimatedBuilder(
       animation: _searchAnim,
       builder: (context, _) {
@@ -5737,12 +5738,25 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _buildMessagesList() =>
       _messageListWidget ??= _ChatMessageList(this, key: _messageListKey);
 
-  EdgeInsets _messagesListPadding(BuildContext context) {
+  EdgeInsets _messagesListPadding(BuildContext context, {double inset = 0}) {
     if (AppChatChrome.current.value == ChatChromeStyle.color) {
-      return const EdgeInsets.symmetric(vertical: 8);
+      return EdgeInsets.fromLTRB(inset, 8, inset, 8);
     }
     final topInset = MediaQuery.paddingOf(context).top;
-    return EdgeInsets.only(top: topInset + 8, bottom: 8);
+    return EdgeInsets.fromLTRB(inset, topInset + 8, inset, 8);
+  }
+
+  Widget _centerChatColumn(Widget child) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final inset = ChatLayout.horizontalInset(constraints.maxWidth);
+        if (inset <= 0) return child;
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: inset),
+          child: child,
+        );
+      },
+    );
   }
 
   double _floatingDateTop(double pinnedHeight) {
@@ -5792,13 +5806,18 @@ class _ChatScreenState extends State<ChatScreen>
                       jumpExtent != null && jumpExtent < userCacheExtent
                       ? jumpExtent
                       : userCacheExtent;
-                  return CustomScrollView(
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      final inset = ChatLayout.horizontalInset(
+                        constraints.maxWidth,
+                      );
+                      return CustomScrollView(
                     controller: _scrollController,
                     reverse: true,
                     scrollCacheExtent: ScrollCacheExtent.pixels(cacheExtent),
                     slivers: [
                       SliverPadding(
-                        padding: _messagesListPadding(context),
+                        padding: _messagesListPadding(context, inset: inset),
                         sliver: SliverList(
                           key: ValueKey(_listEpoch),
                           delegate: SliverChildBuilderDelegate(
@@ -6030,6 +6049,8 @@ class _ChatScreenState extends State<ChatScreen>
                         ),
                       ),
                     ],
+                  );
+                    },
                   );
                 },
               ),

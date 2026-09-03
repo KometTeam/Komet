@@ -15,6 +15,7 @@ import '../../core/config/app_bubble_shape.dart';
 import '../../core/crypto/message_decryption_cache.dart';
 import 'decrypted_text.dart';
 import '../../core/utils/bubble_radius.dart';
+import '../../core/utils/chat_layout.dart';
 import '../../core/utils/emoji_keyword_index.dart';
 import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_format.dart';
@@ -1130,8 +1131,8 @@ class MessageBubble extends StatelessWidget {
     final isVideoNote = _isVideoNote;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final maxBubbleWidth = isVideoNote
-        ? math.min(screenWidth - 24, 560.0)
-        : math.min(screenWidth * 0.75, 560.0);
+        ? math.min(screenWidth - 24, ChatLayout.bubbleHardCap)
+        : ChatLayout.maxBubbleWidth(screenWidth);
     final noBubbleBackground =
         isVideoNote || _isSticker || jumboAnimoji != null;
     final bubbleColor = noBubbleBackground
