@@ -70,7 +70,7 @@ import '../../../backend/models/chat_folder.dart';
 import '../../../backend/modules/account.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/cloud_storage.dart';
-import '../../../backend/modules/contacts.dart';
+import '../../../backend/modules/complaints.dart';
 import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
@@ -3544,7 +3544,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             icon: Symbols.flag,
             label: 'Пожаловаться',
             destructive: true,
-            onTap: () {},
+            onTap: () => unawaited(_reportSingleChat(chat)),
           ),
         if (!isChannel && isDialog && peerId != 0 && !isSaved)
           ChatMenuItem(
@@ -3718,6 +3718,50 @@ class _ChatListScreenState extends State<ChatListScreen>
     showCustomNotification(
       context,
       ok ? 'Вы отписались от канала' : 'Не удалось отписаться',
+    );
+  }
+
+  int _complaintTypeId(String type) {
+    switch (type) {
+      case 'CHANNEL':
+        return 5;
+      case 'CHAT':
+        return 4;
+      default:
+        return 3;
+    }
+  }
+
+  Future<void> _reportSingleChat(CachedChat chat) async {
+    final l10n = AppLocalizations.of(context)!;
+    final typeId = _complaintTypeId(chat.type);
+    await showComplaintCard(
+      context,
+      title: l10n.chatInfoComplaintTitle,
+      subtitle: l10n.chatInfoComplaintSubtitle,
+      sendLabel: l10n.chatInfoComplaintSend,
+      closeLabel: l10n.chatInfoComplaintClose,
+      emptyLabel: l10n.chatInfoComplaintEmpty,
+      loadReasons: () async {
+        final reasons = await ComplaintsModule.reasonsFor(api, typeId);
+        return reasons
+            .map((r) => (id: r.reasonId, title: r.reasonTitle))
+            .toList();
+      },
+      onSend: (reasonId) async {
+        final ok = await ComplaintsModule.sendComplaint(
+          api,
+          reasonId: reasonId,
+          typeId: typeId,
+          ids: [chat.id],
+        );
+        if (!mounted) return ok;
+        showCustomNotification(
+          context,
+          ok ? l10n.chatInfoComplaintSent : l10n.chatInfoComplaintFailed,
+        );
+        return ok;
+      },
     );
   }
 
