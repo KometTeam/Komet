@@ -71,6 +71,7 @@ import '../../../backend/modules/account.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/cloud_storage.dart';
 import '../../../backend/modules/complaints.dart';
+import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/folders.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
