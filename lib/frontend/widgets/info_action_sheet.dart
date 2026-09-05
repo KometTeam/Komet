@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,14 +10,14 @@ import '../../core/config/app_shape.dart';
 class InfoActionSheetItem {
   final IconData icon;
   final String title;
-  final String body;
+  final String? body;
   final Color? titleColor;
   final Color? iconColor;
 
   const InfoActionSheetItem({
     required this.icon,
     required this.title,
-    required this.body,
+    this.body,
     this.titleColor,
     this.iconColor,
   });
@@ -26,6 +27,7 @@ Future<bool> showInfoActionSheet(
   BuildContext context, {
   String? headerEmoji,
   IconData? headerIcon,
+  bool headerGlow = false,
   required String title,
   String? subtitle,
   List<InfoActionSheetItem> items = const [],
@@ -54,6 +56,7 @@ Future<bool> showInfoActionSheet(
     builder: (ctx) => _InfoActionSheet(
       headerEmoji: headerEmoji,
       headerIcon: headerIcon,
+      headerGlow: headerGlow,
       title: title,
       subtitle: subtitle,
       items: items,
@@ -73,6 +76,7 @@ Future<bool> showInfoActionSheet(
 class _InfoActionSheet extends StatefulWidget {
   final String? headerEmoji;
   final IconData? headerIcon;
+  final bool headerGlow;
   final String title;
   final String? subtitle;
   final List<InfoActionSheetItem> items;
@@ -82,6 +86,7 @@ class _InfoActionSheet extends StatefulWidget {
   const _InfoActionSheet({
     this.headerEmoji,
     this.headerIcon,
+    this.headerGlow = false,
     required this.title,
     this.subtitle,
     this.items = const [],
@@ -204,15 +209,34 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
 
   Widget _buildHeader(ColorScheme cs) {
     if (widget.headerEmoji != null) {
+      final emoji = Text(
+        widget.headerEmoji!,
+        style: const TextStyle(fontSize: 72, height: 1.0),
+      );
       return Center(
-        child: Text(
-          widget.headerEmoji!,
-          style: const TextStyle(fontSize: 72, height: 1.0),
+        child: widget.headerGlow ? _GlowHalo(child: emoji) : emoji,
+      );
+    }
+    if (!widget.headerGlow) {
+      return Center(
+        child: Icon(
+          widget.headerIcon,
+          size: 72,
+          color: cs.primary,
+          weight: 400,
         ),
       );
     }
     return Center(
-      child: Icon(widget.headerIcon, size: 72, color: cs.primary, weight: 400),
+      child: _GlowHalo(
+        child: Icon(
+          widget.headerIcon,
+          size: 104,
+          fill: 1,
+          weight: 300,
+          color: Color.lerp(cs.surface, cs.primary, 0.14),
+        ),
+      ),
     );
   }
 
@@ -233,27 +257,80 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
             children: [
               Text(
                 item.title,
-                style: TextStyle(
-                  color: titleColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  height: 1.25,
-                ),
+                style: item.body == null
+                    ? TextStyle(
+                        color: item.titleColor ?? cs.onSurfaceVariant,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
+                        height: 1.35,
+                      )
+                    : TextStyle(
+                        color: titleColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                item.body,
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                  height: 1.35,
+              if (item.body != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  item.body!,
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    height: 1.35,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
       ],
     );
   }
+}
+
+class _GlowHalo extends StatelessWidget {
+  final Widget child;
+
+  const _GlowHalo({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 208,
+      height: 184,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                _blob(cs.primary, const Offset(-36, -12)),
+                _blob(cs.tertiary, const Offset(34, -24)),
+                _blob(cs.secondary, const Offset(6, 30)),
+              ],
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _blob(Color color, Offset offset) => Transform.translate(
+    offset: offset,
+    child: Container(
+      width: 112,
+      height: 112,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.4),
+      ),
+    ),
+  );
 }

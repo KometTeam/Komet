@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 
 import 'call_session.dart';
 
+// #***! что показать в плашке звонка
 class ActiveCallPresentation {
   const ActiveCallPresentation({
     required this.session,
@@ -25,6 +26,7 @@ class ActiveCallPresentation {
       isGroup == other.isGroup;
 }
 
+// #***! активный звонок один на всё приложение
 class ActiveCall {
   ActiveCall._();
 
@@ -32,11 +34,13 @@ class ActiveCall {
 
   final ValueNotifier<ActiveCallPresentation?> current = ValueNotifier(null);
 
+  // #***! сколько экранов звонка открыто, при них плашку не рисуем
   final ValueNotifier<bool> screenVisible = ValueNotifier(false);
 
   int _openScreens = 0;
   StreamSubscription<CallSessionState>? _stateSub;
 
+  // #***! цепляем звонок к плашке и следим за концом
   void attach({
     required CallSession session,
     required String name,
@@ -61,6 +65,7 @@ class ActiveCall {
     _publish(current, next);
   }
 
+  // #***! отцепляем, звонок могли сменить чужой не трогаем
   void detach([CallSession? session]) {
     final active = current.value;
     if (active == null) return;
@@ -80,6 +85,7 @@ class ActiveCall {
     _publish(screenVisible, _openScreens > 0);
   }
 
+  // #***! notifier во время кадра менять нельзя, откладываем
   void _publish<T>(ValueNotifier<T> notifier, T value) {
     if (SchedulerBinding.instance.schedulerPhase ==
         SchedulerPhase.persistentCallbacks) {

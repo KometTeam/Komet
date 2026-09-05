@@ -1,6 +1,8 @@
+// #***! разбор жирного ответа login для отладки сессии
 class LoginInfo {
   const LoginInfo._();
 
+  // #***! профиль конфиг и сводка по чатам плоским мапом
   static Map<String, dynamic> fromPayload(Map<dynamic, dynamic> payload) {
     final profile = _asMap(payload['profile']);
     final contact = _asMap(profile?['contact']);
@@ -40,6 +42,7 @@ class LoginInfo {
     };
   }
 
+  // #***! по чатам только сводка, список огромный
   static Map<String, dynamic> _buildChatsSummary(List<dynamic> chats) {
     var active = 0;
     var hidden = 0;
@@ -86,6 +89,7 @@ class LoginInfo {
     };
   }
 
+  // #***! нет chatMarker берём максимум lastEventTime
   static int? _latestChatEventTime(List<dynamic> chats) {
     int? latest;
     for (final rawChat in chats) {
@@ -98,6 +102,7 @@ class LoginInfo {
     return latest;
   }
 
+  // #***! дальше приведения типов, сервер шлёт разное
   static Map<dynamic, dynamic>? _asMap(dynamic value) {
     return value is Map ? value : null;
   }
@@ -123,6 +128,7 @@ class LoginInfo {
     };
   }
 
+  // #***! копируем в чистый json для jsonEncode
   static Map<String, dynamic>? _copyMap(Map<dynamic, dynamic>? value) {
     if (value == null) return null;
     return value.map(

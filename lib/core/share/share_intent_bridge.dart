@@ -10,12 +10,14 @@ import '../../main.dart';
 import '../../models/shared_payload.dart';
 import '../utils/logger.dart';
 
+// #***! системное поделиться, файлы с натива
 class ShareIntentBridge {
   ShareIntentBridge._();
   static final ShareIntentBridge instance = ShareIntentBridge._();
 
   static const _method = MethodChannel('ru.komet.app/share');
   static const _events = EventChannel('ru.komet.app/share_events');
+  // #***! экран может быть не готов, ретраим
   static const _retryDelay = Duration(milliseconds: 300);
   static const _maxRetries = 100;
 
@@ -34,6 +36,7 @@ class ShareIntentBridge {
     }
   }
 
+  // #***! подписка на шаринг и состояние сессии
   void init() {
     if (_started || !_native) return;
     _started = true;
@@ -46,11 +49,13 @@ class ShareIntentBridge {
     });
   }
 
+  // #***! юишка говорит что готова
   void markReady() {
     _ready = true;
     _flushPending();
   }
 
+  // #***! запустили сразу из поделиться, забираем что лежит
   Future<void> checkInitialShare() async {
     if (!_native) return;
     try {
@@ -69,6 +74,7 @@ class ShareIntentBridge {
     }
   }
 
+  // #***! полученное откладываем и пробуем показать
   void _onEvent(Object? event) {
     final payload = SharedPayload.fromMap(event);
     if (payload == null) return;
@@ -81,6 +87,7 @@ class ShareIntentBridge {
     _flushPending();
   }
 
+  // #***! показываем если есть контекст и сессия, иначе ретраим
   void _flushPending() {
     final payload = _pending;
     if (payload == null || _presenting) return;
@@ -99,6 +106,7 @@ class ShareIntentBridge {
       return;
     }
 
+    // #***! кэш натива чистим после закрытия
     _pending = null;
     _presenting = true;
     unawaited(

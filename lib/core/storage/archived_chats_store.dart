@@ -1,5 +1,6 @@
 import 'per_chat_json_store.dart';
 
+// #***! что убрано в архив, архив локальный сервер про него не знает
 class ArchivedChatsStore extends PerChatJsonStore<bool> {
   ArchivedChatsStore._()
     : super(
@@ -16,6 +17,7 @@ class ArchivedChatsStore extends PerChatJsonStore<bool> {
   Future<void> setArchived(int accountId, int chatId, bool archived) =>
       write(accountId, chatId, archived ? true : null);
 
+  // #***! все архивные аккаунта для фильтрации списка
   Set<int> archivedChatIds(int accountId) {
     if (accountId == 0) return const {};
     final prefix = '$accountId/';

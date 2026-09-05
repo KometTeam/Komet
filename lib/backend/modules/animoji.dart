@@ -6,11 +6,13 @@ import '../../core/utils/emoji_keyword_index.dart';
 import '../../core/utils/logger.dart';
 import '../../models/animoji.dart';
 
+// #***! анимодзи для реакций, каталог плюс недавние
 class AnimojiModule {
   final Api _api;
 
   AnimojiModule(this._api);
 
+  // #***! каталог не загрузился, панель покажем на этих
   static const List<String> fallbackReactions = [
     '👍',
     '❤️',
@@ -23,6 +25,7 @@ class AnimojiModule {
   static const String _recentsKey = 'komet_recent_animoji';
   static const int _maxRecents = 24;
 
+  // #***! два индекса, по id для сервера и по эмодзи для поиска
   final Map<int, Animoji> _byId = {};
   final Map<String, Animoji> _byEmoji = {};
   List<int> _orderedIds = [];
@@ -40,6 +43,7 @@ class AnimojiModule {
 
   List<String> get emojis => animojis.map((a) => a.emoji).toList();
 
+  // #***! недавние в prefs, каталог только в памяти
   Future<void> ensureRecentsLoaded() async {
     if (_recentsLoaded) return;
     _recentsLoaded = true;
@@ -50,6 +54,7 @@ class AnimojiModule {
     } catch (_) {}
   }
 
+  // #***! поставили реакцию, двигаем в начало недавних
   Future<void> noteUsed(Animoji animoji) async {
     await ensureRecentsLoaded();
     _remember(animoji);
@@ -77,6 +82,7 @@ class AnimojiModule {
   Animoji? findByEmoji(String emoji) =>
       _byEmoji[EmojiKeywordIndex.normalize(emoji)];
 
+  // #***! догруз по одному, пуш может прийти по чему то незнакомому
   Future<Animoji?> fetchById(int id) async {
     final known = _byId[id];
     if (known != null) return known;
@@ -94,6 +100,7 @@ class AnimojiModule {
     return _byId[id];
   }
 
+  // #***! _loading схлопывает параллельные вызовы
   Future<void> ensureLoaded() {
     return _loading ??= _load().catchError((Object e) {
       _loading = null;
@@ -101,6 +108,7 @@ class AnimojiModule {
     });
   }
 
+  // #***! каталог в три захода, наборы состав и сами анимодзи
   Future<void> _load() async {
     final setIds = <int>[];
     final fallbackIds = <int>[];
@@ -116,6 +124,7 @@ class AnimojiModule {
           if (s is Map) _appendIntList(setIds, s['animojiSetIds']);
         }
       }
+      // #***! наборов нет, берём id из animojiUpdates
       final updates = sync['animojiUpdates'];
       if (updates is Map) {
         for (final key in updates.keys) {
@@ -146,6 +155,7 @@ class AnimojiModule {
     final ids = _dedup(orderedIds.isNotEmpty ? orderedIds : fallbackIds);
     if (ids.isEmpty) return;
 
+    // #***! пачками по 100, на всём списке сервер даёт ошибку
     for (final batch in _chunk(ids, 100)) {
       final map = await _api.sendRequestMap(Opcode.assetsGetByIds, {
         'type': 'ANIMOJI',
@@ -161,6 +171,7 @@ class AnimojiModule {
       }
     }
 
+    // #***! в порядок берём только то что доехало
     _orderedIds = ids.where(_byId.containsKey).toList();
     logger.i('Анимодзи: ${_orderedIds.length} доступно для реакций');
   }
@@ -186,6 +197,7 @@ class AnimojiModule {
     }
   }
 
+  // #***! режем список на пачки
   Iterable<List<T>> _chunk<T>(List<T> list, int size) sync* {
     for (var i = 0; i < list.length; i += size) {
       yield list.sublist(i, i + size > list.length ? list.length : i + size);

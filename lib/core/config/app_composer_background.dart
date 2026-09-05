@@ -3,8 +3,10 @@ import 'package:flutter/foundation.dart';
 import '../../frontend/widgets/liquid_glass.dart';
 import 'persisted_setting.dart';
 
+// #***! фон поля ввода
 enum ComposerBackground { standard, frostBlur, liquidGlass }
 
+// #***! стекло не тянет платформа, тихо подставляем блюр
 class ComposerMaterial {
   static bool isLiquid(ComposerBackground value) =>
       value == ComposerBackground.liquidGlass && LiquidGlass.isSupported;
@@ -14,6 +16,7 @@ class ComposerMaterial {
       (value == ComposerBackground.liquidGlass && !LiquidGlass.isSupported);
 }
 
+// #***! настройка фона поля ввода
 class AppComposerBackground {
   static const prefKey = 'app_composer_background';
 

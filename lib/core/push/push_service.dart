@@ -23,11 +23,13 @@ const _channelId = 'komet_messages';
 const _channelName = 'Сообщения';
 const _prefsTokenKey = 'fcm_push_token';
 
+// #***! фоновые обработчики, отдельный изолят без доступа к состоянию приложения
 Future<void> _clearHistory(int chatId) async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.remove('notif_hist_$chatId');
 }
 
+// #***! нажали кнопку в уведомлении, ответить или отклонить
 @pragma('vm:entry-point')
 void _onNotificationResponse(NotificationResponse response) {
   if (response.actionId == 'call_decline') {
@@ -42,6 +44,7 @@ void _onNotificationResponse(NotificationResponse response) {
   unawaited(_handleReply(payload, text));
 }
 
+// #***! отклонить звонок из уведомления, поднимаем сигналку ради одного сообщения
 Future<void> _handleCallDecline(String payloadJson) async {
   String vcp;
   String conversationId;
@@ -73,6 +76,7 @@ Future<void> _handleCallDecline(String payloadJson) async {
   }
 }
 
+// #***! быстрый ответ, поднимаем сессию шлём и обновляем уведомление
 Future<void> _handleReply(String payloadJson, String text) async {
   int account;
   int chatId;
@@ -150,6 +154,7 @@ Future<void> _handleReply(String payloadJson, String text) async {
 
 bool _localActionsReady = false;
 
+// #***! каналы и обработчики уведомлений при старте
 /// Инициализация локальных уведомлений и их action-коллбэков.
 ///
 /// Нужна и FCM, и FKM: без неё кнопка «Ответить» в уведомлении не доезжает
@@ -178,13 +183,22 @@ Future<void> initLocalNotificationActions() async {
       );
 }
 
+// #***! фаербейз пуши, только флейвор oneme
 class PushService {
   PushService._();
   static final PushService instance = PushService._();
 
+  // #***! вошли в чат, гасим его уведомления. Плагин может быть не
+  // инициализирован (десктоп без FCM/FKM) — тогда просто нечего гасить
   static Future<void> clearChatNotification(int chatId) async {
-    final plugin = FlutterLocalNotificationsPlugin();
-    await plugin.cancel(id: chatId & 0x7fffffff);
+    if (_localActionsReady) {
+      try {
+        final plugin = FlutterLocalNotificationsPlugin();
+        await plugin.cancel(id: chatId & 0x7fffffff);
+      } catch (e) {
+        logger.w('clearChatNotification: $e');
+      }
+    }
     await _clearHistory(chatId);
   }
 
@@ -193,6 +207,7 @@ class PushService {
   String? _token;
   bool _initialized = false;
 
+  // #***! подписка на токен и входящие пуши
   Future<void> init({required Api api, required AccountModule account}) async {
     if (_initialized) return;
     _api = api;
@@ -229,6 +244,7 @@ class PushService {
     }
   }
 
+  // #***! токен регистрируем после логина, до него сервер не примет
   Future<void> onLoginSuccess() async {
     if (!_initialized) return;
     if (_token == null) {
@@ -240,6 +256,7 @@ class PushService {
     await _registerWithServer();
   }
 
+  // #***! при выходе токен отзываем
   Future<void> unregister() async {
     if (!_initialized || _token == null) return;
     final account = _account;

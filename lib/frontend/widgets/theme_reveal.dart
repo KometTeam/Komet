@@ -16,7 +16,7 @@ class ThemeRevealOverlay {
         return IgnorePointer(
           child: AnimatedBuilder(
             animation: animation,
-            builder: (_, __) {
+            builder: (_, _) {
               final t = Curves.easeInOutCubic.transform(
                 animation.value.clamp(0.0, 1.0),
               );

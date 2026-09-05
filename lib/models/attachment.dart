@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../core/utils/parse.dart';
 import '../core/utils/text_format.dart';
 
+// #***! все виды вложений, unknown это чего мы не знаем
 enum AttachmentType {
   photo,
   video,
@@ -20,6 +21,7 @@ enum AttachmentType {
   unknown,
 }
 
+// #***! размытая превьюшка, то строкой то байтами
 String? decodeAttachPreview(dynamic raw) {
   if (raw is String) return raw;
   if (raw is List) {
@@ -31,6 +33,7 @@ String? decodeAttachPreview(dynamic raw) {
   return null;
 }
 
+// #***! база всех вложений
 abstract class MessageAttachment {
   final AttachmentType type;
   final String? previewData;
@@ -44,6 +47,7 @@ abstract class MessageAttachment {
     this.fileUrl,
   });
 
+  // #***! фабрика по _type, тут и рождаются вложения
   factory MessageAttachment.fromMap(Map<String, dynamic> map) {
     final type = (map['_type'] as String? ?? '').toUpperCase();
     switch (type) {
@@ -76,9 +80,11 @@ abstract class MessageAttachment {
     }
   }
 
+  // #***! обратно в map для базы
   Map<String, dynamic> toMap();
 }
 
+// #***! фото, id и token чтоб дозапросить полный размер
 class PhotoAttachment extends MessageAttachment {
   final int? photoId;
   final String? photoToken;
@@ -99,6 +105,7 @@ class PhotoAttachment extends MessageAttachment {
     this.localPath,
   }) : super(type: AttachmentType.photo);
 
+  // #***! url то baseUrl то url, берём оба
   factory PhotoAttachment.fromMap(Map<String, dynamic> map) {
     return PhotoAttachment(
       previewData: decodeAttachPreview(map['previewData']),
@@ -124,6 +131,7 @@ class PhotoAttachment extends MessageAttachment {
   };
 }
 
+// #***! видео, videoType == 1 это кружок
 class VideoAttachment extends MessageAttachment {
   final int? videoId;
   final String? videoToken;
@@ -136,6 +144,7 @@ class VideoAttachment extends MessageAttachment {
 
   final int? videoType;
 
+  // #***! кружки рисует круглый плеер
   bool get isNote => videoType == 1;
 
   const VideoAttachment({
@@ -153,6 +162,7 @@ class VideoAttachment extends MessageAttachment {
     this.localPath,
   }) : super(type: AttachmentType.video);
 
+  // #***! токен видео тоже под двумя именами
   factory VideoAttachment.fromMap(Map<String, dynamic> map) {
     return VideoAttachment(
       previewData: decodeAttachPreview(map['previewData']),
@@ -184,6 +194,7 @@ class VideoAttachment extends MessageAttachment {
   };
 }
 
+// #***! голосовое или музыка, waveform это картинка дорожки
 class AudioAttachment extends MessageAttachment {
   final int? audioId;
   final String? audioToken;
@@ -202,6 +213,7 @@ class AudioAttachment extends MessageAttachment {
     this.waveform,
   }) : super(type: AttachmentType.audio);
 
+  // #***! волна то строкой то байтами, сводим к строке
   factory AudioAttachment.fromMap(Map<String, dynamic> map) {
     String? waveStr;
     final waveRaw = map['wave'];
@@ -239,6 +251,7 @@ class AudioAttachment extends MessageAttachment {
   };
 }
 
+// #***! документ, preview это обложка
 class FileAttachment extends MessageAttachment {
   final int? fileId;
   final String? fileToken;
@@ -257,6 +270,7 @@ class FileAttachment extends MessageAttachment {
     this.preview,
   }) : super(type: AttachmentType.file);
 
+  // #***! обложка разбирается как обычное фото
   factory FileAttachment.fromMap(Map<String, dynamic> map) {
     PhotoAttachment? preview;
     final previewRaw = map['preview'];
@@ -288,6 +302,7 @@ class FileAttachment extends MessageAttachment {
   };
 }
 
+// #***! стикер, есть lottieUrl значит анимированный
 class StickerAttachment extends MessageAttachment {
   final String? stickerId;
   final String? stickerPackId;
@@ -306,6 +321,7 @@ class StickerAttachment extends MessageAttachment {
     this.height,
   }) : super(type: AttachmentType.sticker);
 
+  // #***! от этого зависит чем рисовать
   bool get isAnimated => lottieUrl != null && lottieUrl!.isNotEmpty;
 
   factory StickerAttachment.fromMap(Map<String, dynamic> map) {
@@ -334,6 +350,7 @@ class StickerAttachment extends MessageAttachment {
   };
 }
 
+// #***! карточка контакта в сообщении
 class ContactAttachment extends MessageAttachment {
   final String? userId;
   final String? firstName;
@@ -387,6 +404,7 @@ class ContactAttachment extends MessageAttachment {
   };
 }
 
+// #***! точка на карте плюс подпись
 class LocationAttachment extends MessageAttachment {
   final double? latitude;
   final double? longitude;
@@ -430,6 +448,7 @@ class LocationAttachment extends MessageAttachment {
   };
 }
 
+// #***! системное событие, кто то вошёл вышел переименовал
 class ControlAttachment extends MessageAttachment {
   static const String botStartedEvent = 'botStarted';
 
@@ -450,8 +469,10 @@ class ControlAttachment extends MessageAttachment {
     this.startPayload,
   }) : super(type: AttachmentType.control);
 
+  // #***! запуск бота кнопкой начать, он особенный
   bool get isBotStart => event == botStartedEvent;
 
+  // #***! текст бывает в shortMessage а не в title
   factory ControlAttachment.fromMap(Map<String, dynamic> map) {
     String? title = map['title']?.toString();
     if ((title == null || title.isEmpty) && map['shortMessage'] != null) {
@@ -484,6 +505,7 @@ class ControlAttachment extends MessageAttachment {
   };
 }
 
+// #***! тут только id опроса, содержимое отдельно
 class PollAttachment extends MessageAttachment {
   final int pollId;
   final String? title;
@@ -507,6 +529,7 @@ class PollAttachment extends MessageAttachment {
   };
 }
 
+// #***! запись о звонке в истории
 class CallAttachment extends MessageAttachment {
   final bool isVideo;
   final int durationMs;
@@ -524,8 +547,10 @@ class CallAttachment extends MessageAttachment {
     this.contactIds = const [],
   }) : super(type: AttachmentType.call);
 
+  // #***! есть ссылка значит групповой
   bool get isGroup => joinLink != null;
 
+  // #***! пропущенный, рисуем красным
   bool get isMissedOrFailed =>
       durationMs == 0 ||
       hangupType == 'CANCELED' ||
@@ -555,6 +580,7 @@ class CallAttachment extends MessageAttachment {
   };
 }
 
+// #***! превью ссылки, всё собрал сервер
 class ShareAttachment extends MessageAttachment {
   final int? shareId;
   final String? title;
@@ -601,6 +627,7 @@ class ShareAttachment extends MessageAttachment {
   };
 }
 
+// #***! кнопка инлайн клавиатуры бота
 class InlineKeyboardButton {
   final String type;
   final String text;
@@ -641,6 +668,7 @@ class InlineKeyboardButton {
   };
 }
 
+// #***! инлайн клавиатура бота
 class InlineKeyboardAttachment extends MessageAttachment {
   final String? callbackId;
   final List<List<InlineKeyboardButton>> rows;
@@ -648,8 +676,10 @@ class InlineKeyboardAttachment extends MessageAttachment {
   const InlineKeyboardAttachment({this.callbackId, required this.rows})
     : super(type: AttachmentType.inlineKeyboard);
 
+  // #***! без кнопок ничего не рисуем
   bool get isEmpty => rows.every((row) => row.isEmpty);
 
+  // #***! кнопки вложенно, keyboard.buttons это массив строк
   factory InlineKeyboardAttachment.fromMap(Map<String, dynamic> map) {
     final keyboard = map['keyboard'];
     final rawRows = keyboard is Map ? keyboard['buttons'] as List? : null;
@@ -684,6 +714,7 @@ class InlineKeyboardAttachment extends MessageAttachment {
   };
 }
 
+// #***! пересланное, тащим автора текст форматирование и вложения
 class ForwardedMessageAttachment extends MessageAttachment {
   final int originalSenderId;
   final String? originalSenderName;
@@ -711,8 +742,10 @@ class ForwardedMessageAttachment extends MessageAttachment {
     this.originalContact,
   }) : super(type: AttachmentType.forward);
 
+  // #***! переслали из канала значит автор это канал
   bool get isChannel => originalType == 'CHANNEL';
 
+  // #***! самое закрученное, оригинал спрятан в link.message
   factory ForwardedMessageAttachment.fromMap(Map<String, dynamic> map) {
     final linkRaw = map['link'];
     Map<String, dynamic>? link;
@@ -730,6 +763,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
 
     List<MessageAttachment>? originalAttaches;
     ContactAttachment? originalContact;
+    // #***! контакт из оригинала вынимаем отдельно
     if (message != null) {
       final attaches = message['attaches'] as List?;
       if (attaches != null) {
@@ -794,6 +828,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
   };
 }
 
+// #***! неизвестное вложение храним как есть чтоб не потерять
 class UnknownAttachment extends MessageAttachment {
   final Map<String, dynamic> rawData;
 

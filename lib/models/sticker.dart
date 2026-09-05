@@ -1,3 +1,4 @@
+// #***! стикерпак, обложка плюс id стикеров
 class StickerSet {
   final int id;
   final String name;
@@ -13,6 +14,7 @@ class StickerSet {
     this.link,
   });
 
+  // #***! разбор ответа assetsGet
   factory StickerSet.fromMap(Map<dynamic, dynamic> map) {
     final rawStickers = map['stickers'];
     final ids = <int>[];
@@ -31,6 +33,7 @@ class StickerSet {
   }
 }
 
+// #***! стикер, есть lottieUrl значит анимированный
 class StickerItem {
   final int id;
   final String url;
@@ -50,6 +53,7 @@ class StickerItem {
     this.tags = const [],
   });
 
+  // #***! чем рисовать
   bool get isAnimated => lottieUrl != null && lottieUrl!.isNotEmpty;
 
   factory StickerItem.fromMap(Map<dynamic, dynamic> map) => StickerItem(
@@ -62,6 +66,7 @@ class StickerItem {
     tags: _parseTags(map['tags']),
   );
 
+  // #***! теги для поиска по слову
   static List<String> _parseTags(dynamic raw) {
     if (raw is! List) return const [];
     final result = <String>[];

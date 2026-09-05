@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -6,12 +8,17 @@ import '../../widgets/connection_status.dart';
 import '../../../core/config/app_amoled.dart';
 import '../../../core/config/app_theme_mode.dart';
 import '../../../core/config/app_theme_schedule.dart';
+import '../../../core/config/app_wallpaper_tint.dart';
+import '../../../core/storage/app_database.dart';
+import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/mesh_gradient_background.dart';
 import '../../widgets/settings_radio_tile.dart';
 import '../../widgets/settings_card.dart';
+import 'custom_gradient_editor_screen.dart';
 
 class ThemeSettingsScreen extends StatelessWidget {
   const ThemeSettingsScreen({super.key});
@@ -45,15 +52,84 @@ class ThemeSettingsScreen extends StatelessWidget {
   }
 }
 
-class _ThemeModeCard extends StatelessWidget {
+class _ThemeModeCard extends StatefulWidget {
   const _ThemeModeCard();
 
+  @override
+  State<_ThemeModeCard> createState() => _ThemeModeCardState();
+}
+
+class _ThemeModeCardState extends State<_ThemeModeCard> {
   static const _items = [
     (mode: AppThemeMode.system, icon: Symbols.brightness_auto),
     (mode: AppThemeMode.light, icon: Symbols.light_mode),
     (mode: AppThemeMode.dark, icon: Symbols.dark_mode),
     (mode: AppThemeMode.schedule, icon: Symbols.schedule),
   ];
+
+  int _accountId = 0;
+  ChatWallpaper? _wallpaper;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    await ChatWallpaperStore.instance.load();
+    final profile = await AppDatabase.loadActiveProfile();
+    if (!mounted) return;
+    setState(() {
+      _accountId = profile?.id ?? 0;
+      final wallpaper = ChatWallpaperStore.instance.get(
+        _accountId,
+        kGlobalWallpaperChatId,
+      );
+      _wallpaper = wallpaper?.isGradient == true ? wallpaper : null;
+      _ready = true;
+    });
+  }
+
+  Future<void> _enableCustom() async {
+    Haptics.selection();
+    if (_wallpaper == null && _accountId != 0) {
+      final wallpaper = await ChatWallpaperStore.instance.setGradient(
+        _accountId,
+        kGlobalWallpaperChatId,
+        const [Color(0xFF000000)],
+      );
+      if (mounted) setState(() => _wallpaper = wallpaper);
+    }
+    await AppWallpaperTint.save(true);
+  }
+
+  Future<void> _openEditor() async {
+    if (_accountId == 0) return;
+    final result = await Navigator.of(context).push<CustomGradientResult>(
+      MaterialPageRoute(
+        builder: (_) => CustomGradientEditorScreen(
+          initialColors: _wallpaper?.gradientColors,
+          initialAnimated: _wallpaper?.gradientAnimated ?? false,
+          initialRotation: _wallpaper?.gradientRotation ?? 0,
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    final wallpaper = await ChatWallpaperStore.instance.setGradient(
+      _accountId,
+      kGlobalWallpaperChatId,
+      result.colors,
+      animated: result.animated,
+      rotation: result.rotation,
+    );
+    if (!AppWallpaperTint.current.value) {
+      await AppWallpaperTint.save(true);
+    }
+    if (!mounted) return;
+    setState(() => _wallpaper = wallpaper);
+  }
 
   String _labelFor(AppLocalizations l10n, AppThemeMode mode) {
     switch (mode) {
@@ -72,6 +148,7 @@ class _ThemeModeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
+    final colors = _wallpaper?.gradientColors;
     return SettingsPanel(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
       child: Column(
@@ -91,23 +168,70 @@ class _ThemeModeCard extends StatelessWidget {
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 8),
-          ValueListenableBuilder<AppThemeMode>(
-            valueListenable: AppThemeModeConfig.current,
-            builder: (context, current, _) {
+          ListenableBuilder(
+            listenable: Listenable.merge([
+              AppThemeModeConfig.current,
+              AppWallpaperTint.current,
+            ]),
+            builder: (context, _) {
+              final current = AppThemeModeConfig.current.value;
+              final customSelected = AppWallpaperTint.current.value;
               return Column(
                 children: [
                   for (final item in _items)
                     _ModeTile(
                       icon: item.icon,
                       label: _labelFor(l10n, item.mode),
-                      selected: current == item.mode,
+                      selected: !customSelected && current == item.mode,
                       onTap: (position) {
-                        if (current == item.mode) return;
+                        if (!customSelected && current == item.mode) return;
                         Haptics.selection();
+                        if (customSelected) {
+                          unawaited(AppWallpaperTint.save(false));
+                        }
                         KometApp.stateOf(
                           context,
                         )?.applyThemeModeWithReveal(item.mode, position);
                       },
+                    ),
+                  _ModeTile(
+                    icon: Symbols.palette,
+                    label: l10n.themeSettingsCustomTitle,
+                    selected: customSelected,
+                    onTap: (_) {
+                      if (customSelected) return;
+                      unawaited(_enableCustom());
+                    },
+                  ),
+                  if (customSelected)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 36),
+                      child: SettingsNavTile(
+                        isLast: true,
+                        onTap: _ready ? _openEditor : null,
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: colors != null && colors.isNotEmpty
+                                ? MeshGradientBackground(
+                                    colors: colors,
+                                    animate: false,
+                                    rotation: _wallpaper?.gradientRotation ?? 0,
+                                  )
+                                : ColoredBox(
+                                    color: cs.surfaceContainerHighest,
+                                    child: Icon(
+                                      Symbols.palette,
+                                      color: cs.onSurface,
+                                      size: 18,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        label: 'Настроить',
+                      ),
                     ),
                 ],
               );
@@ -362,3 +486,4 @@ class _TimeRow extends StatelessWidget {
     if (picked != null) onPick(picked);
   }
 }
+

@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/frontend/widgets/attachment/bubbles/video_note_bubble.dart';

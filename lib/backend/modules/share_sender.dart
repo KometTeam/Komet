@@ -14,6 +14,7 @@ import 'chats.dart';
 import 'messages.dart';
 import 'upload_service.dart';
 
+// #***! файл из системного поделиться с миниатюрой и размерами
 class PreparedShareFile {
   final SharedFile source;
   final String? thumbDataUri;
@@ -33,6 +34,7 @@ class PreparedShareFile {
   File get file => source.file;
 }
 
+// #***! весь пакет шаринга после подготовки
 class PreparedShare {
   final List<PreparedShareFile> files;
   final String? text;
@@ -50,6 +52,7 @@ class PreparedShare {
 
   bool get isTextOnly => files.isEmpty;
 
+  // #***! миниатюры и размеры считаем один раз а не на каждый чат
   static Future<PreparedShare> prepare(SharedPayload payload) async {
     final prepared = <PreparedShareFile>[];
     for (final source in payload.files) {
@@ -58,6 +61,7 @@ class PreparedShare {
     return PreparedShare(files: prepared, text: payload.text);
   }
 
+  // #***! у фото размеры из файла, у видео через probe
   static Future<PreparedShareFile> _prepareOne(SharedFile source) async {
     final thumb = await sharedThumbnailDataUri(source);
     switch (source.kind) {
@@ -89,6 +93,7 @@ class PreparedShare {
   }
 }
 
+// #***! итог отправки для уведомления
 class ShareSendResult {
   final int chatCount;
   final int messageCount;
@@ -96,9 +101,11 @@ class ShareSendResult {
   const ShareSendResult({required this.chatCount, required this.messageCount});
 }
 
+// #***! отправка сразу в несколько чатов
 class ShareSender {
   ShareSender._();
 
+  // #***! плейсхолдеры ждущие загрузку, по ним обновится строка чата
   static final Map<
     String,
     ({int accountId, int chatId, String text, String? preview, int time})
@@ -125,6 +132,7 @@ class ShareSender {
     );
   }
 
+  // #***! загрузка кончилась, правим строку чата на отправлено или ошибку
   static void _onUploadEvent(UploadJobEvent event) {
     final entry = _tracked.remove(event.tempId);
     if (entry == null) return;
@@ -149,6 +157,7 @@ class ShareSender {
     );
   }
 
+  // #***! по очереди во все выбранные чаты
   static Future<ShareSendResult> send({
     required int accountId,
     required List<int> chatIds,
@@ -170,6 +179,7 @@ class ShareSender {
     return ShareSendResult(chatCount: chatIds.length, messageCount: messages);
   }
 
+  // #***! фото альбомом, видео и документы по одному
   static Future<int> _sendToChat({
     required int accountId,
     required int chatId,
@@ -190,6 +200,7 @@ class ShareSender {
     final documents = share.documents;
 
     var used = false;
+    // #***! подпись только к первому сообщению
     String take() {
       if (used || caption.isEmpty) return '';
       used = true;
@@ -227,6 +238,7 @@ class ShareSender {
     return count;
   }
 
+  // #***! текст уходит сразу, плейсхолдер чтоб сообщение появилось мгновенно
   static Future<void> _sendText({
     required int accountId,
     required int chatId,
@@ -254,6 +266,7 @@ class ShareSender {
       status: 'sending',
     );
 
+    // #***! сервер дал настоящий id, временный удаляем
     String realId = tempId;
     var status = 'sent';
     try {
@@ -284,6 +297,7 @@ class ShareSender {
     );
   }
 
+  // #***! фото одним альбомом, загрузка в фоне
   static Future<void> _sendPhotos({
     required int accountId,
     required int chatId,
@@ -345,6 +359,7 @@ class ShareSender {
       time: now,
     );
 
+    // #***! загрузку не ждём, экран закрывается сразу дальше UploadService
     unawaited(
       UploadService.instance.sendPhotos(
         accountId: accountId,
@@ -357,6 +372,7 @@ class ShareSender {
     );
   }
 
+  // #***! видео по одному, у каждого своя длительность
   static Future<void> _sendVideo({
     required int accountId,
     required int chatId,
@@ -422,6 +438,7 @@ class ShareSender {
     );
   }
 
+  // #***! документ, в строке чата имя файла
   static Future<void> _sendDocument({
     required int accountId,
     required int chatId,
@@ -482,6 +499,7 @@ class ShareSender {
     );
   }
 
+  // #***! превью для списка чатов, до трёх миниатюр
   static String? _preview({
     required ChatPreviewKind kind,
     required List<PreparedShareFile> files,
@@ -503,6 +521,7 @@ class ShareSender {
     return ChatPreviewMedia(kind: kind, thumbs: thumbs, label: label).encode();
   }
 
+  // #***! плейсхолдер в базу чтоб пережил перезапуск
   static Future<void> _persist(
     CachedMessage message, {
     String? removeId,
@@ -521,6 +540,7 @@ class ShareSender {
     }
   }
 
+  // #***! обновление строки чата, ошибку глотаем сообщение уже ушло
   static Future<void> _bumpChat({
     required int accountId,
     required int chatId,

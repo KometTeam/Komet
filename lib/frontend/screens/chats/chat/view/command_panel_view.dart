@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:komet/frontend/commands/slash_command.dart';
+import 'package:komet/frontend/commands/commands.dart';
 import 'package:komet/frontend/screens/chats/chat/command_panel_controller.dart';
 import 'package:komet/frontend/widgets/command_suggestions_panel.dart';
 

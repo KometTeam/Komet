@@ -22,6 +22,7 @@ import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
 import 'formatted_message_text.dart';
+import 'reply_preview.dart';
 import 'text_entity_actions.dart';
 import 'sending_clock_icon.dart';
 import 'photo_viewer.dart';
@@ -43,8 +44,12 @@ import 'attachment/bubbles/video_bubble.dart';
 import 'attachment/bubbles/file_bubble.dart';
 import 'attachment/bubbles/forwarded_bubble.dart';
 import 'lottie_image.dart';
+import 'text_with_meta.dart';
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
+final Expando<List<MessageAttachment>> _contentAttachmentsCache =
+    Expando<List<MessageAttachment>>();
+final Expando<List<String>> _jumboAnimojiUrlsCache = Expando<List<String>>();
 
 class ReactionAnimationEvent {
   final String messageId;
@@ -59,138 +64,6 @@ class ReactionAnimationEvent {
 }
 
 typedef ReactionAnimojiResolver = Animoji? Function(String emoji);
-
-class _TextWithMeta extends MultiChildRenderObjectWidget {
-  _TextWithMeta({required Widget text, required Widget meta})
-    : super(children: [text, meta]);
-
-  @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderTextWithMeta();
-}
-
-class _TextWithMetaParentData extends ContainerBoxParentData<RenderBox> {}
-
-class _RenderTextWithMeta extends RenderBox
-    with
-        ContainerRenderObjectMixin<RenderBox, _TextWithMetaParentData>,
-        RenderBoxContainerDefaultsMixin<RenderBox, _TextWithMetaParentData> {
-  static const double _gap = 8;
-  static const double _baselineNudge = 2;
-
-  RenderBox get _text => firstChild!;
-  RenderBox get _meta => lastChild!;
-
-  @override
-  void setupParentData(RenderBox child) {
-    if (child.parentData is! _TextWithMetaParentData) {
-      child.parentData = _TextWithMetaParentData();
-    }
-  }
-
-  RenderParagraph? _soleParagraph() {
-    RenderParagraph? found;
-    var seen = 0;
-    void visit(RenderObject node) {
-      if (node is RenderParagraph) {
-        found = node;
-        seen++;
-        return;
-      }
-      node.visitChildren(visit);
-    }
-
-    _text.visitChildren(visit);
-    if (_text is RenderParagraph) {
-      found = _text as RenderParagraph;
-      seen = 1;
-    }
-    return seen == 1 ? found : null;
-  }
-
-  @override
-  double computeMinIntrinsicWidth(double height) =>
-      _text.getMinIntrinsicWidth(height);
-
-  @override
-  double computeMaxIntrinsicWidth(double height) =>
-      _text.getMaxIntrinsicWidth(height) +
-      _gap +
-      _meta.getMaxIntrinsicWidth(height);
-
-  @override
-  double computeMinIntrinsicHeight(double width) =>
-      _text.getMinIntrinsicHeight(width);
-
-  @override
-  double computeMaxIntrinsicHeight(double width) =>
-      _text.getMaxIntrinsicHeight(width) + _meta.getMaxIntrinsicHeight(width);
-
-  @override
-  double? computeDistanceToActualBaseline(TextBaseline baseline) =>
-      BaselineOffset(_text.getDistanceToActualBaseline(baseline)).offset;
-
-  @override
-  void performLayout() {
-    _meta.layout(const BoxConstraints(), parentUsesSize: true);
-    final metaSize = _meta.size;
-
-    _text.layout(constraints.loosen(), parentUsesSize: true);
-    final textSize = _text.size;
-
-    final paragraph = _soleParagraph();
-    final needed = _gap + metaSize.width;
-
-    double width;
-    double height;
-    var metaOnOwnLine = false;
-
-    if (paragraph != null) {
-      final length = paragraph.text.toPlainText().length;
-      final caret = paragraph.getOffsetForCaret(
-        TextPosition(offset: length),
-        Rect.zero,
-      );
-      final lastLine = caret.dx;
-      final singleLine = caret.dy < 0.5;
-      if (lastLine + needed <= textSize.width) {
-        width = textSize.width;
-        height = textSize.height;
-      } else if (singleLine) {
-        width = lastLine + needed;
-        height = textSize.height;
-      } else {
-        width = textSize.width;
-        height = textSize.height + metaSize.height;
-        metaOnOwnLine = true;
-      }
-    } else {
-      width = math.max(textSize.width, metaSize.width);
-      height = textSize.height + metaSize.height;
-      metaOnOwnLine = true;
-    }
-
-    size = constraints.constrain(Size(width, height));
-
-    (_text.parentData! as _TextWithMetaParentData).offset = Offset.zero;
-    (_meta.parentData! as _TextWithMetaParentData).offset = Offset(
-      math.max(0, size.width - metaSize.width),
-      metaOnOwnLine
-          ? size.height - metaSize.height
-          : size.height - metaSize.height - _baselineNudge,
-    );
-  }
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    defaultPaint(context, offset);
-  }
-
-  @override
-  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
-    return defaultHitTestChildren(result, position: position);
-  }
-}
 
 class _CapIntrinsicWidth extends SingleChildRenderObjectWidget {
   final double cap;
@@ -653,6 +526,8 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onExitTextSelection;
   final String? commentsLabel;
   final VoidCallback? onCommentsTap;
+  final CachedMessage? Function(String messageId)? resolveLocalMessage;
+  final double? listWidth;
 
   const MessageBubble({
     super.key,
@@ -684,27 +559,42 @@ class MessageBubble extends StatelessWidget {
     this.onExitTextSelection,
     this.commentsLabel,
     this.onCommentsTap,
+    this.resolveLocalMessage,
+    this.listWidth,
   });
 
   bool _computeHasPhotoWithCaption() {
-    final attachments = _contentAttachments;
-    if (attachments.isEmpty) return false;
-    final hasPhoto = attachments.any((a) => a is PhotoAttachment);
-    final hasCaption = _contentText?.isNotEmpty ?? false;
-    return hasPhoto && hasCaption;
+    if (!_rendersAlbum) return false;
+    return _contentText?.isNotEmpty ?? false;
   }
 
   bool _computeHasMultiplePhotosNoCaption() {
-    final attachments = _contentAttachments;
-    if (attachments.isEmpty) return false;
-    final photoCount = attachments.whereType<PhotoAttachment>().length;
     final hasCaption = _contentText?.isNotEmpty ?? false;
-    return photoCount >= 2 && !hasCaption;
+    return _albumMedia.length >= 2 && !hasCaption;
+  }
+
+  // #***! фото и видео идут одним альбомом, одиночное видео рисует VideoBubble
+  List<MessageAttachment> get _albumMedia =>
+      _contentAttachments.where(PhotoBubble.isAlbumMedia).toList();
+
+  bool get _rendersAlbum {
+    final album = _albumMedia;
+    if (album.length >= 2) return true;
+    return album.length == 1 && album.single is PhotoAttachment;
   }
 
   ForwardedMessageAttachment? get _forwarded => message.forwardedAttachment;
 
-  List<MessageAttachment> get _contentAttachments {
+  List<MessageAttachment> get _renderableAttachments =>
+      message.attachments
+          ?.where((a) => a is! InlineKeyboardAttachment)
+          .toList() ??
+      const [];
+
+  List<MessageAttachment> get _contentAttachments =>
+      _contentAttachmentsCache[message] ??= _computeContentAttachments();
+
+  List<MessageAttachment> _computeContentAttachments() {
     final forwarded = _forwarded;
     if (forwarded != null) {
       if (forwarded.originalContact != null) {
@@ -715,10 +605,7 @@ class MessageBubble extends StatelessWidget {
               .toList() ??
           const [];
     }
-    return message.attachments
-            ?.where((a) => a is! InlineKeyboardAttachment)
-            .toList() ??
-        const [];
+    return _renderableAttachments;
   }
 
   MessageAttachment? get _primaryAttachment {
@@ -771,15 +658,33 @@ class MessageBubble extends StatelessWidget {
 
   bool get _isSticker => _primaryAttachment is StickerAttachment;
 
+  bool get _mediaDictatesWidth {
+    final attachments = _contentAttachments;
+    if (attachments.isEmpty) return false;
+    if (attachments.any(
+      (a) =>
+          a is ContactAttachment || a is PollAttachment || a is ShareAttachment,
+    )) {
+      return false;
+    }
+    if (attachments.any((a) => a is PhotoAttachment)) return true;
+    final first = attachments.first;
+    return first is VideoAttachment && !first.isNote;
+  }
+
   static const int _jumboAnimojiLimit = 4;
 
   List<String>? get _jumboAnimojiUrls {
     if (message.attachments?.isNotEmpty ?? false) return null;
-    return animojiOnlyLottieUrls(
+    final cached = _jumboAnimojiUrlsCache[message];
+    if (cached != null) return cached;
+    final computed = animojiOnlyLottieUrls(
       message.text,
       message.formatRanges,
       limit: _jumboAnimojiLimit,
     );
+    if (computed != null) _jumboAnimojiUrlsCache[message] = computed;
+    return computed;
   }
 
   MessageType get _contentType {
@@ -1013,6 +918,40 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
+    final width = listWidth;
+    if (width != null) {
+      return _buildBubbleContent(context, cs, contentType, width);
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) =>
+          _buildBubbleContent(context, cs, contentType, constraints.maxWidth),
+    );
+  }
+
+  // #***! сервер иногда шлёт REPLY-ссылку без текста цитаты (например для
+  // ответа на пересланное сообщение) — если это сообщение уже загружено в
+  // текущем чате, берём текст оттуда вместо "сообщение удалено"
+  ReplyInfo? _resolvedReply(ReplyInfo? reply) {
+    if (reply == null || !reply.missing) return reply;
+    final id = reply.messageId;
+    if (id == null) return reply;
+    final local = resolveLocalMessage?.call(id);
+    if (local == null) return reply;
+    return ReplyInfo(
+      messageId: local.id,
+      senderId: local.senderId,
+      text: local.selectableText,
+      time: local.time,
+      attachments: local.attachments,
+    );
+  }
+
+  Widget _buildBubbleContent(
+    BuildContext context,
+    ColorScheme cs,
+    MessageType contentType,
+    double availableWidth,
+  ) {
     final shape = _computeShape();
     final hasReactions = _hasReactions();
     final hasPhotoCap =
@@ -1041,10 +980,10 @@ class MessageBubble extends StatelessWidget {
 
     final keyboard = _inlineKeyboard;
     final isVideoNote = _isVideoNote;
-    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenWidth = availableWidth;
     final maxBubbleWidth = isVideoNote
         ? math.min(screenWidth - 24, 560.0)
-        : math.min(screenWidth * 0.75, 560.0);
+        : math.min(screenWidth * 0.75, 760.0);
     final noBubbleBackground =
         isVideoNote || _isSticker || jumboAnimoji != null;
     final bubbleColor = noBubbleBackground
@@ -1078,7 +1017,7 @@ class MessageBubble extends StatelessWidget {
 
     final reactionsInside = contentType != MessageType.text;
 
-    final reply = message.replyInfo;
+    final reply = _resolvedReply(message.replyInfo);
 
     final bool hasCommentsFooter = onCommentsTap != null;
     final EdgeInsets containerPadding = hasCommentsFooter
@@ -1104,6 +1043,23 @@ class MessageBubble extends StatelessWidget {
         ? _buildSenderHeader(cs, padding == EdgeInsets.zero)
         : null;
 
+    final Widget? replyHeader = reply == null
+        ? null
+        : Padding(
+            padding: EdgeInsets.only(
+              left: padding == EdgeInsets.zero ? 8 : 0,
+              right: padding == EdgeInsets.zero ? 8 : 0,
+              bottom: 4,
+            ),
+            child: _buildReplyQuote(
+              context,
+              cs,
+              textColor,
+              reply,
+              maxBubbleWidth,
+            ),
+          );
+
     final Widget innerContent =
         contentType == MessageType.text &&
             jumboAnimoji == null &&
@@ -1121,7 +1077,13 @@ class MessageBubble extends StatelessWidget {
                 if (reply != null) ...[
                   _CapIntrinsicWidth(
                     cap: maxBubbleWidth * _replyWidthShare,
-                    child: _buildReplyQuote(context, cs, textColor, reply),
+                    child: _buildReplyQuote(
+                      context,
+                      cs,
+                      textColor,
+                      reply,
+                      maxBubbleWidth,
+                    ),
                   ),
                   const SizedBox(height: 4),
                 ],
@@ -1129,24 +1091,26 @@ class MessageBubble extends StatelessWidget {
               ],
             ),
           )
+        : _mediaDictatesWidth && (senderHeader != null || replyHeader != null)
+        ? _HeaderAboveMatchWidth(
+            content: contentWithReactions,
+            header: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [?senderHeader, ?replyHeader],
+            ),
+          )
         : Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ?senderHeader,
-              if (reply == null)
+              if (replyHeader == null)
                 contentWithReactions
               else
                 _HeaderAboveMatchWidth(
                   content: contentWithReactions,
-                  header: Padding(
-                    padding: EdgeInsets.only(
-                      left: padding == EdgeInsets.zero ? 8 : 0,
-                      right: padding == EdgeInsets.zero ? 8 : 0,
-                      bottom: 4,
-                    ),
-                    child: _buildReplyQuote(context, cs, textColor, reply),
-                  ),
+                  header: replyHeader,
                 ),
             ],
           );
@@ -1510,32 +1474,31 @@ class MessageBubble extends StatelessWidget {
         _contentType == MessageType.voice;
     final ctx = makeCtx(metaInFooter: carriesMeta);
 
+    final content = _buildContent(ctx);
+    final footer = Padding(
+      padding: inset,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: _ReactionsWrap(spacing: 4, runSpacing: 4, children: chips),
+          ),
+          if (carriesMeta) ...[const SizedBox(width: 8), ctx.footerMeta()],
+        ],
+      ),
+    );
+
+    // #***! у медиа ширину диктует само медиа, реакции переносим по строкам
+    // чтобы длинный ряд чипов не растягивал бабл шире картинки
+    if (_mediaDictatesWidth) {
+      return _StackMatchTopWidth(top: content, bottom: footer);
+    }
+
     return IntrinsicWidth(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildContent(ctx),
-          Padding(
-            padding: inset,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: _ReactionsWrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: chips,
-                  ),
-                ),
-                if (carriesMeta) ...[
-                  const SizedBox(width: 8),
-                  ctx.footerMeta(),
-                ],
-              ],
-            ),
-          ),
-        ],
+        children: [content, footer],
       ),
     );
   }
@@ -1894,7 +1857,7 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    return _TextWithMeta(text: textWidget, meta: metaRow);
+    return TextWithMeta(text: textWidget, meta: metaRow);
   }
 
   Widget _buildReplyQuote(
@@ -1902,6 +1865,7 @@ class MessageBubble extends StatelessWidget {
     ColorScheme cs,
     Color textColor,
     ReplyInfo reply,
+    double maxBubbleWidth,
   ) {
     final accent = _senderColor(reply.senderId);
     final name = reply.senderId == myId
@@ -1931,6 +1895,36 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
+    final preview = ReplyPreview.of(
+      text: reply.text,
+      attachments: reply.attachments,
+    );
+
+    final Widget? body;
+    if (preview.hasMedia) {
+      final maxSide = math.max(
+        72.0,
+        math.min(150.0, maxBubbleWidth * _replyWidthShare - 24),
+      );
+      final size = preview.box(maxSide: maxSide);
+      body = Padding(
+        padding: const EdgeInsets.only(top: 2, bottom: 1),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: SizedBox(
+            width: size.width,
+            height: size.height,
+            child: preview.thumbnail(size: size, cs: cs),
+          ),
+        ),
+      );
+    } else if (rawPreview.isNotEmpty) {
+      body = _replyQuoteText(cs, textColor, preview.icon, rawPreview, quotedId);
+    } else {
+      body = null;
+    }
+
     final quote = Container(
       padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
       decoration: BoxDecoration(
@@ -1952,30 +1946,7 @@ class MessageBubble extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          if (rawPreview.isNotEmpty)
-            DecryptedContent(
-              accountId: message.accountId,
-              chatId: message.chatId,
-              messageId: quotedId ?? '',
-              cipherText: quotedId == null ? '' : rawPreview,
-              builder: (decryption) => Text(
-                decryption?.state == MessageDecryptionState.wrongKey
-                    ? 'неверный ключ'
-                    : (decryption?.plaintext ?? rawPreview),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: decryption?.state == MessageDecryptionState.wrongKey
-                      ? cs.error
-                      : textColor.withValues(alpha: 0.85),
-                  fontSize: 13,
-                  fontStyle:
-                      decryption?.state == MessageDecryptionState.wrongKey
-                      ? FontStyle.italic
-                      : null,
-                ),
-              ),
-            ),
+          ?body,
         ],
       ),
     );
@@ -1990,6 +1961,48 @@ class MessageBubble extends StatelessWidget {
       );
     }
     return quote;
+  }
+
+  Widget _replyQuoteText(
+    ColorScheme cs,
+    Color textColor,
+    IconData? icon,
+    String rawPreview,
+    String? quotedId,
+  ) {
+    return DecryptedContent(
+      accountId: message.accountId,
+      chatId: message.chatId,
+      messageId: quotedId ?? '',
+      cipherText: quotedId == null ? '' : rawPreview,
+      builder: (decryption) {
+        final wrongKey = decryption?.state == MessageDecryptionState.wrongKey;
+        final color = wrongKey ? cs.error : textColor.withValues(alpha: 0.85);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null && !wrongKey) ...[
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+            ],
+            Flexible(
+              child: Text(
+                wrongKey
+                    ? 'неверный ключ'
+                    : (decryption?.plaintext ?? rawPreview),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 13,
+                  fontStyle: wrongKey ? FontStyle.italic : null,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildForwardedInlineText(
@@ -2026,8 +2039,8 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildAttachmentContent(BubbleContext ctx) {
-    final attachments = message.attachments;
-    if (attachments == null || attachments.isEmpty) {
+    final attachments = _renderableAttachments;
+    if (attachments.isEmpty) {
       return _buildTextContent(ctx);
     }
 
@@ -2061,6 +2074,9 @@ class MessageBubble extends StatelessWidget {
             ?.where((a) => a is! InlineKeyboardAttachment)
             .toList() ??
         const <MessageAttachment>[];
+    if (attachments.isEmpty && forwarded.originalContact == null) {
+      return _buildForwardedInlineText(ctx, forwarded);
+    }
     final content = _buildNativeAttachmentContent(
       forwardedCtx,
       attachments,
@@ -2120,14 +2136,22 @@ class MessageBubble extends StatelessWidget {
       return ShareBubble(ctx: ctx, share: shares.first);
     }
 
-    final photos = attachments.whereType<PhotoAttachment>().toList();
-    if (photos.isEmpty) {
-      return _buildGenericAttachment(ctx, attachments.first);
+    if (attachments.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final album = attachments.where(PhotoBubble.isAlbumMedia).toList();
+    if (album.length < 2 &&
+        !(album.length == 1 && album.single is PhotoAttachment)) {
+      return _buildGenericAttachment(
+        ctx,
+        album.isEmpty ? attachments.first : album.single,
+      );
     }
 
     return PhotoBubble(
       ctx: ctx,
-      photos: photos,
+      media: album,
       hasContentAbove: hasContentAbove,
     );
   }
@@ -2156,7 +2180,10 @@ class MessageBubble extends StatelessWidget {
           child: _buildVoiceAttachment(ctx, attachment as AudioAttachment),
         );
       default:
-        return _buildTextContent(ctx);
+        return Padding(
+          padding: _paddingFor(MessageType.text, ctx.shape),
+          child: _buildTextContent(ctx),
+        );
     }
   }
 

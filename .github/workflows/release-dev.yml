@@ -81,9 +81,9 @@ jobs:
 
       - name: Build APKs and App Bundle (${{ matrix.flavor }})
         run: |
-          flutter build apk --release --flavor ${{ matrix.flavor }} --obfuscate --split-debug-info=build/symbols
-          flutter build apk --release --split-per-abi --flavor ${{ matrix.flavor }} --obfuscate --split-debug-info=build/symbols
-          flutter build appbundle --release --flavor ${{ matrix.flavor }} --obfuscate --split-debug-info=build/symbols
+          flutter build apk --release --flavor ${{ matrix.flavor }} --obfuscate --split-debug-info=build/symbols --dart-define=KOMET_UPDATE_BASE_URL=${{ vars.S3_PUBLIC_BASE_URL || 'https://dl.komet.pw' }}
+          flutter build apk --release --split-per-abi --flavor ${{ matrix.flavor }} --obfuscate --split-debug-info=build/symbols --dart-define=KOMET_UPDATE_BASE_URL=${{ vars.S3_PUBLIC_BASE_URL || 'https://dl.komet.pw' }}
+          flutter build appbundle --release --flavor ${{ matrix.flavor }} --obfuscate --split-debug-info=build/symbols --dart-define=KOMET_UPDATE_BASE_URL=${{ vars.S3_PUBLIC_BASE_URL || 'https://dl.komet.pw' }}
 
       - name: Collect Android artifacts (${{ matrix.flavor }})
         run: |
@@ -122,7 +122,7 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
       - name: Build Windows
-        run: flutter build windows --release
+        run: flutter build windows --release --dart-define=KOMET_UPDATE_BASE_URL=${{ vars.S3_PUBLIC_BASE_URL || 'https://dl.komet.pw' }}
       - name: Package Windows
         shell: pwsh
         run: |
@@ -158,7 +158,7 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
       - name: Build Linux
-        run: flutter build linux --release
+        run: flutter build linux --release --dart-define=KOMET_UPDATE_BASE_URL=${{ vars.S3_PUBLIC_BASE_URL || 'https://dl.komet.pw' }}
       - name: Package Linux
         run: |
           mkdir -p dist
@@ -191,7 +191,7 @@ jobs:
       - name: Fix opus/ogg libs for macOS
         run: ./scripts/fix_opus_macos.sh
       - name: Build macOS
-        run: flutter build macos --release
+        run: flutter build macos --release --dart-define=KOMET_UPDATE_BASE_URL=${{ vars.S3_PUBLIC_BASE_URL || 'https://dl.komet.pw' }}
       - name: Package macOS
         run: |
           mkdir -p dist
@@ -225,7 +225,7 @@ jobs:
       - name: Build iOS (no codesign)
         run: |
           flutter config --no-enable-swift-package-manager
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign --dart-define=KOMET_UPDATE_BASE_URL=${{ vars.S3_PUBLIC_BASE_URL || 'https://dl.komet.pw' }}
       - name: Package unsigned IPA
         run: |
           mkdir -p dist build/ios/Payload
@@ -284,6 +284,10 @@ jobs:
     needs: [android, windows, linux, macos, ios]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -296,6 +300,11 @@ jobs:
           BRANCH_VERSION="${GITHUB_REF_NAME#dev/}"
           BUILD="${{ github.event.inputs.build_number }}"
           BUILD="${BUILD:-$GITHUB_RUN_NUMBER}"
+          PUBSPEC_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          PUBSPEC_BUILD=$(grep '^version:' pubspec.yaml | awk '{print $2}' | awk -F'+' 'NF>1 {print $2}')
+          echo "version=${PUBSPEC_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "build=${PUBSPEC_BUILD:-${BUILD}}" >> "$GITHUB_OUTPUT"
+          echo "release_id=${PUBSPEC_VERSION}-dev.${BUILD}" >> "$GITHUB_OUTPUT"
           echo "tag=v${BRANCH_VERSION}-dev.${BUILD}" >> "$GITHUB_OUTPUT"
           echo "name=Komet ${BRANCH_VERSION}-dev (build ${BUILD})" >> "$GITHUB_OUTPUT"
 
@@ -303,6 +312,7 @@ jobs:
         run: ls -lhR dist
 
       - name: Create pre-release
+        id: release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
@@ -312,3 +322,27 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: dist/*
+
+      - name: Publish to S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.S3_REGION || 'ru-1' }}
+          S3_ENDPOINT: ${{ vars.S3_ENDPOINT || 'https://s3.twcstorage.ru' }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          S3_PUBLIC_BASE_URL: ${{ vars.S3_PUBLIC_BASE_URL }}
+          KEEP_RELEASES: ${{ vars.S3_KEEP_RELEASES || '1' }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          BUILD: ${{ steps.ver.outputs.build }}
+          RELEASE_ID: ${{ steps.ver.outputs.release_id }}
+          COMMIT: ${{ github.sha }}
+          RELEASE_URL: ${{ steps.release.outputs.url }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$S3_BUCKET" ] || [ -z "$S3_PUBLIC_BASE_URL" ]; then
+            echo "S3 is not configured (need S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY secrets and S3_BUCKET/S3_PUBLIC_BASE_URL variables) — skipping upload."
+            exit 0
+          fi
+          gh release view "$TAG" --json body -q .body > release-notes.md || : > release-notes.md
+          NOTES_FILE=release-notes.md bash .github/scripts/publish-s3.sh

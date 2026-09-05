@@ -734,9 +734,7 @@ class _MediaTile extends StatelessWidget {
     final att = item.attachment;
     final video = att is VideoAttachment ? att : null;
     final duration = video?.duration ?? 0;
-    final thumb = att.baseUrl?.isNotEmpty == true
-        ? att.baseUrl
-        : att.previewData;
+    final thumb = video?.thumbnail ?? att.baseUrl ?? att.previewData;
 
     return GestureDetector(
       onTap: () => _open(context),

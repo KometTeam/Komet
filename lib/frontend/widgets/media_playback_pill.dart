@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../backend/modules/messages.dart';
+import '../../core/media/audio_file_track.dart';
+import '../../core/media/audio_playback_controller.dart';
 import '../../core/media/media_playback.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
@@ -51,7 +53,68 @@ class MediaPlaybackPill extends StatelessWidget {
                       margin: margin,
                     ),
             );
+          case PlaybackKind.audioFile:
+            return ValueListenableBuilder<AudioFileTrack?>(
+              valueListenable: playback.audioFile,
+              builder: (context, track, _) => track == null
+                  ? const SizedBox.shrink()
+                  : _AudioFilePill(
+                      track: track,
+                      borderRadius: borderRadius,
+                      margin: margin,
+                    ),
+            );
         }
+      },
+    );
+  }
+}
+
+class _AudioFilePill extends StatelessWidget {
+  const _AudioFilePill({
+    required this.track,
+    required this.borderRadius,
+    required this.margin,
+  });
+
+  final AudioFileTrack track;
+  final BorderRadius? borderRadius;
+  final EdgeInsets margin;
+
+  @override
+  Widget build(BuildContext context) {
+    final audio = AudioPlaybackController.instance;
+    final source = track.sourceName.trim();
+    return _PillSurface(
+      borderRadius: borderRadius,
+      margin: margin,
+      tick: Listenable.merge([
+        audio.playing,
+        audio.position,
+        audio.duration,
+        audio.processingState,
+      ]),
+      isPlaying: () => audio.playing.value,
+      progress: () {
+        final total = audio.duration.value.inMilliseconds;
+        return total > 0
+            ? (audio.position.value.inMilliseconds / total).clamp(0.0, 1.0)
+            : 0.0;
+      },
+      label: source.isEmpty ? track.name : '${track.name} · $source',
+      onToggle: audio.toggle,
+      onClose: MediaPlayback.instance.closeAudioFile,
+      onOpen: () {
+        final chatId = track.chatId;
+        final messageId = track.messageId;
+        final messageTime = track.messageTime;
+        if (chatId == null || messageId == null || messageTime == null) return;
+        openChatAtMessage(
+          context,
+          chatId,
+          messageId: messageId,
+          messageTime: messageTime,
+        );
       },
     );
   }
@@ -93,6 +156,7 @@ class _VoicePill extends StatelessWidget {
           senderId: track.senderId,
           isMe: track.isMe,
           time: track.time,
+          label: null,
           onToggle: track.audio.toggle,
           onSpeed: playback.cycleVoiceSpeed,
           onClose: playback.closeVoice,
@@ -141,6 +205,7 @@ class _VideoNotePill extends StatelessWidget {
           senderId: track.senderId,
           isMe: track.isMe,
           time: track.time,
+          label: null,
           onToggle: () => track.controller.value.isPlaying
               ? track.controller.pause()
               : track.controller.play(),
@@ -165,12 +230,13 @@ class _PillSurface extends StatelessWidget {
     required this.tick,
     required this.isPlaying,
     required this.progress,
-    required this.speed,
-    required this.senderId,
-    required this.isMe,
-    required this.time,
+    this.speed,
+    this.senderId,
+    this.isMe,
+    this.time,
+    required this.label,
     required this.onToggle,
-    required this.onSpeed,
+    this.onSpeed,
     required this.onClose,
     required this.onOpen,
   });
@@ -180,18 +246,20 @@ class _PillSurface extends StatelessWidget {
   final Listenable tick;
   final bool Function() isPlaying;
   final double Function() progress;
-  final double speed;
-  final int senderId;
-  final bool isMe;
-  final int time;
+  final double? speed;
+  final int? senderId;
+  final bool? isMe;
+  final int? time;
+  final String? label;
   final VoidCallback onToggle;
-  final VoidCallback onSpeed;
+  final VoidCallback? onSpeed;
   final VoidCallback onClose;
   final VoidCallback onOpen;
 
   String _speedLabel() {
-    final rounded = speed.round();
-    final text = speed == rounded ? '$rounded' : '$speed';
+    final value = speed ?? 1;
+    final rounded = value.round();
+    final text = value == rounded ? '$rounded' : '$value';
     return '${text}X';
   }
 
@@ -201,10 +269,12 @@ class _PillSurface extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final radius =
         borderRadius ?? BorderRadius.circular(MediaPlaybackPill.height / 2);
-    final author = isMe
+    final author = isMe == true
         ? l10n.playbackPillYou
-        : (ContactCache.get(senderId) ?? '$senderId');
-    final clock = formatClock(DateTime.fromMillisecondsSinceEpoch(time));
+        : (ContactCache.get(senderId ?? 0) ?? '${senderId ?? ''}');
+    final clock = time == null
+        ? ''
+        : formatClock(DateTime.fromMillisecondsSinceEpoch(time!));
 
     return Padding(
       padding: margin,
@@ -234,7 +304,7 @@ class _PillSurface extends StatelessWidget {
                         ),
                         Expanded(
                           child: Text(
-                            '$author ${l10n.playbackPillAt} $clock',
+                            label ?? '$author ${l10n.playbackPillAt} $clock',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -243,7 +313,8 @@ class _PillSurface extends StatelessWidget {
                             ),
                           ),
                         ),
-                        _SpeedChip(label: _speedLabel(), onTap: onSpeed),
+                        if (onSpeed != null)
+                          _SpeedChip(label: _speedLabel(), onTap: onSpeed!),
                         _IconTap(
                           icon: Symbols.close,
                           color: cs.onSurfaceVariant,

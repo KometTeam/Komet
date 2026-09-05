@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../utils/image_utils.dart';
 
+// #***! Picture в жпег во временной папке, для превью кружков и обложек
 Future<File?> rasterPictureToJpegFile(
   ui.Picture picture,
   int width,

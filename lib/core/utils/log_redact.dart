@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 const _redacted = '***';
 
+// #***! ключи с секретами, их значения в лог не идут
 const _sensitiveSubstrings = ['password', 'token', 'secret', 'auth'];
 
 const _sensitiveExact = {
@@ -29,6 +30,7 @@ bool _isSensitiveKey(Object? key) {
   return false;
 }
 
+// #***! телефон не режем целиком, три символа оставляем для отладки
 bool _isPhoneKey(Object? key) {
   if (key is! String) return false;
   final k = key.toLowerCase();
@@ -41,6 +43,7 @@ String _maskPhone(dynamic value) {
   return '${text.substring(0, 3)}***';
 }
 
+// #***! рекурсивно чистим payload перед логом
 dynamic redactForLog(dynamic value) {
   if (value is Map) {
     final out = {};
@@ -62,6 +65,7 @@ dynamic redactForLog(dynamic value) {
   return value;
 }
 
+// #***! в релизе payload в лог не пишем вообще
 Object? payloadForLog(dynamic value) {
   if (kReleaseMode) return '<payload hidden>';
   return redactForLog(value);

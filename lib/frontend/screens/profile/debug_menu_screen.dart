@@ -13,9 +13,11 @@ import '../../debug/cache_section.dart';
 import '../../debug/feature_toggles_section.dart';
 import '../../debug/header_section.dart';
 import '../../debug/id_search_section.dart';
+import '../../debug/load_simulation_section.dart';
 import '../../debug/log_export.dart';
 import '../../debug/lottie_polygon_section.dart';
 import '../../debug/network_section.dart';
+import '../../debug/performance_monitor_section.dart';
 import '../../debug/previews_section.dart';
 import '../../debug/quick_actions_section.dart';
 import '../../debug/sync_probe_section.dart';
@@ -257,6 +259,18 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
               child: Padding(
                 padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: DebugSyncProbeSection(),
+              ),
+            ),
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: DebugLoadSimulationSection(),
+              ),
+            ),
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: DebugPerformanceSection(),
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 120)),

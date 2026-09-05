@@ -10,22 +10,26 @@ import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
 import '../../models/informer_banner.dart';
 
+// #***! баннеры над списком чатов
 class BannersModule {
   static const _snapshotKey = 'informer_banners';
   static const _stateKey = 'informer_state';
   static const _enabledKey = 'informer_enabled';
   static const _serverFlag = 'informer-enabled';
   static const int _resyncMask = 1;
+  // #***! по дефолту баннер живёт сутки
   static const int _defaultShowTime = 86400000;
 
   final Api _api;
 
+  // #***! сервер пушит изменения набора
   BannersModule(this._api) {
     _api.pushStream
         .where((p) => p.opcode == Opcode.notifBanners)
         .listen(_handlePush);
   }
 
+  // #***! наружу один активный, на него подписан список чатов
   final ValueNotifier<InformerBanner?> activeBanner = ValueNotifier(null);
 
   int? _accountId;
@@ -33,8 +37,10 @@ class BannersModule {
   int _updateTime = 0;
   int _showTime = _defaultShowTime;
   List<InformerBanner> _banners = const [];
+  // #***! память показов, сколько видели и когда закрыли
   final Map<String, BannerShowState> _showState = {};
   String? _lastShownId;
+  // #***! _pinnedId держит баннер на экране чтоб не менялся под пальцем
   String? _pinnedId;
   Future<void>? _syncing;
 
@@ -45,6 +51,7 @@ class BannersModule {
   BannerShowState stateOf(String bannerId) =>
       _showState[bannerId] ?? const BannerShowState();
 
+  // #***! при логине снимок, потом баннеры из ответа, потом сервер
   Future<void> initFromLogin(
     int accountId,
     Map<dynamic, dynamic> loginData,
@@ -68,6 +75,7 @@ class BannersModule {
     await syncFromServer();
   }
 
+  // #***! поднимаем из базы чтоб было видно до ответа сервера
   Future<void> load(int accountId) async {
     _accountId = accountId;
     _pinnedId = null;
@@ -78,10 +86,12 @@ class BannersModule {
     _recompute();
   }
 
+  // #***! _syncing схлопывает параллельные синхры
   Future<void> syncFromServer() {
     return _syncing ??= _sync().whenComplete(() => _syncing = null);
   }
 
+  // #***! updateTime старее нашего, данные протухли
   Future<bool> applyPayload(
     int accountId,
     Map<dynamic, dynamic> payload,
@@ -106,6 +116,7 @@ class BannersModule {
     final showTime = _int(payload['showTime']);
     if (showTime != null && showTime > 0) _showTime = showTime;
 
+    // #***! показы исчезнувших баннеров чистим чтоб не копились
     final known = parsed.map((b) => b.id).toSet();
     _showState.removeWhere((id, _) => !known.contains(id));
     if (_pinnedId != null && !known.contains(_pinnedId)) _pinnedId = null;
@@ -119,6 +130,7 @@ class BannersModule {
     return true;
   }
 
+  // #***! первый показ фиксит время, от него срок жизни
   Future<void> markShown(InformerBanner banner) async {
     if (_pinnedId == banner.id) return;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -132,6 +144,7 @@ class BannersModule {
     await _persistShowState(_accountId);
   }
 
+  // #***! закрыли крестиком, помним до истечения rerun
   Future<void> close(InformerBanner banner) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     _showState[banner.id] = stateOf(banner.id).copyWith(closedAt: now);
@@ -162,6 +175,7 @@ class BannersModule {
     activeBanner.value = null;
   }
 
+  // #***! полная синхра, ошибку глотаем баннер того не стоит
   Future<void> _sync() async {
     final accountId = _accountId;
     if (accountId == null || !_enabled) return;
@@ -179,6 +193,7 @@ class BannersModule {
     }
   }
 
+  // #***! пуш или с набором или просто просит перечитать
   void _handlePush(Packet packet) {
     final accountId = _accountId;
     if (accountId == null || !_enabled) return;
@@ -190,6 +205,7 @@ class BannersModule {
     unawaited(syncFromServer());
   }
 
+  // #***! выбираем активный, закреплённый или самый приоритетный
   void _recompute() {
     if (!_enabled) {
       activeBanner.value = null;
@@ -209,6 +225,7 @@ class BannersModule {
 
     final now = DateTime.now().millisecondsSinceEpoch;
     var candidates = _banners.where((b) => _canShow(b, now)).toList();
+    // #***! не повторяем тот что показывали в прошлый раз
     if (candidates.length > 1 && _lastShownId != null) {
       final others = candidates.where((b) => b.id != _lastShownId).toList();
       if (others.isNotEmpty) candidates = others;
@@ -222,6 +239,7 @@ class BannersModule {
     );
   }
 
+  // #***! фильтр, лимит показов срок жизни и пауза
   bool _canShow(InformerBanner banner, int now) {
     final state = stateOf(banner.id);
     if (state.showCounter > 0 && state.showCounter >= banner.repeat) {
@@ -237,6 +255,7 @@ class BannersModule {
     return true;
   }
 
+  // #***! бит в updates значит баннеры изменились
   bool _needsResync(dynamic updates) {
     final mask = _int(updates);
     return mask != null && mask & _resyncMask != 0;
@@ -248,6 +267,7 @@ class BannersModule {
     if (!value) activeBanner.value = null;
   }
 
+  // #***! снимок и показы в sync_state отдельными джейсонами
   Future<void> _restoreSnapshot(int accountId) async {
     _banners = const [];
     _updateTime = 0;
@@ -318,6 +338,7 @@ class BannersModule {
     );
   }
 
+  // #***! флаг то булевый то строка то число
   static bool _parseFlag(dynamic value) {
     if (value is bool) return value;
     if (value is num) return value != 0;

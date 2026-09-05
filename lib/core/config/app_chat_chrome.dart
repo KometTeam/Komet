@@ -3,19 +3,22 @@ import 'package:flutter/foundation.dart';
 import '../../frontend/widgets/liquid_glass.dart';
 import 'persisted_setting.dart';
 
+// #***! чем заливается шапка чата
 enum ChatChromeStyle { color, blur, none, transparent, liquidGlass }
 
+// #***! стекло есть не везде, где нет откатываемся молча
 class ChatChromeMaterial {
   static bool isLiquid(ChatChromeStyle style) =>
       style == ChatChromeStyle.liquidGlass && LiquidGlass.isSupported;
 }
 
+// #***! настройка шапки чата
 class AppChatChrome {
   static const prefKey = 'app_chat_chrome';
 
   static final _setting = PersistedEnum<ChatChromeStyle>(
     prefKey: prefKey,
-    defaultValue: ChatChromeStyle.none,
+    defaultValue: ChatChromeStyle.color,
     encode: _encode,
     decode: _parse,
   );
@@ -23,7 +26,7 @@ class AppChatChrome {
   static ValueNotifier<ChatChromeStyle> get current => _setting.current;
 
   static ChatChromeStyle _parse(String? value) =>
-      enumFromName(ChatChromeStyle.values, value, ChatChromeStyle.none);
+      enumFromName(ChatChromeStyle.values, value, ChatChromeStyle.color);
 
   static String _encode(ChatChromeStyle value) => value.name;
 

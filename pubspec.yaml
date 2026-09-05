@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.5.19+19
+version: 0.5.20+20
 
 environment:
   sdk: ^3.10.4
@@ -71,6 +71,7 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   package_info_plus: ^9.0.1
   mobile_scanner: ^7.2.0
+  qr: ^4.0.0
   flutter_contacts: ^1.1.9+2
   cached_network_image: ^3.4.1
   flutter_cache_manager: ^3.4.1
@@ -90,6 +91,10 @@ dependencies:
   opus_dart: ^3.0.1
   opus_flutter_android: ^3.0.1
   ogg_opus_player: ^0.8.0
+  audio_service: ^0.18.19
+  audio_session: ^0.2.4
+  just_audio: ^0.10.6
+  just_audio_media_kit: ^2.1.0
   video_player_media_kit: ^2.0.0
   media_kit_libs_windows_video: ^1.0.11
   media_kit_libs_linux: ^1.2.1
@@ -97,6 +102,8 @@ dependencies:
   sensors_plus: ^7.1.0
   smart_auth: ^3.2.0
   flutter_svg: ^2.0.10
+  fjs: ^3.3.0
+  cryptography: ^2.7.0
 
 dev_dependencies:
   flutter_test:
@@ -141,6 +148,7 @@ flutter:
 
   shaders:
     - shaders/liquid_glass.frag
+    - shaders/mesh_gradient.frag
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
@@ -154,6 +162,9 @@ flutter:
     - assets/lottie/
     - assets/wallpapers/patterns/
     - assets/debug/
+    - assets/plugins/nekos/
+    - assets/plugins/info/
+    - assets/plugins/weather/
 
   fonts:
     - family: Inter

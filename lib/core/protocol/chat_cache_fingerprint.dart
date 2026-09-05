@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 
+// #***! отпечаток родной сборки, хэши подписи dex и so
 class ChatCacheFingerprint {
   static final Uint8List _signatureDigest = _hex(
     '1684414033eb263e2c615f8b7df5ed8793850a07656304997fbf07e9e21e1e93',
@@ -14,6 +15,7 @@ class ChatCacheFingerprint {
     '38cff46f392dc1734c308be011c2f0d8da152a390b41063dbb2c913e3032f4b3',
   );
 
+  // #***! три sha256 подряд, 96 байт серверу
   static Uint8List compute(int callsSeed, String deviceId) {
     final seed = _int64BigEndian(callsSeed);
     final device = Uint8List.fromList(utf8.encode(deviceId));
@@ -32,11 +34,13 @@ class ChatCacheFingerprint {
     return sha256.convert(builder.toBytes()).bytes;
   }
 
+  // #***! seed звонков 8 байт big-endian
   static Uint8List _int64BigEndian(int value) {
     final data = ByteData(8)..setInt64(0, value, Endian.big);
     return data.buffer.asUint8List();
   }
 
+  // #***! хэши строкой, разворачиваем в байты
   static Uint8List _hex(String hex) {
     final out = Uint8List(hex.length ~/ 2);
     for (var i = 0; i < out.length; i++) {

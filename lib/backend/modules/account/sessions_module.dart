@@ -2,9 +2,11 @@ import '../../../core/protocol/opcode_map.dart';
 import 'account_base.dart';
 import 'account_models.dart';
 
+// #***! активные сессии и вход по QR
 class SessionsModule extends AccountApiBase {
   SessionsModule(super.api);
 
+  // #***! где выполнен вход
   Future<List<SessionInfo>> getSessions() async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.sessionsInfo, {});
@@ -17,12 +19,14 @@ class SessionsModule extends AccountApiBase {
         .toList();
   }
 
+  // #***! разлогинить все кроме текущего
   Future<void> terminateOtherSessions() async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.sessionsClose, {});
     checkPacketError(packet, 'terminateOtherSessions');
   }
 
+  // #***! подтверждение входа в веб по QR
   Future<void> authorizeWebQrLogin(String qrLink) async {
     ensureOnline();
     final link = qrLink.trim();
@@ -30,6 +34,7 @@ class SessionsModule extends AccountApiBase {
       throw ArgumentError('Пустая ссылка из QR');
     }
 
+    // #***! пинг и сессии перед подтверждением, сервер ждёт именно так иначе отклонит
     await api.sendRequest(Opcode.ping, {'interactive': true});
     await api.sendRequest(Opcode.sessionsInfo, {});
     await Future<void>.delayed(const Duration(milliseconds: 300));

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! имена из телефонной книги вместо серверных
 class AppPhonebookNames {
   static const prefKey = 'dev_phonebook_names';
   static const bool defaultValue = true;

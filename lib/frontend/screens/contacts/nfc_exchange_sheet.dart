@@ -417,7 +417,7 @@ class _NfcExchangeSheetState extends State<NfcExchangeSheet>
           const SizedBox(height: 4),
           Text(
             formatPhone(_peerPhone) ??
-                l10n.nfcPeerIdFallback('${_peerId ?? ''}'),
+                l10n.contactIdFallback('${_peerId ?? ''}'),
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 24),

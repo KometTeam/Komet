@@ -99,6 +99,7 @@ void showMessageActions({
   required Rect originRect,
   required Offset tapPoint,
   required bool isMe,
+  double bottomReservedSpace = 0,
   required String? messageText,
   required String? copyText,
   required MessageActionsController controller,
@@ -140,6 +141,7 @@ void showMessageActions({
       originRect: originRect,
       tapPoint: tapPoint,
       isMe: isMe,
+      bottomReservedSpace: bottomReservedSpace,
       messageText: messageText,
       copyText: copyText,
       controller: controller,
@@ -177,6 +179,10 @@ class _MessageActionsLayer extends StatefulWidget {
   final Rect originRect;
   final Offset tapPoint;
   final bool isMe;
+  // #***! высота панели композера, которая не входит в MediaQuery.viewInsets
+  // (она видна и без клавиатуры) — без этого меню/реакции могли вылезать
+  // за неё или за нижний край экрана
+  final double bottomReservedSpace;
   final String? messageText;
   final String? copyText;
   final MessageActionsController controller;
@@ -207,6 +213,7 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.originRect,
     required this.tapPoint,
     required this.isMe,
+    this.bottomReservedSpace = 0,
     required this.messageText,
     required this.copyText,
     required this.controller,
@@ -348,7 +355,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final padding = MediaQuery.paddingOf(context);
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final topMargin = padding.top + _hMargin;
-    final bottomMargin = math.max(padding.bottom, keyboardInset) + _hMargin;
+    final bottomMargin =
+        math.max(
+          padding.bottom,
+          math.max(keyboardInset, widget.bottomReservedSpace),
+        ) +
+        _hMargin;
     final rect = widget.originRect;
 
     final spaceBelow = screenSize.height - bottomMargin - (rect.bottom + 16);
@@ -450,7 +462,9 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     const vPad = 6.0;
     final menuHeight = n * itemHeight + vPad * 2;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final bottomLimit = screenSize.height - keyboardInset;
+    final bottomLimit =
+        screenSize.height -
+        math.max(keyboardInset, widget.bottomReservedSpace);
     final maxMenuY = math.max(8.0, bottomLimit - menuHeight - 8.0);
     late double menuX;
     late double menuY;
@@ -701,96 +715,99 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     return AnimatedBuilder(
       animation: Listenable.merge([_animation, _expandController]),
       builder: (ctx, _) {
-        final t = _animation.value.clamp(0.0, 1.0);
-        final e = showReactions ? _expandAnim.value.clamp(0.0, 1.0) : 0.0;
-        final bubbleScale = 1.0 + 0.02 * t;
-        final menuHidden = _panelOpen || _reactionsExpanded;
+          final t = _animation.value.clamp(0.0, 1.0);
+          final e = showReactions ? _expandAnim.value.clamp(0.0, 1.0) : 0.0;
+          final bubbleScale = 1.0 + 0.02 * t;
+          final menuHidden = _panelOpen || _reactionsExpanded;
 
-        return GestureDetector(
-          onTap: _close,
-          behavior: HitTestBehavior.opaque,
-          child: Stack(
-            children: [
-              if (!isClick) ...[
+          return GestureDetector(
+            onTap: _close,
+            behavior: HitTestBehavior.opaque,
+            child: Stack(
+              children: [
+                if (!isClick) ...[
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: Colors.black.withValues(
+                        alpha: 0.22 * t + 0.28 * e,
+                      ),
+                    ),
+                  ),
+                  if (widget.snapshot != null)
+                    Positioned(
+                      left: widget.originRect.left,
+                      top: widget.originRect.top,
+                      width: widget.originRect.width,
+                      height: widget.originRect.height,
+                      child: Opacity(
+                        opacity: 1.0 - 0.35 * e,
+                        child: Transform.scale(
+                          scale: bubbleScale,
+                          child: RawImage(
+                            image: widget.snapshot,
+                            width: widget.originRect.width,
+                            height: widget.originRect.height,
+                            fit: BoxFit.fill,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
                 Positioned.fill(
-                  child: ColoredBox(
-                    color: Colors.black.withValues(alpha: 0.22 * t + 0.28 * e),
+                  child: IgnorePointer(
+                    ignoring: menuHidden,
+                    child: AnimatedOpacity(
+                      opacity: menuHidden ? 0.0 : 1.0,
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOut,
+                      child: Stack(
+                        children: [
+                          if (_effectiveStyle ==
+                              MessageActionsStyle.radial) ...[
+                            ..._buildButtons(t),
+                            _buildLabelBanner(size, t),
+                          ] else
+                            _buildListMenu(t),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                if (widget.snapshot != null)
-                  Positioned(
-                    left: widget.originRect.left,
-                    top: widget.originRect.top,
-                    width: widget.originRect.width,
-                    height: widget.originRect.height,
-                    child: Opacity(
-                      opacity: 1.0 - 0.35 * e,
-                      child: Transform.scale(
-                        scale: bubbleScale,
-                        child: RawImage(
-                          image: widget.snapshot,
-                          width: widget.originRect.width,
-                          height: widget.originRect.height,
-                          fit: BoxFit.fill,
-                        ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: !_panelOpen,
+                    child: AnimatedOpacity(
+                      opacity: _panelOpen ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      child: Stack(
+                        children: [
+                          if (_showReport)
+                            _buildReportMenu()
+                          else if (_showHistory)
+                            _buildHistoryMenu()
+                          else if (_showReadBy)
+                            _buildReadByMenu(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (showReactions)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      ignoring: _panelOpen,
+                      child: AnimatedOpacity(
+                        opacity: _panelOpen ? 0.0 : 1.0,
+                        duration: const Duration(milliseconds: 150),
+                        curve: Curves.easeOut,
+                        child: _buildReactionStrip(t, e),
                       ),
                     ),
                   ),
               ],
-              Positioned.fill(
-                child: IgnorePointer(
-                  ignoring: menuHidden,
-                  child: AnimatedOpacity(
-                    opacity: menuHidden ? 0.0 : 1.0,
-                    duration: const Duration(milliseconds: 150),
-                    curve: Curves.easeOut,
-                    child: Stack(
-                      children: [
-                        if (_effectiveStyle == MessageActionsStyle.radial) ...[
-                          ..._buildButtons(t),
-                          _buildLabelBanner(size, t),
-                        ] else
-                          _buildListMenu(t),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  ignoring: !_panelOpen,
-                  child: AnimatedOpacity(
-                    opacity: _panelOpen ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut,
-                    child: Stack(
-                      children: [
-                        if (_showReport)
-                          _buildReportMenu()
-                        else if (_showHistory)
-                          _buildHistoryMenu()
-                        else if (_showReadBy)
-                          _buildReadByMenu(),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (showReactions)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: _panelOpen,
-                    child: AnimatedOpacity(
-                      opacity: _panelOpen ? 0.0 : 1.0,
-                      duration: const Duration(milliseconds: 150),
-                      curve: Curves.easeOut,
-                      child: _buildReactionStrip(t, e),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
+            ),
+          );
       },
     );
   }
@@ -841,7 +858,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
 
     final safeTop = padding.top + 8;
     final safeBottom =
-        size.height - math.max(padding.bottom, keyboardInset) - 8;
+        size.height -
+        math.max(
+          padding.bottom,
+          math.max(keyboardInset, widget.bottomReservedSpace),
+        ) -
+        8;
 
     final quick = widget.quickReactions;
     const chevronCell = 38.0;

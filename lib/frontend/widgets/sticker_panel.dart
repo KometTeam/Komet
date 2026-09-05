@@ -426,6 +426,8 @@ class _StickerPanelState extends State<StickerPanel>
                   : CachedNetworkImage(
                       imageUrl: s.iconUrl ?? '',
                       fit: BoxFit.contain,
+                      memCacheWidth: 84,
+                      memCacheHeight: 84,
                       errorWidget: (_, _, _) => Icon(
                         Symbols.image,
                         size: 20,

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+// #***! что делает собеседник, печатает или выбирает стикер
 enum ChatActivity { typing, sticker }
 
 extension ChatActivityLabel on ChatActivity {
@@ -11,9 +12,11 @@ extension ChatActivityLabel on ChatActivity {
   };
 }
 
+// #***! тип строкой, всё кроме STICKER считаем печатью
 ChatActivity chatActivityFromType(dynamic type) =>
     type == 'STICKER' ? ChatActivity.sticker : ChatActivity.typing;
 
+// #***! что происходит и кто этим занят
 class ChatActivitySnapshot {
   const ChatActivitySnapshot({required this.activity, required this.userIds});
 
@@ -22,6 +25,7 @@ class ChatActivitySnapshot {
 
   String get label => activity.label;
 
+  // #***! сравниваем по значению иначе шапка перерисовывается на каждый пуш
   @override
   bool operator ==(Object other) =>
       other is ChatActivitySnapshot &&
@@ -32,11 +36,13 @@ class ChatActivitySnapshot {
   int get hashCode => Object.hash(activity, Object.hashAll(userIds));
 }
 
+// #***! печатает в памяти, само истекает
 class ChatActivityStore {
   ChatActivityStore._();
 
   static final ChatActivityStore instance = ChatActivityStore._();
 
+  // #***! сервер не шлёт перестал печатать, снимаем сами через 6 сек
   static const Duration _ttl = Duration(seconds: 6);
 
   final Map<int, Map<int, ChatActivity>> _users = {};
@@ -53,6 +59,7 @@ class ChatActivityStore {
 
   ChatActivity? activity(int chatId) => _current(chatId)?.activity;
 
+  // #***! новый пуш продлевает таймер
   void mark(int chatId, int userId, ChatActivity activity) {
     final timers = _timers.putIfAbsent(chatId, () => <int, Timer>{});
     timers[userId]?.cancel();
@@ -84,6 +91,7 @@ class ChatActivityStore {
     _sync(chatId);
   }
 
+  // #***! кто то печатает, показываем печать она важнее стикера
   ChatActivitySnapshot? _current(int chatId) {
     final users = _users[chatId];
     if (users == null || users.isEmpty) return null;

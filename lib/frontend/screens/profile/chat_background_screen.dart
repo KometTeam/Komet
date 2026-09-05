@@ -1,4 +1,3 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_wallpaper_tint.dart';
@@ -72,21 +71,24 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
       case WallpaperPickType.gallery:
         await _pickFromGallery();
         break;
+      case WallpaperPickType.gradient:
+        final colors = pick.gradientColors;
+        if (colors == null || colors.isEmpty) break;
+        await store.setGradient(
+          _accountId,
+          kGlobalWallpaperChatId,
+          colors,
+          animated: pick.gradientAnimated,
+          rotation: pick.gradientRotation,
+        );
+        _refresh();
+        break;
     }
   }
 
   Future<void> _pickFromGallery() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final bytes = result.files.first.bytes;
-    if (bytes == null) {
-      if (mounted) showCustomNotification(context, 'Не удалось прочитать файл');
-      return;
-    }
-    if (!mounted) return;
+    final bytes = await pickWallpaperBytes(context);
+    if (bytes == null || !mounted) return;
     final settings = await Navigator.of(context).push<WallpaperImageSettings>(
       MaterialPageRoute(
         builder: (_) => ChatWallpaperPreviewScreen(imageBytes: bytes),

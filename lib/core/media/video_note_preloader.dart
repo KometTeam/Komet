@@ -4,8 +4,11 @@ import 'dart:io';
 
 import '../utils/media_cache.dart';
 
+// #***! подкачка кружков чтоб играли сразу как появятся
 class VideoNotePreloader {
+  // #***! сами тянем только короткие до 30 секунд
   static const int autoLoadMaxMs = 30000;
+  // #***! не больше двух разом иначе мешают открытому чату
   static const int _maxConcurrent = 2;
 
   static int _running = 0;
@@ -14,6 +17,7 @@ class VideoNotePreloader {
   static bool autoLoads(int? durationMs) =>
       durationMs != null && durationMs > 0 && durationMs <= autoLoadMaxMs;
 
+  // #***! в кэше отдаём сразу, иначе в очередь
   static Future<File?> load(
     String cacheName,
     Future<String?> Function() resolveUrl, {
@@ -25,6 +29,7 @@ class VideoNotePreloader {
     if (cached != null) return cached;
 
     final job = _PreloadJob(cacheName, resolveUrl, onProgress, cancelled);
+    // #***! видимый кружок в начало очереди
     if (priority) {
       _queue.addFirst(job);
     } else {
@@ -34,6 +39,7 @@ class VideoNotePreloader {
     return job.result.future;
   }
 
+  // #***! насос очереди
   static void _pump() {
     while (_running < _maxConcurrent && _queue.isNotEmpty) {
       final job = _queue.removeFirst();
@@ -45,6 +51,7 @@ class VideoNotePreloader {
     }
   }
 
+  // #***! пока ждали очереди кружок уехал с экрана, отменяем
   static Future<void> _run(_PreloadJob job) async {
     if (job.cancelled?.call() ?? false) {
       job.result.complete(null);

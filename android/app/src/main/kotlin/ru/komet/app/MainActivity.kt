@@ -23,9 +23,8 @@ import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -50,7 +49,7 @@ import java.util.Collections
 import java.util.Random
 import java.util.concurrent.atomic.AtomicBoolean
 
-class MainActivity : FlutterActivity() {
+class MainActivity : AudioServiceActivity() {
 
     private val channelName = "ru.komet.app/vpn_bypass"
     private val iconPackage = MainActivity::class.java.name.substringBeforeLast('.')
@@ -89,7 +88,6 @@ class MainActivity : FlutterActivity() {
         const val LOG_TAG = "VpnBypass"
         const val SHARE_TAG = "ShareIntake"
         const val NFC_TAG = "NfcExchange"
-        const val KEEP_ENGINE_ID = "komet_keep_engine"
         const val NFC_PHASE_MIN_MS = 350L
         const val NFC_PHASE_JITTER_MS = 400
         const val BLE_PERMS_REQUEST = 7711
@@ -941,33 +939,21 @@ class MainActivity : FlutterActivity() {
     // в обоих случаях в фоне должно жить то же соединение, что и в UI.
     private fun keepEngineAlive(): Boolean = CallState.inCall || FkmState.enabled
 
-    override fun provideFlutterEngine(context: Context): FlutterEngine? {
-        val cache = FlutterEngineCache.getInstance()
-        val cached = cache.get(KEEP_ENGINE_ID)
-        if (cached != null) {
-            if (keepEngineAlive()) return cached
-            cache.remove(KEEP_ENGINE_ID)
-            cached.destroy()
-        }
-        return super.provideFlutterEngine(context)
-    }
-
-    override fun shouldDestroyEngineWithHost(): Boolean = !keepEngineAlive()
+    // Движок общий с audio_service (AudioServiceActivity.provideFlutterEngine), и
+    // уничтожает его AudioServicePlugin.disposeFlutterEngine, когда останавливается
+    // медиа-сервис. Активити не должна рвать его из-под сервиса.
+    override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         if (!keepEngineAlive()) {
-            FlutterEngineCache.getInstance().remove(KEEP_ENGINE_ID)
             FkmChannel.detach()
+            ChatNotifications.activeChatId = 0L
         }
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
     override fun onDestroy() {
         shareExecutor.shutdown()
-        if (keepEngineAlive() && isFinishing) {
-            Log.d("KometFcm", "task removed, caching engine (call=${CallState.inCall} fkm=${FkmState.enabled})")
-            flutterEngine?.let { FlutterEngineCache.getInstance().put(KEEP_ENGINE_ID, it) }
-        }
         super.onDestroy()
     }
 

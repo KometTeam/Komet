@@ -3,7 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/core/config/debug_test.dart';
-import 'package:komet/core/contacts/device_contacts_service.dart';
+import 'package:komet/core/contacts/contact_labels.dart';
 import 'package:komet/core/storage/app_database.dart';
 import 'package:komet/frontend/widgets/komet_avatar.dart';
 import 'package:komet/frontend/widgets/small_spinner.dart';
@@ -60,20 +60,26 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
     final profile = await AppDatabase.loadActiveProfile();
     if (profile == null) return const [];
     final contacts = await ContactsModule.getContacts(profile.id);
-    contacts.sort((a, b) => _displayName(a).compareTo(_displayName(b)));
+    contacts.sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
     return contacts;
   }
 
-  String _displayName(CachedContact contact) {
-    final book = DeviceContactsService.nameForPhone(contact.phone);
-    if (book != null && book.isNotEmpty) return book;
-    final last = contact.lastName;
-    final full = (last != null && last.isNotEmpty)
-        ? '${contact.firstName} $last'
-        : contact.firstName;
-    final trimmed = full.trim();
-    return trimmed.isEmpty ? '+${contact.phone}' : trimmed;
-  }
+  String _sortKey(CachedContact contact) => contactSortKey(
+    firstName: contact.firstName,
+    lastName: contact.lastName,
+    phone: contact.phone,
+  );
+
+  ContactLabels _labels(CachedContact contact) => contactLabels(
+    idLabel: AppLocalizations.of(
+      context,
+    )!.contactIdFallback('${contact.id}'),
+    firstName: contact.firstName,
+    lastName: contact.lastName,
+    phone: contact.phone,
+  );
+
+  String _displayName(CachedContact contact) => _labels(contact).title;
 
   List<CachedContact> get _visible {
     final query = _query.trim().toLowerCase();
@@ -165,7 +171,9 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
   }
 
   Widget _buildTile(ColorScheme cs, CachedContact contact) {
-    final name = _displayName(contact);
+    final labels = _labels(contact);
+    final name = labels.title;
+    final subtitle = labels.subtitle;
     return SpringyTap(
       child: Material(
         color: Colors.transparent,
@@ -194,14 +202,16 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '+${contact.phone}',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 12,
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),

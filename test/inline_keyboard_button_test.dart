@@ -5,6 +5,35 @@ import 'package:komet/frontend/widgets/message_bubble.dart';
 import 'package:komet/l10n/app_localizations.dart';
 
 const int _me = 1;
+const String _caption = 'Нажмите на один из вариантов ниже';
+
+const Map<String, dynamic> _keyboardAttach = {
+  '_type': 'INLINE_KEYBOARD',
+  'keyboard': {
+    'buttons': [
+      [
+        {'type': 'CALLBACK', 'text': 'Тренды интерьера', 'payload': 'go'},
+      ],
+    ],
+  },
+};
+
+const Map<String, dynamic> _videoAttach = {
+  '_type': 'VIDEO',
+  'videoId': 501,
+  'width': 240,
+  'height': 240,
+};
+
+CachedMessage _withAttaches(List<Map<String, dynamic>> attaches) =>
+    CachedMessage.fromPushPayload(_me, 2, {
+      'id': '7007',
+      'time': DateTime(2026, 1, 1, 12, 30).millisecondsSinceEpoch,
+      'type': 'USER',
+      'sender': 2,
+      'text': _caption,
+      'attaches': attaches,
+    });
 
 CachedMessage _withButton(Map<String, dynamic> button) =>
     CachedMessage.fromPushPayload(_me, 2, {
@@ -24,6 +53,14 @@ CachedMessage _withButton(Map<String, dynamic> button) =>
         },
       ],
     });
+
+double _captionInset(WidgetTester tester) {
+  final caption = find.textContaining(_caption, findRichText: true).first;
+  final bubble = find
+      .ancestor(of: caption, matching: find.byType(Container))
+      .last;
+  return tester.getTopLeft(caption).dx - tester.getTopLeft(bubble).dx;
+}
 
 Future<void> _pump(WidgetTester tester, CachedMessage message) async {
   await tester.pumpWidget(
@@ -77,5 +114,17 @@ void main() {
     }));
 
     expect(_horizontalDrift(tester, 'Продолжить').abs(), lessThan(0.5));
+  });
+
+  testWidgets('a keyboard listed first does not strip the text padding', (
+    tester,
+  ) async {
+    await _pump(tester, _withAttaches([_videoAttach, _keyboardAttach]));
+    final mediaFirst = _captionInset(tester);
+
+    await _pump(tester, _withAttaches([_keyboardAttach, _videoAttach]));
+
+    expect(mediaFirst, greaterThan(0));
+    expect(_captionInset(tester), mediaFirst);
   });
 }

@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/media/video_transcoder.dart';
+import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/lottie_slash_icon.dart';
 
@@ -281,7 +282,10 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
 
   Future<ui.Image?> _grabFrame() async {
     final file = _file;
-    if (file == null) return null;
+    if (file == null) {
+      logger.w('_grabFrame: исходник не открыт');
+      return null;
+    }
     final position = _controller?.value.position ?? _edit.start;
     final frames = await VideoTranscoder.frames(
       file.path,
@@ -295,13 +299,17 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
       precise: true,
     );
     final data = frames.isEmpty ? null : frames.first;
-    if (data == null) return null;
+    if (data == null) {
+      logger.w('_grabFrame: ${file.path} на $position без кадра');
+      return null;
+    }
     try {
       final codec = await ui.instantiateImageCodec(data);
       final frame = await codec.getNextFrame();
       codec.dispose();
       return frame.image;
-    } catch (_) {
+    } catch (e) {
+      logger.w('_grabFrame: кадр не декодируется: $e');
       return null;
     }
   }
@@ -536,12 +544,22 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     );
   }
 
+  // #***! ручки триммера стоят по краям дорожки, поэтому её саму отодвигаем
+  // от края экрана дальше зоны системных жестов, иначе их не подцепить
+  static const double _barInset = 8;
+  static const double _trimMinInset = 16;
+
   Widget _bottomBar() {
     final controller = _controller;
+    final gesture = MediaQuery.of(context).systemGestureInsets;
+    final trimInset = math.max(
+      _trimMinInset,
+      math.max(gesture.left, gesture.right) + 8 - _barInset,
+    );
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        padding: const EdgeInsets.fromLTRB(_barInset, 0, _barInset, 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -557,14 +575,17 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
             if (widget.editable &&
                 controller != null &&
                 controller.value.isInitialized)
-              TrimBar(
-                frames: _strip,
-                controller: controller,
-                duration: _edit.sourceDuration,
-                start: _edit.start,
-                end: _edit.end,
-                onScrub: _onScrub,
-                onTrim: _onTrim,
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: trimInset),
+                child: TrimBar(
+                  frames: _strip,
+                  controller: controller,
+                  duration: _edit.sourceDuration,
+                  start: _edit.start,
+                  end: _edit.end,
+                  onScrub: _onScrub,
+                  onTrim: _onTrim,
+                ),
               ),
             const SizedBox(height: 10),
             _captionField(),

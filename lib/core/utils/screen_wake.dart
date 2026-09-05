@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'logger.dart';
 
+// #***! не даёт экрану гаснуть, держателей считаем счётчиком
 class ScreenWake {
   ScreenWake._();
 
@@ -21,6 +22,7 @@ class ScreenWake {
     }
   }
 
+  // #***! гасим когда отпустил последний
   Future<void> acquire(Object holder) async {
     if (!_supported || !_holders.add(holder)) return;
     if (_holders.length == 1) await _apply(true);

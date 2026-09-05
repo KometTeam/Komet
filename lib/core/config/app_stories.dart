@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! показывать ленту историй
 class AppStories {
   static const prefKey = 'dev_stories';
   static const bool defaultValue = true;

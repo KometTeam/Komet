@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../utils/logger.dart';
 
+// #***! разрешения на камеру и микрофон
 class VideoNoteAccess {
   const VideoNoteAccess({required this.camera, required this.microphone});
 
@@ -15,11 +16,13 @@ class VideoNoteAccess {
   bool get granted => camera && microphone;
 }
 
+// #***! запись кружка целиком в нативе, превью текстурой
 class NativeVideoNoteRecorder {
   static const _channel = MethodChannel('ru.komet.app/video_note');
 
   int? textureId;
   bool hasFlash = false;
+  // #***! десктопа не касается
   bool get isAvailable => Platform.isAndroid || Platform.isIOS;
 
   Future<VideoNoteAccess> requestAccess() async {
@@ -36,6 +39,7 @@ class NativeVideoNoteRecorder {
     }
   }
 
+  // #***! инициализация камеры, textureId нужен виджету превью
   Future<bool> init({bool front = true, int size = 480, int fps = 30}) async {
     if (!isAvailable) return false;
     final res = await _channel.invokeMapMethod<String, dynamic>('init', {
@@ -69,6 +73,7 @@ class NativeVideoNoteRecorder {
     }
   }
 
+  // #***! запись без поддержки платформы это ошибка программиста, кидаем исключение
   Future<void> start() async {
     if (!isAvailable) {
       throw PlatformException(

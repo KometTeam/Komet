@@ -1,5 +1,6 @@
 import '../utils/format.dart';
 
+// #***! заголовок экрана поделиться
 String shareTitleFor({
   required int photos,
   required int videos,
@@ -28,6 +29,7 @@ String shareTitleFor({
   return 'Отправить $total ${pluralRu(total, 'файл', 'файла', 'файлов')}';
 }
 
+// #***! подпись с получателями, больше двух счётчиком
 String shareSubtitleFor(List<String> recipientNames) {
   if (recipientNames.isEmpty) return 'Выберите чат';
   if (recipientNames.length <= 2) return 'В чат ${recipientNames.join(', ')}';

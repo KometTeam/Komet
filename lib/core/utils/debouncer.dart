@@ -1,5 +1,6 @@
 import 'dart:async';
 
+// #***! откладывает пока дёргают, поиск печатает и прочее
 class Debouncer {
   Debouncer(this.duration);
 

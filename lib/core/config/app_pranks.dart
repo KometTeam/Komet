@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! пасхалки и шутки
 class AppPranks {
   static const prefKey = 'dev_pranks';
   static const bool defaultValue = false;

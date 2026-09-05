@@ -7,8 +7,10 @@ import 'package:photo_manager/photo_manager.dart';
 
 import 'desktop_video_probe.dart';
 
+// #***! доступ к галерее, полный частичный или запрещён
 enum GalleryPermission { granted, limited, denied }
 
+// #***! элемент галереи, за ним системный ассет или просто файл
 abstract class GalleryItem {
   String get id;
   bool get isVideo;
@@ -25,6 +27,7 @@ abstract class GalleryItem {
   static GalleryItem fromFile(File file) => _FileGalleryItem(file);
 }
 
+// #***! страница выдачи
 class GalleryPage {
   const GalleryPage({required this.items, required this.hasMore});
 
@@ -34,6 +37,7 @@ class GalleryPage {
   final bool hasMore;
 }
 
+// #***! выбранное фото плюс результат редактирования
 class PickedPhoto {
   final GalleryItem item;
   final File? editedFile;
@@ -41,6 +45,7 @@ class PickedPhoto {
   const PickedPhoto({required this.item, this.editedFile});
 }
 
+// #***! размеры картинки без полного декодирования
 Future<(int, int)?> imageFileDimensions(File file) async {
   ui.ImmutableBuffer? buffer;
   ui.ImageDescriptor? descriptor;
@@ -57,14 +62,34 @@ Future<(int, int)?> imageFileDimensions(File file) async {
   }
 }
 
+// #***! галерея, на мобилках photo_manager на десктопе обход папок
 abstract class GallerySource {
+  // #***! по 120 штук, столько влезает в несколько экранов сетки
   static const int pageSize = 120;
+  static const Duration maxInt32Duration = Duration(milliseconds: 0x7fffffff);
+
+  // #***! фильтр без ограничений, иначе часть видео пропадает
+  static FilterOptionGroup mediaFilter() => FilterOptionGroup(
+    imageOption: const FilterOption(
+      sizeConstraint: SizeConstraint(ignoreSize: true),
+    ),
+    videoOption: const FilterOption(
+      sizeConstraint: SizeConstraint(ignoreSize: true),
+      durationConstraint: DurationConstraint(
+        max: maxInt32Duration,
+        allowNullable: true,
+      ),
+    ),
+    createTimeCond: DateTimeCond.def().copyWith(ignore: true),
+    orders: const [OrderOption(type: OrderOptionType.createDate, asc: false)],
+  );
 
   Future<GalleryPermission> ensurePermission();
   Future<GalleryPage> load({int offset, int limit});
   Future<void> openSettings();
   Future<void> manageAccess();
 
+  // #***! альбом все спрашиваем один раз, дальше листаем диапазонами
   factory GallerySource.create() {
     if (Platform.isAndroid || Platform.isIOS) {
       return _PhotoManagerSource();
@@ -85,21 +110,6 @@ class _PhotoManagerSource implements GallerySource {
   AssetPathEntity? _album;
   int _total = 0;
 
-  static FilterOptionGroup _filter() => FilterOptionGroup(
-    imageOption: const FilterOption(
-      sizeConstraint: SizeConstraint(ignoreSize: true),
-    ),
-    videoOption: const FilterOption(
-      sizeConstraint: SizeConstraint(ignoreSize: true),
-      durationConstraint: DurationConstraint(
-        max: Duration(days: 365),
-        allowNullable: true,
-      ),
-    ),
-    createTimeCond: DateTimeCond.def().copyWith(ignore: true),
-    orders: const [OrderOption(type: OrderOptionType.createDate, asc: false)],
-  );
-
   @override
   Future<GalleryPage> load({
     int offset = 0,
@@ -109,7 +119,7 @@ class _PhotoManagerSource implements GallerySource {
       final paths = await PhotoManager.getAssetPathList(
         type: RequestType.common,
         onlyAll: true,
-        filterOption: _filter(),
+        filterOption: GallerySource.mediaFilter(),
       );
       if (paths.isEmpty) {
         _album = null;
@@ -136,6 +146,7 @@ class _PhotoManagerSource implements GallerySource {
   Future<void> manageAccess() => PhotoManager.presentLimited();
 }
 
+// #***! обёртка над системным ассетом
 class _AssetGalleryItem implements GalleryItem {
   final AssetEntity asset;
 
@@ -200,6 +211,7 @@ const Set<String> kGalleryVideoExtensions = {
   '.3gp',
 };
 
+// #***! тип по расширению
 String _fileExtension(String path) {
   final dot = path.lastIndexOf('.');
   if (dot < 0) return '';
@@ -209,6 +221,10 @@ String _fileExtension(String path) {
 bool isVideoPath(String path) =>
     kGalleryVideoExtensions.contains(_fileExtension(path));
 
+bool isImagePath(String path) =>
+    kGalleryImageExtensions.contains(_fileExtension(path));
+
+// #***! на десктопе галереи нет, сканируем стандартные папки
 class _DesktopGallerySource implements GallerySource {
   @override
   Future<GalleryPermission> ensurePermission() async =>
@@ -283,6 +299,7 @@ class _DesktopGallerySource implements GallerySource {
   }
 }
 
+// #***! обёртка над обычным файлом
 class _FileGalleryItem implements GalleryItem {
   final File file;
   Duration? _duration;

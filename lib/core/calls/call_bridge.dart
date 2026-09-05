@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../utils/logger.dart';
 import 'call_controller.dart';
 
+// #***! мост к нативному экрану входящего, андроид
 class CallBridge {
   CallBridge._();
   static final CallBridge instance = CallBridge._();
@@ -24,6 +25,7 @@ class CallBridge {
     }
   }
 
+  // #***! события с натива, приняли сбросили закончился
   void init() {
     if (_started || !_android) return;
     _started = true;
@@ -33,6 +35,7 @@ class CallBridge {
     );
   }
 
+  // #***! звонок мог прийти пока приложение не запущено
   Future<void> checkInitialCall() async {
     if (!_android) return;
     try {
@@ -42,6 +45,7 @@ class CallBridge {
     }
   }
 
+  // #***! hangup и ended без данных, остальное несёт payload
   void _handle(Object? event) {
     if (event is! Map) return;
     final action = event['action']?.toString();
@@ -69,6 +73,7 @@ class CallBridge {
     );
   }
 
+  // #***! дальше управление нативным уведомлением
   Future<void> notifyAccepted({String? caller}) async {
     if (!_android) return;
     try {
@@ -126,6 +131,7 @@ class CallBridge {
     }
   }
 
+  // #***! с андроида 14 полноэкранное уведомление требует отдельного разрешения
   Future<bool> canUseFullScreenIntent() async {
     if (!_android) return true;
     try {

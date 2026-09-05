@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// #***! виды форматирования текста
 enum TextFormat {
   heading,
   strong,
@@ -13,6 +14,7 @@ enum TextFormat {
   userMention,
 }
 
+// #***! на проводе форматы это строки капсом
 const Map<TextFormat, String> _formatToServer = {
   TextFormat.heading: 'HEADING',
   TextFormat.strong: 'STRONG',
@@ -35,6 +37,7 @@ String textFormatToServer(TextFormat format) => _formatToServer[format]!;
 TextFormat? textFormatFromServer(String? raw) =>
     raw == null ? null : _serverToFormat[raw];
 
+// #***! отрезок форматирования, откуда сколько и чем
 class FormatRange {
   final TextFormat format;
   final int start;
@@ -54,6 +57,7 @@ class FormatRange {
 
   int get end => start + length;
 
+  // #***! у ссылки и анимодзи детали в attributes
   String? get url {
     final value = attributes?['url'];
     return value is String ? value : null;
@@ -64,6 +68,7 @@ class FormatRange {
     return value is String && value.isNotEmpty ? value : null;
   }
 
+  // #***! обратно в вид для сервера
   Map<String, dynamic> toServer() => {
     'type': textFormatToServer(format),
     'from': start,
@@ -74,6 +79,7 @@ class FormatRange {
   };
 }
 
+// #***! разбор elements, незнакомые типы пропускаем
 List<FormatRange> parseFormatElements(dynamic raw) {
   if (raw is! List) return const [];
   final result = <FormatRange>[];
@@ -110,6 +116,7 @@ List<Map<String, dynamic>> serializeFormatElements(
   Iterable<FormatRange> ranges,
 ) => [for (final range in ranges) range.toServer()];
 
+// #***! сообщение только из анимодзи рисуется крупно, тут это и проверяем
 List<String>? animojiOnlyLottieUrls(
   String? text,
   List<FormatRange> ranges, {
@@ -127,6 +134,7 @@ List<String>? animojiOnlyLottieUrls(
   var cursor = 0;
   for (final r in animoji) {
     final start = r.start.clamp(0, len).toInt();
+    // #***! между анимодзи только пробелы, иначе это обычный текст
     if (text.substring(cursor.clamp(0, len).toInt(), start).trim().isNotEmpty) {
       return null;
     }
@@ -144,6 +152,7 @@ int _asInt(dynamic value) {
   return 0;
 }
 
+// #***! отрезок с наложенными форматами, его рисует один TextSpan
 class FormatSegment {
   final int start;
   final int end;
@@ -164,6 +173,7 @@ class FormatSegment {
   });
 }
 
+// #***! режем текст по границам форматов чтоб куски не пересекались
 List<FormatSegment> segmentizeFormats(String text, List<FormatRange> ranges) {
   if (text.isEmpty) return const [];
   final length = text.length;
@@ -187,6 +197,7 @@ List<FormatSegment> segmentizeFormats(String text, List<FormatRange> ranges) {
     return [FormatSegment(start: 0, end: length, formats: const {})];
   }
 
+  // #***! собираем границы, между соседними формат постоянен
   final boundaries = <int>{0, length};
   for (final range in clamped) {
     boundaries.add(range.start);
@@ -204,6 +215,7 @@ List<FormatSegment> segmentizeFormats(String text, List<FormatRange> ranges) {
     String? animojiUrl;
     int? mentionId;
     String? mentionName;
+    // #***! формат наследуется только если отрезок целиком внутри
     for (final range in clamped) {
       if (range.start <= start && range.end >= end) {
         formats.add(range.format);
@@ -230,6 +242,7 @@ List<FormatSegment> segmentizeFormats(String text, List<FormatRange> ranges) {
   return segments;
 }
 
+// #***! форматы в TextStyle
 TextStyle applyTextFormats(
   TextStyle base,
   Set<TextFormat> formats, {

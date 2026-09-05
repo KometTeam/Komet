@@ -3,10 +3,12 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../widgets/connection_status.dart';
 
+import '../../../core/config/build_profile.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../main.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
+import 'plugins_screen.dart';
 
 class KometSettingsScreen extends StatelessWidget {
   const KometSettingsScreen({super.key});
@@ -34,26 +36,37 @@ class KometSettingsScreen extends StatelessWidget {
             ),
             SettingsCard(
               children: [
-                ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.viewDeleted,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.delete_history,
-                    label: 'View deleted message',
-                    subtitle: 'Показывать удалённые сообщения',
-                    value: value,
-                    onChanged: KometSettings.setViewDeleted,
+                SettingsNavTile(
+                  icon: Symbols.extension,
+                  label: 'Плагины',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PluginsScreen()),
                   ),
                 ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.viewRedacted,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.history_edu,
-                    label: 'View redacted message history',
-                    subtitle: 'Показывать историю у редактированных сообщений',
-                    value: value,
-                    onChanged: KometSettings.setViewRedacted,
+                if (BuildProfile.hiddenContentViewers) ...[
+                  ValueListenableBuilder<bool>(
+                    valueListenable: KometSettings.viewDeleted,
+                    builder: (context, value, _) => SettingsToggleTile(
+                      icon: Symbols.delete_history,
+                      label: 'View deleted message',
+                      subtitle: 'Показывать удалённые сообщения',
+                      value: value,
+                      onChanged: KometSettings.setViewDeleted,
+                    ),
                   ),
-                ),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: KometSettings.viewRedacted,
+                    builder: (context, value, _) => SettingsToggleTile(
+                      icon: Symbols.history_edu,
+                      label: 'View redacted message history',
+                      subtitle:
+                          'Показывать историю у редактированных сообщений',
+                      value: value,
+                      onChanged: KometSettings.setViewRedacted,
+                    ),
+                  ),
+                ],
                 ValueListenableBuilder<bool>(
                   valueListenable: KometSettings.fullTimestamp,
                   builder: (context, value, _) => SettingsToggleTile(
@@ -92,8 +105,9 @@ class KometSettingsScreen extends StatelessWidget {
                     icon: Symbols.visibility_lock,
                     label: 'Show hidden chats',
                     subtitle:
-                        'Показывать скрытые чаты (например, от групповых '
-                        'звонков), которые обычно не отображаются в списке',
+                        'Показывать скрытые чаты, которые обычно не '
+                        'отображаются в списке: от групповых звонков, '
+                        'закрытые каналы и покинутые чаты',
                     value: value,
                     onChanged: KometSettings.setShowHiddenChats,
                   ),
@@ -138,6 +152,28 @@ class KometSettingsScreen extends StatelessWidget {
                         'Полезно для проверки ghost mode',
                     value: value,
                     onChanged: KometSettings.setSelfOnlineCheck,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const SectionHeader(
+              'Отладка',
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+              fontSize: 14,
+            ),
+            SettingsCard(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.recordDebugLogs,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.bug_report,
+                    label: 'Запись отладочных логов',
+                    subtitle:
+                        'Пишет трафик протокола в файл на устройстве — '
+                        'помогает диагностировать баги при репортах',
+                    value: value,
+                    onChanged: KometSettings.setRecordDebugLogs,
                   ),
                 ),
               ],

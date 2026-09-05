@@ -7,6 +7,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'download_history.dart';
 import 'media_cache.dart';
 
+// #***! итог сохранения, в галерею или в папку
 class MediaSaveResult {
   final bool ok;
   final bool toGallery;
@@ -21,6 +22,7 @@ class MediaSaveResult {
   });
 }
 
+// #***! аватарка, качаем в кэш и в галерею
 Future<MediaSaveResult> saveImageFromUrl(String url) async {
   if (url.isEmpty) {
     return const MediaSaveResult(ok: false, error: 'нет ссылки');
@@ -41,8 +43,10 @@ Future<MediaSaveResult> saveImageFromUrl(String url) async {
   }
 }
 
+// #***! фото и видео в галерею, остальное в папку
 enum SaveMediaKind { image, video, file }
 
+// #***! сохранение вложения с записью в историю
 Future<MediaSaveResult> saveMediaFile({
   required String cacheName,
   required Future<String?> Function() resolveUrl,
@@ -74,6 +78,7 @@ Future<MediaSaveResult> saveMediaFile({
   }
 }
 
+// #***! картинка уже на диске, просто копируем
 Future<MediaSaveResult> saveLocalImage(String path, {String? saveName}) async {
   try {
     final file = File(path);
@@ -90,6 +95,7 @@ Future<MediaSaveResult> saveLocalImage(String path, {String? saveName}) async {
   }
 }
 
+// #***! на мобилках просим доступ и в галерею, на десктопе в загрузки
 Future<MediaSaveResult> _persist(
   File file, {
   required String saveName,
@@ -116,6 +122,7 @@ Future<MediaSaveResult> _persist(
   return MediaSaveResult(ok: true, location: target.path);
 }
 
+// #***! папка загрузок есть не везде, иначе документы приложения
 Future<Directory> _targetDirectory() async {
   try {
     final downloads = await getDownloadsDirectory();

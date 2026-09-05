@@ -1,3 +1,4 @@
+// #***! ссылка в звонок и разбор обратно в токен
 class CallLink {
   static const String base = 'https://max.ru/joincall/';
 
@@ -6,6 +7,7 @@ class CallLink {
     caseSensitive: false,
   );
 
+  // #***! принимаем и голый токен и joincall/<токен>
   static final RegExp _rawPattern = RegExp(
     r'^(?:joincall/)?([A-Za-z0-9_-]+)$',
     caseSensitive: false,

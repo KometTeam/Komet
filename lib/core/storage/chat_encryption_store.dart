@@ -1,6 +1,7 @@
 import 'per_chat_json_store.dart';
 import 'token_storage.dart';
 
+// #***! шифрование чата, флаг в prefs ключ в защищённом хранилище
 class ChatEncryptionStore extends PerChatJsonStore<bool> {
   ChatEncryptionStore._()
     : super(
@@ -18,6 +19,7 @@ class ChatEncryptionStore extends PerChatJsonStore<bool> {
   Future<void> setEnabled(int accountId, int chatId, bool enabled) =>
       write(accountId, chatId, enabled ? true : null);
 
+  // #***! ключ в обычные prefs не попадает никогда
   Future<String?> readKey(int accountId, int chatId) async {
     if (accountId == 0) return null;
     return TokenStorage.readSecure(_secureKey(accountId, chatId));

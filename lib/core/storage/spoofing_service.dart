@@ -9,11 +9,23 @@ import 'token_storage.dart';
 import '../utils/ids.dart';
 import '../utils/logger.dart';
 
+// #***! подмена устройства, профиль свой у каждого аккаунта
 class SpoofingService {
+  // #***! версия которой представляемся, от неё зависит функционал
   static const String hardcodedAppVersion = '26.23.2';
   static const int hardcodedBuildNumber = 6779;
+  // #***! незалогиненный профиль живёт под pending пока не узнаем id
   static const String pendingScope = 'pending';
+  static const String androidDeviceType = 'ANDROID';
+  static const String defaultArchitecture = 'arm64-v8a';
+  static const List<String> supportedArchitectures = [
+    'arm64-v8a',
+    'armeabi-v7a',
+    'x86',
+    'x86_64',
+  ];
 
+  // #***! ключи старой схемы, при чтении переносим и удаляем
   static const String _legacyEnabledKey = 'spoofing_enabled';
   static const List<String> _legacyKeys = [
     'spoofing_enabled',
@@ -36,6 +48,7 @@ class SpoofingService {
 
   static final Random _rng = Random.secure();
 
+  // #***! один аккаунт один профиль, ключ от id
   static String _profileKey(String scope) => 'spoof_profile_$scope';
 
   static Future<String> activeScope() async {
@@ -58,6 +71,7 @@ class SpoofingService {
     await prefs.remove(_profileKey('$accountId'));
   }
 
+  // #***! после логина переносим pending на настоящий id
   static Future<void> commitPendingSpoof(int accountId) async {
     final prefs = await SharedPreferences.getInstance();
     final pending = await _read(prefs, pendingScope);
@@ -69,6 +83,7 @@ class SpoofingService {
     await prefs.remove(_profileKey(pendingScope));
   }
 
+  // #***! новому аккаунту свободный пресет, два одинаковых устройства выглядят подозрительно
   static Future<SpoofProfile> prepareNewAccountSpoof(
     List<int> existingAccountIds,
   ) async {
@@ -82,13 +97,14 @@ class SpoofingService {
       }
     }
 
-    bool isAndroid(DevicePreset p) => p.deviceType == 'ANDROID';
+    bool isAndroid(DevicePreset p) => p.deviceType == androidDeviceType;
     final fresh = devicePresets
         .where((p) => isAndroid(p) && !used.contains(p.deviceName))
         .toList();
     final pool = fresh.isNotEmpty
         ? fresh
         : devicePresets.where(isAndroid).toList();
+    // #***! свободные кончились, берём любой
     final preset = pool[_rng.nextInt(pool.length)];
     final shortLocale = preset.locale.split(RegExp(r'[-_]')).first;
 
@@ -101,8 +117,8 @@ class SpoofingService {
       locale: shortLocale,
       deviceLocale: shortLocale,
       deviceId: _hex(8),
-      deviceType: preset.deviceType,
-      arch: 'arm64-v8a',
+      deviceType: androidDeviceType,
+      arch: defaultArchitecture,
       appVersion: hardcodedAppVersion,
       buildNumber: hardcodedBuildNumber,
       pushDeviceType: 'GCM',
@@ -118,6 +134,7 @@ class SpoofingService {
     return profile;
   }
 
+  // #***! вот это и уезжает в хэндшейк, пустое заменяем хардкодом
   static Future<Map<String, dynamic>?> getSpoofedSessionData({
     String? scope,
   }) async {
@@ -137,7 +154,7 @@ class SpoofingService {
       'app_version': profile.appVersion.isEmpty
           ? hardcodedAppVersion
           : profile.appVersion,
-      'arch': profile.arch.isEmpty ? 'arm64-v8a' : profile.arch,
+      'arch': profile.arch.isEmpty ? defaultArchitecture : profile.arch,
       'build_number': profile.buildNumber == 0
           ? hardcodedBuildNumber
           : profile.buildNumber,
@@ -148,6 +165,7 @@ class SpoofingService {
     };
   }
 
+  // #***! вебвью должно быть тем же устройством что и сокет
   static Future<String?> getWebViewUserAgent() async {
     final prefs = await SharedPreferences.getInstance();
     final profile = await _read(prefs, await activeScope());
@@ -160,28 +178,17 @@ class SpoofingService {
     return _deriveUserAgent(profile);
   }
 
+  // #***! пресета нет, собираем юзерагент из полей
   static String _deriveUserAgent(SpoofProfile profile) {
-    final deviceType = profile.deviceType.isEmpty
-        ? 'ANDROID'
-        : profile.deviceType;
-    final osVersion = profile.osVersion;
     final model = profile.deviceName.isEmpty ? 'K' : profile.deviceName;
-
-    if (deviceType == 'IOS' || deviceType == 'iOS') {
-      final version = osVersion
-          .replaceAll(RegExp(r'[^0-9.]'), '')
-          .replaceAll('.', '_');
-      return 'Mozilla/5.0 (iPhone; CPU iPhone OS '
-          '${version.isEmpty ? '17_0' : version} like Mac OS X) '
-          'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 '
-          'Mobile/15E148 Safari/604.1';
-    }
-
-    final android = osVersion.isEmpty ? 'Android 14' : osVersion;
+    final android = profile.osVersion.isEmpty
+        ? 'Android 14'
+        : profile.osVersion;
     return 'Mozilla/5.0 (Linux; $android; $model) AppleWebKit/537.36 '
         '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
   }
 
+  // #***! чтение с миграцией, сначала новый формат потом старый
   static Future<SpoofProfile?> _read(
     SharedPreferences prefs,
     String scope,
@@ -192,7 +199,7 @@ class SpoofingService {
         final profile = SpoofProfile.fromJson(
           jsonDecode(raw) as Map<String, dynamic>,
         );
-        return _migrateVersion(prefs, scope, profile);
+        return _migrateProfile(prefs, scope, profile);
       } catch (e) {
         logger.w('spoof profile read failed: $e');
       }
@@ -203,23 +210,32 @@ class SpoofingService {
     return null;
   }
 
-  static Future<SpoofProfile> _migrateVersion(
+  // #***! версию и архитектуру подтягиваем к текущим чтоб профиль не палился
+  static Future<SpoofProfile> _migrateProfile(
     SharedPreferences prefs,
     String scope,
     SpoofProfile profile,
   ) async {
+    final arch = supportedArchitectures.contains(profile.arch)
+        ? profile.arch
+        : defaultArchitecture;
     if (profile.appVersion == hardcodedAppVersion &&
-        profile.buildNumber == hardcodedBuildNumber) {
+        profile.buildNumber == hardcodedBuildNumber &&
+        profile.deviceType == androidDeviceType &&
+        profile.arch == arch) {
       return profile;
     }
     final migrated = profile.copyWith(
       appVersion: hardcodedAppVersion,
       buildNumber: hardcodedBuildNumber,
+      deviceType: androidDeviceType,
+      arch: arch,
     );
     await prefs.setString(_profileKey(scope), jsonEncode(migrated.toJson()));
     return migrated;
   }
 
+  // #***! разовый перенос со старой схемы поле = ключ
   static Future<SpoofProfile?> _migrateLegacy(
     SharedPreferences prefs,
     String scope,
@@ -235,8 +251,8 @@ class SpoofingService {
       locale: prefs.getString('spoof_locale') ?? '',
       deviceLocale: prefs.getString('spoof_devicelocale') ?? '',
       deviceId: prefs.getString('spoof_deviceid') ?? '',
-      deviceType: prefs.getString('spoof_devicetype') ?? 'ANDROID',
-      arch: prefs.getString('spoof_arch') ?? 'arm64-v8a',
+      deviceType: androidDeviceType,
+      arch: prefs.getString('spoof_arch') ?? defaultArchitecture,
       appVersion: prefs.getString('spoof_appversion') ?? hardcodedAppVersion,
       buildNumber: prefs.getInt('spoof_buildnumber') ?? hardcodedBuildNumber,
       pushDeviceType: prefs.getString('spoof_pushdevicetype') ?? 'GCM',

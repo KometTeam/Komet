@@ -1,3 +1,4 @@
+// #***! что подсвечиваем в тексте
 enum TextEntityKind { mention, phone, card }
 
 class TextEntity {
@@ -18,6 +19,7 @@ class TextEntity {
 
 typedef TextSpanRange = ({int start, int end});
 
+// #***! регулярки терпят пробелы и дефисы но не цепляют обычные числа
 final RegExp _cardPattern = RegExp(
   r'(?<![\d.,])\d(?:[ -]?\d){12,18}(?![\d.,])',
 );
@@ -26,6 +28,7 @@ final RegExp _phonePattern = RegExp(
 );
 final RegExp _mentionPattern = RegExp(r'(?<![\w@/])@([A-Za-z0-9_]{2,32})');
 
+// #***! человеческие названия платёжных систем
 const Map<String, String> _cardBrands = {
   'MIR': 'МИР',
   'VISA': 'Visa',
@@ -38,6 +41,7 @@ const Map<String, String> _cardBrands = {
   'DISCOVER': 'Discover',
 };
 
+// #***! платёжка по первым цифрам
 String? cardBrand(String digits) {
   if (digits.length < 13) return null;
   int prefix(int length) => int.parse(digits.substring(0, length));
@@ -70,6 +74,7 @@ String? cardBrandTitle(String digits) {
   return brand == null ? null : _cardBrands[brand];
 }
 
+// #***! показываем маскированный номер а не полный
 String cardMask(String digits) {
   final brand = cardBrand(digits) ?? 'CARD';
   final tail = digits.length >= 4
@@ -87,6 +92,7 @@ String formatCardNumber(String digits) {
   return buffer.toString();
 }
 
+// #***! алгоритм луна отсекает случайные длинные числа
 bool isLuhnValid(String digits) {
   if (digits.length < 12) return false;
   var sum = 0;
@@ -113,6 +119,7 @@ String _digitsOf(String raw) {
   return buffer.toString();
 }
 
+// #***! быстрый отсев, зовётся на каждое сообщение
 bool _mayContainEntities(String text) {
   for (var i = 0; i < text.length; i++) {
     final code = text.codeUnitAt(i);
@@ -122,6 +129,7 @@ bool _mayContainEntities(String text) {
   return false;
 }
 
+// #***! поиск сущностей, skip это уже занятые куски
 List<TextEntity> detectTextEntities(
   String text, {
   Iterable<TextSpanRange> skip = const [],
@@ -134,6 +142,7 @@ List<TextEntity> detectTextEntities(
 
   final found = <TextEntity>[];
 
+  // #***! занимаем диапазоны чтоб сущности не накладывались
   void collect(
     RegExp pattern,
     TextEntityKind kind,
@@ -155,6 +164,7 @@ List<TextEntity> detectTextEntities(
     }
   }
 
+  // #***! карту берём только если сходится бренд и контрольная сумма
   collect(_cardPattern, TextEntityKind.card, (match) {
     final digits = _digitsOf(match.group(0)!);
     if (digits.length < 13 || digits.length > 19) return null;

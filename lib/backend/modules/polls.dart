@@ -5,16 +5,19 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/utils/logger.dart';
 import '../../models/poll.dart';
 
+// #***! опросы, кэш и голосование
 class PollsModule extends ChangeNotifier {
   final Api _api;
 
   PollsModule(this._api);
 
+  // #***! _inFlight не даёт послать второй запрос по тому же опросу
   final Map<int, Poll> _cache = {};
   final Set<int> _inFlight = {};
 
   Poll? get(int pollId) => _cache[pollId];
 
+  // #***! содержимое опроса грузится отдельно от сообщения
   Future<void> fetch(
     int chatId,
     String messageId,
@@ -60,6 +63,7 @@ class PollsModule extends ChangeNotifier {
     }
   }
 
+  // #***! сервер обычно сразу даёт новое состояние, перезапрос не нужен
   Future<bool> vote(
     int chatId,
     String messageId,

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/ids.dart';
 
+// #***! постоянные идентификаторы установки для хэндшейка
 abstract class DeviceIdentity {
   static const String _instanceIdKey = 'mt_instance_id';
   static const String _deviceIdKey = 'device_id_local';
@@ -11,9 +12,11 @@ abstract class DeviceIdentity {
   static final Random _rng = Random.secure();
   static int? _clientSessionId;
 
+  // #***! номер сессии живёт пока запущен процесс
   static int get clientSessionId =>
       _clientSessionId ??= _rng.nextInt(0x7FFFFFFF) + 1;
 
+  // #***! instanceId и deviceId генерятся один раз, по ним сервер узнаёт устройство
   static Future<String> instanceId() async {
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getString(_instanceIdKey);

@@ -40,8 +40,11 @@ class _TokenLoginScreenState extends State<TokenLoginScreen> {
   final _clientSessionIdController = TextEditingController();
   final _userAgentController = TextEditingController();
 
-  String _selectedDeviceType = 'ANDROID';
-  String _selectedArch = 'arm64-v8a';
+  static final List<_Opt> _archOptions = SpoofingService.supportedArchitectures
+      .map((arch) => _Opt(arch, arch, Symbols.memory))
+      .toList();
+
+  String _selectedArch = SpoofingService.defaultArchitecture;
   bool _isLoading = false;
 
   @override
@@ -87,7 +90,7 @@ class _TokenLoginScreenState extends State<TokenLoginScreen> {
       locale: _localeController.text.trim(),
       deviceLocale: _deviceLocaleController.text.trim(),
       deviceId: _deviceIdController.text.trim(),
-      deviceType: _selectedDeviceType,
+      deviceType: SpoofingService.androidDeviceType,
       arch: _selectedArch,
       appVersion: _appVersionController.text.trim(),
       buildNumber:
@@ -202,17 +205,6 @@ class _TokenLoginScreenState extends State<TokenLoginScreen> {
               padding: const EdgeInsets.only(bottom: 16, top: 4),
               fontSize: 20,
             ),
-            Text(l10n.spoofDeviceTypeTitle),
-            const SizedBox(height: 8),
-            _chips(
-              const [
-                _Opt('ANDROID', 'Android', Symbols.android),
-                _Opt('IOS', 'iOS', Symbols.phone_iphone),
-              ],
-              _selectedDeviceType,
-              (v) => setState(() => _selectedDeviceType = v),
-            ),
-            const SizedBox(height: 16),
             _field(
               _deviceNameController,
               l10n.spoofFieldDeviceName,
@@ -292,13 +284,7 @@ class _TokenLoginScreenState extends State<TokenLoginScreen> {
             Text(l10n.spoofFieldArchitecture),
             const SizedBox(height: 8),
             _chips(
-              const [
-                _Opt('arm64-v8a', 'arm64-v8a', Symbols.memory),
-                _Opt('armeabi-v7a', 'armeabi-v7a', Symbols.memory),
-                _Opt('arm64', 'arm64', Symbols.memory),
-                _Opt('x86_64', 'x86_64', Symbols.memory),
-                _Opt('x86', 'x86', Symbols.memory),
-              ],
+              _archOptions,
               _selectedArch,
               (v) => setState(() => _selectedArch = v),
             ),

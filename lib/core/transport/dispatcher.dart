@@ -7,6 +7,7 @@ import '../utils/logger.dart';
 
 typedef PacketHandler = void Function(Packet packet);
 
+// #***! один ждущий запрос плюс время отправки
 class _PendingRequest {
   _PendingRequest(this.completer, this.sentAt);
 
@@ -14,6 +15,7 @@ class _PendingRequest {
   final DateTime sentAt;
 }
 
+// #***! роутер входящих, ответы по seq пуши по опкоду
 /// Роутер входящих пакетов.
 ///
 /// Ответы на запросы матчатся по seq (через [registerPending]),
@@ -30,6 +32,7 @@ class PacketDispatcher {
 
   Stream<String> get errorStream => _errorController.stream;
 
+  // #***! текст ошибки юзеру
   static String? _serverErrorText(dynamic payload) {
     if (payload is! Map) return null;
     for (final key in ['localizedMessage', 'title']) {
@@ -41,6 +44,7 @@ class PacketDispatcher {
 
   Timer? _cleanupTimer;
 
+  // #***! раз в 10 сек чистим зависшие
   PacketDispatcher() {
     _cleanupTimer = Timer.periodic(
       const Duration(seconds: 10),
@@ -48,6 +52,7 @@ class PacketDispatcher {
     );
   }
 
+  // #***! зовём перед отправкой, ждём пакет с этим seq
   /// Регистрирует ожидание ответа — future завершится когда
   /// придёт пакет с совпадающим seq.
   Future<Packet> registerPending(int seq) {
@@ -62,6 +67,7 @@ class PacketDispatcher {
     return completer.future;
   }
 
+  // #***! модули цепляются к пушам своего опкода
   /// Вешает обработчик на пуши с конкретным опкодом.
   void registerHandler(int opcode, PacketHandler handler) {
     _pushHandlers[opcode] = handler;
@@ -71,9 +77,11 @@ class PacketDispatcher {
     _pushHandlers.remove(opcode);
   }
 
+  // #***! сюда падает каждый пакет из сокета
   void dispatch(Packet packet) {
     final tag = Opcode.name(packet.opcode);
 
+    // #***! ветка ответа на наш запрос
     if (packet.cmd == CmdType.ok ||
         packet.cmd == CmdType.error ||
         packet.cmd == CmdType.notFound) {
@@ -84,6 +92,7 @@ class PacketDispatcher {
         '<= {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: $payloadLog}',
       );
 
+      // #***! ошибки в errorStream, кроме протухшей сессии
       if (packet.isError) {
         final isSessionExpired =
             packet.payload is Map &&
@@ -97,6 +106,7 @@ class PacketDispatcher {
       final pending = _pendingRequests.remove(packet.seq);
       final completer = pending?.completer;
 
+      // #***! ответ пришёл а ждать некому, опоздал
       if (completer == null) {
         if (packet.opcode != Opcode.ping) {
           logger.w('Нет ожидающего запроса для seq=${packet.seq} [$tag]');
@@ -118,6 +128,7 @@ class PacketDispatcher {
       } else {
         completer.complete(packet);
       }
+    // #***! ветка пуша, отдаём обработчику и в стрим
     } else if (packet.isPush) {
       logger.i(
         '<= push {ver: ${packet.api}, cmd: ${packet.cmd}, seq: ${packet.seq}, opcode: ${packet.opcode}, payload: ${payloadForLog(packet.payload)}}',
@@ -134,6 +145,7 @@ class PacketDispatcher {
     }
   }
 
+  // #***! нет ответа 30 сек значит потерялся
   /// Чистит зависшие запросы старше 30 секунд
   void _cleanupStaleRequests() {
     final now = DateTime.now();
@@ -152,6 +164,7 @@ class PacketDispatcher {
     }
   }
 
+  // #***! при обрыве рубим всех ждущих
   /// Обрывает все ожидающие запросы (при дисконнекте)
   void clearPending() {
     for (final entry in _pendingRequests.entries) {

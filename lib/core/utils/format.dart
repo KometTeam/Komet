@@ -1,5 +1,6 @@
 library;
 
+// #***! русские месяцы, intl ради трёх букв тянуть не хочется
 const List<String> kRuMonthsShort = [
   'янв',
   'фев',
@@ -15,8 +16,10 @@ const List<String> kRuMonthsShort = [
   'дек',
 ];
 
+// #***! ведущий ноль
 String pad2(int n) => n.toString().padLeft(2, '0');
 
+// #***! русское склонение, 1 файл 2 файла 5 файлов
 String pluralRu(int n, String one, String few, String many) {
   final mod100 = n % 100;
   if (mod100 >= 11 && mod100 <= 14) return many;
@@ -32,6 +35,7 @@ String pluralRu(int n, String one, String few, String many) {
   }
 }
 
+// #***! таймер голосового с десятыми
 String formatVoiceElapsed(int ms) {
   final totalSec = ms ~/ 1000;
   final m = totalSec ~/ 60;
@@ -42,6 +46,7 @@ String formatVoiceElapsed(int ms) {
 
 final RegExp _phoneNonDigits = RegExp(r'[^0-9]');
 
+// #***! размер по человечески
 String formatBytes(int bytes) {
   if (bytes < 1024) return '$bytes Б';
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} КБ';
@@ -51,6 +56,7 @@ String formatBytes(int bytes) {
   return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} ГБ';
 }
 
+// #***! дальше время и даты в разных видах
 String formatDurationMmSs(Duration d, {bool padMinutes = false}) {
   final m = d.inMinutes;
   return '${padMinutes ? pad2(m) : m}:${pad2(d.inSeconds % 60)}';
@@ -87,6 +93,7 @@ String formatDateTimeNumeric(DateTime dt) =>
 String formatDateTimeWords(DateTime dt) =>
     '${formatDateWords(dt)}, ${formatClock(dt)}';
 
+// #***! был недавно и подобное для шапки чата
 String formatLastSeen(int secondsSinceEpoch) {
   final dt = DateTime.fromMillisecondsSinceEpoch(secondsSinceEpoch * 1000);
   final diff = DateTime.now().difference(dt);
@@ -97,6 +104,7 @@ String formatLastSeen(int secondsSinceEpoch) {
   return 'Был(-а) ${formatDateWords(dt)}';
 }
 
+// #***! телефон разбираем красиво только для российских
 String? formatPhone(dynamic raw) {
   String? digits;
   if (raw is int && raw > 0) {

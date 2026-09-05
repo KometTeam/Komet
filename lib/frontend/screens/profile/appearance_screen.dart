@@ -1,8 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../widgets/color_wheel_picker.dart';
 import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_bubble_behavior.dart';
@@ -102,36 +101,44 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: ListView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+        child: Column(
           children: [
-            _PreviewSection(color: _color, isSystem: _isSystem),
-            const SizedBox(height: 16),
-            _ColorPickerCard(
-              color: _color,
-              isSystem: _isSystem,
-              expanded: _accentExpanded,
-              onToggle: _toggleAccentExpanded,
-              onColorChanged: _onColorChanged,
-              onReset: _resetToSystem,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _PreviewSection(color: _color, isSystem: _isSystem),
             ),
-            const SizedBox(height: 12),
-            _BubbleShapeCard(onChanged: _onStyleChanged),
-            const SizedBox(height: 12),
-            _BubbleBehaviorCard(onChanged: _onBehaviorChanged),
-            const SizedBox(height: 12),
-            const _VisualStyleCard(),
-            const SizedBox(height: 12),
-            const _ChatChromeCard(),
-            const SizedBox(height: 12),
-            const _ComposerBarCard(),
-            const SizedBox(height: 12),
-            const _NavPillStyleCard(),
-            const SizedBox(height: 12),
-            const _GradientToggleCard(),
-            const SizedBox(height: 12),
-            const _SpectrumToggleCard(),
+            Expanded(
+              child: ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                children: [
+                  _ColorPickerCard(
+                    color: _color,
+                    isSystem: _isSystem,
+                    expanded: _accentExpanded,
+                    onToggle: _toggleAccentExpanded,
+                    onColorChanged: _onColorChanged,
+                    onReset: _resetToSystem,
+                  ),
+                  const SizedBox(height: 12),
+                  _BubbleShapeCard(onChanged: _onStyleChanged),
+                  const SizedBox(height: 12),
+                  _BubbleBehaviorCard(onChanged: _onBehaviorChanged),
+                  const SizedBox(height: 12),
+                  const _VisualStyleCard(),
+                  const SizedBox(height: 12),
+                  const _ChatChromeCard(),
+                  const SizedBox(height: 12),
+                  const _ComposerBarCard(),
+                  const SizedBox(height: 12),
+                  const _NavPillStyleCard(),
+                  const SizedBox(height: 12),
+                  const _GradientToggleCard(),
+                  const SizedBox(height: 12),
+                  const _SpectrumToggleCard(),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -844,7 +851,7 @@ class _ColorPickerCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _ColorWheelPicker(
+                        ColorWheelPicker(
                           color: col,
                           onChanged: onColorChanged,
                         ),
@@ -999,113 +1006,3 @@ class _BubbleBehaviorCard extends StatelessWidget {
   }
 }
 
-class _ColorWheelPicker extends StatefulWidget {
-  final Color color;
-  final ValueChanged<Color> onChanged;
-
-  const _ColorWheelPicker({required this.color, required this.onChanged});
-
-  @override
-  State<_ColorWheelPicker> createState() => _ColorWheelPickerState();
-}
-
-class _ColorWheelPickerState extends State<_ColorWheelPicker> {
-  late HSVColor _hsv;
-  late Color _lastEmitted;
-
-  @override
-  void initState() {
-    super.initState();
-    _hsv = HSVColor.fromColor(widget.color).withValue(1);
-    _lastEmitted = widget.color;
-  }
-
-  @override
-  void didUpdateWidget(covariant _ColorWheelPicker oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.color != _lastEmitted) {
-      _hsv = HSVColor.fromColor(widget.color).withValue(1);
-      _lastEmitted = widget.color;
-    }
-  }
-
-  void _handleWheel(Offset local, double size) {
-    final radius = size / 2;
-    final dx = local.dx - radius;
-    final dy = local.dy - radius;
-    final sat = (math.sqrt(dx * dx + dy * dy) / radius).clamp(0.0, 1.0);
-    var hue = math.atan2(dy, dx) * 180 / math.pi;
-    if (hue < 0) hue += 360;
-    final hsv = _hsv.withHue(hue).withSaturation(sat);
-    setState(() => _hsv = hsv);
-    final color = hsv.toColor();
-    _lastEmitted = color;
-    widget.onChanged(color);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wheelSize = math.min(260.0, constraints.maxWidth);
-
-        return Center(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanDown: (d) => _handleWheel(d.localPosition, wheelSize),
-            onPanUpdate: (d) => _handleWheel(d.localPosition, wheelSize),
-            child: SizedBox(
-              width: wheelSize,
-              height: wheelSize,
-              child: CustomPaint(painter: _WheelPainter(hsv: _hsv)),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _WheelPainter extends CustomPainter {
-  final HSVColor hsv;
-
-  const _WheelPainter({required this.hsv});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    final hueShader = SweepGradient(
-      colors: [
-        for (var i = 0; i <= 360; i += 30)
-          HSVColor.fromAHSV(1, (i % 360).toDouble(), 1, 1).toColor(),
-      ],
-      stops: [for (var i = 0; i <= 360; i += 30) i / 360],
-    ).createShader(rect);
-    canvas.drawCircle(center, radius, Paint()..shader = hueShader);
-
-    final satShader = RadialGradient(
-      colors: [Colors.white, Colors.white.withValues(alpha: 0)],
-    ).createShader(rect);
-    canvas.drawCircle(center, radius, Paint()..shader = satShader);
-
-    final angle = hsv.hue * math.pi / 180;
-    final thumb = Offset(
-      center.dx + hsv.saturation * radius * math.cos(angle),
-      center.dy + hsv.saturation * radius * math.sin(angle),
-    );
-    canvas.drawShadow(
-      Path()..addOval(Rect.fromCircle(center: thumb, radius: 13)),
-      Colors.black,
-      2,
-      false,
-    );
-    canvas.drawCircle(thumb, 13, Paint()..color = Colors.white);
-    canvas.drawCircle(thumb, 10, Paint()..color = hsv.toColor());
-  }
-
-  @override
-  bool shouldRepaint(_WheelPainter oldDelegate) => oldDelegate.hsv != hsv;
-}

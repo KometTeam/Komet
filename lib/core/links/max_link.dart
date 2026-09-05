@@ -1,10 +1,13 @@
+// #***! виды ссылок max.ru
 enum MaxContentKind { public, invite, user, content }
 
 sealed class MaxLink {
   const MaxLink();
 
+  // #***! needsConnection значит надо дождаться сессии
   bool get needsConnection => false;
 
+  // #***! принимаем и без схемы, max.ru/name тоже ссылка
   static final RegExp _schemeless = RegExp(
     r'^(?:www\.)?max\.ru(?:[/?#]|$)',
     caseSensitive: false,
@@ -12,6 +15,7 @@ sealed class MaxLink {
 
   static final RegExp _segment = RegExp(r'^[A-Za-z0-9_]+$');
 
+  // #***! зарезервированные пути, публичным именем быть не могут
   static const Set<String> _reserved = {
     'login',
     'ps',
@@ -21,8 +25,10 @@ sealed class MaxLink {
     'help',
   };
 
+  // #***! быстрая проверка без разбора
   static bool isMaxLink(String url) => parse(url) != null;
 
+  // #***! строка в конкретный подтип ссылки
   static MaxLink? parse(String input) {
     final uri = _canonical(input);
     if (uri == null) return null;
@@ -40,6 +46,7 @@ sealed class MaxLink {
     return _parseContent(segments, params, url);
   }
 
+  // #***! нормализация к Uri, дописываем схему убираем мусор
   static Uri? _canonical(String input) {
     var value = input.trim();
     if (value.isEmpty) return null;
@@ -56,6 +63,7 @@ sealed class MaxLink {
     return uri;
   }
 
+  // #***! ссылка ?param=... без пути
   static MaxLink _parseQueryOnly(Map<String, String> params) {
     final userId = _idParam(params, 'uid');
     if (userId != null) return MaxContactIdLink(userId);
@@ -64,6 +72,7 @@ sealed class MaxLink {
     return const MaxRootLink();
   }
 
+  // #***! разбор по первому сегменту
   static MaxLink _parseRoute(
     List<String> segments,
     Map<String, String> params,
@@ -89,6 +98,7 @@ sealed class MaxLink {
     return MaxRouteLink(route, params);
   }
 
+  // #***! остальное это контент, пост чат стикерпак
   static MaxLink? _parseContent(
     List<String> segments,
     Map<String, String> params,
@@ -164,6 +174,7 @@ sealed class MaxLink {
     return null;
   }
 
+  // #***! публичное имя это один допустимый сегмент
   static String? _publicName(String segment) {
     final name = segment.startsWith('@') ? segment.substring(1) : segment;
     if (name.isEmpty) return null;
@@ -185,6 +196,7 @@ sealed class MaxLink {
   }
 }
 
+// #***! дальше по классу на каждый вид ссылки
 class MaxRootLink extends MaxLink {
   const MaxRootLink();
 }

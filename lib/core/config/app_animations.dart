@@ -1,3 +1,4 @@
+// #***! lottie иконки нижней панели, генерит tool/make_morph_icons.py
 class AppAnimations {
   const AppAnimations._();
 

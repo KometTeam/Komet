@@ -11,10 +11,12 @@ import '../storage/chat_members_store.dart';
 
 Api? _api;
 
+// #***! api ставится один раз при старте
 void attachInfoCacheApi(Api api) {
   _api = api;
 }
 
+// #***! запись кэша
 class _Entry<T> {
   T? value;
   DateTime? fetchedAt;
@@ -22,6 +24,7 @@ class _Entry<T> {
   Future<T?>? inFlight;
 }
 
+// #***! общий кэш по id с TTL
 class InfoCache<T> {
   final Duration ttl;
   final Duration failureBackoff;
@@ -34,16 +37,19 @@ class InfoCache<T> {
     this.failureBackoff = const Duration(seconds: 10),
   });
 
+  // #***! свежее отдаём без сети
   bool _isFresh(_Entry<T> e) {
     if (e.fetchedAt == null) return false;
     return DateTime.now().difference(e.fetchedAt!) < ttl;
   }
 
+  // #***! после неудачи не долбим сервер
   bool _isInFailureBackoff(_Entry<T> e) {
     if (e.failedAt == null) return false;
     return DateTime.now().difference(e.failedAt!) < failureBackoff;
   }
 
+  // #***! параллельные вызовы ждут один запрос
   Future<T?> get(int id, {bool forceRefresh = false}) {
     final entry = _entries.putIfAbsent(id, () => _Entry<T>());
 
@@ -97,6 +103,7 @@ class InfoCache<T> {
   }
 }
 
+// #***! карточки контактов
 class ContactInfoFetch {
   static final _cache = InfoCache<ContactInfo>(
     ttl: const Duration(minutes: 5),
@@ -111,6 +118,7 @@ class ContactInfoFetch {
   static void invalidate(int id) => _cache.invalidate(id);
   static void clear() => _cache.clear();
 
+  // #***! положить контакт мимо сети
   static void putContact(int id, Map<dynamic, dynamic> contact) {
     _cache.putValue(
       id,
@@ -118,6 +126,7 @@ class ContactInfoFetch {
     );
   }
 
+  // #***! пачкой за всех недостающих
   static Future<Map<int, ContactInfo>> getMany(
     List<int> ids, {
     bool forceRefresh = false,
@@ -174,6 +183,7 @@ class ContactInfoFetch {
   }
 }
 
+// #***! присутствие, онлайн и последний визит
 class PresenceFetch {
   static final _cache = InfoCache<Map<String, dynamic>>(
     ttl: const Duration(seconds: 60),
@@ -187,7 +197,9 @@ class PresenceFetch {
 
   static Map<String, dynamic>? peek(int id) => _cache.peek(id);
 
+  // #***! _live от пушей, он важнее
   static final Map<int, Map<String, dynamic>> _live = {};
+  // #***! revision на каждый пуш, юишка подписана
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
   static Map<String, dynamic>? live(int id) => _live[id] ?? _cache.peek(id);
@@ -209,6 +221,7 @@ class PresenceFetch {
     revision.value++;
   }
 
+  // #***! присутствие из логина кладём разом
   static void primeAll(Map<dynamic, dynamic> presence) {
     final now = DateTime.now();
     presence.forEach((key, value) {
@@ -263,6 +276,7 @@ class PresenceFetch {
     return result;
   }
 
+  // #***! не больше 100 id за раз
   static const _batchSize = 100;
 
   static Future<void> ensureFor(Iterable<int> ids) async {
@@ -308,6 +322,7 @@ class PresenceFetch {
   }
 }
 
+// #***! команды ботов
 class BotInfoFetch {
   static final _cache = InfoCache<BotInfo>(
     ttl: const Duration(minutes: 30),
@@ -338,6 +353,7 @@ class BotInfoFetch {
   }
 }
 
+// #***! полные карточки чатов
 class ChatInfoFetch {
   static final _cache = InfoCache<ChatInfo>(
     ttl: const Duration(minutes: 5),

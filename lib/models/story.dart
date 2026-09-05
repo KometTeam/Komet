@@ -1,8 +1,10 @@
 import '../core/utils/parse.dart';
 import 'attachment.dart';
 
+// #***! чья история, человека группы или канала
 enum StoryOwnerType { user, chat, channel }
 
+// #***! на проводе число, у нас enum
 int _ownerTypeToInt(StoryOwnerType type) {
   switch (type) {
     case StoryOwnerType.user:
@@ -25,12 +27,14 @@ StoryOwnerType _ownerTypeFromInt(Object? raw) {
   }
 }
 
+// #***! сервер отдаёт то Map<String, dynamic> то просто Map
 Map<String, dynamic> _asStringMap(Object? raw) {
   if (raw is Map<String, dynamic>) return raw;
   if (raw is Map) return Map<String, dynamic>.from(raw);
   return const {};
 }
 
+// #***! владелец истории, он же ключ группировки в ленте
 class StoryOwner {
   final int ownerId;
   final StoryOwnerType type;
@@ -51,6 +55,7 @@ class StoryOwner {
     'type': _ownerTypeToInt(type),
   };
 
+  // #***! сравниваем по значению иначе будут дубли
   @override
   bool operator ==(Object other) =>
       other is StoryOwner &&
@@ -61,6 +66,7 @@ class StoryOwner {
   int get hashCode => Object.hash(ownerId, type);
 }
 
+// #***! наша реакция, эмодзи или стикер
 class StoryReaction {
   final int reactionType; // 0 = emoji, 1 = sticker
   final String id;
@@ -82,6 +88,7 @@ class StoryReaction {
   Map<String, dynamic> toMap() => {'reactionType': reactionType, 'id': id};
 }
 
+// #***! медиа истории, url у фото и видео по разному зовутся
 class StoryMedia {
   final AttachmentType type;
   final String? url;
@@ -101,9 +108,11 @@ class StoryMedia {
     this.durationMs,
   });
 
+  // #***! видео и фото рисуют разные виджеты
   bool get isVideo => type == AttachmentType.video;
   bool get isPhoto => type == AttachmentType.photo;
 
+  // #***! 9:16 по умолчанию, размеры приходят не всегда
   double get aspectRatio {
     final w = width ?? 0;
     final h = height ?? 0;
@@ -111,6 +120,7 @@ class StoryMedia {
     return w / h;
   }
 
+  // #***! разбор по _type, у фото и видео свои url
   static StoryMedia? fromMap(Object? raw) {
     final map = _asStringMap(raw);
     final typeStr = (map['_type'] as String? ?? '').toUpperCase();
@@ -154,6 +164,7 @@ class StoryMedia {
     }
   }
 
+  // #***! обратно для локального кэша
   String get _typeName {
     switch (type) {
       case AttachmentType.photo:
@@ -183,6 +194,7 @@ class StoryMedia {
   }
 }
 
+// #***! одна история
 class Story {
   final int id;
   final int cid;
@@ -206,6 +218,7 @@ class Story {
     this.reaction,
   });
 
+  // #***! локально меняется только реакция
   Story copyWith({StoryReaction? reaction, bool clearReaction = false}) {
     return Story(
       id: id,
@@ -220,6 +233,7 @@ class Story {
     );
   }
 
+  // #***! нет владельца, выкидываем
   static Story? fromMap(Object? raw) {
     final map = _asStringMap(raw);
     final owner = StoryOwner.fromMap(map['owner']);
@@ -250,6 +264,7 @@ class Story {
   };
 }
 
+// #***! шапка ленты, сколько всего и сколько прочли
 class StoryPreview {
   final StoryOwner owner;
   final int updateTime;
@@ -265,6 +280,7 @@ class StoryPreview {
     this.lastStoryExpirationTime = 0,
   });
 
+  // #***! по непрочитанным рисуется кольцо вокруг аватарки
   int get unreadCount {
     final diff = totalCount - readCount;
     return diff < 0 ? 0 : diff;
@@ -274,6 +290,7 @@ class StoryPreview {
 
   bool get isEmpty => totalCount <= 0;
 
+  // #***! прочтение отмечаем сразу не дожидаясь сервера
   StoryPreview copyWith({int? readCount}) => StoryPreview(
     owner: owner,
     updateTime: updateTime,
@@ -305,6 +322,7 @@ class StoryPreview {
   };
 }
 
+// #***! все истории владельца, листаются свайпом
 class PeerStories {
   final StoryOwner owner;
   final List<Story> stories;

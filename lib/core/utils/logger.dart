@@ -5,6 +5,7 @@ import 'package:logger/logger.dart';
 
 import 'debug_session_log.dart';
 
+// #***! уровень логов задаётся при сборке
 Level _minimumLogLevel() {
   const raw = String.fromEnvironment('KOMET_LOG_LEVEL', defaultValue: '');
   switch (raw.toLowerCase()) {
@@ -26,6 +27,7 @@ Level _minimumLogLevel() {
     default:
       break;
   }
+  // #***! в релизе не ниже info, в отладке всё
   if (kReleaseMode) {
     return Level.info;
   }
@@ -39,6 +41,7 @@ LogFilter _logFilter() {
   return DevelopmentFilter();
 }
 
+// #***! единый логгер, консоль плюс лог сессии
 final logger = Logger(
   filter: _logFilter(),
   level: _minimumLogLevel(),
@@ -46,6 +49,7 @@ final logger = Logger(
   output: MultiOutput([ConsoleOutput(), DebugSessionLogOutput()]),
 );
 
+// #***! дублируем строки в лог сессии, его можно выгрузить из дев меню
 class DebugSessionLogOutput extends LogOutput {
   @override
   void output(OutputEvent event) {
@@ -55,6 +59,7 @@ class DebugSessionLogOutput extends LogOutput {
   }
 }
 
+// #***! префикс с цифрой важности, по нему лог сортируется
 int _importanceSortKey(Level level) {
   final v = level.value;
   if (v >= 5999) {
@@ -75,6 +80,7 @@ int _importanceSortKey(Level level) {
   return 5;
 }
 
+// #***! буква уровня и цвет для консоли
 String _levelLetter(Level level) {
   final v = level.value;
   if (v >= 5999) {
@@ -115,6 +121,7 @@ AnsiColor _levelColor(Level level) {
   return AnsiColor.fg(AnsiColor.grey(0.5));
 }
 
+// #***! свой формат строки
 class KometLogPrinter extends LogPrinter {
   KometLogPrinter({this.colors = true});
 
@@ -134,6 +141,7 @@ class KometLogPrinter extends LogPrinter {
     if (event.error != null) {
       lines.add('${' ' * 3}|         ${event.error}');
     }
+    // #***! стек только для ошибок и не длиннее 12 строк
     if (event.stackTrace != null && event.level.value >= 5000) {
       final st = event.stackTrace.toString().split('\n');
       const limit = 12;
@@ -144,6 +152,7 @@ class KometLogPrinter extends LogPrinter {
     return lines;
   }
 
+  // #***! карты и списки печатаем джейсоном
   String _stringifyMessage(dynamic message) {
     final finalMessage = message is Function ? message() : message;
     if (finalMessage is Map || finalMessage is Iterable) {

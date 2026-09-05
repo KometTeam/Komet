@@ -464,10 +464,11 @@ class _PhotoAdjustEditorState extends State<PhotoAdjustEditor> {
     final (rl, gl, bl) = _combinedLuts();
     final out = _curveOut ??= Uint8List(base.length);
     out.setAll(0, base);
-    _applyLutsToBytes((out, rl, gl, bl));
+    final result = await compute(_applyLutsToBytes, (out, rl, gl, bl));
+    _curveOut = result;
     final completer = Completer<ui.Image>();
     ui.decodeImageFromPixels(
-      out,
+      result,
       _smallW,
       _smallH,
       ui.PixelFormat.rgba8888,

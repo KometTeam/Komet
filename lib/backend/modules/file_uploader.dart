@@ -10,6 +10,7 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/utils/logger.dart';
 import 'messages.dart';
 
+// #***! события загрузки, прогресс успех ошибка
 sealed class UploadEvent {
   const UploadEvent();
 }
@@ -20,6 +21,7 @@ class UploadProgress extends UploadEvent {
   const UploadProgress({required this.sent, required this.total});
 }
 
+// #***! итог, id файла и настоящий id сообщения от сервера
 class UploadDone extends UploadEvent {
   final int fileId;
   final String? token;
@@ -46,6 +48,7 @@ class UploadError extends UploadEvent {
   const UploadError(this.message);
 }
 
+// #***! низкий уровень загрузок, сам файл льёт раст с диска
 /// Оркестратор медиа-загрузок: control-plane (URL, отправка сообщения) идёт
 /// обычными опкодами, data-plane (заливка на CDN) — через Rust-ядро kolibri,
 /// которое стримит файл с диска (не держит его целиком в памяти).
@@ -55,6 +58,7 @@ class FileUploader {
 
   FileUploader({required this.api, required this.messages});
 
+  // #***! весь сценарий для документа, url заливка сообщение
   Stream<UploadEvent> upload({
     required int chatId,
     required File file,
@@ -89,6 +93,7 @@ class FileUploader {
           return;
         }
 
+        // #***! отправляет файл в чате, параллельно заливке ошибку игнорим
         unawaited(() async {
           try {
             await api.sendRequest(Opcode.msgTyping, {
@@ -101,6 +106,7 @@ class FileUploader {
         var status = 0;
         String? error;
         final done = Completer<void>();
+        // #***! подписка на события ядра
         sub =
             session
                 .uploadFilePath(
@@ -140,11 +146,13 @@ class FileUploader {
           ctrl.add(UploadError(error!));
           return;
         }
+        // #***! статус ноль значит ядро не дошло до ответа но и не упало, считаем успехом
         if (status != 200 && status != 0) {
           ctrl.add(UploadError('http_$status'));
           return;
         }
 
+        // #***! файл на CDN, шлём само сообщение
         final messageId = await messages.sendFileMessage(
           chatId,
           info.fileId,
@@ -178,6 +186,7 @@ class FileUploader {
     return ctrl.stream;
   }
 
+  // #***! заливка без отправки сообщения, для аватарок и историй
   Future<bool> uploadMediaFile(
     Uri uri,
     File file, {
@@ -202,6 +211,7 @@ class FileUploader {
         logger.w('uploadMediaFile: ${result.error}');
         return false;
       }
+      // #***! сервер отвечает 200 даже на ошибку, смотрим тело
       final respBody = utf8.decode(result.body, allowMalformed: true);
       final hasError =
           respBody.contains('error_msg') || respBody.contains('error_code');
@@ -218,6 +228,7 @@ class FileUploader {
     }
   }
 
+  // #***! аватарка грузится из памяти, она уже обработана
   Future<String?> uploadImage(
     Uri uri,
     Uint8List bytes, {
@@ -273,6 +284,7 @@ class FileUploader {
     }
   }
 
+  // #***! видео чанками параллельно, файл бывает на сотни мегабайт
   Future<bool> uploadVideoFile(
     Uri uri,
     File file, {
@@ -305,6 +317,7 @@ class FileUploader {
     }
   }
 
+  // #***! видео для истории это один POST и токен из тела ответа
   /// Загрузка видео для истории. В отличие от чата (чанковый `uploadVideoPath`
   /// с GET-handshake), story-эндпоинт `su.oneme.ru/uploadVideo` ждёт **один POST
   /// на весь файл** (как у оригинального клиента) и возвращает медиа-токен в теле
@@ -344,6 +357,7 @@ class FileUploader {
     }
   }
 
+  // #***! токен лежит по разному, перебираем варианты
   String? _parseVideoToken(String body) {
     try {
       final json = jsonDecode(body);
@@ -379,6 +393,7 @@ class FileUploader {
     return null;
   }
 
+  // #***! прогоняем стрим ядра до конца
   /// Прогоняет стрим ядра до конца, форвардит прогресс, отдаёт итог.
   Future<({int status, Uint8List body, String? error})> _consume(
     Stream<kb.UploadEvent> stream, {
@@ -401,9 +416,11 @@ class FileUploader {
     return (status: status, body: body, error: error);
   }
 
+  // #***! серверу нужно хоть какое то имя, берём время
   String _syntheticFilename() =>
       (DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF).toString();
 
+  // #***! токен фото спрятан в photos
   String? _parsePhotoToken(String body) {
     try {
       final json = jsonDecode(body);

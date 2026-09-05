@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../../../backend/modules/messages.dart';
+import '../../../../core/config/build_profile.dart';
 import '../../../../core/config/app_pranks.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../widgets/theme_reveal.dart';
@@ -35,7 +36,12 @@ class ChatPrankController {
   String? get bubbleId => _bubbleId;
 
   void checkTrigger(CachedMessage msg) {
-    if (!AppPranks.current.value || _active || _bubbleId != null) return;
+    if (!BuildProfile.pranks ||
+        !AppPranks.current.value ||
+        _active ||
+        _bubbleId != null) {
+      return;
+    }
     if ((msg.text ?? '').trim().toUpperCase() != 'THE WORLD') return;
     _bubbleId = msg.id;
     onChanged();

@@ -11,6 +11,7 @@ import '../utils/ids.dart';
 import '../utils/logger.dart';
 import 'max_web_socket.dart';
 
+// #***! подписка браузера на пуши
 class WebPushSubscription {
   final String endpoint;
   final String publicKey;
@@ -23,6 +24,7 @@ class WebPushSubscription {
   });
 }
 
+// #***! что сейчас привязано
 class WebPushLinkInfo {
   final String endpoint;
   final DateTime? linkedAt;
@@ -43,6 +45,7 @@ class WebPushLinkInfo {
   String get host => Uri.tryParse(endpoint)?.host ?? endpoint;
 }
 
+// #***! QR трек авторизации
 class WebPushQrTrack {
   final String trackId;
   final String qrLink;
@@ -57,6 +60,7 @@ class WebPushQrTrack {
   });
 }
 
+// #***! аккаунт с 2FA, нужен пароль
 class WebPushPasswordChallenge {
   final String trackId;
   final String? hint;
@@ -64,6 +68,7 @@ class WebPushPasswordChallenge {
   const WebPushPasswordChallenge({required this.trackId, this.hint});
 }
 
+// #***! шаг авторизации, токен или запрос пароля
 class WebPushAuthStep {
   final String? loginToken;
   final WebPushPasswordChallenge? passwordChallenge;
@@ -73,6 +78,7 @@ class WebPushAuthStep {
   bool get needsPassword => loginToken == null && passwordChallenge != null;
 }
 
+// #***! привязка вебпушей, вход по QR через веб API
 class WebPushService {
   WebPushService._();
 
@@ -87,6 +93,7 @@ class WebPushService {
   static const String _endpointKey = 'webpush_endpoint';
   static const String _linkedAtKey = 'webpush_linked_at';
 
+  // #***! представляемся конкретной версией веб клиента, от неё зависят опкоды
   static const String _appVersion = '26.8.8';
   static const Duration _defaultPoll = Duration(seconds: 5);
   static const Duration _defaultLifetime = Duration(minutes: 2);
@@ -94,10 +101,12 @@ class WebPushService {
   MaxWebSocketSession? _authSocket;
   MaxWebDevice? _device;
 
+  // #***! changes на изменение привязки, экран настроек подписан
   final ValueNotifier<int> changes = ValueNotifier<int>(0);
 
   void _notifyChanged() => changes.value++;
 
+  // #***! состояние привязки в защищённом хранилище
   Future<bool> isAuthorized() async =>
       (await TokenStorage.readSecure(_tokenKey))?.isNotEmpty ?? false;
 
@@ -138,6 +147,7 @@ class WebPushService {
     return built;
   }
 
+  // #***! создаём QR трек, юзер подтверждает в приложении
   Future<WebPushQrTrack> startQrAuth() async {
     await cancelAuth();
 
@@ -164,6 +174,7 @@ class WebPushService {
     );
   }
 
+  // #***! опрос до подтверждения или истечения
   Future<WebPushAuthStep> awaitApproval(WebPushQrTrack track) async {
     final socket = _requireSocket();
     final deadline = DateTime.now().add(track.lifetime);
@@ -194,6 +205,7 @@ class WebPushService {
     throw const MaxWebException('время подтверждения истекло');
   }
 
+  // #***! второй шаг при 2FA
   Future<WebPushAuthStep> submitPassword(String trackId, String password) async {
     final socket = _requireSocket();
     final payload = _asMap(
@@ -219,6 +231,7 @@ class WebPushService {
     await socket?.close();
   }
 
+  // #***! регистрация подписки на сервере
   Future<void> registerSubscription(WebPushSubscription subscription) async {
     final token = await TokenStorage.readSecure(_tokenKey);
     if (token == null || token.isEmpty) {
@@ -255,6 +268,7 @@ class WebPushService {
     }
   }
 
+  // #***! отвязка, гасим сессию и чистим локальное
   Future<void> signOut() async {
     await cancelAuth();
 
@@ -355,6 +369,7 @@ class WebPushService {
     return fallback;
   }
 
+  // #***! юзерагент сафари, сервер принимает вебпуши только от известных браузеров
   Future<String> _safariUserAgent() async {
     var release = '18_5';
     var version = '18.5';

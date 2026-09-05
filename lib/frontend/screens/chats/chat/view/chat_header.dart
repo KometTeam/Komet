@@ -135,7 +135,18 @@ class ChatHeaderRow extends StatelessWidget {
                     cs,
                     _heroAvatar(
                       44,
-                      (d) => imageUrl.isNotEmpty
+                      (d) => chatId == 0
+                          ? CircleAvatar(
+                              radius: d / 2,
+                              backgroundColor: cs.primary,
+                              child: Icon(
+                                Symbols.bookmark,
+                                fill: 1,
+                                color: cs.onPrimary,
+                                size: d * 0.5,
+                              ),
+                            )
+                          : imageUrl.isNotEmpty
                           ? CircleAvatar(
                               radius: d / 2,
                               backgroundImage: CachedNetworkImageProvider(
@@ -301,7 +312,18 @@ class ChatHeaderRow extends StatelessWidget {
                   cs,
                   _heroAvatar(
                     36,
-                    (d) => imageUrl.isNotEmpty
+                    (d) => chatId == 0
+                        ? CircleAvatar(
+                            radius: d / 2,
+                            backgroundColor: cs.primary,
+                            child: Icon(
+                              Symbols.bookmark,
+                              fill: 1,
+                              color: cs.onPrimary,
+                              size: d * 0.5,
+                            ),
+                          )
+                        : imageUrl.isNotEmpty
                         ? CircleAvatar(
                             radius: d / 2,
                             backgroundImage: CachedNetworkImageProvider(

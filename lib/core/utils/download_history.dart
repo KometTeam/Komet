@@ -8,8 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../storage/app_instance.dart';
 import 'media_cache.dart';
 
+// #***! тип файла для группировки в списке
 enum DownloadKind { photo, video, gif, audio, file }
 
+// #***! тип по расширению
 DownloadKind downloadKindForName(
   String name, {
   DownloadKind fallback = DownloadKind.file,
@@ -49,6 +51,7 @@ DownloadKind downloadKindForName(
   return fallback;
 }
 
+// #***! что писать в историю, заполняется на месте скачивания
 class DownloadMetadata {
   final String cacheName;
   final String name;
@@ -73,6 +76,7 @@ class DownloadMetadata {
   });
 }
 
+// #***! запись в истории
 class DownloadRecord {
   final String cacheName;
   final String name;
@@ -98,6 +102,7 @@ class DownloadRecord {
     required this.messageTime,
   });
 
+  // #***! незнакомый тип из старой версии превращаем в файл
   factory DownloadRecord.fromJson(Map<String, dynamic> json) {
     final rawKind = json['kind']?.toString();
     final kind = DownloadKind.values.firstWhere(
@@ -139,6 +144,7 @@ class DownloadRecord {
     'messageTime': messageTime,
   };
 
+  // #***! размер обновляем если на диске другой
   DownloadRecord withSize(int value) => DownloadRecord(
     cacheName: cacheName,
     name: name,
@@ -153,13 +159,16 @@ class DownloadRecord {
   );
 }
 
+// #***! последние 200 загрузок, они же экран загрузок
 class DownloadHistory {
   static const int maxEntries = 200;
+  // #***! records для экрана, менять только через _enqueue
   static final ValueNotifier<List<DownloadRecord>> records = ValueNotifier(
     const [],
   );
 
   static Future<void>? _loading;
+  // #***! _mutations строит очередь, параллельная запись затёрла бы список
   static Future<void> _mutations = Future.value();
 
   static String get _key => 'recent_downloads_v1${AppInstance.suffix}';
@@ -171,8 +180,10 @@ class DownloadHistory {
     records.value = const [];
   }
 
+  // #***! грузится один раз
   static Future<void> load() => _loading ??= _load();
 
+  // #***! сверка с диском, удалённые руками уходят из истории
   static Future<void> refresh() => _enqueue(() async {
     await load();
     final available = await _available(records.value);
@@ -181,6 +192,7 @@ class DownloadHistory {
     await _save();
   });
 
+  // #***! новая запись в начало, дубль заменяется
   static Future<void> record(DownloadMetadata metadata, File file) =>
       _enqueue(() async {
         await load();
@@ -223,6 +235,7 @@ class DownloadHistory {
     await _save();
   });
 
+  // #***! touch false чтоб не двигать mtime, иначе просмотр списка ломает LRU
   static Future<File?> fileFor(
     DownloadRecord record, {
     bool touch = true,
@@ -232,6 +245,7 @@ class DownloadHistory {
     return await file.exists() && await file.length() > 0 ? file : null;
   }
 
+  // #***! истории нет, собираем из того что в кэше
   static Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
@@ -266,6 +280,7 @@ class DownloadHistory {
     }
   }
 
+  // #***! оставляем только те у кого файл на месте
   static Future<List<DownloadRecord>> _available(
     List<DownloadRecord> source,
   ) async {
@@ -279,6 +294,7 @@ class DownloadHistory {
     return available;
   }
 
+  // #***! разовая миграция, служебные файлы кэша не берём
   static Future<List<DownloadRecord>> _migrateCache() async {
     final files = await MediaCache.files();
     final migrated = <DownloadRecord>[];
@@ -313,6 +329,7 @@ class DownloadHistory {
     return migrated;
   }
 
+  // #***! в имени кэша префикс из id, для показа отрезаем
   static String _fileName(String cacheName) {
     final separator = cacheName.indexOf('_');
     if (separator <= 0) return cacheName;

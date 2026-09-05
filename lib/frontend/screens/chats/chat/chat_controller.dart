@@ -33,8 +33,56 @@ class ChatController extends ChangeNotifier {
   int chatId = 0;
   int myId = 0;
 
-  List<CachedMessage> messages = [];
+  List<CachedMessage> _messages = [];
+  final Map<String, int> _indexById = {};
+
+  List<CachedMessage> get messages => _messages;
+  set messages(List<CachedMessage> v) {
+    _messages = v;
+    _reindexAll();
+  }
+
   final ValueNotifier<int> messagesRev = ValueNotifier(0);
+
+  void _reindexAll() {
+    _indexById.clear();
+    for (var i = 0; i < _messages.length; i++) {
+      _indexById[_messages[i].id] = i;
+    }
+  }
+
+  void _reindexFrom(int start) {
+    for (var i = start; i < _messages.length; i++) {
+      _indexById[_messages[i].id] = i;
+    }
+  }
+
+  // #***! O(1) поиск вместо линейного скана по списку сообщений
+  int indexOfId(String id) => _indexById[id] ?? -1;
+  bool containsId(String id) => _indexById.containsKey(id);
+  CachedMessage? byId(String id) {
+    final i = _indexById[id];
+    return i == null ? null : _messages[i];
+  }
+
+  void addMessage(CachedMessage msg) {
+    _indexById[msg.id] = _messages.length;
+    _messages.add(msg);
+  }
+
+  void removeMessageAt(int index) {
+    final removedId = _messages[index].id;
+    _messages.removeAt(index);
+    _indexById.remove(removedId);
+    _reindexFrom(index);
+  }
+
+  void setMessageAt(int index, CachedMessage msg) {
+    final old = _messages[index];
+    _messages[index] = msg;
+    if (old.id != msg.id) _indexById.remove(old.id);
+    _indexById[msg.id] = index;
+  }
 
   bool hasMoreHistory = true;
   bool isLoadingMore = false;
@@ -56,12 +104,26 @@ class ChatController extends ChangeNotifier {
     messagesRev.value++;
   }
 
+  int _tempIdCounter = 0;
+  String nextTempId() =>
+      'temp_${++_tempIdCounter}_${DateTime.now().microsecondsSinceEpoch}';
+
+  Future<void> persistOutgoing(CachedMessage msg, {String? removeId}) async {
+    try {
+      if (removeId != null && removeId != msg.id) {
+        await AppDatabase.deleteMessage(myId, chatId, removeId);
+      }
+      await AppDatabase.saveMessages([msg.toDbRow()]);
+    } catch (_) {}
+  }
+
   int prependOlder(List<CachedMessage> olderDesc) {
     if (olderDesc.isEmpty) return 0;
-    final existing = messages.map((m) => m.id).toSet();
     final toAdd = <CachedMessage>[];
+    final seenInBatch = <String>{};
     for (final m in olderDesc.reversed) {
-      if (existing.add(m.id)) toAdd.add(m);
+      if (containsId(m.id) || !seenInBatch.add(m.id)) continue;
+      toAdd.add(m);
     }
     if (toAdd.isEmpty) return 0;
     messages = [...toAdd, ...messages];
@@ -70,26 +132,24 @@ class ChatController extends ChangeNotifier {
   }
 
   bool mergeMessages(List<CachedMessage> decodedDesc) {
-    final byId = <String, CachedMessage>{for (final m in messages) m.id: m};
-    var changed = false;
+    final updates = <String, CachedMessage>{};
     for (final fresh in decodedDesc) {
-      final old = byId[fresh.id];
-      if (old == null) {
-        byId[fresh.id] = fresh;
-        changed = true;
-      } else if (!_sameMessage(old, fresh)) {
-        byId[fresh.id] = fresh;
-        changed = true;
+      final old = byId(fresh.id);
+      if (old == null || !_sameMessage(old, fresh)) {
+        updates[fresh.id] = fresh;
       }
     }
 
-    if (!changed) return false;
+    if (updates.isEmpty) return false;
 
-    final merged = byId.values.toList()
-      ..sort((a, b) {
-        final byTime = a.time.compareTo(b.time);
-        return byTime != 0 ? byTime : a.id.compareTo(b.id);
-      });
+    final merged = <CachedMessage>[
+      for (final m in messages) updates[m.id] ?? m,
+      for (final entry in updates.entries)
+        if (!containsId(entry.key)) entry.value,
+    ]..sort((a, b) {
+      final byTime = a.time.compareTo(b.time);
+      return byTime != 0 ? byTime : a.id.compareTo(b.id);
+    });
 
     messages = merged;
     messagesRev.value++;
@@ -202,7 +262,7 @@ class ChatController extends ChangeNotifier {
     } else {
       _markGapAfterWindow(window);
     }
-    return messages.any((m) => m.id == targetId);
+    return containsId(targetId);
   }
 
   void _markGapAfterWindow(List<CachedMessage> window) {
@@ -210,7 +270,7 @@ class ChatController extends ChangeNotifier {
     for (final m in window) {
       if (m.time > edge.time) edge = m;
     }
-    final idx = messages.indexWhere((m) => m.id == edge.id);
+    final idx = indexOfId(edge.id);
     if (idx == -1 || idx + 1 >= messages.length) return;
     final tailTime = messages[idx + 1].time;
     gaps.removeWhere((g) => g.tailTime == tailTime);
@@ -352,7 +412,22 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  // #***! дешёвое локальное чтение — не ждём анимацию перехода, красим
+  // сообщения из БД сразу же, ещё до сетевых частей ниже
+  Future<List<CachedMessage>> loadLocalHistory({
+    required void Function(List<CachedMessage> decoded, {bool markLoaded})
+    onApplyMerged,
+  }) async {
+    final onlyVisible = !KometSettings.viewDeleted.value;
+    final fullDecoded = await loadInitialFromDb(onlyVisible: onlyVisible);
+    if (isMounted()) {
+      onApplyMerged(fullDecoded);
+    }
+    return fullDecoded;
+  }
+
   Future<void> loadRemainingHistory({
+    required List<CachedMessage> localDecoded,
     required void Function(List<CachedMessage> decoded, {bool markLoaded})
     onApplyMerged,
     required void Function() onLoadingFinished,
@@ -371,10 +446,7 @@ class ChatController extends ChangeNotifier {
       await chats.subscribeChat(api, chatId);
     }
 
-    final fullDecoded = await loadInitialFromDb(onlyVisible: onlyVisible);
-    if (isMounted()) {
-      onApplyMerged(fullDecoded);
-    }
+    final fullDecoded = localDecoded;
 
     if (fullDecoded.isNotEmpty && chats.wasHistoryFetched(chatId)) {
       if (isMounted()) {

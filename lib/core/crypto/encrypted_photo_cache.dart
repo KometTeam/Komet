@@ -61,13 +61,18 @@ class EncryptedPhotoCache {
 
   static final EncryptedPhotoCache instance = EncryptedPhotoCache._();
 
+  // #***! двести последних расшифрованных
   static const int _maxEntries = 200;
+  // #***! сами расшифровываем только до 32 МБ
   static const int _maxAutoBytes = 32 * 1024 * 1024;
+  // #***! не больше трёх разом иначе скролл просаживается
   static const int _maxConcurrentAuto = 3;
 
+  // #***! на картинку свой notifier, перерисуется только её пузырь
   final LinkedHashMap<String, ValueNotifier<EncryptedPhotoView?>> _entries =
       LinkedHashMap();
   final Map<String, Future<EncryptedPhotoView>> _inFlight = {};
+  // #***! очередь расшифровок для видимых пузырей
   final Queue<_AutoRequest> _queue = Queue();
   final Set<String> _queued = {};
   int _running = 0;
@@ -86,6 +91,7 @@ class EncryptedPhotoCache {
     }
   }
 
+  // #***! запрос из пузыря, картинка уехала с экрана значит задание снимаем
   void request({
     required int accountId,
     required int chatId,
@@ -110,6 +116,7 @@ class EncryptedPhotoCache {
     _pump();
   }
 
+  // #***! открыли просмотрщик, расшифровываем мимо очереди
   Future<EncryptedPhotoView> resolve({
     required int accountId,
     required int chatId,
@@ -137,6 +144,7 @@ class EncryptedPhotoCache {
     _queue.removeWhere((request) => request.cacheName == cacheName);
   }
 
+  // #***! насос очереди
   void _pump() {
     while (_running < _maxConcurrentAuto && _queue.isNotEmpty) {
       final next = _queue.removeLast();
@@ -191,6 +199,7 @@ class EncryptedPhotoCache {
     return view;
   }
 
+  // #***! само скачивание и расшифровка
   Future<EncryptedPhotoView> _decrypt(
     int accountId,
     int chatId,

@@ -11,8 +11,12 @@ import '../../../../core/utils/file_download.dart';
 import '../../../../core/utils/media_cache.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
+import '../../../../core/media/audio_file_track.dart';
+import '../../../../core/media/audio_playback_controller.dart';
+import '../../../../core/media/media_playback.dart';
 import '../../../../core/crypto/chat_crypto_service.dart';
 import '../../../../core/crypto/encrypted_photo_cache.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
 import '../../decrypted_photo.dart';
@@ -43,10 +47,12 @@ class FileBubble extends StatelessWidget {
     final sizeStr = formatBytes(size);
     final fileId = file.fileId;
     final cacheName = '${fileId}_$name';
+    final audioFile = downloadKindForName(name) == DownloadKind.audio;
 
     final preview = file.preview;
     final previewUrl = preview?.baseUrl ?? preview?.previewData ?? '';
     final previewWidget = _preview(
+      name: name,
       cacheName: cacheName,
       previewUrl: previewUrl,
       encrypted: fileId != null && _isEncryptedImage(name),
@@ -72,7 +78,7 @@ class FileBubble extends StatelessWidget {
                 ),
                 child: ctx.uploadProgress == null
                     ? Icon(
-                        Symbols.description,
+                        audioFile ? Symbols.audio_file : Symbols.description,
                         color: isMe
                             ? ctx.cs.onPrimaryContainer
                             : ctx.cs.primary,
@@ -165,19 +171,50 @@ class FileBubble extends StatelessWidget {
 
                   return ValueListenableBuilder<bool>(
                     valueListenable: MediaCache.presence(cacheName),
-                    builder: (context, cached, _) => circle(
-                      Icon(
-                        cached ? Symbols.check : Symbols.download,
-                        color: iconColor,
-                        size: 18,
-                      ),
-                      () => _downloadFile(ctx.context, file, name),
-                    ),
+                    builder: (context, cached, _) {
+                      if (!audioFile) {
+                        return circle(
+                          Icon(
+                            cached ? Symbols.check : Symbols.download,
+                            color: iconColor,
+                            size: 18,
+                          ),
+                          () => _downloadFile(ctx.context, file, name),
+                        );
+                      }
+                      Widget button(IconData icon) => circle(
+                        Icon(icon, color: iconColor, size: 18, fill: 1),
+                        () => _playAudioFile(ctx.context, file, name),
+                      );
+                      return ValueListenableBuilder<AudioFileTrack?>(
+                        valueListenable: MediaPlayback.instance.audioFile,
+                        builder: (context, track, _) {
+                          if (!cached) return button(Symbols.download);
+                          if (track?.cacheName != cacheName ||
+                              !AudioPlaybackController.isInitialized) {
+                            return button(Symbols.play_arrow);
+                          }
+                          return ValueListenableBuilder<bool>(
+                            valueListenable:
+                                AudioPlaybackController.instance.playing,
+                            builder: (context, playing, _) => button(
+                              playing ? Symbols.pause : Symbols.play_arrow,
+                            ),
+                          );
+                        },
+                      );
+                    },
                   );
                 },
               ),
             ],
           ),
+          if (audioFile)
+            _AudioFilePlaybackControl(
+              cacheName: cacheName,
+              color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+              textColor: ctx.dim,
+            ),
           ctx.meta(),
         ],
       ),
@@ -191,8 +228,25 @@ class FileBubble extends StatelessWidget {
     );
   }
 
+  static const Set<String> _coverExtensions = {
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.webp',
+    '.bmp',
+    '.heic',
+    '.heif',
+  };
+
   static bool _isViewableImage(String name) =>
       name.toLowerCase().endsWith('.png');
+
+  static bool _hasCover(String name) {
+    final dot = name.lastIndexOf('.');
+    if (dot < 0) return false;
+    return _coverExtensions.contains(name.substring(dot).toLowerCase());
+  }
 
   bool _isEncryptedImage(String name) =>
       _isViewableImage(name) &&
@@ -202,6 +256,7 @@ class FileBubble extends StatelessWidget {
       );
 
   Widget? _preview({
+    required String name,
     required String cacheName,
     required String previewUrl,
     required bool encrypted,
@@ -216,7 +271,7 @@ class FileBubble extends StatelessWidget {
         builder: (view) => _encryptedPreview(view, previewUrl),
       );
     }
-    if (previewUrl.isEmpty) return null;
+    if (previewUrl.isEmpty || !_hasCover(name)) return null;
     return _networkPreview(previewUrl);
   }
 
@@ -255,11 +310,16 @@ class FileBubble extends StatelessWidget {
   Widget _networkPreview(String url) => _framed(
     CachedNetworkImage(
       imageUrl: url,
-      width: _previewWidth,
-      height: _previewHeight,
-      fit: BoxFit.cover,
       memCacheWidth: 480,
       fadeInDuration: const Duration(milliseconds: 120),
+      imageBuilder: (context, image) => Image(
+        image: image,
+        width: _previewWidth,
+        height: _previewHeight,
+        fit: BoxFit.cover,
+      ),
+      placeholder: (_, _) =>
+          const SizedBox(width: _previewWidth, height: _previewHeight),
       errorWidget: (_, _, _) => const SizedBox.shrink(),
     ),
   );
@@ -293,6 +353,9 @@ class FileBubble extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 8),
     child: ClipRRect(borderRadius: BorderRadius.circular(10), child: child),
   );
+
+  String? get _thumbnailUrl =>
+      file.preview?.baseUrl ?? file.preview?.previewData ?? file.previewData;
 
   Future<String?> _fileUrl() {
     final fileId = file.fileId;
@@ -340,13 +403,10 @@ class FileBubble extends StatelessWidget {
       await DownloadHistory.record(
         DownloadMetadata(
           cacheName: cacheName,
-          name: kind == DownloadKind.file ? name : '',
+          name: name,
           kind: kind,
           sourceName: ctx.chatName ?? '',
-          thumbnailUrl:
-              file.preview?.baseUrl ??
-              file.preview?.previewData ??
-              file.previewData,
+          thumbnailUrl: _thumbnailUrl,
           expectedSize: file.size ?? 0,
           chatId: ctx.message.chatId,
           messageId: ctx.message.id,
@@ -433,13 +493,10 @@ class FileBubble extends StatelessWidget {
       },
       download: DownloadMetadata(
         cacheName: cacheName,
-        name: kind == DownloadKind.file ? name : '',
+        name: name,
         kind: kind,
         sourceName: ctx.chatName ?? '',
-        thumbnailUrl:
-            file.preview?.baseUrl ??
-            file.preview?.previewData ??
-            file.previewData,
+        thumbnailUrl: _thumbnailUrl,
         expectedSize: file.size ?? 0,
         chatId: ctx.message.chatId,
         messageId: ctx.message.id,
@@ -453,5 +510,171 @@ class FileBubble extends StatelessWidget {
         'Ошибка загрузки: ${result.error ?? 'не удалось открыть'}',
       );
     }
+  }
+
+  Future<void> _playAudioFile(
+    BuildContext context,
+    FileAttachment file,
+    String name,
+  ) async {
+    final fileId = file.fileId;
+    if (fileId == null) {
+      showCustomNotification(context, 'Не удалось определить файл');
+      return;
+    }
+    Haptics.tap();
+    final cacheName = '${fileId}_$name';
+    final playback = MediaPlayback.instance;
+    if (playback.audioFile.value?.cacheName == cacheName &&
+        AudioPlaybackController.isInitialized) {
+      await AudioPlaybackController.instance.toggle();
+      return;
+    }
+    final cached = (await MediaCache.existing(cacheName)) != null;
+    if (!cached) MediaDownloadProgress.set(cacheName, 0);
+    final result = await ensureCachedFile(
+      cacheName,
+      _fileUrl,
+      onProgress: (value) => MediaDownloadProgress.set(cacheName, value),
+      onReady: () {
+        if (!cached) MediaDownloadProgress.set(cacheName, null);
+      },
+      download: DownloadMetadata(
+        cacheName: cacheName,
+        name: name,
+        kind: DownloadKind.audio,
+        sourceName: ctx.chatName ?? '',
+        thumbnailUrl: _thumbnailUrl,
+        expectedSize: file.size ?? 0,
+        chatId: ctx.message.chatId,
+        messageId: ctx.message.id,
+        messageTime: ctx.message.time,
+      ),
+    );
+    if (!context.mounted) return;
+    if (!result.ok || result.path == null) {
+      showCustomNotification(
+        context,
+        'Ошибка загрузки: ${result.error ?? 'не удалось загрузить'}',
+      );
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      await playback.activateAudioFile(
+        AudioFileTrack(
+          cacheName: cacheName,
+          path: result.path!,
+          name: name,
+          sourceName: ctx.chatName ?? '',
+          chatId: ctx.message.chatId,
+          messageId: ctx.message.id,
+          messageTime: ctx.message.time,
+          thumbnailUrl: _thumbnailUrl,
+        ),
+        notificationChannelName: l10n.audioPlaybackChannel,
+      );
+    } catch (_) {
+      if (context.mounted) {
+        showCustomNotification(context, l10n.audioPlaybackFailed);
+      }
+    }
+  }
+}
+
+class _AudioFilePlaybackControl extends StatelessWidget {
+  const _AudioFilePlaybackControl({
+    required this.cacheName,
+    required this.color,
+    required this.textColor,
+  });
+
+  final String cacheName;
+  final Color color;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AudioFileTrack?>(
+      valueListenable: MediaPlayback.instance.audioFile,
+      builder: (context, track, _) =>
+          track?.cacheName != cacheName || !AudioPlaybackController.isInitialized
+          ? const SizedBox.shrink()
+          : _AudioFileScrubber(color: color, textColor: textColor),
+    );
+  }
+}
+
+class _AudioFileScrubber extends StatefulWidget {
+  const _AudioFileScrubber({required this.color, required this.textColor});
+
+  final Color color;
+  final Color textColor;
+
+  @override
+  State<_AudioFileScrubber> createState() => _AudioFileScrubberState();
+}
+
+class _AudioFileScrubberState extends State<_AudioFileScrubber> {
+  double? _dragMilliseconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final audio = AudioPlaybackController.instance;
+    return AnimatedBuilder(
+      animation: Listenable.merge([audio.position, audio.duration]),
+      builder: (context, _) {
+        final total = audio.duration.value.inMilliseconds;
+        final elapsed = _dragMilliseconds != null
+            ? _dragMilliseconds!.round()
+            : audio.position.value.inMilliseconds.clamp(0, total > 0 ? total : 0);
+        return Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            children: [
+              Text(
+                formatSecondsMmSs(elapsed ~/ 1000),
+                style: TextStyle(color: widget.textColor, fontSize: 10),
+              ),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: widget.color,
+                    inactiveTrackColor: widget.color.withValues(alpha: 0.2),
+                    thumbColor: widget.color,
+                    overlayColor: widget.color.withValues(alpha: 0.12),
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 5,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 12,
+                    ),
+                  ),
+                  child: Slider(
+                    min: 0,
+                    max: total > 0 ? total.toDouble() : 1,
+                    value: total > 0 ? elapsed.toDouble() : 0,
+                    onChanged: total > 0
+                        ? (next) => setState(() => _dragMilliseconds = next)
+                        : null,
+                    onChangeEnd: total > 0
+                        ? (next) {
+                            setState(() => _dragMilliseconds = null);
+                            audio.seek(Duration(milliseconds: next.round()));
+                          }
+                        : null,
+                  ),
+                ),
+              ),
+              Text(
+                formatSecondsMmSs(audio.duration.value.inSeconds),
+                style: TextStyle(color: widget.textColor, fontSize: 10),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

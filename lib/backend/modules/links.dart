@@ -4,6 +4,7 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../api.dart';
 
+// #***! что оказалось по ссылке, чат юзер или ошибка
 sealed class ResolvedLink {
   const ResolvedLink();
 }
@@ -27,7 +28,9 @@ class ResolvedLinkError extends ResolvedLink {
   const ResolvedLinkError(this.message);
 }
 
+// #***! разбор ссылок приглашений и вступление
 abstract class LinkModule {
+  // #***! silent, ошибку покажем сами в диалоге
   static Future<ResolvedLink?> resolve(Api api, String url) async {
     final Packet response;
     try {
@@ -46,6 +49,7 @@ abstract class LinkModule {
       return ResolvedLinkError(messageFromErrorPayload(payload));
     }
 
+    // #***! в ответе или чат или контакт
     final chat = payload['chat'];
     if (chat is Map) {
       final message = payload['message'];
@@ -60,6 +64,7 @@ abstract class LinkModule {
     return null;
   }
 
+  // #***! вступление по ссылке, вернёт текст ошибки или null
   static Future<String?> join(Api api, String url) async {
     try {
       final response = await api.sendRequest(Opcode.chatJoin, {'link': url});

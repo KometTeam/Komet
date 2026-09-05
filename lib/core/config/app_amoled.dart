@@ -2,9 +2,11 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! чёрная тема для олед
 class AppAmoled {
   static const prefKey = 'app_amoled';
 
+  // #***! по дефолту как системная
   static bool get systemIsDark =>
       PlatformDispatcher.instance.platformBrightness == Brightness.dark;
 

@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 
+// #***! заглушка для платформ без нативки
 class RlottieClip {
   RlottieClip({this.px = 0});
 

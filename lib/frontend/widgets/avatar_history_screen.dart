@@ -12,12 +12,14 @@ class AvatarHistoryScreen extends StatefulWidget {
   final int contactId;
   final String? name;
   final String? currentAvatarUrl;
+  final String? initialUrl;
 
   const AvatarHistoryScreen({
     super.key,
     required this.contactId,
     this.name,
     this.currentAvatarUrl,
+    this.initialUrl,
   });
 
   static Future<void> open(
@@ -25,6 +27,7 @@ class AvatarHistoryScreen extends StatefulWidget {
     required int contactId,
     String? name,
     String? currentAvatarUrl,
+    String? initialUrl,
   }) {
     final url = currentAvatarUrl;
     if (url == null || url.isEmpty) return Future.value();
@@ -35,6 +38,7 @@ class AvatarHistoryScreen extends StatefulWidget {
           contactId: contactId,
           name: name,
           currentAvatarUrl: url,
+          initialUrl: initialUrl,
         ),
       ),
     );
@@ -48,14 +52,16 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
   static const int _pageSize = 50;
   static const int _maxDots = 10;
 
-  final PageController _pageController = PageController();
+  late final PageController _pageController;
   String? _current;
   final List<String> _history = [];
   List<String> _pages = const [];
   int _historyTotal = 0;
+  int _total = 0;
   int _index = 0;
   bool _loading = true;
   bool _loadingMore = false;
+  bool _historyDone = false;
   bool _saving = false;
 
   @override
@@ -63,7 +69,13 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
     super.initState();
     final current = widget.currentAvatarUrl;
     _current = (current != null && current.isNotEmpty) ? current : null;
-    _rebuildPages();
+    final cached = _hasHistory
+        ? ContactsModule.cachedPhotos(widget.contactId)
+        : null;
+    if (cached != null) _mergeHistory(cached);
+    _rebuild();
+    _index = _indexOfUrl(widget.initialUrl ?? _current);
+    _pageController = PageController(initialPage: _index);
     if (_hasHistory) {
       _load();
     } else {
@@ -79,15 +91,41 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
     super.dispose();
   }
 
-  void _rebuildPages() {
-    _pages = _current == null ? List.of(_history) : [_current!, ..._history];
+  int _indexOfUrl(String? url) {
+    if (url == null || _pages.isEmpty) return 0;
+    final at = _pages.indexOf(url);
+    return at < 0 ? 0 : at;
   }
 
-  void _addHistory(List<String> urls) {
-    for (final url in urls) {
-      if (url == _current || _history.contains(url)) continue;
+  String? _anchorUrl() =>
+      _index < _pages.length ? _pages[_index] : (widget.initialUrl ?? _current);
+
+  void _mergeHistory(ContactPhotos photos) {
+    for (final url in photos.urls) {
+      if (url.isEmpty || _history.contains(url)) continue;
       _history.add(url);
     }
+    if (photos.total > _historyTotal) _historyTotal = photos.total;
+  }
+
+  void _rebuild() {
+    final current = _current;
+    final extra = current != null && !_history.contains(current);
+    _pages = extra ? [current, ..._history] : List.of(_history);
+    final counted = _historyTotal + (extra ? 1 : 0);
+    _total = counted > _pages.length ? counted : _pages.length;
+  }
+
+  void _restoreIndex(String? anchor) {
+    if (_pages.isEmpty) return;
+    final at = anchor == null ? -1 : _pages.indexOf(anchor);
+    final next = at >= 0 ? at : _index.clamp(0, _pages.length - 1);
+    if (next == _index) return;
+    setState(() => _index = next);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pageController.hasClients) return;
+      _pageController.jumpToPage(next);
+    });
   }
 
   Future<void> _load() async {
@@ -97,34 +135,41 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
       count: _pageSize,
     );
     if (!mounted) return;
+    final anchor = _anchorUrl();
     setState(() {
-      _addHistory(photos.urls);
-      _historyTotal = photos.total;
-      _rebuildPages();
+      _mergeHistory(photos);
+      _rebuild();
       _loading = false;
     });
+    _restoreIndex(anchor);
   }
 
   Future<void> _loadMore() async {
-    if (!_hasHistory || _loadingMore || _history.length >= _historyTotal) {
+    if (!_hasHistory ||
+        _loadingMore ||
+        _historyDone ||
+        _history.length >= _historyTotal) {
       return;
     }
     _loadingMore = true;
+    final before = _history.length;
     final photos = await ContactsModule.fetchPhotos(
       api,
       widget.contactId,
-      from: _history.length,
+      from: before,
       count: _pageSize,
     );
     if (!mounted) {
       _loadingMore = false;
       return;
     }
+    final anchor = _anchorUrl();
     setState(() {
-      _addHistory(photos.urls);
-      if (photos.total > _historyTotal) _historyTotal = photos.total;
-      _rebuildPages();
+      _mergeHistory(photos);
+      if (_history.length == before) _historyDone = true;
+      _rebuild();
     });
+    _restoreIndex(anchor);
     _loadingMore = false;
   }
 
@@ -161,11 +206,6 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
               : 'Сохранено: ${result.location}')
         : 'Не удалось сохранить: ${result.error}';
     showCustomNotification(context, message);
-  }
-
-  int get _count {
-    final total = _historyTotal + (_current != null ? 1 : 0);
-    return total > _pages.length ? total : _pages.length;
   }
 
   @override
@@ -245,7 +285,7 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
       children: [
         if (_pages.length > 1)
           Text(
-            '${_index + 1} из $_count',
+            '${_index + 1} из $_total',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,

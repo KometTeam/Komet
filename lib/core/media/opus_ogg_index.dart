@@ -2,15 +2,18 @@ import 'dart:typed_data';
 
 import 'ogg_page_writer.dart';
 
+// #***! разбор ogg/opus на пакеты чтоб играть с середины
 class OpusOggIndex {
   static const int sampleRate = 48000;
 
+  // #***! перед стартом играем 80 мс, без разогрева кодека слышен щелчок
   static const int _prerollSamples = 3840;
   static const int _maxPreSkip = 65535;
   static const int _maxPacketSamples = 5760;
   static const int _preSkipOffset = 10;
   static const int _opusHeadMinLength = 19;
   static const int _pageHeaderSize = 27;
+// #***! разбор держим в памяти, файл голосового маленький
 
   OpusOggIndex._({
     required Uint8List head,
@@ -35,12 +38,14 @@ class OpusOggIndex {
   final int _preSkip;
   final int _serial;
   final int _endGranule;
+// #***! длительность это гранулы минус preSkip делить на частоту
 
   double get duration {
     final playable = _endGranule - _preSkip;
     return playable <= 0 ? 0 : playable / sampleRate;
   }
 
+  // #***! потоковый разбор, при повреждении ищем следующую сигнатуру
   static OpusOggIndex? parse(Uint8List bytes) {
     Uint8List? head;
     Uint8List? tags;
@@ -277,6 +282,7 @@ class OpusOggIndex {
     return head;
   }
 
+  // #***! сигнатура страницы OggS
   static bool _hasCapture(Uint8List bytes, int offset) =>
       bytes[offset] == 0x4f &&
       bytes[offset + 1] == 0x67 &&
@@ -316,6 +322,7 @@ class OpusOggIndex {
     return true;
   }
 
+  // #***! длительность пакета в его первом байте
   static int _packetDuration(Uint8List packet) {
     if (packet.isEmpty) return 0;
     final toc = packet[0];
@@ -345,6 +352,7 @@ class OpusOggIndex {
   }
 }
 
+// #***! план новой страницы при пересборке с нужной позиции
 class _PagePlan {
   const _PagePlan({
     required this.start,

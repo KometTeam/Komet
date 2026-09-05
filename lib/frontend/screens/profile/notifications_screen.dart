@@ -7,7 +7,8 @@ import '../../../core/push/fkm_bridge.dart';
 import '../../../core/push/fkm_controller.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../main.dart' show accountModule, isOnemeFlavor;
+import '../../../core/config/build_profile.dart';
+import '../../../main.dart' show accountModule;
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
@@ -109,7 +110,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     }
     if (_fkmBusy) return;
 
-    if (value && isOnemeFlavor) {
+    if (value && BuildProfile.firebasePush) {
       final confirmed = await showConfirmDialog(
         context,
         title: l10n.notificationsFkmAlreadyHasFcm,

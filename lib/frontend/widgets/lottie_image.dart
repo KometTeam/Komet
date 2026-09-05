@@ -73,18 +73,24 @@ class LottieHoldScope extends InheritedWidget {
     required super.child,
   });
 
-  static ValueListenable<bool>? of(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<LottieHoldScope>()
-      ?.isHeld;
+  static ValueListenable<bool>? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<LottieHoldScope>()?.isHeld;
 
   @override
   bool updateShouldNotify(LottieHoldScope oldWidget) =>
       !identical(oldWidget.isHeld, isHeld);
 }
 
+Widget _boxed(Widget child, double? box) => SizedBox(
+  width: box,
+  height: box,
+  child: Center(child: child),
+);
+
 class LottiePlayer extends StatefulWidget {
   final String lottieUrl;
   final String? fallbackUrl;
+  final Widget? placeholder;
   final double? size;
   final int? memCacheWidth;
   final bool shimmer;
@@ -97,6 +103,7 @@ class LottiePlayer extends StatefulWidget {
     super.key,
     required this.lottieUrl,
     this.fallbackUrl,
+    this.placeholder,
     this.size,
     this.memCacheWidth,
     this.shimmer = true,
@@ -394,11 +401,15 @@ class _LottiePlayerState extends State<LottiePlayer>
       repeat: widget.repeat,
       onLoaded: (composition) =>
           _scheduleFallbackCompletion(composition.duration),
+      frameBuilder: (context, child, composition) =>
+          composition == null ? _staticFallback(widget.size ?? 96.0) : child,
       errorBuilder: (context, _, _) => _staticFallback(widget.size ?? 96.0),
     );
   }
 
   Widget _staticFallback(double box) {
+    final placeholder = widget.placeholder;
+    if (placeholder != null) return _boxed(placeholder, box);
     final url = widget.fallbackUrl ?? '';
     if (url.isEmpty) {
       return widget.shimmer
@@ -421,6 +432,7 @@ class _LottiePlayerState extends State<LottiePlayer>
 class LottieImage extends StatelessWidget {
   final String? url;
   final String? lottieUrl;
+  final Widget? placeholder;
   final double? size;
   final int? memCacheWidth;
   final bool shimmer;
@@ -433,6 +445,7 @@ class LottieImage extends StatelessWidget {
     super.key,
     this.url,
     this.lottieUrl,
+    this.placeholder,
     this.size,
     this.memCacheWidth,
     this.shimmer = true,
@@ -448,6 +461,7 @@ class LottieImage extends StatelessWidget {
       return LottiePlayer(
         lottieUrl: lottieUrl!,
         fallbackUrl: url,
+        placeholder: placeholder,
         size: size,
         memCacheWidth: memCacheWidth,
         shimmer: shimmer,
@@ -462,7 +476,12 @@ class LottieImage extends StatelessWidget {
 
   Widget _static() {
     final src = url ?? '';
-    if (src.isEmpty) return SizedBox(width: size, height: size);
+    final holder = placeholder;
+    if (src.isEmpty) {
+      return holder == null
+          ? SizedBox(width: size, height: size)
+          : _boxed(holder, size);
+    }
     return CachedNetworkImage(
       imageUrl: src,
       width: size,
@@ -470,10 +489,14 @@ class LottieImage extends StatelessWidget {
       fit: BoxFit.contain,
       memCacheWidth: memCacheWidth,
       fadeInDuration: const Duration(milliseconds: 120),
-      placeholder: (_, _) => shimmer
+      placeholder: (_, _) => holder != null
+          ? _boxed(holder, size)
+          : shimmer
           ? LottieShimmer(size: size)
           : SizedBox(width: size, height: size),
-      errorWidget: (_, _, _) => SizedBox(width: size, height: size),
+      errorWidget: (_, _, _) => holder == null
+          ? SizedBox(width: size, height: size)
+          : _boxed(holder, size),
     );
   }
 }

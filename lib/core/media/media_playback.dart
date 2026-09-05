@@ -1,10 +1,17 @@
+import 'dart:async';
+
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
 
+import 'audio_file_track.dart';
+import 'audio_playback_controller.dart';
 import 'voice_audio_controller.dart';
 
-enum PlaybackKind { voice, videoNote }
+// #***! что играет сейчас, голосовое кружок или музыка
+enum PlaybackKind { voice, videoNote, audioFile }
 
+// #***! играющее голосовое плюс сообщение откуда оно
 class VoiceTrack {
   const VoiceTrack({
     required this.cacheName,
@@ -25,6 +32,7 @@ class VoiceTrack {
   final VoiceAudioController audio;
 }
 
+// #***! играющий кружок
 class VideoNoteTrack {
   const VideoNoteTrack({
     required this.cacheName,
@@ -47,15 +55,21 @@ class VideoNoteTrack {
   final Uint8List? preview;
 }
 
+// #***! единый диспетчер, одновременно играет только что то одно
 class MediaPlayback {
   MediaPlayback._();
 
   static final MediaPlayback instance = MediaPlayback._();
 
+  // #***! скорости которые перебирает кнопка
   static const List<double> speeds = [1.0, 1.5, 2.0];
 
+  // #***! primary говорит юишке какую плашку рисовать
   final ValueNotifier<PlaybackKind?> primary = ValueNotifier(null);
+  final ValueNotifier<AudioFileTrack?> audioFile = ValueNotifier(null);
+  bool _audioCompletionListenerAttached = false;
 
+  // #***! ушли из чата, играет дальше но плашка меняется
   final ValueNotifier<int?> visibleChatId = ValueNotifier(null);
 
   void enterChat(int chatId) => visibleChatId.value = chatId;
@@ -67,6 +81,7 @@ class MediaPlayback {
   final ValueNotifier<VoiceTrack?> voice = ValueNotifier(null);
   final ValueNotifier<double> voiceSpeed = ValueNotifier(speeds.first);
 
+  // #***! держатели не дают освободить контроллер пока его рисует виджет
   final Set<VoiceAudioController> _heldVoice = {};
 
   VoiceAudioController acquireVoice({
@@ -93,7 +108,9 @@ class MediaPlayback {
     _disposeVoiceIfIdle(audio);
   }
 
+  // #***! включили голосовое, кружок и музыка гаснут
   void activateVoice(VoiceTrack track) {
+    _clearAudioFile();
     _clearVideoNote();
     final previous = voice.value;
     if (previous != null && previous.audio != track.audio) {
@@ -106,6 +123,7 @@ class MediaPlayback {
     track.audio.setSpeed(voiceSpeed.value);
   }
 
+  // #***! перебор скорости по кругу
   void cycleVoiceSpeed() {
     final next = speeds[(speeds.indexOf(voiceSpeed.value) + 1) % speeds.length];
     voiceSpeed.value = next;
@@ -126,12 +144,14 @@ class MediaPlayback {
     return true;
   }
 
+  // #***! освобождаем только когда никто не держит и он не активен
   void _disposeVoiceIfIdle(VoiceAudioController audio) {
     if (_heldVoice.contains(audio)) return;
     if (voice.value?.audio == audio) return;
     audio.dispose();
   }
 
+  // #***! то же для кружков
   final ValueNotifier<VideoNoteTrack?> videoNote = ValueNotifier(null);
   final ValueNotifier<double> videoNoteSpeed = ValueNotifier(speeds.first);
 
@@ -156,6 +176,7 @@ class MediaPlayback {
   }
 
   void activateVideoNote(VideoNoteTrack track) {
+    _clearAudioFile();
     _clearVoice();
     final previous = videoNote.value;
     if (previous != null && previous.controller != track.controller) {
@@ -194,5 +215,63 @@ class MediaPlayback {
     if (_heldNotes.contains(controller)) return;
     if (videoNote.value?.controller == controller) return;
     controller.dispose();
+  }
+
+  Future<void> activateAudioFile(
+    AudioFileTrack track, {
+    required String notificationChannelName,
+  }) async {
+    final audio = await AudioPlaybackController.ensureInitialized(
+      notificationChannelName,
+    );
+    _attachAudioCompletionListener(audio);
+    final current = audioFile.value;
+    if (current?.cacheName == track.cacheName) {
+      await audio.toggle();
+      return;
+    }
+    _clearVoice();
+    _clearVideoNote();
+    audioFile.value = track;
+    primary.value = PlaybackKind.audioFile;
+    try {
+      await audio.playTrack(track);
+    } catch (_) {
+      audioFile.value = null;
+      primary.value = null;
+      rethrow;
+    }
+  }
+
+  void closeAudioFile() {
+    if (!_clearAudioFile()) return;
+    primary.value = voice.value != null
+        ? PlaybackKind.voice
+        : videoNote.value != null
+        ? PlaybackKind.videoNote
+        : null;
+  }
+
+  bool _clearAudioFile() {
+    if (audioFile.value == null) return false;
+    audioFile.value = null;
+    if (AudioPlaybackController.isInitialized) {
+      unawaited(AudioPlaybackController.instance.stop());
+    }
+    return true;
+  }
+
+  void _attachAudioCompletionListener(AudioPlaybackController audio) {
+    if (_audioCompletionListenerAttached) return;
+    _audioCompletionListenerAttached = true;
+    audio.processingState.addListener(_onAudioProcessingStateChanged);
+  }
+
+  void _onAudioProcessingStateChanged() {
+    if (AudioPlaybackController.instance.processingState.value !=
+        AudioProcessingState.completed) {
+      return;
+    }
+    closeAudioFile();
   }
 }

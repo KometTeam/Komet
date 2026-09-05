@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/account.dart';
 import '../../../main.dart';
+import '../../widgets/auth_limits_sheet.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
 import '../../widgets/small_spinner.dart';
@@ -71,12 +72,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
       if (!mounted) return;
 
+      await markAuthLimitsPending(AuthEntry.registration);
+
+      if (!mounted) return;
+
       Navigator.pushAndRemoveUntil(
         context,
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 240),
-          pageBuilder: (_, __, ___) => LoginSuccessScreen(avatar: avatar),
-          transitionsBuilder: (_, animation, __, child) =>
+          pageBuilder: (_, _, _) => LoginSuccessScreen(avatar: avatar),
+          transitionsBuilder: (_, animation, _, child) =>
               FadeTransition(opacity: animation, child: child),
         ),
         (route) => false,
@@ -270,7 +275,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: category.avatars.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final avatar = category.avatars[index];
               final selected = _selectedPhotoId == avatar.id;
@@ -297,9 +302,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       child: CachedNetworkImage(
                         imageUrl: avatar.url,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) =>
+                        placeholder: (_, _) =>
                             Container(color: cs.surfaceContainerHigh),
-                        errorWidget: (_, __, ___) =>
+                        errorWidget: (_, _, _) =>
                             Container(color: cs.surfaceContainerHigh),
                       ),
                     ),

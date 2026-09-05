@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'build_profile.dart';
+
+// #***! фирменные настройки комета которых нет в оригинале
 class KometSettings {
   static const _kViewDeleted = 'komet_view_deleted';
   static const _kViewRedacted = 'komet_view_redacted';
@@ -10,7 +13,9 @@ class KometSettings {
   static const _kSelfOnlineCheck = 'komet_self_online_check';
   static const _kHideAllChatsFolder = 'komet_hide_all_chats_folder';
   static const _kShowHiddenChats = 'komet_show_hidden_chats';
+  static const _kRecordDebugLogs = 'komet_record_debug_logs';
 
+  // #***! каждая настройка это ValueNotifier, юишка подписана напрямую
   static final ValueNotifier<bool> viewDeleted = ValueNotifier(false);
   static final ValueNotifier<bool> viewRedacted = ValueNotifier(false);
   static final ValueNotifier<bool> fullTimestamp = ValueNotifier(false);
@@ -19,19 +24,28 @@ class KometSettings {
   static final ValueNotifier<bool> selfOnlineCheck = ValueNotifier(true);
   static final ValueNotifier<bool> hideAllChatsFolder = ValueNotifier(false);
   static final ValueNotifier<bool> showHiddenChats = ValueNotifier(false);
+  static final ValueNotifier<bool> recordDebugLogs = ValueNotifier(true);
 
+  // #***! читаем всё разом на старте
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    viewDeleted.value = prefs.getBool(_kViewDeleted) ?? false;
-    viewRedacted.value = prefs.getBool(_kViewRedacted) ?? false;
+    // #***! просмотр удалённого только вне store сборки
+    viewDeleted.value =
+        BuildProfile.hiddenContentViewers &&
+        (prefs.getBool(_kViewDeleted) ?? false);
+    viewRedacted.value =
+        BuildProfile.hiddenContentViewers &&
+        (prefs.getBool(_kViewRedacted) ?? false);
     fullTimestamp.value = prefs.getBool(_kFullTimestamp) ?? false;
     ghostMode.value = prefs.getBool(_kGhostMode) ?? false;
     antiRead.value = prefs.getBool(_kAntiRead) ?? false;
     selfOnlineCheck.value = prefs.getBool(_kSelfOnlineCheck) ?? true;
     hideAllChatsFolder.value = prefs.getBool(_kHideAllChatsFolder) ?? false;
     showHiddenChats.value = prefs.getBool(_kShowHiddenChats) ?? false;
+    recordDebugLogs.value = prefs.getBool(_kRecordDebugLogs) ?? true;
   }
 
+  // #***! дальше по сеттеру на настройку, память потом диск
   static Future<void> setViewDeleted(bool value) async {
     viewDeleted.value = value;
     final prefs = await SharedPreferences.getInstance();
@@ -50,6 +64,7 @@ class KometSettings {
     await prefs.setBool(_kFullTimestamp, value);
   }
 
+  // #***! невидимка влияет на пинг, с interactive false сервер не считает нас онлайн
   static Future<void> setGhostMode(bool value) async {
     ghostMode.value = value;
     final prefs = await SharedPreferences.getInstance();
@@ -78,5 +93,11 @@ class KometSettings {
     showHiddenChats.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kShowHiddenChats, value);
+  }
+
+  static Future<void> setRecordDebugLogs(bool value) async {
+    recordDebugLogs.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kRecordDebugLogs, value);
   }
 }

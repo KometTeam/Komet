@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+// #***! страна, коды названия и формат телефона
 class CountryName {
   final String code; // ISO 3166-1 alpha-2, например "RU"
   final String en;
@@ -23,27 +24,32 @@ class CountryName {
     required this.phoneGroupSeparators,
   });
 
+  // #***! название на языке интерфейса
   String displayName(String languageCode) {
     return languageCode == 'ru' ? ru : en;
   }
 }
 
+// #***! список из двух джейсонов внизу файла, собирается один раз
 /// Полный список стран (195 государств) с названием на русском и английском.
 ///
 /// Источник данных:
 /// https://github.com/stefangabos/world_countries
 final List<CountryName> allCountries = _buildCountries();
 
+// #***! быстрый доступ по коду
 /// Быстрый доступ по ISO-коду.
 final Map<String, CountryName> countriesByCode = {
   for (final country in allCountries) country.code: country,
 };
 
+// #***! у +7 и +1 несколько стран, эти основные
 const Map<String, String> primaryCountryByPhoneCode = {'+7': 'RU', '+1': 'US'};
 
 bool isPrimaryForPhoneCode(CountryName country) =>
     primaryCountryByPhoneCode[country.phoneCode] == country.code;
 
+// #***! сортируем по названию а не по коду
 List<CountryName> sortedByDisplayName(
   Iterable<CountryName> countries,
   String languageCode,
@@ -58,6 +64,7 @@ List<CountryName> sortedByDisplayName(
   return list;
 }
 
+// #***! порядок от сервера, незнакомые коды пропускаем
 List<CountryName> countriesInServerOrder(Iterable<String> codes) {
   final out = <CountryName>[];
   for (final raw in codes) {
@@ -80,6 +87,7 @@ Map<String, String>? exampleCountryLookup(String code) {
   return {'code': country.code, 'ru': country.ru, 'en': country.en};
 }
 
+// #***! склеиваем английский и русский списки по alpha2
 List<CountryName> _buildCountries() {
   final enList = (jsonDecode(_countriesEnJson) as List)
       .cast<Map<String, dynamic>>();

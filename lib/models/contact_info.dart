@@ -1,3 +1,4 @@
+// #***! одно имя контакта, их несколько своё наше и телефонное
 class ContactName {
   final String? type;
   final String? name;
@@ -13,12 +14,14 @@ class ContactName {
     lastName: map['lastName']?.toString(),
   );
 
+  // #***! как показать имя одной строкой
   String? get label {
     final n = name;
     if (n != null && n.trim().isNotEmpty) return n.trim();
     return fullName;
   }
 
+  // #***! имя плюс фамилия если сервер разложил
   String? get fullName {
     final combined = [firstName, lastName]
         .where((s) => s != null && s.trim().isNotEmpty)
@@ -30,12 +33,14 @@ class ContactName {
   }
 }
 
+// #***! карточка контакта плюс список имён
 class ContactInfo {
   final Map<String, dynamic> raw;
   final List<ContactName> names;
 
   const ContactInfo({required this.raw, required this.names});
 
+  // #***! разбор ответа contactInfo
   factory ContactInfo.fromMap(Map<String, dynamic> map) {
     final rawNames = map['names'];
     final names = <ContactName>[];
@@ -47,6 +52,7 @@ class ContactInfo {
     return ContactInfo(raw: map, names: names);
   }
 
+  // #***! имя для юишки, своё важнее
   String? get displayName {
     String? firstLabel;
     for (final n in names) {
@@ -58,12 +64,15 @@ class ContactInfo {
     return firstLabel;
   }
 
+  // #***! имя которым мы сами подписали
   String? get customFullName => _fullNameOfType('CUSTOM');
 
   String? get onemeFullName => _fullNameOfType('ONEME');
 
+  // #***! своя подпись важнее серверной
   String? get fullName => customFullName ?? onemeFullName ?? displayName;
 
+  // #***! дали своё имя значит сохранён
   bool get isSavedContact => customFullName != null;
 
   String? _fullNameOfType(String type) {
@@ -75,6 +84,7 @@ class ContactInfo {
     return null;
   }
 
+  // #***! только имя для обращения
   String? get firstName {
     for (final n in names) {
       final f = n.firstName;
@@ -85,6 +95,7 @@ class ContactInfo {
 
   String? get avatarUrl => raw['baseUrl'] as String?;
 
+  // #***! флаги аккаунта, BOT и прочее
   List<String> get options {
     final o = raw['options'];
     return o is List ? o.whereType<String>().toList() : const [];
@@ -92,6 +103,7 @@ class ContactInfo {
 
   bool get isBot => options.contains('BOT');
 
+  // #***! accountStatus не ноль значит удалён
   bool get isDeleted {
     final status = raw['accountStatus'];
     return status is int && status != 0;

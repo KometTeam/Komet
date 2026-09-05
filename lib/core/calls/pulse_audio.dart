@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../utils/logger.dart';
 
+// #***! источник PulseAudio, monitor это захват того что играет в системе
 class PulseSource {
   const PulseSource({
     required this.name,
@@ -17,6 +18,7 @@ class PulseSource {
   final bool isMonitor;
 }
 
+// #***! не смогли переключить маршрут
 class PulseRouteException implements Exception {
   const PulseRouteException(this.source);
 
@@ -26,19 +28,23 @@ class PulseRouteException implements Exception {
   String toString() => source;
 }
 
+// #***! PulseAudio через pactl, на линуксе нет системного выбора устройства
 class PulseAudio {
   PulseAudio._();
 
+  // #***! наш источник зовётся komet_capture_<pid>
   static const String bridgePrefix = 'komet_capture_';
 
   static String? _bridgeModule;
   static String? _bridgeMaster;
   static String? _bridgeSource;
 
+  // #***! только линукс
   static bool get supported => !kIsWeb && Platform.isLinux;
 
   static String get _bridgeName => '$bridgePrefix$pid';
 
+  // #***! всё через pactl, своей библиотеки нет
   static Future<ProcessResult?> _pactl(List<String> args) async {
     if (!supported) return null;
     try {
@@ -57,6 +63,7 @@ class PulseAudio {
   static Future<bool> isAvailable() async =>
       (await _pactl(const ['info']))?.exitCode == 0;
 
+  // #***! список источников, pactl умеет в джейсон
   static Future<List<PulseSource>> sources() async {
     final result = await _pactl(const ['-f', 'json', 'list', 'sources']);
     if (result == null || result.exitCode != 0) return const [];
@@ -96,6 +103,7 @@ class PulseAudio {
     return null;
   }
 
+  // #***! мост источник чтоб захватывать устройство мимо WebRTC
   static Future<String?> openBridge(String master) async {
     if (_bridgeMaster == master && _bridgeSource != null) return _bridgeSource;
     await closeBridge();
@@ -121,6 +129,7 @@ class PulseAudio {
     return name;
   }
 
+  // #***! мост обязательно снимаем иначе останется в системе
   static Future<void> closeBridge() async {
     final module = _bridgeModule;
     _bridgeModule = null;
@@ -130,6 +139,7 @@ class PulseAudio {
     await _pactl(['unload-module', module]);
   }
 
+  // #***! мосты от упавших запусков чистим по pid в имени
   static Future<void> _dropStaleBridges() async {
     final result = await _pactl(const ['list', 'modules', 'short']);
     if (result == null || result.exitCode != 0) return;

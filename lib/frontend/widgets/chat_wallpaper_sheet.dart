@@ -1,25 +1,70 @@
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/core/config/chat_wallpaper_themes.dart';
 import 'package:komet/core/config/app_colors.dart';
 import 'package:komet/core/storage/chat_wallpaper_store.dart';
+import 'package:komet/core/utils/image_utils.dart';
+import 'package:komet/frontend/screens/profile/custom_gradient_editor_screen.dart';
 import 'chat_wallpaper_view.dart';
+import 'mesh_gradient_background.dart';
+import 'custom_notification.dart';
 import '../../core/config/app_fonts.dart';
 
-enum WallpaperPickType { none, theme, gallery }
+enum WallpaperPickType { none, theme, gallery, gradient }
 
 class WallpaperPick {
   final WallpaperPickType type;
   final ChatWallpaperTheme? theme;
+  final List<Color>? gradientColors;
+  final bool gradientAnimated;
+  final double gradientRotation;
 
-  const WallpaperPick.none() : type = WallpaperPickType.none, theme = null;
+  const WallpaperPick.none()
+    : type = WallpaperPickType.none,
+      theme = null,
+      gradientColors = null,
+      gradientAnimated = true,
+      gradientRotation = 0;
   const WallpaperPick.gallery()
     : type = WallpaperPickType.gallery,
-      theme = null;
-  const WallpaperPick.theme(this.theme) : type = WallpaperPickType.theme;
+      theme = null,
+      gradientColors = null,
+      gradientAnimated = true,
+      gradientRotation = 0;
+  const WallpaperPick.theme(this.theme)
+    : type = WallpaperPickType.theme,
+      gradientColors = null,
+      gradientAnimated = true,
+      gradientRotation = 0;
+  const WallpaperPick.gradient(
+    this.gradientColors, {
+    this.gradientAnimated = false,
+    this.gradientRotation = 0,
+  }) : type = WallpaperPickType.gradient,
+       theme = null;
+}
+
+// #***! путь, а не байты: withData грузит файл в java-кучу и валит процесс на OOM
+Future<Uint8List?> pickWallpaperBytes(BuildContext context) async {
+  final result = await FilePicker.platform.pickFiles(type: FileType.image);
+  final path = result?.files.firstOrNull?.path;
+  if (path == null) return null;
+  if (await File(path).length() > kMaxWallpaperBytes) {
+    if (context.mounted) {
+      showCustomNotification(context, 'Картинка слишком большая (макс 16 МБ)');
+    }
+    return null;
+  }
+  final bytes = await compressWallpaperFile(path);
+  if (bytes == null && context.mounted) {
+    showCustomNotification(context, 'Не удалось обработать изображение');
+  }
+  return bytes;
 }
 
 Future<WallpaperPick?> showChatWallpaperSheet(
@@ -71,6 +116,34 @@ class _ChatWallpaperGalleryScreenState
     } else {
       Navigator.pop(context, WallpaperPick.theme(_selected));
     }
+  }
+
+  Future<void> _openGradientEditor() async {
+    final current = widget.current;
+    final result = await Navigator.of(context).push<CustomGradientResult>(
+      MaterialPageRoute(
+        builder: (_) => CustomGradientEditorScreen(
+          initialColors: current?.isGradient == true
+              ? current!.gradientColors
+              : null,
+          initialAnimated: current?.isGradient == true
+              ? current!.gradientAnimated
+              : false,
+          initialRotation: current?.isGradient == true
+              ? current!.gradientRotation
+              : 0,
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    Navigator.pop(
+      context,
+      WallpaperPick.gradient(
+        result.colors,
+        gradientAnimated: result.animated,
+        gradientRotation: result.rotation,
+      ),
+    );
   }
 
   @override
@@ -166,6 +239,12 @@ class _ChatWallpaperGalleryScreenState
                       _selected = null;
                       _keepsImage = false;
                     }),
+                  ),
+                  _CustomGradientTile(
+                    current: widget.current?.isGradient == true
+                        ? widget.current
+                        : null,
+                    onTap: _openGradientEditor,
                   ),
                   for (final theme in kChatWallpaperThemes)
                     _ThemeTile(
@@ -419,6 +498,36 @@ class _CurrentImageTile extends StatelessWidget {
       child: path == null
           ? ColoredBox(color: cs.surfaceContainerHighest)
           : Image.file(File(path), fit: BoxFit.cover),
+    );
+  }
+}
+
+class _CustomGradientTile extends StatelessWidget {
+  final ChatWallpaper? current;
+  final VoidCallback onTap;
+
+  const _CustomGradientTile({required this.current, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final colors = current?.gradientColors;
+    return _TileFrame(
+      selected: false,
+      onTap: onTap,
+      label: 'Своя',
+      child: colors != null && colors.isNotEmpty
+          ? MeshGradientBackground(
+              colors: colors,
+              animate: false,
+              rotation: current?.gradientRotation ?? 0,
+            )
+          : ColoredBox(
+              color: cs.surfaceContainerHighest,
+              child: Center(
+                child: Icon(Symbols.palette, color: cs.onSurface, size: 30),
+              ),
+            ),
     );
   }
 }

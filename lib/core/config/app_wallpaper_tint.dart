@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! подкрашивать интерфейс под обои
 class AppWallpaperTint {
   static const prefKey = 'app_wallpaper_tint';
 

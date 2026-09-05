@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! меню действий, кругом вокруг пальца или списком
 enum MessageActionsStyle { radial, list }
 
+// #***! настройка вида меню
 class AppMessageActionsStyle {
   static const prefKey = 'app_message_actions_style';
 
@@ -23,6 +25,7 @@ class AppMessageActionsStyle {
   static MessageActionsStyle _parse(String? val) =>
       enumFromName(MessageActionsStyle.values, val, MessageActionsStyle.list);
 
+  // #***! подписи для настроек
   static String label(MessageActionsStyle style) {
     switch (style) {
       case MessageActionsStyle.radial:

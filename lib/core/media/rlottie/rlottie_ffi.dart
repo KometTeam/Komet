@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 
+// #***! сигнатуры нативной rlottie для FFI
 typedef _InitNative = Void Function();
 typedef _VoidFn = void Function();
 
@@ -26,6 +27,7 @@ typedef _Destroy = void Function(Pointer<Void>);
 typedef _CacheSizeNative = Void Function(Size);
 typedef _CacheSize = void Function(int);
 
+// #***! обёртка над librlottie, стикеры рисует си а не дарт
 class RlottieBindings {
   RlottieBindings._(this._lib) {
     _init = _lib.lookupFunction<_InitNative, _VoidFn>('lottie_init');
@@ -58,6 +60,7 @@ class RlottieBindings {
   late final _Destroy _destroy;
   late final _CacheSize _cacheSize;
 
+  // #***! библиотеки может не быть, тогда стикеры просто не играют
   static RlottieBindings? open({String? path}) {
     try {
       final lib = _openLibrary(path);
@@ -67,6 +70,7 @@ class RlottieBindings {
     }
   }
 
+  // #***! на эпле библиотека в самом процессе, на остальных файлом
   static DynamicLibrary? _openLibrary(String? path) {
     if (path != null) return DynamicLibrary.open(path);
     if (Platform.isMacOS || Platform.isIOS) return DynamicLibrary.process();
@@ -77,6 +81,7 @@ class RlottieBindings {
     }
   }
 
+  // #***! строки в си руками и обязательно освободить
   Pointer<Void>? loadFromData(String data, String key) {
     final dataC = data.toNativeUtf8();
     final keyC = key.toNativeUtf8();
@@ -95,6 +100,7 @@ class RlottieBindings {
   double frameRate(Pointer<Void> anim) => _frameRate(anim);
   double duration(Pointer<Void> anim) => _duration(anim);
 
+  // #***! кадр рендерим прямо в буфер, так отдаём в текстуру без копий
   void render(Pointer<Void> anim, int frameNo, Pointer<Uint32> buffer, int px) {
     _render(anim, frameNo, buffer, px, px, px * 4);
   }
@@ -106,6 +112,7 @@ class RlottieBindings {
   void shutdown() => _shutdown();
 }
 
+// #***! имя библиотеки на каждой платформе своё
 String get rlottieLibraryName {
   if (Platform.isWindows) return 'rlottie.dll';
   return 'librlottie.so';

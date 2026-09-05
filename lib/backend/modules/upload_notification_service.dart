@@ -7,8 +7,10 @@ import 'package:flutter/widgets.dart';
 import '../../l10n/app_localizations.dart';
 import '../../main.dart' show KometApp;
 
+// #***! что грузим, от этого текст уведомления
 enum UploadKind { photo, video, videoNote, voice, file }
 
+// #***! одна загрузка в уведомлении, байты и скорость
 class _NotificationJob {
   _NotificationJob({required this.kind, required this.count, this.filename});
 
@@ -24,6 +26,7 @@ class _NotificationJob {
   int _windowSent = 0;
   int _windowAt = DateTime.now().millisecondsSinceEpoch;
 
+  // #***! скорость окном в полсекунды иначе цифра скачет и её не прочитать
   void report(int sentBytes, int totalBytes, double jobFraction) {
     sent = sentBytes;
     total = totalBytes;
@@ -51,11 +54,14 @@ class _NotificationJob {
   }
 }
 
+// #***! уведомление с прогрессом, только андроид
 class UploadNotificationService {
   static const MethodChannel _channel = MethodChannel(
     'ru.komet.app/upload_service',
   );
+  // #***! не чаще раза в 350 мс иначе шторка захлёбывается
   static const int _minIntervalMs = 350;
+  // #***! первые 700 мс молчим, короткие загрузки не должны мелькать
   static const Duration _startDelay = Duration(milliseconds: 700);
 
   static final Map<String, _NotificationJob> _jobs = {};
@@ -69,6 +75,7 @@ class UploadNotificationService {
   static bool get _enabled =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+  // #***! начало, несколько параллельных в одно уведомление
   static void begin(
     String id, {
     required UploadKind kind,
@@ -91,6 +98,7 @@ class UploadNotificationService {
     });
   }
 
+  // #***! прогресс от загрузчика
   static void report(
     String id, {
     required int sent,
@@ -104,6 +112,7 @@ class UploadNotificationService {
     _push();
   }
 
+  // #***! конец, последняя гасит уведомление
   static void end(String id) {
     if (!_enabled) return;
     if (_jobs.remove(id) == null) return;
@@ -126,6 +135,7 @@ class UploadNotificationService {
     if (wasRunning) _invoke('stop', const <String, dynamic>{});
   }
 
+  // #***! сводка по всем, размеры известны считаем по байтам иначе усредняем
   static void _push({bool force = false}) {
     if (_jobs.isEmpty) return;
     if (!_running && _startTimer != null) return;
@@ -161,6 +171,7 @@ class UploadNotificationService {
     final now = DateTime.now().millisecondsSinceEpoch;
     final changed =
         title != _lastTitle || body != _lastBody || percent != _lastPercent;
+    // #***! ничего не изменилось или рано, систему не дёргаем
     if (!force && (!changed || now - _lastPushAt < _minIntervalMs)) return;
 
     _lastTitle = title;
@@ -188,6 +199,7 @@ class UploadNotificationService {
     return l10n.uploadSpeedMb((bps / (1024 * 1024)).toStringAsFixed(1));
   }
 
+  // #***! уведомление вне дерева виджетов, локаль достаём руками
   static AppLocalizations _localizations() {
     final context = KometApp.navigatorKey.currentContext;
     if (context != null) {

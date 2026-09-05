@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -84,18 +86,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _changeAvatar() async {
     if (_isSaving) return;
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final picked = result.files.first;
-    final bytes = picked.bytes;
-    if (bytes == null) {
-      if (mounted) showCustomNotification(context, 'Не удалось прочитать файл');
-      return;
-    }
-    if (bytes.length > kMaxAvatarBytes) {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final path = result?.files.firstOrNull?.path;
+    if (path == null) return;
+    if (await File(path).length() > kMaxAvatarBytes) {
       if (mounted) {
         showCustomNotification(context, 'Картинка слишком большая (макс 8 МБ)');
       }
@@ -104,7 +98,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!mounted) return;
     setState(() => _isSaving = true);
     try {
-      final processed = await compressAvatar(bytes);
+      final processed = await compressAvatarFile(path);
       if (processed == null) {
         if (!mounted) return;
         showCustomNotification(context, 'Не удалось обработать изображение');
