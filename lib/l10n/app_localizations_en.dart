@@ -68,6 +68,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Required for api2.oneme.ru: its certificate chains to the Russian Trusted Root CA, which is absent from the standard trust store. The root is bundled with the app; other hosts keep using the usual roots.';
 
   @override
+  String get serverTrustKnownAvTlsTitle => 'Trust local certificates';
+
+  @override
+  String get serverTrustKnownAvTlsSubtitle =>
+      'If something on this device (antivirus, corporate proxy, your own certificate authority) replaces the certificate while scanning encrypted connections, the connection will fail. This accepts that replacement — but only for known local certificate issuers (e.g. Kaspersky). Weakens protection against certificate substitution; enable only if you understand why.';
+
+  @override
   String get serverApply => 'Apply and reconnect';
 
   @override
@@ -860,6 +867,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeSettingsScheduleLightFrom => 'Light from';
 
   @override
+  String get themeSettingsCustomTitle => 'Custom';
+
+  @override
   String get appearanceTitle => 'Appearance';
 
   @override
@@ -1565,6 +1575,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatInfoActionLeave => 'Leave';
+
+  @override
+  String get chatInfoActionSubscribe => 'Subscribe';
+
+  @override
+  String get chatInfoSubscribed => 'You subscribed to the channel';
+
+  @override
+  String get chatInfoSubscribeFailed => 'Could not subscribe to the channel';
 
   @override
   String get chatInfoActionMuted => 'Muted';

@@ -178,7 +178,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     _heroTransform.addListener(_syncZoom);
     _items = _localItems();
     _index = widget.video == null
-        ? (_items.length - 1 - widget.initialIndex).clamp(0, _items.length - 1)
+        ? widget.initialIndex.clamp(0, _items.length - 1)
         : 0;
     _heroId = _items[_index].id;
     _initialMediaId = _heroId;
@@ -253,7 +253,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       ];
     }
     return [
-      for (var i = widget.photos.length - 1; i >= 0; i--)
+      for (var i = 0; i < widget.photos.length; i++)
         _ViewerMedia(
           id: _localId(widget.photos[i], message, i),
           attachment: widget.photos[i],

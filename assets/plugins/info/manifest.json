@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "pw.komet.info",
+  "name": "Komet Info",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "Сводка данных о собеседнике",
+  "author": "Komet",
+  "main": "main.js",
+  "permissions": ["chat.write", "chat.edit", "ui.notify", "contact.read"],
+  "commands": [
+    {"name": "/info", "description": "сводка данных о человеке", "handler": "info"}
+  ]
+}

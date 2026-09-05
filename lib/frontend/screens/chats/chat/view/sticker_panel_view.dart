@@ -20,8 +20,9 @@ class StickerPanelView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    stickers.maxHeight = media.size.height - media.padding.top - 160;
+    final size = MediaQuery.sizeOf(context);
+    final padding = MediaQuery.paddingOf(context);
+    stickers.maxHeight = size.height - padding.top - 160;
 
     return AnimatedBuilder(
       animation: stickers.anim,

@@ -38,9 +38,9 @@ Note also that `flutter analyze` treats **info**-level lints as fatal by default
 
 ## Build Flavors
 
-| Flavor | App ID | Notes |
-|--------|--------|-------|
-| `komet` | `ru.komet.app` | Default, no FCM |
+| Flavor  | App ID         | Notes                               |
+|---------|----------------|-------------------------------------|
+| `komet` | `ru.komet.app` | Default, no FCM                     |
 | `oneme` | `ru.oneme.app` | FCM push notifications via Firebase |
 
 Flavor-specific Android resources live in `android/app/src/komet/` and `android/app/src/oneme/`.
@@ -59,7 +59,6 @@ core/config/       — app config, proxy config, device presets, countries list
 backend/api.dart   — session lifecycle: connect, handshake, ping, auto-reconnect
 backend/modules/   — feature modules: account, messages, chats, contacts, calls, folders
 
-state/             — ChangeNotifier state classes consumed by the UI
 models/            — plain data classes (User, Chat, Message, Call, Attachment, Session)
 
 frontend/screens/  — full-page widgets grouped by feature (auth/, chats/, contacts/, calls/, profile/)
@@ -69,7 +68,17 @@ frontend/widgets/  — reusable components (message_bubble, chat_tile, avatar, e
 Data flow: UI → backend module → `api.dart` → transport layer → server.  
 Incoming packets: transport → dispatcher → backend module → state → UI rebuild.
 
-## Key Conventions (from AGENTS.md)
+State is `ChangeNotifier`-based but not centralized in one directory: it lives next to the
+feature it belongs to — e.g. `ChatListState` in `frontend/screens/chats/chat_list_screen.dart`,
+`ChatController` in `frontend/screens/chats/chat/chat_controller.dart`, `PollsState` in
+`backend/modules/polls.dart`. Colocate new state with its screen/module rather than adding a
+top-level `state/` directory.
+
+Wire framing, MessagePack, and Zstd (de)compression are handled by the Rust core (`kolibri`,
+via `native/komet_crypto/`) — `core/protocol/packet.dart` only wraps the already-decoded
+payload. There is no serialization work to move off the Dart isolate here; it never runs on it.
+
+## Key Conventions (see [AGENTS.md](./AGENTS.md) for the full, canonical list)
 
 - **No comments in code.** Write self-documenting code instead.
 - **Use `showCustomNotification(context, 'text')`** for all user-facing notifications — never use SnackBars.
@@ -77,15 +86,40 @@ Incoming packets: transport → dispatcher → backend module → state → UI r
 - Quality over quantity.
 - **Never leave real data in test files**, including existing message contents or real IDs captured from requests. Use synthetic fixtures instead.
 - **A button whose icon toggles between plain and slashed** (flash on/off, mic muted, sound, notifications) **must animate with a Lottie icon** — never swap two `Icon`s instantly. See *Animated icons* below.
+- **Never `git commit` unless explicitly asked**, even for trivial changes — leave them in the working tree or stash instead.
+
+## Flutter performance conventions
+
+These are established patterns already in use in this codebase — follow them for new code
+rather than introducing a different approach.
+
+- **Heavy CPU work goes through `compute()`, not the main isolate.** `core/utils/image_utils.dart`
+  and `core/media/image_optimizer.dart` already offload JPEG/AVIF encoding this way
+  (`compute(_encodeAvatarFile, ...)`, `compute(_encodePhotoIsolate, ...)`). Follow the same
+  pattern for any new CPU-bound Dart work (image/video processing, large data transforms).
+  Note this does **not** apply to wire (de)serialization — MessagePack/Zstd is handled by the
+  Rust core (`kolibri`), not Dart, so there's nothing to offload there.
+- **`ListView.builder` + `ValueKey` is the norm for lists** (chat list, message list, contacts,
+  attachments) — the codebase already uses this pattern in ~40 files. Keep using `ValueKey` on
+  list items whose identity matters across rebuilds (reorder, delete, optimistic updates),
+  otherwise Flutter can misattribute state to the wrong item.
+- **Dispose what you subscribe.** `ChangeNotifier`-based controllers/state classes are colocated
+  with their screen or module (see *Architecture* above, not a shared `state/` tree) — each one
+  must cancel its `StreamSubscription`s and dispose its controllers (`AnimationController`,
+  `TextEditingController`, etc.) in its own `dispose()`.
+- **Prefer `const` constructors** wherever the widget's properties are compile-time constant —
+  it lets Flutter skip rebuilding that subtree entirely.
+- **Keep `build()` pure and cheap** — no network/IO calls, no heavy computation inline; extract
+  reusable pieces into their own `StatelessWidget`s instead of nesting logic in one big builder.
 
 ## Animated icons
 
 Everything in `assets/lottie/` is generated from the Material Symbols font by `tool/make_morph_icons.py` (stdlib-only Python, no deps). Never hand-edit the JSON — add a spec and re-run `python3 tool/make_morph_icons.py`.
 
-| Kind | Spec list | Widget |
-|------|-----------|--------|
-| Morph between two glyphs | `SPECS` | `ComposerMorphIcon` |
-| Plain ↔ slashed toggle | `SLASH_SPECS` | `LottieSlashIcon` |
+| Kind                     | Spec list     | Widget              |
+|--------------------------|---------------|---------------------|
+| Morph between two glyphs | `SPECS`       | `ComposerMorphIcon` |
+| Plain ↔ slashed toggle   | `SLASH_SPECS` | `LottieSlashIcon`   |
 
 A slash spec takes the plain and slashed codepoints; the generator lays both glyphs out as static layers and sweeps a mask across the diagonal, so the slash looks drawn on top of the icon. Pass `fill=1.0` when the button renders `Icon(..., fill: 1)` — contours are then taken from the `FILL=1` instance of the variable font.
 
@@ -98,12 +132,12 @@ runtime by `AppIconConfig` (Android activity-alias, iOS alternate icon). Every
 launcher resource is *derived* from `assets/komet.png` / `assets/meteor.png` by a
 script in `tool/`, so the source art lives in exactly one place:
 
-| Script | Produces |
-|--------|----------|
-| `make_icon_bg.dart` | `*_icon.png` — the same art flattened on black |
-| `make_minimal_android.dart` / `make_minimal_adaptive.dart` / `make_minimal_ios.dart` | the `Minimal` launcher + adaptive layers |
-| `make_monochrome_android.dart` | `ic_launcher[_minimal]_monochrome.png` — alpha silhouettes for themed icons |
-| `make_appearances_ios.dart` | `Icon-App-{Dark,Tinted}-1024x1024@1x.png` + their `Contents.json` entries |
+| Script                                                                               | Produces                                                                    |
+|--------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
+| `make_icon_bg.dart`                                                                  | `*_icon.png` — the same art flattened on black                              |
+| `make_minimal_android.dart` / `make_minimal_adaptive.dart` / `make_minimal_ios.dart` | the `Minimal` launcher + adaptive layers                                    |
+| `make_monochrome_android.dart`                                                       | `ic_launcher[_minimal]_monochrome.png` — alpha silhouettes for themed icons |
+| `make_appearances_ios.dart`                                                          | `Icon-App-{Dark,Tinted}-1024x1024@1x.png` + their `Contents.json` entries   |
 
 **Themed icons.** Both adaptive icons carry a `<monochrome>` layer, so Android 13+
 launchers with *Themed icons* enabled recolour the icon from the wallpaper. The

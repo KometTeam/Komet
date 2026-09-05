@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
@@ -10,8 +11,8 @@ import 'per_chat_json_store.dart';
 // #***! chatId 0 это обои по умолчанию
 const int kGlobalWallpaperChatId = 0;
 
-// #***! обои, своя картинка или тема
-enum ChatWallpaperKind { image, theme }
+// #***! обои, своя картинка, встроенная тема или свой градиент
+enum ChatWallpaperKind { image, theme, gradient }
 
 // #***! правки картинки, затемнение блюр параллакс сдвиг
 @immutable
@@ -29,12 +30,15 @@ class WallpaperImageSettings {
   });
 }
 
-// #***! один объект на оба вида, у темы настройки картинки нулевые
+// #***! один объект на все виды, у темы/градиента настройки картинки нулевые
 @immutable
 class ChatWallpaper {
   final ChatWallpaperKind kind;
   final String? imagePath;
   final String? themeId;
+  final List<Color>? gradientColors;
+  final bool gradientAnimated;
+  final double gradientRotation;
   final double dim;
   final bool blur;
   final bool motion;
@@ -48,29 +52,59 @@ class ChatWallpaper {
     this.offsetX = 0,
   }) : kind = ChatWallpaperKind.image,
        imagePath = path,
-       themeId = null;
+       themeId = null,
+       gradientColors = null,
+       gradientAnimated = true,
+       gradientRotation = 0;
 
   const ChatWallpaper.theme(String id)
     : kind = ChatWallpaperKind.theme,
       imagePath = null,
       themeId = id,
+      gradientColors = null,
+      gradientAnimated = true,
+      gradientRotation = 0,
       dim = 0,
       blur = false,
       motion = false,
       offsetX = 0;
 
-  bool get isImage => kind == ChatWallpaperKind.image;
+  const ChatWallpaper.gradient(
+    List<Color> colors, {
+    this.gradientAnimated = false,
+    this.gradientRotation = 0,
+  }) : kind = ChatWallpaperKind.gradient,
+       imagePath = null,
+       themeId = null,
+       gradientColors = colors,
+       dim = 0,
+       blur = false,
+       motion = false,
+       offsetX = 0;
 
-  // #***! в джейсон или путь с настройками или id темы
-  Map<String, dynamic> _toJson() => isImage
-      ? {
-          'path': imagePath,
-          'dim': dim,
-          'blur': blur,
-          'motion': motion,
-          'offsetX': offsetX,
-        }
-      : {'theme': themeId};
+  bool get isImage => kind == ChatWallpaperKind.image;
+  bool get isGradient => kind == ChatWallpaperKind.gradient;
+
+  // #***! в джейсон или путь с настройками, или id темы, или свои цвета
+  Map<String, dynamic> _toJson() {
+    if (isImage) {
+      return {
+        'path': imagePath,
+        'dim': dim,
+        'blur': blur,
+        'motion': motion,
+        'offsetX': offsetX,
+      };
+    }
+    if (isGradient) {
+      return {
+        'colors': gradientColors!.map((c) => c.toARGB32()).toList(),
+        'animated': gradientAnimated,
+        'rotation': gradientRotation,
+      };
+    }
+    return {'theme': themeId};
+  }
 
   static ChatWallpaper? _fromJson(Object? raw) {
     if (raw is! Map) return null;
@@ -82,6 +116,14 @@ class ChatWallpaper {
         blur: raw['blur'] == true,
         motion: raw['motion'] == true,
         offsetX: (raw['offsetX'] as num?)?.toDouble() ?? 0,
+      );
+    }
+    final colors = raw['colors'];
+    if (colors is List && colors.isNotEmpty) {
+      return ChatWallpaper.gradient(
+        colors.whereType<num>().map((v) => Color(v.toInt())).toList(),
+        gradientAnimated: raw['animated'] == true,
+        gradientRotation: (raw['rotation'] as num?)?.toDouble() ?? 0,
       );
     }
     final theme = raw['theme'];
@@ -137,6 +179,22 @@ class ChatWallpaperStore extends PerChatJsonStore<ChatWallpaper> {
     String themeId,
   ) async {
     final wallpaper = ChatWallpaper.theme(themeId);
+    await write(accountId, chatId, wallpaper);
+    return wallpaper;
+  }
+
+  Future<ChatWallpaper> setGradient(
+    int accountId,
+    int chatId,
+    List<Color> colors, {
+    bool animated = false,
+    double rotation = 0,
+  }) async {
+    final wallpaper = ChatWallpaper.gradient(
+      colors,
+      gradientAnimated: animated,
+      gradientRotation: rotation,
+    );
     await write(accountId, chatId, wallpaper);
     return wallpaper;
   }

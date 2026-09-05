@@ -9,6 +9,11 @@ import '../storage/chat_wallpaper_store.dart';
 // #***! цвет для подкраски интерфейса под обои
 Future<Color?> computeWallpaperSeed(ChatWallpaper? wallpaper) async {
   if (wallpaper == null) return null;
+  if (wallpaper.isGradient) {
+    final colors = wallpaper.gradientColors;
+    if (colors == null || colors.isEmpty) return null;
+    return _mostVivid(colors);
+  }
   if (!wallpaper.isImage) {
     final theme = chatWallpaperThemeById(wallpaper.themeId);
     if (theme == null) return null;

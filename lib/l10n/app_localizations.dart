@@ -212,6 +212,18 @@ abstract class AppLocalizations {
   /// **'Required for api2.oneme.ru: its certificate chains to the Russian Trusted Root CA, which is absent from the standard trust store. The root is bundled with the app; other hosts keep using the usual roots.'**
   String get serverTrustMincifrySubtitle;
 
+  /// No description provided for @serverTrustKnownAvTlsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust local certificates'**
+  String get serverTrustKnownAvTlsTitle;
+
+  /// No description provided for @serverTrustKnownAvTlsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'If something on this device (antivirus, corporate proxy, your own certificate authority) replaces the certificate while scanning encrypted connections, the connection will fail. This accepts that replacement — but only for known local certificate issuers (e.g. Kaspersky). Weakens protection against certificate substitution; enable only if you understand why.'**
+  String get serverTrustKnownAvTlsSubtitle;
+
   /// No description provided for @serverApply.
   ///
   /// In en, this message translates to:
@@ -1706,6 +1718,12 @@ abstract class AppLocalizations {
   /// **'Light from'**
   String get themeSettingsScheduleLightFrom;
 
+  /// No description provided for @themeSettingsCustomTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get themeSettingsCustomTitle;
+
   /// No description provided for @appearanceTitle.
   ///
   /// In en, this message translates to:
@@ -3025,6 +3043,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Leave'**
   String get chatInfoActionLeave;
+
+  /// No description provided for @chatInfoActionSubscribe.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribe'**
+  String get chatInfoActionSubscribe;
+
+  /// No description provided for @chatInfoSubscribed.
+  ///
+  /// In en, this message translates to:
+  /// **'You subscribed to the channel'**
+  String get chatInfoSubscribed;
+
+  /// No description provided for @chatInfoSubscribeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not subscribe to the channel'**
+  String get chatInfoSubscribeFailed;
 
   /// No description provided for @chatInfoActionMuted.
   ///

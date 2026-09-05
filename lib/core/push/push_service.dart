@@ -188,10 +188,17 @@ class PushService {
   PushService._();
   static final PushService instance = PushService._();
 
-  // #***! вошли в чат, гасим его уведомления
+  // #***! вошли в чат, гасим его уведомления. Плагин может быть не
+  // инициализирован (десктоп без FCM/FKM) — тогда просто нечего гасить
   static Future<void> clearChatNotification(int chatId) async {
-    final plugin = FlutterLocalNotificationsPlugin();
-    await plugin.cancel(id: chatId & 0x7fffffff);
+    if (_localActionsReady) {
+      try {
+        final plugin = FlutterLocalNotificationsPlugin();
+        await plugin.cancel(id: chatId & 0x7fffffff);
+      } catch (e) {
+        logger.w('clearChatNotification: $e');
+      }
+    }
     await _clearHistory(chatId);
   }
 

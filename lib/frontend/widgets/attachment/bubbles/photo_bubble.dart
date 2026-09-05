@@ -51,6 +51,18 @@ class PhotoBubble extends StatelessWidget {
     _ => null,
   };
 
+  // #***! реальное соотношение сторон плитки в ряду, зажатое в разумных
+  // пределах — иначе один экстремально узкий/широкий скрин ломает ряд
+  static const double _minTileRatio = 0.6;
+  static const double _maxTileRatio = 1.6;
+
+  static double _tileRatio(MessageAttachment item) {
+    final w = _intrinsicWidth(item)?.toDouble();
+    final h = _intrinsicHeight(item)?.toDouble();
+    if (w == null || h == null || w <= 0 || h <= 0) return 1.0;
+    return (w / h).clamp(_minTileRatio, _maxTileRatio);
+  }
+
   static String? _localPathOf(MessageAttachment item) => switch (item) {
     PhotoAttachment(:final localPath) => localPath,
     VideoAttachment(:final localPath) => localPath,
@@ -418,19 +430,30 @@ class PhotoBubble extends StatelessWidget {
     final matchBottom =
         ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleBottom;
 
+    final r1 = _tileRatio(p1);
+    final r2 = _tileRatio(p2);
+
     return ClipRRect(
       borderRadius: _multiPhotoCornerRadius(
         matchTop: matchTop,
         matchBottom: matchBottom,
         isMe: ctx.isMe,
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(child: _buildPhotoTile(ctx, p1, 0)),
-          const SizedBox(width: 2),
-          Expanded(child: _buildPhotoTile(ctx, p2, 1)),
-        ],
+      child: AspectRatio(
+        aspectRatio: r1 + r2,
+        child: Row(
+          children: [
+            Expanded(
+              flex: (r1 * 100).round(),
+              child: _buildPhotoTile(ctx, p1, 0),
+            ),
+            const SizedBox(width: 2),
+            Expanded(
+              flex: (r2 * 100).round(),
+              child: _buildPhotoTile(ctx, p2, 1),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -480,17 +503,27 @@ class PhotoBubble extends StatelessWidget {
     final rows = <Widget>[];
     for (var i = 0; i < displayCount; i += 2) {
       if (rows.isNotEmpty) rows.add(const SizedBox(height: 2));
+      final hasSecond = i + 1 < displayCount;
+      final r0 = _tileRatio(photos[i]);
+      final r1 = hasSecond ? _tileRatio(photos[i + 1]) : r0;
       rows.add(
-        Row(
-          children: [
-            Expanded(child: _buildGridTile(ctx, photos, i, remaining)),
-            const SizedBox(width: 2),
-            Expanded(
-              child: i + 1 < displayCount
-                  ? _buildGridTile(ctx, photos, i + 1, remaining)
-                  : const SizedBox.shrink(),
-            ),
-          ],
+        AspectRatio(
+          aspectRatio: hasSecond ? r0 + r1 : r0,
+          child: Row(
+            children: [
+              Expanded(
+                flex: (r0 * 100).round(),
+                child: _buildGridTile(ctx, photos, i, remaining),
+              ),
+              if (hasSecond) ...[
+                const SizedBox(width: 2),
+                Expanded(
+                  flex: (r1 * 100).round(),
+                  child: _buildGridTile(ctx, photos, i + 1, remaining),
+                ),
+              ],
+            ],
+          ),
         ),
       );
     }
@@ -522,34 +555,44 @@ class PhotoBubble extends StatelessWidget {
     return _buildPhotoTile(ctx, photos[index], index);
   }
 
+  // #***! форму плитки задаёт AspectRatio ряда-родителя, тут просто контент
   Widget _buildPhotoTile(
     BubbleContext ctx,
     MessageAttachment photo,
     int index,
-  ) => AspectRatio(aspectRatio: 1, child: _buildFillTile(ctx, photo, index));
+  ) => _buildFillTile(ctx, photo, index);
 
+  // #***! кэш декода считаем по реальному размеру плитки, а не по прикидке
+  // "photoMaxSize/2" — с адаптивной шириной ряда плитка может быть заметно
+  // больше половины бабла, и фиксированная прикидка даёт мыло на растяжении
   Widget _buildFillTile(BubbleContext ctx, MessageAttachment photo, int index) {
-    final cachePx =
-        (BubbleContext.photoMaxSize /
-                2 *
-                MediaQuery.of(ctx.context).devicePixelRatio)
-            .round();
-    return Stack(
-      children: [
-        _buildPhotoImage(
-          ctx,
-          photo,
-          double.infinity,
-          double.infinity,
-          memWidth: cachePx,
-          memHeight: cachePx,
-        ),
-        ..._videoBadges(photo, compact: true),
-        if (ctx.uploadProgress != null)
-          _buildUploadOverlay(ctx.uploadProgress!, index),
-        if (ctx.uploadProgress == null)
-          _buildTileTapTarget(ctx, index, cachePx),
-      ],
+    final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cachePx =
+            (constraints.maxWidth.isFinite
+                ? constraints.maxWidth
+                : BubbleContext.photoMaxSize / 2) *
+            dpr;
+        final cachePxInt = cachePx.round().clamp(1, 2048);
+        return Stack(
+          children: [
+            _buildPhotoImage(
+              ctx,
+              photo,
+              double.infinity,
+              double.infinity,
+              memWidth: cachePxInt,
+              memHeight: cachePxInt,
+            ),
+            ..._videoBadges(photo, compact: true),
+            if (ctx.uploadProgress != null)
+              _buildUploadOverlay(ctx.uploadProgress!, index),
+            if (ctx.uploadProgress == null)
+              _buildTileTapTarget(ctx, index, cachePxInt),
+          ],
+        );
+      },
     );
   }
 
@@ -577,44 +620,47 @@ class PhotoBubble extends StatelessWidget {
     String overlay,
     int index,
   ) {
-    final cachePx =
-        (BubbleContext.photoMaxSize /
-                2 *
-                MediaQuery.of(ctx.context).devicePixelRatio)
-            .round();
-    return AspectRatio(
-      aspectRatio: 1,
-      child: Stack(
-        children: [
-          _buildPhotoImage(
-            ctx,
-            photo,
-            double.infinity,
-            double.infinity,
-            memWidth: cachePx,
-            memHeight: cachePx,
-          ),
-          Positioned.fill(
-            child: Container(
-              color: Colors.black45,
-              child: Center(
-                child: Text(
-                  overlay,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+    final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cachePx =
+            (constraints.maxWidth.isFinite
+                ? constraints.maxWidth
+                : BubbleContext.photoMaxSize / 2) *
+            dpr;
+        final cachePxInt = cachePx.round().clamp(1, 2048);
+        return Stack(
+          children: [
+            _buildPhotoImage(
+              ctx,
+              photo,
+              double.infinity,
+              double.infinity,
+              memWidth: cachePxInt,
+              memHeight: cachePxInt,
+            ),
+            Positioned.fill(
+              child: Container(
+                color: Colors.black45,
+                child: Center(
+                  child: Text(
+                    overlay,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          if (ctx.uploadProgress != null)
-            _buildUploadOverlay(ctx.uploadProgress!, index),
-          if (ctx.uploadProgress == null)
-            _buildTileTapTarget(ctx, index, cachePx),
-        ],
-      ),
+            if (ctx.uploadProgress != null)
+              _buildUploadOverlay(ctx.uploadProgress!, index),
+            if (ctx.uploadProgress == null)
+              _buildTileTapTarget(ctx, index, cachePxInt),
+          ],
+        );
+      },
     );
   }
 

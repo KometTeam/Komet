@@ -5,7 +5,10 @@ import 'persisted_setting.dart';
 // #***! сколько списка рисовать за экраном, больше плавнее но жрёт память
 class AppCacheExtent {
   static const prefKey = 'app_cache_extent';
-  static const double defaultValue = 5000;
+  // #***! профилирование показало, что при быстром скролле именно
+  // cacheExtent определяет, сколько бабблов лэйаутится за один кадр —
+  // урезали дефолт, чтобы не ловить просадки на резком свайпе
+  static const double defaultValue = 3000;
   static const double min = 1000;
   static const double max = 10000;
   // #***! за этими порогами в настройках ругаемся

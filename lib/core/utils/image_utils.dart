@@ -7,9 +7,10 @@ import 'package:image/image.dart' as img;
 const int _avatarMaxDimension = 1024;
 const int _avatarTargetBytes = 900 * 1024;
 
-// #***! обои ужимаем под экран, иначе полный кадр декодится при каждом открытии чата
-const int _wallpaperMaxDimension = 1440;
-const int _wallpaperQuality = 88;
+// #***! обои ужимаем под экран, иначе полный кадр декодится при каждом открытии чата.
+// 1920 покрывает физическое разрешение большинства экранов по длинной стороне
+const int _wallpaperMaxDimension = 1920;
+const int _wallpaperQuality = 92;
 
 /// Maximum accepted size for a user-picked avatar before compression.
 const int kMaxAvatarBytes = 8 * 1024 * 1024;

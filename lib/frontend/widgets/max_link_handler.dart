@@ -272,7 +272,10 @@ Future<void> _openResolvedChat(
       name: title,
       imageUrl: icon,
       chatType: type,
-      channelSubscribed: type == 'CHANNEL' ? isMember : null,
+      channelSubscribed:
+          (type == 'CHANNEL' || type == 'CHAT' || type == 'GROUP')
+          ? isMember
+          : null,
       initialMessageId: target?.id,
       initialMessageTime: target?.time,
     ),

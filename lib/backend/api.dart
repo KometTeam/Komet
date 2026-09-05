@@ -89,7 +89,7 @@ class Api {
   int _sessionEpoch = 0;
   bool? _lastInteractive;
 
-  // #***! тайминги 
+  // #***! тайминги
   static const Duration _connectWatchdogTimeout = Duration(seconds: 75);
   static const Duration _shouldArmTimeout = Duration(seconds: 5);
   static const Duration _endpointTimeout = Duration(seconds: 5);
@@ -130,7 +130,8 @@ class Api {
       }
       if (gen != _connectGen) return;
 
-      ({String host, int port, bool trustMincifryCa}) endpoint;
+      ({String host, int port, bool trustMincifryCa, bool trustKnownAvTls})
+      endpoint;
       try {
         endpoint = await ServerConfig.loadEndpoint().timeout(_endpointTimeout);
       } catch (e) {
@@ -139,11 +140,13 @@ class Api {
           host: ServerConfig.defaultHost,
           port: ServerConfig.defaultPort,
           trustMincifryCa: ServerConfig.defaultTrustMincifryCa,
+          trustKnownAvTls: ServerConfig.defaultTrustKnownAvTls,
         );
       }
       if (gen != _connectGen) return;
 
       setTrustMincifryCa(enabled: endpoint.trustMincifryCa);
+      setTrustKnownAvTls(enabled: endpoint.trustKnownAvTls);
 
       final (session, wireLog) = await _buildSessionOptions(endpoint);
       built = session;
@@ -174,7 +177,7 @@ class Api {
       _setSessionState(SessionState.connected);
       _reconnectAttempts = 0;
 
-      // #***! Сервер отвечает кто мы для него💔 
+      // #***! Сервер отвечает кто мы для него💔
       HandshakeInfo info;
       try {
         logger.i('connect: сокет готов, отправляю хэндшейк');
@@ -388,7 +391,8 @@ class Api {
 
   // #***! сборка полей устройства для хэндшейка и создание сессии ядра. СПУФ <------
   Future<(KolibriSession, Stream<WireLogEvent>)> _buildSessionOptions(
-    ({String host, int port, bool trustMincifryCa}) endpoint,
+    ({String host, int port, bool trustMincifryCa, bool trustKnownAvTls})
+    endpoint,
   ) async {
     final device = await DeviceProfile.load();
 
@@ -621,12 +625,14 @@ class Api {
     final payload = _decodeWireJson(e.json);
     final cmd = _wireCmdCode(e.cmd);
     if (e.direction == 'out') {
-      DebugSessionLog.instance.recordRequest(e.opcode, e.seq, payload);
+      if (KometSettings.recordDebugLogs.value) {
+        DebugSessionLog.instance.recordRequest(e.opcode, e.seq, payload);
+      }
       TrafficMonitor.instance.recordOutgoing(e.opcode, payload, e.seq, 0);
       return;
     }
     // Входящие: ответы матчатся по seq, пуши идут только в монитор трафика.
-    if (e.cmd != 'push') {
+    if (e.cmd != 'push' && KometSettings.recordDebugLogs.value) {
       DebugSessionLog.instance.recordResponse(e.seq, cmd, payload);
     }
     TrafficMonitor.instance.recordIncoming(

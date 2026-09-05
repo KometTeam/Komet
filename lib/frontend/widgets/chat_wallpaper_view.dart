@@ -7,6 +7,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 
 import 'package:komet/core/config/chat_wallpaper_themes.dart';
 import 'package:komet/core/storage/chat_wallpaper_store.dart';
+import 'package:komet/frontend/widgets/mesh_gradient_background.dart';
 
 class ChatWallpaperView extends StatelessWidget {
   final ChatWallpaper wallpaper;
@@ -24,6 +25,15 @@ class ChatWallpaperView extends StatelessWidget {
         blur: wallpaper.blur,
         motion: wallpaper.motion,
         offsetX: wallpaper.offsetX,
+      );
+    }
+    if (wallpaper.isGradient) {
+      final colors = wallpaper.gradientColors;
+      if (colors == null || colors.isEmpty) return const SizedBox.shrink();
+      return MeshGradientBackground(
+        colors: colors,
+        animate: wallpaper.gradientAnimated,
+        rotation: wallpaper.gradientRotation,
       );
     }
     final theme = chatWallpaperThemeById(wallpaper.themeId);

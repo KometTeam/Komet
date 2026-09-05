@@ -47,6 +47,9 @@ import 'lottie_image.dart';
 import 'text_with_meta.dart';
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
+final Expando<List<MessageAttachment>> _contentAttachmentsCache =
+    Expando<List<MessageAttachment>>();
+final Expando<List<String>> _jumboAnimojiUrlsCache = Expando<List<String>>();
 
 class ReactionAnimationEvent {
   final String messageId;
@@ -523,6 +526,8 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onExitTextSelection;
   final String? commentsLabel;
   final VoidCallback? onCommentsTap;
+  final CachedMessage? Function(String messageId)? resolveLocalMessage;
+  final double? listWidth;
 
   const MessageBubble({
     super.key,
@@ -554,6 +559,8 @@ class MessageBubble extends StatelessWidget {
     this.onExitTextSelection,
     this.commentsLabel,
     this.onCommentsTap,
+    this.resolveLocalMessage,
+    this.listWidth,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -584,7 +591,10 @@ class MessageBubble extends StatelessWidget {
           .toList() ??
       const [];
 
-  List<MessageAttachment> get _contentAttachments {
+  List<MessageAttachment> get _contentAttachments =>
+      _contentAttachmentsCache[message] ??= _computeContentAttachments();
+
+  List<MessageAttachment> _computeContentAttachments() {
     final forwarded = _forwarded;
     if (forwarded != null) {
       if (forwarded.originalContact != null) {
@@ -666,11 +676,15 @@ class MessageBubble extends StatelessWidget {
 
   List<String>? get _jumboAnimojiUrls {
     if (message.attachments?.isNotEmpty ?? false) return null;
-    return animojiOnlyLottieUrls(
+    final cached = _jumboAnimojiUrlsCache[message];
+    if (cached != null) return cached;
+    final computed = animojiOnlyLottieUrls(
       message.text,
       message.formatRanges,
       limit: _jumboAnimojiLimit,
     );
+    if (computed != null) _jumboAnimojiUrlsCache[message] = computed;
+    return computed;
   }
 
   MessageType get _contentType {
@@ -904,6 +918,40 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
+    final width = listWidth;
+    if (width != null) {
+      return _buildBubbleContent(context, cs, contentType, width);
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) =>
+          _buildBubbleContent(context, cs, contentType, constraints.maxWidth),
+    );
+  }
+
+  // #***! сервер иногда шлёт REPLY-ссылку без текста цитаты (например для
+  // ответа на пересланное сообщение) — если это сообщение уже загружено в
+  // текущем чате, берём текст оттуда вместо "сообщение удалено"
+  ReplyInfo? _resolvedReply(ReplyInfo? reply) {
+    if (reply == null || !reply.missing) return reply;
+    final id = reply.messageId;
+    if (id == null) return reply;
+    final local = resolveLocalMessage?.call(id);
+    if (local == null) return reply;
+    return ReplyInfo(
+      messageId: local.id,
+      senderId: local.senderId,
+      text: local.selectableText,
+      time: local.time,
+      attachments: local.attachments,
+    );
+  }
+
+  Widget _buildBubbleContent(
+    BuildContext context,
+    ColorScheme cs,
+    MessageType contentType,
+    double availableWidth,
+  ) {
     final shape = _computeShape();
     final hasReactions = _hasReactions();
     final hasPhotoCap =
@@ -932,10 +980,10 @@ class MessageBubble extends StatelessWidget {
 
     final keyboard = _inlineKeyboard;
     final isVideoNote = _isVideoNote;
-    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenWidth = availableWidth;
     final maxBubbleWidth = isVideoNote
         ? math.min(screenWidth - 24, 560.0)
-        : math.min(screenWidth * 0.75, 560.0);
+        : math.min(screenWidth * 0.75, 760.0);
     final noBubbleBackground =
         isVideoNote || _isSticker || jumboAnimoji != null;
     final bubbleColor = noBubbleBackground
@@ -969,7 +1017,7 @@ class MessageBubble extends StatelessWidget {
 
     final reactionsInside = contentType != MessageType.text;
 
-    final reply = message.replyInfo;
+    final reply = _resolvedReply(message.replyInfo);
 
     final bool hasCommentsFooter = onCommentsTap != null;
     final EdgeInsets containerPadding = hasCommentsFooter
@@ -2026,6 +2074,9 @@ class MessageBubble extends StatelessWidget {
             ?.where((a) => a is! InlineKeyboardAttachment)
             .toList() ??
         const <MessageAttachment>[];
+    if (attachments.isEmpty && forwarded.originalContact == null) {
+      return _buildForwardedInlineText(ctx, forwarded);
+    }
     final content = _buildNativeAttachmentContent(
       forwardedCtx,
       attachments,
@@ -2083,6 +2134,10 @@ class MessageBubble extends StatelessWidget {
     final shares = attachments.whereType<ShareAttachment>().toList();
     if (shares.isNotEmpty) {
       return ShareBubble(ctx: ctx, share: shares.first);
+    }
+
+    if (attachments.isEmpty) {
+      return const SizedBox.shrink();
     }
 
     final album = attachments.where(PhotoBubble.isAlbumMedia).toList();

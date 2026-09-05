@@ -7,15 +7,20 @@ abstract class ServerConfig {
   static const String defaultHost = 'api2.oneme.ru';
   static const int defaultPort = 443;
   static const bool defaultTrustMincifryCa = true;
+  // #***! доверять локальным TLS-инспекторам, ослабляет защиту от подмены сертификата
+  static const bool defaultTrustKnownAvTls = false;
   static const String prefHostKey = 'server_host_override';
   static const String prefPortKey = 'server_port_override';
   static const String prefTrustMincifryKey = 'server_trust_mincifry_ca';
+  static const String prefTrustKnownAvTlsKey = 'server_trust_known_av_tls';
   static const Duration pingInterval = Duration(seconds: 10);
   static const Duration requestTimeout = Duration(seconds: 30);
   static const int maxReconnectAttempts = 50;
 
   // #***! в dev адрес можно переопределить, в релизе всегда дефолтный
-  static Future<({String host, int port, bool trustMincifryCa})>
+  static Future<
+    ({String host, int port, bool trustMincifryCa, bool trustKnownAvTls})
+  >
   loadEndpoint() async {
     final prefs = await SharedPreferences.getInstance();
     final rawHost = BuildProfile.devTools ? prefs.getString(prefHostKey) : null;
@@ -32,6 +37,8 @@ abstract class ServerConfig {
       port: port,
       trustMincifryCa:
           prefs.getBool(prefTrustMincifryKey) ?? defaultTrustMincifryCa,
+      trustKnownAvTls:
+          prefs.getBool(prefTrustKnownAvTlsKey) ?? defaultTrustKnownAvTls,
     );
   }
 }

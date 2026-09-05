@@ -71,6 +71,18 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
       case WallpaperPickType.gallery:
         await _pickFromGallery();
         break;
+      case WallpaperPickType.gradient:
+        final colors = pick.gradientColors;
+        if (colors == null || colors.isEmpty) break;
+        await store.setGradient(
+          _accountId,
+          kGlobalWallpaperChatId,
+          colors,
+          animated: pick.gradientAnimated,
+          rotation: pick.gradientRotation,
+        );
+        _refresh();
+        break;
     }
   }
 

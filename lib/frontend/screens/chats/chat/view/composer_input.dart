@@ -59,6 +59,7 @@ class ComposerInputBar extends StatelessWidget {
     this.showStickerButton = true,
     this.showAttachButton = true,
     this.forceSend = false,
+    this.readOnly = false,
     this.hintText = 'Message',
     this.bottomSafe = true,
     this.vignette = false,
@@ -99,6 +100,7 @@ class ComposerInputBar extends StatelessWidget {
   final bool showStickerButton;
   final bool showAttachButton;
   final bool forceSend;
+  final bool readOnly;
   final String hintText;
   final bool bottomSafe;
   final bool vignette;
@@ -116,50 +118,55 @@ class ComposerInputBar extends StatelessWidget {
     final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
     final hasForward = forwards.isNotEmpty;
 
-    if (chatType == "CHANNEL" && !hasForward) {
-      if (!channelSubscribed) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 8.0,
+    final isChannel = chatType == "CHANNEL";
+    final isGroup = chatType == "CHAT" || chatType == "GROUP";
+    if ((isChannel || isGroup) && !hasForward && !channelSubscribed) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12.0,
+            vertical: 8.0,
+          ),
+          child: GlossyPill(
+            onTap: channelSubscribing ? null : onSubscribe,
+            color: cs.primary,
+            borderRadius: BorderRadius.circular(28),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            depth: 8,
+            borderSide: BorderSide(
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+              width: 0.5,
             ),
-            child: GlossyPill(
-              onTap: channelSubscribing ? null : onSubscribe,
-              color: cs.primary,
-              borderRadius: BorderRadius.circular(28),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              depth: 8,
-              borderSide: BorderSide(
-                color: cs.outlineVariant.withValues(alpha: 0.5),
-                width: 0.5,
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                child: Center(
-                  child: channelSubscribing
-                      ? SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: cs.onPrimary,
-                          ),
-                        )
-                      : Text(
-                          'Подписаться',
-                          style: TextStyle(
-                            color: cs.onPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
+            child: SizedBox(
+              width: double.infinity,
+              child: Center(
+                child: channelSubscribing
+                    ? SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: cs.onPrimary,
                         ),
-                ),
+                      )
+                    : Text(
+                        isChannel ? 'Подписаться' : 'Вступить',
+                        style: TextStyle(
+                          color: cs.onPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
             ),
           ),
-        );
-      }
+        ),
+      );
+    }
+
+    // Regular channel members can't post — show the mute toggle instead of
+    // a composer. Groups always keep the real composer once joined.
+    if (isChannel && !hasForward) {
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -295,6 +302,7 @@ class ComposerInputBar extends StatelessWidget {
                                           child: TextField(
                                             controller: messageController,
                                             focusNode: messageFocusNode,
+                                            readOnly: readOnly,
                                             style: TextStyle(
                                               color: cs.onSurface,
                                               fontSize: 16,

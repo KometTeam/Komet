@@ -103,6 +103,32 @@ class RlottieEngine {
   // #***! _rrIndex раскидывает задания по воркерам по кругу
   int _rrIndex = 0;
 
+  // #***! декод с диска идёт на главном изоляте (кадры уже готовые байты,
+  // изолят тут не нужен) — без лимита пачка закэшированных стикеров разом
+  // заваливает decodeImageFromPixels и роняет FPS до нуля, пока все не
+  // прогрузятся. Ограничиваем сколько стикеров декодятся параллельно
+  static const int _maxConcurrentDiskDecodes = 3;
+  int _activeDiskDecodes = 0;
+  final List<Completer<void>> _diskDecodeQueue = [];
+
+  Future<void> _acquireDiskDecodeSlot() async {
+    if (_activeDiskDecodes < _maxConcurrentDiskDecodes) {
+      _activeDiskDecodes++;
+      return;
+    }
+    final completer = Completer<void>();
+    _diskDecodeQueue.add(completer);
+    await completer.future;
+    _activeDiskDecodes++;
+  }
+
+  void _releaseDiskDecodeSlot() {
+    _activeDiskDecodes--;
+    if (_diskDecodeQueue.isNotEmpty) {
+      _diskDecodeQueue.removeAt(0).complete();
+    }
+  }
+
   bool? _available;
   Future<List<SendPort>>? _poolFuture;
 
@@ -283,20 +309,27 @@ class RlottieEngine {
     return completer.future;
   }
 
-  // #***! кадры с диска декодируем по одному чтоб стикер заиграл раньше
+  // #***! кадры с диска декодируем по одному чтоб стикер заиграл раньше.
+  // Пачка стикеров может прийти разом (открыли чат/панель) — придерживаем
+  // лишние очередью, иначе главный изолят захлёбывается decodeImageFromPixels
   Future<void> _decodeDiskProgressive(RlottieClip clip, DiskClip disk) async {
-    for (var i = 0; i < disk.frameCount; i++) {
-      if (!identical(_clips[clip.key], clip)) return;
-      final image = await _decode(disk.frames[i], clip.px);
-      if (!identical(_clips[clip.key], clip)) {
-        image.dispose();
-        return;
+    await _acquireDiskDecodeSlot();
+    try {
+      for (var i = 0; i < disk.frameCount; i++) {
+        if (!identical(_clips[clip.key], clip)) return;
+        final image = await _decode(disk.frames[i], clip.px);
+        if (!identical(_clips[clip.key], clip)) {
+          image.dispose();
+          return;
+        }
+        clip._setFrame(i, image);
+        _totalBytes += clip.px * clip.px * 4;
       }
-      clip._setFrame(i, image);
-      _totalBytes += clip.px * clip.px * 4;
+      clip.complete = true;
+      _evictIfNeeded();
+    } finally {
+      _releaseDiskDecodeSlot();
     }
-    clip.complete = true;
-    _evictIfNeeded();
   }
 
   Future<ui.Image> _decode(Uint8List bgra, int px) {

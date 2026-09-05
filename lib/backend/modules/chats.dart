@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/config/komet_settings.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
+import '../../core/push/push_service.dart';
 import '../../core/cache/info_cache.dart';
 import '../../core/cache/message_session_cache.dart';
 import 'shared_content.dart';
@@ -513,7 +514,8 @@ class ChatsModule {
       ..[accountId] = mark > currentMark ? mark : currentMark;
     final updated = cached.copyWith(unreadCount: 0, participants: participants);
     await AppDatabase.saveChats([updated.toDbRow()]);
-    _bump();
+    _applyChatToMemory(updated, inList: row['in_list'] as int? ?? 1);
+    unawaited(PushService.clearChatNotification(chatId));
   }
 
   // #***! прочитано до сообщения, при скролле по непрочитанным
@@ -551,7 +553,10 @@ class ChatsModule {
       participants: participants,
     );
     await AppDatabase.saveChats([updated.toDbRow()]);
-    _bump();
+    _applyChatToMemory(updated, inList: rows.first['in_list'] as int? ?? 1);
+    if (next == 0) {
+      unawaited(PushService.clearChatNotification(chatId));
+    }
   }
 
   // #***! пометить непрочитанным руками
@@ -612,6 +617,81 @@ class ChatsModule {
   final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   void _bump() => chatsChanged.value = chatsChanged.value + 1;
 
+  // #***! кэш чатов в памяти, обновляется точечно вместо перечитывания всего списка из базы
+  final Map<int, CachedChat> _chatsById = {};
+  final Map<int, int> _inListById = {};
+  final Map<int, ValueNotifier<CachedChat>> _chatNotifiers = {};
+  final Set<int> _loadedAccounts = {};
+
+  // #***! бампается только когда реально меняется порядок/состав списка
+  final ValueNotifier<int> chatOrderRevision = ValueNotifier(0);
+
+  ValueListenable<CachedChat> chatListenable(int chatId) {
+    final existing = _chatNotifiers[chatId];
+    if (existing != null) return existing;
+    final chat = _chatsById[chatId];
+    final notifier = ValueNotifier<CachedChat>(
+      chat ?? CachedChat.fromDbRow(const {}),
+    );
+    if (chat != null) _chatNotifiers[chatId] = notifier;
+    return notifier;
+  }
+
+  // #***! снимок текущего кэша, без похода в базу
+  List<CachedChat> chatsSnapshot({bool includeHidden = false}) {
+    final list = _chatsById.entries
+        .where((e) => includeHidden || _inListById[e.key] == 1)
+        .map((e) => e.value)
+        .toList();
+    list.sort((a, b) => b.lastEventTime.compareTo(a.lastEventTime));
+    return list;
+  }
+
+  // #***! разовая подгрузка кэша чатов аккаунта из базы
+  Future<void> ensureLoaded(int accountId) async {
+    if (!_loadedAccounts.add(accountId)) return;
+    if (_repairedSenders.add(accountId)) {
+      await AppDatabase.repairLastMessageSenders(accountId);
+    }
+    final rows = await AppDatabase.loadChats(accountId, includeHidden: true);
+    for (final row in rows) {
+      final chat = CachedChat.fromDbRow(row);
+      _chatsById[chat.id] = chat;
+      _inListById[chat.id] = row['in_list'] as int? ?? 1;
+      _chatNotifiers[chat.id]?.value = chat;
+    }
+  }
+
+  // #***! центральная точка обновления кэша, вызывается вместо голого _bump()
+  void _applyChatToMemory(CachedChat updated, {int inList = 1}) {
+    _bump();
+    if (inList == 0) {
+      _removeChatFromMemory(updated.id);
+      return;
+    }
+    final old = _chatsById[updated.id];
+    _chatsById[updated.id] = updated;
+    _inListById[updated.id] = inList;
+    final notifier = _chatNotifiers[updated.id];
+    if (notifier != null) {
+      notifier.value = updated;
+    } else {
+      _chatNotifiers[updated.id] = ValueNotifier(updated);
+    }
+    final reorder =
+        old == null ||
+        old.favIndex != updated.favIndex ||
+        old.lastEventTime != updated.lastEventTime;
+    if (reorder) chatOrderRevision.value++;
+  }
+
+  void _removeChatFromMemory(int chatId) {
+    final had = _chatsById.remove(chatId) != null;
+    _inListById.remove(chatId);
+    _chatNotifiers.remove(chatId)?.dispose();
+    if (had) chatOrderRevision.value++;
+  }
+
   // #***! события меняющие состав участников
   static const Set<String> _membershipEvents = {
     'add',
@@ -663,7 +743,7 @@ class ChatsModule {
     final row = Map<String, dynamic>.from(rows.first)
       ..addAll(updated.toDbRow());
     await AppDatabase.saveChats([row]);
-    _bump();
+    _applyChatToMemory(updated, inList: row['in_list'] as int? ?? 1);
     return true;
   }
 
@@ -703,6 +783,11 @@ class ChatsModule {
     _contactFlushTimer = null;
     _messageEventsController.close();
     chatsChanged.dispose();
+    chatOrderRevision.dispose();
+    for (final notifier in _chatNotifiers.values) {
+      notifier.dispose();
+    }
+    _chatNotifiers.clear();
   }
 
   // #***! при обрыве чистим кэши, пока нас не было всё устарело
@@ -722,6 +807,13 @@ class ChatsModule {
     PresenceFetch.clear();
     ChatInfoFetch.clear();
     SharedContentModule.clearMediaIndex();
+    _chatsById.clear();
+    _inListById.clear();
+    for (final notifier in _chatNotifiers.values) {
+      notifier.dispose();
+    }
+    _chatNotifiers.clear();
+    _loadedAccounts.clear();
   }
 
   // #***! пуши строго по одному, иначе гонки при записи в базу
@@ -780,19 +872,27 @@ class ChatsModule {
     final keepDeleted = KometSettings.viewDeleted.value;
     final ids = payload['messageIds'];
     if (ids is List) {
-      for (final raw in ids) {
-        final id = raw?.toString();
-        if (id == null || id.isEmpty) continue;
+      final messageIds = ids
+          .map((raw) => raw?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toList();
+      if (messageIds.isNotEmpty) {
         if (keepDeleted) {
-          await AppDatabase.markMessageDeleted(accountId, chatId, id);
-          _messageEventsController.add(MessageMarkedDeletedEvent(chatId, id));
+          await AppDatabase.markMessagesDeleted(accountId, chatId, messageIds);
         } else {
-          await AppDatabase.deleteMessage(accountId, chatId, id);
-          _messageEventsController.add(MessageRemovedEvent(chatId, id));
+          await AppDatabase.deleteMessages(accountId, chatId, messageIds);
+        }
+        for (final id in messageIds) {
+          _messageEventsController.add(
+            keepDeleted
+                ? MessageMarkedDeletedEvent(chatId, id)
+                : MessageRemovedEvent(chatId, id),
+          );
         }
       }
     }
-    _bump();
+    await _notifyChatFromDb(accountId, chatId);
   }
 
   // #***! новое сообщение, комментарии отсеиваем у них свой модуль
@@ -869,7 +969,13 @@ class ChatsModule {
             ? MessageMarkedDeletedEvent(chatId, msgIdStr)
             : MessageRemovedEvent(chatId, msgIdStr),
       );
-      _bump();
+      final freshRows = await AppDatabase.loadChat(accountId, chatId);
+      if (freshRows.isNotEmpty) {
+        _applyChatToMemory(
+          CachedChat.fromDbRow(freshRows.first),
+          inList: freshRows.first['in_list'] as int? ?? 1,
+        );
+      }
       return;
     }
 
@@ -933,7 +1039,6 @@ class ChatsModule {
         cached.lastMsgId == msgIdInt &&
         status != 'EDITED';
     if (isStaleLast) {
-      _bump();
       return;
     }
 
@@ -970,7 +1075,10 @@ class ChatsModule {
     }
 
     await AppDatabase.saveChats([newRow]);
-    _bump();
+    _applyChatToMemory(
+      CachedChat.fromDbRow(newRow),
+      inList: newRow['in_list'] as int? ?? 1,
+    );
   }
 
   ({int? id, String? text, int? time, bool isPreview})? _extractPinnedMessage(
@@ -1059,14 +1167,24 @@ class ChatsModule {
     final chat = CachedChat.fromDbRow(rows.first);
     if (!chat.isLastMsgDeleted) return;
     await _reconcileLastMessage(accountId, chatId, rows.first);
-    _bump();
+    await _notifyChatFromDb(accountId, chatId);
   }
 
   Future<void> reconcileLastMessage(int accountId, int chatId) async {
     final rows = await AppDatabase.loadChat(accountId, chatId);
     if (rows.isEmpty) return;
     await _reconcileLastMessage(accountId, chatId, rows.first);
-    _bump();
+    await _notifyChatFromDb(accountId, chatId);
+  }
+
+  // #***! перечитать чат из базы и обновить точечный кэш
+  Future<void> _notifyChatFromDb(int accountId, int chatId) async {
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    _applyChatToMemory(
+      CachedChat.fromDbRow(rows.first),
+      inList: rows.first['in_list'] as int? ?? 1,
+    );
   }
 
   // #***! сверяем что удалили на сервере
@@ -1163,7 +1281,6 @@ class ChatsModule {
     _messageEventsController.add(
       MessageReactionsChangedEvent(chatId, messageId, emitted),
     );
-    _bump();
   }
 
   // #***! пуш про прочтение с другого устройства
@@ -1187,7 +1304,7 @@ class ChatsModule {
     if (cached.participants[userId] == mark) return;
     cached.participants[userId] = mark;
     await AppDatabase.saveChats([cached.toDbRow()]);
-    _bump();
+    _applyChatToMemory(cached, inList: rows.first['in_list'] as int? ?? 1);
   }
 
   // #***! обновления контактов копим 250 мс, их прилетают сотни
@@ -1262,7 +1379,12 @@ class ChatsModule {
     }
     if (updates.isNotEmpty) {
       await AppDatabase.saveChats(updates);
-      _bump();
+      for (final newRow in updates) {
+        _applyChatToMemory(
+          CachedChat.fromDbRow(newRow),
+          inList: newRow['in_list'] as int? ?? 1,
+        );
+      }
     }
   }
 
@@ -1316,7 +1438,7 @@ class ChatsModule {
     final row = parsed.toDbRow();
     row['in_list'] = listState;
     await AppDatabase.saveChats([row]);
-    _bump();
+    _applyChatToMemory(parsed, inList: listState);
     return parsed;
   }
 
@@ -1380,8 +1502,7 @@ class ChatsModule {
         row['id'] as int: CachedChat.fromDbRow(row),
     };
     final existingListState = {
-      for (final row in existingRows)
-        row['id'] as int: row['in_list'] as int,
+      for (final row in existingRows) row['id'] as int: row['in_list'] as int,
     };
 
     final rows = <Map<String, dynamic>>[];
@@ -1409,7 +1530,12 @@ class ChatsModule {
 
     if (rows.isNotEmpty) {
       await AppDatabase.saveChats(rows);
-      _bump();
+      for (final row in rows) {
+        _applyChatToMemory(
+          CachedChat.fromDbRow(row),
+          inList: row['in_list'] as int? ?? 1,
+        );
+      }
     }
     return rows.length;
   }
@@ -1836,7 +1962,12 @@ class ChatsModule {
       }
       if (updates.isNotEmpty) {
         await AppDatabase.saveChats(updates);
-        _bump();
+        for (final newRow in updates) {
+          _applyChatToMemory(
+            CachedChat.fromDbRow(newRow),
+            inList: newRow['in_list'] as int? ?? 1,
+          );
+        }
       }
       return null;
     } on PacketError catch (e) {
@@ -1876,7 +2007,12 @@ class ChatsModule {
       }
       if (updates.isNotEmpty) {
         await AppDatabase.saveChats(updates);
-        _bump();
+        for (final newRow in updates) {
+          _applyChatToMemory(
+            CachedChat.fromDbRow(newRow),
+            inList: newRow['in_list'] as int? ?? 1,
+          );
+        }
       }
     } catch (e) {
       logger.w('applyFavorites: $e');
@@ -1932,6 +2068,7 @@ class ChatsModule {
       if (accountId != null) {
         await AppDatabase.deleteChat(chatId, accountId);
         _bump();
+        _removeChatFromMemory(chatId);
       }
       return null;
     } on PacketError catch (e) {
@@ -1981,11 +2118,33 @@ class ChatsModule {
       if (accountId != null) {
         await AppDatabase.deleteChat(chatId, accountId);
         _bump();
+        _removeChatFromMemory(chatId);
+        unawaited(_verifyLeftChat(api, accountId, chatId));
       }
       return true;
     } catch (_) {
       return false;
     }
+  }
+
+  // #***! сервер иногда роняет chatLeave тихо — перепроверяем через паузу и
+  // при необходимости повторяем, вместо того чтобы доверять первому ack
+  Future<void> _verifyLeftChat(Api api, int accountId, int chatId) async {
+    await Future<void>.delayed(const Duration(seconds: 5));
+    Map<String, dynamic>? info;
+    try {
+      info = await getChatInfo(api, chatId);
+    } catch (_) {
+      return;
+    }
+    if (info == null) return;
+    final stillMember = parseParticipants(
+      info['participants'],
+    ).containsKey(accountId);
+    if (!stillMember) return;
+    try {
+      await api.sendRequest(Opcode.chatLeave, {'chatId': chatId});
+    } catch (_) {}
   }
 
   // #***! добавление участников
@@ -2130,8 +2289,7 @@ class ChatsModule {
           row['id'] as int: CachedChat.fromDbRow(row),
       };
       final preloadedListState = {
-        for (final row in existingRows)
-          row['id'] as int: row['in_list'] as int,
+        for (final row in existingRows) row['id'] as int: row['in_list'] as int,
       };
       final out = <CachedChat>[];
       for (final c in list) {

@@ -8,6 +8,7 @@ import '../../../core/config/komet_settings.dart';
 import '../../../main.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
+import 'plugins_screen.dart';
 
 class KometSettingsScreen extends StatelessWidget {
   const KometSettingsScreen({super.key});
@@ -35,6 +36,14 @@ class KometSettingsScreen extends StatelessWidget {
             ),
             SettingsCard(
               children: [
+                SettingsNavTile(
+                  icon: Symbols.extension,
+                  label: 'Плагины',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PluginsScreen()),
+                  ),
+                ),
                 if (BuildProfile.hiddenContentViewers) ...[
                   ValueListenableBuilder<bool>(
                     valueListenable: KometSettings.viewDeleted,
@@ -143,6 +152,28 @@ class KometSettingsScreen extends StatelessWidget {
                         'Полезно для проверки ghost mode',
                     value: value,
                     onChanged: KometSettings.setSelfOnlineCheck,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const SectionHeader(
+              'Отладка',
+              padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+              fontSize: 14,
+            ),
+            SettingsCard(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.recordDebugLogs,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.bug_report,
+                    label: 'Запись отладочных логов',
+                    subtitle:
+                        'Пишет трафик протокола в файл на устройстве — '
+                        'помогает диагностировать баги при репортах',
+                    value: value,
+                    onChanged: KometSettings.setRecordDebugLogs,
                   ),
                 ),
               ],

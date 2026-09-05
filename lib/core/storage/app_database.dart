@@ -431,6 +431,9 @@ class AppDatabase {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_contacts_account ON contacts(account_id)',
     );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_messages_pending ON messages(account_id, status)',
+    );
   }
 
   static Future<void> _createChatParticipantsIndex(Database db) async {
@@ -853,24 +856,30 @@ class AppDatabase {
           batch.rawInsert(sql, cols.map((c) => row[c]).toList());
         }
         await batch.commit(noResult: true);
+        final participantsBatch = txn.batch();
+        var hasParticipantWrites = false;
         for (final row in rows) {
           if (!row.containsKey('participants')) continue;
           if (row['type'] != 'DIALOG') continue;
           final accountId = row['account_id'];
           final chatId = row['id'];
           if (accountId is! int || chatId is! int) continue;
-          await txn.delete(
+          hasParticipantWrites = true;
+          participantsBatch.delete(
             'chat_participants',
             where: 'account_id = ? AND chat_id = ?',
             whereArgs: [accountId, chatId],
           );
           for (final pid in _participantIdsFromRaw(row['participants'])) {
-            await txn.insert('chat_participants', {
+            participantsBatch.insert('chat_participants', {
               'account_id': accountId,
               'chat_id': chatId,
               'participant_id': pid,
             }, conflictAlgorithm: ConflictAlgorithm.ignore);
           }
+        }
+        if (hasParticipantWrites) {
+          await participantsBatch.commit(noResult: true);
         }
       });
     } catch (e) {
@@ -1324,6 +1333,55 @@ class AppDatabase {
       where: 'account_id = ? AND chat_id = ? AND id = ?',
       whereArgs: [accountId, chatId, messageId],
     );
+  }
+
+  // #***! messages.chat_id -> chats_cache FK требует, чтобы чат реально
+  // существовал в кэше — используется симулятором нагрузки, чтобы не
+  // ловить сырое исключение FOREIGN KEY constraint failed
+  static Future<bool> chatExistsInCache(int accountId, int chatId) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'chats_cache',
+      columns: ['id'],
+      where: 'account_id = ? AND id = ?',
+      whereArgs: [accountId, chatId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
+  // #***! чистка синтетических сообщений от симулятора нагрузки (debug-меню)
+  static Future<void> deleteSyntheticMessages(
+    int accountId,
+    int chatId, {
+    String prefix = 'sim_',
+  }) async {
+    final db = await _instance;
+    await db.delete(
+      'messages',
+      where: 'account_id = ? AND chat_id = ? AND id LIKE ?',
+      whereArgs: [accountId, chatId, '$prefix%'],
+    );
+  }
+
+  static Future<void> deleteMessages(
+    int accountId,
+    int chatId,
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) return;
+    final db = await _instance;
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+      for (final id in messageIds) {
+        batch.delete(
+          'messages',
+          where: 'account_id = ? AND chat_id = ? AND id = ?',
+          whereArgs: [accountId, chatId, id],
+        );
+      }
+      await batch.commit(noResult: true);
+    });
   }
 
   // #***! неотправленные, их подхватит outbox при коннекте
