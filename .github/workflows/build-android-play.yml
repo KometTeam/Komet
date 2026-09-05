@@ -80,7 +80,10 @@ jobs:
           } > android/key.properties
 
       - name: Build Universal APK
-        run: flutter build apk --release --flavor store --obfuscate --split-debug-info=build/symbols
+        env:
+          KOMET_REVIEW_PHONE: ${{ secrets.KOMET_REVIEW_PHONE }}
+          KOMET_REVIEW_PAYLOAD: ${{ secrets.KOMET_REVIEW_PAYLOAD }}
+        run: flutter build apk --release --flavor store --obfuscate --split-debug-info=build/symbols --dart-define=KOMET_REVIEW_PHONE="$KOMET_REVIEW_PHONE" --dart-define=KOMET_REVIEW_PAYLOAD="$KOMET_REVIEW_PAYLOAD"
 
       - name: Verify store manifest
         run: |
@@ -100,13 +103,23 @@ jobs:
             echo "::error::Firebase is still initialized in the store manifest"
             exit 1
           fi
+          if ! grep -q 'package="pw.komet.app"' "$MANIFEST"; then
+            echo "::error::The store manifest does not declare pw.komet.app"
+            exit 1
+          fi
           echo "Store manifest is clean."
 
       - name: Build Split APKs
-        run: flutter build apk --release --split-per-abi --flavor store --obfuscate --split-debug-info=build/symbols
+        env:
+          KOMET_REVIEW_PHONE: ${{ secrets.KOMET_REVIEW_PHONE }}
+          KOMET_REVIEW_PAYLOAD: ${{ secrets.KOMET_REVIEW_PAYLOAD }}
+        run: flutter build apk --release --split-per-abi --flavor store --obfuscate --split-debug-info=build/symbols --dart-define=KOMET_REVIEW_PHONE="$KOMET_REVIEW_PHONE" --dart-define=KOMET_REVIEW_PAYLOAD="$KOMET_REVIEW_PAYLOAD"
 
       - name: Build App Bundle
-        run: flutter build appbundle --release --flavor store --obfuscate --split-debug-info=build/symbols
+        env:
+          KOMET_REVIEW_PHONE: ${{ secrets.KOMET_REVIEW_PHONE }}
+          KOMET_REVIEW_PAYLOAD: ${{ secrets.KOMET_REVIEW_PAYLOAD }}
+        run: flutter build appbundle --release --flavor store --obfuscate --split-debug-info=build/symbols --dart-define=KOMET_REVIEW_PHONE="$KOMET_REVIEW_PHONE" --dart-define=KOMET_REVIEW_PAYLOAD="$KOMET_REVIEW_PAYLOAD"
 
       - name: Upload Universal APK
         uses: actions/upload-artifact@v4

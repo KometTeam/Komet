@@ -130,8 +130,7 @@ class Api {
       }
       if (gen != _connectGen) return;
 
-      ({String host, int port, bool trustMincifryCa, bool trustKnownAvTls})
-      endpoint;
+      ({String host, int port, bool trustMincifryCa}) endpoint;
       try {
         endpoint = await ServerConfig.loadEndpoint().timeout(_endpointTimeout);
       } catch (e) {
@@ -140,13 +139,11 @@ class Api {
           host: ServerConfig.defaultHost,
           port: ServerConfig.defaultPort,
           trustMincifryCa: ServerConfig.defaultTrustMincifryCa,
-          trustKnownAvTls: ServerConfig.defaultTrustKnownAvTls,
         );
       }
       if (gen != _connectGen) return;
 
       setTrustMincifryCa(enabled: endpoint.trustMincifryCa);
-      setTrustKnownAvTls(enabled: endpoint.trustKnownAvTls);
 
       final (session, wireLog) = await _buildSessionOptions(endpoint);
       built = session;
@@ -391,8 +388,7 @@ class Api {
 
   // #***! сборка полей устройства для хэндшейка и создание сессии ядра. СПУФ <------
   Future<(KolibriSession, Stream<WireLogEvent>)> _buildSessionOptions(
-    ({String host, int port, bool trustMincifryCa, bool trustKnownAvTls})
-    endpoint,
+    ({String host, int port, bool trustMincifryCa}) endpoint,
   ) async {
     final device = await DeviceProfile.load();
 

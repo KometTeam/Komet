@@ -25,6 +25,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/build_profile.dart';
+import '../../../core/config/review_access.dart';
 import '../../../core/config/app_shape.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -479,6 +480,20 @@ class _LoginScreenState extends State<LoginScreen> {
                           if (!_isOnline) {
                             _showPhoneError(
                               'Нет соединения с сервером. Подождите подключения.',
+                            );
+                            return;
+                          }
+
+                          if (ReviewAccess.matchesPhone(fullPhone)) {
+                            Navigator.push(
+                              screenContext,
+                              MaterialPageRoute(
+                                builder: (context) => CodeConfirmationScreen.review(
+                                  phoneNumber:
+                                      '${_selectedCountry.phoneCode} $formattedPhone',
+                                  rawPhone: fullPhone,
+                                ),
+                              ),
                             );
                             return;
                           }

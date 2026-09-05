@@ -67,7 +67,7 @@ android {
         }
         create("store") {
             dimension = "distribution"
-            applicationId = "ru.komet.app"
+            applicationId = "pw.komet.app"
         }
     }
 

@@ -189,6 +189,16 @@ class ChatCryptoService {
     }
   }
 
+  Future<String?> decryptWithPassword(String text, String password) async {
+    if (!await _ensureInitialized()) return null;
+    try {
+      final key = await kc.deriveKey(password: password);
+      return await kc.decryptMessage(text: text, key: key);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<bool> looksEncrypted(String text) async {
     if (!await _ensureInitialized()) return false;
     try {

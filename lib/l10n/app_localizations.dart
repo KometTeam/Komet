@@ -212,18 +212,6 @@ abstract class AppLocalizations {
   /// **'Required for api2.oneme.ru: its certificate chains to the Russian Trusted Root CA, which is absent from the standard trust store. The root is bundled with the app; other hosts keep using the usual roots.'**
   String get serverTrustMincifrySubtitle;
 
-  /// No description provided for @serverTrustKnownAvTlsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Trust local certificates'**
-  String get serverTrustKnownAvTlsTitle;
-
-  /// No description provided for @serverTrustKnownAvTlsSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'If something on this device (antivirus, corporate proxy, your own certificate authority) replaces the certificate while scanning encrypted connections, the connection will fail. This accepts that replacement — but only for known local certificate issuers (e.g. Kaspersky). Weakens protection against certificate substitution; enable only if you understand why.'**
-  String get serverTrustKnownAvTlsSubtitle;
-
   /// No description provided for @serverApply.
   ///
   /// In en, this message translates to:
@@ -361,6 +349,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Error: missing data for 2FA'**
   String get codeError2faMissing;
+
+  /// No description provided for @codeErrorInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid code'**
+  String get codeErrorInvalid;
 
   /// No description provided for @codeConfirmation2faWarning.
   ///

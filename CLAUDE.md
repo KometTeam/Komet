@@ -42,8 +42,44 @@ Note also that `flutter analyze` treats **info**-level lints as fatal by default
 |---------|----------------|-------------------------------------|
 | `komet` | `ru.komet.app` | Default, no FCM                     |
 | `oneme` | `ru.oneme.app` | FCM push notifications via Firebase |
+| `store` | `pw.komet.app` | Google Play build, trimmed by `BuildProfile` |
 
-Flavor-specific Android resources live in `android/app/src/komet/` and `android/app/src/oneme/`.
+Flavor-specific Android resources live in `android/app/src/komet/`, `android/app/src/oneme/`
+and `android/app/src/store/`.
+
+The store build carries its own application id — `pw.komet.app`, the same identifier as the iOS
+bundle — because `ru.komet.app` has already shipped outside Play. The Kotlin sources keep the
+`ru.komet.app` namespace: component names in the manifest are absolute, and `MainActivity` derives
+the launcher-alias package from its own class name, so the icon switch survives the rename.
+`android/app/src/store/google-services.json` must repeat the same id or the Google Services plugin
+fails the build.
+
+## Review account
+
+Google Play reviewers cannot receive an SMS from the MAX server, so the store build ships one
+account they can open with an ordinary phone-and-code login. `ReviewAccess`
+(`lib/core/config/review_access.dart`) holds two `--dart-define`s: `KOMET_REVIEW_PHONE`, the demo
+number, and `KOMET_REVIEW_PAYLOAD`, a session token encrypted with the app's own crypto core
+(Argon2id + ChaCha20-Poly1305). The key is derived from `<digits of the phone>:<code>`, so the
+payload in the APK is worthless without the pair handed to the reviewer, and neither define is
+committed — `build-android-play.yml` reads them from the `KOMET_REVIEW_PHONE` and
+`KOMET_REVIEW_PAYLOAD` secrets. Without both defines `ReviewAccess.enabled` is false and the login
+screen behaves exactly as before.
+
+Entering the demo number skips `requestCode` and opens `CodeConfirmationScreen.review`, which
+decrypts the payload with the typed code and signs in through `accountModule.loginWithToken`. The
+payload is JSON: `{"token": "…"}`, plus an optional `"spoof"` object in `SpoofProfile.toJson()`
+shape when the token has to be replayed with the device parameters it was issued for.
+
+Regenerate the payload with the crate's own cipher, so the format can never drift:
+
+```bash
+printf '{"token":"…"}' | cargo run -q --manifest-path native/komet_crypto/rust/Cargo.toml \
+  --features blobtool --bin review_blob -- '+7 999 999 99 99' '123456'
+```
+
+The bin is gated behind the `blobtool` feature, so plugin builds never compile it. It prints one
+space-free Cyrillic blob — that string is the secret's value.
 
 ## Architecture
 

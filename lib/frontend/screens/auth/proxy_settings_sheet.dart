@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:komet/backend/api.dart';
-import 'package:komet/core/config/config.dart';
 import 'package:komet/core/config/proxy_config.dart';
 import 'package:komet/l10n/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
@@ -26,7 +24,6 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
   ProxyType _selectedType = ProxyType.none;
   ProxySettings _applied = const ProxySettings();
   bool _busy = false;
-  bool _trustKnownAvTls = ServerConfig.defaultTrustKnownAvTls;
 
   @override
   void initState() {
@@ -36,7 +33,6 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
 
   Future<void> _load() async {
     final settings = await ProxyConfig.load();
-    final endpoint = await ServerConfig.loadEndpoint();
     if (!mounted) return;
     setState(() {
       _applied = settings;
@@ -45,16 +41,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
       _portController.text = '${settings.port}';
       _usernameController.text = settings.username ?? '';
       _passwordController.text = settings.password ?? '';
-      _trustKnownAvTls = endpoint.trustKnownAvTls;
     });
-  }
-
-  Future<void> _applyTrustKnownAvTls(bool value) async {
-    setState(() => _trustKnownAvTls = value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(ServerConfig.prefTrustKnownAvTlsKey, value);
-    await api.disconnect();
-    await api.connect();
   }
 
   Future<void> _apply(AppLocalizations l10n) async {
@@ -212,47 +199,6 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
                     : const SizedBox.shrink(),
               ),
 
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            l10n.serverTrustKnownAvTlsTitle,
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            l10n.serverTrustKnownAvTlsSubtitle,
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 12.5,
-                              height: 1.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Switch(
-                      value: _trustKnownAvTls,
-                      onChanged: _busy ? null : _applyTrustKnownAvTls,
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: (_busy || !(isActive || _applied.isEnabled))
