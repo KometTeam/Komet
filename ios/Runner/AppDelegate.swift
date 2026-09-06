@@ -43,6 +43,7 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
       registerVideoNote(messenger)
       registerNotifications(messenger)
       registerScreen(messenger)
+      registerClipboard(messenger)
     }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
@@ -163,6 +164,12 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
       default:
         result(FlutterMethodNotImplemented)
       }
+    }
+  }
+
+  private func registerClipboard(_ messenger: FlutterBinaryMessenger) {
+    method("ru.komet.app/clipboard", messenger) { call, result in
+      KometClipboard.handle(call, result: result)
     }
   }
 

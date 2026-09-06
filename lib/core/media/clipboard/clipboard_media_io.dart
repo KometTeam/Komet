@@ -8,14 +8,17 @@ import 'dib_image.dart';
 import 'raw_clipboard_media.dart';
 import 'win32_clipboard.dart';
 
-// #***! вставка файлов и картинок из буфера на десктопе
+// #***! вставка файлов и картинок из буфера
 class ClipboardMedia {
   const ClipboardMedia._();
 
-  // #***! на винде WinAPI, на маке и линуксе нативный канал
+  // #***! на винде WinAPI, на остальных нативный канал
   static bool get supported {
     if (Platform.isWindows) return Win32Clipboard.instance != null;
-    return Platform.isMacOS || Platform.isLinux;
+    return Platform.isMacOS ||
+        Platform.isLinux ||
+        Platform.isAndroid ||
+        Platform.isIOS;
   }
 
   static Future<bool> hasMedia() async {
@@ -50,7 +53,10 @@ class ClipboardMedia {
     final png = raw.png;
     if (png != null && png.isNotEmpty) {
       return ClipboardMediaPayload(
-        image: ClipboardImageData(bytes: png, extension: '.png'),
+        image: ClipboardImageData(
+          bytes: png,
+          extension: raw.imageExtension ?? '.png',
+        ),
       );
     }
 

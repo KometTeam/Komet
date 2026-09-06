@@ -16,6 +16,7 @@ import 'package:komet/backend/modules/webapp.dart';
 import 'package:komet/frontend/screens/webapp/open_mini_app.dart';
 import 'package:komet/core/media/clipboard/clipboard_media.dart';
 import 'package:komet/core/media/clipboard/pasted_attachment.dart';
+import 'package:komet/frontend/widgets/paste_media_toolbar.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -2577,8 +2578,9 @@ class _ChatScreenState extends State<ChatScreen>
       onPickReplyChat: _pickReplyChat,
       formatElapsed: formatVoiceElapsed,
       formatContextMenu: _formatContextMenu,
-      pasteMenuItems: _pasteMenuItems,
+      pasteMenuItem: _pasteMenuItem,
       onPasteMedia: ClipboardMedia.supported ? _handlePasteMedia : null,
+      onInsertContent: _insertKeyboardContent,
       isMuted: chat?.isMuted ?? false,
       onToggleMute: _toggleChatMute,
       channelSubscribed: !_previewChat,
@@ -3414,7 +3416,7 @@ class _ChatScreenState extends State<ChatScreen>
     RichMessageController controller,
     BuildContext context,
     EditableTextState editableState, {
-    List<ContextMenuButtonItem> extraItems = const [],
+    ContextMenuButtonItem? pasteItem,
   }) {
     final selection = controller.selection;
     final buttonItems = <ContextMenuButtonItem>[];
@@ -3432,11 +3434,18 @@ class _ChatScreenState extends State<ChatScreen>
         );
       }
     }
-    buttonItems.addAll(extraItems);
+    if (pasteItem != null) buttonItems.add(pasteItem);
     buttonItems.addAll(editableState.contextMenuButtonItems);
-    return AdaptiveTextSelectionToolbar.buttonItems(
+    if (pasteItem == null) {
+      return AdaptiveTextSelectionToolbar.buttonItems(
+        anchors: editableState.contextMenuAnchors,
+        buttonItems: buttonItems,
+      );
+    }
+    return PasteMediaToolbar(
       anchors: editableState.contextMenuAnchors,
       buttonItems: buttonItems,
+      pasteItem: pasteItem,
     );
   }
 
@@ -4750,20 +4759,18 @@ class _ChatScreenState extends State<ChatScreen>
     showCustomNotification(context, '$what пока нельзя зашифровать');
   }
 
-  List<ContextMenuButtonItem> _pasteMenuItems(
+  ContextMenuButtonItem? _pasteMenuItem(
     BuildContext context,
     EditableTextState editableState,
   ) {
-    if (!ClipboardMedia.supported) return const [];
-    return [
-      ContextMenuButtonItem(
-        label: AppLocalizations.of(context)!.composerPasteAttachment,
-        onPressed: () {
-          editableState.hideToolbar();
-          unawaited(_pasteClipboardMedia());
-        },
-      ),
-    ];
+    if (!ClipboardMedia.supported) return null;
+    return ContextMenuButtonItem(
+      label: AppLocalizations.of(context)!.composerPasteAttachment,
+      onPressed: () {
+        editableState.hideToolbar();
+        unawaited(_pasteClipboardMedia());
+      },
+    );
   }
 
   Future<bool> _handlePasteMedia() async {
@@ -4773,7 +4780,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _pasteClipboardMedia() async {
-    if (_myId == 0 || _pastePending) return;
+    if (_pastePending) return;
     _pastePending = true;
     try {
       final payload = await ClipboardMedia.read();
@@ -4782,46 +4789,71 @@ class _ChatScreenState extends State<ChatScreen>
           ? const <PastedAttachment>[]
           : await materializeClipboardMedia(payload);
       if (!mounted) return;
-      if (items.isEmpty) {
-        showCustomNotification(
-          context,
-          AppLocalizations.of(context)!.pasteAttachFailed,
-        );
-        return;
-      }
-
-      final media = items.where((it) => it.isMedia).toList();
-      final documents = items.where((it) => !it.isMedia).toList();
-      if (_encryptionEnabled && documents.isNotEmpty) {
-        _refuseUnencrypted('Файлы');
-        if (media.isEmpty) return;
-        documents.clear();
-      }
-
-      final caption = await showPastePreviewSheet(
-        context,
-        items: [...media, ...documents],
-      );
-      if (caption == null || !mounted) return;
-
-      if (media.isNotEmpty) {
-        await _mediaSend.sendPhotos(
-          media
-              .map((it) => PickedPhoto(item: GalleryItem.fromFile(it.file)))
-              .toList(),
-          caption,
-        );
-      }
-      for (final document in documents) {
-        if (!mounted) return;
-        await _mediaSend.uploadAsFile(
-          source: document.file,
-          filename: document.name,
-          size: document.size,
-        );
-      }
+      await _offerPastedAttachments(items);
     } finally {
       _pastePending = false;
+    }
+  }
+
+  Future<void> _insertKeyboardContent(KeyboardInsertedContent content) async {
+    if (_pastePending) return;
+    _pastePending = true;
+    try {
+      final data = content.data;
+      final stored = data == null || data.isEmpty
+          ? null
+          : await storePastedImage(
+              ClipboardImageData(
+                bytes: data,
+                extension: pastedImageExtension(content.mimeType),
+              ),
+            );
+      if (!mounted) return;
+      await _offerPastedAttachments(stored == null ? const [] : [stored]);
+    } finally {
+      _pastePending = false;
+    }
+  }
+
+  Future<void> _offerPastedAttachments(List<PastedAttachment> items) async {
+    if (_myId == 0) return;
+    if (items.isEmpty) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.pasteAttachFailed,
+      );
+      return;
+    }
+
+    final media = items.where((it) => it.isMedia).toList();
+    final documents = items.where((it) => !it.isMedia).toList();
+    if (_encryptionEnabled && documents.isNotEmpty) {
+      _refuseUnencrypted('Файлы');
+      if (media.isEmpty) return;
+      documents.clear();
+    }
+
+    final caption = await showPastePreviewSheet(
+      context,
+      items: [...media, ...documents],
+    );
+    if (caption == null || !mounted) return;
+
+    if (media.isNotEmpty) {
+      await _mediaSend.sendPhotos(
+        media
+            .map((it) => PickedPhoto(item: GalleryItem.fromFile(it.file)))
+            .toList(),
+        caption,
+      );
+    }
+    for (final document in documents) {
+      if (!mounted) return;
+      await _mediaSend.uploadAsFile(
+        source: document.file,
+        filename: document.name,
+        size: document.size,
+      );
     }
   }
 

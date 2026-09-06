@@ -510,6 +510,8 @@ class MainActivity : AudioServiceActivity() {
             }
         })
 
+        ClipboardMedia.attach(flutterEngine, this)
+
         FkmChannel.attach(flutterEngine, this)
     }
 

@@ -35,8 +35,19 @@ class ClipboardChannel {
 
     final image = raw['image'];
     if (image is Uint8List && image.isNotEmpty) {
-      return RawClipboardMedia(png: image);
+      return RawClipboardMedia(
+        png: image,
+        imageExtension: _extension(raw['imageExtension']),
+      );
     }
     return null;
+  }
+
+  static String? _extension(Object? value) {
+    if (value is! String) return null;
+    final trimmed = value.startsWith('.') ? value.substring(1) : value;
+    if (trimmed.isEmpty || trimmed.length > 5) return null;
+    if (!RegExp(r'^[A-Za-z0-9]+$').hasMatch(trimmed)) return null;
+    return '.${trimmed.toLowerCase()}';
   }
 }

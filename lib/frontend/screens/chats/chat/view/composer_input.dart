@@ -51,6 +51,7 @@ class ComposerInputBar extends StatelessWidget {
     required this.formatElapsed,
     required this.contextMenuBuilder,
     this.onPasteMedia,
+    this.onInsertContent,
     required this.isMuted,
     required this.onToggleMute,
     this.channelSubscribed = true,
@@ -92,6 +93,8 @@ class ComposerInputBar extends StatelessWidget {
   final String Function(int ms) formatElapsed;
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
   final Future<bool> Function()? onPasteMedia;
+  final Future<void> Function(KeyboardInsertedContent content)?
+  onInsertContent;
   final bool isMuted;
   final VoidCallback onToggleMute;
   final bool channelSubscribed;
@@ -316,6 +319,10 @@ class ComposerInputBar extends StatelessWidget {
                                                 TextAlignVertical.center,
                                             contextMenuBuilder:
                                                 contextMenuBuilder,
+                                            contentInsertionConfiguration:
+                                                _insertionConfig(
+                                                  onInsertContent,
+                                                ),
                                             decoration: InputDecoration(
                                               hintText: hintText,
                                               hintStyle: TextStyle(
@@ -1096,6 +1103,23 @@ class ComposerInputBar extends StatelessWidget {
       ),
     );
   }
+}
+
+const List<String> _insertableMimeTypes = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+];
+
+ContentInsertionConfiguration? _insertionConfig(
+  Future<void> Function(KeyboardInsertedContent content)? onInsert,
+) {
+  if (onInsert == null) return null;
+  return ContentInsertionConfiguration(
+    allowedMimeTypes: _insertableMimeTypes,
+    onContentInserted: onInsert,
+  );
 }
 
 class _AttachButton extends StatelessWidget {

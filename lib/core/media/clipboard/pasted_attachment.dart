@@ -36,7 +36,7 @@ Future<List<PastedAttachment>> materializeClipboardMedia(
 
   final image = payload.image;
   if (image != null) {
-    final stored = await _storePastedImage(image);
+    final stored = await storePastedImage(image);
     if (stored != null) result.add(stored);
   }
 
@@ -56,7 +56,7 @@ Future<List<PastedAttachment>> materializeClipboardMedia(
 }
 
 // #***! картинку сначала сохраняем иначе её не отправить
-Future<PastedAttachment?> _storePastedImage(ClipboardImageData image) async {
+Future<PastedAttachment?> storePastedImage(ClipboardImageData image) async {
   try {
     final dir = Directory(
       '${(await getTemporaryDirectory()).path}/komet_paste',
@@ -78,6 +78,20 @@ Future<PastedAttachment?> _storePastedImage(ClipboardImageData image) async {
     return null;
   }
 }
+
+const Map<String, String> _imageExtensions = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'image/heic': '.heic',
+  'image/bmp': '.bmp',
+};
+
+// #***! клавиатура отдаёт mime, файлу нужно расширение
+String pastedImageExtension(String mimeType) =>
+    _imageExtensions[mimeType.toLowerCase()] ?? '.png';
 
 // #***! тип по расширению
 PastedAttachmentKind _kindOf(String path) {

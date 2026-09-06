@@ -71,15 +71,16 @@ class ComposerArea extends StatelessWidget {
     RichMessageController controller,
     BuildContext context,
     EditableTextState editableState, {
-    List<ContextMenuButtonItem> extraItems,
+    ContextMenuButtonItem? pasteItem,
   })
   formatContextMenu;
-  final List<ContextMenuButtonItem> Function(
+  final ContextMenuButtonItem? Function(
     BuildContext context,
     EditableTextState editableState,
   )
-  pasteMenuItems;
+  pasteMenuItem;
   final Future<bool> Function()? onPasteMedia;
+  final Future<void> Function(KeyboardInsertedContent content) onInsertContent;
   final bool isMuted;
   final VoidCallback onToggleMute;
   final bool channelSubscribed;
@@ -136,8 +137,9 @@ class ComposerArea extends StatelessWidget {
     required this.onPickReplyChat,
     required this.formatElapsed,
     required this.formatContextMenu,
-    required this.pasteMenuItems,
+    required this.pasteMenuItem,
     required this.onPasteMedia,
+    required this.onInsertContent,
     required this.isMuted,
     required this.onToggleMute,
     required this.channelSubscribed,
@@ -254,11 +256,12 @@ class ComposerArea extends StatelessWidget {
                     messageController,
                     ctx,
                     state,
-                    extraItems: pasteMenuItems(ctx, state),
+                    pasteItem: pasteMenuItem(ctx, state),
                   ),
                   onPasteMedia: ClipboardMedia.supported
                       ? onPasteMedia
                       : null,
+                  onInsertContent: onInsertContent,
                   isMuted: isMuted,
                   onToggleMute: onToggleMute,
                   channelSubscribed: channelSubscribed,
