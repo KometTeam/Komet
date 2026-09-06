@@ -194,16 +194,16 @@ class AccountModule {
 
     final result = VerifyCodeResult(payload: data.cast<dynamic, dynamic>());
 
-    final sessionToken = result.loginToken ?? result.registerToken;
+    final loginToken = result.loginToken;
     final verifiedProfile = _profileFromVerifyPayload(result.payload);
     final accountId = result.accountId ?? verifiedProfile?.id;
 
     // #***! токен сохраняем сразу и переносим спуф профиль
-    if (sessionToken != null && accountId != null) {
-      if (result.loginToken != null && verifiedProfile != null) {
+    if (loginToken != null && accountId != null) {
+      if (verifiedProfile != null) {
         await AppDatabase.saveProfile(verifiedProfile, isActive: true);
       }
-      await TokenStorage.saveToken(sessionToken, accountId);
+      await TokenStorage.saveToken(loginToken, accountId);
       await TokenStorage.setActiveAccount(accountId);
       await SpoofingService.commitPendingSpoof(accountId);
     }
@@ -218,7 +218,7 @@ class AccountModule {
   }
 
   // #***! регистрация после кода
-  Future<int> completeRegistration({
+  Future<RegistrationResult> completeRegistration({
     required String token,
     required String firstName,
     String? lastName,
@@ -258,15 +258,21 @@ class AccountModule {
       throw Exception('completeRegistration: отсутствует id аккаунта');
     }
 
+    final loginToken = data['token'];
+    if (loginToken is! String || loginToken.isEmpty) {
+      throw Exception('completeRegistration: отсутствует token в ответе');
+    }
+
     final profile = ProfileData.fromServerProfile(
       profileMap.cast<dynamic, dynamic>(),
     );
     await AppDatabase.saveProfile(profile, isActive: true);
+    await TokenStorage.saveToken(loginToken, accountId);
     await TokenStorage.setActiveAccount(accountId);
     await SpoofingService.commitPendingSpoof(accountId);
 
     logger.i('Регистрация завершена, accountId=$accountId');
-    return accountId;
+    return RegistrationResult(loginToken: loginToken, accountId: accountId);
   }
 
   // #***! основной вход, syncParams говорят серверу что у нас есть
@@ -280,7 +286,7 @@ class AccountModule {
     int? resolvedAccountId =
         accountId ?? await TokenStorage.getActiveAccountId();
 
-    String? authToken = token;
+    String? authToken = token == null || token.isEmpty ? null : token;
     if (authToken == null) {
       if (resolvedAccountId == null) {
         throw StateError('login: нет активного аккаунта');
@@ -359,6 +365,9 @@ class AccountModule {
 
   // #***! вход по чужому токену из дев меню
   Future<LoginResult> loginWithToken(String token) async {
+    if (token.isEmpty) {
+      throw StateError('loginWithToken: пустой токен');
+    }
     await TokenStorage.clearActiveAccount();
     try {
       await _api.disconnect();

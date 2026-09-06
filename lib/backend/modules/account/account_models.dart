@@ -394,6 +394,16 @@ class VerifyCodeResult {
   }
 }
 
+class RegistrationResult {
+  final String loginToken;
+  final int accountId;
+
+  const RegistrationResult({
+    required this.loginToken,
+    required this.accountId,
+  });
+}
+
 class TwoFactorResult {
   final String loginToken;
   final int accountId;
