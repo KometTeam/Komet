@@ -22,6 +22,7 @@ import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/attachment/photo_hero.dart';
 import 'package:komet/frontend/widgets/attachment/video_edit.dart';
 import 'package:komet/frontend/widgets/attachment/video_preview_screen.dart';
+import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
@@ -39,10 +40,14 @@ List<PillNavItem> _buildNavItems(AppLocalizations l10n) => [
   PillNavItem(icon: Symbols.person, label: l10n.attachSheetContact),
 ];
 
+typedef PickedPhotosCallback =
+    void Function(List<PickedPhoto> photos, String caption);
+
 Future<void> showAttachmentSheet(
   BuildContext context, {
   String? title,
-  void Function(List<PickedPhoto> photos, String caption)? onSend,
+  PickedPhotosCallback? onSend,
+  PickedPhotosCallback? onSendSeparately,
   VoidCallback? onPickFile,
   VoidCallback? onShareLocation,
   VoidCallback? onCreatePoll,
@@ -57,6 +62,7 @@ Future<void> showAttachmentSheet(
     builder: (_) => AttachmentSheet(
       title: title,
       onSend: onSend,
+      onSendSeparately: onSendSeparately,
       onPickFile: onPickFile,
       onShareLocation: onShareLocation,
       onCreatePoll: onCreatePoll,
@@ -67,7 +73,8 @@ Future<void> showAttachmentSheet(
 
 class AttachmentSheet extends StatefulWidget {
   final String? title;
-  final void Function(List<PickedPhoto> photos, String caption)? onSend;
+  final PickedPhotosCallback? onSend;
+  final PickedPhotosCallback? onSendSeparately;
   final VoidCallback? onPickFile;
   final VoidCallback? onShareLocation;
   final VoidCallback? onCreatePoll;
@@ -77,6 +84,7 @@ class AttachmentSheet extends StatefulWidget {
     super.key,
     this.title,
     this.onSend,
+    this.onSendSeparately,
     this.onPickFile,
     this.onShareLocation,
     this.onCreatePoll,
@@ -379,7 +387,10 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     return ok;
   }
 
-  Future<void> _sendSelection({GalleryItem? fallback}) async {
+  Future<void> _sendSelection({
+    GalleryItem? fallback,
+    bool separately = false,
+  }) async {
     if (_exporting) return;
     final ids = _selected.value;
     var chosen = _items.where((it) => ids.contains(it.id)).toList();
@@ -396,7 +407,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           ),
         )
         .toList();
-    final callback = widget.onSend;
+    final callback = separately ? widget.onSendSeparately : widget.onSend;
     if (callback != null) {
       for (final photo in picked) {
         final path = photo.editedFile?.path;
@@ -429,7 +440,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
-              const SheetGrabber(),
+              _buildGrabberBar(cs),
               Expanded(
                 child: Stack(
                   children: [
@@ -875,6 +886,44 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     );
   }
 
+  Widget _buildGrabberBar(ColorScheme cs) {
+    if (widget.onSendSeparately == null) return const SheetGrabber();
+    return SheetGrabberBar(
+      action: AnimatedBuilder(
+        animation: Listenable.merge([_selected, _pageController]),
+        builder: (context, child) {
+          final galleryT = (1 - _currentPageT()).clamp(0.0, 1.0);
+          if (_selected.value.isEmpty || galleryT == 0) {
+            return const SizedBox.shrink();
+          }
+          return Opacity(
+            opacity: galleryT,
+            child: IgnorePointer(ignoring: galleryT < 0.5, child: child),
+          );
+        },
+        child: _GalleryMenuButton(cs: cs, onTap: _openGalleryMenu),
+      ),
+    );
+  }
+
+  void _openGalleryMenu(BuildContext anchorContext) {
+    if (widget.onSendSeparately == null) return;
+    final box = anchorContext.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    showChatMenu(
+      context: context,
+      anchorRect: box.localToGlobal(Offset.zero) & box.size,
+      compact: true,
+      items: [
+        ChatMenuItem(
+          icon: Symbols.arrow_split,
+          label: AppLocalizations.of(context)!.attachSheetSendSeparately,
+          onTap: () => _sendSelection(separately: true),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSendButton(ColorScheme cs) {
     return Material(
       color: cs.primary,
@@ -1037,6 +1086,36 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GalleryMenuButton extends StatelessWidget {
+  final ColorScheme cs;
+  final void Function(BuildContext anchorContext) onTap;
+
+  const _GalleryMenuButton({required this.cs, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: AppLocalizations.of(context)!.attachSheetMoreActions,
+      child: Material(
+        color: cs.surfaceContainerHighest,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => onTap(context),
+          child: Padding(
+            padding: const EdgeInsets.all(5),
+            child: Icon(
+              Symbols.more_horiz,
+              size: 20,
+              color: cs.onSurfaceVariant,
+            ),
           ),
         ),
       ),

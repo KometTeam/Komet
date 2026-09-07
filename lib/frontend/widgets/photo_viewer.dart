@@ -15,6 +15,7 @@ import '../../core/cache/info_cache.dart';
 import '../../core/config/app_frost.dart';
 import '../../core/utils/download_history.dart';
 import '../../core/utils/format.dart';
+import '../../core/utils/image_format.dart';
 import '../../core/utils/media_cache.dart';
 import '../../core/utils/media_saver.dart';
 import '../../core/utils/save_file_as.dart';
@@ -599,6 +600,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   Future<void> _saveAs() async {
     if (_saving) return;
     setState(() => _saving = true);
+    SaveReadyImage? image;
     try {
       final item = _current;
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -614,6 +616,12 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         final cacheName = _cacheNameFor(photo, url);
         if (url.isNotEmpty) download = _photoDownload(item, photo, cacheName);
         saveName = 'IMG_$now.jpg';
+        if (file != null) {
+          image = await prepareImageForSave(file);
+          if (image != null) {
+            saveName = withImageExtension(saveName, image.extension);
+          }
+        }
       } else if (video != null) {
         file = await _videoFileFor(item);
         final cacheName = _videoCacheName(item, video);
@@ -630,7 +638,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         return;
       }
       final result = await saveFileAs(
-        source: file,
+        source: image?.file ?? file,
         fileName: saveName,
         dialogTitle: AppLocalizations.of(context)!.photoViewerSaveAs,
       );
@@ -648,6 +656,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     } catch (_) {
       if (mounted) showCustomNotification(context, 'Не удалось сохранить файл');
     } finally {
+      await image?.discard();
       if (mounted) setState(() => _saving = false);
     }
   }

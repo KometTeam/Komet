@@ -982,6 +982,8 @@
   "attachSheetCreatePoll": "Create poll",
   "attachSheetCreatePollSubtitle": "A question with answer options",
   "attachSheetNoImagesFound": "No images found",
+  "attachSheetMoreActions": "More",
+  "attachSheetSendSeparately": "Send separately",
   "attachSheetLimitedAccessInfo": "Not all photos are accessible",
   "attachSheetSectionInProgress": "Section under development",
   "attachSheetContact": "Contact",

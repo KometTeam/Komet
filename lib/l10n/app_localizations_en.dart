@@ -2349,6 +2349,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachSheetNoImagesFound => 'No images found';
 
   @override
+  String get attachSheetMoreActions => 'More';
+
+  @override
+  String get attachSheetSendSeparately => 'Send separately';
+
+  @override
   String get attachSheetLimitedAccessInfo => 'Not all photos are accessible';
 
   @override

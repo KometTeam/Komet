@@ -4698,6 +4698,15 @@ class _ChatScreenState extends State<ChatScreen>
           ? _mediaSend.sendPhotos
           : (picked, caption) =>
                 _mediaSend.sendScheduledPhotos(picked, caption, scheduledTime),
+      onSendSeparately: scheduledTime == null
+          ? (picked, caption) =>
+                _mediaSend.sendPhotos(picked, caption, separate: true)
+          : (picked, caption) => _mediaSend.sendScheduledPhotos(
+              picked,
+              caption,
+              scheduledTime,
+              separate: true,
+            ),
       onPickFile: _encryptionEnabled
           ? () => _refuseUnencrypted('Файлы')
           : (scheduledTime == null

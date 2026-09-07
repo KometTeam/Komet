@@ -4496,6 +4496,18 @@ abstract class AppLocalizations {
   /// **'No images found'**
   String get attachSheetNoImagesFound;
 
+  /// No description provided for @attachSheetMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get attachSheetMoreActions;
+
+  /// No description provided for @attachSheetSendSeparately.
+  ///
+  /// In en, this message translates to:
+  /// **'Send separately'**
+  String get attachSheetSendSeparately;
+
   /// No description provided for @attachSheetLimitedAccessInfo.
   ///
   /// In en, this message translates to:

@@ -747,6 +747,8 @@
   "attachSheetCreatePoll": "Создать опрос",
   "attachSheetCreatePollSubtitle": "Вопрос с вариантами ответа",
   "attachSheetNoImagesFound": "Изображений не найдено",
+  "attachSheetMoreActions": "Ещё",
+  "attachSheetSendSeparately": "Отправить по отдельности",
   "attachSheetLimitedAccessInfo": "Доступны не все фото",
   "attachSheetSectionInProgress": "Раздел в разработке",
   "attachSheetContact": "Контакт",

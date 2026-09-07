@@ -353,6 +353,7 @@ class ChatMediaSendController {
     List<PickedPhoto> picked,
     String caption, {
     bool waitForUpload = false,
+    bool separate = false,
   }) async {
     if (_myId == 0) return;
     if (encryptionEnabled()) return sendEncryptedPhotos(picked, caption);
@@ -366,6 +367,24 @@ class ChatMediaSendController {
     }
     if (photos.isEmpty) return;
 
+    if (separate && photos.length > 1) {
+      for (var i = 0; i < photos.length; i++) {
+        await _sendPhotoAlbum(
+          [photos[i]],
+          i == 0 ? caption : '',
+          waitForUpload: waitForUpload,
+        );
+      }
+      return;
+    }
+    await _sendPhotoAlbum(photos, caption, waitForUpload: waitForUpload);
+  }
+
+  Future<void> _sendPhotoAlbum(
+    List<PickedPhoto> photos,
+    String caption, {
+    required bool waitForUpload,
+  }) async {
     final jobs = <({File file, GalleryItem? item})>[];
     final attachments = <PhotoAttachment>[];
     for (final photo in photos) {
@@ -505,8 +524,9 @@ class ChatMediaSendController {
   Future<void> sendScheduledPhotos(
     List<PickedPhoto> picked,
     String caption,
-    int scheduledTime,
-  ) async {
+    int scheduledTime, {
+    bool separate = false,
+  }) async {
     if (_myId == 0) return;
     final videos = picked.where((ph) => ph.item.isVideo).toList();
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
@@ -518,6 +538,24 @@ class ChatMediaSendController {
     }
     if (photos.isEmpty) return;
 
+    if (separate && photos.length > 1) {
+      for (var i = 0; i < photos.length; i++) {
+        await _sendScheduledPhotoAlbum(
+          [photos[i]],
+          i == 0 ? caption : '',
+          scheduledTime,
+        );
+      }
+      return;
+    }
+    await _sendScheduledPhotoAlbum(photos, caption, scheduledTime);
+  }
+
+  Future<void> _sendScheduledPhotoAlbum(
+    List<PickedPhoto> photos,
+    String caption,
+    int scheduledTime,
+  ) async {
     final jobs = <({File file, GalleryItem? item})>[];
     for (final photo in photos) {
       final edited = photo.editedFile;

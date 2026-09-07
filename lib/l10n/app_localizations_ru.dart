@@ -2362,6 +2362,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get attachSheetNoImagesFound => 'Изображений не найдено';
 
   @override
+  String get attachSheetMoreActions => 'Ещё';
+
+  @override
+  String get attachSheetSendSeparately => 'Отправить по отдельности';
+
+  @override
   String get attachSheetLimitedAccessInfo => 'Доступны не все фото';
 
   @override
