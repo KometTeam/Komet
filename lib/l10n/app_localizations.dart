@@ -5659,6 +5659,264 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Got it'**
   String get authLimitsConfirm;
+
+  /// No description provided for @e2eeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'End-to-end encryption'**
+  String get e2eeTitle;
+
+  /// No description provided for @e2eeStatusNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get e2eeStatusNone;
+
+  /// No description provided for @e2eeStatusOffered.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for {name} to accept'**
+  String e2eeStatusOffered(String name);
+
+  /// No description provided for @e2eeStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} wants to turn on encryption'**
+  String e2eeStatusPending(String name);
+
+  /// No description provided for @e2eeStatusEstablished.
+  ///
+  /// In en, this message translates to:
+  /// **'On'**
+  String get e2eeStatusEstablished;
+
+  /// No description provided for @e2eeStatusKeyChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s encryption key has changed'**
+  String e2eeStatusKeyChanged(String name);
+
+  /// No description provided for @e2eeEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get e2eeEnable;
+
+  /// No description provided for @e2eeAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept'**
+  String get e2eeAccept;
+
+  /// No description provided for @e2eeDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get e2eeDecline;
+
+  /// No description provided for @e2eeCancelOffer.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel request'**
+  String get e2eeCancelOffer;
+
+  /// No description provided for @e2eeReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset session'**
+  String get e2eeReset;
+
+  /// No description provided for @e2eeResetConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset the encrypted session? Both sides will need to set it up again.'**
+  String get e2eeResetConfirm;
+
+  /// No description provided for @e2eeFingerprint.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety number'**
+  String get e2eeFingerprint;
+
+  /// No description provided for @e2eeFingerprintHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare these 60 digits with {name} outside MAX — in person or over another channel. If they match, the server did not substitute the keys.'**
+  String e2eeFingerprintHint(String name);
+
+  /// No description provided for @e2eeVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified in person'**
+  String get e2eeVerified;
+
+  /// No description provided for @e2eeCeiling.
+  ///
+  /// In en, this message translates to:
+  /// **'Only message text and photos are encrypted. The server still sees who talks to whom and when, sees that the chat is encrypted, and can withhold messages. Nothing here hides that.'**
+  String get e2eeCeiling;
+
+  /// No description provided for @e2eeNeedsKomet.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} needs Komet for this to work.'**
+  String e2eeNeedsKomet(String name);
+
+  /// No description provided for @e2eeOfferSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Request sent'**
+  String get e2eeOfferSent;
+
+  /// No description provided for @e2eeOfferFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the request'**
+  String get e2eeOfferFailed;
+
+  /// No description provided for @e2eeAcceptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not accept the request'**
+  String get e2eeAcceptFailed;
+
+  /// No description provided for @e2eeBannerPending.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} wants to turn on end-to-end encryption'**
+  String e2eeBannerPending(String name);
+
+  /// No description provided for @e2eeBannerKeyChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s encryption key has changed. Check the safety number before accepting.'**
+  String e2eeBannerKeyChanged(String name);
+
+  /// No description provided for @e2eeTransferTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to another device'**
+  String get e2eeTransferTitle;
+
+  /// No description provided for @e2eeTransferHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The transfer file holds your key and sessions. After importing it on the new device, stop using this one for encrypted chats.'**
+  String get e2eeTransferHint;
+
+  /// No description provided for @e2eeExport.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get e2eeExport;
+
+  /// No description provided for @e2eeImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get e2eeImport;
+
+  /// No description provided for @e2eeTransferPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer password'**
+  String get e2eeTransferPassword;
+
+  /// No description provided for @e2eeExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not export'**
+  String get e2eeExportFailed;
+
+  /// No description provided for @e2eeImported.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions moved: {count}'**
+  String e2eeImported(int count);
+
+  /// No description provided for @e2eeImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not import — wrong password or damaged file'**
+  String get e2eeImportFailed;
+
+  /// No description provided for @e2eeLegacyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Passphrase mode for groups: no forward secrecy, anyone who knows the passphrase can read the whole history.'**
+  String get e2eeLegacyNote;
+
+  /// No description provided for @e2eeTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The message is too long for an encrypted chat. Split it up.'**
+  String get e2eeTooLong;
+
+  /// No description provided for @e2eeEncryptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not encrypt the message'**
+  String get e2eeEncryptFailed;
+
+  /// No description provided for @e2eeRotateIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace my key'**
+  String get e2eeRotateIdentity;
+
+  /// No description provided for @e2eeRotateConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a new identity key? Every encrypted session will be reset, your contacts will see a key-change warning, and the safety numbers will change.'**
+  String get e2eeRotateConfirm;
+
+  /// No description provided for @e2eeRotated.
+  ///
+  /// In en, this message translates to:
+  /// **'Key replaced'**
+  String get e2eeRotated;
+
+  /// No description provided for @e2eeRotateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not replace the key'**
+  String get e2eeRotateFailed;
+
+  /// No description provided for @e2eeForwardBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarding is off in an encrypted chat: the server, not your device, would supply the message text.'**
+  String get e2eeForwardBlocked;
+
+  /// No description provided for @e2eeScheduledMediaBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled photos are not supported in an encrypted chat yet. Send them now, or turn encryption off.'**
+  String get e2eeScheduledMediaBlocked;
+
+  /// No description provided for @e2eeSearchBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Search is off in an encrypted chat: the query would go to the server, and the server only sees ciphertext.'**
+  String get e2eeSearchBlocked;
+
+  /// No description provided for @e2eeAwaitingPeer.
+  ///
+  /// In en, this message translates to:
+  /// **'This session was moved from another device. Wait for one message from your contact before sending — otherwise both devices would use the same key.'**
+  String get e2eeAwaitingPeer;
+
+  /// No description provided for @e2eeBannerRehandshake.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is turning encryption on again. Accept only if you expected this — otherwise the server is replaying an old request to reset your session.'**
+  String e2eeBannerRehandshake(String name);
+
+  /// No description provided for @e2eeExportedAndDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer created. Encryption is now off on this device: import the file on the new one and turn it on there.'**
+  String get e2eeExportedAndDisabled;
 }
 
 class _AppLocalizationsDelegate

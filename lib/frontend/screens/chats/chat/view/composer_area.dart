@@ -18,6 +18,7 @@ import 'package:komet/frontend/screens/chats/chat/upload_status.dart'
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/attachment_panel.dart';
+import 'package:komet/frontend/widgets/e2ee_banner.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
 
 import 'command_arguments_form.dart';
@@ -44,6 +45,9 @@ class ComposerArea extends StatelessWidget {
 
   final bool commentsMode;
   final String chatType;
+  final int chatId;
+  final String peerName;
+  final VoidCallback onOpenEncryption;
   final ChatChromeStyle chrome;
   final bool chromeVignette;
   final BackdropKey? pillBackdrop;
@@ -113,6 +117,9 @@ class ComposerArea extends StatelessWidget {
     required this.onSendFileById,
     required this.commentsMode,
     required this.chatType,
+    required this.chatId,
+    required this.peerName,
+    required this.onOpenEncryption,
     required this.chrome,
     required this.chromeVignette,
     required this.pillBackdrop,
@@ -160,6 +167,13 @@ class ComposerArea extends StatelessWidget {
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (chatType == 'DIALOG' && myId != 0)
+          E2eeBanner(
+            accountId: myId,
+            chatId: chatId,
+            peerName: peerName,
+            onOpenDetails: onOpenEncryption,
+          ),
         AnimatedBuilder(
           animation: selectionAnim,
           builder: (context, child) {

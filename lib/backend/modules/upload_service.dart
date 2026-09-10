@@ -416,6 +416,7 @@ class UploadService {
     required String filename,
     required int size,
     CachedMessage? placeholder,
+    String? text,
     int? scheduledTime,
   }) {
     return _run(
@@ -437,6 +438,7 @@ class UploadService {
           source: source,
           filename: filename,
           size: size,
+          text: text,
           scheduledTime: scheduledTime,
         );
         FileHistoryCache.add(
@@ -472,6 +474,8 @@ class UploadService {
               size: size,
             ),
           ],
+          sealedText: base?.sealedText,
+          e2ee: base?.e2ee ?? CachedMessage.e2eeNone,
         );
       },
     );
@@ -484,6 +488,7 @@ class UploadService {
     required File source,
     required String filename,
     required int size,
+    String? text,
     int? scheduledTime,
   }) async {
     final result = Completer<UploadDone>();
@@ -494,6 +499,7 @@ class UploadService {
           file: source,
           filename: filename,
           totalSize: size,
+          text: text,
           scheduledTime: scheduledTime,
         )
         .listen(

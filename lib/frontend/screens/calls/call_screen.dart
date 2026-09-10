@@ -1565,7 +1565,6 @@ class _CallInfoSheet extends StatelessWidget {
     );
 
     final badges = <Widget>[
-      _badge(cs, Symbols.lock, l10n.callBadgeEncrypted),
       _badge(cs, Symbols.call, l10n.callBadgeAudio),
       if (info?.record == true)
         _badge(cs, Symbols.radio_button_checked, l10n.callBadgeRecording),

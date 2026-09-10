@@ -10,6 +10,7 @@ import '../../core/push/push_service.dart';
 import '../../core/cache/info_cache.dart';
 import '../../core/cache/message_session_cache.dart';
 import 'shared_content.dart';
+import '../../core/crypto/e2ee_service.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/chat_members_store.dart';
 import '../../core/storage/token_storage.dart';
@@ -802,6 +803,7 @@ class ChatsModule {
 
   // #***! сменили аккаунт, всё локальное чужое
   void resetForAccountSwitch() {
+    E2eeService.instance.lock();
     _historyFetched.clear();
     ContactInfoFetch.clear();
     PresenceFetch.clear();
@@ -1008,9 +1010,24 @@ class ChatsModule {
             newRow['edit_history'] = jsonEncode(history);
           }
         }
+        final wasEncrypted =
+            (existing['e2ee'] as int? ?? CachedMessage.e2eeNone) !=
+            CachedMessage.e2eeNone;
         newRow['text'] = msgText;
         newRow['status'] = status;
         newRow['payload'] = jsonEncode(mergedPayload);
+        newRow['text_sealed'] = null;
+        newRow['e2ee'] = CachedMessage.e2eeNone;
+        final inspected = await E2eeService.instance.inspect(
+          CachedMessage.fromDbRow(newRow),
+        );
+        // #***! правка без расшифровки не от собеседника, применять нельзя
+        if (wasEncrypted && inspected.e2ee != CachedMessage.e2eeText) {
+          logger.w('notifMessage: отклонена правка $msgIdStr без расшифровки');
+          return;
+        }
+        newRow['text_sealed'] = inspected.sealedText;
+        newRow['e2ee'] = inspected.e2ee;
         await AppDatabase.saveMessages([newRow]);
         emittedMessage = CachedMessage.fromDbRow(newRow);
         _messageEventsController.add(
@@ -1024,7 +1041,11 @@ class ChatsModule {
         msgIdStr,
       );
       if (existing == null) {
-        final cached = CachedMessage.fromPushPayload(accountId, chatId, msg);
+        final cached = await E2eeService.instance.inspect(
+          CachedMessage.fromPushPayload(accountId, chatId, msg),
+          commit: (decrypted) =>
+              AppDatabase.saveMessages([decrypted.toDbRow()]),
+        );
         await AppDatabase.saveMessages([cached.toDbRow()]);
         emittedMessage = cached;
         _applyMembershipControl(accountId, chatId, cached);

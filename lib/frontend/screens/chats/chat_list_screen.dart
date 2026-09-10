@@ -73,6 +73,7 @@ import '../../../core/cache/message_session_cache.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
+import '../../../core/crypto/e2ee_service.dart';
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
@@ -770,6 +771,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     chats.chatOrderRevision.addListener(_onChatsChanged);
     ArchivedChatsStore.instance.revision.addListener(_onArchivedChanged);
     ChatEncryptionStore.instance.revision.addListener(_onEncryptionChanged);
+    E2eeService.instance.revision.addListener(_onEncryptionChanged);
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
@@ -1520,6 +1522,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     chats.chatOrderRevision.removeListener(_onChatsChanged);
     ArchivedChatsStore.instance.revision.removeListener(_onArchivedChanged);
     ChatEncryptionStore.instance.revision.removeListener(_onEncryptionChanged);
+    E2eeService.instance.revision.removeListener(_onEncryptionChanged);
     DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
@@ -3078,10 +3081,18 @@ class _ChatListScreenState extends State<ChatListScreen>
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
-    final isEncrypted = ChatEncryptionStore.instance.isEnabled(
+    final e2eeInfo = E2eeService.instance.info(
       _profile?.id ?? 0,
       int.tryParse(id) ?? 0,
     );
+    final isEncrypted =
+        ChatEncryptionStore.instance.isEnabled(
+          _profile?.id ?? 0,
+          int.tryParse(id) ?? 0,
+        ) ||
+        E2eeService.instance.isOn(_profile?.id ?? 0, int.tryParse(id) ?? 0);
+    final isVerified =
+        e2eeInfo?.phase == E2eePhase.established && e2eeInfo!.verified;
     final Widget? statusIcon = (ownStatus != null && draft == null)
         ? _ownStatusIcon(cs, ownStatus, ownRead)
         : null;
@@ -3109,6 +3120,14 @@ class _ChatListScreenState extends State<ChatListScreen>
               MessageDecryptionState.wrongKey => _buildPreviewLine(
                 cs,
                 'неверный ключ',
+                const [],
+                draft,
+                true,
+                prefix: previewPrefix,
+              ),
+              MessageDecryptionState.unavailable => _buildPreviewLine(
+                cs,
+                'недоступно на этом устройстве',
                 const [],
                 draft,
                 true,
@@ -3268,10 +3287,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                   children: [
                     avatarCircle,
                     if (isEncrypted)
-                      const Positioned(
+                      Positioned(
                         left: -2,
                         bottom: -2,
-                        child: EncryptionLockBadge(size: 18),
+                        child: EncryptionLockBadge(
+                          size: 18,
+                          verified: isVerified,
+                        ),
                       ),
                     if (isSelected)
                       Positioned(

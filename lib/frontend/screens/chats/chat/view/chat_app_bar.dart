@@ -36,6 +36,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String chatType;
   final bool isOfficial;
   final bool encrypted;
+  final bool verified;
   final int myId;
   final ValueNotifier<String> headerStatus;
   final ValueListenable<int> scheduledCount;
@@ -78,6 +79,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.chatType,
     required this.isOfficial,
     required this.encrypted,
+    this.verified = false,
     required this.myId,
     required this.headerStatus,
     required this.scheduledCount,
@@ -204,6 +206,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                             chatType: chatType,
                             isOfficial: isOfficial,
                             encrypted: encrypted,
+                            verified: verified,
                             myId: myId,
                             headerStatus: headerStatus,
                             scheduledCount: scheduledCount,

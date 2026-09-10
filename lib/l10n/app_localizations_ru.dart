@@ -3024,4 +3024,163 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get authLimitsConfirm => 'Понятно';
+
+  @override
+  String get e2eeTitle => 'Сквозное шифрование';
+
+  @override
+  String get e2eeStatusNone => 'Выключено';
+
+  @override
+  String e2eeStatusOffered(String name) {
+    return 'Ждём, пока $name примет запрос';
+  }
+
+  @override
+  String e2eeStatusPending(String name) {
+    return '$name предлагает включить шифрование';
+  }
+
+  @override
+  String get e2eeStatusEstablished => 'Включено';
+
+  @override
+  String e2eeStatusKeyChanged(String name) {
+    return 'Ключ шифрования $name изменился';
+  }
+
+  @override
+  String get e2eeEnable => 'Включить';
+
+  @override
+  String get e2eeAccept => 'Принять';
+
+  @override
+  String get e2eeDecline => 'Отклонить';
+
+  @override
+  String get e2eeCancelOffer => 'Отменить запрос';
+
+  @override
+  String get e2eeReset => 'Сбросить сессию';
+
+  @override
+  String get e2eeResetConfirm =>
+      'Сбросить зашифрованную сессию? Обеим сторонам придётся включить шифрование заново.';
+
+  @override
+  String get e2eeFingerprint => 'Код безопасности';
+
+  @override
+  String e2eeFingerprintHint(String name) {
+    return 'Сравните эти 60 цифр с $name вне MAX — при встрече или по другому каналу. Совпадают — значит, сервер не подменил ключи.';
+  }
+
+  @override
+  String get e2eeVerified => 'Проверено лично';
+
+  @override
+  String get e2eeCeiling =>
+      'Шифруется только текст сообщений и фото. Сервер по-прежнему видит, кто с кем и когда переписывается, видит, что переписка зашифрована, и может не доставлять сообщения. Скрыть это нельзя.';
+
+  @override
+  String e2eeNeedsKomet(String name) {
+    return 'Чтобы это работало, $name должен пользоваться Komet.';
+  }
+
+  @override
+  String get e2eeOfferSent => 'Запрос отправлен';
+
+  @override
+  String get e2eeOfferFailed => 'Не удалось отправить запрос';
+
+  @override
+  String get e2eeAcceptFailed => 'Не удалось принять запрос';
+
+  @override
+  String e2eeBannerPending(String name) {
+    return '$name предлагает включить сквозное шифрование';
+  }
+
+  @override
+  String e2eeBannerKeyChanged(String name) {
+    return 'Ключ шифрования $name изменился. Проверьте код безопасности, прежде чем принять.';
+  }
+
+  @override
+  String get e2eeTransferTitle => 'Перенос на другое устройство';
+
+  @override
+  String get e2eeTransferHint =>
+      'Файл переноса содержит ваш ключ и сессии. После импорта на новом устройстве перестаньте пользоваться этим для зашифрованных чатов.';
+
+  @override
+  String get e2eeExport => 'Экспортировать';
+
+  @override
+  String get e2eeImport => 'Импортировать';
+
+  @override
+  String get e2eeTransferPassword => 'Пароль переноса';
+
+  @override
+  String get e2eeExportFailed => 'Не удалось экспортировать';
+
+  @override
+  String e2eeImported(int count) {
+    return 'Перенесено сессий: $count';
+  }
+
+  @override
+  String get e2eeImportFailed =>
+      'Не удалось импортировать — неверный пароль или повреждённый файл';
+
+  @override
+  String get e2eeLegacyNote =>
+      'Парольный режим для групп: без forward secrecy, любой, кто знает пароль, читает всю историю.';
+
+  @override
+  String get e2eeTooLong =>
+      'Сообщение слишком длинное для зашифрованного чата. Разделите его.';
+
+  @override
+  String get e2eeEncryptFailed => 'Не удалось зашифровать сообщение';
+
+  @override
+  String get e2eeRotateIdentity => 'Сменить свой ключ';
+
+  @override
+  String get e2eeRotateConfirm =>
+      'Создать новый ключ? Все зашифрованные сессии сбросятся, собеседники увидят предупреждение о смене ключа, коды безопасности изменятся.';
+
+  @override
+  String get e2eeRotated => 'Ключ заменён';
+
+  @override
+  String get e2eeRotateFailed => 'Не удалось заменить ключ';
+
+  @override
+  String get e2eeForwardBlocked =>
+      'В зашифрованном чате пересылка недоступна: текст сообщения подставил бы сервер, а не ваше устройство.';
+
+  @override
+  String get e2eeScheduledMediaBlocked =>
+      'Отложенные фото в зашифрованном чате пока не поддерживаются. Отправьте сейчас или выключите шифрование.';
+
+  @override
+  String get e2eeSearchBlocked =>
+      'В зашифрованном чате поиск недоступен: запрос ушёл бы на сервер, а сервер видит только шифртекст.';
+
+  @override
+  String get e2eeAwaitingPeer =>
+      'Сессия перенесена с другого устройства. Дождитесь одного сообщения от собеседника, иначе оба устройства выведут одинаковый ключ.';
+
+  @override
+  String e2eeBannerRehandshake(String name) {
+    return '$name заново включает шифрование. Принимайте, только если этого ждали — иначе сервер повторяет старый запрос, чтобы сбросить вашу сессию.';
+  }
+
+  @override
+  String get e2eeExportedAndDisabled =>
+      'Перенос создан. На этом устройстве шифрование выключено: импортируйте файл на новом и включите там.';
 }

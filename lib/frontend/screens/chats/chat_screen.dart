@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show File;
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
@@ -44,6 +45,8 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_activity_store.dart';
 import '../../../core/storage/chat_members_store.dart';
 import '../../../core/crypto/chat_crypto_service.dart';
+import '../../../core/crypto/e2ee_service.dart';
+import '../../../core/crypto/message_decryption_cache.dart';
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/storage/draft_store.dart';
@@ -105,6 +108,7 @@ import '../../widgets/schedule_time_picker.dart';
 import '../../widgets/chat_wallpaper_sheet.dart';
 import 'scheduled_messages_screen.dart';
 import 'chat_encryption_screen.dart';
+import 'e2ee_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
 import 'profile_action_sheets.dart';
 import '../../../core/media/media_playback.dart';
@@ -2148,6 +2152,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (_encryptionListening) {
       ChatEncryptionStore.instance.revision.removeListener(_applyEncryption);
+      E2eeService.instance.revision.removeListener(_applyEncryption);
     }
     _headerStatusNotifier.dispose();
     _otherReadTime.dispose();
@@ -2285,6 +2290,13 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _saveDraft() {
     if (_myId == 0 || _commentsMode) return;
+    // #***! черновик зашифрованного чата осел бы на диске открытым текстом
+    if (_encryptionEnabled) {
+      if (DraftStore.instance.get(_myId, widget.chatId) != null) {
+        unawaited(DraftStore.instance.clear(_myId, widget.chatId));
+      }
+      return;
+    }
     unawaited(
       DraftStore.instance.set(
         _myId,
@@ -2497,12 +2509,20 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(_forwardMessages(msgs));
   }
 
+  // #***! пересылка это серверная копия, текст подставляет сервер а не мы
   Future<void> _forwardMessages(List<CachedMessage> msgs) async {
     final forwardable = msgs
         .where((message) => int.tryParse(message.id) != null)
         .toList();
     if (forwardable.isEmpty) {
       showCustomNotification(context, 'Нечего пересылать');
+      return;
+    }
+    if (_encryptionEnabled) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.e2eeForwardBlocked,
+      );
       return;
     }
 
@@ -2554,6 +2574,9 @@ class _ChatScreenState extends State<ChatScreen>
       onSendFileById: _mediaSend.sendFileById,
       commentsMode: _commentsMode,
       chatType: widget.chatType,
+      chatId: widget.chatId,
+      peerName: widget.name,
+      onOpenEncryption: _openEncryptionSettings,
       chrome: _effectiveChrome,
       chromeVignette: _chromeVignette,
       pillBackdrop: _pillBackdrop,
@@ -2640,11 +2663,14 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
+    final wireText = await _encryptOutgoing(newText);
+    if (wireText == null || !mounted) return;
+    final editEncrypted = wireText != newText;
     final ok = await messagesModule.editMessage(
       widget.chatId,
       message.id,
-      text: newText,
-      elements: elements,
+      text: wireText,
+      elements: editEncrypted ? const [] : elements,
     );
     if (!mounted) return;
     if (!ok) {
@@ -2663,19 +2689,32 @@ class _ChatScreenState extends State<ChatScreen>
               DateTime.now().millisecondsSinceEpoch,
             )
           : old.editHistory;
+      final editSealed = editEncrypted && _e2eeActive
+          ? await E2eeService.instance.sealText(_myId, widget.chatId, newText)
+          : null;
       final edited = CachedMessage(
         id: old.id,
         accountId: old.accountId,
         chatId: old.chatId,
         senderId: old.senderId,
-        text: newText.isEmpty ? null : newText,
+        text: wireText.isEmpty ? null : wireText,
         time: old.time,
         status: 'EDITED',
-        payload: {...?old.payload, 'elements': elements},
+        payload: {
+          ...?old.payload,
+          'elements': editEncrypted ? const <Map<String, dynamic>>[] : elements,
+        },
         attachments: old.attachments,
         isControl: old.isControl,
         editHistory: newHistory,
+        sealedText: editSealed,
+        e2ee: editSealed == null
+            ? CachedMessage.e2eeNone
+            : CachedMessage.e2eeText,
       );
+      if (editEncrypted) {
+        MessageDecryptionCache.instance.seed(message.id, newText);
+      }
       _chatController.setMessageAt(idx, edited);
       _bumpMessages();
       unawaited(_chatController.persistOutgoing(edited));
@@ -3049,24 +3088,33 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _loadEncryption() async {
     await ChatEncryptionStore.instance.load();
+    await E2eeService.instance.ensureLoaded(_myId);
     if (!mounted) return;
     if (!_encryptionListening) {
       _encryptionListening = true;
       ChatEncryptionStore.instance.revision.addListener(_applyEncryption);
+      E2eeService.instance.revision.addListener(_applyEncryption);
     }
     _applyEncryption();
   }
 
+  bool get _e2eeActive =>
+      widget.chatType == 'DIALOG' &&
+      E2eeService.instance.isActive(_myId, widget.chatId);
+
+  bool get _e2eeVerified =>
+      _e2eeActive &&
+      (E2eeService.instance.info(_myId, widget.chatId)?.verified ?? false);
+
   void _applyEncryption() {
     if (!mounted) return;
-    final enabled = ChatEncryptionStore.instance.isEnabled(
-      _myId,
-      widget.chatId,
-    );
+    final e2ee = _e2eeActive;
+    final enabled =
+        e2ee || ChatEncryptionStore.instance.isEnabled(_myId, widget.chatId);
     if (enabled != _encryptionEnabled) {
       setState(() => _encryptionEnabled = enabled);
     }
-    if (enabled && _myId != 0) {
+    if (enabled && !e2ee && _myId != 0) {
       unawaited(ChatCryptoService.instance.warmKey(_myId, widget.chatId));
     }
   }
@@ -3075,8 +3123,14 @@ class _ChatScreenState extends State<ChatScreen>
     if (_myId == 0) return;
     await pushSwipeable(
       context,
-      (context) =>
-          ChatEncryptionScreen(accountId: _myId, chatId: widget.chatId),
+      (context) => widget.chatType == 'DIALOG'
+          ? E2eeScreen(
+              accountId: _myId,
+              chatId: widget.chatId,
+              peerId: _resolveOtherId() ?? 0,
+              peerName: widget.name,
+            )
+          : ChatEncryptionScreen(accountId: _myId, chatId: widget.chatId),
     );
     if (!mounted) return;
     _applyEncryption();
@@ -3520,6 +3574,30 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<String?> _encryptOutgoing(String text, {bool notify = true}) async {
     if (!_encryptionEnabled || _myId == 0) return text;
+    if (_e2eeActive) {
+      final l10n = AppLocalizations.of(context)!;
+      if (!E2eeService.instance.fitsTransport(utf8.encode(text).length)) {
+        if (mounted && notify) showCustomNotification(context, l10n.e2eeTooLong);
+        return null;
+      }
+      final String? wire;
+      try {
+        wire = await E2eeService.instance.encryptText(
+          _myId,
+          widget.chatId,
+          text,
+        );
+      } on E2eeAwaitingPeer {
+        if (mounted && notify) {
+          showCustomNotification(context, l10n.e2eeAwaitingPeer);
+        }
+        return null;
+      }
+      if (wire == null && mounted && notify) {
+        showCustomNotification(context, l10n.e2eeEncryptFailed);
+      }
+      return wire;
+    }
     final result = await ChatCryptoService.instance.encrypt(
       _myId,
       widget.chatId,
@@ -3708,11 +3786,14 @@ class _ChatScreenState extends State<ChatScreen>
     final when = await _pickScheduleTime();
     if (when == null || !mounted) return;
 
+    final wireText = await _encryptOutgoing(text);
+    if (wireText == null || !mounted) return;
+
     try {
       await messagesModule.sendMessage(
         _myId,
         widget.chatId,
-        text,
+        wireText,
         scheduledTime: when.millisecondsSinceEpoch,
       );
       if (!mounted) return;
@@ -3957,6 +4038,14 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _openSearch() {
     if (_search.searchMode.value || _selectionMode) return;
+    // #***! запрос уходит на сервер, а сервер видит только шифртекст
+    if (_encryptionEnabled) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.e2eeSearchBlocked,
+      );
+      return;
+    }
     _search.searchMode.value = true;
     _searchAnim.forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4231,6 +4320,7 @@ class _ChatScreenState extends State<ChatScreen>
                     chatType: widget.chatType,
                     isOfficial: chat?.isOfficial ?? false,
                     encrypted: _encryptionEnabled,
+                    verified: _e2eeVerified,
                     myId: _myId,
                     headerStatus: _headerStatusNotifier,
                     scheduledCount: _scheduledCount,

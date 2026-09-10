@@ -10,7 +10,7 @@ Komet is a cross-platform Flutter messaging client (Android, iOS, macOS, Windows
 
 ```bash
 flutter pub get          # install dependencies
-flutter analyze lib test tool native/komet_crypto/lib  # lint / static analysis (what CI runs)
+flutter analyze lib test tool  # lint / static analysis (what CI runs)
 flutter run              # run on connected device (default: komet flavor)
 flutter run --flavor oneme -t lib/main.dart  # run oneme flavor (FCM)
 
@@ -30,11 +30,19 @@ flutter build windows --release
 Android builds require **Java 17**. Gradle memory is configured to `-Xmx4096m`.
 
 **Never run APK/AAB builds yourself** (`flutter build apk`, `flutter build appbundle`, gradle assemble tasks) — they are slow and the user builds them. Verify changes with the scoped `flutter analyze` above; the build commands are documentation only.
-Always pass those directories: a bare `flutter analyze` also walks the vendored
-`native/komet_crypto/cargokit/build_tool` package, whose dependencies are never resolved, and reports
-~47 phantom errors. It is a nested package with its own `pubspec.yaml`, so `analyzer: exclude:` in
-`analysis_options.yaml` cannot reach it — scoping the command is the only way to skip it.
-Note also that `flutter analyze` treats **info**-level lints as fatal by default, so CI fails on any lint.
+Note that `flutter analyze` treats **info**-level lints as fatal by default, so CI fails on any lint.
+
+## Message encryption core
+
+`komet_crypto` is a `dart:ffi` plugin over a C core. `KometTeam/crypto-core` is a **git
+submodule** at `native/crypto-core`, and the plugin is a path dependency inside it, so the
+version is pinned by the submodule commit. After cloning: `git submodule update --init --recursive`.
+Every CI workflow already checks out with `submodules: recursive`.
+
+The C core is the single implementation shared with Komet-Android (which points at a checkout via
+`komet.crypto.dir`) — protocol and byte formats live in that repo's `docs/PROTOCOL.md`, never
+reimplement them in Dart. Its own suite (`make test`, `make asan`) must pass before bumping the
+submodule here.
 
 ## Build Flavors
 
@@ -71,15 +79,15 @@ decrypts the payload with the typed code and signs in through `accountModule.log
 payload is JSON: `{"token": "…"}`, plus an optional `"spoof"` object in `SpoofProfile.toJson()`
 shape when the token has to be replayed with the device parameters it was issued for.
 
-Regenerate the payload with the crate's own cipher, so the format can never drift:
+Regenerate the payload with the core's own cipher, so the format can never drift:
 
 ```bash
-printf '{"token":"…"}' | cargo run -q --manifest-path native/komet_crypto/rust/Cargo.toml \
-  --features blobtool --bin review_blob -- '+7 999 999 99 99' '123456'
+make -C native/crypto-core shared
+printf '{"token":"…"}' | dart run tool/review_blob.dart '+7 999 999 99 99' '123456'
 ```
 
-The bin is gated behind the `blobtool` feature, so plugin builds never compile it. It prints one
-space-free Cyrillic blob — that string is the secret's value.
+The tool derives the key exactly as `ReviewAccess` does and prints one space-free Cyrillic blob —
+that string is the secret's value.
 
 ## Architecture
 
@@ -110,9 +118,8 @@ feature it belongs to — e.g. `ChatListState` in `frontend/screens/chats/chat_l
 `backend/modules/polls.dart`. Colocate new state with its screen/module rather than adding a
 top-level `state/` directory.
 
-Wire framing, MessagePack, and Zstd (de)compression are handled by the Rust core (`kolibri`,
-via `native/komet_crypto/`) — `core/protocol/packet.dart` only wraps the already-decoded
-payload. There is no serialization work to move off the Dart isolate here; it never runs on it.
+Wire framing, MessagePack, and Zstd (de)compression are handled by the `kolibri` Rust package
+from pub.dev — `core/protocol/packet.dart` only wraps the already-decoded payload. There is no serialization work to move off the Dart isolate here; it never runs on it.
 
 ## Key Conventions (see [AGENTS.md](./AGENTS.md) for the full, canonical list)
 

@@ -8,6 +8,7 @@ import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/media/media_playback.dart';
+import '../../core/crypto/e2ee_service.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/profile_deletion_store.dart';
 import '../../core/storage/spoofing_service.dart';
@@ -441,6 +442,7 @@ class AccountModule {
 
   // #***! удаляем локально, база токен спуф и заявка
   Future<void> removeAccount(int accountId) async {
+    await E2eeService.instance.eraseAccount(accountId);
     await AppDatabase.deleteAccount(accountId);
     await TokenStorage.deleteAccount(accountId);
     await SpoofingService.clearAccountSpoof(accountId);

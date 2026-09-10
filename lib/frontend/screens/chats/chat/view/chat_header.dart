@@ -33,6 +33,7 @@ class ChatHeaderRow extends StatelessWidget {
   final String chatType;
   final bool isOfficial;
   final bool encrypted;
+  final bool verified;
   final int myId;
   final ValueListenable<String> headerStatus;
   final ValueListenable<int> scheduledCount;
@@ -60,6 +61,7 @@ class ChatHeaderRow extends StatelessWidget {
     required this.chatType,
     required this.isOfficial,
     this.encrypted = false,
+    this.verified = false,
     required this.myId,
     required this.headerStatus,
     required this.scheduledCount,
@@ -514,7 +516,7 @@ class ChatHeaderRow extends StatelessWidget {
           Positioned(
             left: -2,
             bottom: -2,
-            child: EncryptionLockBadge(size: dotSize + 4),
+            child: EncryptionLockBadge(size: dotSize + 4, verified: verified),
           ),
       ],
     );

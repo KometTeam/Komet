@@ -23,6 +23,7 @@ import 'core/cache/self_presence.dart';
 import 'core/storage/app_instance.dart';
 import 'core/storage/draft_store.dart';
 import 'core/storage/archived_chats_store.dart';
+import 'core/crypto/e2ee_service.dart';
 import 'core/storage/chat_encryption_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
@@ -265,6 +266,7 @@ void main(List<String> args) async {
   await DraftStore.instance.load();
   await ArchivedChatsStore.instance.load();
   await ChatEncryptionStore.instance.load();
+  E2eeService.instance.attach(messagesModule);
   await KometSettings.load();
   await PluginStore.instance.load();
   CommandRegistry.instance.initialize();
@@ -656,6 +658,7 @@ class KometAppState extends State<KometApp>
     if (background) {
       DebugSessionLog.instance.flushNow();
       SelfCheckService.instance.pause();
+      E2eeService.instance.lock();
     }
     if (state != AppLifecycleState.resumed) return;
     api.wakeUp();

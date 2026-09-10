@@ -9,6 +9,8 @@ import '../../../../backend/modules/contacts.dart';
 import '../../../../backend/modules/messages.dart';
 import '../../../../backend/modules/upload_service.dart';
 import '../../../../core/crypto/chat_crypto_service.dart';
+import '../../../../core/crypto/e2ee_service.dart';
+import 'package:komet_crypto/komet_crypto.dart' show ContentType;
 import '../../../../core/crypto/encrypted_photo.dart';
 import '../../../../core/media/desktop_video_probe.dart';
 import '../../../../core/media/gallery_source.dart';
@@ -54,6 +56,8 @@ class ChatMediaSendController {
   int get _myId => chatController.myId;
   int get _chatId => chatController.chatId;
 
+  bool get _e2eeActive => E2eeService.instance.isActive(_myId, _chatId);
+
   String? _uploadStatusJobId;
   ValueListenable<UploadBytes>? _uploadStatusBytes;
 
@@ -61,7 +65,12 @@ class ChatMediaSendController {
     _detachUploadStatus();
   }
 
-  CachedMessage addOptimisticMediaMessage(MessageAttachment attachment) {
+  CachedMessage addOptimisticMediaMessage(
+    MessageAttachment attachment, {
+    String? text,
+    Uint8List? sealedText,
+    int e2ee = CachedMessage.e2eeNone,
+  }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = chatController.nextTempId();
     final msg = CachedMessage(
@@ -69,9 +78,12 @@ class ChatMediaSendController {
       accountId: _myId,
       chatId: _chatId,
       senderId: _myId,
+      text: text,
       time: now,
       status: 'sending',
       attachments: [attachment],
+      sealedText: sealedText,
+      e2ee: e2ee,
     );
     setLastSentId(tempId);
     chatController.addMessage(msg);
@@ -567,6 +579,11 @@ class ChatMediaSendController {
     }
     if (jobs.isEmpty || !isMounted()) return;
 
+    if (encryptionEnabled()) {
+      notify('Отложенные фото в зашифрованном чате пока не поддерживаются');
+      return;
+    }
+
     notify('Загрузка…');
     unawaited(
       UploadService.instance.sendPhotos(
@@ -600,6 +617,41 @@ class ChatMediaSendController {
       showAttachmentPanel.value = false;
       uploadStatus.value = const UploadStatus(active: true);
       final stamp = DateTime.now().microsecondsSinceEpoch.toString();
+      if (_e2eeActive) {
+        final e2eePhoto = await prepareE2eePhoto(source: source, stamp: stamp);
+        if (!isMounted()) return;
+        final wire = e2eePhoto == null
+            ? null
+            : await E2eeService.instance.encryptBytes(
+                _myId,
+                _chatId,
+                ContentType.file,
+                e2eePhoto.ticket,
+              );
+        if (e2eePhoto == null || wire == null) {
+          uploadStatus.value = const UploadStatus();
+          if (isMounted()) {
+            notify('Не удалось зашифровать фото');
+          }
+          return;
+        }
+        final sealed = await E2eeService.instance.sealBytes(
+          _myId,
+          _chatId,
+          e2eePhoto.ticket,
+        );
+        if (!isMounted()) return;
+        await uploadAsFile(
+          source: e2eePhoto.file,
+          filename: 'photo_$stamp$kE2eePhotoExtension',
+          size: await e2eePhoto.file.length(),
+          text: wire,
+          sealedText: sealed,
+          e2ee: CachedMessage.e2eeFile,
+        );
+        if (!isMounted()) return;
+        continue;
+      }
       final prepared = await prepareEncryptedPhoto(
         accountId: _myId,
         chatId: _chatId,
@@ -639,6 +691,9 @@ class ChatMediaSendController {
     required String filename,
     required int size,
     int? scheduledTime,
+    String? text,
+    Uint8List? sealedText,
+    int e2ee = CachedMessage.e2eeNone,
   }) async {
     if (_myId == 0) return;
 
@@ -648,6 +703,9 @@ class ChatMediaSendController {
         ? null
         : addOptimisticMediaMessage(
             FileAttachment(name: filename, size: size),
+            text: text,
+            sealedText: sealedText,
+            e2ee: e2ee,
           );
 
     final sending = UploadService.instance.sendFile(
@@ -658,6 +716,7 @@ class ChatMediaSendController {
       filename: filename,
       size: size,
       placeholder: placeholder,
+      text: text,
       scheduledTime: scheduledTime,
     );
     syncUploadStatus();

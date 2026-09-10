@@ -7,6 +7,7 @@ import '../../core/config/komet_settings.dart';
 import '../../core/contacts/device_contacts_service.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
+import '../../core/crypto/e2ee_service.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
@@ -496,6 +497,14 @@ class CachedMessage {
   final bool isControl;
   final bool deleted;
   final List<Map<String, dynamic>>? editHistory;
+  // #***! открытый текст лежит запечатанным локальным ключом
+  final Uint8List? sealedText;
+  final int e2ee;
+
+  static const int e2eeNone = 0;
+  static const int e2eeText = 1;
+  static const int e2eeFailed = 2;
+  static const int e2eeFile = 3;
 
   // #***! дальше удобства для юишки
   const CachedMessage({
@@ -511,6 +520,8 @@ class CachedMessage {
     this.isControl = false,
     this.deleted = false,
     this.editHistory,
+    this.sealedText,
+    this.e2ee = e2eeNone,
   });
 
   ControlAttachment? get controlAttachment =>
@@ -545,6 +556,8 @@ class CachedMessage {
     List<MessageAttachment>? attachments,
     List<Map<String, dynamic>>? editHistory,
     Map<String, dynamic>? payload,
+    Uint8List? sealedText,
+    int? e2ee,
   }) => CachedMessage(
     id: id,
     accountId: accountId,
@@ -558,6 +571,8 @@ class CachedMessage {
     isControl: isControl,
     deleted: deleted ?? this.deleted,
     editHistory: editHistory ?? this.editHistory,
+    sealedText: sealedText ?? this.sealedText,
+    e2ee: e2ee ?? this.e2ee,
   );
 
   // #***! история правок это список прошлых версий текста
@@ -654,6 +669,10 @@ class CachedMessage {
           ? row['deleted'] == 1
           : row['deleted']?.toString() == '1',
       editHistory: parseEditHistory(row['edit_history']),
+      sealedText: row['text_sealed'] is Uint8List
+          ? row['text_sealed'] as Uint8List
+          : null,
+      e2ee: row['e2ee'] is int ? row['e2ee'] as int : 0,
     );
   }
 
@@ -700,6 +719,8 @@ class CachedMessage {
     'payload': payload != null ? jsonEncode(payload) : null,
     'deleted': deleted ? 1 : 0,
     'edit_history': editHistory != null ? jsonEncode(editHistory) : null,
+    'text_sealed': sealedText,
+    'e2ee': e2ee,
   };
 
   // #***! сообщение из пуша, разбор тот же
@@ -770,9 +791,14 @@ class MessagesModule {
       }
     }
 
-    final toSave = KometSettings.viewRedacted.value && results.isNotEmpty
+    final merged = KometSettings.viewRedacted.value && results.isNotEmpty
         ? await _mergeEditHistory(accountId, chatId, results)
         : results;
+    final toSave = await E2eeService.instance.inspectHistory(
+      accountId,
+      chatId,
+      merged,
+    );
 
     if (toSave.isNotEmpty) {
       try {
@@ -1522,6 +1548,7 @@ class MessagesModule {
     int chatId,
     int fileId, {
     String? token,
+    String? text,
     bool notify = true,
     int? scheduledTime,
     int maxAttempts = 20,
@@ -1539,6 +1566,7 @@ class MessagesModule {
           {'_type': 'FILE', 'fileId': fileId},
       ],
     };
+    if (text != null && text.isNotEmpty) message['text'] = text;
     if (scheduledTime != null) {
       message['delayedAttributes'] = {
         'timeToFire': scheduledTime,

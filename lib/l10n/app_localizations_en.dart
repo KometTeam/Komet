@@ -3008,4 +3008,163 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authLimitsConfirm => 'Got it';
+
+  @override
+  String get e2eeTitle => 'End-to-end encryption';
+
+  @override
+  String get e2eeStatusNone => 'Off';
+
+  @override
+  String e2eeStatusOffered(String name) {
+    return 'Waiting for $name to accept';
+  }
+
+  @override
+  String e2eeStatusPending(String name) {
+    return '$name wants to turn on encryption';
+  }
+
+  @override
+  String get e2eeStatusEstablished => 'On';
+
+  @override
+  String e2eeStatusKeyChanged(String name) {
+    return '$name\'s encryption key has changed';
+  }
+
+  @override
+  String get e2eeEnable => 'Turn on';
+
+  @override
+  String get e2eeAccept => 'Accept';
+
+  @override
+  String get e2eeDecline => 'Decline';
+
+  @override
+  String get e2eeCancelOffer => 'Cancel request';
+
+  @override
+  String get e2eeReset => 'Reset session';
+
+  @override
+  String get e2eeResetConfirm =>
+      'Reset the encrypted session? Both sides will need to set it up again.';
+
+  @override
+  String get e2eeFingerprint => 'Safety number';
+
+  @override
+  String e2eeFingerprintHint(String name) {
+    return 'Compare these 60 digits with $name outside MAX — in person or over another channel. If they match, the server did not substitute the keys.';
+  }
+
+  @override
+  String get e2eeVerified => 'Verified in person';
+
+  @override
+  String get e2eeCeiling =>
+      'Only message text and photos are encrypted. The server still sees who talks to whom and when, sees that the chat is encrypted, and can withhold messages. Nothing here hides that.';
+
+  @override
+  String e2eeNeedsKomet(String name) {
+    return '$name needs Komet for this to work.';
+  }
+
+  @override
+  String get e2eeOfferSent => 'Request sent';
+
+  @override
+  String get e2eeOfferFailed => 'Could not send the request';
+
+  @override
+  String get e2eeAcceptFailed => 'Could not accept the request';
+
+  @override
+  String e2eeBannerPending(String name) {
+    return '$name wants to turn on end-to-end encryption';
+  }
+
+  @override
+  String e2eeBannerKeyChanged(String name) {
+    return '$name\'s encryption key has changed. Check the safety number before accepting.';
+  }
+
+  @override
+  String get e2eeTransferTitle => 'Move to another device';
+
+  @override
+  String get e2eeTransferHint =>
+      'The transfer file holds your key and sessions. After importing it on the new device, stop using this one for encrypted chats.';
+
+  @override
+  String get e2eeExport => 'Export';
+
+  @override
+  String get e2eeImport => 'Import';
+
+  @override
+  String get e2eeTransferPassword => 'Transfer password';
+
+  @override
+  String get e2eeExportFailed => 'Could not export';
+
+  @override
+  String e2eeImported(int count) {
+    return 'Sessions moved: $count';
+  }
+
+  @override
+  String get e2eeImportFailed =>
+      'Could not import — wrong password or damaged file';
+
+  @override
+  String get e2eeLegacyNote =>
+      'Passphrase mode for groups: no forward secrecy, anyone who knows the passphrase can read the whole history.';
+
+  @override
+  String get e2eeTooLong =>
+      'The message is too long for an encrypted chat. Split it up.';
+
+  @override
+  String get e2eeEncryptFailed => 'Could not encrypt the message';
+
+  @override
+  String get e2eeRotateIdentity => 'Replace my key';
+
+  @override
+  String get e2eeRotateConfirm =>
+      'Create a new identity key? Every encrypted session will be reset, your contacts will see a key-change warning, and the safety numbers will change.';
+
+  @override
+  String get e2eeRotated => 'Key replaced';
+
+  @override
+  String get e2eeRotateFailed => 'Could not replace the key';
+
+  @override
+  String get e2eeForwardBlocked =>
+      'Forwarding is off in an encrypted chat: the server, not your device, would supply the message text.';
+
+  @override
+  String get e2eeScheduledMediaBlocked =>
+      'Scheduled photos are not supported in an encrypted chat yet. Send them now, or turn encryption off.';
+
+  @override
+  String get e2eeSearchBlocked =>
+      'Search is off in an encrypted chat: the query would go to the server, and the server only sees ciphertext.';
+
+  @override
+  String get e2eeAwaitingPeer =>
+      'This session was moved from another device. Wait for one message from your contact before sending — otherwise both devices would use the same key.';
+
+  @override
+  String e2eeBannerRehandshake(String name) {
+    return '$name is turning encryption on again. Accept only if you expected this — otherwise the server is replaying an old request to reset your session.';
+  }
+
+  @override
+  String get e2eeExportedAndDisabled =>
+      'Transfer created. Encryption is now off on this device: import the file on the new one and turn it on there.';
 }

@@ -15,6 +15,7 @@ import '../calls/conversation_params.dart';
 import '../calls/ws2_signaling.dart';
 import '../protocol/opcode_map.dart';
 import '../storage/app_instance.dart';
+import '../storage/app_database.dart';
 import '../storage/token_storage.dart';
 import '../transport/tls_config.dart';
 import '../utils/logger.dart';
@@ -119,7 +120,8 @@ Future<void> _handleReply(String payloadJson, String text) async {
         Opcode.login,
         AccountModule(api).buildLoginPayload(token, interactive: false),
       );
-      if (login.isOk) {
+      final session = await AppDatabase.loadE2eeSession(account, chatId);
+      if (login.isOk && session == null) {
         await MessagesModule(
           api,
         ).sendMessage(account, chatId, text, replyToMessageId: replyTo);

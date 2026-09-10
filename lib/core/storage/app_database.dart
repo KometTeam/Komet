@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:komet/core/storage/app_instance.dart';
 import 'package:komet/core/utils/logger.dart';
@@ -198,9 +199,13 @@ class AppDatabase {
     return _db!;
   }
 
-  // #***! на десктопе в support, на мобилках в системной папке баз
+  // #***! на десктопе и на iOS в support, на андроиде в системной папке баз.
+  // #***! на iOS getDatabasesPath это Documents, а он открыт файловым шерингом
   static Future<String> _databasesDir() async {
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+    if (Platform.isLinux ||
+        Platform.isWindows ||
+        Platform.isMacOS ||
+        Platform.isIOS) {
       final dir = await getApplicationSupportDirectory();
       return dir.path;
     }
@@ -208,8 +213,48 @@ class AppDatabase {
         .getDatabasesPath();
   }
 
+  static String? _legacyExposedDb;
+
+  // #***! WAL живёт в отдельных файлах, копировать надо все три
+  static Future<void> _copyDbFiles(String from, String to) async {
+    for (final suffix in const ['', '-wal', '-shm']) {
+      final src = File('$from$suffix');
+      if (await src.exists()) await src.copy('$to$suffix');
+    }
+  }
+
+  static Future<void> _dropLegacyExposedDb() async {
+    final legacy = _legacyExposedDb;
+    if (legacy == null) return;
+    _legacyExposedDb = null;
+    for (final suffix in const ['', '-wal', '-shm']) {
+      try {
+        final file = File('$legacy$suffix');
+        if (await file.exists()) await file.delete();
+      } catch (e) {
+        logger.w('[db] не удалось убрать старую базу: $e');
+      }
+    }
+  }
+
   // #***! разовый перенос со старого пути
   static Future<void> _migrateLegacyDb(String target) async {
+    if (Platform.isIOS) {
+      try {
+        final legacyDir = await databaseFactorySqflitePlugin.getDatabasesPath();
+        final legacy = join(legacyDir, 'komet${AppInstance.suffix}.db');
+        if (legacy == target || !await File(legacy).exists()) return;
+        if (!await File(target).exists()) {
+          await _copyDbFiles(legacy, target);
+          logger.i('[db] перенёс базу из Documents в Application Support');
+        }
+        // #***! удаляем только после того, как новая база успешно откроется
+        _legacyExposedDb = legacy;
+      } catch (e) {
+        logger.w('ios db migration failed: $e');
+      }
+      return;
+    }
     if (AppInstance.isNamed) return;
     if (!(Platform.isLinux || Platform.isWindows || Platform.isMacOS)) return;
     try {
@@ -225,16 +270,16 @@ class AppDatabase {
     }
   }
 
-  // #***! версия 23, поднял версию дописывай миграцию ниже
+  // #***! версия 24, поднял версию дописывай миграцию ниже
   static Future<Database> _open() async {
     final dbPath = await _databasesDir();
     await Directory(dbPath).create(recursive: true);
     final target = join(dbPath, 'komet${AppInstance.suffix}.db');
     await _migrateLegacyDb(target);
-    return openDatabase(
+    final opened = await openDatabase(
       target,
       // #***! каждый if oldVersion < N это шаг миграции, идут по порядку
-      version: 23,
+      version: 24,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -374,8 +419,20 @@ class AppDatabase {
             'INTEGER NOT NULL DEFAULT 0',
           );
         }
+        if (oldVersion < 24) {
+          await _addColumnIfMissing(db, 'messages', 'text_sealed', 'BLOB');
+          await _addColumnIfMissing(
+            db,
+            'messages',
+            'e2ee',
+            'INTEGER NOT NULL DEFAULT 0',
+          );
+          await db.execute(_e2eeSessionsSchema);
+        }
       },
     );
+    await _dropLegacyExposedDb();
+    return opened;
   }
 
   // #***! создание таблиц с нуля для свежей установки
@@ -403,6 +460,7 @@ class AppDatabase {
     await db.execute(_chatParticipantsSchema);
     await db.execute(_webAppStorageSchema);
     await db.execute(_webAppBiometrySchema);
+    await db.execute(_e2eeSessionsSchema);
     await _createIndexes(db);
     await _createChatParticipantsIndex(db);
   }
@@ -567,8 +625,26 @@ class AppDatabase {
       payload    TEXT,
       deleted    INTEGER NOT NULL DEFAULT 0,
       edit_history TEXT,
+      text_sealed BLOB,
+      e2ee       INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (id, account_id),
       FOREIGN KEY (chat_id, account_id) REFERENCES chats_cache (id, account_id) ON DELETE CASCADE
+    )
+  ''';
+
+  static const _e2eeSessionsSchema = '''
+    CREATE TABLE e2ee_sessions (
+      account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      chat_id    INTEGER NOT NULL,
+      peer_id    INTEGER NOT NULL,
+      phase      TEXT    NOT NULL,
+      state      BLOB,
+      peer_public BLOB,
+      verified   INTEGER NOT NULL DEFAULT 0,
+      offer_text TEXT,
+      offer_message_id TEXT,
+      updated    INTEGER NOT NULL,
+      PRIMARY KEY (account_id, chat_id)
     )
   ''';
 
@@ -690,6 +766,66 @@ class AppDatabase {
     return {
       for (final row in rows) row['key'] as String: row['value'] as String,
     };
+  }
+
+  static Future<void> saveE2eeSession(Map<String, dynamic> row) async {
+    final db = await _instance;
+    await db.insert(
+      'e2ee_sessions',
+      row,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<Map<String, dynamic>?> loadE2eeSession(
+    int accountId,
+    int chatId,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'e2ee_sessions',
+      where: 'account_id = ? AND chat_id = ?',
+      whereArgs: [accountId, chatId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first;
+  }
+
+  static Future<List<Map<String, dynamic>>> loadE2eeSessions(
+    int accountId,
+  ) async {
+    final db = await _instance;
+    return db.query(
+      'e2ee_sessions',
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+    );
+  }
+
+  static Future<void> deleteE2eeSession(int accountId, int chatId) async {
+    final db = await _instance;
+    await db.delete(
+      'e2ee_sessions',
+      where: 'account_id = ? AND chat_id = ?',
+      whereArgs: [accountId, chatId],
+    );
+  }
+
+  static Future<void> updateMessageSealed(
+    int accountId,
+    int chatId,
+    String messageId, {
+    required Uint8List? sealed,
+    required int e2ee,
+  }) async {
+    final db = await _instance;
+    await db.update(
+      'messages',
+      {'text_sealed': sealed, 'e2ee': e2ee},
+      where: 'account_id = ? AND chat_id = ? AND id = ?',
+      whereArgs: [accountId, chatId, messageId],
+    );
   }
 
   static Future<void> saveWebAppValue(

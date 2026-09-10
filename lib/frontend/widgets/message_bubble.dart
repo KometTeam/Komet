@@ -1802,10 +1802,13 @@ class MessageBubble extends StatelessWidget {
     );
 
     final Widget textWidget;
-    if (decryption?.state == MessageDecryptionState.wrongKey) {
+    if (decryption?.state == MessageDecryptionState.wrongKey ||
+        decryption?.state == MessageDecryptionState.unavailable) {
       textWidget = _wrapSelectable(
         Text(
-          'неверный ключ',
+          decryption?.state == MessageDecryptionState.wrongKey
+              ? 'неверный ключ'
+              : 'недоступно на этом устройстве',
           style: textStyle.copyWith(
             color: ctx.cs.error,
             fontStyle: FontStyle.italic,
@@ -1976,7 +1979,9 @@ class MessageBubble extends StatelessWidget {
       messageId: quotedId ?? '',
       cipherText: quotedId == null ? '' : rawPreview,
       builder: (decryption) {
-        final wrongKey = decryption?.state == MessageDecryptionState.wrongKey;
+        final wrongKey =
+            decryption?.state == MessageDecryptionState.wrongKey ||
+            decryption?.state == MessageDecryptionState.unavailable;
         final color = wrongKey ? cs.error : textColor.withValues(alpha: 0.85);
         return Row(
           mainAxisSize: MainAxisSize.min,
@@ -1987,7 +1992,9 @@ class MessageBubble extends StatelessWidget {
             ],
             Flexible(
               child: Text(
-                wrongKey
+                decryption?.state == MessageDecryptionState.unavailable
+                    ? 'недоступно на этом устройстве'
+                    : wrongKey
                     ? 'неверный ключ'
                     : (decryption?.plaintext ?? rawPreview),
                 maxLines: 1,

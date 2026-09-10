@@ -64,6 +64,7 @@ class FileUploader {
     required File file,
     required String filename,
     required int totalSize,
+    String? text,
     int? scheduledTime,
     Duration autoForceAfter = const Duration(seconds: 1),
     Duration overallTimeout = const Duration(minutes: 5),
@@ -157,6 +158,7 @@ class FileUploader {
           chatId,
           info.fileId,
           token: info.token,
+          text: text,
           scheduledTime: scheduledTime,
         );
         if (cancelled) return;
