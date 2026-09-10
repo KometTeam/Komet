@@ -16,9 +16,11 @@ import '../../core/config/app_frost.dart';
 import '../../core/utils/download_history.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/image_format.dart';
+import '../../core/utils/logger.dart';
 import '../../core/utils/media_cache.dart';
 import '../../core/utils/media_saver.dart';
 import '../../core/utils/save_file_as.dart';
+import '../../core/media/video_request_headers.dart';
 import '../../l10n/app_localizations.dart';
 import '../../core/config/app_colors.dart';
 import '../../main.dart';
@@ -97,6 +99,7 @@ class PhotoViewerScreen extends StatefulWidget {
   final PhotoHeroController? hero;
   final bool isFile;
   final String? sourceName;
+  final String? Function()? videoUserAgentProvider;
 
   const PhotoViewerScreen({
     super.key,
@@ -108,6 +111,7 @@ class PhotoViewerScreen extends StatefulWidget {
     this.hero,
     this.isFile = false,
     this.sourceName,
+    this.videoUserAgentProvider,
   }) : video = null,
        initialVideoSources = const {},
        initialVideoQuality = null;
@@ -121,6 +125,7 @@ class PhotoViewerScreen extends StatefulWidget {
     this.message,
     this.actions,
     this.sourceName,
+    this.videoUserAgentProvider,
   }) : photos = const [],
        video = attachment,
        initialIndex = 0,
@@ -138,7 +143,8 @@ class PhotoViewerScreen extends StatefulWidget {
       actions = null,
       hero = null,
       isFile = false,
-      sourceName = null;
+      sourceName = null,
+      videoUserAgentProvider = null;
 
   @override
   State<PhotoViewerScreen> createState() => _PhotoViewerScreenState();
@@ -471,6 +477,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
           ? widget.initialVideoQuality
           : null,
       loadSources: () => _loadVideoSources(item),
+      userAgentProvider: widget.videoUserAgentProvider,
       active: item.id == _current.id,
     );
     _videoSessions[item.id] = session;
@@ -1073,6 +1080,7 @@ class _VideoPlaybackSession extends ChangeNotifier {
   final VideoAttachment attachment;
   final String? initialQuality;
   final Future<Map<String, String>> Function() loadSources;
+  final String? Function()? userAgentProvider;
 
   VideoPlayerController? _controller;
   Map<String, String> _sources = const {};
@@ -1093,6 +1101,7 @@ class _VideoPlaybackSession extends ChangeNotifier {
     required this.attachment,
     required this.initialQuality,
     required this.loadSources,
+    required this.userAgentProvider,
     required bool active,
   }) : _active = active {
     unawaited(_prepare());
@@ -1143,7 +1152,14 @@ class _VideoPlaybackSession extends ChangeNotifier {
     final generation = ++_loadGeneration;
     final old = _controller;
     final previousQuality = _quality;
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final uri = Uri.parse(url);
+    final controller = VideoPlayerController.networkUrl(
+      uri,
+      httpHeaders: videoRequestHeaders(
+        uri,
+        sessionUserAgent: userAgentProvider?.call(),
+      ),
+    );
     var installed = false;
     _quality = quality;
     _error = false;
@@ -1179,7 +1195,12 @@ class _VideoPlaybackSession extends ChangeNotifier {
       if (_playWhenActive && _active) await controller.play();
       _loading = false;
       _notify();
-    } catch (_) {
+    } catch (error) {
+      final sourceAgent = uri.queryParameters['srcAg'] ?? 'unknown';
+      logger.w(
+        'PhotoViewer video init failed: host=${uri.host}, '
+        'srcAg=$sourceAgent, error=$error',
+      );
       if (!installed) await controller.dispose();
       if (generation == _loadGeneration && !_disposed) {
         if (!installed) {

@@ -248,6 +248,7 @@ Future<void> openVideoPlayer(BubbleContext ctx, VideoAttachment video) async {
         message: ctx.message,
         actions: ctx.photoActions,
         sourceName: ctx.chatName,
+        videoUserAgentProvider: () => api.session?.userAgent(),
       ),
     ),
   );

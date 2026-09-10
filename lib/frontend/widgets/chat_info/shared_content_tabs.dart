@@ -823,6 +823,7 @@ class _MediaTile extends StatelessWidget {
           ),
           actions: PhotoViewerActions(goToMessage: onGoToMessage),
           sourceName: sourceName,
+          videoUserAgentProvider: () => api.session?.userAgent(),
         ),
       );
       return;
@@ -848,6 +849,7 @@ class _MediaTile extends StatelessWidget {
         ),
         actions: PhotoViewerActions(goToMessage: onGoToMessage),
         sourceName: sourceName,
+        videoUserAgentProvider: () => api.session?.userAgent(),
       ),
     );
   }
