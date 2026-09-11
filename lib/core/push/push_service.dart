@@ -19,17 +19,13 @@ import '../storage/app_database.dart';
 import '../storage/token_storage.dart';
 import '../transport/tls_config.dart';
 import '../utils/logger.dart';
+import 'notification_bridge.dart';
 
 const _channelId = 'komet_messages';
 const _channelName = 'Сообщения';
 const _prefsTokenKey = 'fcm_push_token';
 
 // #***! фоновые обработчики, отдельный изолят без доступа к состоянию приложения
-Future<void> _clearHistory(int chatId) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.remove('notif_hist_$chatId');
-}
-
 // #***! нажали кнопку в уведомлении, ответить или отклонить
 @pragma('vm:entry-point')
 void _onNotificationResponse(NotificationResponse response) {
@@ -135,7 +131,6 @@ Future<void> _handleReply(String payloadJson, String text) async {
   }
 
   if (sent) {
-    await _clearHistory(chatId);
     await plugin.cancel(id: notifId);
   } else {
     await plugin.show(
@@ -190,19 +185,8 @@ class PushService {
   PushService._();
   static final PushService instance = PushService._();
 
-  // #***! вошли в чат, гасим его уведомления. Плагин может быть не
-  // инициализирован (десктоп без FCM/FKM) — тогда просто нечего гасить
-  static Future<void> clearChatNotification(int chatId) async {
-    if (_localActionsReady) {
-      try {
-        final plugin = FlutterLocalNotificationsPlugin();
-        await plugin.cancel(id: chatId & 0x7fffffff);
-      } catch (e) {
-        logger.w('clearChatNotification: $e');
-      }
-    }
-    await _clearHistory(chatId);
-  }
+  static Future<void> clearChatNotification(int chatId) =>
+      NotificationBridge.instance.cancelChat(chatId);
 
   Api? _api;
   AccountModule? _account;

@@ -448,6 +448,7 @@ class KometAppState extends State<KometApp>
       if (status == LoginStatus.success) {
         DeepLinkService.instance.markReady();
         NotificationBridge.instance.markReady();
+        unawaited(NotificationBridge.instance.dismissReadChats());
         ShareIntentBridge.instance.markReady();
         unawaited(_refreshWallpaperSeed());
         CallController.instance.init(api);
@@ -667,6 +668,7 @@ class KometAppState extends State<KometApp>
       unawaited(CallBridge.instance.dropOngoing());
     }
     CallBridge.instance.checkInitialCall();
+    unawaited(NotificationBridge.instance.onAppResumed());
     unawaited(NotificationBridge.instance.checkInitialChat());
     unawaited(ShareIntentBridge.instance.checkInitialShare());
     if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;

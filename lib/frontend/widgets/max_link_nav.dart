@@ -62,6 +62,11 @@ Future<bool> openChatAtMessage(
   int? messageTime,
   String? initialText,
 }) async {
+  if (messageId == null &&
+      initialText == null &&
+      ChatScreen.revealOpenChat(chatId)) {
+    return true;
+  }
   final myId = await currentAccountId();
   if (myId == 0) return false;
   final chat = await resolveChat(myId, chatId);

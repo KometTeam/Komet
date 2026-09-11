@@ -124,6 +124,21 @@ class KometNotifier(private val ctx: Context) {
         updateSummary(notifId, senderName, text, ts, active)
     }
 
+    fun cancelChat(chatId: Long) {
+        val notifId = notifIdOf(chatId)
+        manager().cancel(notifId)
+        clearChat(chatId)
+        syncSummary(notifId, null)
+    }
+
+    fun notifiedChats(): List<Long> {
+        val active = activeIds()
+        return pushPrefs().all.keys
+            .filter { it.startsWith("meta_") }
+            .mapNotNull { it.removePrefix("meta_").toLongOrNull() }
+            .filter { active.contains(notifIdOf(it)) }
+    }
+
     // Сообщение отредактировали — правим текст в уже висящем уведомлении.
     fun editMessage(data: Map<String, String>) {
         val chatId = data["mc"]?.toLongOrNull() ?: return

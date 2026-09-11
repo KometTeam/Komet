@@ -179,6 +179,17 @@ class ChatScreen extends StatefulWidget {
 
   static final List<_ChatScreenState> _open = [];
 
+  static bool revealOpenChat(int chatId) {
+    for (final screen in _open.reversed) {
+      if (screen.widget.chatId != chatId || !screen.mounted) continue;
+      final route = ModalRoute.of(screen.context);
+      if (route == null) return false;
+      Navigator.of(screen.context).popUntil((r) => r == route);
+      return true;
+    }
+    return false;
+  }
+
   static bool startBotInVisibleChat(int chatId, String startPayload) {
     for (final screen in _open.reversed) {
       if (screen.widget.chatId != chatId) continue;

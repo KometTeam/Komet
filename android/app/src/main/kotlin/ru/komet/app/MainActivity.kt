@@ -436,7 +436,7 @@ class MainActivity : AudioServiceActivity() {
                     stashChatOpen(intent, emit = false)
                     val chatId = pendingChat
                     pendingChat = 0L
-                    result.success(if (chatId > 0L) chatId else null)
+                    result.success(if (chatId != 0L) chatId else null)
                 }
                 "setActiveChat" -> {
                     ChatNotifications.activeChatId = longArg(call.argument<Any>("chatId"))
@@ -445,6 +445,15 @@ class MainActivity : AudioServiceActivity() {
                 "clearActiveChat" -> {
                     ChatNotifications.activeChatId = 0L
                     result.success(null)
+                }
+                "cancelChat" -> {
+                    KometNotifier(applicationContext).cancelChat(
+                        longArg(call.argument<Any>("chatId")),
+                    )
+                    result.success(null)
+                }
+                "notifiedChats" -> {
+                    result.success(KometNotifier(applicationContext).notifiedChats())
                 }
                 else -> result.notImplemented()
             }
@@ -541,6 +550,9 @@ class MainActivity : AudioServiceActivity() {
         val chatId = ChatNotifications.chatIdFrom(source)
         if (chatId == 0L) return
         source?.removeExtra(ChatNotifications.EXTRA_CHAT)
+        val fromRecents =
+            (source?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        if (fromRecents) return
         val sink = ChatNotifications.sink
         if (emit && sink != null) {
             sink.success(chatId)

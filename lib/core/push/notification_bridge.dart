@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../../backend/api.dart';
 import '../../frontend/widgets/max_link_nav.dart';
 import '../../main.dart';
+import '../storage/app_database.dart';
+import '../storage/token_storage.dart';
 import '../utils/logger.dart';
 
 // #***! открытие чата по тапу на уведомление
@@ -24,7 +26,8 @@ class NotificationBridge {
   bool _started = false;
   bool _ready = false;
   int _pendingChatId = 0;
-  int _sentChatId = 0;
+  int _openingChatId = 0;
+  int? _sentChatId;
   int _retriesLeft = 0;
   Timer? _retry;
 
@@ -33,6 +36,14 @@ class NotificationBridge {
   bool get _native {
     try {
       return Platform.isAndroid || Platform.isIOS;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool get _android {
+    try {
+      return Platform.isAndroid;
     } catch (_) {
       return false;
     }
@@ -68,17 +79,58 @@ class NotificationBridge {
 
   // #***! вошли в чат, говорим нативу чтоб не уведомлял
   Future<void> pushActiveChat(int chatId) async {
-    if (!_native || chatId <= 0) return;
+    if (!_native || chatId == 0) return;
+    if (_openingChatId == chatId) _openingChatId = 0;
     _activeChats.add(chatId);
     await _syncActiveChat();
   }
 
   Future<void> popActiveChat(int chatId) async {
-    if (!_native || chatId <= 0) return;
+    if (!_native || chatId == 0) return;
     final index = _activeChats.lastIndexOf(chatId);
     if (index < 0) return;
     _activeChats.removeAt(index);
     await _syncActiveChat();
+  }
+
+  Future<void> cancelChat(int chatId) async {
+    if (!_android || chatId == 0) return;
+    try {
+      await _method.invokeMethod<void>('cancelChat', {'chatId': chatId});
+    } catch (e) {
+      logger.w('NotificationBridge.cancelChat: $e');
+    }
+  }
+
+  Future<void> dismissReadChats() async {
+    if (!_android) return;
+    final List<int> notified;
+    try {
+      notified =
+          (await _method.invokeListMethod<int>('notifiedChats')) ?? const [];
+    } catch (e) {
+      logger.w('NotificationBridge.notifiedChats: $e');
+      return;
+    }
+    if (notified.isEmpty) return;
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+    for (final chatId in notified) {
+      final rows = await AppDatabase.loadChat(accountId, chatId);
+      if (rows.isEmpty) continue;
+      if ((rows.first['unread_count'] as int? ?? 0) == 0) {
+        await cancelChat(chatId);
+      }
+    }
+  }
+
+  Future<void> onAppResumed() async {
+    if (!_native) return;
+    _sentChatId = null;
+    await _syncActiveChat();
+    final chatId = _activeChatId;
+    if (chatId != 0) await cancelChat(chatId);
+    await dismissReadChats();
   }
 
   Future<void> _syncActiveChat() async {
@@ -86,7 +138,7 @@ class NotificationBridge {
     if (chatId == _sentChatId) return;
     _sentChatId = chatId;
     try {
-      if (chatId > 0) {
+      if (chatId != 0) {
         await _method.invokeMethod<void>('setActiveChat', {'chatId': chatId});
       } else {
         await _method.invokeMethod<void>('clearActiveChat');
@@ -99,7 +151,7 @@ class NotificationBridge {
   // #***! событие это просто id чата
   void _onEvent(Object? event) {
     final chatId = event is int ? event : int.tryParse(event?.toString() ?? '');
-    if (chatId == null || chatId <= 0) return;
+    if (chatId == null || chatId == 0) return;
     _pendingChatId = chatId;
     _retriesLeft = _maxRetries;
     _flushPending();
@@ -108,7 +160,7 @@ class NotificationBridge {
   // #***! ждём дерево и сессию иначе ретраим, открытый чат не переоткрываем
   void _flushPending() {
     final chatId = _pendingChatId;
-    if (chatId <= 0) return;
+    if (chatId == 0) return;
 
     final context = KometApp.navigatorKey.currentContext;
     if (!_ready || context == null || api.state != SessionState.online) {
@@ -125,7 +177,12 @@ class NotificationBridge {
     }
 
     _pendingChatId = 0;
-    if (_activeChatId == chatId) return;
-    unawaited(openChatById(context, chatId));
+    if (_activeChatId == chatId || _openingChatId == chatId) return;
+    _openingChatId = chatId;
+    unawaited(
+      openChatById(context, chatId).whenComplete(() {
+        if (_openingChatId == chatId) _openingChatId = 0;
+      }),
+    );
   }
 }

@@ -567,7 +567,10 @@ class ChatsModule {
     final next = remaining < 0 ? 0 : remaining;
     final currentMark = cached.participants[accountId] ?? 0;
     final nextMark = mark > currentMark ? mark : currentMark;
-    if (cached.unreadCount == next && nextMark == currentMark) return;
+    if (cached.unreadCount == next && nextMark == currentMark) {
+      if (next == 0) unawaited(PushService.clearChatNotification(chatId));
+      return;
+    }
     final participants = Map<int, int>.from(cached.participants)
       ..[accountId] = nextMark;
     final updated = cached.copyWith(

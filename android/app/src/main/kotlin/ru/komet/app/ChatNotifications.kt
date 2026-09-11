@@ -15,8 +15,6 @@ object ChatNotifications {
     fun isDisplayed(chatId: Long): Boolean =
         AppState.resumed && activeChatId == chatId
 
-    fun chatIdFrom(intent: Intent?): Long {
-        val id = intent?.getLongExtra(EXTRA_CHAT, 0L) ?: 0L
-        return if (id > 0L) id else 0L
-    }
+    fun chatIdFrom(intent: Intent?): Long =
+        intent?.getLongExtra(EXTRA_CHAT, 0L) ?: 0L
 }
