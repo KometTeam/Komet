@@ -404,13 +404,7 @@ class KometNotifier(private val ctx: Context) {
     }
 
     private fun chatIntent(chatId: Long): Intent {
-        val launcher = ctx.packageManager
-            .getLaunchIntentForPackage(ctx.packageName)?.component
-        val intent = if (launcher != null) {
-            Intent().setComponent(launcher)
-        } else {
-            Intent(ctx, MainActivity::class.java)
-        }
+        val intent = LaunchIntents.app(ctx)
         intent.addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP or

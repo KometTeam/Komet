@@ -183,9 +183,13 @@ class _DevicesScreenState extends State<DevicesScreen>
   String _formatPlace(Map<String, dynamic> details) {
     final country = details['country'] as String? ?? '';
     if (!BuildProfile.sessionCityLookup) {
-      return country.isEmpty ? 'Unknown' : country;
+      return country.isEmpty
+          ? AppLocalizations.of(context)!.devicesUnknownValue
+          : country;
     }
-    final city = details['city'] as String? ?? 'Unknown';
+    final city =
+        details['city'] as String? ??
+        AppLocalizations.of(context)!.devicesUnknownValue;
     return '$city, $country';
   }
 
@@ -596,12 +600,18 @@ class _DevicesScreenState extends State<DevicesScreen>
                                 _buildDetailRow(
                                   cs,
                                   Symbols.dns,
-                                  details['isp'] ?? 'Unknown',
+                                  details['isp'] ??
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.devicesUnknownValue,
                                 ),
                                 _buildDetailRow(
                                   cs,
                                   Symbols.public,
-                                  details['as'] ?? 'Unknown',
+                                  details['as'] ??
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.devicesUnknownValue,
                                 ),
                                 if (details['mobile'] == true)
                                   _buildDetailRow(
@@ -620,7 +630,10 @@ class _DevicesScreenState extends State<DevicesScreen>
                                 _buildDetailRow(
                                   cs,
                                   Symbols.schedule,
-                                  details['timezone'] ?? 'Unknown',
+                                  details['timezone'] ??
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.devicesUnknownValue,
                                 ),
                               ],
                             ),

@@ -1461,9 +1461,27 @@ class ChatsModule {
     final rows = await AppDatabase.loadChat(accountId, chatId);
     if (rows.isEmpty) return;
     final cached = CachedChat.fromDbRow(rows.first);
-    if (cached.participants[userId] == mark) return;
-    cached.participants[userId] = mark;
-    await _commitChatContent([(rows.first, cached.toDbRow())]);
+    final ownRead = userId == accountId;
+    final serverUnread = payload['unread'];
+    final lastTime = cached.lastMsgTime;
+    final unread = !ownRead
+        ? cached.unreadCount
+        : serverUnread is int
+        ? serverUnread
+        : lastTime != null && mark >= lastTime
+        ? 0
+        : cached.unreadCount;
+    if (cached.participants[userId] == mark && unread == cached.unreadCount) {
+      return;
+    }
+    final updated = cached.copyWith(
+      unreadCount: unread,
+      participants: Map<int, int>.from(cached.participants)..[userId] = mark,
+    );
+    await _commitChatContent([(rows.first, updated.toDbRow())]);
+    if (ownRead && unread == 0) {
+      unawaited(PushService.clearChatNotification(chatId));
+    }
   }
 
   // #***! обновления контактов копим 250 мс, их прилетают сотни

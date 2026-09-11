@@ -110,9 +110,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get tokenLoginFailed => 'Не удалось войти';
 
   @override
-  String get loginSignInWithSessionFile => 'По файлу сессии';
-
-  @override
   String get loginLanguage => 'Язык';
 
   @override
@@ -334,7 +331,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get profileMenuSpoof => 'Подмена данных';
 
   @override
-  String get infoTitle => 'Info';
+  String get infoTitle => 'Информация';
 
   @override
   String get infoAccountSection => 'Аккаунт';
@@ -703,14 +700,14 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notificationsTitle => 'Уведомления';
 
   @override
-  String get notificationsFkmSectionTitle => 'FKM';
+  String get notificationsFkmSectionTitle => 'Уведомления без Google (FKM)';
 
   @override
   String get notificationsFkmEnableLabel => 'Включить уведомления';
 
   @override
   String get notificationsFkmEnableSubtitle =>
-      'Для работы FKM уведомлений, приложению понадобится держать уведомление в шторке.';
+      'Komet сам держит соединение с сервером и показывает уведомления. Пока это включено, в шторке висит служебное уведомление.';
 
   @override
   String get notificationsFkmUnsupported => 'FKM работает только на Android';
@@ -3167,6 +3164,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'В зашифрованном чате пересылка недоступна: текст сообщения подставил бы сервер, а не ваше устройство.';
 
   @override
+  String get e2eeEditUnavailable =>
+      'Это сообщение не расшифровать на этом устройстве, поэтому его нельзя изменить.';
+
+  @override
   String get e2eeScheduledMediaBlocked =>
       'Отложенные фото в зашифрованном чате пока не поддерживаются. Отправьте сейчас или выключите шифрование.';
 
@@ -3220,4 +3221,57 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get chatCallJoin => 'Присоединиться';
+
+  @override
+  String get composerHintMessage => 'Сообщение';
+
+  @override
+  String get composerHintComment => 'Комментарий';
+
+  @override
+  String get composerHintCommandArgs => 'Заполните аргументы команды';
+
+  @override
+  String get emojiPanelRecent => 'Недавние';
+
+  @override
+  String get emojiPanelAnimated => 'Анимированные';
+
+  @override
+  String get attachmentFileFallback => 'Файл';
+
+  @override
+  String get attachmentContactFallback => 'Контакт';
+
+  @override
+  String userFallbackName(Object id) {
+    return 'Пользователь #$id';
+  }
+
+  @override
+  String get devicesUnknownValue => 'Неизвестно';
+
+  @override
+  String infoLoadError(Object error) {
+    return 'Ошибка: $error';
+  }
+
+  @override
+  String get chatInfoTabInfo => 'Инфо';
+
+  @override
+  String get callInfoConversationId => 'ID разговора';
+
+  @override
+  String get chatQrTitle => 'QR-код';
+
+  @override
+  String get chatQrHint => 'Отсканируйте код, чтобы открыть чат';
+
+  @override
+  String get linkQrUnavailable => 'Не удалось получить ссылку';
+
+  @override
+  String get notificationsDesktopNote =>
+      'На компьютере уведомления пока не показываются. Ниже — push-настройки аккаунта для телефонов.';
 }

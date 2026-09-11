@@ -47,7 +47,7 @@ class MessageDecryptionCache {
 
   final LinkedHashMap<String, ValueNotifier<MessageDecryption?>> _entries =
       LinkedHashMap();
-  final Set<String> _inFlight = {};
+  final Map<String, Future<void>> _inFlight = {};
 
   // #***! пузырь подписывается сюда и перерисуется когда текст расшифруется
   ValueListenable<MessageDecryption?> listenableFor(String messageId) =>
@@ -82,19 +82,57 @@ class MessageDecryptionCache {
     required String messageId,
     required String cipherText,
   }) {
-    if (cipherText.isEmpty) return;
+    final job = _begin(accountId, chatId, messageId, cipherText);
+    if (job != null) unawaited(job);
+  }
+
+  Future<MessageDecryption?> resolve({
+    required int accountId,
+    required int chatId,
+    required String messageId,
+    required String cipherText,
+  }) async {
+    try {
+      await _begin(accountId, chatId, messageId, cipherText);
+    } catch (_) {
+      return const MessageDecryption.unavailable();
+    }
+    return _entries[messageId]?.value;
+  }
+
+  String? readableText(CachedMessage message) {
+    final decryption = _entries[message.id]?.value;
+    if (decryption == null) return message.selectableText;
+    return decryption.isDecrypted ? decryption.plaintext : null;
+  }
+
+  Future<void>? _begin(
+    int accountId,
+    int chatId,
+    String messageId,
+    String cipherText,
+  ) {
+    if (cipherText.isEmpty) return null;
     final e2ee = E2eeService.instance.isOn(accountId, chatId);
     if (!e2ee && !ChatCryptoService.instance.isEnabled(accountId, chatId)) {
-      return;
+      return null;
     }
-    if (_entryFor(messageId).value != null) return;
-    if (!_inFlight.add(messageId)) return;
+    if (_entryFor(messageId).value != null) return null;
+    final running = _inFlight[messageId];
+    if (running != null) return running;
     _evictStale(messageId);
-    unawaited(
-      e2ee
-          ? _resolveSealed(accountId, chatId, messageId, cipherText)
-          : _resolve(accountId, chatId, messageId, cipherText),
-    );
+    late final Future<void> job;
+    job =
+        (e2ee
+                ? _resolveSealed(accountId, chatId, messageId, cipherText)
+                : _resolve(accountId, chatId, messageId, cipherText))
+            .whenComplete(() {
+              if (identical(_inFlight[messageId], job)) {
+                _inFlight.remove(messageId);
+              }
+            });
+    _inFlight[messageId] = job;
+    return job;
   }
 
   // #***! сквозное: открытый текст лежит в базе под локальным ключом
@@ -104,51 +142,46 @@ class MessageDecryptionCache {
     String messageId,
     String cipherText,
   ) async {
-    try {
-      final row = await AppDatabase.loadMessage(accountId, chatId, messageId);
-      if (row == null) return;
-      final flag = row['e2ee'] as int? ?? 0;
-      final sealed = row['text_sealed'];
-      if (flag == CachedMessage.e2eeText && sealed is Uint8List) {
-        final text = await E2eeService.instance.openText(
-          accountId,
-          chatId,
-          sealed,
+    final row = await AppDatabase.loadMessage(accountId, chatId, messageId);
+    if (row == null) return;
+    final flag = row['e2ee'] as int? ?? 0;
+    final sealed = row['text_sealed'];
+    if (flag == CachedMessage.e2eeText && sealed is Uint8List) {
+      final text = await E2eeService.instance.openText(
+        accountId,
+        chatId,
+        sealed,
+      );
+      _entryFor(messageId).value = text == null
+          ? const MessageDecryption.unavailable()
+          : MessageDecryption.decrypted(text);
+      return;
+    }
+    if (flag == CachedMessage.e2eeFailed) {
+      _entryFor(messageId).value = const MessageDecryption.wrongKey();
+      return;
+    }
+    if (flag == CachedMessage.e2eeFile) {
+      _entryFor(messageId).value = const MessageDecryption.decrypted('');
+      return;
+    }
+    if (flag != CachedMessage.e2eeNone || !E2eeService.instance.available) {
+      return;
+    }
+    switch (KometCrypto.classifyText(cipherText)) {
+      case TextClass.session:
+        _entryFor(messageId).value = const MessageDecryption.unavailable();
+      case TextClass.offer:
+      case TextClass.answer:
+        _entryFor(messageId).value = MessageDecryption.decrypted(
+          cipherText.split('\n').first,
         );
-        _entryFor(messageId).value = text == null
-            ? const MessageDecryption.unavailable()
-            : MessageDecryption.decrypted(text);
-        return;
-      }
-      if (flag == CachedMessage.e2eeFailed) {
-        _entryFor(messageId).value = const MessageDecryption.wrongKey();
-        return;
-      }
-      if (flag == CachedMessage.e2eeFile) {
-        _entryFor(messageId).value = const MessageDecryption.decrypted('');
-        return;
-      }
-      if (flag != CachedMessage.e2eeNone || !E2eeService.instance.available) {
-        return;
-      }
-      switch (KometCrypto.classifyText(cipherText)) {
-        case TextClass.session:
-          _entryFor(messageId).value = const MessageDecryption.unavailable();
-        case TextClass.offer:
-        case TextClass.answer:
-          _entryFor(messageId).value = MessageDecryption.decrypted(
-            cipherText.split('\n').first,
-          );
-        case TextClass.legacy:
-          if (ChatCryptoService.instance.isEnabled(accountId, chatId)) {
-            _inFlight.remove(messageId);
-            await _resolve(accountId, chatId, messageId, cipherText);
-          }
-        case TextClass.none:
-          break;
-      }
-    } finally {
-      _inFlight.remove(messageId);
+      case TextClass.legacy:
+        if (ChatCryptoService.instance.isEnabled(accountId, chatId)) {
+          await _resolve(accountId, chatId, messageId, cipherText);
+        }
+      case TextClass.none:
+        break;
     }
   }
 
@@ -158,29 +191,25 @@ class MessageDecryptionCache {
     String messageId,
     String cipherText,
   ) async {
-    try {
-      final crypto = ChatCryptoService.instance;
-      final result = await crypto.decrypt(accountId, chatId, cipherText);
-      if (result.isOk) {
-        _entryFor(messageId).value = MessageDecryption.decrypted(result.text!);
-        return;
-      }
-      // #***! ключа нет показываем как неверный ключ только если текст правда похож на шифр
-      switch (result.failure) {
-        case CryptoFailure.wrongKey:
+    final crypto = ChatCryptoService.instance;
+    final result = await crypto.decrypt(accountId, chatId, cipherText);
+    if (result.isOk) {
+      _entryFor(messageId).value = MessageDecryption.decrypted(result.text!);
+      return;
+    }
+    // #***! ключа нет показываем как неверный ключ только если текст правда похож на шифр
+    switch (result.failure) {
+      case CryptoFailure.wrongKey:
+        _entryFor(messageId).value = const MessageDecryption.wrongKey();
+      case CryptoFailure.noKey:
+        if (crypto.looksEncrypted(cipherText)) {
           _entryFor(messageId).value = const MessageDecryption.wrongKey();
-        case CryptoFailure.noKey:
-          if (crypto.looksEncrypted(cipherText)) {
-            _entryFor(messageId).value = const MessageDecryption.wrongKey();
-          }
-        case CryptoFailure.notEncrypted:
-        case CryptoFailure.malformed:
-        case CryptoFailure.unavailable:
-        case null:
-          break;
-      }
-    } finally {
-      _inFlight.remove(messageId);
+        }
+      case CryptoFailure.notEncrypted:
+      case CryptoFailure.malformed:
+      case CryptoFailure.unavailable:
+      case null:
+        break;
     }
   }
 

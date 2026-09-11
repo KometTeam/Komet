@@ -44,7 +44,8 @@ class FileBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMe = ctx.isMe;
-    final name = file.name ?? 'File';
+    final name =
+        file.name ?? AppLocalizations.of(context)!.attachmentFileFallback;
     final size = file.size ?? 0;
     final sizeStr = formatBytes(size);
     final fileId = file.fileId;

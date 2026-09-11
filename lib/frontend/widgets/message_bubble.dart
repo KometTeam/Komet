@@ -1490,7 +1490,7 @@ class MessageBubble extends StatelessWidget {
 
     // #***! у медиа ширину диктует само медиа, реакции переносим по строкам
     // чтобы длинный ряд чипов не растягивал бабл шире картинки
-    if (_mediaDictatesWidth) {
+    if (_mediaDictatesWidth || _isVideoNote) {
       return _StackMatchTopWidth(top: content, bottom: footer);
     }
 

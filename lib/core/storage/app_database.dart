@@ -1189,31 +1189,29 @@ class AppDatabase {
     );
   }
 
-  // #***! экранируем LIKE иначе поиск по % вернёт всё
-  static String _escapeLike(String value) => value
-      .replaceAll('\\', '\\\\')
-      .replaceAll('%', '\\%')
-      .replaceAll('_', '\\_');
+  static bool contactMatches(Map<String, dynamic> row, String foldedTerm) {
+    final first = (row['first_name'] as String?)?.trim() ?? '';
+    final last = (row['last_name'] as String?)?.trim() ?? '';
+    return '$first $last'.toLowerCase().contains(foldedTerm) ||
+        '$last $first'.toLowerCase().contains(foldedTerm) ||
+        (row['phone']?.toString() ?? '').contains(foldedTerm);
+  }
 
   static Future<List<Map<String, dynamic>>> searchContacts(
     int accountId,
     String query, {
     int limit = 30,
   }) async {
-    final term = query.trim();
+    final term = query.trim().toLowerCase();
     if (term.isEmpty) return const [];
     final db = await _instance;
-    final like = '%${_escapeLike(term)}%';
-    return db.query(
+    final rows = await db.query(
       'contacts',
-      where:
-          'account_id = ? AND '
-          "(first_name LIKE ? ESCAPE '\\' OR last_name LIKE ? ESCAPE '\\' "
-          "OR CAST(phone AS TEXT) LIKE ? ESCAPE '\\')",
-      whereArgs: [accountId, like, like, like],
+      where: 'account_id = ?',
+      whereArgs: [accountId],
       orderBy: 'first_name ASC, last_name ASC',
-      limit: limit,
     );
+    return rows.where((row) => contactMatches(row, term)).take(limit).toList();
   }
 
   static Future<List<Map<String, dynamic>>> searchChatsByTitle(
@@ -1221,17 +1219,19 @@ class AppDatabase {
     String query, {
     int limit = 30,
   }) async {
-    final term = query.trim();
+    final term = query.trim().toLowerCase();
     if (term.isEmpty) return const [];
     final db = await _instance;
-    final like = '%${_escapeLike(term)}%';
-    return db.query(
+    final rows = await db.query(
       'chats_cache',
-      where: "account_id = ? AND title LIKE ? ESCAPE '\\'",
-      whereArgs: [accountId, like],
+      where: 'account_id = ? AND title IS NOT NULL',
+      whereArgs: [accountId],
       orderBy: 'last_event_time DESC',
-      limit: limit,
     );
+    return rows
+        .where((row) => (row['title'] as String).toLowerCase().contains(term))
+        .take(limit)
+        .toList();
   }
 
   static Future<List<Map<String, dynamic>>> loadChatsByIds(
@@ -1325,6 +1325,17 @@ class AppDatabase {
       'contacts',
       where: 'account_id = ? AND id = ?',
       whereArgs: [accountId, id],
+    );
+  }
+
+  static Future<void> deleteContacts(int accountId, List<int> ids) async {
+    if (ids.isEmpty) return;
+    final db = await _instance;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.delete(
+      'contacts',
+      where: 'account_id = ? AND id IN ($placeholders)',
+      whereArgs: [accountId, ...ids],
     );
   }
 

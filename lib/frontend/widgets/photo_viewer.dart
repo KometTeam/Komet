@@ -455,10 +455,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   void _rotate() {
-    final delta = _current.isVideo ? 3 : 1;
     setState(() {
-      _quarterTurns[_current.id] =
-          ((_quarterTurns[_current.id] ?? 0) + delta) % 4;
+      _quarterTurns[_current.id] = ((_quarterTurns[_current.id] ?? 0) + 3) % 4;
     });
     _syncHero();
   }

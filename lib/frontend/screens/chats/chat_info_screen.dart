@@ -45,6 +45,7 @@ import '../../widgets/swipe_route.dart';
 import '../../../backend/modules/chats.dart';
 import '../calls/call_screen.dart';
 import '../contacts/open_contact_profile.dart';
+import '../profile/profile_qr_sheet.dart';
 import '../stories/story_owner_info.dart';
 import '../stories/story_peanut.dart';
 import '../stories/story_ring.dart';
@@ -217,7 +218,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       case 'DIALOG':
         if (_isBot) {
           return [
-            if (showInfo) 'Info',
+            if (showInfo) l10n.chatInfoTabInfo,
             l10n.chatInfoTabMedia,
             l10n.chatInfoTabFiles,
             l10n.chatInfoTabVoice,
@@ -227,7 +228,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         return [
           l10n.chatInfoTabGeneralChats,
           l10n.chatInfoTabMedia,
-          if (showInfo) 'Info',
+          if (showInfo) l10n.chatInfoTabInfo,
           l10n.chatInfoTabFiles,
           l10n.chatInfoTabVoice,
           l10n.chatInfoTabLinks,
@@ -235,7 +236,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       case 'CHAT':
         return [
           l10n.chatInfoTabMembers,
-          if (showInfo) 'Info',
+          if (showInfo) l10n.chatInfoTabInfo,
           l10n.chatInfoTabMedia,
           l10n.chatInfoTabFiles,
           l10n.chatInfoTabVoice,
@@ -243,14 +244,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         ];
       case 'CHANNEL':
         return [
-          if (showInfo) 'Info',
+          if (showInfo) l10n.chatInfoTabInfo,
           l10n.chatInfoTabMedia,
           l10n.chatInfoTabFiles,
           l10n.chatInfoTabVoice,
           l10n.chatInfoTabLinks,
         ];
       default:
-        return [if (showInfo) 'Info'];
+        return [if (showInfo) l10n.chatInfoTabInfo];
     }
   }
 
@@ -1815,7 +1816,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           ),
           IconButton(
             icon: Icon(Symbols.qr_code_2, color: cs.primary, size: 22),
-            onPressed: () {},
+            onPressed: () => showLinkQrSheet(
+              context,
+              name: widget.name,
+              avatarUrl: widget.imageUrl,
+              title: l10n.chatQrTitle,
+              hint: l10n.chatQrHint,
+              unavailable: l10n.linkQrUnavailable,
+              loadLink: () async => link,
+            ),
           ),
         ],
       ),
@@ -1972,7 +1981,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _tabBody(ColorScheme cs) {
-    if (_selectedTab == 'Info') return _buildInfoTabContent(cs);
+    if (_selectedTab == l10n.chatInfoTabInfo) {
+      return _buildInfoTabContent(cs);
+    }
     if (_selectedTab == l10n.chatInfoTabMembers) {
       return _buildMembersTabContent(cs);
     }

@@ -130,7 +130,21 @@ class _WebAppScreenState extends State<WebAppScreen> {
 
   void _closeFromWebApp() {
     if (!mounted) return;
-    Navigator.of(context).maybePop();
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _closeByUser() async {
+    final bridge = _bridge;
+    if (bridge != null && bridge.needsCloseConfirmation) {
+      final confirmed = await showConfirmDialog(
+        context,
+        title: widget.title,
+        message: 'Закрыть мини-приложение?',
+        confirmLabel: 'Закрыть',
+      );
+      if (!confirmed || !mounted) return;
+    }
+    Navigator.of(context).pop();
   }
 
   Future<bool> _handleBack() async {
@@ -211,7 +225,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
           title: Text(widget.title),
           leading: IconButton(
             icon: const Icon(Symbols.close),
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: _closeByUser,
           ),
           actions: [
             IconButton(

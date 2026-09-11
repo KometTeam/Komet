@@ -434,19 +434,27 @@ class ContactsModule {
     }
 
     final rows = <Map<String, dynamic>>[];
+    final removedIds = <int>[];
     for (final raw in contacts.whereType<Map>()) {
       final contact = raw.cast<dynamic, dynamic>();
+      primeContactCache(contact);
+      final id = contact['id'];
+      if (contact['status'] == 'REMOVED') {
+        if (id is int) removedIds.add(id);
+        continue;
+      }
       final row = _parseContact(contact, accountId);
       if (row != null) rows.add(row);
-      primeContactCache(contact);
     }
 
-    if (rows.isNotEmpty) {
-      await AppDatabase.saveContacts(rows);
-      revision.value++;
+    if (rows.isNotEmpty) await AppDatabase.saveContacts(rows);
+    if (removedIds.isNotEmpty) {
+      await AppDatabase.deleteContacts(accountId, removedIds);
     }
+    if (rows.isNotEmpty || removedIds.isNotEmpty) revision.value++;
     logger.i(
-      'Контакты: получено ${contacts.length}, сохранено ${rows.length} (акк $accountId)',
+      'Контакты: получено ${contacts.length}, сохранено ${rows.length}, '
+      'удалено ${removedIds.length} (акк $accountId)',
     );
   }
 

@@ -267,6 +267,7 @@ class MainActivity : AudioServiceActivity() {
                 "start" -> noteRecorder?.start(result)
                     ?: result.error("NOT_READY", "recorder not initialized", null)
                 "switch" -> noteRecorder?.switchCamera(result)
+                    ?: result.error("NOT_READY", "recorder not initialized", null)
                 "torch" -> noteRecorder?.setTorch(
                     call.argument<Boolean>("on") ?: false,
                     result,
@@ -519,6 +520,7 @@ class MainActivity : AudioServiceActivity() {
         if (intent?.hasExtra(CallConst.EXTRA_CALL) == true) applyCallWindowFlags()
         super.onCreate(savedInstanceState)
         applyKeepAwake()
+        requestHighRefreshRate()
         intent?.let { if (it.hasExtra(CallConst.EXTRA_CALL)) stashCall(it, emit = false) }
         stashChatOpen(intent, emit = false)
         stashShare(intent, emit = false)
@@ -631,6 +633,25 @@ class MainActivity : AudioServiceActivity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    private fun requestHighRefreshRate() {
+        val screen = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay
+        } ?: return
+        val current = screen.mode
+        val fastest = screen.supportedModes
+            .filter {
+                it.physicalWidth == current.physicalWidth &&
+                    it.physicalHeight == current.physicalHeight
+            }
+            .maxByOrNull { it.refreshRate } ?: return
+        window.attributes = window.attributes.apply {
+            preferredDisplayModeId = fastest.modeId
         }
     }
 

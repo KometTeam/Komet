@@ -20,6 +20,7 @@ import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/attachment_panel.dart';
 import 'package:komet/frontend/widgets/e2ee_banner.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
 import 'command_arguments_form.dart';
 import 'composer_input.dart';
@@ -89,6 +90,7 @@ class ComposerArea extends StatelessWidget {
   final VoidCallback onToggleMute;
   final bool channelSubscribed;
   final bool channelSubscribing;
+  final bool canPostToChannel;
   final VoidCallback onSubscribe;
 
   final void Function(StickerItem sticker) onStickerTap;
@@ -151,6 +153,7 @@ class ComposerArea extends StatelessWidget {
     required this.onToggleMute,
     required this.channelSubscribed,
     required this.channelSubscribing,
+    this.canPostToChannel = false,
     required this.onSubscribe,
     required this.onStickerTap,
     required this.onEmojiTap,
@@ -279,6 +282,7 @@ class ComposerArea extends StatelessWidget {
                   isMuted: isMuted,
                   onToggleMute: onToggleMute,
                   channelSubscribed: channelSubscribed,
+                  canPostToChannel: canPostToChannel,
                   channelSubscribing: channelSubscribing,
                   onSubscribe: onSubscribe,
                   showStickerButton: !commentsMode && selectedCommand == null,
@@ -286,10 +290,10 @@ class ComposerArea extends StatelessWidget {
                   forceSend: commentsMode || selectedCommand != null,
                   readOnly: selectedCommand != null,
                   hintText: selectedCommand != null
-                      ? 'Заполните аргументы команды'
+                      ? AppLocalizations.of(context)!.composerHintCommandArgs
                       : commentsMode
-                      ? 'Комментарий'
-                      : 'Message',
+                      ? AppLocalizations.of(context)!.composerHintComment
+                      : null,
                 ),
               ),
               StickerPanelView(

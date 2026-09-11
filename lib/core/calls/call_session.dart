@@ -95,6 +95,7 @@ class CallSession {
   bool _accepted = false;
   bool _peerMuted = false;
   bool _peerVideo = false;
+  bool _peerScreen = false;
   bool _mediaConnected = false;
   bool _remoteDescSet = false;
   bool _ownRemoteStream = false;
@@ -240,7 +241,8 @@ class CallSession {
   String? get pulseSource => _pulseSource;
   bool get isSpeaker => _speakerOn;
   bool get peerMuted => _peerMuted;
-  bool get peerVideo => _peerVideo;
+  bool get peerVideo => _peerVideo || _peerScreen;
+  bool get peerCamera => _peerVideo;
   bool get mediaConnected => _mediaConnected;
 
   CallSessionState _current = CallSessionState.connecting;
@@ -2449,6 +2451,7 @@ class CallSession {
             if (ms is Map) {
               _peerMuted = ms['isAudioEnabled'] != true;
               _peerVideo = ms['isVideoEnabled'] == true;
+              _peerScreen = ms['isScreenSharingEnabled'] == true;
             }
           }
         }
@@ -2483,11 +2486,13 @@ class CallSession {
 
     final muted = ms['isAudioEnabled'] != true;
     final video = ms['isVideoEnabled'] == true;
-    if (muted != _peerMuted || video != _peerVideo) {
+    final screen = ms['isScreenSharingEnabled'] == true;
+    if (muted != _peerMuted || video != _peerVideo || screen != _peerScreen) {
       _peerMuted = muted;
       _peerVideo = video;
+      _peerScreen = screen;
       _notifyInfo();
-      if (video) unawaited(_collectReceivers());
+      if (video || screen) unawaited(_collectReceivers());
     }
   }
 

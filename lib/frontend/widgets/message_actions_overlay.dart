@@ -135,9 +135,13 @@ void showMessageActions({
       MessageActionsInteraction.dragAndRelease,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
+  final route = ModalRoute.of(context);
+  final layerKey = GlobalKey<_MessageActionsLayerState>();
+  final backEntry = _CloseOnBack(() => layerKey.currentState?._close());
   late OverlayEntry entry;
   entry = OverlayEntry(
     builder: (ctx) => _MessageActionsLayer(
+      key: layerKey,
       snapshot: snapshot,
       originRect: originRect,
       tapPoint: tapPoint,
@@ -168,12 +172,29 @@ void showMessageActions({
       quickReactions: quickReactions,
       loadReactionEmojis: loadReactionEmojis,
       onDismiss: () {
+        route?.unregisterPopEntry(backEntry);
+        backEntry.canPopNotifier.dispose();
         if (entry.mounted) entry.remove();
         onDispose();
       },
     ),
   );
   overlay.insert(entry);
+  route?.registerPopEntry(backEntry);
+}
+
+class _CloseOnBack extends PopEntry<Object?> {
+  _CloseOnBack(this.onBack);
+
+  final VoidCallback onBack;
+
+  @override
+  final ValueNotifier<bool> canPopNotifier = ValueNotifier<bool>(false);
+
+  @override
+  void onPopInvokedWithResult(bool didPop, Object? result) {
+    if (!didPop) onBack();
+  }
 }
 
 class _MessageActionsLayer extends StatefulWidget {
@@ -212,6 +233,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final Future<List<ReactionEmoji>> Function()? loadReactionEmojis;
 
   const _MessageActionsLayer({
+    super.key,
     required this.snapshot,
     required this.originRect,
     required this.tapPoint,

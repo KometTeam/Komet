@@ -8,6 +8,7 @@ import '../../backend/modules/messages.dart' show ContactCache;
 import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_entities.dart';
 import '../../core/utils/text_format.dart';
+import '../../l10n/app_localizations.dart';
 import '../screens/contacts/open_contact_profile.dart';
 import 'link_text.dart';
 import 'lottie_image.dart';
@@ -151,7 +152,9 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
       openContactDialogProfile(
         context,
         contactId: userId,
-        name: ContactCache.get(userId) ?? 'User #$userId',
+        name:
+            ContactCache.get(userId) ??
+            AppLocalizations.of(context)!.userFallbackName(userId),
         avatarUrl: ContactCache.getAvatar(userId),
       ),
     );

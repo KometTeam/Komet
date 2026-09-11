@@ -21,11 +21,15 @@ object NotifAvatars {
         0xFFE3883A.toInt(), 0xFF9B72F0.toInt(), 0xFF2AA9B5.toInt(),
     )
 
-    fun load(ctx: Context, senderId: String, name: String): Bitmap {
-        val url = avatarUrl(ctx, senderId)
-        val raw = if (url != null) downloadBitmap(url) else null
-        return if (raw != null) circleCrop(raw) else initialsBitmap(name)
+    fun load(ctx: Context, senderId: String, name: String): Bitmap =
+        photo(ctx, senderId) ?: initials(name)
+
+    fun photo(ctx: Context, senderId: String): Bitmap? {
+        val url = avatarUrl(ctx, senderId) ?: return null
+        return downloadBitmap(url)?.let { circleCrop(it) }
     }
+
+    fun initials(name: String): Bitmap = initialsBitmap(name)
 
     private fun avatarUrl(ctx: Context, senderId: String): String? {
         if (senderId.isEmpty()) return null

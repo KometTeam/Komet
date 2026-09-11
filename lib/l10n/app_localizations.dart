@@ -290,12 +290,6 @@ abstract class AppLocalizations {
   /// **'Sign in failed'**
   String get tokenLoginFailed;
 
-  /// No description provided for @loginSignInWithSessionFile.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign in with session file'**
-  String get loginSignInWithSessionFile;
-
   /// No description provided for @loginLanguage.
   ///
   /// In en, this message translates to:
@@ -1421,7 +1415,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationsFkmSectionTitle.
   ///
   /// In en, this message translates to:
-  /// **'FKM'**
+  /// **'Notifications without Google (FKM)'**
   String get notificationsFkmSectionTitle;
 
   /// No description provided for @notificationsFkmEnableLabel.
@@ -1433,7 +1427,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationsFkmEnableSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'For FKM notifications to work, the app will need to keep a notification in the shade.'**
+  /// **'Komet keeps its own connection to the server and shows notifications itself. A service notification will stay in the shade while this is on.'**
   String get notificationsFkmEnableSubtitle;
 
   /// No description provided for @notificationsFkmUnsupported.
@@ -5894,6 +5888,12 @@ abstract class AppLocalizations {
   /// **'Forwarding is off in an encrypted chat: the server, not your device, would supply the message text.'**
   String get e2eeForwardBlocked;
 
+  /// No description provided for @e2eeEditUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This message can\'t be decrypted on this device, so it can\'t be edited.'**
+  String get e2eeEditUnavailable;
+
   /// No description provided for @e2eeScheduledMediaBlocked.
   ///
   /// In en, this message translates to:
@@ -5971,6 +5971,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Join'**
   String get chatCallJoin;
+
+  /// No description provided for @composerHintMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get composerHintMessage;
+
+  /// No description provided for @composerHintComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment'**
+  String get composerHintComment;
+
+  /// No description provided for @composerHintCommandArgs.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in the command arguments'**
+  String get composerHintCommandArgs;
+
+  /// No description provided for @emojiPanelRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get emojiPanelRecent;
+
+  /// No description provided for @emojiPanelAnimated.
+  ///
+  /// In en, this message translates to:
+  /// **'Animated'**
+  String get emojiPanelAnimated;
+
+  /// No description provided for @attachmentFileFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get attachmentFileFallback;
+
+  /// No description provided for @attachmentContactFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact'**
+  String get attachmentContactFallback;
+
+  /// No description provided for @userFallbackName.
+  ///
+  /// In en, this message translates to:
+  /// **'User #{id}'**
+  String userFallbackName(Object id);
+
+  /// No description provided for @devicesUnknownValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get devicesUnknownValue;
+
+  /// No description provided for @infoLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error: {error}'**
+  String infoLoadError(Object error);
+
+  /// No description provided for @chatInfoTabInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Info'**
+  String get chatInfoTabInfo;
+
+  /// No description provided for @callInfoConversationId.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation ID'**
+  String get callInfoConversationId;
+
+  /// No description provided for @chatQrTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'QR code'**
+  String get chatQrTitle;
+
+  /// No description provided for @chatQrHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the code to open this chat'**
+  String get chatQrHint;
+
+  /// No description provided for @linkQrUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t get the link'**
+  String get linkQrUnavailable;
+
+  /// No description provided for @notificationsDesktopNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications aren\'t shown on the computer yet. The settings below are your account\'s push settings for phones.'**
+  String get notificationsDesktopNote;
 }
 
 class _AppLocalizationsDelegate

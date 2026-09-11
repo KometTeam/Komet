@@ -10,6 +10,7 @@ import 'package:komet/backend/modules/messages.dart' show CachedMessage;
 import 'package:komet/core/config/app_fonts.dart';
 import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_message_actions_style.dart';
+import 'package:komet/core/crypto/message_decryption_cache.dart';
 import 'package:komet/core/utils/haptics.dart';
 import 'package:komet/core/utils/text_format.dart';
 import 'package:komet/frontend/widgets/animated_text_swap.dart';
@@ -439,7 +440,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       isMe: widget.isMe,
       bottomReservedSpace: widget.composerHeight?.value ?? 0,
       messageText: widget.message.text,
-      copyText: widget.message.selectableText,
+      copyText: MessageDecryptionCache.instance.readableText(widget.message),
       controller: controller,
       style: AppMessageActionsStyle.current.value,
       interaction: MessageActionsInteraction.tap,
@@ -512,7 +513,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       isMe: widget.isMe,
       bottomReservedSpace: widget.composerHeight?.value ?? 0,
       messageText: widget.message.text,
-      copyText: widget.message.selectableText,
+      copyText: MessageDecryptionCache.instance.readableText(widget.message),
       controller: controller,
       style: MessageActionsStyle.list,
       interaction: MessageActionsInteraction.click,

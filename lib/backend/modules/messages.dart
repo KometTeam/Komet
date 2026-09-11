@@ -406,14 +406,14 @@ class ReplyInfo {
       return ReplyInfo(messageId: mid.toString(), senderId: 0);
     }
 
-    List<MessageAttachment>? attaches;
-    final raw = msg['attaches'];
-    if (raw is List && raw.isNotEmpty) {
-      attaches = raw
-          .whereType<Map>()
-          .map((a) => MessageAttachment.fromMap(Map<String, dynamic>.from(a)))
-          .toList();
-    }
+    final (parsed, _) = CachedMessage.parseAttachments(
+      Map<String, dynamic>.from(msg),
+    );
+    final forwarded = parsed
+        ?.whereType<ForwardedMessageAttachment>()
+        .firstOrNull;
+    final ownText = msg['text']?.toString();
+    final forwardedAttaches = forwarded?.originalAttachments;
 
     final sender = msg['sender'];
     return ReplyInfo(
@@ -421,9 +421,13 @@ class ReplyInfo {
       senderId: sender is int
           ? sender
           : int.tryParse(sender?.toString() ?? '') ?? 0,
-      text: msg['text']?.toString(),
+      text: ownText != null && ownText.trim().isNotEmpty
+          ? ownText
+          : forwarded?.originalText,
       time: msg['time'] is int ? msg['time'] as int : null,
-      attachments: attaches,
+      attachments: forwardedAttaches != null && forwardedAttaches.isNotEmpty
+          ? forwardedAttaches
+          : (parsed == null || parsed.isEmpty ? null : parsed),
     );
   }
 

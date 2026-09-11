@@ -20,6 +20,7 @@ import 'package:komet/frontend/widgets/liquid_glass.dart';
 import 'package:komet/frontend/widgets/paste_media_scope.dart';
 import 'package:komet/frontend/widgets/reply_preview.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
 class ComposerInputBar extends StatelessWidget {
   const ComposerInputBar({
@@ -56,12 +57,13 @@ class ComposerInputBar extends StatelessWidget {
     required this.onToggleMute,
     this.channelSubscribed = true,
     this.channelSubscribing = false,
+    this.canPostToChannel = false,
     this.onSubscribe,
     this.showStickerButton = true,
     this.showAttachButton = true,
     this.forceSend = false,
     this.readOnly = false,
-    this.hintText = 'Message',
+    this.hintText,
     this.bottomSafe = true,
     this.vignette = false,
   });
@@ -99,12 +101,13 @@ class ComposerInputBar extends StatelessWidget {
   final VoidCallback onToggleMute;
   final bool channelSubscribed;
   final bool channelSubscribing;
+  final bool canPostToChannel;
   final VoidCallback? onSubscribe;
   final bool showStickerButton;
   final bool showAttachButton;
   final bool forceSend;
   final bool readOnly;
-  final String hintText;
+  final String? hintText;
   final bool bottomSafe;
   final bool vignette;
 
@@ -169,7 +172,7 @@ class ComposerInputBar extends StatelessWidget {
 
     // Regular channel members can't post — show the mute toggle instead of
     // a composer. Groups always keep the real composer once joined.
-    if (isChannel && !hasForward) {
+    if (isChannel && !hasForward && !canPostToChannel) {
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -324,7 +327,11 @@ class ComposerInputBar extends StatelessWidget {
                                                   onInsertContent,
                                                 ),
                                             decoration: InputDecoration(
-                                              hintText: hintText,
+                                              hintText:
+                                                  hintText ??
+                                                  AppLocalizations.of(
+                                                    context,
+                                                  )?.composerHintMessage,
                                               hintStyle: TextStyle(
                                                 color: cs.onSurfaceVariant,
                                                 fontSize: 16,

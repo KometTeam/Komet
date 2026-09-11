@@ -147,7 +147,7 @@ String? _resolvePublicLink(Map<dynamic, dynamic> chat, CachedChat? previous) {
     };
   }
   return (
-    title: chat['title'] as String?,
+    title: chat['title'] as String? ?? existing[id]?.title,
     iconUrl: chat['baseIconUrl'] as String?,
     options: options,
   );

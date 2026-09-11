@@ -1530,7 +1530,7 @@ class _CallInfoSheet extends StatelessWidget {
     add(l10n.callInfoCodec, info?.audioCodec);
     add(l10n.callInfoServer, info?.region);
     add(l10n.callInfoTopology, info?.topology);
-    add('Conversation ID', info?.conversationId);
+    add(l10n.callInfoConversationId, info?.conversationId);
     if (info?.dtlsFingerprint != null) {
       add('DTLS', _shortFp(info!.dtlsFingerprint!));
     }
@@ -1547,7 +1547,7 @@ class _CallInfoSheet extends StatelessWidget {
       );
       add(
         l10n.callInfoPeerCamera,
-        session!.peerVideo ? l10n.callCameraValueOn : l10n.callCameraValueOff,
+        session!.peerCamera ? l10n.callCameraValueOn : l10n.callCameraValueOff,
       );
     }
 

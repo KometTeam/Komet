@@ -129,6 +129,15 @@ class ChatTextSendController {
       ? E2eeService.instance.sealText(_myId, _chatId, plaintext)
       : Future.value(null);
 
+  static const int _maxClockSkewMs = 24 * 60 * 60 * 1000;
+
+  static int _serverTimeOf(String messageId, {required int fallback}) {
+    final id = int.tryParse(messageId);
+    if (id == null || id <= 0) return fallback;
+    final time = messageIdToTime(id);
+    return (time - fallback).abs() < _maxClockSkewMs ? time : fallback;
+  }
+
   // #***! доступен _pickReplyChat (остаётся в chat_screen.dart, навигация)
   int? replySourceChatId;
   ForwardRequest? forwardRequest;
@@ -334,6 +343,7 @@ class ChatTextSendController {
     final int? replySrcChatId = replyId == null ? null : replySourceChatId;
     Map<String, dynamic>? replyPayload;
     if (reply != null && replyId != null) {
+      final sourceLink = reply.payload?['link'];
       replyPayload = {
         'link': {
           'type': 'REPLY',
@@ -344,6 +354,8 @@ class ChatTextSendController {
             'text': reply.text,
             'time': reply.time,
             'attaches': reply.payload?['attaches'] ?? const [],
+            if (sourceLink is Map && sourceLink['type'] == 'FORWARD')
+              'link': sourceLink,
           },
         },
       };
@@ -426,13 +438,14 @@ class ChatTextSendController {
 
       final index = chatController.indexOfId(tempId);
       if (index != -1 && isMounted()) {
+        final sentTime = _serverTimeOf(actualId, fallback: now);
         final sent = CachedMessage(
           id: actualId.isNotEmpty ? actualId : tempId,
           accountId: _myId,
           chatId: _chatId,
           senderId: _myId,
           text: wireText,
-          time: now,
+          time: sentTime,
           status: 'sent',
           payload: composedPayload,
           sealedText: sealedText,
@@ -450,7 +463,7 @@ class ChatTextSendController {
               _myId,
               _chatId,
               messageId: sent.id,
-              time: now,
+              time: sentTime,
               text: wireText,
               status: 'sent',
               elements: elements,

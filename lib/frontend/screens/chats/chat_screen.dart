@@ -1507,12 +1507,26 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(_runBadgeRefresh());
   }
 
+  bool _mergeReadMarks(CachedChat into, CachedChat from) {
+    var changed = false;
+    from.participants.forEach((userId, mark) {
+      if (mark > (into.participants[userId] ?? 0)) {
+        into.participants[userId] = mark;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
   Future<void> _reloadChatMeta() async {
     if (_myId == 0) return;
     final rows = await chats.getChat(_myId, widget.chatId);
     if (!mounted || rows.isEmpty) return;
     final fresh = rows.first;
     final current = chat;
+    if (current != null && _mergeReadMarks(current, fresh)) {
+      _syncOtherReadTime();
+    }
     if (current != null &&
         current.pinnedMsgId == fresh.pinnedMsgId &&
         current.pinnedMsgText == fresh.pinnedMsgText &&
@@ -1527,7 +1541,18 @@ class _ChatScreenState extends State<ChatScreen>
         current.publicLink == fresh.publicLink) {
       return;
     }
+    if (current != null) _mergeReadMarks(fresh, current);
     setState(() => chat = fresh);
+    _syncOtherReadTime();
+  }
+
+  void _notePeerReadThrough(CachedMessage message) {
+    if (widget.chatType != 'DIALOG' || message.senderId == _myId) return;
+    final c = chat;
+    if (c == null) return;
+    if ((c.participants[message.senderId] ?? 0) >= message.time) return;
+    c.participants[message.senderId] = message.time;
+    _syncOtherReadTime();
   }
 
   bool get _showsCallBanner => !_commentsMode && chat?.activeCall != null;
@@ -2470,7 +2495,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   List<CachedMessage> _copyableSelection(Set<String> ids) => [
     for (final m in _messages)
-      if (ids.contains(m.id) && (m.selectableText ?? '').isNotEmpty) m,
+      if (ids.contains(m.id) &&
+          (MessageDecryptionCache.instance.readableText(m) ?? '').isNotEmpty)
+        m,
   ];
 
   CachedMessage? _singleEditable(Set<String> ids) {
@@ -2482,7 +2509,10 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _copySelected(List<CachedMessage> messages) {
     if (messages.isEmpty) return;
-    final text = messages.map((m) => m.selectableText!).join('\n\n');
+    final text = messages
+        .map((m) => MessageDecryptionCache.instance.readableText(m) ?? '')
+        .where((t) => t.isNotEmpty)
+        .join('\n\n');
     Clipboard.setData(ClipboardData(text: text));
     Haptics.tap();
     showCustomNotification(context, 'Скопировано');
@@ -2640,6 +2670,7 @@ class _ChatScreenState extends State<ChatScreen>
       isMuted: chat?.isMuted ?? false,
       onToggleMute: _toggleChatMute,
       channelSubscribed: !_previewChat,
+      canPostToChannel: chat?.iAmAdmin(_myId) ?? false,
       channelSubscribing: _subscribing,
       onSubscribe: _subscribeChannel,
       onStickerTap: _mediaSend.sendSticker,
@@ -2662,7 +2693,32 @@ class _ChatScreenState extends State<ChatScreen>
     return true;
   }
 
+  Future<String?> _editableText(CachedMessage message) async {
+    final text = message.text ?? '';
+    final decryption = await MessageDecryptionCache.instance.resolve(
+      accountId: message.accountId,
+      chatId: message.chatId,
+      messageId: message.id,
+      cipherText: text,
+    );
+    if (decryption == null) return text;
+    return decryption.isDecrypted ? decryption.plaintext : null;
+  }
+
   Future<void> _startEditMessage(CachedMessage message) async {
+    final original = await _editableText(message);
+    if (!mounted) return;
+    if (original == null) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.e2eeEditUnavailable,
+      );
+      return;
+    }
+    final decrypted = original != (message.text ?? '');
+    final formatRanges = decrypted
+        ? const <FormatRange>[]
+        : message.formatRanges;
     final cs = Theme.of(context).colorScheme;
 
     final content =
@@ -2676,8 +2732,8 @@ class _ChatScreenState extends State<ChatScreen>
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           builder: (sheetContext) => EditMessageSheet(
-            text: message.text ?? '',
-            formatRanges: message.formatRanges,
+            text: original,
+            formatRanges: formatRanges,
             contextMenuBuilder: _formatContextMenu,
           ),
         );
@@ -2689,10 +2745,9 @@ class _ChatScreenState extends State<ChatScreen>
     final elements = trimmedElements(content.elements, rawText, newText);
 
     final oldElements = serializeFormatElements(
-      message.formatRanges.where((r) => composerFormats.contains(r.format)),
+      formatRanges.where((r) => composerFormats.contains(r.format)),
     );
-    if (newText == (message.text ?? '') &&
-        _sameElements(elements, oldElements)) {
+    if (newText == original && _sameElements(elements, oldElements)) {
       return;
     }
 
@@ -2886,6 +2941,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (!nearBottom) _deferredIds.add(message.id);
         _lastSentId = message.id;
         _chatController.addMessage(message);
+        _notePeerReadThrough(message);
         _bumpMessages();
         _clearTyping(message.senderId);
         Haptics.tap();
@@ -3985,7 +4041,9 @@ class _ChatScreenState extends State<ChatScreen>
       openContactDialogProfile(
         context,
         contactId: senderId,
-        name: ContactCache.get(senderId) ?? 'User #$senderId',
+        name:
+            ContactCache.get(senderId) ??
+            AppLocalizations.of(context)!.userFallbackName(senderId),
         avatarUrl: ContactCache.getAvatar(senderId),
       ),
     );
@@ -4005,7 +4063,7 @@ class _ChatScreenState extends State<ChatScreen>
         name:
             forwarded.originalSenderName ??
             ContactCache.get(senderId) ??
-            'User #$senderId',
+            AppLocalizations.of(context)!.userFallbackName(senderId),
         avatarUrl:
             forwarded.originalSenderAvatar ?? ContactCache.getAvatar(senderId),
       ),

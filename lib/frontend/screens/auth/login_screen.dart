@@ -713,20 +713,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       );
                     },
                   ),
-                ListTile(
-                  leading: Icon(Symbols.description, color: cs.onSurface),
-                  title: Text(
-                    l10n.loginSignInWithSessionFile,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                  },
-                ),
               ],
             ),
           ),
@@ -949,18 +935,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : const SizedBox.shrink(),
                           ),
                           const SizedBox(height: 16),
-                          TextButton(
-                            onPressed: () => _showOtherLoginMethods(context),
-                            child: Text(
-                              l10n.loginOtherSignInMethods,
-                              style: TextStyle(
-                                color: cs.primary,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w400,
-                                height: 1.4,
+                          if (BuildProfile.qrLogin || BuildProfile.tokenLogin)
+                            TextButton(
+                              onPressed: () => _showOtherLoginMethods(context),
+                              child: Text(
+                                l10n.loginOtherSignInMethods,
+                                style: TextStyle(
+                                  color: cs.primary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w400,
+                                  height: 1.4,
+                                ),
                               ),
                             ),
-                          ),
                           const Spacer(),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.end,

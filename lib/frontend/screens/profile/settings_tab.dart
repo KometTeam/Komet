@@ -443,7 +443,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                             if (showExtraInfo)
                               _SettingsItem(
                                 icon: Symbols.info,
-                                label: 'Info',
+                                label: AppLocalizations.of(context)!.infoTitle,
                                 onTap: () {
                                   Navigator.push(
                                     context,

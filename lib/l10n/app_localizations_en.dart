@@ -109,9 +109,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tokenLoginFailed => 'Sign in failed';
 
   @override
-  String get loginSignInWithSessionFile => 'Sign in with session file';
-
-  @override
   String get loginLanguage => 'Language';
 
   @override
@@ -700,14 +697,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationsTitle => 'Notifications';
 
   @override
-  String get notificationsFkmSectionTitle => 'FKM';
+  String get notificationsFkmSectionTitle =>
+      'Notifications without Google (FKM)';
 
   @override
   String get notificationsFkmEnableLabel => 'Enable notifications';
 
   @override
   String get notificationsFkmEnableSubtitle =>
-      'For FKM notifications to work, the app will need to keep a notification in the shade.';
+      'Komet keeps its own connection to the server and shows notifications itself. A service notification will stay in the shade while this is on.';
 
   @override
   String get notificationsFkmUnsupported => 'FKM is Android-only';
@@ -3151,6 +3149,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Forwarding is off in an encrypted chat: the server, not your device, would supply the message text.';
 
   @override
+  String get e2eeEditUnavailable =>
+      'This message can\'t be decrypted on this device, so it can\'t be edited.';
+
+  @override
   String get e2eeScheduledMediaBlocked =>
       'Scheduled photos are not supported in an encrypted chat yet. Send them now, or turn encryption off.';
 
@@ -3202,4 +3204,57 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatCallJoin => 'Join';
+
+  @override
+  String get composerHintMessage => 'Message';
+
+  @override
+  String get composerHintComment => 'Comment';
+
+  @override
+  String get composerHintCommandArgs => 'Fill in the command arguments';
+
+  @override
+  String get emojiPanelRecent => 'Recent';
+
+  @override
+  String get emojiPanelAnimated => 'Animated';
+
+  @override
+  String get attachmentFileFallback => 'File';
+
+  @override
+  String get attachmentContactFallback => 'Contact';
+
+  @override
+  String userFallbackName(Object id) {
+    return 'User #$id';
+  }
+
+  @override
+  String get devicesUnknownValue => 'Unknown';
+
+  @override
+  String infoLoadError(Object error) {
+    return 'Error: $error';
+  }
+
+  @override
+  String get chatInfoTabInfo => 'Info';
+
+  @override
+  String get callInfoConversationId => 'Conversation ID';
+
+  @override
+  String get chatQrTitle => 'QR code';
+
+  @override
+  String get chatQrHint => 'Scan the code to open this chat';
+
+  @override
+  String get linkQrUnavailable => 'Couldn\'t get the link';
+
+  @override
+  String get notificationsDesktopNote =>
+      'Notifications aren\'t shown on the computer yet. The settings below are your account\'s push settings for phones.';
 }

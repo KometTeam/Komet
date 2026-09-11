@@ -43,7 +43,10 @@ class _InfoScreenState extends State<InfoScreen> {
       setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Error: $e');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.infoLoadError(e.toString()),
+        );
         setState(() => _isLoading = false);
       }
     }
@@ -73,7 +76,7 @@ class _InfoScreenState extends State<InfoScreen> {
           : _info == null
           ? Center(
               child: Text(
-                'No data',
+                AppLocalizations.of(context)!.chatInfoNoData,
                 style: TextStyle(color: cs.onSurfaceVariant),
               ),
             )
