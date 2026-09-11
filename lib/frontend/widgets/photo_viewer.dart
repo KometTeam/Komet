@@ -1199,7 +1199,7 @@ class _VideoPlaybackSession extends ChangeNotifier {
         'PhotoViewer video init failed: host=${uri.host}, '
         'srcAg=$sourceAgent, error=$error',
       );
-      if (!installed) await controller.dispose();
+      if (!installed) unawaited(controller.dispose().catchError((_) {}));
       if (generation == _loadGeneration && !_disposed) {
         if (!installed) {
           _quality = previousQuality;
@@ -1216,6 +1216,19 @@ class _VideoPlaybackSession extends ChangeNotifier {
     if (isCompleted && !_wasCompleted) _playWhenActive = false;
     _wasCompleted = isCompleted;
     _notify();
+  }
+
+  Future<void> retry() async {
+    if (_loading) return;
+    final quality = _quality ?? (_sources.isEmpty ? null : _sources.keys.first);
+    if (quality != null) {
+      await _load(quality, wasPlaying: _active);
+      return;
+    }
+    _error = false;
+    _loading = true;
+    _notify();
+    await _prepare();
   }
 
   Future<void> switchQuality(String quality) async {
@@ -1325,7 +1338,7 @@ class _VideoSurface extends StatelessWidget {
                 key: const ValueKey('video-rotation'),
                 quarterTurns: quarterTurns,
                 child: session.error
-                    ? const Icon(Symbols.error, color: Colors.white54, size: 64)
+                    ? _VideoErrorView(onRetry: session.retry)
                     : session.value != null
                     ? AspectRatio(
                         aspectRatio: session.value!.aspectRatio,
@@ -1356,6 +1369,50 @@ class _VideoSurface extends StatelessWidget {
       fit: BoxFit.contain,
       errorWidget: (_, _, _) =>
           const Icon(Symbols.videocam, color: Colors.white38, size: 64),
+    );
+  }
+}
+
+class _VideoErrorView extends StatelessWidget {
+  final VoidCallback onRetry;
+
+  const _VideoErrorView({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final buttonStyle = TextButton.styleFrom(foregroundColor: Colors.white);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Symbols.error, color: Colors.white54, size: 64),
+          const SizedBox(height: 12),
+          Text(
+            l10n.videoViewerFailed,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 15),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton(
+                style: buttonStyle,
+                onPressed: onRetry,
+                child: Text(l10n.videoViewerRetry),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                style: buttonStyle,
+                onPressed: () => Navigator.of(context).maybePop(),
+                child: Text(l10n.videoViewerClose),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

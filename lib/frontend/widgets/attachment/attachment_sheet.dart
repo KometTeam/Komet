@@ -16,6 +16,7 @@ import 'package:komet/core/config/app_visual_style.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/media/video_transcoder.dart';
 import 'package:komet/core/utils/format.dart';
+import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/widgets/attachment/contact_picker_page.dart';
 import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
 import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
@@ -122,6 +123,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   bool _loadingMore = false;
   bool _hasMore = false;
   int _loadToken = 0;
+  Object? _loadError;
   GalleryPermission _permission = GalleryPermission.granted;
   List<GalleryItem> _items = const [];
 
@@ -157,29 +159,48 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
 
   Future<void> _loadGallery({bool silent = false}) async {
     final token = ++_loadToken;
-    if (!silent) setState(() => _loading = true);
-    final permission = await _source.ensurePermission();
-    if (!mounted || token != _loadToken) return;
-    if (permission == GalleryPermission.denied) {
-      _cachedItems = null;
-      _cachedHasMore = false;
+    if (!silent) {
       setState(() {
-        _permission = permission;
-        _items = const [];
-        _hasMore = false;
-        _loading = false;
+        _loading = true;
+        _loadError = null;
       });
-      return;
     }
-    final loaded = _items.length;
-    final page = await _source.load(
-      offset: 0,
-      limit: loaded > GallerySource.pageSize ? loaded : GallerySource.pageSize,
-    );
-    if (!mounted || token != _loadToken) return;
-    _permission = permission;
-    _loading = false;
-    _publishItems(page.items, page.hasMore);
+    try {
+      final permission = await _source.ensurePermission();
+      if (!mounted || token != _loadToken) return;
+      if (permission == GalleryPermission.denied) {
+        _cachedItems = null;
+        _cachedHasMore = false;
+        setState(() {
+          _permission = permission;
+          _items = const [];
+          _hasMore = false;
+          _loading = false;
+        });
+        return;
+      }
+      final loaded = _items.length;
+      final page = await _source.load(
+        offset: 0,
+        limit: loaded > GallerySource.pageSize
+            ? loaded
+            : GallerySource.pageSize,
+      );
+      if (!mounted || token != _loadToken) return;
+      _permission = permission;
+      _loading = false;
+      _loadError = null;
+      _publishItems(page.items, page.hasMore);
+    } catch (error, stackTrace) {
+      logger.w('Галерея не загрузилась', error: error, stackTrace: stackTrace);
+      if (!mounted || token != _loadToken) return;
+      if (silent && _items.isNotEmpty) return;
+      _cachedItems = null;
+      setState(() {
+        _loading = false;
+        _loadError = error;
+      });
+    }
   }
 
   Future<void> _loadMore() async {
@@ -187,8 +208,19 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     final token = _loadToken;
     final offset = _items.length;
     _loadingMore = true;
-    final page = await _source.load(offset: offset);
-    _loadingMore = false;
+    final GalleryPage page;
+    try {
+      page = await _source.load(offset: offset);
+    } catch (error, stackTrace) {
+      logger.w(
+        'Следующая страница галереи не загрузилась',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return;
+    } finally {
+      _loadingMore = false;
+    }
     if (!mounted || token != _loadToken || offset != _items.length) return;
     if (page.items.isEmpty) {
       _cachedHasMore = false;
@@ -449,36 +481,41 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      child: _buildBottomBar(),
-                    ),
-                    Positioned(
-                      right: 16,
-                      bottom:
-                          barReserve +
-                          8 +
-                          MediaQuery.viewInsetsOf(context).bottom,
-                      child: AnimatedBuilder(
-                        animation: Listenable.merge([
-                          _selected,
-                          _pageController,
-                        ]),
-                        builder: (context, _) {
-                          final count = _selected.value.length;
-                          final galleryT = (1 - _currentPageT()).clamp(
-                            0.0,
-                            1.0,
-                          );
-                          if (count == 0 || galleryT == 0) {
-                            return const SizedBox.shrink();
-                          }
-                          return Opacity(
-                            opacity: galleryT,
-                            child: IgnorePointer(
-                              ignoring: galleryT < 0.5,
-                              child: _buildSendButton(cs),
-                            ),
-                          );
-                        },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          AnimatedBuilder(
+                            animation: Listenable.merge([
+                              _selected,
+                              _pageController,
+                            ]),
+                            builder: (context, _) {
+                              final count = _selected.value.length;
+                              final galleryT = (1 - _currentPageT()).clamp(
+                                0.0,
+                                1.0,
+                              );
+                              if (count == 0 || galleryT == 0) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                  right: 16,
+                                  bottom: 8,
+                                ),
+                                child: Opacity(
+                                  opacity: galleryT,
+                                  child: IgnorePointer(
+                                    ignoring: galleryT < 0.5,
+                                    child: _buildSendButton(cs),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          _buildBottomBar(),
+                        ],
                       ),
                     ),
                   ],
@@ -493,6 +530,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
 
   static const double _pillMargin = 10;
   static const double _barHeight = SlidingPillNav.height + _pillMargin;
+  static const double _captionMinHeight = 52;
   static const Duration _navAnim = Duration(milliseconds: 300);
 
   Color _composerColor(ColorScheme cs) => Color.alphaBlend(
@@ -625,6 +663,10 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     }
     if (_permission == GalleryPermission.denied) {
       return _buildDenied(scrollController, cs, bottomReserve);
+    }
+    final loadError = _loadError;
+    if (loadError != null) {
+      return _buildLoadError(scrollController, cs, bottomReserve, loadError);
     }
     if (_items.isEmpty) {
       return _buildMessage(
@@ -854,6 +896,47 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     );
   }
 
+  Widget _buildLoadError(
+    ScrollController scrollController,
+    ColorScheme cs,
+    double bottomReserve,
+    Object error,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    return _scrollableCenter(
+      scrollController,
+      bottomReserve,
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Symbols.broken_image, size: 48, color: cs.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text(
+              l10n.attachSheetGalleryFailedTitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: cs.onSurface, fontSize: 16),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '$error',
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _loadGallery,
+              child: Text(l10n.attachSheetRetry),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessage(
     ScrollController scrollController,
     ColorScheme cs,
@@ -1054,39 +1137,41 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
 
   Widget _buildCaptionBar(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
-    return SizedBox(
+    return Padding(
       key: const ValueKey('caption'),
-      height: SlidingPillNav.height,
-      child: Center(
-        child: Container(
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: _composerColor(cs),
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: _composerBorderColor(cs), width: 0.5),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _captionCtrl,
-                  style: TextStyle(color: cs.onSurface, fontSize: 15),
-                  cursorColor: cs.primary,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    isCollapsed: true,
-                    border: InputBorder.none,
-                    hintText: l10n.attachSheetAddCaptionHint,
-                    hintStyle: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontSize: 15,
-                    ),
+      padding: const EdgeInsets.symmetric(
+        vertical: (SlidingPillNav.height - _captionMinHeight) / 2,
+      ),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: _captionMinHeight),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: _composerColor(cs),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: _composerBorderColor(cs), width: 0.5),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _captionCtrl,
+                minLines: 1,
+                maxLines: 5,
+                style: TextStyle(color: cs.onSurface, fontSize: 15),
+                cursorColor: cs.primary,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  hintText: l10n.attachSheetAddCaptionHint,
+                  hintStyle: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 15,
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

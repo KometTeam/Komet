@@ -1565,6 +1565,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoViewerQuality => 'Quality';
 
   @override
+  String get videoViewerFailed => 'Could not play the video';
+
+  @override
+  String get videoViewerRetry => 'Retry';
+
+  @override
+  String get videoViewerClose => 'Close';
+
+  @override
   String get sharedCopyLink => 'Copy link';
 
   @override
@@ -1581,6 +1590,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatInfoSubscribeFailed => 'Could not subscribe to the channel';
+
+  @override
+  String get chatInfoActionJoin => 'Join';
+
+  @override
+  String get chatInfoJoinedGroup => 'You joined the group';
+
+  @override
+  String get chatInfoJoinGroupFailed => 'Could not join the group';
 
   @override
   String get chatInfoActionMuted => 'Muted';
@@ -2382,6 +2400,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attachSheetAllow => 'Allow';
+
+  @override
+  String get attachSheetGalleryFailedTitle => 'Could not load the gallery';
+
+  @override
+  String get attachSheetRetry => 'Retry';
 
   @override
   String get attachSheetSettings => 'Settings';

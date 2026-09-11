@@ -657,27 +657,14 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildPhotoPlaceholder(
-    ColorScheme cs,
-    double w,
-    double h, {
-    VoidCallback? onRetry,
-  }) {
+  Widget _buildPhotoPlaceholder(ColorScheme cs, double w, double h) {
     return Container(
       width: w,
       height: h,
       color: cs.surfaceContainerHighest,
-      child: onRetry != null
-          ? Center(
-              child: IconButton(
-                icon: Icon(Symbols.refresh, color: cs.onSurfaceVariant),
-                onPressed: onRetry,
-                tooltip: 'Retry',
-              ),
-            )
-          : Center(
-              child: Icon(Symbols.image, size: 48, color: cs.onSurfaceVariant),
-            ),
+      child: Center(
+        child: Icon(Symbols.image, size: 48, color: cs.onSurfaceVariant),
+      ),
     );
   }
 

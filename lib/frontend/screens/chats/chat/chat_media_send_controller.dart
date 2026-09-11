@@ -800,7 +800,7 @@ class ChatMediaSendController {
     if (changed) bumpMessages();
   }
 
-  String? _uploadFailureText(UploadKind kind, String reason) {
+  String _uploadFailureText(UploadKind kind, String reason) {
     final detail = switch (reason) {
       'no_upload_url' => 'сервер не выдал ссылку',
       'upload_failed' => 'загрузка отклонена',
@@ -808,10 +808,11 @@ class ChatMediaSendController {
       _ => reason,
     };
     return switch (kind) {
-      UploadKind.file => 'Ошибка: $reason',
+      UploadKind.file => 'Файл не отправлен: $detail',
       UploadKind.videoNote => 'Кружок не отправлен: $detail',
       UploadKind.voice => 'Голосовое не отправлено: $detail',
-      UploadKind.photo || UploadKind.video => null,
+      UploadKind.photo => 'Фото не отправлено: $detail',
+      UploadKind.video => 'Видео не отправлено: $detail',
     };
   }
 
@@ -845,8 +846,7 @@ class ChatMediaSendController {
         return;
       }
       failPhotoMessage(event.tempId);
-      final text = _uploadFailureText(event.kind, event.reason);
-      if (text != null) notify(text);
+      notify(_uploadFailureText(event.kind, event.reason));
     }
   }
 }

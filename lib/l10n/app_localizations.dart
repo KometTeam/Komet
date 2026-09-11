@@ -3020,6 +3020,24 @@ abstract class AppLocalizations {
   /// **'Quality'**
   String get videoViewerQuality;
 
+  /// No description provided for @videoViewerFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not play the video'**
+  String get videoViewerFailed;
+
+  /// No description provided for @videoViewerRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get videoViewerRetry;
+
+  /// No description provided for @videoViewerClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get videoViewerClose;
+
   /// No description provided for @sharedCopyLink.
   ///
   /// In en, this message translates to:
@@ -3055,6 +3073,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not subscribe to the channel'**
   String get chatInfoSubscribeFailed;
+
+  /// No description provided for @chatInfoActionJoin.
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get chatInfoActionJoin;
+
+  /// No description provided for @chatInfoJoinedGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'You joined the group'**
+  String get chatInfoJoinedGroup;
+
+  /// No description provided for @chatInfoJoinGroupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not join the group'**
+  String get chatInfoJoinGroupFailed;
 
   /// No description provided for @chatInfoActionMuted.
   ///
@@ -4561,6 +4597,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Allow'**
   String get attachSheetAllow;
+
+  /// No description provided for @attachSheetGalleryFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the gallery'**
+  String get attachSheetGalleryFailedTitle;
+
+  /// No description provided for @attachSheetRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get attachSheetRetry;
 
   /// No description provided for @attachSheetSettings.
   ///

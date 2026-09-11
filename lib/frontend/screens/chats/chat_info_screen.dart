@@ -119,8 +119,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   bool _blocked = false;
   bool _muteBusy = false;
   bool _addContactBusy = false;
-  bool _channelPreview = false;
-  bool _subscribingChannel = false;
+  bool _notMember = false;
+  bool _joining = false;
 
   StoryPreview? _storyPreview;
   List<Story> _unreadStories = const [];
@@ -271,8 +271,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
     _mediaChatId = (info?.raw['id'] as int?) ?? widget.chatId;
 
-    if (widget.chatType == 'CHANNEL') {
-      _channelPreview = !await AppDatabase.isChatInList(_myId, _mediaChatId);
+    if (_isGroupOrChannel) {
+      _notMember = !await AppDatabase.isChatInList(_myId, _mediaChatId);
       if (!mounted) return;
     }
 
@@ -1266,13 +1266,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       label: l10n.chatInfoActionLeave,
       onTap: _leaveChat,
     );
-    final subscribeBtn = (
+    final joinBtn = (
       icon: Symbols.add_circle_outline,
       slashedIcon: null,
       slashed: false,
-      label: l10n.chatInfoActionSubscribe,
-      onTap: _subscribingChannel ? null : _subscribeChannel,
+      label: widget.chatType == 'CHANNEL'
+          ? l10n.chatInfoActionSubscribe
+          : l10n.chatInfoActionJoin,
+      onTap: _joining ? null : _joinChat,
     );
+    final membershipBtn = _notMember ? joinBtn : leaveBtn;
 
     final List<
       ({
@@ -1298,9 +1301,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           ),
       ];
     } else if (widget.chatType == 'CHANNEL') {
-      btns = [muteBtn, _channelPreview ? subscribeBtn : leaveBtn];
+      btns = [muteBtn, membershipBtn];
     } else {
-      btns = [chatBtn, muteBtn, leaveBtn];
+      btns = [chatBtn, muteBtn, membershipBtn];
     }
 
     return Column(
@@ -1478,9 +1481,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
-  Future<void> _subscribeChannel() async {
-    if (_subscribingChannel) return;
-    setState(() => _subscribingChannel = true);
+  Future<void> _joinChat() async {
+    if (_joining) return;
+    final isChannel = widget.chatType == 'CHANNEL';
+    setState(() => _joining = true);
     try {
       var link = _chatInfo?.link;
       if (link == null || link.isEmpty) {
@@ -1493,15 +1497,21 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       final result = await chats.joinChannel(api, link, _myId);
       if (!mounted) return;
       setState(() {
-        _channelPreview = false;
-        _subscribingChannel = false;
+        _notMember = false;
+        _joining = false;
       });
       ChatMembersStore.instance.setCount(_mediaChatId, result.subscribersCount);
-      showCustomNotification(context, l10n.chatInfoSubscribed);
+      showCustomNotification(
+        context,
+        isChannel ? l10n.chatInfoSubscribed : l10n.chatInfoJoinedGroup,
+      );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _subscribingChannel = false);
-      showCustomNotification(context, l10n.chatInfoSubscribeFailed);
+      setState(() => _joining = false);
+      showCustomNotification(
+        context,
+        isChannel ? l10n.chatInfoSubscribeFailed : l10n.chatInfoJoinGroupFailed,
+      );
     }
   }
 

@@ -315,6 +315,8 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
           Expanded(
             child: TextField(
               controller: _caption,
+              minLines: 1,
+              maxLines: 5,
               style: const TextStyle(color: Colors.white, fontSize: 15),
               cursorColor: Colors.white,
               decoration: const InputDecoration(
