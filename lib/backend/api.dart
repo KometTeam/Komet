@@ -23,6 +23,7 @@ import '../core/utils/app_foreground.dart';
 import '../core/utils/debug_session_log.dart';
 import '../core/utils/device_locale.dart';
 import '../core/utils/logger.dart';
+import 'login_gate.dart';
 
 // #***! состояния сеськи
 enum SessionState { disconnected, connecting, connected, online }
@@ -88,6 +89,7 @@ class Api {
   bool _autoReconnect = false;
   int _sessionEpoch = 0;
   bool? _lastInteractive;
+  final LoginGate _loginGate = LoginGate();
 
   // #***! тайминги
   static const Duration _connectWatchdogTimeout = Duration(seconds: 75);
@@ -161,6 +163,7 @@ class Api {
         }
       }
 
+      _loginGate.close();
       _session = session;
       _wireLogSub?.cancel();
       _wireLogSub = wireLog.listen(_onWireLog);
@@ -207,6 +210,15 @@ class Api {
           logger.w('Авто-логин при хэндшейке не удался: $e');
         }
       }
+      if (gen != _connectGen) return;
+      if (_loginGate.loginUnanswered) {
+        await _handleConnectFailure(
+          StateError('сервер не ответил на вход'),
+          phase: 'Авто-логин',
+        );
+        return;
+      }
+      _loginGate.open();
       if (_sessionState == SessionState.online) {
         _stateController.add(SessionState.online);
         _handshakeSuccessController.add(info.deviceName ?? 'Unknown');
@@ -296,10 +308,17 @@ class Api {
     Map<dynamic, dynamic> payload, {
     bool silent = false,
   }) async {
+    if (_session == null) {
+      throw StateError('Нет соединения (${Opcode.name(opcode)})');
+    }
+    if (opcode != Opcode.login) {
+      await _loginGate.wait(ServerConfig.requestTimeout, Opcode.name(opcode));
+    }
     final session = _session;
     if (session == null) {
       throw StateError('Нет соединения (${Opcode.name(opcode)})');
     }
+    if (opcode == Opcode.login) _loginGate.noteLoginSent();
 
     final KolibriResponse resp = await session
         .requestMapFull(opcode, Map<String, dynamic>.from(payload))
@@ -314,6 +333,9 @@ class Api {
       opcode: resp.opcode,
       payload: resp.payload,
     );
+    if (opcode == Opcode.login && identical(session, _session)) {
+      _loginGate.noteLoginAnswer(ok: !packet.isError);
+    }
 
     // #***! единственное место где протухший токен уезжает в sessionExpiredStream
     if (packet.isError) {
@@ -708,6 +730,7 @@ class Api {
 
   // #***! общая уборка, таймеры подписки сессия
   void _cleanup() {
+    _loginGate.fail();
     _cancelConnectWatchdog();
     _livenessTimer?.cancel();
     _livenessTimer = null;
