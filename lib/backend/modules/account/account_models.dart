@@ -424,6 +424,8 @@ class LoginSyncParams {
   final String? chatCacheFingerprint;
   final bool serverConfigSeen;
 
+  static const String serverConfigRevision = '2';
+
   const LoginSyncParams({
     required this.chatsSync,
     required this.contactsSync,
@@ -453,7 +455,8 @@ class LoginSyncParams {
       lastLogin: int.tryParse(lastLogin) ?? 0,
       configHash: values[SyncKey.configHash],
       chatCacheFingerprint: values[SyncKey.chatCacheFingerprint],
-      serverConfigSeen: values[SyncKey.serverConfigSeen] == '1',
+      serverConfigSeen:
+          values[SyncKey.serverConfigSeen] == serverConfigRevision,
     );
   }
 }

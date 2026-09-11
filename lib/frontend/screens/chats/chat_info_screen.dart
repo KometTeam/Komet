@@ -1726,10 +1726,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     } else {
       final info = _chatInfo;
       final link = info?.link;
-      if (link != null &&
+      if (info != null &&
+          link != null &&
           link.isNotEmpty &&
-          (info?.canSeeInviteLink(_myId) ?? false)) {
-        items.add(_linkCard(cs, link));
+          info.canSeeLink(_myId)) {
+        items.add(_linkCard(cs, link, isPublic: info.isPublic));
       }
       final desc = _chatInfo?.description;
       if (desc != null && desc.isNotEmpty) {
@@ -1784,7 +1785,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
   }
 
-  Widget _linkCard(ColorScheme cs, String link) {
+  Widget _linkCard(ColorScheme cs, String link, {required bool isPublic}) {
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
@@ -1797,7 +1798,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l10n.chatInfoInviteLink,
+                  isPublic
+                      ? l10n.contactProfileInfoLink
+                      : l10n.chatInfoInviteLink,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
                 const SizedBox(height: 4),

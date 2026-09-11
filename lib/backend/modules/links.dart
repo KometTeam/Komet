@@ -24,8 +24,11 @@ class ResolvedUser extends ResolvedLink {
 
 class ResolvedLinkError extends ResolvedLink {
   final String message;
+  final String? code;
 
-  const ResolvedLinkError(this.message);
+  const ResolvedLinkError(this.message, {this.code});
+
+  bool get accessDenied => code == 'chat.denied';
 }
 
 // #***! разбор ссылок приглашений и вступление
@@ -40,13 +43,16 @@ abstract class LinkModule {
     } on TimeoutException {
       return const ResolvedLinkError('Превышено время ожидания');
     } on PacketError catch (e) {
-      return ResolvedLinkError(e.message);
+      return ResolvedLinkError(e.message, code: e.errorKey);
     }
 
     final payload = response.payload;
     if (payload is! Map) return null;
     if (!response.isOk) {
-      return ResolvedLinkError(messageFromErrorPayload(payload));
+      return ResolvedLinkError(
+        messageFromErrorPayload(payload),
+        code: payload['error']?.toString(),
+      );
     }
 
     // #***! в ответе или чат или контакт

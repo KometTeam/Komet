@@ -1,4 +1,5 @@
 import '../../core/utils/logger.dart';
+import '../../models/chat_call.dart';
 import 'chat_preview.dart';
 import 'chats.dart';
 
@@ -89,12 +90,22 @@ CachedChat? parseChatRow(
       pinnedMsgTime: pinned.time,
       pinnedMsgIsPreview: pinned.isPreview,
       lastMentionMsgId: mentionId ?? existing[id]?.lastMentionMsgId,
+      activeCallData: ChatCall.fromServer(chat['videoConversation'])?.encode(),
+      publicLink: _resolvePublicLink(chat, previous),
     );
   // #***! логируем и null, чат просто не попадёт в список
   } catch (e) {
     logger.e("Ошибка при парсинге чата: $e");
     return null;
   }
+}
+
+String? _resolvePublicLink(Map<dynamic, dynamic> chat, CachedChat? previous) {
+  final access = chat['access'];
+  if (access == null) return previous?.publicLink;
+  if (access != 'PUBLIC') return null;
+  final link = chat['link']?.toString().trim() ?? '';
+  return link.isEmpty ? null : link;
 }
 
 // #***! имя и иконка, у диалога от контакта у группы от чата
@@ -365,6 +376,8 @@ bool sameChatContent(CachedChat a, CachedChat b) {
   if (a.lastEventTime != b.lastEventTime) return false;
   if (a.isOnline != b.isOnline) return false;
   if (a.seenTime != b.seenTime) return false;
+  if (a.activeCallData != b.activeCallData) return false;
+  if (a.publicLink != b.publicLink) return false;
   if (a.admins.length != b.admins.length) return false;
   if (!a.admins.containsAll(b.admins)) return false;
   if (a.options.length != b.options.length) return false;

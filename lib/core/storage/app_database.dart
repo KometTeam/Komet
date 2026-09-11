@@ -164,6 +164,7 @@ abstract class SyncKey {
   static const loginInfo = 'login_info';
   static const serverConfigSeen = 'server_config_seen';
   static const profileInviteLink = 'profile_invite_link';
+  static const welcomeStickerIds = 'welcome_sticker_ids';
 }
 
 // #***! вся локальная база, профили чаты контакты сообщения
@@ -279,7 +280,7 @@ class AppDatabase {
     final opened = await openDatabase(
       target,
       // #***! каждый if oldVersion < N это шаг миграции, идут по порядку
-      version: 24,
+      version: 26,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -428,6 +429,12 @@ class AppDatabase {
             'INTEGER NOT NULL DEFAULT 0',
           );
           await db.execute(_e2eeSessionsSchema);
+        }
+        if (oldVersion < 25) {
+          await _addColumnIfMissing(db, 'chats_cache', 'active_call', 'TEXT');
+        }
+        if (oldVersion < 26) {
+          await _addColumnIfMissing(db, 'chats_cache', 'public_link', 'TEXT');
         }
       },
     );
@@ -598,6 +605,8 @@ class AppDatabase {
       pinned_msg_time INTEGER,
       pinned_msg_is_preview INTEGER NOT NULL DEFAULT 0,
       last_mention_msg_id INTEGER,
+      active_call     TEXT,
+      public_link     TEXT,
       PRIMARY KEY (id, account_id)
     )
   ''';
@@ -754,6 +763,15 @@ class AppDatabase {
     );
     if (rows.isEmpty) return null;
     return rows.first['value'] as String;
+  }
+
+  static Future<void> setWelcomeStickerIds(int accountId, List<int> ids) =>
+      setSyncValue(accountId, SyncKey.welcomeStickerIds, ids.join(','));
+
+  static Future<List<int>> getWelcomeStickerIds(int accountId) async {
+    final raw = await getSyncValue(accountId, SyncKey.welcomeStickerIds);
+    if (raw == null || raw.isEmpty) return const [];
+    return raw.split(',').map(int.tryParse).whereType<int>().toList();
   }
 
   static Future<Map<String, String>> getAllSyncValues(int accountId) async {
@@ -1065,6 +1083,41 @@ class AppDatabase {
   static Future<bool> isChatInList(int accountId, int chatId) async {
     final rows = await loadChat(accountId, chatId);
     return rows.isNotEmpty && chatRowIsInList(rows.first);
+  }
+
+  static Future<void> updateChatColumns(
+    List<({int accountId, int chatId, Map<String, Object?> values})> updates,
+  ) async {
+    if (updates.isEmpty) return;
+    try {
+      final db = await _instance;
+      final batch = db.batch();
+      for (final update in updates) {
+        batch.update(
+          'chats_cache',
+          update.values,
+          where: 'account_id = ? AND id = ?',
+          whereArgs: [update.accountId, update.chatId],
+        );
+      }
+      await batch.commit(noResult: true);
+    } catch (e) {
+      logger.e('Ошибка при обновлении чата: $e');
+    }
+  }
+
+  static Future<void> setChatListState(
+    int accountId,
+    int chatId,
+    int listState,
+  ) async {
+    final db = await _instance;
+    await db.update(
+      'chats_cache',
+      {'in_list': listState},
+      where: 'account_id = ? AND id = ?',
+      whereArgs: [accountId, chatId],
+    );
   }
 
   static Future<List<Map<String, dynamic>>> loadChats(

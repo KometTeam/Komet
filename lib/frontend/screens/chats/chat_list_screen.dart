@@ -14,6 +14,7 @@ import 'folder_action_sheet.dart';
 import 'folder_edit_sheet.dart';
 import '../contacts/add_contact_sheet.dart';
 import '../../widgets/adaptive_shell.dart';
+import '../../widgets/chat_call_badge.dart';
 import '../../../core/crypto/message_decryption_cache.dart';
 import '../../widgets/decrypted_text.dart';
 import '../../widgets/encryption_lock_badge.dart';
@@ -2137,6 +2138,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               isBot: _isBotDialog(secondId, chat),
                             ),
                             hasMiniApp: _hasMiniApp(secondId, chat),
+                            hasCall: chat.activeCall != null,
                           ),
                         );
                       } else {
@@ -2198,6 +2200,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             titleIcon: chat.id == 0
                                 ? null
                                 : chatKindIcon(chat.type, isBot: false),
+                            hasCall: chat.activeCall != null,
                           ),
                         );
                       }
@@ -3078,6 +3081,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     ChatPreviewMedia? previewMedia,
     IconData? titleIcon,
     bool hasMiniApp = false,
+    bool hasCall = false,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
@@ -3313,6 +3317,12 @@ class _ChatListScreenState extends State<ChatListScreen>
                             size: 14,
                           ),
                         ),
+                      )
+                    else if (hasCall)
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: ChatCallBadge(borderColor: cs.surface),
                       )
                     else if (presenceUserId != 0)
                       Positioned(

@@ -12,6 +12,7 @@ import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/message_search_result.dart';
 import 'package:komet/frontend/widgets/chat_wallpaper_view.dart';
 
+import 'chat_call_banner.dart';
 import 'command_panel_view.dart';
 import 'measure_size.dart';
 import 'mention_panel_view.dart';
@@ -29,6 +30,7 @@ class ChatBodyLayout extends StatelessWidget {
   final int myId;
   final VoidCallback onJumpToPinnedMessage;
   final Future<void> Function() onUnpinCurrentMessage;
+  final VoidCallback? onJoinCall;
   final bool composerFrosted;
   final ValueNotifier<double> composerHeight;
   final ValueNotifier<double> pinnedBannerHeight;
@@ -59,6 +61,7 @@ class ChatBodyLayout extends StatelessWidget {
     required this.myId,
     required this.onJumpToPinnedMessage,
     required this.onUnpinCurrentMessage,
+    required this.onJoinCall,
     required this.composerFrosted,
     required this.composerHeight,
     required this.pinnedBannerHeight,
@@ -93,6 +96,20 @@ class ChatBodyLayout extends StatelessWidget {
     );
   }
 
+  Widget? _callBanner({required bool floating}) {
+    final call = chat?.activeCall;
+    final join = onJoinCall;
+    if (call == null || join == null) return null;
+    return ChatCallBanner(
+      call: call,
+      onJoin: join,
+      floating: floating,
+      frosted: effectiveChrome == ChatChromeStyle.transparent,
+      liquid: liquidChrome,
+      backdropKey: pillBackdrop,
+    );
+  }
+
   Widget _panelsColumn() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -111,10 +128,12 @@ class ChatBodyLayout extends StatelessWidget {
     );
 
     if (!underlap) {
+      final callBanner = _callBanner(floating: false);
       final banner = _pinnedBanner(floating: false);
       final frosted = composerFrosted;
       return Column(
         children: [
+          ?callBanner,
           ?banner,
           Expanded(
             child: Stack(
@@ -152,6 +171,7 @@ class ChatBodyLayout extends StatelessWidget {
     }
 
     final vignette = chromeVignette;
+    final callBanner = _callBanner(floating: true);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -200,14 +220,24 @@ class ChatBodyLayout extends StatelessWidget {
           right: 8,
           child: MeasureSize(
             onHeight: (value) => pinnedBannerHeight.value = value,
-            child: buildPinnedAndPill(
-              chat: chat,
-              frosted: effectiveChrome == ChatChromeStyle.transparent,
-              liquidChrome: liquidChrome,
-              backdropKey: pillBackdrop,
-              onTap: onJumpToPinnedMessage,
-              myId: myId,
-              onUnpinRequested: () => unawaited(onUnpinCurrentMessage()),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (callBanner != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: callBanner,
+                  ),
+                buildPinnedAndPill(
+                  chat: chat,
+                  frosted: effectiveChrome == ChatChromeStyle.transparent,
+                  liquidChrome: liquidChrome,
+                  backdropKey: pillBackdrop,
+                  onTap: onJumpToPinnedMessage,
+                  myId: myId,
+                  onUnpinRequested: () => unawaited(onUnpinCurrentMessage()),
+                ),
+              ],
             ),
           ),
         ),

@@ -350,6 +350,7 @@ class SelectableMessageRow extends StatefulWidget {
   final bool allowCopy;
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
+  final VoidCallback? onCopyLink;
   final bool Function() isPinned;
   final Future<List<MessageReader>> Function()? loadReadBy;
   final void Function(int userId)? onReaderTap;
@@ -379,6 +380,7 @@ class SelectableMessageRow extends StatefulWidget {
     this.allowCopy = true,
     this.onMarkUnread,
     this.onPin,
+    this.onCopyLink,
     required this.isPinned,
     this.loadReadBy,
     this.onReaderTap,
@@ -454,6 +456,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       allowCopy: widget.allowCopy,
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
+      onCopyLink: widget.onCopyLink,
       isPinned: _isPinnedNow(),
       onReact: widget.onReact,
       selectedReaction: widget.reactions?.value?['yourReaction']?.toString(),
@@ -526,6 +529,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       allowCopy: widget.allowCopy,
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
+      onCopyLink: widget.onCopyLink,
       isPinned: _isPinnedNow(),
       onDispose: controller.dispose,
     );

@@ -5,6 +5,8 @@ import 'dart:io' show File;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../../../backend/modules/chat_preview.dart';
+import '../../../../backend/modules/chats.dart';
 import '../../../../backend/modules/contacts.dart';
 import '../../../../backend/modules/messages.dart';
 import '../../../../backend/modules/upload_service.dart';
@@ -169,6 +171,17 @@ class ChatMediaSendController {
       chatController.setMessageAt(idx, real);
       bumpMessages();
       unawaited(chatController.persistOutgoing(real, removeId: tempId));
+      unawaited(
+        chats.applyOutgoing(
+          _myId,
+          _chatId,
+          messageId: real.id,
+          time: real.time,
+          text: messagePreviewText(serverMsg) ?? '',
+          preview: messagePreviewMedia(serverMsg),
+          status: 'sent',
+        ),
+      );
     } catch (e) {
       if (!isMounted()) return;
       updateFileMessageStatus(tempId, 'error');

@@ -1268,6 +1268,12 @@ abstract class AppLocalizations {
   /// **'Copy'**
   String get msgActionsCopy;
 
+  /// No description provided for @msgActionsCopyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get msgActionsCopyLink;
+
   /// No description provided for @msgActionsSelectAll.
   ///
   /// In en, this message translates to:
@@ -5917,6 +5923,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Transfer created. Encryption is now off on this device: import the file on the new one and turn it on there.'**
   String get e2eeExportedAndDisabled;
+
+  /// No description provided for @chatNoAccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have access to this chat'**
+  String get chatNoAccessMessage;
+
+  /// No description provided for @chatNoAccessOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get chatNoAccessOk;
+
+  /// No description provided for @chatEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No messages yet'**
+  String get chatEmptyTitle;
+
+  /// No description provided for @chatGreetingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a message or send this sticker'**
+  String get chatGreetingHint;
+
+  /// No description provided for @chatCallBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Call in chat'**
+  String get chatCallBannerTitle;
+
+  /// No description provided for @chatVideoCallBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Video call in chat'**
+  String get chatVideoCallBannerTitle;
+
+  /// No description provided for @chatCallParticipants.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 participant} other{{count} participants}}'**
+  String chatCallParticipants(int count);
+
+  /// No description provided for @chatCallJoin.
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get chatCallJoin;
 }
 
 class _AppLocalizationsDelegate

@@ -675,20 +675,21 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ListTile(
-                  leading: Icon(Symbols.qr_code_2, color: cs.onSurface),
-                  title: Text(
-                    l10n.loginSignInWithQr,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                if (BuildProfile.qrLogin)
+                  ListTile(
+                    leading: Icon(Symbols.qr_code_2, color: cs.onSurface),
+                    title: Text(
+                      l10n.loginSignInWithQr,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
+                    onTap: () {
+                      Navigator.pop(context);
+                    },
                   ),
-                  onTap: () {
-                    Navigator.pop(context);
-                  },
-                ),
                 if (BuildProfile.tokenLogin)
                   ListTile(
                     leading: Icon(Symbols.key, color: cs.onSurface),

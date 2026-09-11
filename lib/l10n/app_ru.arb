@@ -209,6 +209,7 @@
   "registrationSubtitle": "Укажите имя и выберите аватар",
   "registrationChooseAvatar": "Выберите аватар",
   "msgActionsCopy": "Копировать",
+  "msgActionsCopyLink": "Скопировать ссылку",
   "msgActionsSelectAll": "Выбрать всё",
   "emojiSearchHint": "Поиск эмодзи",
   "msgActionsEdit": "Изменить",
@@ -1092,5 +1093,13 @@
   "e2eeAwaitingPeer": "Сессия перенесена с другого устройства. Дождитесь одного сообщения от собеседника, иначе оба устройства выведут одинаковый ключ.",
   "e2eeBannerRehandshake": "{name} заново включает шифрование. Принимайте, только если этого ждали — иначе сервер повторяет старый запрос, чтобы сбросить вашу сессию.",
   "@e2eeBannerRehandshake": {"placeholders": {"name": {"type": "String"}}},
-  "e2eeExportedAndDisabled": "Перенос создан. На этом устройстве шифрование выключено: импортируйте файл на новом и включите там."
+  "e2eeExportedAndDisabled": "Перенос создан. На этом устройстве шифрование выключено: импортируйте файл на новом и включите там.",
+  "chatNoAccessMessage": "У вас нет доступа к этому чату",
+  "chatNoAccessOk": "Ок",
+  "chatEmptyTitle": "Сообщений пока нет",
+  "chatGreetingHint": "Напишите сообщение или отправьте этот стикер",
+  "chatCallBannerTitle": "Звонок в чате",
+  "chatVideoCallBannerTitle": "Видеозвонок в чате",
+  "chatCallParticipants": "{count, plural, one{{count} участник} few{{count} участника} many{{count} участников} other{{count} участника}}",
+  "chatCallJoin": "Присоединиться"
 }

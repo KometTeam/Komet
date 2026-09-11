@@ -91,13 +91,9 @@ class ChatTextSendController {
   final bool Function() isMounted;
   final BuildContext Function() contextOf;
   final CachedChat? Function() chatOf;
-  final void Function(CachedChat) setChat;
-  final bool Function() isChatListed;
-  final VoidCallback markChatListed;
   final Future<String?> Function(String text, {bool notify}) encryptOutgoing;
   final Future<void> Function(SlashCommand command, String args) executeCommand;
   final void Function(CachedMessage) checkPrankTrigger;
-  final VoidCallback syncOtherReadTime;
 
   ChatTextSendController({
     required this.chatController,
@@ -115,13 +111,9 @@ class ChatTextSendController {
     required this.isMounted,
     required this.contextOf,
     required this.chatOf,
-    required this.setChat,
-    required this.isChatListed,
-    required this.markChatListed,
     required this.encryptOutgoing,
     required this.executeCommand,
     required this.checkPrankTrigger,
-    required this.syncOtherReadTime,
   });
 
   int get _myId => chatController.myId;
@@ -465,18 +457,6 @@ class ChatTextSendController {
             ),
           );
         }
-      }
-
-      if (!commentsMode && !isChatListed()) {
-        unawaited(
-          chats.refreshChats(api, [_chatId]).then((list) {
-            if (!isMounted() || list.isEmpty) return;
-            setChat(list.first);
-            markChatListed();
-            bumpMessages();
-            syncOtherReadTime();
-          }),
-        );
       }
     } catch (e) {
       if (replySrcChatId != null) {

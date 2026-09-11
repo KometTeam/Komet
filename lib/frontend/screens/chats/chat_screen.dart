@@ -52,6 +52,7 @@ import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
 import '../../../core/cache/info_cache.dart';
+import '../../../core/links/message_link_token.dart';
 import '../../../core/cache/message_session_cache.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/emoji_keyword_index.dart';
@@ -74,6 +75,7 @@ import 'chat/upload_status.dart';
 import 'chat/mention_panel_controller.dart';
 import 'chat/chat_media_send_controller.dart';
 import 'chat/chat_text_send_controller.dart';
+import 'chat/view/greeting_sticker_card.dart';
 import 'chat/view/message_list_decorations.dart';
 import 'chat/view/message_row_widgets.dart';
 import 'chat/view/scroll_down_button.dart';
@@ -92,12 +94,14 @@ import '../../../models/contact_info.dart';
 import '../../commands/commands.dart';
 import '../../widgets/rich_message_controller.dart';
 import '../../../core/utils/text_format.dart';
+import '../../widgets/call_link_handler.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/photo_viewer.dart';
 import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/lottie_image.dart';
+import '../../widgets/no_chat_access_card.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
 import '../../widgets/attachment/paste_preview_sheet.dart';
 import '../../widgets/sticker_pack_sheet.dart';
@@ -438,10 +442,6 @@ class _ChatScreenState extends State<ChatScreen>
   late AnimationController _shimmerController;
   Timer? _shimmerStartTimer;
   bool _previewChat = false;
-  // #***! чат ещё не в списке (первое сообщение новому диалогу/каналу без
-  // подписки) — сброшено в true по умолчанию, чтобы не мешать обычным
-  // чатам; настоящее состояние узнаём асинхронно в _fastPreloadCache.
-  bool _chatInList = true;
   bool _subscribing = false;
   String? _channelLink;
   final ChatController _chatController = ChatController();
@@ -478,6 +478,8 @@ class _ChatScreenState extends State<ChatScreen>
   set _myId(int v) => _chatController.myId = v;
   CachedChat? chat;
   bool _peerIsBot = false;
+  bool _peerKindKnown = false;
+  bool _greetingMounted = false;
   bool _botStartRequested = false;
   ChatWallpaper? _wallpaper;
 
@@ -663,17 +665,9 @@ class _ChatScreenState extends State<ChatScreen>
       isMounted: () => mounted,
       contextOf: () => context,
       chatOf: () => chat,
-      setChat: (value) {
-        if (mounted) setState(() => chat = value);
-      },
-      isChatListed: () => _chatInList,
-      markChatListed: () {
-        if (mounted) setState(() => _chatInList = true);
-      },
       encryptOutgoing: _encryptOutgoing,
       executeCommand: _executeCommand,
       checkPrankTrigger: _prank.checkTrigger,
-      syncOtherReadTime: _syncOtherReadTime,
     );
     final incomingReply = widget.replyRequest;
     if (incomingReply != null) {
@@ -811,8 +805,11 @@ class _ChatScreenState extends State<ChatScreen>
         avatar.isNotEmpty &&
         ContactCache.getAvatar(peerId) != avatar;
     if (avatarIsNew) ContactCache.putAvatar(peerId, avatar);
-    if (_peerIsBot == info.isBot && !avatarIsNew) return;
-    setState(() => _peerIsBot = info.isBot);
+    if (_peerKindKnown && _peerIsBot == info.isBot && !avatarIsNew) return;
+    setState(() {
+      _peerKindKnown = true;
+      _peerIsBot = info.isBot;
+    });
   }
 
   Future<void> _fastPreloadCache() async {
@@ -839,7 +836,6 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted) return;
       final inList = await AppDatabase.isChatInList(_myId, widget.chatId);
       if (!mounted) return;
-      if (inList != _chatInList) setState(() => _chatInList = inList);
       if (widget.chatType == 'CHANNEL') {
         final preview = !inList;
         if (preview != _previewChat) setState(() => _previewChat = preview);
@@ -1384,6 +1380,28 @@ class _ChatScreenState extends State<ChatScreen>
     return readers;
   }
 
+  bool _canLinkMessage(CachedMessage message) {
+    if (_commentsMode || message.isControl) return false;
+    final type = chat?.type ?? widget.chatType;
+    if (type != 'CHAT' && type != 'GROUP' && type != 'CHANNEL') return false;
+    return MessageLinkToken.encode(message.id) != null;
+  }
+
+  Future<void> _copyMessageLink(CachedMessage message) async {
+    final url = MessageLinkToken.messageUrl(
+      chatId: widget.chatId,
+      messageId: message.id,
+      publicLink: chat?.publicLink,
+    );
+    if (url == null) return;
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.sharedLinkCopied,
+    );
+  }
+
   bool _canPinMessage(CachedMessage message) {
     if (message.isControl) return false;
     if (int.tryParse(message.id) == null) return false;
@@ -1504,10 +1522,25 @@ class _ChatScreenState extends State<ChatScreen>
         current.options.length == fresh.options.length &&
         current.options.containsAll(fresh.options) &&
         current.admins.length == fresh.admins.length &&
-        current.admins.containsAll(fresh.admins)) {
+        current.admins.containsAll(fresh.admins) &&
+        current.activeCallData == fresh.activeCallData &&
+        current.publicLink == fresh.publicLink) {
       return;
     }
     setState(() => chat = fresh);
+  }
+
+  bool get _showsCallBanner => !_commentsMode && chat?.activeCall != null;
+
+  Future<void> _joinChatCall() async {
+    final call = chat?.activeCall;
+    if (call == null) return;
+    await joinGroupCall(
+      context,
+      token: call.joinLink,
+      name: _headerName(),
+      isVideo: call.isVideo,
+    );
   }
 
   Future<void> _runBadgeRefresh() async {
@@ -3894,6 +3927,7 @@ class _ChatScreenState extends State<ChatScreen>
             originalTime: a.originalTime,
             originalText: a.originalText,
             originalChatId: a.originalChatId,
+            originalChatAccess: a.originalChatAccess,
             originalFormatRanges: a.originalFormatRanges,
             originalAttachments: a.originalAttachments,
             originalContact: a.originalContact,
@@ -3996,6 +4030,13 @@ class _ChatScreenState extends State<ChatScreen>
       );
       return;
     }
+
+    if (!await chats.canOpenForwardSource(api, _myId, forwarded)) {
+      if (!mounted) return;
+      await showNoChatAccessCard(context);
+      return;
+    }
+    if (!mounted) return;
 
     await chats.ensureChatCached(api, _myId, sourceChatId);
     if (!mounted) return;
@@ -4279,6 +4320,7 @@ class _ChatScreenState extends State<ChatScreen>
                     myId: _myId,
                     onJumpToPinnedMessage: _jumpToPinnedMessage,
                     onUnpinCurrentMessage: _unpinCurrentMessage,
+                    onJoinCall: _commentsMode ? null : _joinChatCall,
                     composerFrosted: _composerFrosted,
                     composerHeight: _composerHeight,
                     pinnedBannerHeight: _pinnedBannerHeight,
@@ -4393,7 +4435,41 @@ class _ChatScreenState extends State<ChatScreen>
         ),
         if (showShimmer)
           Positioned.fill(child: ShimmerLoading(shimmer: _shimmerController)),
+        Positioned.fill(
+          child: ValueListenableBuilder<int>(
+            valueListenable: _messagesRev,
+            builder: (context, _, _) => _buildEmptyState(),
+          ),
+        ),
       ],
+    );
+  }
+
+  bool get _isPersonDialog =>
+      !_commentsMode && widget.chatType == 'DIALOG' && widget.chatId != 0;
+
+  Widget _buildEmptyState() {
+    final empty = _messages.isEmpty && !_isLoading;
+    final greetingDue =
+        empty && _isPersonDialog && _peerKindKnown && !_peerIsBot;
+    if (greetingDue) _greetingMounted = true;
+    if (_greetingMounted) {
+      return GreetingStickerCard(
+        accountId: _myId,
+        visible: greetingDue,
+        onSend: _mediaSend.sendSticker,
+      );
+    }
+    if (!empty) return const SizedBox.shrink();
+    return IgnorePointer(
+      child: Center(
+        child: Text(
+          AppLocalizations.of(context)!.chatEmptyTitle,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
     );
   }
 
@@ -4413,7 +4489,9 @@ class _ChatScreenState extends State<ChatScreen>
       final glossy = AppVisualStyle.current.value.glossyChrome;
       return glossy ? 2 : 4;
     }
-    if (chat?.hasPinnedMessage == true && pinnedHeight > 0) {
+    final hasBanner =
+        chat?.hasPinnedMessage == true || _showsCallBanner;
+    if (hasBanner && pinnedHeight > 0) {
       return _pinnedBannerTop() + pinnedHeight + 2;
     }
     return _pinnedBannerTop() + 2;
@@ -4421,16 +4499,7 @@ class _ChatScreenState extends State<ChatScreen>
 
 
   Widget _buildMessagesListContent() {
-    if (_messages.isEmpty) {
-      return Center(
-        child: Text(
-          'No messages yet',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
+    if (_messages.isEmpty) return const SizedBox.shrink();
 
     final items = _buildCombinedItems();
     final visibleCount = _visibleMessageCount;
@@ -4614,6 +4683,9 @@ class _ChatScreenState extends State<ChatScreen>
                                     : () => _markMessageUnread(message),
                                 onPin: _canPinMessage(message)
                                     ? () => _togglePinMessage(message)
+                                    : null,
+                                onCopyLink: _canLinkMessage(message)
+                                    ? () => _copyMessageLink(message)
                                     : null,
                                 isPinned: () =>
                                     chat?.pinnedMsgId ==

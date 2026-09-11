@@ -216,6 +216,7 @@
   "registrationSubtitle": "Add your name and pick an avatar",
   "registrationChooseAvatar": "Choose an avatar",
   "msgActionsCopy": "Copy",
+  "msgActionsCopyLink": "Copy link",
   "msgActionsSelectAll": "Select all",
   "emojiSearchHint": "Search emoji",
   "msgActionsEdit": "Edit",
@@ -1348,5 +1349,20 @@
   "e2eeAwaitingPeer": "This session was moved from another device. Wait for one message from your contact before sending — otherwise both devices would use the same key.",
   "e2eeBannerRehandshake": "{name} is turning encryption on again. Accept only if you expected this — otherwise the server is replaying an old request to reset your session.",
   "@e2eeBannerRehandshake": {"placeholders": {"name": {"type": "String"}}},
-  "e2eeExportedAndDisabled": "Transfer created. Encryption is now off on this device: import the file on the new one and turn it on there."
+  "e2eeExportedAndDisabled": "Transfer created. Encryption is now off on this device: import the file on the new one and turn it on there.",
+  "chatNoAccessMessage": "You don't have access to this chat",
+  "chatNoAccessOk": "OK",
+  "chatEmptyTitle": "No messages yet",
+  "chatGreetingHint": "Write a message or send this sticker",
+  "chatCallBannerTitle": "Call in chat",
+  "chatVideoCallBannerTitle": "Video call in chat",
+  "chatCallParticipants": "{count, plural, =1{1 participant} other{{count} participants}}",
+  "@chatCallParticipants": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatCallJoin": "Join"
 }

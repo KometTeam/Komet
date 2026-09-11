@@ -10,6 +10,7 @@ import '../../core/protocol/packet.dart';
 import '../../core/media/media_playback.dart';
 import '../../core/crypto/e2ee_service.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/utils/parse.dart';
 import '../../core/storage/profile_deletion_store.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
@@ -785,11 +786,19 @@ class AccountModule {
     final config = data['config'] as Map?;
     final serverConfig = config?['server'] as Map?;
     if (serverConfig != null) {
-      await AppDatabase.setSyncValue(accountId, SyncKey.serverConfigSeen, '1');
+      await AppDatabase.setSyncValue(
+        accountId,
+        SyncKey.serverConfigSeen,
+        LoginSyncParams.serverConfigRevision,
+      );
       await AppDatabase.setSyncValue(
         accountId,
         SyncKey.profileInviteLink,
         serverConfig['invite-link']?.toString().trim() ?? '',
+      );
+      await AppDatabase.setWelcomeStickerIds(
+        accountId,
+        parseIntList(serverConfig['welcome-sticker-ids']),
       );
       await _persistEntryBannerApps(accountId, serverConfig);
     }

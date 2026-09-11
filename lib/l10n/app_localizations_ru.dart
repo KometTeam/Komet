@@ -623,6 +623,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get msgActionsCopy => 'Копировать';
 
   @override
+  String get msgActionsCopyLink => 'Скопировать ссылку';
+
+  @override
   String get msgActionsSelectAll => 'Выбрать всё';
 
   @override
@@ -3183,4 +3186,38 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get e2eeExportedAndDisabled =>
       'Перенос создан. На этом устройстве шифрование выключено: импортируйте файл на новом и включите там.';
+
+  @override
+  String get chatNoAccessMessage => 'У вас нет доступа к этому чату';
+
+  @override
+  String get chatNoAccessOk => 'Ок';
+
+  @override
+  String get chatEmptyTitle => 'Сообщений пока нет';
+
+  @override
+  String get chatGreetingHint => 'Напишите сообщение или отправьте этот стикер';
+
+  @override
+  String get chatCallBannerTitle => 'Звонок в чате';
+
+  @override
+  String get chatVideoCallBannerTitle => 'Видеозвонок в чате';
+
+  @override
+  String chatCallParticipants(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count участника',
+      many: '$count участников',
+      few: '$count участника',
+      one: '$count участник',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatCallJoin => 'Присоединиться';
 }

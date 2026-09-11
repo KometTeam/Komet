@@ -1,3 +1,5 @@
+import 'message_link_token.dart';
+
 // #***! виды ссылок max.ru
 enum MaxContentKind { public, invite, user, content }
 
@@ -141,7 +143,7 @@ sealed class MaxLink {
             baseUrl: url,
           );
       }
-      final messageId = int.tryParse(segments[1]);
+      final messageId = _messageId(segments[1]);
       final name = _publicName(first);
       if (messageId == null || name == null) return null;
       return MaxContentLink(
@@ -149,18 +151,20 @@ sealed class MaxLink {
         url: url,
         baseUrl: 'https://max.ru/$name',
         messageId: messageId,
+        lookup: '$name/${segments[1]}',
       );
     }
 
     if (lower == 'c' && segments.length == 3) {
       final chatId = int.tryParse(segments[1]);
-      final messageId = int.tryParse(segments[2]);
+      final messageId = _messageId(segments[2]);
       if (chatId == null || messageId == null) return null;
       return MaxContentLink(
         kind: MaxContentKind.content,
         url: url,
         baseUrl: 'https://max.ru/c/$chatId',
         messageId: messageId,
+        lookup: '/c/$chatId/${segments[2]}',
       );
     }
 
@@ -182,6 +186,10 @@ sealed class MaxLink {
     if (!_segment.hasMatch(name)) return null;
     return name;
   }
+
+  static int? _messageId(String segment) =>
+      int.tryParse(segment) ??
+      int.tryParse(MessageLinkToken.decode(segment) ?? '');
 
   static String? _startPayload(Map<String, String> params) {
     final value = params['start']?.trim();
@@ -287,6 +295,7 @@ class MaxContentLink extends MaxLink {
   final String baseUrl;
   final String? startPayload;
   final int? messageId;
+  final String lookup;
 
   const MaxContentLink({
     required this.kind,
@@ -294,7 +303,8 @@ class MaxContentLink extends MaxLink {
     required this.baseUrl,
     this.startPayload,
     this.messageId,
-  });
+    String? lookup,
+  }) : lookup = lookup ?? url;
 
   @override
   bool get needsConnection => true;

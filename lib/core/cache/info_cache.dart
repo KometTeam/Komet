@@ -69,6 +69,10 @@ class InfoCache<T> {
   Future<T?> _runFetch(_Entry<T> entry, int id) async {
     try {
       final result = await fetcher(id);
+      if (result == null) {
+        entry.failedAt = DateTime.now();
+        return null;
+      }
       entry.value = result;
       entry.fetchedAt = DateTime.now();
       entry.failedAt = null;

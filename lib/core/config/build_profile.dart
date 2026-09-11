@@ -10,7 +10,8 @@ abstract final class BuildProfile {
   static const bool selfUpdate = !isStore;
   static const bool firebasePush = appFlavor == 'oneme';
   static const bool spoofUi = !isStore;
-  static const bool tokenLogin = !isStore;
+  static const bool tokenLogin = false;
+  static const bool qrLogin = false;
   static const bool devTools = !isStore;
   static const bool insecureTransport = !isStore;
   static const bool trafficCapture = !isStore;

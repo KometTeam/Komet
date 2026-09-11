@@ -64,11 +64,16 @@ class CallController {
   StreamSubscription<CallSessionState>? _activeSub;
   CallSession? get activeSession => _active;
 
+  String? _activeJoinLink;
+  String? get activeJoinLink => _active == null ? null : _activeJoinLink;
+
   IncomingCall? _pending;
   IncomingCall? get pendingIncoming => _pending;
 
+  bool _starting = false;
+
   // #***! занято, второй звонок не берём
-  bool get isBusy => _active != null;
+  bool get isBusy => _active != null || _starting;
 
   // #***! подписка на пуши звонков
   void init(Api api) {
@@ -146,7 +151,7 @@ class CallController {
 
   // #***! входящий наружу, юишка решит что показать
   void _emitIncoming(IncomingCall incoming) {
-    if (_active != null) return;
+    if (isBusy) return;
     if (_pending?.conversationId == incoming.conversationId) return;
     _pending = incoming;
     _incoming.add(incoming);
@@ -159,25 +164,22 @@ class CallController {
   }
 
   // #***! исходящий звонок
-  Future<CallSession> startOutgoing(
-    int calleeId, {
-    bool isVideo = false,
-  }) async {
-    if (_active != null) throw StateError('уже идёт звонок');
-    final out = await _calls!.initiateCall(calleeId, isVideo: isVideo);
-    final config = Ws2Config.fromEndpoint(
-      out.endpoint,
-      userId: out.callsUserId,
-      device: _api?.callsDevice,
-      osVersion: _api?.callsOsVersion,
-    );
-    final session = CallSession(ws2Config: config, role: CallRole.caller);
-    return _launch(session, session.start);
-  }
+  Future<CallSession> startOutgoing(int calleeId, {bool isVideo = false}) =>
+      _startExclusive(() async {
+        final out = await _calls!.initiateCall(calleeId, isVideo: isVideo);
+        final config = Ws2Config.fromEndpoint(
+          out.endpoint,
+          userId: out.callsUserId,
+          device: _api?.callsDevice,
+          osVersion: _api?.callsOsVersion,
+        );
+        final session = CallSession(ws2Config: config, role: CallRole.caller);
+        return _launch(session, session.start);
+      });
 
   // #***! конференция со ссылкой
   Future<CreatedCall> createConference() async {
-    if (_active != null) throw StateError('уже идёт звонок');
+    if (isBusy) throw StateError('уже идёт звонок');
     return _calls!.createConference();
   }
 
@@ -185,21 +187,34 @@ class CallController {
       _calls!.resolveCallLink(url);
 
   // #***! вход по ссылке
-  Future<CallSession> joinByLink(String token, {bool isVideo = false}) async {
-    if (_active != null) throw StateError('уже идёт звонок');
-    final params = await _calls!.joinByLink(token, isVideo: isVideo);
-    final config = Ws2Config.fromEndpoint(
-      params.endpoint,
-      userId: params.callsUserId,
-      device: _api?.callsDevice,
-      osVersion: _api?.callsOsVersion,
-    );
-    final session = CallSession(
-      ws2Config: config,
-      role: CallRole.joiner,
-      isGroup: true,
-    );
-    return _launch(session, session.start);
+  Future<CallSession> joinByLink(String token, {bool isVideo = false}) =>
+      _startExclusive(() async {
+        final params = await _calls!.joinByLink(token, isVideo: isVideo);
+        final config = Ws2Config.fromEndpoint(
+          params.endpoint,
+          userId: params.callsUserId,
+          device: _api?.callsDevice,
+          osVersion: _api?.callsOsVersion,
+        );
+        final session = CallSession(
+          ws2Config: config,
+          role: CallRole.joiner,
+          isGroup: true,
+        );
+        _activeJoinLink = token;
+        return _launch(session, session.start);
+      });
+
+  Future<CallSession> _startExclusive(
+    Future<CallSession> Function() start,
+  ) async {
+    if (isBusy) throw StateError('уже идёт звонок');
+    _starting = true;
+    try {
+      return await start();
+    } finally {
+      _starting = false;
+    }
   }
 
   // #***! принятие входящего
@@ -290,6 +305,7 @@ class CallController {
   Future<void> _release(CallSession session) async {
     if (!identical(_active, session)) return;
     _active = null;
+    _activeJoinLink = null;
     await _activeSub?.cancel();
     _activeSub = null;
     CallBridge.instance.notifyEnded();

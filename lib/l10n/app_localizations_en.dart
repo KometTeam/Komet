@@ -620,6 +620,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgActionsCopy => 'Copy';
 
   @override
+  String get msgActionsCopyLink => 'Copy link';
+
+  @override
   String get msgActionsSelectAll => 'Select all';
 
   @override
@@ -3167,4 +3170,36 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get e2eeExportedAndDisabled =>
       'Transfer created. Encryption is now off on this device: import the file on the new one and turn it on there.';
+
+  @override
+  String get chatNoAccessMessage => 'You don\'t have access to this chat';
+
+  @override
+  String get chatNoAccessOk => 'OK';
+
+  @override
+  String get chatEmptyTitle => 'No messages yet';
+
+  @override
+  String get chatGreetingHint => 'Write a message or send this sticker';
+
+  @override
+  String get chatCallBannerTitle => 'Call in chat';
+
+  @override
+  String get chatVideoCallBannerTitle => 'Video call in chat';
+
+  @override
+  String chatCallParticipants(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count participants',
+      one: '1 participant',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatCallJoin => 'Join';
 }

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
@@ -24,6 +26,7 @@ class StickersModule {
 
   Future<void>? _loading;
   Future<void>? _favoritesLoading;
+  final Random _random = Random();
 
   List<StickerSet> get sets =>
       _orderedSetIds.map((id) => _sets[id]).whereType<StickerSet>().toList();
@@ -206,6 +209,35 @@ class StickersModule {
 
   // #***! у эмодзи бывает вариационный селектор, без него теги сходятся
   static String _stripVariation(String s) => s.replaceAll('️', '');
+
+  static const String greetingEmoji = '👋';
+  static const int greetingSetScanLimit = 5;
+
+  Future<StickerItem?> randomGreetingSticker(List<int> welcomeIds) async {
+    if (welcomeIds.isNotEmpty) {
+      final welcome = await ensureStickers(welcomeIds);
+      final animated = welcome.where((s) => s.isAnimated).toList();
+      final pool = animated.isNotEmpty ? animated : welcome;
+      if (pool.isNotEmpty) return pool[_random.nextInt(pool.length)];
+    }
+    final cached = _animatedGreetings();
+    if (cached.isNotEmpty) return cached[_random.nextInt(cached.length)];
+    await ensureLoaded();
+    final shuffled = List<StickerSet>.of(sets)..shuffle(_random);
+    for (final set in shuffled.take(greetingSetScanLimit)) {
+      await ensureStickers(set.stickerIds);
+      final found = _animatedGreetings();
+      if (found.isNotEmpty) return found[_random.nextInt(found.length)];
+    }
+    return null;
+  }
+
+  List<StickerItem> _animatedGreetings() => [
+    for (final sticker in _stickers.values)
+      if (sticker.isAnimated &&
+          sticker.tags.any((tag) => tag.contains(greetingEmoji)))
+        sticker,
+  ];
 
   void cacheSet(StickerSet set) => _sets[set.id] = set;
 

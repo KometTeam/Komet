@@ -118,6 +118,7 @@ void showMessageActions({
   VoidCallback? onForward,
   VoidCallback? onMarkUnread,
   VoidCallback? onPin,
+  VoidCallback? onCopyLink,
   bool isPinned = false,
   void Function(String emoji)? onReact,
   String? selectedReaction,
@@ -160,6 +161,7 @@ void showMessageActions({
       onForward: onForward,
       onMarkUnread: onMarkUnread,
       onPin: onPin,
+      onCopyLink: onCopyLink,
       isPinned: isPinned,
       onReact: onReact,
       selectedReaction: selectedReaction,
@@ -202,6 +204,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final VoidCallback? onForward;
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
+  final VoidCallback? onCopyLink;
   final bool isPinned;
   final void Function(String emoji)? onReact;
   final String? selectedReaction;
@@ -233,6 +236,7 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onForward,
     this.onMarkUnread,
     this.onPin,
+    this.onCopyLink,
     this.isPinned = false,
     this.onReact,
     this.selectedReaction,
@@ -522,6 +526,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       if (widget.onForward != null)
         _Action(Symbols.forward, l10n.msgActionsForward, _forward),
       if (canCopy) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
+      if (widget.onCopyLink != null)
+        _Action(Symbols.link, l10n.msgActionsCopyLink, _copyLink),
       if (widget.isMe && widget.onEdit != null)
         _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
       if (widget.onPin != null)
@@ -705,6 +711,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final onPin = widget.onPin;
     await _close();
     onPin?.call();
+  }
+
+  Future<void> _copyLink() async {
+    final onCopyLink = widget.onCopyLink;
+    await _close();
+    onCopyLink?.call();
   }
 
   @override
