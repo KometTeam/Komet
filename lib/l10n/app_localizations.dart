@@ -6067,6 +6067,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Notifications aren\'t shown on the computer yet. The settings below are your account\'s push settings for phones.'**
   String get notificationsDesktopNote;
+
+  /// No description provided for @fileNoAppToOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'No app on this device can open this file. Choose where to send it.'**
+  String get fileNoAppToOpen;
 }
 
 class _AppLocalizationsDelegate

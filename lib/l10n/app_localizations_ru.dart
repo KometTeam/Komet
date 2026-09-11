@@ -3274,4 +3274,8 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get notificationsDesktopNote =>
       'На компьютере уведомления пока не показываются. Ниже — push-настройки аккаунта для телефонов.';
+
+  @override
+  String get fileNoAppToOpen =>
+      'Нет приложения, чтобы открыть этот файл. Выберите, куда его отправить.';
 }

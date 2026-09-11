@@ -13,6 +13,7 @@ import '../../../../models/attachment.dart';
 import '../../photo_viewer.dart';
 import '../photo_hero.dart';
 import '../../text_with_meta.dart';
+import 'album_layout.dart';
 import 'bubble_context.dart';
 import 'video_bubble.dart';
 
@@ -145,7 +146,7 @@ class PhotoBubble extends StatelessWidget {
     } else if (count == 3) {
       photosWidget = _buildThreePhotos(ctx, media);
     } else {
-      photosWidget = _buildPhotoGrid(ctx, media);
+      photosWidget = _buildPhotoMosaic(ctx, media);
     }
 
     if (!hasCaption) {
@@ -492,9 +493,10 @@ class PhotoBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildPhotoGrid(BubbleContext ctx, List<MessageAttachment> photos) {
-    final displayCount = photos.length > 4 ? 4 : photos.length;
-    final remaining = photos.length - 4;
+  Widget _buildPhotoMosaic(BubbleContext ctx, List<MessageAttachment> photos) {
+    final visible = math.min(photos.length, AlbumLayout.maxTiles);
+    final remaining = photos.length - visible;
+    final ratios = [for (var i = 0; i < visible; i++) _tileRatio(photos[i])];
 
     final matchTop =
         ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleTop;
@@ -502,31 +504,38 @@ class PhotoBubble extends StatelessWidget {
         ctx.hasMultiplePhotosNoCaption && ctx.shape == BubbleShape.singleBottom;
 
     final rows = <Widget>[];
-    for (var i = 0; i < displayCount; i += 2) {
+    var start = 0;
+    for (final size in AlbumLayout.rows(ratios)) {
       if (rows.isNotEmpty) rows.add(const SizedBox(height: 2));
-      final hasSecond = i + 1 < displayCount;
-      final r0 = _tileRatio(photos[i]);
-      final r1 = hasSecond ? _tileRatio(photos[i + 1]) : r0;
+      final end = start + size;
+      var rowRatio = 0.0;
+      for (var i = start; i < end; i++) {
+        rowRatio += ratios[i];
+      }
       rows.add(
         AspectRatio(
-          aspectRatio: hasSecond ? r0 + r1 : r0,
+          aspectRatio: rowRatio,
           child: Row(
             children: [
-              Expanded(
-                flex: (r0 * 100).round(),
-                child: _buildGridTile(ctx, photos, i, remaining),
-              ),
-              if (hasSecond) ...[
-                const SizedBox(width: 2),
+              for (var i = start; i < end; i++) ...[
+                if (i > start) const SizedBox(width: 2),
                 Expanded(
-                  flex: (r1 * 100).round(),
-                  child: _buildGridTile(ctx, photos, i + 1, remaining),
+                  flex: (ratios[i] * 100).round(),
+                  child: i == visible - 1 && remaining > 0
+                      ? _buildPhotoTileWithOverlay(
+                          ctx,
+                          photos[i],
+                          '+$remaining',
+                          i,
+                        )
+                      : _buildPhotoTile(ctx, photos[i], i),
                 ),
               ],
             ],
           ),
         ),
       );
+      start = end;
     }
 
     return ClipRRect(
@@ -537,23 +546,6 @@ class PhotoBubble extends StatelessWidget {
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: rows),
     );
-  }
-
-  Widget _buildGridTile(
-    BubbleContext ctx,
-    List<MessageAttachment> photos,
-    int index,
-    int remaining,
-  ) {
-    if (index == 3 && remaining > 0) {
-      return _buildPhotoTileWithOverlay(
-        ctx,
-        photos[index],
-        '+$remaining',
-        index,
-      );
-    }
-    return _buildPhotoTile(ctx, photos[index], index);
   }
 
   // #***! форму плитки задаёт AspectRatio ряда-родителя, тут просто контент

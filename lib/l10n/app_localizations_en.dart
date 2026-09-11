@@ -3257,4 +3257,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationsDesktopNote =>
       'Notifications aren\'t shown on the computer yet. The settings below are your account\'s push settings for phones.';
+
+  @override
+  String get fileNoAppToOpen =>
+      'No app on this device can open this file. Choose where to send it.';
 }

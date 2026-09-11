@@ -1380,5 +1380,6 @@
   "chatQrTitle": "QR code",
   "chatQrHint": "Scan the code to open this chat",
   "linkQrUnavailable": "Couldn't get the link",
-  "notificationsDesktopNote": "Notifications aren't shown on the computer yet. The settings below are your account's push settings for phones."
+  "notificationsDesktopNote": "Notifications aren't shown on the computer yet. The settings below are your account's push settings for phones.",
+  "fileNoAppToOpen": "No app on this device can open this file. Choose where to send it."
 }

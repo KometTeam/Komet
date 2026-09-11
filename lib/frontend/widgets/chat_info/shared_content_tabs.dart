@@ -25,6 +25,7 @@ import '../custom_notification.dart';
 import '../komet_avatar.dart';
 import '../photo_viewer.dart';
 import '../reload_on_reconnect.dart';
+import '../share_unopenable_file.dart';
 import '../small_spinner.dart';
 import '../swipe_route.dart';
 import '../sheet_helpers.dart';
@@ -1015,6 +1016,11 @@ class _FileRow extends StatelessWidget {
     );
 
     if (!context.mounted) return;
+    final path = result.path;
+    if (result.noAppToOpen && path != null) {
+      await shareUnopenableFile(context, path);
+      return;
+    }
     if (!result.ok) {
       showCustomNotification(context, 'Не удалось открыть файл');
     }

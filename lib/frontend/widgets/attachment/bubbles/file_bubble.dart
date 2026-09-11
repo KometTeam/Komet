@@ -23,6 +23,7 @@ import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
 import '../../decrypted_photo.dart';
 import '../../photo_viewer.dart';
+import '../../share_unopenable_file.dart';
 import '../../upload_progress_ring.dart';
 import 'bubble_context.dart';
 
@@ -519,6 +520,11 @@ class FileBubble extends StatelessWidget {
       ),
     );
     if (!context.mounted) return;
+    final path = result.path;
+    if (result.noAppToOpen && path != null) {
+      await shareUnopenableFile(context, path);
+      return;
+    }
     if (!result.ok) {
       showCustomNotification(
         context,
