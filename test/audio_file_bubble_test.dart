@@ -37,9 +37,11 @@ void main() {
     PathProviderPlatform.instance = _SyntheticPathProvider(directory.path);
     MediaCache.resetForTesting();
 
-    final file = await MediaCache.fileFor('42_sample.mp3');
-    await file.writeAsBytes(List<int>.filled(128, 1));
-    await MediaCache.existing('42_sample.mp3');
+    await tester.runAsync(() async {
+      final file = await MediaCache.fileFor('42_sample.mp3');
+      await file.writeAsBytes(List<int>.filled(128, 1));
+      await MediaCache.existing('42_sample.mp3');
+    });
 
     final message = CachedMessage(
       id: 'synthetic-message',

@@ -853,6 +853,8 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  static const double _groupAvatarSize = 30;
+
   Widget _buildLeadingAvatar(ColorScheme cs) {
     final senderAvatar =
         senderAvatarOverride ?? ContactCache.getAvatar(message.senderId);
@@ -861,7 +863,7 @@ class MessageBubble extends StatelessWidget {
     final Widget avatar;
     if (senderAvatar != null && senderAvatar.isNotEmpty) {
       avatar = CircleAvatar(
-        radius: 15,
+        radius: _groupAvatarSize / 2,
         backgroundImage: CachedNetworkImageProvider(
           senderAvatar,
           maxWidth: 96,
@@ -871,7 +873,7 @@ class MessageBubble extends StatelessWidget {
       );
     } else {
       avatar = CircleAvatar(
-        radius: 15,
+        radius: _groupAvatarSize / 2,
         backgroundColor: cs.primaryContainer,
         child: Text(
           displaySender != null && displaySender.isNotEmpty
@@ -1121,7 +1123,12 @@ class MessageBubble extends StatelessWidget {
         AppBubbleBehavior.current,
       ]),
       builder: (context, child) => Container(
-        constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+        constraints: BoxConstraints(
+          maxWidth: maxBubbleWidth,
+          minHeight: showAvatarSlot && chatType == "CHAT"
+              ? _groupAvatarSize
+              : 0,
+        ),
         decoration: BoxDecoration(
           color: bubbleColor,
           borderRadius: noBubbleBackground
@@ -1164,7 +1171,7 @@ class MessageBubble extends StatelessWidget {
             if (showAvatar)
               _buildLeadingAvatar(cs)
             else if (showAvatarSlot && chatType == "CHAT")
-              const SizedBox(width: 30),
+              const SizedBox(width: _groupAvatarSize),
             Column(
               crossAxisAlignment: isMe
                   ? CrossAxisAlignment.end

@@ -86,15 +86,15 @@ void main() {
     expect(manifest.commands.single.arguments.single.name, 'city');
   });
 
-  test('fox plugin declares network and photo permissions', () {
+  test('nekos plugin declares network and photo permissions', () {
     final raw = jsonDecode(
-      File('assets/plugins/fox/manifest.json').readAsStringSync(),
+      File('assets/plugins/nekos/manifest.json').readAsStringSync(),
     );
     final manifest = PluginManifest.fromJson(Map<String, dynamic>.from(raw));
 
     expect(manifest.permissions, contains(PluginPermission.network));
     expect(manifest.permissions, contains(PluginPermission.photoWrite));
-    expect(manifest.commands.single.name, '/fox');
+    expect(manifest.commands.single.name, '/nekogirl');
     expect(manifest.commands.single.arguments, isEmpty);
   });
 }
