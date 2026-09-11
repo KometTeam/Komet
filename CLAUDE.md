@@ -44,6 +44,15 @@ The C core is the single implementation shared with Komet-Android (which points 
 reimplement them in Dart. Its own suite (`make test`, `make asan`) must pass before bumping the
 submodule here.
 
+## Sticker renderer
+
+Animated stickers, animoji and reactions are rendered by [tlottie](https://github.com/dkaraush/tlottie)
+(Rust) through the local FFI plugin `native/komet_tlottie`. Its wrapper crate pins tlottie by an
+exact git `rev`, and the vendored cargokit compiles it during the Flutter build with the same
+toolchain as `kolibri`; bump it by changing the `rev` and running `cargo update -p tlottie`.
+`lib/core/media/tlottie/` renders frames in a pool of worker isolates and caches them in RAM and
+on disk. Web has no native path and falls back to the pure-Dart `lottie` package.
+
 ## Build Flavors
 
 | Flavor  | App ID         | Notes                               |

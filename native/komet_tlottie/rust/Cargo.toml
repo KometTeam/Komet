@@ -1,0 +1,25 @@
+[package]
+name = "komet_tlottie"
+version = "0.1.0"
+edition = "2021"
+description = "Builds the tlottie C ABI into a library the Komet app loads through dart:ffi"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+tlottie = { git = "https://github.com/dkaraush/tlottie", rev = "31f1b542f88e7b4be9a01e749920d857535fc715", features = ["c-api"] }
+
+[workspace]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev.package.tlottie]
+opt-level = 3

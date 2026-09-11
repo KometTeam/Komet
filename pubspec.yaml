@@ -46,6 +46,12 @@ dependencies:
   komet_crypto:
     path: native/crypto-core/flutter/komet_crypto
 
+  # Lottie renderer (tlottie, Rust) for animated stickers, animoji and
+  # reactions — local FFI plugin; its wrapper crate pins tlottie by git rev and
+  # cargokit compiles it at app build time, like kolibri.
+  komet_tlottie:
+    path: native/komet_tlottie
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   crypto: ^3.0.7

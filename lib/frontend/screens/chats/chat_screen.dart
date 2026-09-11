@@ -35,7 +35,7 @@ import '../../../backend/modules/contacts.dart';
 import '../../../models/animoji.dart';
 import '../../../backend/modules/complaints.dart';
 import '../../../core/calls/call_controller.dart';
-import '../../../core/media/rlottie/rlottie.dart';
+import '../../../core/media/tlottie/tlottie.dart';
 import '../calls/call_screen.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
@@ -540,7 +540,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool get _selectionMode => _selectedIds.value.isNotEmpty;
 
   void _prewarmQuickReactions() {
-    if (!mounted || !RlottieEngine.instance.available) return;
+    if (!mounted || !TlottieEngine.instance.available) return;
     final dpr = (MediaQuery.maybeOf(context)?.devicePixelRatio ?? 2.0).clamp(
       1.0,
       2.0,
@@ -549,7 +549,7 @@ class _ChatScreenState extends State<ChatScreen>
     for (final a in animojiModule.quickAnimojis) {
       for (final url in [a.lottieUrl, a.lottiePlayUrl]) {
         if (url != null && url.isNotEmpty) {
-          unawaited(RlottieEngine.instance.prewarm(url, px));
+          unawaited(TlottieEngine.instance.prewarm(url, px));
         }
       }
     }

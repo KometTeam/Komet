@@ -988,6 +988,13 @@ packages:
       relative: true
     source: path
     version: "0.2.0"
+  komet_tlottie:
+    dependency: "direct main"
+    description:
+      path: "native/komet_tlottie"
+      relative: true
+    source: path
+    version: "0.1.0"
   leak_tracker:
     dependency: transitive
     description:

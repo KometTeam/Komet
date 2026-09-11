@@ -99,7 +99,6 @@ PODS:
     - FlutterMacOS
   - record_ios (1.2.1):
     - Flutter
-  - rlottie (0.2.0)
   - SDWebImage (5.21.7):
     - SDWebImage/Core (= 5.21.7)
   - SDWebImage/Core (5.21.7)
@@ -151,7 +150,6 @@ DEPENDENCIES:
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - photo_manager (from `.symlinks/plugins/photo_manager/darwin`)
   - record_ios (from `.symlinks/plugins/record_ios/ios`)
-  - rlottie (from `../third_party`)
   - sensors_plus (from `.symlinks/plugins/sensors_plus/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
@@ -224,8 +222,6 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/photo_manager/darwin"
   record_ios:
     :path: ".symlinks/plugins/record_ios/ios"
-  rlottie:
-    :path: "../third_party"
   sensors_plus:
     :path: ".symlinks/plugins/sensors_plus/ios"
   share_plus:
@@ -272,7 +268,6 @@ SPEC CHECKSUMS:
   permission_handler_apple: 92d754bbaa7361d436db2d6c3c1c2a0fdcec462e
   photo_manager: 25fd77df14f4f0ba5ef99e2c61814dde77e2bceb
   record_ios: 980fd386a97a35987d0fce3dfda4b26a38c90f4c
-  rlottie: 206daeeeb0f9dec6594ed248eb0c7e876a289e93
   SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
   sensors_plus: b70a93b69dafdabd26ce4ac3f4d0529ab9acc4ca
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
