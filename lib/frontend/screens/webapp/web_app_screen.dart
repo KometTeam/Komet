@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/webapp.dart';
 import '../../../core/storage/spoofing_service.dart';
 import '../../../core/utils/link_opener.dart';
+import '../../../core/utils/logger.dart';
 import '../../../main.dart' show api;
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
@@ -314,6 +315,11 @@ class _WebAppScreenState extends State<WebAppScreen> {
         setState(() => _progress = progress / 100);
       },
       onReceivedError: (controller, request, error) {
+        final host = request.url.host;
+        logger.w(
+          'WebView ${widget.title}: ${error.type} ${error.description} '
+          '($host${request.isForMainFrame ?? false ? ', главный фрейм' : ''})',
+        );
         if (!mounted) return;
         if (request.isForMainFrame ?? false) {
           setState(() => _loadError = error.description);

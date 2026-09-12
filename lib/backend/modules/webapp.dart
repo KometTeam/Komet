@@ -2,16 +2,53 @@ import '../api.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
+import '../../core/utils/logger.dart';
+import 'account/account_models.dart';
 
 // #***! встроенные мини аппы со своими кнопками
 abstract class EntryBannerApps {
   static const String sferumKey = 'entry_banner_app_sferum';
   static const String digitalIdKey = 'entry_banner_app_digital_id';
 
-  static const Map<String, String> iconMatchers = {
-    sferumKey: 'sferum',
-    digitalIdKey: 'digital',
+  static const Map<String, List<String>> iconMatchers = {
+    sferumKey: ['sferum'],
+    digitalIdKey: ['digital'],
   };
+
+  static const Map<String, List<String>> titleMatchers = {
+    sferumKey: ['ферум'],
+    digitalIdKey: ['цифровой'],
+  };
+
+  static const Map<String, int> knownAppIds = {
+    sferumKey: 2340831,
+    digitalIdKey: 8250447,
+  };
+
+  static Map<String, int> appIdsFrom(Map serverConfig) {
+    final banners = serverConfig['settings-entry-banners'];
+    if (banners is! List) return const {};
+    final resolved = <String, int>{};
+    const passes = [('icon', iconMatchers), ('title', titleMatchers)];
+    for (final (field, matchers) in passes) {
+      for (final banner in banners) {
+        final items = (banner is Map) ? banner['items'] : null;
+        if (items is! List) continue;
+        for (final item in items) {
+          if (item is! Map) continue;
+          final appId = item['appid'];
+          if (appId is! int) continue;
+          final value = item[field]?.toString().toLowerCase() ?? '';
+          if (value.isEmpty) continue;
+          for (final entry in matchers.entries) {
+            if (resolved.containsKey(entry.key)) continue;
+            if (entry.value.any(value.contains)) resolved[entry.key] = appId;
+          }
+        }
+      }
+    }
+    return resolved;
+  }
 }
 
 // #***! сервер зовёт эту опцию по разному
@@ -191,7 +228,12 @@ class WebAppModule {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return null;
     final raw = await AppDatabase.getSyncValue(accountId, key);
-    return int.tryParse(raw ?? '');
+    final stored = int.tryParse(raw ?? '');
+    if (stored != null) return stored;
+    await LoginSyncParams.forgetServerConfig(accountId);
+    final known = EntryBannerApps.knownAppIds[key];
+    logger.w('Мини-аппа $key: id нет в конфиге, берём известный $known');
+    return known;
   }
 }
 

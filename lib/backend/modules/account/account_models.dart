@@ -426,6 +426,9 @@ class LoginSyncParams {
 
   static const String serverConfigRevision = '2';
 
+  static Future<void> forgetServerConfig(int accountId) =>
+      AppDatabase.setSyncValue(accountId, SyncKey.serverConfigSeen, '');
+
   const LoginSyncParams({
     required this.chatsSync,
     required this.contactsSync,
