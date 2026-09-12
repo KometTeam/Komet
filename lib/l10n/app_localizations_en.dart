@@ -602,6 +602,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editProfileLastName => 'Last name';
 
   @override
+  String get editProfileBio => 'About me';
+
+  @override
   String get editProfileRemovePhoto => 'Remove photo';
 
   @override

@@ -106,6 +106,10 @@ import '../../../core/config/app_fonts.dart';
 
 const String _savedWelcomeKey = 'welcome.saved.dialog.message';
 
+// #***! вкладки смонтированы все сразу, так что открытая вкладка это состояние,
+// а не отдельный экран: по нему вкладки понимают, что их только что открыли
+final ValueNotifier<int> activeNavTab = ValueNotifier<int>(0);
+
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
   final bool Function() allowPullOverscrollTop;
@@ -1589,6 +1593,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     _navPageAnimStart = fromT;
     _navPageAnimEnd = index.toDouble();
     setState(() => _currentNavIndex = index);
+    activeNavTab.value = index;
     _navPageAnimController.forward(from: 0);
     if (index == 0) _scheduleInformerPresentation();
   }
@@ -2345,6 +2350,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               _currentNavIndex = next;
               _navDragging = false;
             });
+            activeNavTab.value = next;
             if (next == 0) _scheduleInformerPresentation();
           },
           onHorizontalDragCancel: () {

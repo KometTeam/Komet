@@ -605,6 +605,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get editProfileLastName => 'Фамилия';
 
   @override
+  String get editProfileBio => 'О себе';
+
+  @override
   String get editProfileRemovePhoto => 'Удалить фото';
 
   @override

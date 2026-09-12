@@ -82,13 +82,22 @@ class PhoneLookupResult {
   });
 }
 
+// #***! ids идут параллельно urls, по ним удаляем конкретное фото
 class ContactPhotos {
   final List<String> urls;
+  final List<int> ids;
   final int total;
 
-  const ContactPhotos({required this.urls, required this.total});
+  const ContactPhotos({
+    required this.urls,
+    this.ids = const [],
+    required this.total,
+  });
 
   static const empty = ContactPhotos(urls: [], total: 0);
+
+  int? idAt(int index) =>
+      index >= 0 && index < ids.length ? ids[index] : null;
 }
 
 // #***! итог добавления, добавили не нашли или ошибка
@@ -549,10 +558,22 @@ class ContactsModule {
     final urls = rawUrls is List
         ? rawUrls.whereType<String>().toList()
         : <String>[];
+    final rawIds = map['ids'];
+    final ids = rawIds is List ? rawIds.whereType<int>().toList() : <int>[];
     final total = map['total'] is int ? map['total'] as int : urls.length;
-    final photos = ContactPhotos(urls: urls, total: total);
+    final photos = ContactPhotos(
+      urls: urls,
+      // #***! разъехавшиеся списки хуже отсутствующих, id тогда не берём
+      ids: ids.length == urls.length ? ids : const [],
+      total: total,
+    );
     if (from == 0) _photosHead[contactId] = photos;
     return photos;
+  }
+
+  // #***! после удаления фото голова кэша протухла
+  static void invalidatePhotos(int contactId) {
+    _photosHead.remove(contactId);
   }
 
   // #***! чтение из базы, основной путь для юишки

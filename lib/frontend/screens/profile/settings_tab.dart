@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:material_symbols_icons/symbols.dart';
@@ -17,9 +18,12 @@ import '../../../core/utils/format.dart';
 import '../../../core/utils/update_checker.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../../backend/modules/contacts.dart';
 import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/avatar_history_screen.dart';
+import '../../widgets/avatar_photo_actions.dart';
 import '../../widgets/connection_status.dart';
+import '../../widgets/glossy_pill.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/profile_header_scroll.dart';
@@ -28,6 +32,7 @@ import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/update_dialog.dart';
+import '../chats/chat_list_screen.dart' show activeNavTab;
 import '../auth/login_screen.dart';
 import '../auth/proxy_settings_sheet.dart';
 import '../../../core/config/app_digital_id_mode.dart';
@@ -36,6 +41,7 @@ import '../digital_id/digital_id_screen.dart';
 import '../digital_id/digital_id_web_screen.dart';
 import '../webapp/web_app_bridge.dart';
 import '../webapp/web_app_screen.dart';
+import 'avatar_carousel.dart';
 import 'cloud_storage_screen.dart';
 import 'customization_section.dart';
 import 'debug_menu_screen.dart';
@@ -59,8 +65,18 @@ class SettingsTab extends StatefulWidget {
   State<SettingsTab> createState() => _SettingsTabState();
 }
 
+const int _settingsTabIndex = 3;
+const double _headerVignette = 64;
+const int _avatarHistoryPageSize = 50;
+
 class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   ProfileData? _profile;
+  List<String> _avatarUrls = const [];
+  List<int?> _avatarIds = const [];
+  List<AvatarPhoto> _avatarPhotos = const [];
+  int _avatarIndex = 0;
+  bool _avatarForward = true;
+  final GlobalKey _avatarMenuKey = GlobalKey();
   bool _isPhoneVisible = false;
   ScrollController? _scrollController;
   double _headerDelta = 0;
@@ -87,11 +103,30 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
         if (mounted) _loadProfile();
       });
     }
+    activeNavTab.addListener(_onNavTabChanged);
+  }
+
+  // #***! вкладку не размонтируют, поэтому при открытии сами возвращаемся
+  // к шапке: иначе настройки открываются там же, где их закрыли
+  void _onNavTabChanged() {
+    if (!mounted || activeNavTab.value != _settingsTabIndex) return;
+    _resetHeaderScroll();
+  }
+
+  void _resetHeaderScroll() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final c = _scrollController;
+      if (!mounted || c == null || !c.hasClients) return;
+      final target = math.min(_headerDelta, c.position.maxScrollExtent);
+      if ((c.offset - target).abs() < 1) return;
+      c.jumpTo(target);
+    });
   }
 
   @override
   void dispose() {
     _versionSecretTapResetTimer?.cancel();
+    activeNavTab.removeListener(_onNavTabChanged);
     _profileUpdateSub?.cancel();
     _scrollController?.dispose();
     super.dispose();
@@ -193,7 +228,147 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
 
   Future<void> _loadProfile() async {
     final p = await AppDatabase.loadActiveProfile();
-    if (mounted) setState(() => _profile = p);
+    if (!mounted) return;
+    // #***! фото могли сменить с другого устройства, тогда список истории
+    // в кэше уже неверен и его надо перечитать
+    if (p != null && p.photoId != _profile?.photoId) {
+      ContactsModule.invalidatePhotos(p.id);
+    }
+    setState(() {
+      _profile = p;
+      _rebuildAvatarPhotos();
+    });
+    await _loadAvatars();
+  }
+
+  // #***! список фото нужен вместе с id, а кэшу модуля можно верить:
+  // он сам сбрасывается при загрузке и удалении аватарки
+  Future<void> _loadAvatars() async {
+    final profile = _profile;
+    if (profile == null || profile.id <= 0) return;
+    final photos =
+        ContactsModule.cachedPhotos(profile.id) ??
+        await ContactsModule.fetchPhotos(
+          api,
+          profile.id,
+          count: _avatarHistoryPageSize,
+        );
+    if (!mounted) return;
+    final ids = List<int?>.generate(photos.urls.length, (i) => photos.idAt(i));
+    if (listEquals(_avatarUrls, photos.urls) && listEquals(_avatarIds, ids)) {
+      return;
+    }
+    setState(() {
+      _avatarUrls = photos.urls;
+      _avatarIds = ids;
+      _rebuildAvatarPhotos();
+    });
+  }
+
+  // #***! готовый список держим полем: шапка перестраивается на каждом кадре
+  // прокрутки, собирать его в build значило бы мусорить каждый кадр
+  void _rebuildAvatarPhotos() {
+    _avatarPhotos = buildAvatarPhotos(
+      urls: _avatarUrls,
+      ids: _avatarIds,
+      baseUrl: _profile?.baseUrl,
+      mainPhotoId: _profile?.photoId,
+    );
+    _avatarIndex = indexOfMainAvatar(_avatarPhotos, _profile?.photoId);
+  }
+
+  int get _fullAvatarCacheWidth {
+    final width = MediaQuery.sizeOf(context).width;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return (width * dpr).round().clamp(264, 2048);
+  }
+
+  AvatarPhoto? get _currentAvatar {
+    if (_avatarPhotos.isEmpty) return null;
+    return _avatarPhotos[_avatarIndex.clamp(0, _avatarPhotos.length - 1)
+        .toInt()];
+  }
+
+  void _stepAvatar(int delta) {
+    final next = _avatarIndex + delta;
+    if (next < 0 || next >= _avatarPhotos.length) return;
+    setState(() {
+      _avatarForward = delta > 0;
+      _avatarIndex = next;
+    });
+  }
+
+  void _onAvatarSwipe(DragEndDetails details) {
+    final vx = details.primaryVelocity ?? 0;
+    if (vx.abs() < 120) return;
+    _stepAvatar(vx < 0 ? 1 : -1);
+  }
+
+  String get _fullName {
+    final profile = _profile;
+    if (profile == null) return '';
+    final last = profile.lastName;
+    return last == null || last.isEmpty
+        ? profile.firstName
+        : '${profile.firstName} $last';
+  }
+
+  Future<void> _openAvatarViewer() async {
+    final profile = _profile;
+    final current = _currentAvatar;
+    if (profile == null || current == null) return;
+    final updated = await AvatarHistoryScreen.open(
+      context,
+      contactId: profile.id,
+      name: _fullName,
+      currentAvatarUrl: profile.baseUrl,
+      initialUrl: current.url,
+      initialPhotoId: current.id,
+      mainPhotoId: profile.photoId,
+      allowDelete: true,
+    );
+    if (updated != null && mounted) await _applyProfileAfterDeletion(updated);
+  }
+
+  void _openAvatarMenu() {
+    final rect = anchorRectOf(_avatarMenuKey);
+    final current = _currentAvatar;
+    if (rect == null || current == null) return;
+    final id = current.id;
+    showAvatarMenu(
+      context: context,
+      anchorRect: rect,
+      onSave: () => saveAvatarPhoto(context, current.url),
+      onDelete: id == null ? null : () => _deleteAvatar(id),
+    );
+  }
+
+  Future<void> _deleteAvatar(int id) async {
+    if (!await confirmAvatarDeletion(context)) return;
+    if (!mounted) return;
+    try {
+      final profile = await accountModule.removeProfilePhoto(id);
+      if (!mounted) return;
+      await _applyProfileAfterDeletion(profile);
+      if (mounted) showCustomNotification(context, 'Фото удалено');
+    } catch (e) {
+      if (mounted) showCustomNotification(context, 'Не удалось удалить фото: $e');
+    }
+  }
+
+  // #***! сервер сам назначает новую основную, к ней и перелистываем.
+  // Старый список уже неверен: удалённое фото в нём ещё есть, и показывать его
+  // нельзя — до перезагрузки списка живём одной аватаркой из свежего профиля
+  Future<void> _applyProfileAfterDeletion(ProfileData profile) async {
+    setState(() {
+      _profile = profile;
+      _avatarUrls = const [];
+      _avatarIds = const [];
+      _avatarForward = false;
+      _rebuildAvatarPhotos();
+    });
+    await _loadAvatars();
+    if (mounted) KometApp.stateOf(context)?.notifyProfileUpdate();
   }
 
   Future<void> _loadAppVersion() async {
@@ -393,6 +568,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                         _buildHeader(ctx, cs, fullName, phone, t),
                   ),
                 ),
+                SliverToBoxAdapter(child: _buildBioCard(cs, l10n)),
                 const SliverToBoxAdapter(
                   child: MediaPlaybackPill(
                     margin: EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -732,12 +908,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
               Positioned.fromRect(
                 rect: avatarRect,
                 child: GestureDetector(
-                  onTap: () => AvatarHistoryScreen.open(
-                    context,
-                    contactId: _profile?.id ?? 0,
-                    name: name,
-                    currentAvatarUrl: _profile?.baseUrl,
-                  ),
+                  onTap: _openAvatarViewer,
                   child: _buildMorphAvatar(cs, name, radius, pt),
                 ),
               ),
@@ -783,6 +954,34 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                     ),
                   ),
                 ),
+              // #***! виньетка как на чужом профиле: развёрнутое фото уводим
+              // в цвет фона, чтобы не обрывалось резкой границей
+              if (hasPhoto)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: _headerVignette,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: pt,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              spectrumSurfaceColor(cs).withValues(alpha: 0),
+                              spectrumSurfaceColor(cs).withValues(alpha: 0.55),
+                              spectrumSurfaceColor(cs),
+                            ],
+                            stops: const [0.0, 0.55, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               Positioned(
                 left: 8,
                 right: 8,
@@ -811,21 +1010,38 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                         ),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(
-                        Symbols.edit,
-                        color: iconColor,
-                        size: 22,
-                        weight: 400,
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const EditProfileScreen(),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          key: _avatarMenuKey,
+                          icon: Icon(
+                            Symbols.more_vert,
+                            color: iconColor,
+                            size: 22,
+                            weight: 400,
                           ),
-                        );
-                      },
+                          onPressed: _currentAvatar == null
+                              ? null
+                              : _openAvatarMenu,
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Symbols.edit,
+                            color: iconColor,
+                            size: 22,
+                            weight: 400,
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const EditProfileScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -934,7 +1150,9 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
     double radius,
     double pt,
   ) {
-    final base = _profile?.baseUrl;
+    final photos = _avatarPhotos;
+    final index = _avatarIndex.clamp(0, math.max(0, photos.length - 1)).toInt();
+    final base = photos.isEmpty ? null : photos[index].url;
     final borderOpacity = (1 - pt * 2).clamp(0.0, 1.0);
     if (base == null || base.isEmpty) {
       return Container(
@@ -961,33 +1179,82 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
         ),
       ),
     );
+    final isMain = photos[index].id == _profile?.photoId;
+    final rawUrl = _profile?.baseRawUrl;
+    final arrowOpacity = ((pt - 0.35) / 0.35).clamp(0.0, 1.0);
     return Stack(
       fit: StackFit.expand,
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(radius),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              CachedNetworkImage(
-                imageUrl: base,
-                fit: BoxFit.cover,
-                memCacheWidth: 264,
-                memCacheHeight: 264,
-                errorWidget: (_, _, _) => letterFallback,
+          // #***! свайп по самой аватарке, без вложенного скролла:
+          // шапка морфится и ломала бы пейджеру размер вьюпорта
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragEnd: photos.length > 1 ? _onAvatarSwipe : null,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final incoming = child.key == ValueKey(base);
+                final dx = (_avatarForward ? 1.0 : -1.0) * (incoming ? 1 : -1);
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: Offset(dx, 0),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: FadeTransition(opacity: animation, child: child),
+                );
+              },
+              layoutBuilder: (current, previous) => Stack(
+                fit: StackFit.expand,
+                children: [...previous, ?current],
               ),
-              if (_headerEverExpanded &&
-                  _profile?.baseRawUrl != null &&
-                  _profile!.baseRawUrl!.isNotEmpty)
-                CachedNetworkImage(
-                  imageUrl: _profile!.baseRawUrl!,
-                  fit: BoxFit.cover,
-                  fadeInDuration: const Duration(milliseconds: 250),
-                  errorWidget: (_, _, _) => const SizedBox.shrink(),
-                ),
-            ],
+              child: Stack(
+                key: ValueKey(base),
+                fit: StackFit.expand,
+                children: [
+                  // #***! уменьшенный кадр показываем сразу, поверх него
+                  // догружается полноразмерный — иначе в развёрнутой шапке мыло
+                  CachedNetworkImage(
+                    imageUrl: base,
+                    fit: BoxFit.cover,
+                    memCacheWidth: 264,
+                    memCacheHeight: 264,
+                    placeholder: (_, _) => letterFallback,
+                    errorWidget: (_, _, _) => letterFallback,
+                  ),
+                  if (_headerEverExpanded)
+                    CachedNetworkImage(
+                      imageUrl: isMain && rawUrl != null && rawUrl.isNotEmpty
+                          ? rawUrl
+                          : base,
+                      fit: BoxFit.cover,
+                      // #***! шире экрана декодировать незачем
+                      memCacheWidth: _fullAvatarCacheWidth,
+                      fadeInDuration: const Duration(milliseconds: 250),
+                      errorWidget: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
+        if (photos.length > 1 && arrowOpacity > 0) ...[
+          if (index > 0)
+            _avatarArrow(
+              alignLeft: true,
+              opacity: arrowOpacity,
+              onTap: () => _stepAvatar(-1),
+            ),
+          if (index < photos.length - 1)
+            _avatarArrow(
+              alignLeft: false,
+              opacity: arrowOpacity,
+              onTap: () => _stepAvatar(1),
+            ),
+        ],
         if (borderOpacity > 0)
           IgnorePointer(
             child: Opacity(
@@ -1004,6 +1271,82 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
             ),
           ),
       ],
+    );
+  }
+
+  // #***! био показываем карточкой как на чужом профиле, тап ведёт в редактор
+  Widget _buildBioCard(ColorScheme cs, AppLocalizations l10n) {
+    final bio = _profile?.description ?? '';
+    if (bio.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const EditProfileScreen()),
+        ),
+        child: GlossyPill(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(14),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+          depth: 6,
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.editProfileBio,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  bio,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _avatarArrow({
+    required bool alignLeft,
+    required double opacity,
+    required VoidCallback onTap,
+  }) {
+    return Positioned(
+      top: 0,
+      bottom: 0,
+      left: alignLeft ? 6 : null,
+      right: alignLeft ? null : 6,
+      child: Center(
+        child: Opacity(
+          opacity: opacity,
+          child: Material(
+            color: Colors.black.withValues(alpha: 0.35),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Icon(
+                  alignLeft ? Symbols.chevron_left : Symbols.chevron_right,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 

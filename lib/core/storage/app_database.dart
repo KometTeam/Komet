@@ -23,6 +23,7 @@ class ProfileData {
   final int accountStatus;
   final int updateTime;
   final List<int>? profileOptions;
+  final String? description;
 
   ProfileData({
     required this.id,
@@ -36,6 +37,7 @@ class ProfileData {
     required this.accountStatus,
     required this.updateTime,
     this.profileOptions,
+    this.description,
   });
 
   factory ProfileData.stub(int id) => ProfileData(
@@ -90,7 +92,14 @@ class ProfileData {
       updateTime: (contact['updateTime'] as int?) ?? 0,
       profileOptions:
           profileOptions ?? _parseProfileOptions(contact['profileOptions']),
+      description: _nonEmpty(contact['description']),
     );
+  }
+
+  // #***! пустое описание от сервера это то же самое что его нет
+  static String? _nonEmpty(dynamic raw) {
+    if (raw is! String) return null;
+    return raw.isEmpty ? null : raw;
   }
 
   // #***! profileOptions в базе строкой а от сервера списком
@@ -129,6 +138,7 @@ class ProfileData {
       accountStatus: (row['account_status'] as int?) ?? 0,
       updateTime: (row['update_time'] as int?) ?? 0,
       profileOptions: profileOptions,
+      description: _nonEmpty(row['description']),
     );
   }
 
@@ -146,6 +156,7 @@ class ProfileData {
     'update_time': updateTime,
     'is_active': isActive ? 1 : 0,
     'profile_options': profileOptions?.join(','),
+    'description': description,
   };
 }
 
@@ -280,7 +291,7 @@ class AppDatabase {
     final opened = await openDatabase(
       target,
       // #***! каждый if oldVersion < N это шаг миграции, идут по порядку
-      version: 26,
+      version: 27,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -436,6 +447,9 @@ class AppDatabase {
         if (oldVersion < 26) {
           await _addColumnIfMissing(db, 'chats_cache', 'public_link', 'TEXT');
         }
+        if (oldVersion < 27) {
+          await _addColumnIfMissing(db, 'profile', 'description', 'TEXT');
+        }
       },
     );
     await _dropLegacyExposedDb();
@@ -457,7 +471,8 @@ class AppDatabase {
         account_status INTEGER NOT NULL DEFAULT 0,
         update_time  INTEGER NOT NULL DEFAULT 0,
         is_active    INTEGER NOT NULL DEFAULT 0,
-        profile_options TEXT
+        profile_options TEXT,
+        description  TEXT
       )
     ''');
     await db.execute(_syncStateSchema);

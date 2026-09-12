@@ -102,8 +102,11 @@ class AccountModule {
   Future<void> unregisterPushToken(String pushToken) =>
       _privacy.unregisterPushToken(pushToken);
 
-  Future<ProfileData> updateProfileName(String firstName, String? lastName) =>
-      _profile.updateProfileName(firstName, lastName);
+  Future<ProfileData> updateProfile(
+    String firstName,
+    String? lastName, {
+    String? description,
+  }) => _profile.updateProfile(firstName, lastName, description: description);
 
   Future<ProfileData> updateProfileAvatar(
     String photoToken, {
@@ -633,7 +636,7 @@ class AccountModule {
       if (sync.serverConfigSeen && sync.configHash != null) {
         payload['configHash'] = sync.configHash;
       }
-    // #***! нет маркеров, просим всё с нуля
+      // #***! нет маркеров, просим всё с нуля
     } else {
       payload['presenceSync'] = -1;
       payload['chatsSync'] = -1;

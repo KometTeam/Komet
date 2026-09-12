@@ -203,6 +203,7 @@
   "editProfileSave": "Сохранить",
   "editProfileFirstName": "Имя",
   "editProfileLastName": "Фамилия",
+  "editProfileBio": "О себе",
   "editProfileRemovePhoto": "Удалить фото",
   "registrationTitle": "Создание профиля",
   "registrationSubtitle": "Укажите имя и выберите аватар",

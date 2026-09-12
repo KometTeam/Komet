@@ -210,6 +210,7 @@
   "editProfileSave": "Save",
   "editProfileFirstName": "First name",
   "editProfileLastName": "Last name",
+  "editProfileBio": "About me",
   "editProfileRemovePhoto": "Remove photo",
   "registrationTitle": "Create your profile",
   "registrationSubtitle": "Add your name and pick an avatar",

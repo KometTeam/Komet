@@ -1232,6 +1232,12 @@ abstract class AppLocalizations {
   /// **'Last name'**
   String get editProfileLastName;
 
+  /// No description provided for @editProfileBio.
+  ///
+  /// In en, this message translates to:
+  /// **'About me'**
+  String get editProfileBio;
+
   /// No description provided for @editProfileRemovePhoto.
   ///
   /// In en, this message translates to:
