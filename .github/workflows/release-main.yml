@@ -184,7 +184,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
       - name: Build macOS
-        run: flutter build macos --release
+        run: |
+          flutter config --no-enable-swift-package-manager
+          flutter build macos --release
       - name: Package macOS
         run: |
           mkdir -p dist
