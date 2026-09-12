@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! светлая тёмная системная или по расписанию
 enum AppThemeMode { system, light, dark, schedule }
 
+// #***! настройка темы
 class AppThemeModeConfig {
   static const prefKey = 'app_theme_mode';
 
@@ -23,6 +25,7 @@ class AppThemeModeConfig {
   static AppThemeMode _parse(String? val) =>
       enumFromName(AppThemeMode.values, val, AppThemeMode.system);
 
+  // #***! подписи для настроек
   static String label(AppThemeMode mode) {
     switch (mode) {
       case AppThemeMode.system:

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+// #***! кадр веб протокола, заголовок как в сокете но поверх вебсокета
 class MaxWebFrame {
   final int cmd;
   final int seq;
@@ -18,6 +19,7 @@ class MaxWebFrame {
   bool get isError => cmd != MaxWebCmd.ok && cmd != MaxWebCmd.request;
 }
 
+// #***! коды команд как в основном протоколе
 abstract class MaxWebCmd {
   static const int request = 0;
   static const int ok = 1;
@@ -25,10 +27,12 @@ abstract class MaxWebCmd {
   static const int error = 3;
 }
 
+// #***! фрейминг, 10 байт заголовка плюс тело
 abstract class MaxWebFraming {
   static const int protocolVersion = 10;
   static const int headerSize = 10;
 
+  // #***! тело в MessagePack и при надобности жмётся LZ4
   static Uint8List encode({
     required int cmd,
     required int seq,
@@ -54,6 +58,7 @@ abstract class MaxWebFraming {
     return frame;
   }
 
+  // #***! разбор входящего кадра
   static MaxWebFrame decode(Uint8List frame) {
     if (frame.length < headerSize) {
       throw const FormatException('MaxWebFraming: кадр короче заголовка');
@@ -85,6 +90,7 @@ abstract class MaxWebFraming {
   }
 }
 
+// #***! свой распаковщик LZ4, тянуть библиотеку ради одного формата не хочется
 abstract class Lz4Block {
   static Uint8List decompress(Uint8List source, int maxOutputSize) {
     final output = Uint8List(maxOutputSize);
@@ -154,6 +160,7 @@ abstract class Lz4Block {
   }
 }
 
+// #***! свой MessagePack, нужен только тот набор типов что реально шлёт сервер
 abstract class MaxMsgpack {
   static Uint8List encode(Object? value) {
     final sink = BytesBuilder(copy: false);
@@ -163,6 +170,7 @@ abstract class MaxMsgpack {
 
   static Object? decode(Uint8List bytes) => _Reader(bytes).read();
 
+  // #***! запись значения по типу
   static void _write(BytesBuilder sink, Object? value) {
     if (value == null) {
       sink.addByte(0xC0);
@@ -257,6 +265,7 @@ abstract class MaxMsgpack {
     sink.add(value);
   }
 
+  // #***! целые пишем минимально возможным представлением
   static void _writeInt(BytesBuilder sink, int value) {
     if (value >= 0) {
       if (value < 0x80) {
@@ -305,6 +314,7 @@ abstract class MaxMsgpack {
   }
 }
 
+// #***! чтение по курсору
 class _Reader {
   _Reader(this._bytes) : _view = ByteData.view(
           _bytes.buffer,
@@ -396,6 +406,7 @@ class _Reader {
     throw FormatException('MaxMsgpack: неизвестный маркер 0x${byte.toRadixString(16)}');
   }
 
+  // #***! расширение типа 1 это большое число, сервер шлёт им id
   static const int _numberExtType = 1;
 
   Object? _ext(int length) {

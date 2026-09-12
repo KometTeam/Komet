@@ -10,6 +10,7 @@ import '../../models/contact_info.dart';
 import '../api.dart';
 import 'messages.dart';
 
+// #***! контакт как он лежит в базе
 class CachedContact {
   final int id;
   final int accountId;
@@ -37,12 +38,14 @@ class CachedContact {
     this.accountStatus = 0,
   });
 
+  // #***! флаги аккаунта, официальный бот служебный удалённый
   bool get isOfficial => options.contains('OFFICIAL');
   bool get isBot => options.contains('BOT');
   bool get isServiceAccount => options.contains('SERVICE_ACCOUNT');
   bool get isVerified => isOfficial;
   bool get isDeleted => accountStatus != 0;
 
+  // #***! разбор строки таблицы
   factory CachedContact.fromDbRow(Map<String, dynamic> row) => CachedContact(
     id: row['id'] as int,
     accountId: row['account_id'] as int,
@@ -57,12 +60,14 @@ class CachedContact {
     accountStatus: (row['account_status'] as int?) ?? 0,
   );
 
+  // #***! options в базе одной строкой через запятую
   static Set<String> _decodeOptions(dynamic raw) {
     if (raw is! String || raw.isEmpty) return const {};
     return raw.split(',').where((s) => s.isNotEmpty).toSet();
   }
 }
 
+// #***! результат поиска по номеру
 class PhoneLookupResult {
   final int id;
   final String? name;
@@ -77,15 +82,25 @@ class PhoneLookupResult {
   });
 }
 
+// #***! ids идут параллельно urls, по ним удаляем конкретное фото
 class ContactPhotos {
   final List<String> urls;
+  final List<int> ids;
   final int total;
 
-  const ContactPhotos({required this.urls, required this.total});
+  const ContactPhotos({
+    required this.urls,
+    this.ids = const [],
+    required this.total,
+  });
 
   static const empty = ContactPhotos(urls: [], total: 0);
+
+  int? idAt(int index) =>
+      index >= 0 && index < ids.length ? ids[index] : null;
 }
 
+// #***! итог добавления, добавили не нашли или ошибка
 enum AddContactStatus { added, notFound, error }
 
 class AddContactResult {
@@ -95,9 +110,12 @@ class AddContactResult {
   const AddContactResult(this.status, {this.contact});
 }
 
+// #***! контакты, поиск добавление блокировка и синхра
 class ContactsModule {
+  // #***! revision на любое изменение, списки подписаны
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
+  // #***! поиск по номеру, silent значит ошибку покажем сами
   static Future<PhoneLookupResult?> findByPhone(
     Api api,
     String phone, {
@@ -119,6 +137,7 @@ class ContactsModule {
     final id = contact['id'];
     if (id is! int) return null;
 
+    // #***! заодно греем кэши имени аватарки и телефона
     primeContactCache(contact);
 
     final payloadPhone = contact['phone'];
@@ -148,12 +167,14 @@ class ContactsModule {
     );
   }
 
+  // #***! только цифры и плюс впереди
   static String? _normalizePhone(String raw) {
     final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
     if (digits.length < 5) return null;
     return '+$digits';
   }
 
+  // #***! добавляем известный контакт по id
   static Future<CachedContact?> addContact(
     Api api,
     int id,
@@ -174,6 +195,7 @@ class ContactsModule {
         ? (data['contact'] as Map).cast<dynamic, dynamic>()
         : null;
 
+    // #***! сервер не дал карточку, собираем минимум сами контакт должен появиться
     final row = contact != null
         ? _parseContact(contact, profile.id)
         : {
@@ -200,6 +222,7 @@ class ContactsModule {
     return CachedContact.fromDbRow(row);
   }
 
+  // #***! добавление по номеру, не найден отличаем по errorKey
   static Future<AddContactResult> addContactByPhone(
     Api api, {
     required String phone,
@@ -257,6 +280,7 @@ class ContactsModule {
     );
   }
 
+  // #***! переименование контакта у себя
   static Future<CachedContact?> updateContact(
     Api api, {
     required int contactId,
@@ -294,6 +318,7 @@ class ContactsModule {
     return CachedContact.fromDbRow(row);
   }
 
+  // #***! удаление, чистим базу и кэши и убираем своё имя
   static Future<bool> removeContact(Api api, int contactId) async {
     try {
       await api.sendRequest(Opcode.contactUpdate, {
@@ -317,6 +342,7 @@ class ContactsModule {
       info = await ContactInfoFetch.get(contactId, forceRefresh: true);
     }
 
+    // #***! имя CUSTOM это наша подпись, после удаления её быть не должно
     final rawNames = info?.raw['names'];
     if (info != null && rawNames is List) {
       final stripped = rawNames
@@ -333,6 +359,7 @@ class ContactsModule {
     return true;
   }
 
+  // #***! заблокированных держим в памяти, сервер отдаёт только списком
   static final Set<int> _blockedIds = <int>{};
   static bool _blockedLoaded = false;
 
@@ -341,9 +368,11 @@ class ContactsModule {
     _blockedLoaded = false;
   }
 
+  // #***! по 100, максимум 20 страниц дальше нужен свой экран
   static const int _blockedPageSize = 100;
   static const int _blockedMaxPages = 20;
 
+  // #***! первый запрос тянет всё, дальше из памяти
   static Future<bool> isBlocked(Api api, int contactId) async {
     if (!_blockedLoaded) await _loadBlockedIds(api);
     return _blockedIds.contains(contactId);
@@ -375,6 +404,7 @@ class ContactsModule {
     _blockedLoaded = true;
   }
 
+  // #***! блокировка, локальный список правим сразу
   static Future<bool> setBlocked(Api api, int contactId, bool blocked) async {
     try {
       final packet = await api.sendRequest(Opcode.contactUpdate, {
@@ -397,10 +427,22 @@ class ContactsModule {
     return true;
   }
 
+  // #***! контакты приходят в login, кладём пачкой в базу
   static Future<void> syncFromLoginPayload(
     Map<dynamic, dynamic> data,
     int accountId,
-  ) async {
+  ) => _applyContacts(data, accountId, complete: false);
+
+  static Future<void> applyFullContactList(
+    Map<dynamic, dynamic> data,
+    int accountId,
+  ) => _applyContacts(data, accountId, complete: true);
+
+  static Future<void> _applyContacts(
+    Map<dynamic, dynamic> data,
+    int accountId, {
+    required bool complete,
+  }) async {
     final contacts = data['contacts'];
     if (contacts is! List) {
       logger.i('Контакты: сервер не прислал список (акк $accountId)');
@@ -412,30 +454,46 @@ class ContactsModule {
     }
 
     final rows = <Map<String, dynamic>>[];
+    final removedIds = <int>{};
+    final presentIds = <int>{};
     for (final raw in contacts.whereType<Map>()) {
       final contact = raw.cast<dynamic, dynamic>();
+      primeContactCache(contact);
+      final id = contact['id'];
+      if (contact['status'] == 'REMOVED') {
+        if (id is int) removedIds.add(id);
+        continue;
+      }
+      if (id is int) presentIds.add(id);
       final row = _parseContact(contact, accountId);
       if (row != null) rows.add(row);
-      primeContactCache(contact);
+    }
+    if (complete) {
+      final localIds = await AppDatabase.loadContactIds(accountId);
+      removedIds.addAll(localIds.where((id) => !presentIds.contains(id)));
     }
 
-    if (rows.isNotEmpty) {
-      await AppDatabase.saveContacts(rows);
-      revision.value++;
+    if (rows.isNotEmpty) await AppDatabase.saveContacts(rows);
+    if (removedIds.isNotEmpty) {
+      await AppDatabase.deleteContacts(accountId, removedIds.toList());
     }
+    if (rows.isNotEmpty || removedIds.isNotEmpty) revision.value++;
     logger.i(
-      'Контакты: получено ${contacts.length}, сохранено ${rows.length} (акк $accountId)',
+      'Контакты: получено ${contacts.length}, сохранено ${rows.length}, '
+      'удалено ${removedIds.length} (акк $accountId)',
     );
   }
 
+  // #***! отдельная синхра если в login их не было
   static Future<void> syncFromServer(Api api, int accountId) async {
     final map = await api.sendRequestMap(Opcode.contactsGet, {
       'contactsSync': 0,
     });
     if (map == null) return;
-    await syncFromLoginPayload(map.cast<dynamic, dynamic>(), accountId);
+    await applyFullContactList(map.cast<dynamic, dynamic>(), accountId);
   }
 
+  // #***! своя карточка для профиля
   static Future<ProfileData?> fetchSelfProfile(Api api, int accountId) async {
     final map = await api.sendRequestMap(Opcode.contactInfo, {
       'contactIds': [accountId],
@@ -451,6 +509,7 @@ class ContactsModule {
     return null;
   }
 
+  // #***! греем кэши имя телефон аватарка
   static void primeContactCache(Map<dynamic, dynamic> contact) {
     final id = contact['id'];
     if (id is! int) return;
@@ -477,6 +536,7 @@ class ContactsModule {
     }
   }
 
+  // #***! первая страница фоток кэшируется для профиля
   static final Map<int, ContactPhotos> _photosHead = {};
 
   static ContactPhotos? cachedPhotos(int contactId) => _photosHead[contactId];
@@ -498,12 +558,25 @@ class ContactsModule {
     final urls = rawUrls is List
         ? rawUrls.whereType<String>().toList()
         : <String>[];
+    final rawIds = map['ids'];
+    final ids = rawIds is List ? rawIds.whereType<int>().toList() : <int>[];
     final total = map['total'] is int ? map['total'] as int : urls.length;
-    final photos = ContactPhotos(urls: urls, total: total);
+    final photos = ContactPhotos(
+      urls: urls,
+      // #***! разъехавшиеся списки хуже отсутствующих, id тогда не берём
+      ids: ids.length == urls.length ? ids : const [],
+      total: total,
+    );
     if (from == 0) _photosHead[contactId] = photos;
     return photos;
   }
 
+  // #***! после удаления фото голова кэша протухла
+  static void invalidatePhotos(int contactId) {
+    _photosHead.remove(contactId);
+  }
+
+  // #***! чтение из базы, основной путь для юишки
   static Future<List<CachedContact>> getContacts(
     int accountId, {
     bool includeDeleted = false,
@@ -520,6 +593,7 @@ class ContactsModule {
     return row == null ? null : CachedContact.fromDbRow(row);
   }
 
+  // #***! синтетические контакты для отладки
   static const List<String> _debugFirstNames = [
     'Алиса',
     'Борис',
@@ -586,6 +660,7 @@ class ContactsModule {
     return out;
   }
 
+  // #***! греем кэш из базы на холодном старте иначе имена пустые
   /// Прогревает in-memory ContactCache из локальных контактов.
   /// Нужно вызывать на cold start: иначе кэш пуст до следующего логина.
   static Future<void> primeCacheFromDb(int accountId) async {
@@ -602,6 +677,7 @@ class ContactsModule {
     }
   }
 
+  // #***! приоритет имён, наша подпись потом профиль потом любое
   static Map? _preferredNameEntry(List names) {
     Map? oneme;
     Map? any;
@@ -615,6 +691,7 @@ class ContactsModule {
     return oneme ?? any;
   }
 
+  // #***! карточка сервера в строку таблицы
   static Map<String, dynamic>? _parseContact(
     Map<dynamic, dynamic> contact,
     int accountId,

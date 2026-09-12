@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../backend/modules/contacts.dart';
-import '../../core/utils/media_saver.dart';
+import '../../core/storage/app_database.dart';
 import '../../main.dart';
+import 'avatar_photo_actions.dart';
 import 'custom_notification.dart';
 import 'small_spinner.dart';
 
@@ -13,6 +14,9 @@ class AvatarHistoryScreen extends StatefulWidget {
   final String? name;
   final String? currentAvatarUrl;
   final String? initialUrl;
+  final int? mainPhotoId;
+  final int? initialPhotoId;
+  final bool allowDelete;
 
   const AvatarHistoryScreen({
     super.key,
@@ -20,25 +24,35 @@ class AvatarHistoryScreen extends StatefulWidget {
     this.name,
     this.currentAvatarUrl,
     this.initialUrl,
+    this.mainPhotoId,
+    this.initialPhotoId,
+    this.allowDelete = false,
   });
 
-  static Future<void> open(
+  // #***! возвращает новый профиль, если фото удалили прямо отсюда
+  static Future<ProfileData?> open(
     BuildContext context, {
     required int contactId,
     String? name,
     String? currentAvatarUrl,
     String? initialUrl,
+    int? mainPhotoId,
+    int? initialPhotoId,
+    bool allowDelete = false,
   }) {
     final url = currentAvatarUrl;
-    if (url == null || url.isEmpty) return Future.value();
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    if (url == null || url.isEmpty) return Future.value(null);
+    return Navigator.of(context).push<ProfileData>(
+      MaterialPageRoute<ProfileData>(
         fullscreenDialog: true,
         builder: (_) => AvatarHistoryScreen(
           contactId: contactId,
           name: name,
           currentAvatarUrl: url,
           initialUrl: initialUrl,
+          mainPhotoId: mainPhotoId,
+          initialPhotoId: initialPhotoId,
+          allowDelete: allowDelete,
         ),
       ),
     );
@@ -55,14 +69,19 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
   late final PageController _pageController;
   String? _current;
   final List<String> _history = [];
+  final List<int?> _historyIds = [];
+  // #***! страницы истории догружаются пачками, дубликаты ловим множеством
+  final Set<String> _seenUrls = {};
   List<String> _pages = const [];
+  List<int?> _pageIds = const [];
   int _historyTotal = 0;
   int _total = 0;
   int _index = 0;
   bool _loading = true;
   bool _loadingMore = false;
   bool _historyDone = false;
-  bool _saving = false;
+  bool _busy = false;
+  final GlobalKey _menuKey = GlobalKey();
 
   @override
   void initState() {
@@ -74,13 +93,22 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
         : null;
     if (cached != null) _mergeHistory(cached);
     _rebuild();
-    _index = _indexOfUrl(widget.initialUrl ?? _current);
+    _index = _initialIndex();
     _pageController = PageController(initialPage: _index);
     if (_hasHistory) {
       _load();
     } else {
       _loading = false;
     }
+  }
+
+  int _initialIndex() {
+    final id = widget.initialPhotoId;
+    if (id != null) {
+      final at = _pageIds.indexOf(id);
+      if (at >= 0) return at;
+    }
+    return _indexOfUrl(widget.initialUrl ?? _current);
   }
 
   bool get _hasHistory => widget.contactId > 0;
@@ -97,28 +125,44 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
     return at < 0 ? 0 : at;
   }
 
-  String? _anchorUrl() =>
-      _index < _pages.length ? _pages[_index] : (widget.initialUrl ?? _current);
+  // #***! якорь по id надёжнее, у одного фото ссылки бывают разные
+  Object? _anchor() {
+    final id = _index < _pageIds.length ? _pageIds[_index] : null;
+    if (id != null) return id;
+    return _index < _pages.length ? _pages[_index] : (widget.initialUrl ?? _current);
+  }
 
   void _mergeHistory(ContactPhotos photos) {
-    for (final url in photos.urls) {
-      if (url.isEmpty || _history.contains(url)) continue;
+    for (var i = 0; i < photos.urls.length; i++) {
+      final url = photos.urls[i];
+      if (url.isEmpty || !_seenUrls.add(url)) continue;
       _history.add(url);
+      _historyIds.add(photos.idAt(i));
     }
     if (photos.total > _historyTotal) _historyTotal = photos.total;
   }
 
   void _rebuild() {
     final current = _current;
-    final extra = current != null && !_history.contains(current);
+    final mainId = widget.mainPhotoId;
+    final known =
+        current != null &&
+        (_history.contains(current) ||
+            (mainId != null && _historyIds.contains(mainId)));
+    final extra = current != null && !known;
     _pages = extra ? [current, ..._history] : List.of(_history);
+    _pageIds = extra ? [mainId, ..._historyIds] : List.of(_historyIds);
     final counted = _historyTotal + (extra ? 1 : 0);
     _total = counted > _pages.length ? counted : _pages.length;
   }
 
-  void _restoreIndex(String? anchor) {
+  void _restoreIndex(Object? anchor) {
     if (_pages.isEmpty) return;
-    final at = anchor == null ? -1 : _pages.indexOf(anchor);
+    final at = switch (anchor) {
+      final int id => _pageIds.indexOf(id),
+      final String url => _pages.indexOf(url),
+      _ => -1,
+    };
     final next = at >= 0 ? at : _index.clamp(0, _pages.length - 1);
     if (next == _index) return;
     setState(() => _index = next);
@@ -135,7 +179,7 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
       count: _pageSize,
     );
     if (!mounted) return;
-    final anchor = _anchorUrl();
+    final anchor = _anchor();
     setState(() {
       _mergeHistory(photos);
       _rebuild();
@@ -163,7 +207,7 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
       _loadingMore = false;
       return;
     }
-    final anchor = _anchorUrl();
+    final anchor = _anchor();
     setState(() {
       _mergeHistory(photos);
       if (_history.length == before) _historyDone = true;
@@ -194,18 +238,45 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
     );
   }
 
+  int? get _currentPhotoId =>
+      _index < _pageIds.length ? _pageIds[_index] : null;
+
+  bool get _canDelete => widget.allowDelete && _currentPhotoId != null;
+
   Future<void> _save() async {
-    if (_saving || _index >= _pages.length) return;
-    setState(() => _saving = true);
-    final result = await saveImageFromUrl(_pages[_index]);
+    if (_busy || _index >= _pages.length) return;
+    setState(() => _busy = true);
+    await saveAvatarPhoto(context, _pages[_index]);
+    if (mounted) setState(() => _busy = false);
+  }
+
+  // #***! удалили и сразу назад, обновлённый профиль отдаём вызвавшему экрану
+  Future<void> _delete() async {
+    final id = _currentPhotoId;
+    if (_busy || id == null) return;
+    if (!await confirmAvatarDeletion(context)) return;
     if (!mounted) return;
-    setState(() => _saving = false);
-    final message = result.ok
-        ? (result.toGallery
-              ? 'Сохранено в галерею'
-              : 'Сохранено: ${result.location}')
-        : 'Не удалось сохранить: ${result.error}';
-    showCustomNotification(context, message);
+    setState(() => _busy = true);
+    try {
+      final profile = await accountModule.removeProfilePhoto(id);
+      if (!mounted) return;
+      Navigator.of(context).pop(profile);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      showCustomNotification(context, 'Не удалось удалить фото: $e');
+    }
+  }
+
+  void _openMenu() {
+    final rect = anchorRectOf(_menuKey);
+    if (rect == null) return;
+    showAvatarMenu(
+      context: context,
+      anchorRect: rect,
+      onSave: _save,
+      onDelete: _canDelete ? _delete : null,
+    );
   }
 
   @override
@@ -258,10 +329,11 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
                 ),
                 Expanded(child: _buildCounter()),
                 IconButton(
-                  icon: _saving
+                  key: _menuKey,
+                  icon: _busy
                       ? const SmallSpinner(size: 22, color: Colors.white)
-                      : const Icon(Symbols.download, color: Colors.white),
-                  onPressed: _pages.isEmpty || _saving ? null : _save,
+                      : const Icon(Symbols.more_vert, color: Colors.white),
+                  onPressed: _pages.isEmpty || _busy ? null : _openMenu,
                 ),
               ],
             ),

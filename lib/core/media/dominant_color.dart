@@ -4,15 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
+// #***! преобладающий цвет картинки, под него красим фон
 class DominantColorCache {
   DominantColorCache._();
 
   static final DominantColorCache instance = DominantColorCache._();
 
+  // #***! берём 8x8, этого хватает и стоит копейки
   static const int _sampleExtent = 8;
   static const int _maxEntries = 256;
   static const int _minAlpha = 8;
+  // #***! почти серые отвергаем, дают грязный фон
   static const double _achromaticFloor = 0.15;
+  // #***! файла нет, не долбимся к нему постоянно ждём пару секунд
   static const Duration _missingFileCooldown = Duration(seconds: 3);
 
   final Map<String, Color> _resolved = <String, Color>{};
@@ -22,6 +26,7 @@ class DominantColorCache {
 
   Color? lookup(String url) => _resolved[url];
 
+  // #***! запрос с колбэком, цвет приедет не сразу
   void request(String url, VoidCallback onResolved) {
     if (_resolved.containsKey(url) ||
         _inFlight.contains(url) ||
@@ -55,6 +60,7 @@ class DominantColorCache {
     _resolved[url] = color;
   }
 
+  // #***! само извлечение цвета
   Future<_ExtractionOutcome> _extract(String url) async {
     ui.Codec? codec;
     ui.Image? image;
@@ -127,6 +133,7 @@ sealed class _ExtractionOutcome {
   const _ExtractionOutcome();
 }
 
+// #***! три исхода, файла нет цвет не годится цвет найден
 class _ExtractionMissing extends _ExtractionOutcome {
   const _ExtractionMissing();
 }

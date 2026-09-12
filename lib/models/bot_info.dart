@@ -1,5 +1,6 @@
 import 'contact_info.dart';
 
+// #***! одна команда бота из меню /
 class BotCommand {
   final String name;
   final String? description;
@@ -13,9 +14,11 @@ class BotCommand {
         : null,
   );
 
+  // #***! как команда выглядит в поле ввода
   String get slash => '/$name';
 }
 
+// #***! данные бота плюс карточка контакта
 class BotInfo {
   final int botId;
   final List<BotCommand> commands;
@@ -23,6 +26,7 @@ class BotInfo {
 
   const BotInfo({required this.botId, required this.commands, this.contact});
 
+  // #***! склеиваем ответ, пустые имена выкидываем
   factory BotInfo.fromPayload(int botId, Map<String, dynamic> payload) {
     final rawCommands = payload['commands'];
     final commands = <BotCommand>[];
@@ -42,6 +46,7 @@ class BotInfo {
     );
   }
 
+  // #***! описание и ссылка в сыром контакте
   String? get description => contact?.raw['description'] as String?;
 
   String? get link => contact?.raw['link'] as String?;

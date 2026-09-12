@@ -272,7 +272,8 @@ class VideoNoteRecorder(
     }
 
     @Suppress("MissingPermission")
-    private fun openCamera(result: MethodChannel.Result, textureId: Long) {
+    private fun openCamera(rawResult: MethodChannel.Result, textureId: Long) {
+        val result = OnceResult(rawResult)
         manager().openCamera(
             cameraId,
             object : CameraDevice.StateCallback() {
@@ -284,6 +285,7 @@ class VideoNoteRecorder(
 
                 override fun onDisconnected(device: CameraDevice) {
                     device.close(); cameraDevice = null
+                    result.error("CAMERA_DISCONNECTED", "camera $cameraId disconnected", null)
                 }
 
                 override fun onError(device: CameraDevice, error: Int) {
@@ -296,49 +298,73 @@ class VideoNoteRecorder(
     }
 
     private fun startPreviewSession(result: MethodChannel.Result, textureId: Long) {
-        val device = cameraDevice ?: return
-        val camSurface = camInputSurface ?: return
+        val device = cameraDevice
+        val camSurface = camInputSurface
+        if (device == null || camSurface == null) {
+            result.error("NOT_READY", "camera or surface released", null)
+            return
+        }
         try {
-            createSession(listOf(camSurface)) { s ->
-                session = s
-                val req = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-                req.addTarget(camSurface)
-                fpsRange?.let {
-                    req.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it)
+            createSession(
+                listOf(camSurface),
+                onFailed = {
+                    result.error("PREVIEW_FAILED", "capture session config failed", null)
+                },
+            ) { s ->
+                try {
+                    configurePreview(s, device, camSurface, result, textureId)
+                } catch (e: Exception) {
+                    Log.e(tag, "preview request failed", e)
+                    result.error("PREVIEW_FAILED", e.message, null)
                 }
-                // Оптическая стабилизация, если линза умеет; иначе электронная.
-                // Обе сразу включать нельзя — на многих устройствах конфликтуют.
-                if (hasOis) {
-                    req.set(
-                        CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
-                        CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON,
-                    )
-                } else if (hasEis) {
-                    req.set(
-                        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
-                        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON,
-                    )
-                }
-                previewRequest = req
-                applyTorch(req)
-                s.setRepeatingRequest(req.build(), null, camHandler)
-                Log.i(
-                    tag,
-                    "preview session configured fpsRange=$fpsRange " +
-                        "ois=$hasOis eis=$hasEis flash=$hasFlash",
-                )
-                result.success(
-                    mapOf(
-                        "textureId" to textureId,
-                        "size" to edge,
-                        "hasFlash" to hasFlash,
-                    ),
-                )
             }
         } catch (e: Exception) {
             Log.e(tag, "preview session failed", e)
             result.error("PREVIEW_FAILED", e.message, null)
         }
+    }
+
+    private fun configurePreview(
+        s: CameraCaptureSession,
+        device: CameraDevice,
+        camSurface: Surface,
+        result: MethodChannel.Result,
+        textureId: Long,
+    ) {
+        session = s
+        val req = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+        req.addTarget(camSurface)
+        fpsRange?.let {
+            req.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it)
+        }
+        // Оптическая стабилизация, если линза умеет; иначе электронная.
+        // Обе сразу включать нельзя — на многих устройствах конфликтуют.
+        if (hasOis) {
+            req.set(
+                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON,
+            )
+        } else if (hasEis) {
+            req.set(
+                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON,
+            )
+        }
+        previewRequest = req
+        applyTorch(req)
+        s.setRepeatingRequest(req.build(), null, camHandler)
+        Log.i(
+            tag,
+            "preview session configured fpsRange=$fpsRange " +
+                "ois=$hasOis eis=$hasEis flash=$hasFlash",
+        )
+        result.success(
+            mapOf(
+                "textureId" to textureId,
+                "size" to edge,
+                "hasFlash" to hasFlash,
+            ),
+        )
     }
 
     private fun setupRecorder(path: String) {
@@ -569,15 +595,17 @@ class VideoNoteRecorder(
     @Suppress("DEPRECATION")
     private fun createSession(
         surfaces: List<Surface>,
+        onFailed: () -> Unit,
         onReady: (CameraCaptureSession) -> Unit,
     ) {
-        val device = cameraDevice ?: return
+        val device = cameraDevice ?: return onFailed()
         device.createCaptureSession(
             surfaces,
             object : CameraCaptureSession.StateCallback() {
                 override fun onConfigured(s: CameraCaptureSession) = onReady(s)
                 override fun onConfigureFailed(s: CameraCaptureSession) {
                     Log.e(tag, "session config failed")
+                    onFailed()
                 }
             },
             camHandler,

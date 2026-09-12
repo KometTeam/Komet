@@ -3,9 +3,12 @@ import 'dart:convert';
 import '../../models/attachment.dart';
 import '../../models/chat_preview_media.dart';
 
+// #***! в превью влезает три миниатюры
 const int _maxPreviewThumbs = 3;
+// #***! длинную base64 превьюшку в базу не кладём, раздувает таблицу
 const int _maxThumbLength = 20000;
 
+// #***! подпись чата вместо текста, Изображение Файл и прочее
 String? attachPreviewLabel(dynamic attaches) {
   final parts = _attachPreviewParts(attaches);
   if (parts == null) return null;
@@ -13,6 +16,7 @@ String? attachPreviewLabel(dynamic attaches) {
   return detail == null ? parts.label : '${parts.label}: $detail';
 }
 
+// #***! метка и уточнение отдельно, склеит вызывающий
 ({String label, String? detail})? _attachPreviewParts(dynamic attaches) {
   final first = _firstPreviewAttach(attaches);
   if (first == null) return null;
@@ -52,6 +56,7 @@ String? attachPreviewLabel(dynamic attaches) {
   }
 }
 
+// #***! тот же разбор но для иконки
 ChatPreviewKind? _attachPreviewKind(Map attach) {
   switch ((attach['_type'] as String? ?? '').toUpperCase()) {
     case 'PHOTO':
@@ -91,6 +96,7 @@ ChatPreviewKind? _attachPreviewKind(Map attach) {
   }
 }
 
+// #***! звонок, групповой пропущенный или обычный
 String _callPreviewLabel(Map attach) {
   final video = attach['callType']?.toString().toUpperCase() == 'VIDEO';
   if (attach['joinLink'] != null) {
@@ -102,6 +108,7 @@ String _callPreviewLabel(Map attach) {
   return video ? 'Видеозвонок' : 'Звонок';
 }
 
+// #***! нулевая длительность или тип сброса значит пропущенный
 bool _isFailedCall(Map attach) {
   final duration = (attach['duration'] as num?)?.toInt() ?? 0;
   final hangup = attach['hangupType']?.toString();
@@ -116,6 +123,7 @@ String? _nonEmpty(dynamic raw) {
   return value != null && value.isNotEmpty ? value : null;
 }
 
+// #***! инлайн клавиатуру пропускаем, это не вложение
 Map? _firstPreviewAttach(dynamic attaches) {
   if (attaches is! List || attaches.isEmpty) return null;
   for (final attach in attaches) {
@@ -127,6 +135,7 @@ Map? _firstPreviewAttach(dynamic attaches) {
   return null;
 }
 
+// #***! несколько фото значит множественное число
 int _mediaAttachCount(dynamic attaches) {
   if (attaches is! List) return 0;
   var count = 0;
@@ -137,12 +146,14 @@ int _mediaAttachCount(dynamic attaches) {
   return count;
 }
 
+// #***! videoType == 1 это кружок, у него своя подпись
 bool _isVideoNote(Map attach) {
   final raw = attach['videoType'];
   if (raw is int) return raw == 1;
   return raw?.toString() == '1';
 }
 
+// #***! системное событие, берём текст сервера иначе пишем сами
 String? _controlPreviewLabel(Map c) {
   final title = c['title']?.toString();
   if (title != null && title.isNotEmpty) return title;
@@ -169,6 +180,7 @@ String? _controlPreviewLabel(Map c) {
   }
 }
 
+// #***! итоговая подпись чата, пересланное со стрелкой
 String? messagePreviewText(Map msg) {
   final original = _forwardOrigin(msg);
   if (original != null) {
@@ -180,6 +192,7 @@ String? messagePreviewText(Map msg) {
   return _bodyPreviewText(msg);
 }
 
+// #***! компактное превью для строки чата
 String? messagePreviewMedia(Map msg) {
   final origin = _forwardOrigin(msg);
   final body = origin ?? msg;
@@ -189,6 +202,7 @@ String? messagePreviewMedia(Map msg) {
   final kind = _attachPreviewKind(first);
   if (kind == null) return null;
 
+  // #***! есть подпись к медиа, метку типа не дублируем
   final text = body['text']?.toString();
   final captioned = text != null && text.isNotEmpty;
   final parts = captioned ? null : _attachPreviewParts(body['attaches']);
@@ -204,6 +218,7 @@ String? messagePreviewMedia(Map msg) {
   ).encode();
 }
 
+// #***! достаём оригинал из пересланного
 dynamic _forwardOrigin(Map msg) {
   final link = msg['link'];
   if (link is! Map) return null;
@@ -211,6 +226,7 @@ dynamic _forwardOrigin(Map msg) {
   return link['message'];
 }
 
+// #***! миниатюры только у фото и видео, максимум три
 List<ChatPreviewThumb> _previewThumbs(dynamic attaches) {
   if (attaches is! List) return const [];
   final thumbs = <ChatPreviewThumb>[];
@@ -226,6 +242,7 @@ List<ChatPreviewThumb> _previewThumbs(dynamic attaches) {
   return thumbs;
 }
 
+// #***! берём base64 превьюшку если не гигантская, иначе url
 String? _thumbSource(Map attach, bool isVideo) {
   final data = decodeAttachPreview(attach['previewData']);
   if (data != null && data.length <= _maxThumbLength) return data;
@@ -236,6 +253,7 @@ String? _thumbSource(Map attach, bool isVideo) {
   return null;
 }
 
+// #***! подписи покороче для закреплённого
 ({String? text, bool isPreview}) pinnedMessagePreview(Map msg) {
   final link = msg['link'];
   if (link is Map && link['type']?.toString().toUpperCase() == 'FORWARD') {
@@ -296,6 +314,7 @@ String? _bodyPreviewText(Map msg) {
   return attachPreviewLabel(msg['attaches']);
 }
 
+// #***! форматирование тоже в подпись чтоб жирный и ссылки не терялись
 String? messagePreviewElements(Map msg) {
   final text = msg['text'];
   if (text is! String || text.isEmpty) return null;

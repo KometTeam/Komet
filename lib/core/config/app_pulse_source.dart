@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! источник PulseAudio для звонков на десктопе
 class AppPulseSource {
   static const prefKey = 'call_pulse_source';
   static const String defaultValue = '';

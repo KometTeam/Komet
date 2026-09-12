@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+// #***! параметры жидкого стекла, enabled false значит выключено везде
 class AppLiquidGlass {
   static const bool enabled = false;
 
+  // #***! подобрано на глаз, крутится только тут
   static const double blurSigma = 0;
   static const double spread = 1;
   static const double refraction = 34;

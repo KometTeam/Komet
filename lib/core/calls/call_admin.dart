@@ -1,5 +1,6 @@
 import 'ws2_signaling.dart';
 
+// #***! значения которые ждёт сервер звонков, wire это строка на проводе
 enum CallMedia {
   audio('AUDIO'),
   video('VIDEO'),
@@ -62,6 +63,7 @@ enum CallListType {
   final String wire;
 }
 
+// #***! ссылка на участника, id плюс номер устройства их бывает несколько
 class CallParticipantRef {
   final int id;
   final int deviceIdx;
@@ -72,11 +74,13 @@ class CallParticipantRef {
   String get wire => '${isGroup ? 'g' : 'u'}$id:d$deviceIdx';
 }
 
+// #***! админские команды, мьют роли запись комната ожидания
 class CallAdmin {
   final Ws2Signaling _signaling;
 
   const CallAdmin(this._signaling);
 
+  // #***! просим у участника микрофон или камеру
   Future<void> requestMedia(
     Set<CallMedia> media, {
     CallParticipantRef? participant,
@@ -92,6 +96,7 @@ class CallAdmin {
     );
   }
 
+  // #***! принудительный мьют
   Future<void> setMuteStates(
     Map<CallMedia, CallMuteState?> states, {
     CallParticipantRef? participant,
@@ -119,6 +124,7 @@ class CallAdmin {
     );
   }
 
+  // #***! выключить микрофоны всем
   Future<void> muteEveryone() {
     return _signaling.sendCommand(
       'switch-micro',
@@ -126,6 +132,7 @@ class CallAdmin {
     );
   }
 
+  // #***! поднять в докладчики
   Future<void> setPromoted(CallParticipantRef participant, bool promoted) {
     return _signaling.sendCommand(
       'promote-participant',
@@ -133,6 +140,7 @@ class CallAdmin {
     );
   }
 
+  // #***! раздача ролей
   Future<void> setRoles(
     CallParticipantRef participant,
     List<CallRoleName> roles, {
@@ -148,6 +156,7 @@ class CallAdmin {
     );
   }
 
+  // #***! выкинуть из звонка
   Future<void> removeParticipant(CallParticipantRef participant) {
     return _signaling.sendCommand(
       'remove-participant',
@@ -155,6 +164,7 @@ class CallAdmin {
     );
   }
 
+  // #***! закрепить участника на экране у всех
   Future<void> setPinned(
     CallParticipantRef participant,
     bool pinned, {
@@ -170,6 +180,7 @@ class CallAdmin {
     );
   }
 
+  // #***! настройки звонка, кто что может
   Future<void> setOptions(Map<CallOption, bool> options) {
     return _signaling.sendCommand(
       'change-options',
@@ -181,6 +192,7 @@ class CallAdmin {
     );
   }
 
+  // #***! включить фичу для ролей
   Future<void> enableFeatureForRoles(
     CallFeature feature,
     List<CallRoleName> roles,
@@ -194,6 +206,7 @@ class CallAdmin {
     );
   }
 
+  // #***! поднятые руки
   Future<void> lowerAllHands() => _signaling.sendCommand('put-hands-down');
 
   Future<void> setHandRaised(bool raised, {CallParticipantRef? participant}) {
@@ -220,6 +233,7 @@ class CallAdmin {
     );
   }
 
+  // #***! добавить участников в идущий звонок
   Future<void> addParticipants(
     List<String> externalIds, {
     bool? unban,
@@ -242,6 +256,7 @@ class CallAdmin {
     );
   }
 
+  // #***! запись звонка
   Future<Map<String, dynamic>> startRecord({
     int? movieId,
     String? name,
@@ -274,6 +289,7 @@ class CallAdmin {
     );
   }
 
+  // #***! участники постранично
   Future<Map<String, dynamic>> participantChunk({
     int count = 50,
     CallListType listType = CallListType.grid,
@@ -285,6 +301,7 @@ class CallAdmin {
     );
   }
 
+  // #***! комната ожидания
   Future<Map<String, dynamic>> waitingHall({
     int count = 50,
     String? fromId,

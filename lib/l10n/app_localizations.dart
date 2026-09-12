@@ -290,12 +290,6 @@ abstract class AppLocalizations {
   /// **'Sign in failed'**
   String get tokenLoginFailed;
 
-  /// No description provided for @loginSignInWithSessionFile.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign in with session file'**
-  String get loginSignInWithSessionFile;
-
   /// No description provided for @loginLanguage.
   ///
   /// In en, this message translates to:
@@ -349,6 +343,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Error: missing data for 2FA'**
   String get codeError2faMissing;
+
+  /// No description provided for @codeErrorInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid code'**
+  String get codeErrorInvalid;
 
   /// No description provided for @codeConfirmation2faWarning.
   ///
@@ -1232,6 +1232,12 @@ abstract class AppLocalizations {
   /// **'Last name'**
   String get editProfileLastName;
 
+  /// No description provided for @editProfileBio.
+  ///
+  /// In en, this message translates to:
+  /// **'About me'**
+  String get editProfileBio;
+
   /// No description provided for @editProfileRemovePhoto.
   ///
   /// In en, this message translates to:
@@ -1261,6 +1267,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copy'**
   String get msgActionsCopy;
+
+  /// No description provided for @msgActionsCopyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get msgActionsCopyLink;
 
   /// No description provided for @msgActionsSelectAll.
   ///
@@ -1409,7 +1421,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationsFkmSectionTitle.
   ///
   /// In en, this message translates to:
-  /// **'FKM'**
+  /// **'Notifications without Google (FKM)'**
   String get notificationsFkmSectionTitle;
 
   /// No description provided for @notificationsFkmEnableLabel.
@@ -1421,7 +1433,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationsFkmEnableSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'For FKM notifications to work, the app will need to keep a notification in the shade.'**
+  /// **'Komet keeps its own connection to the server and shows notifications itself. A service notification will stay in the shade while this is on.'**
   String get notificationsFkmEnableSubtitle;
 
   /// No description provided for @notificationsFkmUnsupported.
@@ -1705,6 +1717,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Light from'**
   String get themeSettingsScheduleLightFrom;
+
+  /// No description provided for @themeSettingsCustomTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get themeSettingsCustomTitle;
 
   /// No description provided for @appearanceTitle.
   ///
@@ -3008,6 +3026,24 @@ abstract class AppLocalizations {
   /// **'Quality'**
   String get videoViewerQuality;
 
+  /// No description provided for @videoViewerFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not play the video'**
+  String get videoViewerFailed;
+
+  /// No description provided for @videoViewerRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get videoViewerRetry;
+
+  /// No description provided for @videoViewerClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get videoViewerClose;
+
   /// No description provided for @sharedCopyLink.
   ///
   /// In en, this message translates to:
@@ -3025,6 +3061,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Leave'**
   String get chatInfoActionLeave;
+
+  /// No description provided for @chatInfoActionSubscribe.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribe'**
+  String get chatInfoActionSubscribe;
+
+  /// No description provided for @chatInfoSubscribed.
+  ///
+  /// In en, this message translates to:
+  /// **'You subscribed to the channel'**
+  String get chatInfoSubscribed;
+
+  /// No description provided for @chatInfoSubscribeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not subscribe to the channel'**
+  String get chatInfoSubscribeFailed;
+
+  /// No description provided for @chatInfoActionJoin.
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get chatInfoActionJoin;
+
+  /// No description provided for @chatInfoJoinedGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'You joined the group'**
+  String get chatInfoJoinedGroup;
+
+  /// No description provided for @chatInfoJoinGroupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not join the group'**
+  String get chatInfoJoinGroupFailed;
 
   /// No description provided for @chatInfoActionMuted.
   ///
@@ -3752,6 +3824,18 @@ abstract class AppLocalizations {
   /// **'Audio transcription'**
   String get securityAudioTranscription;
 
+  /// No description provided for @securityConfidentialityWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'These toggles do not exist in the original app, and they may be unavailable to you.\n\nIf the server refuses, it will drop the connection. (conection closed)'**
+  String get securityConfidentialityWarning;
+
+  /// No description provided for @securityConfidentialityDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get securityConfidentialityDecline;
+
   /// No description provided for @securityBlacklistTitle.
   ///
   /// In en, this message translates to:
@@ -4454,6 +4538,18 @@ abstract class AppLocalizations {
   /// **'No images found'**
   String get attachSheetNoImagesFound;
 
+  /// No description provided for @attachSheetMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get attachSheetMoreActions;
+
+  /// No description provided for @attachSheetSendSeparately.
+  ///
+  /// In en, this message translates to:
+  /// **'Send separately'**
+  String get attachSheetSendSeparately;
+
   /// No description provided for @attachSheetLimitedAccessInfo.
   ///
   /// In en, this message translates to:
@@ -4507,6 +4603,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Allow'**
   String get attachSheetAllow;
+
+  /// No description provided for @attachSheetGalleryFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the gallery'**
+  String get attachSheetGalleryFailedTitle;
+
+  /// No description provided for @attachSheetRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get attachSheetRetry;
 
   /// No description provided for @attachSheetSettings.
   ///
@@ -5066,6 +5174,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t open the file'**
   String get downloadsOpenFailed;
 
+  /// No description provided for @audioPlaybackChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio playback'**
+  String get audioPlaybackChannel;
+
+  /// No description provided for @audioPlaybackFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t play the file'**
+  String get audioPlaybackFailed;
+
   /// No description provided for @downloadsClearHistory.
   ///
   /// In en, this message translates to:
@@ -5593,6 +5713,420 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Got it'**
   String get authLimitsConfirm;
+
+  /// No description provided for @e2eeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'End-to-end encryption'**
+  String get e2eeTitle;
+
+  /// No description provided for @e2eeStatusNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get e2eeStatusNone;
+
+  /// No description provided for @e2eeStatusOffered.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for {name} to accept'**
+  String e2eeStatusOffered(String name);
+
+  /// No description provided for @e2eeStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} wants to turn on encryption'**
+  String e2eeStatusPending(String name);
+
+  /// No description provided for @e2eeStatusEstablished.
+  ///
+  /// In en, this message translates to:
+  /// **'On'**
+  String get e2eeStatusEstablished;
+
+  /// No description provided for @e2eeStatusKeyChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s encryption key has changed'**
+  String e2eeStatusKeyChanged(String name);
+
+  /// No description provided for @e2eeEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get e2eeEnable;
+
+  /// No description provided for @e2eeAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept'**
+  String get e2eeAccept;
+
+  /// No description provided for @e2eeDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get e2eeDecline;
+
+  /// No description provided for @e2eeCancelOffer.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel request'**
+  String get e2eeCancelOffer;
+
+  /// No description provided for @e2eeReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset session'**
+  String get e2eeReset;
+
+  /// No description provided for @e2eeResetConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset the encrypted session? Both sides will need to set it up again.'**
+  String get e2eeResetConfirm;
+
+  /// No description provided for @e2eeFingerprint.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety number'**
+  String get e2eeFingerprint;
+
+  /// No description provided for @e2eeFingerprintHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare these 60 digits with {name} outside MAX — in person or over another channel. If they match, the server did not substitute the keys.'**
+  String e2eeFingerprintHint(String name);
+
+  /// No description provided for @e2eeVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified in person'**
+  String get e2eeVerified;
+
+  /// No description provided for @e2eeCeiling.
+  ///
+  /// In en, this message translates to:
+  /// **'Only message text and photos are encrypted. The server still sees who talks to whom and when, sees that the chat is encrypted, and can withhold messages. Nothing here hides that.'**
+  String get e2eeCeiling;
+
+  /// No description provided for @e2eeNeedsKomet.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} needs Komet for this to work.'**
+  String e2eeNeedsKomet(String name);
+
+  /// No description provided for @e2eeOfferSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Request sent'**
+  String get e2eeOfferSent;
+
+  /// No description provided for @e2eeOfferFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the request'**
+  String get e2eeOfferFailed;
+
+  /// No description provided for @e2eeAcceptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not accept the request'**
+  String get e2eeAcceptFailed;
+
+  /// No description provided for @e2eeBannerPending.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} wants to turn on end-to-end encryption'**
+  String e2eeBannerPending(String name);
+
+  /// No description provided for @e2eeBannerKeyChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s encryption key has changed. Check the safety number before accepting.'**
+  String e2eeBannerKeyChanged(String name);
+
+  /// No description provided for @e2eeTransferTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to another device'**
+  String get e2eeTransferTitle;
+
+  /// No description provided for @e2eeTransferHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The transfer file holds your key and sessions. After importing it on the new device, stop using this one for encrypted chats.'**
+  String get e2eeTransferHint;
+
+  /// No description provided for @e2eeExport.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get e2eeExport;
+
+  /// No description provided for @e2eeImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get e2eeImport;
+
+  /// No description provided for @e2eeTransferPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer password'**
+  String get e2eeTransferPassword;
+
+  /// No description provided for @e2eeExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not export'**
+  String get e2eeExportFailed;
+
+  /// No description provided for @e2eeImported.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions moved: {count}'**
+  String e2eeImported(int count);
+
+  /// No description provided for @e2eeImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not import — wrong password or damaged file'**
+  String get e2eeImportFailed;
+
+  /// No description provided for @e2eeLegacyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Passphrase mode for groups: no forward secrecy, anyone who knows the passphrase can read the whole history.'**
+  String get e2eeLegacyNote;
+
+  /// No description provided for @e2eeTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The message is too long for an encrypted chat. Split it up.'**
+  String get e2eeTooLong;
+
+  /// No description provided for @e2eeEncryptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not encrypt the message'**
+  String get e2eeEncryptFailed;
+
+  /// No description provided for @e2eeRotateIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace my key'**
+  String get e2eeRotateIdentity;
+
+  /// No description provided for @e2eeRotateConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a new identity key? Every encrypted session will be reset, your contacts will see a key-change warning, and the safety numbers will change.'**
+  String get e2eeRotateConfirm;
+
+  /// No description provided for @e2eeRotated.
+  ///
+  /// In en, this message translates to:
+  /// **'Key replaced'**
+  String get e2eeRotated;
+
+  /// No description provided for @e2eeRotateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not replace the key'**
+  String get e2eeRotateFailed;
+
+  /// No description provided for @e2eeForwardBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarding is off in an encrypted chat: the server, not your device, would supply the message text.'**
+  String get e2eeForwardBlocked;
+
+  /// No description provided for @e2eeEditUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This message can\'t be decrypted on this device, so it can\'t be edited.'**
+  String get e2eeEditUnavailable;
+
+  /// No description provided for @e2eeScheduledMediaBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled photos are not supported in an encrypted chat yet. Send them now, or turn encryption off.'**
+  String get e2eeScheduledMediaBlocked;
+
+  /// No description provided for @e2eeSearchBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Search is off in an encrypted chat: the query would go to the server, and the server only sees ciphertext.'**
+  String get e2eeSearchBlocked;
+
+  /// No description provided for @e2eeAwaitingPeer.
+  ///
+  /// In en, this message translates to:
+  /// **'This session was moved from another device. Wait for one message from your contact before sending — otherwise both devices would use the same key.'**
+  String get e2eeAwaitingPeer;
+
+  /// No description provided for @e2eeBannerRehandshake.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is turning encryption on again. Accept only if you expected this — otherwise the server is replaying an old request to reset your session.'**
+  String e2eeBannerRehandshake(String name);
+
+  /// No description provided for @e2eeExportedAndDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer created. Encryption is now off on this device: import the file on the new one and turn it on there.'**
+  String get e2eeExportedAndDisabled;
+
+  /// No description provided for @chatNoAccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have access to this chat'**
+  String get chatNoAccessMessage;
+
+  /// No description provided for @chatNoAccessOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get chatNoAccessOk;
+
+  /// No description provided for @chatEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No messages yet'**
+  String get chatEmptyTitle;
+
+  /// No description provided for @chatGreetingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a message or send this sticker'**
+  String get chatGreetingHint;
+
+  /// No description provided for @chatCallBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Call in chat'**
+  String get chatCallBannerTitle;
+
+  /// No description provided for @chatVideoCallBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Video call in chat'**
+  String get chatVideoCallBannerTitle;
+
+  /// No description provided for @chatCallParticipants.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 participant} other{{count} participants}}'**
+  String chatCallParticipants(int count);
+
+  /// No description provided for @chatCallJoin.
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get chatCallJoin;
+
+  /// No description provided for @composerHintMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get composerHintMessage;
+
+  /// No description provided for @composerHintComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment'**
+  String get composerHintComment;
+
+  /// No description provided for @composerHintCommandArgs.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in the command arguments'**
+  String get composerHintCommandArgs;
+
+  /// No description provided for @emojiPanelRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get emojiPanelRecent;
+
+  /// No description provided for @emojiPanelAnimated.
+  ///
+  /// In en, this message translates to:
+  /// **'Animated'**
+  String get emojiPanelAnimated;
+
+  /// No description provided for @attachmentFileFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get attachmentFileFallback;
+
+  /// No description provided for @attachmentContactFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact'**
+  String get attachmentContactFallback;
+
+  /// No description provided for @userFallbackName.
+  ///
+  /// In en, this message translates to:
+  /// **'User #{id}'**
+  String userFallbackName(Object id);
+
+  /// No description provided for @devicesUnknownValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get devicesUnknownValue;
+
+  /// No description provided for @infoLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error: {error}'**
+  String infoLoadError(Object error);
+
+  /// No description provided for @chatInfoTabInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Info'**
+  String get chatInfoTabInfo;
+
+  /// No description provided for @callInfoConversationId.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation ID'**
+  String get callInfoConversationId;
+
+  /// No description provided for @chatQrTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'QR code'**
+  String get chatQrTitle;
+
+  /// No description provided for @chatQrHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the code to open this chat'**
+  String get chatQrHint;
+
+  /// No description provided for @linkQrUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t get the link'**
+  String get linkQrUnavailable;
+
+  /// No description provided for @notificationsDesktopNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications aren\'t shown on the computer yet. The settings below are your account\'s push settings for phones.'**
+  String get notificationsDesktopNote;
+
+  /// No description provided for @fileNoAppToOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'No app on this device can open this file. Choose where to send it.'**
+  String get fileNoAppToOpen;
 }
 
 class _AppLocalizationsDelegate

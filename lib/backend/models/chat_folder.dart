@@ -1,3 +1,4 @@
+// #***! коды фильтров папки, числа но бывают строкой
 class FolderFilter {
   static const int unread = 0;
   static const int read = 1;
@@ -14,6 +15,7 @@ class FolderFilter {
   static const int markedUnread = 12;
   static const int org = 13;
 
+  // #***! типы по или, остальное по и
   static const Set<int> chatTypes = {
     contact,
     notContact,
@@ -52,6 +54,7 @@ class FolderFilter {
     'ORG': org,
   };
 
+  // #***! принимаем и число, и строковое имя
   static int? parse(dynamic raw) {
     if (raw is int) return raw;
     if (raw is String) return int.tryParse(raw) ?? _byName[raw];
@@ -59,6 +62,7 @@ class FolderFilter {
   }
 }
 
+// #***! флаги папки
 class FolderOption {
   static const int hideEmpty = 0;
   static const int noDelete = 1;
@@ -81,6 +85,7 @@ class FolderOption {
   }
 }
 
+// #***! папка чатов
 class ChatFolder {
   final String id;
   final String title;
@@ -108,6 +113,7 @@ class ChatFolder {
     this.sourceId,
   });
 
+  // #***! обёртки над options для юишки
   bool get hideEmpty => options.contains(FolderOption.hideEmpty);
 
   bool get canDelete => !options.contains(FolderOption.noDelete);
@@ -116,6 +122,7 @@ class ChatFolder {
 
   bool get canEditFilters => !options.contains(FolderOption.noFiltersEdit);
 
+  // #***! приходит разнотипным, приводим аккуратно
   static List<int> _parseIds(dynamic raw) {
     if (raw is! List) return <int>[];
     return raw
@@ -139,6 +146,7 @@ class ChatFolder {
     return null;
   }
 
+  // #***! hideEmpty раньше был отдельным полем
   factory ChatFolder.fromJson(Map<String, dynamic> json) {
     final options = _parseCodes(json['options'], FolderOption.parse);
     if (json['hideEmpty'] == true &&
@@ -188,6 +196,7 @@ class ChatFolder {
     sourceId: sourceId,
   );
 
+  // #***! в этом же виде папка уходит на сервер
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
@@ -203,6 +212,7 @@ class ChatFolder {
   };
 }
 
+// #***! виджет мини аппы в папке
 class ChatFolderWidget {
   final int id;
   final String name;

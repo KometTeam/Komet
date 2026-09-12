@@ -2,10 +2,12 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// #***! токены и активный аккаунт
 class TokenStorage {
   static const _tokenPrefix = 'auth_token_';
   static const _activeAccountKey = 'active_account_id';
 
+  // #***! на иосе ключ только после первой разблокировки и без синхры в айклауд
   static const _secure = FlutterSecureStorage(
     aOptions: AndroidOptions(),
     iOptions: IOSOptions(
@@ -15,6 +17,7 @@ class TokenStorage {
     mOptions: MacOsOptions(usesDataProtectionKeychain: false),
   );
 
+  // #***! иос иногда даёт дубликат вместо перезаписи, удаляем и пишем заново
   static const int _duplicateKeychainItem = -25299;
 
   static bool _isDuplicateItem(PlatformException error) =>
@@ -42,6 +45,7 @@ class TokenStorage {
     await _secure.delete(key: key);
   }
 
+  // #***! чтоб найти все аккаунты или все ключи по префиксу
   static Future<List<String>> secureKeysWithPrefix(String prefix) async {
     final all = await _secure.readAll();
     return all.keys.where((key) => key.startsWith(prefix)).toList();
@@ -50,6 +54,7 @@ class TokenStorage {
   static Future<void> saveToken(String token, int accountId) =>
       _write('$_tokenPrefix$accountId', token);
 
+  // #***! токены раньше лежали в открытых prefs, переносим и стираем
   static Future<String?> readToken(int accountId) async {
     final key = '$_tokenPrefix$accountId';
     final secured = await _secure.read(key: key);
@@ -72,6 +77,7 @@ class TokenStorage {
     await prefs.remove(key);
   }
 
+  // #***! активный аккаунт в обычных prefs, это не секрет
   static Future<void> setActiveAccount(int accountId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_activeAccountKey, accountId.toString());

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! разрешение кружков
 class AppVideoNoteResolution {
   static const prefKey = 'dev_video_note_resolution';
   static const int defaultValue = 480;
@@ -14,6 +15,7 @@ class AppVideoNoteResolution {
     write: (prefs, key, value) async {
       await prefs.setInt(key, value);
     },
+    // #***! значение не из списка меняем дефолтом
     sanitize: (value) => presets.contains(value) ? value : defaultValue,
   );
 
@@ -24,6 +26,7 @@ class AppVideoNoteResolution {
   static Future<void> save(int value) => _setting.save(value);
 }
 
+// #***! кружок задней камерой
 class AppVideoNoteRearCamera {
   static const prefKey = 'dev_video_note_rear_camera';
   static const bool defaultValue = false;
@@ -44,6 +47,7 @@ class AppVideoNoteRearCamera {
   static Future<void> save(bool value) => _setting.save(value);
 }
 
+// #***! фпс кружков
 class AppVideoNoteFps {
   static const prefKey = 'dev_video_note_fps';
   static const int defaultValue = 30;

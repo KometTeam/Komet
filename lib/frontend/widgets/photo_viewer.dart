@@ -15,9 +15,12 @@ import '../../core/cache/info_cache.dart';
 import '../../core/config/app_frost.dart';
 import '../../core/utils/download_history.dart';
 import '../../core/utils/format.dart';
+import '../../core/utils/image_format.dart';
+import '../../core/utils/logger.dart';
 import '../../core/utils/media_cache.dart';
 import '../../core/utils/media_saver.dart';
 import '../../core/utils/save_file_as.dart';
+import '../../core/media/video_request_headers.dart';
 import '../../l10n/app_localizations.dart';
 import '../../core/config/app_colors.dart';
 import '../../main.dart';
@@ -96,6 +99,7 @@ class PhotoViewerScreen extends StatefulWidget {
   final PhotoHeroController? hero;
   final bool isFile;
   final String? sourceName;
+  final String? Function()? videoUserAgentProvider;
 
   const PhotoViewerScreen({
     super.key,
@@ -107,6 +111,7 @@ class PhotoViewerScreen extends StatefulWidget {
     this.hero,
     this.isFile = false,
     this.sourceName,
+    this.videoUserAgentProvider,
   }) : video = null,
        initialVideoSources = const {},
        initialVideoQuality = null;
@@ -120,6 +125,7 @@ class PhotoViewerScreen extends StatefulWidget {
     this.message,
     this.actions,
     this.sourceName,
+    this.videoUserAgentProvider,
   }) : photos = const [],
        video = attachment,
        initialIndex = 0,
@@ -137,7 +143,8 @@ class PhotoViewerScreen extends StatefulWidget {
       actions = null,
       hero = null,
       isFile = false,
-      sourceName = null;
+      sourceName = null,
+      videoUserAgentProvider = null;
 
   @override
   State<PhotoViewerScreen> createState() => _PhotoViewerScreenState();
@@ -448,10 +455,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   void _rotate() {
-    final delta = _current.isVideo ? 3 : 1;
     setState(() {
-      _quarterTurns[_current.id] =
-          ((_quarterTurns[_current.id] ?? 0) + delta) % 4;
+      _quarterTurns[_current.id] = ((_quarterTurns[_current.id] ?? 0) + 3) % 4;
     });
     _syncHero();
   }
@@ -470,6 +475,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
           ? widget.initialVideoQuality
           : null,
       loadSources: () => _loadVideoSources(item),
+      userAgentProvider: widget.videoUserAgentProvider,
       active: item.id == _current.id,
     );
     _videoSessions[item.id] = session;
@@ -599,6 +605,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   Future<void> _saveAs() async {
     if (_saving) return;
     setState(() => _saving = true);
+    SaveReadyImage? image;
     try {
       final item = _current;
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -614,6 +621,12 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         final cacheName = _cacheNameFor(photo, url);
         if (url.isNotEmpty) download = _photoDownload(item, photo, cacheName);
         saveName = 'IMG_$now.jpg';
+        if (file != null) {
+          image = await prepareImageForSave(file);
+          if (image != null) {
+            saveName = withImageExtension(saveName, image.extension);
+          }
+        }
       } else if (video != null) {
         file = await _videoFileFor(item);
         final cacheName = _videoCacheName(item, video);
@@ -630,7 +643,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         return;
       }
       final result = await saveFileAs(
-        source: file,
+        source: image?.file ?? file,
         fileName: saveName,
         dialogTitle: AppLocalizations.of(context)!.photoViewerSaveAs,
       );
@@ -648,6 +661,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     } catch (_) {
       if (mounted) showCustomNotification(context, 'Не удалось сохранить файл');
     } finally {
+      await image?.discard();
       if (mounted) setState(() => _saving = false);
     }
   }
@@ -1064,6 +1078,7 @@ class _VideoPlaybackSession extends ChangeNotifier {
   final VideoAttachment attachment;
   final String? initialQuality;
   final Future<Map<String, String>> Function() loadSources;
+  final String? Function()? userAgentProvider;
 
   VideoPlayerController? _controller;
   Map<String, String> _sources = const {};
@@ -1084,6 +1099,7 @@ class _VideoPlaybackSession extends ChangeNotifier {
     required this.attachment,
     required this.initialQuality,
     required this.loadSources,
+    required this.userAgentProvider,
     required bool active,
   }) : _active = active {
     unawaited(_prepare());
@@ -1134,7 +1150,14 @@ class _VideoPlaybackSession extends ChangeNotifier {
     final generation = ++_loadGeneration;
     final old = _controller;
     final previousQuality = _quality;
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final uri = Uri.parse(url);
+    final controller = VideoPlayerController.networkUrl(
+      uri,
+      httpHeaders: videoRequestHeaders(
+        uri,
+        sessionUserAgent: userAgentProvider?.call(),
+      ),
+    );
     var installed = false;
     _quality = quality;
     _error = false;
@@ -1170,8 +1193,13 @@ class _VideoPlaybackSession extends ChangeNotifier {
       if (_playWhenActive && _active) await controller.play();
       _loading = false;
       _notify();
-    } catch (_) {
-      if (!installed) await controller.dispose();
+    } catch (error) {
+      final sourceAgent = uri.queryParameters['srcAg'] ?? 'unknown';
+      logger.w(
+        'PhotoViewer video init failed: host=${uri.host}, '
+        'srcAg=$sourceAgent, error=$error',
+      );
+      if (!installed) unawaited(controller.dispose().catchError((_) {}));
       if (generation == _loadGeneration && !_disposed) {
         if (!installed) {
           _quality = previousQuality;
@@ -1188,6 +1216,19 @@ class _VideoPlaybackSession extends ChangeNotifier {
     if (isCompleted && !_wasCompleted) _playWhenActive = false;
     _wasCompleted = isCompleted;
     _notify();
+  }
+
+  Future<void> retry() async {
+    if (_loading) return;
+    final quality = _quality ?? (_sources.isEmpty ? null : _sources.keys.first);
+    if (quality != null) {
+      await _load(quality, wasPlaying: _active);
+      return;
+    }
+    _error = false;
+    _loading = true;
+    _notify();
+    await _prepare();
   }
 
   Future<void> switchQuality(String quality) async {
@@ -1297,7 +1338,7 @@ class _VideoSurface extends StatelessWidget {
                 key: const ValueKey('video-rotation'),
                 quarterTurns: quarterTurns,
                 child: session.error
-                    ? const Icon(Symbols.error, color: Colors.white54, size: 64)
+                    ? _VideoErrorView(onRetry: session.retry)
                     : session.value != null
                     ? AspectRatio(
                         aspectRatio: session.value!.aspectRatio,
@@ -1328,6 +1369,50 @@ class _VideoSurface extends StatelessWidget {
       fit: BoxFit.contain,
       errorWidget: (_, _, _) =>
           const Icon(Symbols.videocam, color: Colors.white38, size: 64),
+    );
+  }
+}
+
+class _VideoErrorView extends StatelessWidget {
+  final VoidCallback onRetry;
+
+  const _VideoErrorView({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final buttonStyle = TextButton.styleFrom(foregroundColor: Colors.white);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Symbols.error, color: Colors.white54, size: 64),
+          const SizedBox(height: 12),
+          Text(
+            l10n.videoViewerFailed,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 15),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton(
+                style: buttonStyle,
+                onPressed: onRetry,
+                child: Text(l10n.videoViewerRetry),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                style: buttonStyle,
+                onPressed: () => Navigator.of(context).maybePop(),
+                child: Text(l10n.videoViewerClose),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

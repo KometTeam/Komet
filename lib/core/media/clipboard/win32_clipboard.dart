@@ -14,8 +14,10 @@ const int _cfDibV5 = 17;
 const int _pathBufferChars = 32768;
 const int _maxFiles = 20;
 const int _openAttempts = 8;
+// #***! буфер может быть занят другим приложением, повторяем
 const Duration _openRetryDelay = Duration(milliseconds: 25);
 
+// #***! сигнатуры WinAPI для FFI
 typedef _OpenClipboardC = Int32 Function(IntPtr);
 typedef _OpenClipboardDart = int Function(int);
 typedef _CloseClipboardC = Int32 Function();
@@ -36,6 +38,7 @@ typedef _DragQueryFileC =
     Uint32 Function(IntPtr, Uint32, Pointer<Utf16>, Uint32);
 typedef _DragQueryFileDart = int Function(int, int, Pointer<Utf16>, int);
 
+// #***! буфер винды напрямую через WinAPI, флаттер файлы оттуда не отдаёт
 class Win32Clipboard {
   Win32Clipboard._() {
     final user32 = DynamicLibrary.open('user32.dll');
@@ -73,6 +76,7 @@ class Win32Clipboard {
     _pngFormat = _registerNamedFormat('PNG');
   }
 
+  // #***! инстанс один раз, функции не нашлись значит фича выключена
   static Win32Clipboard? _instance;
   static bool _resolved = false;
 
@@ -100,12 +104,14 @@ class Win32Clipboard {
   late final _DragQueryFileDart _dragQueryFile;
   late final int _pngFormat;
 
+  // #***! в буфере или файлы или картинка
   bool get hasMedia => _has(_cfHdrop) || _hasImage;
 
   bool get _hasImage =>
       !_has(_cfUnicodeText) &&
       (_has(_pngFormat) || _has(_cfDibV5) || _has(_cfDib));
 
+  // #***! чтение с ретраями, буфер надо открыть забрать и обязательно закрыть
   Future<RawClipboardMedia?> read() async {
     if (!hasMedia) return null;
     for (var attempt = 0; attempt < _openAttempts; attempt++) {
@@ -122,6 +128,7 @@ class Win32Clipboard {
     return null;
   }
 
+  // #***! формат PNG не стандартный, регистрируем по имени
   int _registerNamedFormat(String name) {
     final native = name.toNativeUtf16();
     try {
@@ -151,6 +158,7 @@ class Win32Clipboard {
     return null;
   }
 
+  // #***! пути достаём через DragQueryFile
   List<String> _readPaths() {
     final handle = _getData(_cfHdrop);
     if (handle == 0) return const [];
@@ -172,6 +180,7 @@ class Win32Clipboard {
     }
   }
 
+  // #***! данные надо залочить скопировать и разлочить
   Uint8List? _copyGlobal(int handle) {
     if (handle == 0) return null;
     final size = _globalSize(handle);

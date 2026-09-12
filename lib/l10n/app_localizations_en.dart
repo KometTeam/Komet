@@ -109,9 +109,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tokenLoginFailed => 'Sign in failed';
 
   @override
-  String get loginSignInWithSessionFile => 'Sign in with session file';
-
-  @override
   String get loginLanguage => 'Language';
 
   @override
@@ -140,6 +137,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get codeError2faMissing => 'Error: missing data for 2FA';
+
+  @override
+  String get codeErrorInvalid => 'Invalid code';
 
   @override
   String get codeConfirmation2faWarning =>
@@ -602,6 +602,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editProfileLastName => 'Last name';
 
   @override
+  String get editProfileBio => 'About me';
+
+  @override
   String get editProfileRemovePhoto => 'Remove photo';
 
   @override
@@ -615,6 +618,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get msgActionsCopy => 'Copy';
+
+  @override
+  String get msgActionsCopyLink => 'Copy link';
 
   @override
   String get msgActionsSelectAll => 'Select all';
@@ -694,14 +700,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationsTitle => 'Notifications';
 
   @override
-  String get notificationsFkmSectionTitle => 'FKM';
+  String get notificationsFkmSectionTitle =>
+      'Notifications without Google (FKM)';
 
   @override
   String get notificationsFkmEnableLabel => 'Enable notifications';
 
   @override
   String get notificationsFkmEnableSubtitle =>
-      'For FKM notifications to work, the app will need to keep a notification in the shade.';
+      'Komet keeps its own connection to the server and shows notifications itself. A service notification will stay in the shade while this is on.';
 
   @override
   String get notificationsFkmUnsupported => 'FKM is Android-only';
@@ -858,6 +865,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeSettingsScheduleLightFrom => 'Light from';
+
+  @override
+  String get themeSettingsCustomTitle => 'Custom';
 
   @override
   String get appearanceTitle => 'Appearance';
@@ -1558,6 +1568,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoViewerQuality => 'Quality';
 
   @override
+  String get videoViewerFailed => 'Could not play the video';
+
+  @override
+  String get videoViewerRetry => 'Retry';
+
+  @override
+  String get videoViewerClose => 'Close';
+
+  @override
   String get sharedCopyLink => 'Copy link';
 
   @override
@@ -1565,6 +1584,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatInfoActionLeave => 'Leave';
+
+  @override
+  String get chatInfoActionSubscribe => 'Subscribe';
+
+  @override
+  String get chatInfoSubscribed => 'You subscribed to the channel';
+
+  @override
+  String get chatInfoSubscribeFailed => 'Could not subscribe to the channel';
+
+  @override
+  String get chatInfoActionJoin => 'Join';
+
+  @override
+  String get chatInfoJoinedGroup => 'You joined the group';
+
+  @override
+  String get chatInfoJoinGroupFailed => 'Could not join the group';
 
   @override
   String get chatInfoActionMuted => 'Muted';
@@ -1947,6 +1984,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get securityAudioTranscription => 'Audio transcription';
 
   @override
+  String get securityConfidentialityWarning =>
+      'These toggles do not exist in the original app, and they may be unavailable to you.\n\nIf the server refuses, it will drop the connection. (conection closed)';
+
+  @override
+  String get securityConfidentialityDecline => 'No';
+
+  @override
   String get securityBlacklistTitle => 'Blacklist';
 
   @override
@@ -2327,6 +2371,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachSheetNoImagesFound => 'No images found';
 
   @override
+  String get attachSheetMoreActions => 'More';
+
+  @override
+  String get attachSheetSendSeparately => 'Send separately';
+
+  @override
   String get attachSheetLimitedAccessInfo => 'Not all photos are accessible';
 
   @override
@@ -2353,6 +2403,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attachSheetAllow => 'Allow';
+
+  @override
+  String get attachSheetGalleryFailedTitle => 'Could not load the gallery';
+
+  @override
+  String get attachSheetRetry => 'Retry';
 
   @override
   String get attachSheetSettings => 'Settings';
@@ -2647,6 +2703,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get downloadsOpenFailed => 'Couldn\'t open the file';
+
+  @override
+  String get audioPlaybackChannel => 'Audio playback';
+
+  @override
+  String get audioPlaybackFailed => 'Couldn\'t play the file';
 
   @override
   String get downloadsClearHistory => 'Clear download history';
@@ -2974,4 +3036,256 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authLimitsConfirm => 'Got it';
+
+  @override
+  String get e2eeTitle => 'End-to-end encryption';
+
+  @override
+  String get e2eeStatusNone => 'Off';
+
+  @override
+  String e2eeStatusOffered(String name) {
+    return 'Waiting for $name to accept';
+  }
+
+  @override
+  String e2eeStatusPending(String name) {
+    return '$name wants to turn on encryption';
+  }
+
+  @override
+  String get e2eeStatusEstablished => 'On';
+
+  @override
+  String e2eeStatusKeyChanged(String name) {
+    return '$name\'s encryption key has changed';
+  }
+
+  @override
+  String get e2eeEnable => 'Turn on';
+
+  @override
+  String get e2eeAccept => 'Accept';
+
+  @override
+  String get e2eeDecline => 'Decline';
+
+  @override
+  String get e2eeCancelOffer => 'Cancel request';
+
+  @override
+  String get e2eeReset => 'Reset session';
+
+  @override
+  String get e2eeResetConfirm =>
+      'Reset the encrypted session? Both sides will need to set it up again.';
+
+  @override
+  String get e2eeFingerprint => 'Safety number';
+
+  @override
+  String e2eeFingerprintHint(String name) {
+    return 'Compare these 60 digits with $name outside MAX — in person or over another channel. If they match, the server did not substitute the keys.';
+  }
+
+  @override
+  String get e2eeVerified => 'Verified in person';
+
+  @override
+  String get e2eeCeiling =>
+      'Only message text and photos are encrypted. The server still sees who talks to whom and when, sees that the chat is encrypted, and can withhold messages. Nothing here hides that.';
+
+  @override
+  String e2eeNeedsKomet(String name) {
+    return '$name needs Komet for this to work.';
+  }
+
+  @override
+  String get e2eeOfferSent => 'Request sent';
+
+  @override
+  String get e2eeOfferFailed => 'Could not send the request';
+
+  @override
+  String get e2eeAcceptFailed => 'Could not accept the request';
+
+  @override
+  String e2eeBannerPending(String name) {
+    return '$name wants to turn on end-to-end encryption';
+  }
+
+  @override
+  String e2eeBannerKeyChanged(String name) {
+    return '$name\'s encryption key has changed. Check the safety number before accepting.';
+  }
+
+  @override
+  String get e2eeTransferTitle => 'Move to another device';
+
+  @override
+  String get e2eeTransferHint =>
+      'The transfer file holds your key and sessions. After importing it on the new device, stop using this one for encrypted chats.';
+
+  @override
+  String get e2eeExport => 'Export';
+
+  @override
+  String get e2eeImport => 'Import';
+
+  @override
+  String get e2eeTransferPassword => 'Transfer password';
+
+  @override
+  String get e2eeExportFailed => 'Could not export';
+
+  @override
+  String e2eeImported(int count) {
+    return 'Sessions moved: $count';
+  }
+
+  @override
+  String get e2eeImportFailed =>
+      'Could not import — wrong password or damaged file';
+
+  @override
+  String get e2eeLegacyNote =>
+      'Passphrase mode for groups: no forward secrecy, anyone who knows the passphrase can read the whole history.';
+
+  @override
+  String get e2eeTooLong =>
+      'The message is too long for an encrypted chat. Split it up.';
+
+  @override
+  String get e2eeEncryptFailed => 'Could not encrypt the message';
+
+  @override
+  String get e2eeRotateIdentity => 'Replace my key';
+
+  @override
+  String get e2eeRotateConfirm =>
+      'Create a new identity key? Every encrypted session will be reset, your contacts will see a key-change warning, and the safety numbers will change.';
+
+  @override
+  String get e2eeRotated => 'Key replaced';
+
+  @override
+  String get e2eeRotateFailed => 'Could not replace the key';
+
+  @override
+  String get e2eeForwardBlocked =>
+      'Forwarding is off in an encrypted chat: the server, not your device, would supply the message text.';
+
+  @override
+  String get e2eeEditUnavailable =>
+      'This message can\'t be decrypted on this device, so it can\'t be edited.';
+
+  @override
+  String get e2eeScheduledMediaBlocked =>
+      'Scheduled photos are not supported in an encrypted chat yet. Send them now, or turn encryption off.';
+
+  @override
+  String get e2eeSearchBlocked =>
+      'Search is off in an encrypted chat: the query would go to the server, and the server only sees ciphertext.';
+
+  @override
+  String get e2eeAwaitingPeer =>
+      'This session was moved from another device. Wait for one message from your contact before sending — otherwise both devices would use the same key.';
+
+  @override
+  String e2eeBannerRehandshake(String name) {
+    return '$name is turning encryption on again. Accept only if you expected this — otherwise the server is replaying an old request to reset your session.';
+  }
+
+  @override
+  String get e2eeExportedAndDisabled =>
+      'Transfer created. Encryption is now off on this device: import the file on the new one and turn it on there.';
+
+  @override
+  String get chatNoAccessMessage => 'You don\'t have access to this chat';
+
+  @override
+  String get chatNoAccessOk => 'OK';
+
+  @override
+  String get chatEmptyTitle => 'No messages yet';
+
+  @override
+  String get chatGreetingHint => 'Write a message or send this sticker';
+
+  @override
+  String get chatCallBannerTitle => 'Call in chat';
+
+  @override
+  String get chatVideoCallBannerTitle => 'Video call in chat';
+
+  @override
+  String chatCallParticipants(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count participants',
+      one: '1 participant',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatCallJoin => 'Join';
+
+  @override
+  String get composerHintMessage => 'Message';
+
+  @override
+  String get composerHintComment => 'Comment';
+
+  @override
+  String get composerHintCommandArgs => 'Fill in the command arguments';
+
+  @override
+  String get emojiPanelRecent => 'Recent';
+
+  @override
+  String get emojiPanelAnimated => 'Animated';
+
+  @override
+  String get attachmentFileFallback => 'File';
+
+  @override
+  String get attachmentContactFallback => 'Contact';
+
+  @override
+  String userFallbackName(Object id) {
+    return 'User #$id';
+  }
+
+  @override
+  String get devicesUnknownValue => 'Unknown';
+
+  @override
+  String infoLoadError(Object error) {
+    return 'Error: $error';
+  }
+
+  @override
+  String get chatInfoTabInfo => 'Info';
+
+  @override
+  String get callInfoConversationId => 'Conversation ID';
+
+  @override
+  String get chatQrTitle => 'QR code';
+
+  @override
+  String get chatQrHint => 'Scan the code to open this chat';
+
+  @override
+  String get linkQrUnavailable => 'Couldn\'t get the link';
+
+  @override
+  String get notificationsDesktopNote =>
+      'Notifications aren\'t shown on the computer yet. The settings below are your account\'s push settings for phones.';
+
+  @override
+  String get fileNoAppToOpen =>
+      'No app on this device can open this file. Choose where to send it.';
 }

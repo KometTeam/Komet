@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/config/app_colors.dart';
+import '../../../core/config/build_profile.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart' show SessionInfo;
@@ -129,6 +130,7 @@ class _DevicesScreenState extends State<DevicesScreen>
   }
 
   Future<void> _lookupIp(int id, String location) async {
+    if (!BuildProfile.ipGeoLookup) return;
     if (_ipDetails.containsKey(id)) {
       setState(() => _expandedSessions.add(id));
       return;
@@ -147,10 +149,11 @@ class _DevicesScreenState extends State<DevicesScreen>
     try {
       client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 5);
+      const fields = BuildProfile.sessionCityLookup
+          ? 'status,message,country,city,isp,as,mobile,proxy,timezone'
+          : 'status,message,country,isp,as,mobile,proxy,timezone';
       final request = await client.getUrl(
-        Uri.parse(
-          'http://ip-api.com/json/$ip?fields=status,message,country,city,isp,as,mobile,proxy,timezone',
-        ),
+        Uri.parse('http://ip-api.com/json/$ip?fields=$fields'),
       );
       final response = await request.close();
       if (response.statusCode == 200) {
@@ -175,6 +178,19 @@ class _DevicesScreenState extends State<DevicesScreen>
     } finally {
       client?.close();
     }
+  }
+
+  String _formatPlace(Map<String, dynamic> details) {
+    final country = details['country'] as String? ?? '';
+    if (!BuildProfile.sessionCityLookup) {
+      return country.isEmpty
+          ? AppLocalizations.of(context)!.devicesUnknownValue
+          : country;
+    }
+    final city =
+        details['city'] as String? ??
+        AppLocalizations.of(context)!.devicesUnknownValue;
+    return '$city, $country';
   }
 
   String _formatTime(int timestamp) {
@@ -532,7 +548,7 @@ class _DevicesScreenState extends State<DevicesScreen>
                       ),
                     ),
                   const SizedBox(height: 8),
-                  if (!isExpanded)
+                  if (!isExpanded && BuildProfile.ipGeoLookup)
                     InkWell(
                       onTap: isLoading ? null : () => _lookupIp(id, location),
                       borderRadius: BorderRadius.circular(12),
@@ -579,17 +595,23 @@ class _DevicesScreenState extends State<DevicesScreen>
                                 _buildDetailRow(
                                   cs,
                                   Symbols.location_city,
-                                  '${details['city'] ?? 'Unknown'}, ${details['country'] ?? ''}',
+                                  _formatPlace(details),
                                 ),
                                 _buildDetailRow(
                                   cs,
                                   Symbols.dns,
-                                  details['isp'] ?? 'Unknown',
+                                  details['isp'] ??
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.devicesUnknownValue,
                                 ),
                                 _buildDetailRow(
                                   cs,
                                   Symbols.public,
-                                  details['as'] ?? 'Unknown',
+                                  details['as'] ??
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.devicesUnknownValue,
                                 ),
                                 if (details['mobile'] == true)
                                   _buildDetailRow(
@@ -608,7 +630,10 @@ class _DevicesScreenState extends State<DevicesScreen>
                                 _buildDetailRow(
                                   cs,
                                   Symbols.schedule,
-                                  details['timezone'] ?? 'Unknown',
+                                  details['timezone'] ??
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.devicesUnknownValue,
                                 ),
                               ],
                             ),

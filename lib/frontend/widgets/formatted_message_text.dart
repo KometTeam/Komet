@@ -8,6 +8,7 @@ import '../../backend/modules/messages.dart' show ContactCache;
 import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_entities.dart';
 import '../../core/utils/text_format.dart';
+import '../../l10n/app_localizations.dart';
 import '../screens/contacts/open_contact_profile.dart';
 import 'link_text.dart';
 import 'lottie_image.dart';
@@ -77,17 +78,15 @@ class FormattedMessageText extends StatefulWidget {
             child: SizedBox(
               width: box,
               height: box,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Text(content, style: style.copyWith(fontSize: fontSize)),
-                  LottieImage(
-                    lottieUrl: animojiUrl,
-                    size: box,
-                    memCacheWidth: 96,
-                    shimmer: false,
-                  ),
-                ],
+              child: LottieImage(
+                lottieUrl: animojiUrl,
+                size: box,
+                memCacheWidth: 96,
+                shimmer: false,
+                placeholder: Text(
+                  content,
+                  style: style.copyWith(fontSize: fontSize),
+                ),
               ),
             ),
           ),
@@ -153,7 +152,9 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
       openContactDialogProfile(
         context,
         contactId: userId,
-        name: ContactCache.get(userId) ?? 'User #$userId',
+        name:
+            ContactCache.get(userId) ??
+            AppLocalizations.of(context)!.userFallbackName(userId),
         avatarUrl: ContactCache.getAvatar(userId),
       ),
     );
@@ -290,21 +291,16 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
             child: SizedBox(
               width: box,
               height: box,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Text(
-                    content,
-                    style: widget.style.copyWith(fontSize: fontSize * 1.15),
-                  ),
-                  LottieImage(
-                    lottieUrl: segment.animojiUrl,
-                    size: box,
-                    memCacheWidth: 120,
-                    shimmer: false,
-                    eager: true,
-                  ),
-                ],
+              child: LottieImage(
+                lottieUrl: segment.animojiUrl,
+                size: box,
+                memCacheWidth: 120,
+                shimmer: false,
+                eager: true,
+                placeholder: Text(
+                  content,
+                  style: widget.style.copyWith(fontSize: fontSize * 1.15),
+                ),
               ),
             ),
           ),

@@ -3,11 +3,14 @@ import 'dart:async';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
+import '../contacts.dart';
 import 'account_base.dart';
 
+// #***! имя аватарка и удаление фото
 class ProfileModule extends AccountApiBase {
   ProfileModule(super.api);
 
+  // #***! разбор ответа, профиль сразу в базу активным
   Future<ProfileData> _applyProfileResponse(Packet packet) async {
     if (packet.isError) {
       throw Exception(packet.payload?.toString() ?? 'Server error');
@@ -25,17 +28,21 @@ class ProfileModule extends AccountApiBase {
     return newProfile;
   }
 
-  Future<ProfileData> updateProfileName(
+  // #***! description пустой строкой это очистка био, null это не трогать
+  Future<ProfileData> updateProfile(
     String firstName,
-    String? lastName,
-  ) async {
+    String? lastName, {
+    String? description,
+  }) async {
     ensureOnline();
     final payload = <dynamic, dynamic>{'firstName': firstName};
     if (lastName != null) payload['lastName'] = lastName;
+    if (description != null) payload['description'] = description;
     final packet = await api.sendRequest(Opcode.profile, payload);
     return _applyProfileResponse(packet);
   }
 
+  // #***! список фото поменялся, кэш истории аватарок протух
   Future<ProfileData> updateProfileAvatar(
     String photoToken, {
     String avatarType = 'USER_AVATAR',
@@ -45,9 +52,12 @@ class ProfileModule extends AccountApiBase {
       'photoToken': photoToken,
       'avatarType': avatarType,
     });
-    return _applyProfileResponse(packet);
+    final profile = await _applyProfileResponse(packet);
+    ContactsModule.invalidatePhotos(profile.id);
+    return profile;
   }
 
+  // #***! сервер даёт одноразовый url под аватарку
   Future<String> getAvatarUploadUrl() async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.photoUpload, {
@@ -69,9 +79,12 @@ class ProfileModule extends AccountApiBase {
     final packet = await api.sendRequest(Opcode.removeContactPhoto, {
       'photoId': photoId,
     });
-    return _applyProfileResponse(packet);
+    final profile = await _applyProfileResponse(packet);
+    ContactsModule.invalidatePhotos(profile.id);
+    return profile;
   }
 
+  // #***! часть правок сервер подтверждает пушем, ждём до 15 сек
   Future<ProfileData> processProfileUpdate(
     Future<Packet> requestFuture,
     String tag,

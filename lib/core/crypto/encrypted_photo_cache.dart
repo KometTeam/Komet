@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../storage/chat_encryption_store.dart';
+import 'e2ee_service.dart';
 import '../utils/download_progress.dart';
 import '../utils/logger.dart';
 import '../utils/media_cache.dart';
@@ -44,6 +45,7 @@ class _AutoRequest {
   final String cacheName;
   final EncryptedPhotoUrlLoader urlLoader;
   final int size;
+  final Uint8List? sealedTicket;
 
   const _AutoRequest({
     required this.accountId,
@@ -51,6 +53,7 @@ class _AutoRequest {
     required this.cacheName,
     required this.urlLoader,
     required this.size,
+    required this.sealedTicket,
   });
 }
 
@@ -61,13 +64,18 @@ class EncryptedPhotoCache {
 
   static final EncryptedPhotoCache instance = EncryptedPhotoCache._();
 
+  // #***! двести последних расшифрованных
   static const int _maxEntries = 200;
+  // #***! сами расшифровываем только до 32 МБ
   static const int _maxAutoBytes = 32 * 1024 * 1024;
+  // #***! не больше трёх разом иначе скролл просаживается
   static const int _maxConcurrentAuto = 3;
 
+  // #***! на картинку свой notifier, перерисуется только её пузырь
   final LinkedHashMap<String, ValueNotifier<EncryptedPhotoView?>> _entries =
       LinkedHashMap();
   final Map<String, Future<EncryptedPhotoView>> _inFlight = {};
+  // #***! очередь расшифровок для видимых пузырей
   final Queue<_AutoRequest> _queue = Queue();
   final Set<String> _queued = {};
   int _running = 0;
@@ -86,14 +94,19 @@ class EncryptedPhotoCache {
     }
   }
 
+  // #***! запрос из пузыря, картинка уехала с экрана значит задание снимаем
   void request({
     required int accountId,
     required int chatId,
     required String cacheName,
     required EncryptedPhotoUrlLoader urlLoader,
     required int size,
+    Uint8List? sealedTicket,
   }) {
-    if (!ChatCryptoService.instance.isEnabled(accountId, chatId)) return;
+    if (sealedTicket == null &&
+        !ChatCryptoService.instance.isEnabled(accountId, chatId)) {
+      return;
+    }
     if (_entryFor(cacheName).value != null) return;
     if (_inFlight.containsKey(cacheName)) return;
     if (!_queued.add(cacheName)) return;
@@ -105,23 +118,27 @@ class EncryptedPhotoCache {
         cacheName: cacheName,
         urlLoader: urlLoader,
         size: size,
+        sealedTicket: sealedTicket,
       ),
     );
     _pump();
   }
 
+  // #***! открыли просмотрщик, расшифровываем мимо очереди
   Future<EncryptedPhotoView> resolve({
     required int accountId,
     required int chatId,
     required String cacheName,
     required EncryptedPhotoUrlLoader urlLoader,
+    int? size,
+    Uint8List? sealedTicket,
   }) {
     final known = _entryFor(cacheName).value;
     if (known != null && known.status != EncryptedPhotoStatus.locked) {
       return Future.value(known);
     }
     _dequeue(cacheName);
-    return _start(accountId, chatId, cacheName, urlLoader, null);
+    return _start(accountId, chatId, cacheName, urlLoader, size, sealedTicket);
   }
 
   void clear() {
@@ -137,6 +154,7 @@ class EncryptedPhotoCache {
     _queue.removeWhere((request) => request.cacheName == cacheName);
   }
 
+  // #***! насос очереди
   void _pump() {
     while (_running < _maxConcurrentAuto && _queue.isNotEmpty) {
       final next = _queue.removeLast();
@@ -148,6 +166,7 @@ class EncryptedPhotoCache {
         next.cacheName,
         next.urlLoader,
         next.size,
+        next.sealedTicket,
       );
       unawaited(
         done.whenComplete(() {
@@ -164,10 +183,18 @@ class EncryptedPhotoCache {
     String cacheName,
     EncryptedPhotoUrlLoader urlLoader,
     int? autoSize,
+    Uint8List? sealedTicket,
   ) {
     final running = _inFlight[cacheName];
     if (running != null) return running;
-    final future = _resolve(accountId, chatId, cacheName, urlLoader, autoSize);
+    final future = _resolve(
+      accountId,
+      chatId,
+      cacheName,
+      urlLoader,
+      autoSize,
+      sealedTicket,
+    );
     _inFlight[cacheName] = future;
     unawaited(future.whenComplete(() => _inFlight.remove(cacheName)));
     return future;
@@ -179,10 +206,18 @@ class EncryptedPhotoCache {
     String cacheName,
     EncryptedPhotoUrlLoader urlLoader,
     int? autoSize,
+    Uint8List? sealedTicket,
   ) async {
     EncryptedPhotoView view;
     try {
-      view = await _decrypt(accountId, chatId, cacheName, urlLoader, autoSize);
+      view = await _decrypt(
+        accountId,
+        chatId,
+        cacheName,
+        urlLoader,
+        autoSize,
+        sealedTicket,
+      );
     } catch (e) {
       logger.w('encrypted preview $cacheName: $e');
       view = const EncryptedPhotoView.locked();
@@ -191,26 +226,60 @@ class EncryptedPhotoCache {
     return view;
   }
 
+  // #***! само скачивание и расшифровка
   Future<EncryptedPhotoView> _decrypt(
     int accountId,
     int chatId,
     String cacheName,
     EncryptedPhotoUrlLoader urlLoader,
     int? autoSize,
+    Uint8List? sealedTicket,
   ) async {
-    final ready = await MediaCache.existing(decryptedCacheName(cacheName));
-    if (ready != null) return EncryptedPhotoView.decrypted(ready);
+    // #***! имя расшифрованного берётся из билета, поэтому билет первым
+    Uint8List? ticket;
+    if (sealedTicket != null) {
+      ticket = await E2eeService.instance.openBytes(
+        accountId,
+        chatId,
+        sealedTicket,
+      );
+      if (ticket == null) return const EncryptedPhotoView.locked();
+      final ready = await MediaCache.existing(e2eeDecryptedCacheName(ticket));
+      if (ready != null) return EncryptedPhotoView.decrypted(ready);
+    } else {
+      final ready = await MediaCache.existing(
+        decryptedCacheName(accountId, chatId, cacheName),
+      );
+      if (ready != null) return EncryptedPhotoView.decrypted(ready);
+    }
 
     var encrypted = await MediaCache.existing(cacheName);
     if (encrypted == null) {
       if (autoSize != null && autoSize > _maxAutoBytes) {
         return const EncryptedPhotoView.locked();
       }
-      encrypted = await _download(cacheName, urlLoader);
+      // #***! потолок по объявленному размеру, но не выше нашего собственного
+      final cap = autoSize == null || autoSize <= 0
+          ? _maxAutoBytes
+          : (autoSize < _maxAutoBytes ? autoSize : _maxAutoBytes);
+      encrypted = await _download(cacheName, urlLoader, cap);
     }
     if (encrypted == null) return const EncryptedPhotoView.locked();
 
-    if (!await ChatCryptoService.instance.looksEncryptedImage(encrypted.path)) {
+    if (ticket != null) {
+      final opened = await openE2eePhoto(
+        encrypted: encrypted,
+        ticket: ticket,
+      );
+      if (opened.isOk) return EncryptedPhotoView.decrypted(opened.file!);
+      return opened.failure == CryptoFailure.unavailable
+          ? const EncryptedPhotoView.locked()
+          : const EncryptedPhotoView.wrongKey();
+    }
+
+    if (!ChatCryptoService.instance.looksEncryptedImage(
+      await encrypted.readAsBytes(),
+    )) {
       return const EncryptedPhotoView.plain();
     }
 
@@ -229,6 +298,7 @@ class EncryptedPhotoCache {
   Future<File?> _download(
     String cacheName,
     EncryptedPhotoUrlLoader urlLoader,
+    int maxBytes,
   ) async {
     final url = await urlLoader();
     if (url == null || url.isEmpty) return null;
@@ -238,6 +308,7 @@ class EncryptedPhotoCache {
         cacheName,
         url,
         onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
+        maxBytes: maxBytes,
       );
     } finally {
       MediaDownloadProgress.set(cacheName, null);

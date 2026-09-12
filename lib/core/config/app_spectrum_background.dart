@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! анимированный спектральный фон
 class AppSpectrumBackground {
   static const prefKey = 'app_spectrum_background';
   static const bool defaultValue = false;

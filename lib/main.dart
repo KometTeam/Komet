@@ -7,6 +7,7 @@ import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:kolibri/kolibri.dart' show initKolibri;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player_media_kit/video_player_media_kit.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:m3e_collection/m3e_collection.dart';
@@ -14,12 +15,15 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
 import 'core/cache/info_cache.dart';
+import 'core/plugins/plugin_store.dart';
 import 'core/config/build_profile.dart';
+import 'core/utils/app_foreground.dart';
 import 'core/utils/logger.dart';
 import 'core/cache/self_presence.dart';
 import 'core/storage/app_instance.dart';
 import 'core/storage/draft_store.dart';
 import 'core/storage/archived_chats_store.dart';
+import 'core/crypto/e2ee_service.dart';
 import 'core/storage/chat_encryption_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
@@ -74,6 +78,7 @@ import 'backend/modules/webapp.dart';
 import 'backend/modules/digital_id.dart';
 import 'core/calls/call_bridge.dart';
 import 'core/calls/call_controller.dart';
+import 'core/media/audio_playback_controller.dart';
 import 'core/links/deep_link_service.dart';
 import 'frontend/screens/calls/call_screen.dart';
 import 'core/push/fkm_controller.dart';
@@ -87,12 +92,15 @@ import 'core/transport/vpn_bypass.dart';
 import 'core/storage/token_storage.dart';
 import 'core/utils/haptics.dart';
 import 'core/utils/debug_session_log.dart';
+import 'frontend/commands/commands.dart';
 import 'core/protocol/packet.dart';
 import 'frontend/debug/fps_overlay_layer.dart';
+import 'frontend/debug/performance_monitor.dart';
 import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/widgets/adaptive_shell.dart';
 import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/liquid_glass.dart';
+import 'frontend/widgets/mesh_gradient_background.dart';
 import 'frontend/widgets/small_spinner.dart';
 import 'frontend/widgets/theme_reveal.dart';
 import 'frontend/widgets/floating_call_badge.dart';
@@ -222,6 +230,7 @@ void main(List<String> args) async {
   final pillGradientFuture = AppPillGradient.load();
   final visualStyleFuture = AppVisualStyle.load();
   final liquidGlassFuture = LiquidGlass.load();
+  final meshGradientFuture = MeshGradient.load();
   final chatChromeFuture = AppChatChrome.load();
   final composerStyleFuture = AppComposerStyle.load();
   final composerBackgroundFuture = AppComposerBackground.load();
@@ -257,7 +266,10 @@ void main(List<String> args) async {
   await DraftStore.instance.load();
   await ArchivedChatsStore.instance.load();
   await ChatEncryptionStore.instance.load();
+  E2eeService.instance.attach(messagesModule);
   await KometSettings.load();
+  await PluginStore.instance.load();
+  CommandRegistry.instance.initialize();
   if (KometSettings.ghostMode.value) SelfPresence.markOffline();
   await ContactCache.load();
   final initialFpsOverlay = prefs.getBool('dev_fps_overlay') ?? false;
@@ -287,6 +299,7 @@ void main(List<String> args) async {
     pillGradientFuture,
     visualStyleFuture,
     liquidGlassFuture,
+    meshGradientFuture,
     chatChromeFuture,
     composerStyleFuture,
     composerBackgroundFuture,
@@ -373,6 +386,7 @@ class KometAppState extends State<KometApp>
     widget.initialAccentSeed,
   );
   final ValueNotifier<Color?> wallpaperSeed = ValueNotifier(null);
+  ChatWallpaper? _globalWallpaper;
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
   StreamSubscription<VpnBypassResult>? _vpnBypassSub;
@@ -406,6 +420,7 @@ class KometAppState extends State<KometApp>
     _fontId = widget.initialFontId;
 
     WidgetsBinding.instance.addObserver(this);
+    AudioPlaybackController.error.addListener(_onAudioPlaybackError);
     AppThemeModeConfig.current.addListener(_onThemeModeChanged);
     AppAmoled.current.addListener(_onAmoledChanged);
     AppThemeSchedule.current.addListener(_onScheduleChanged);
@@ -433,6 +448,7 @@ class KometAppState extends State<KometApp>
       if (status == LoginStatus.success) {
         DeepLinkService.instance.markReady();
         NotificationBridge.instance.markReady();
+        unawaited(NotificationBridge.instance.dismissReadChats());
         ShareIntentBridge.instance.markReady();
         unawaited(_refreshWallpaperSeed());
         CallController.instance.init(api);
@@ -511,8 +527,10 @@ class KometAppState extends State<KometApp>
 
     _serverErrorSub = api.errorStream.listen((msg) {
       final now = DateTime.now();
+      // #***! 3с не переживает даже первый шаг бэкоффа реконнекта — растянули
+      // под его потолок (15с foreground), иначе тост долбит на каждой попытке
       if (msg == _lastServerError &&
-          now.difference(_lastServerErrorAt).inSeconds < 3) {
+          now.difference(_lastServerErrorAt).inSeconds < 15) {
         return;
       }
       _lastServerError = msg;
@@ -594,6 +612,7 @@ class KometAppState extends State<KometApp>
     _serverErrorSub?.cancel();
     _accountNoticeSub?.cancel();
     _scheduleTimer?.cancel();
+    _resizeMarkTimer?.cancel();
     AppThemeModeConfig.current.removeListener(_onThemeModeChanged);
     AppAmoled.current.removeListener(_onAmoledChanged);
     AppThemeSchedule.current.removeListener(_onScheduleChanged);
@@ -602,6 +621,7 @@ class KometAppState extends State<KometApp>
       _onWallpaperTintChanged,
     );
     WidgetsBinding.instance.removeObserver(this);
+    AudioPlaybackController.error.removeListener(_onAudioPlaybackError);
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
     vpnBypassEnabled.dispose();
@@ -612,17 +632,34 @@ class KometAppState extends State<KometApp>
     super.dispose();
   }
 
+  void _onAudioPlaybackError() {
+    final message = AudioPlaybackController.error.value;
+    if (message == null) return;
+    AudioPlaybackController.error.value = null;
+    final overlay = KometApp.navigatorKey.currentState?.overlay;
+    if (overlay == null) return;
+    final text = message.isEmpty
+        ? AppLocalizations.of(overlay.context)?.audioPlaybackFailed
+        : message;
+    if (text == null || text.isEmpty) return;
+    showCustomNotificationOnOverlay(overlay, text);
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final background =
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached;
+    AppForeground.update(foreground: !background);
     CallController.instance.appResumed = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.inactive && CallController.instance.isBusy) {
       unawaited(CallBridge.instance.ensureOngoing());
     }
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden ||
-        state == AppLifecycleState.detached) {
+    if (background) {
       DebugSessionLog.instance.flushNow();
       SelfCheckService.instance.pause();
+      E2eeService.instance.lock();
     }
     if (state != AppLifecycleState.resumed) return;
     api.wakeUp();
@@ -631,6 +668,7 @@ class KometAppState extends State<KometApp>
       unawaited(CallBridge.instance.dropOngoing());
     }
     CallBridge.instance.checkInitialCall();
+    unawaited(NotificationBridge.instance.onAppResumed());
     unawaited(NotificationBridge.instance.checkInitialChat());
     unawaited(ShareIntentBridge.instance.checkInitialShare());
     if (AppThemeModeConfig.current.value != AppThemeMode.schedule) return;
@@ -639,6 +677,19 @@ class KometAppState extends State<KometApp>
     if (next == _lastAppliedThemeMode) return;
     _lastAppliedThemeMode = next;
     if (mounted) setState(() {});
+  }
+
+  Timer? _resizeMarkTimer;
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    PerformanceMonitor.instance.mark('resize');
+    _resizeMarkTimer?.cancel();
+    _resizeMarkTimer = Timer(
+      const Duration(milliseconds: 400),
+      PerformanceMonitor.instance.markActivityEnd,
+    );
   }
 
   void _onThemeModeChanged() {
@@ -823,12 +874,14 @@ class KometAppState extends State<KometApp>
 
   Future<void> _refreshWallpaperSeed() async {
     if (!AppWallpaperTint.current.value) {
+      _globalWallpaper = null;
       wallpaperSeed.value = null;
       return;
     }
     final profile = await AppDatabase.loadActiveProfile();
     final accountId = profile?.id ?? 0;
     if (accountId == 0) {
+      _globalWallpaper = null;
       wallpaperSeed.value = null;
       return;
     }
@@ -839,6 +892,7 @@ class KometAppState extends State<KometApp>
     );
     final seed = await computeWallpaperSeed(wallpaper);
     if (!mounted) return;
+    _globalWallpaper = wallpaper;
     wallpaperSeed.value = seed;
   }
 
@@ -930,6 +984,9 @@ class KometAppState extends State<KometApp>
     );
   }
 
+  bool get _globalGradientActive =>
+      AppWallpaperTint.current.value && (_globalWallpaper?.isGradient ?? false);
+
   ColorScheme _adjustDarkScheme(ColorScheme base) {
     if (AppAmoled.current.value) {
       return base.copyWith(
@@ -941,11 +998,14 @@ class KometAppState extends State<KometApp>
         surfaceContainerHighest: const Color(0xFF1C1C1C),
       );
     }
+    final darkSurface = Color.alphaBlend(
+      base.primary.withValues(alpha: 0.05),
+      const Color(0xFF0D0D14),
+    );
     return base.copyWith(
-      surface: Color.alphaBlend(
-        base.primary.withValues(alpha: 0.05),
-        const Color(0xFF0D0D14),
-      ),
+      surface: _globalGradientActive
+          ? darkSurface.withValues(alpha: _globalGradientSurfaceAlpha)
+          : darkSurface,
       surfaceContainerHigh: Color.alphaBlend(
         base.primary.withValues(alpha: 0.08),
         const Color(0xFF1A1A26),
@@ -957,12 +1017,18 @@ class KometAppState extends State<KometApp>
     );
   }
 
+  // #***! обои просвечивают сквозь фон, но текст держит контраст как раньше
+  static const double _globalGradientSurfaceAlpha = 0.6;
+
   ColorScheme _adjustLightScheme(ColorScheme base) {
+    final lightSurface = Color.alphaBlend(
+      base.primary.withValues(alpha: 0.06),
+      const Color(0xFFF5F5FA),
+    );
     return base.copyWith(
-      surface: Color.alphaBlend(
-        base.primary.withValues(alpha: 0.06),
-        const Color(0xFFF5F5FA),
-      ),
+      surface: _globalGradientActive
+          ? lightSurface.withValues(alpha: _globalGradientSurfaceAlpha)
+          : lightSurface,
       surfaceContainerHigh: Color.alphaBlend(
         base.primary.withValues(alpha: 0.08),
         const Color(0xFFEAEAF2),
@@ -1020,7 +1086,7 @@ class KometAppState extends State<KometApp>
               theme: _lightTheme,
               darkTheme: _darkTheme,
               navigatorKey: KometApp.navigatorKey,
-              navigatorObservers: [appRouteObserver],
+              navigatorObservers: [appRouteObserver, PerfRouteObserver()],
               builder: (context, child) {
                 return ValueListenableBuilder<double>(
                   valueListenable: fontScale,
@@ -1039,13 +1105,44 @@ class KometAppState extends State<KometApp>
                       valueListenable: fpsOverlayEnabled,
                       child: scaledChild,
                       builder: (context, fpsOn, sChild) {
-                        return Stack(
+                        final gradientWallpaper = _globalGradientActive
+                            ? _globalWallpaper
+                            : null;
+                        final gradientColors = gradientWallpaper?.gradientColors;
+                        final brightness = Theme.of(context).brightness;
+                        final overlayStyle = brightness == Brightness.dark
+                            ? SystemUiOverlayStyle.light
+                            : SystemUiOverlayStyle.dark;
+                        return AnnotatedRegion<SystemUiOverlayStyle>(
+                          value: overlayStyle.copyWith(
+                            statusBarColor: Colors.transparent,
+                          ),
+                          child: Stack(
                           fit: StackFit.expand,
                           clipBehavior: Clip.none,
                           children: [
+                            if (gradientColors != null && gradientColors.isNotEmpty)
+                              Positioned.fill(
+                                child: MeshGradientBackground(
+                                  colors: gradientColors,
+                                  animate: gradientWallpaper!.gradientAnimated,
+                                  rotation: gradientWallpaper.gradientRotation,
+                                ),
+                              ),
                             RepaintBoundary(
                               key: _captureBoundaryKey,
-                              child: sChild!,
+                              child: NotificationListener<ScrollNotification>(
+                                onNotification: (notification) {
+                                  if (notification is ScrollEndNotification) {
+                                    PerformanceMonitor.instance
+                                        .markActivityEnd();
+                                  } else {
+                                    PerformanceMonitor.instance.mark('scroll');
+                                  }
+                                  return false;
+                                },
+                                child: sChild!,
+                              ),
                             ),
                             const Positioned.fill(
                               child: FloatingVideoNoteLayer(),
@@ -1055,6 +1152,7 @@ class KometAppState extends State<KometApp>
                             ),
                             if (fpsOn) const FpsOverlayLayer(),
                           ],
+                          ),
                         );
                       },
                     );

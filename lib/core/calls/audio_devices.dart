@@ -4,6 +4,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../utils/logger.dart';
 
+// #***! микрофон в списке выбора
 class AudioInputDevice {
   const AudioInputDevice({required this.id, required this.label});
 
@@ -11,9 +12,11 @@ class AudioInputDevice {
   final String label;
 }
 
+// #***! аудиоустройства через WebRTC
 class AudioDevices {
   AudioDevices._();
 
+  // #***! список микрофонов, пустые и дубли выкидываем
   static Future<List<AudioInputDevice>> microphones() async {
     try {
       final devices = await navigator.mediaDevices.enumerateDevices();
@@ -33,6 +36,7 @@ class AudioDevices {
     }
   }
 
+  // #***! на мобилках и маке устройство переключает сам движок
   static bool get switchesInsideEngine =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -47,6 +51,7 @@ class AudioDevices {
     }
   }
 
+  // #***! ограничения захвата, для мониторинга глушим шумодав иначе себя не слышно
   static Object micConstraints(
     String? deviceId, {
     bool monitorCapture = false,
@@ -71,6 +76,7 @@ class AudioDevices {
     return constraints.isEmpty ? true : constraints;
   }
 
+  // #***! ищем по части id или названия, сразу после подключения его может не быть
   static Future<String?> findDevice(String token, {int attempts = 1}) async {
     for (var attempt = 0; attempt < attempts; attempt++) {
       for (final device in await microphones()) {

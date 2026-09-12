@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! тянуть ли превью ссылок
 class AppLinkPreview {
   static const prefKey = 'dev_link_preview';
   static const bool defaultValue = true;

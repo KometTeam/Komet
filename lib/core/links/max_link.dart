@@ -1,10 +1,15 @@
+import 'message_link_token.dart';
+
+// #***! виды ссылок max.ru
 enum MaxContentKind { public, invite, user, content }
 
 sealed class MaxLink {
   const MaxLink();
 
+  // #***! needsConnection значит надо дождаться сессии
   bool get needsConnection => false;
 
+  // #***! принимаем и без схемы, max.ru/name тоже ссылка
   static final RegExp _schemeless = RegExp(
     r'^(?:www\.)?max\.ru(?:[/?#]|$)',
     caseSensitive: false,
@@ -12,6 +17,7 @@ sealed class MaxLink {
 
   static final RegExp _segment = RegExp(r'^[A-Za-z0-9_]+$');
 
+  // #***! зарезервированные пути, публичным именем быть не могут
   static const Set<String> _reserved = {
     'login',
     'ps',
@@ -21,8 +27,10 @@ sealed class MaxLink {
     'help',
   };
 
+  // #***! быстрая проверка без разбора
   static bool isMaxLink(String url) => parse(url) != null;
 
+  // #***! строка в конкретный подтип ссылки
   static MaxLink? parse(String input) {
     final uri = _canonical(input);
     if (uri == null) return null;
@@ -40,6 +48,7 @@ sealed class MaxLink {
     return _parseContent(segments, params, url);
   }
 
+  // #***! нормализация к Uri, дописываем схему убираем мусор
   static Uri? _canonical(String input) {
     var value = input.trim();
     if (value.isEmpty) return null;
@@ -56,6 +65,7 @@ sealed class MaxLink {
     return uri;
   }
 
+  // #***! ссылка ?param=... без пути
   static MaxLink _parseQueryOnly(Map<String, String> params) {
     final userId = _idParam(params, 'uid');
     if (userId != null) return MaxContactIdLink(userId);
@@ -64,6 +74,7 @@ sealed class MaxLink {
     return const MaxRootLink();
   }
 
+  // #***! разбор по первому сегменту
   static MaxLink _parseRoute(
     List<String> segments,
     Map<String, String> params,
@@ -89,6 +100,7 @@ sealed class MaxLink {
     return MaxRouteLink(route, params);
   }
 
+  // #***! остальное это контент, пост чат стикерпак
   static MaxLink? _parseContent(
     List<String> segments,
     Map<String, String> params,
@@ -131,7 +143,7 @@ sealed class MaxLink {
             baseUrl: url,
           );
       }
-      final messageId = int.tryParse(segments[1]);
+      final messageId = _messageId(segments[1]);
       final name = _publicName(first);
       if (messageId == null || name == null) return null;
       return MaxContentLink(
@@ -139,18 +151,20 @@ sealed class MaxLink {
         url: url,
         baseUrl: 'https://max.ru/$name',
         messageId: messageId,
+        lookup: '$name/${segments[1]}',
       );
     }
 
     if (lower == 'c' && segments.length == 3) {
       final chatId = int.tryParse(segments[1]);
-      final messageId = int.tryParse(segments[2]);
+      final messageId = _messageId(segments[2]);
       if (chatId == null || messageId == null) return null;
       return MaxContentLink(
         kind: MaxContentKind.content,
         url: url,
         baseUrl: 'https://max.ru/c/$chatId',
         messageId: messageId,
+        lookup: '/c/$chatId/${segments[2]}',
       );
     }
 
@@ -164,6 +178,7 @@ sealed class MaxLink {
     return null;
   }
 
+  // #***! публичное имя это один допустимый сегмент
   static String? _publicName(String segment) {
     final name = segment.startsWith('@') ? segment.substring(1) : segment;
     if (name.isEmpty) return null;
@@ -171,6 +186,10 @@ sealed class MaxLink {
     if (!_segment.hasMatch(name)) return null;
     return name;
   }
+
+  static int? _messageId(String segment) =>
+      int.tryParse(segment) ??
+      int.tryParse(MessageLinkToken.decode(segment) ?? '');
 
   static String? _startPayload(Map<String, String> params) {
     final value = params['start']?.trim();
@@ -185,6 +204,7 @@ sealed class MaxLink {
   }
 }
 
+// #***! дальше по классу на каждый вид ссылки
 class MaxRootLink extends MaxLink {
   const MaxRootLink();
 }
@@ -275,6 +295,7 @@ class MaxContentLink extends MaxLink {
   final String baseUrl;
   final String? startPayload;
   final int? messageId;
+  final String lookup;
 
   const MaxContentLink({
     required this.kind,
@@ -282,7 +303,8 @@ class MaxContentLink extends MaxLink {
     required this.baseUrl,
     this.startPayload,
     this.messageId,
-  });
+    String? lookup,
+  }) : lookup = lookup ?? url;
 
   @override
   bool get needsConnection => true;

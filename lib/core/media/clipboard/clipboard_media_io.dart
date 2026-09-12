@@ -8,12 +8,17 @@ import 'dib_image.dart';
 import 'raw_clipboard_media.dart';
 import 'win32_clipboard.dart';
 
+// #***! вставка файлов и картинок из буфера
 class ClipboardMedia {
   const ClipboardMedia._();
 
+  // #***! на винде WinAPI, на остальных нативный канал
   static bool get supported {
     if (Platform.isWindows) return Win32Clipboard.instance != null;
-    return Platform.isMacOS || Platform.isLinux;
+    return Platform.isMacOS ||
+        Platform.isLinux ||
+        Platform.isAndroid ||
+        Platform.isIOS;
   }
 
   static Future<bool> hasMedia() async {
@@ -24,6 +29,7 @@ class ClipboardMedia {
     return ClipboardChannel.hasMedia();
   }
 
+  // #***! сначала файлы, потом PNG, потом виндовый DIB
   static Future<ClipboardMediaPayload?> read() async {
     final raw = await _readRaw();
     if (raw == null || raw.isEmpty) return null;
@@ -47,10 +53,14 @@ class ClipboardMedia {
     final png = raw.png;
     if (png != null && png.isNotEmpty) {
       return ClipboardMediaPayload(
-        image: ClipboardImageData(bytes: png, extension: '.png'),
+        image: ClipboardImageData(
+          bytes: png,
+          extension: raw.imageExtension ?? '.png',
+        ),
       );
     }
 
+    // #***! DIB в PNG в отдельном изоляте
     final dib = raw.dib;
     if (dib != null && dib.isNotEmpty) {
       final decoded = await compute(dibToPng, dib);

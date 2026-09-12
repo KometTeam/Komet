@@ -110,9 +110,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get tokenLoginFailed => 'Не удалось войти';
 
   @override
-  String get loginSignInWithSessionFile => 'По файлу сессии';
-
-  @override
   String get loginLanguage => 'Язык';
 
   @override
@@ -141,6 +138,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get codeError2faMissing => 'Ошибка: отсутствуют данные для 2FA';
+
+  @override
+  String get codeErrorInvalid => 'Неверный код';
 
   @override
   String get codeConfirmation2faWarning =>
@@ -331,7 +331,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get profileMenuSpoof => 'Подмена данных';
 
   @override
-  String get infoTitle => 'Info';
+  String get infoTitle => 'Информация';
 
   @override
   String get infoAccountSection => 'Аккаунт';
@@ -605,6 +605,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get editProfileLastName => 'Фамилия';
 
   @override
+  String get editProfileBio => 'О себе';
+
+  @override
   String get editProfileRemovePhoto => 'Удалить фото';
 
   @override
@@ -618,6 +621,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get msgActionsCopy => 'Копировать';
+
+  @override
+  String get msgActionsCopyLink => 'Скопировать ссылку';
 
   @override
   String get msgActionsSelectAll => 'Выбрать всё';
@@ -697,14 +703,14 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notificationsTitle => 'Уведомления';
 
   @override
-  String get notificationsFkmSectionTitle => 'FKM';
+  String get notificationsFkmSectionTitle => 'Уведомления без Google (FKM)';
 
   @override
   String get notificationsFkmEnableLabel => 'Включить уведомления';
 
   @override
   String get notificationsFkmEnableSubtitle =>
-      'Для работы FKM уведомлений, приложению понадобится держать уведомление в шторке.';
+      'Komet сам держит соединение с сервером и показывает уведомления. Пока это включено, в шторке висит служебное уведомление.';
 
   @override
   String get notificationsFkmUnsupported => 'FKM работает только на Android';
@@ -861,6 +867,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get themeSettingsScheduleLightFrom => 'Светлая с';
+
+  @override
+  String get themeSettingsCustomTitle => 'Своя';
 
   @override
   String get appearanceTitle => 'Внешний вид';
@@ -1564,6 +1573,15 @@ class AppLocalizationsRu extends AppLocalizations {
   String get videoViewerQuality => 'Качество';
 
   @override
+  String get videoViewerFailed => 'Не удалось воспроизвести видео';
+
+  @override
+  String get videoViewerRetry => 'Повторить';
+
+  @override
+  String get videoViewerClose => 'Закрыть';
+
+  @override
   String get sharedCopyLink => 'Копировать ссылку';
 
   @override
@@ -1571,6 +1589,24 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get chatInfoActionLeave => 'Покинуть';
+
+  @override
+  String get chatInfoActionSubscribe => 'Подписаться';
+
+  @override
+  String get chatInfoSubscribed => 'Вы подписались на канал';
+
+  @override
+  String get chatInfoSubscribeFailed => 'Не удалось подписаться на канал';
+
+  @override
+  String get chatInfoActionJoin => 'Вступить';
+
+  @override
+  String get chatInfoJoinedGroup => 'Вы вступили в группу';
+
+  @override
+  String get chatInfoJoinGroupFailed => 'Не удалось вступить в группу';
 
   @override
   String get chatInfoActionMuted => 'Без звука';
@@ -1953,6 +1989,13 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get securityAudioTranscription => 'Транскрибация аудио';
+
+  @override
+  String get securityConfidentialityWarning =>
+      'Этих тумблеров нету в оригинальном приложении, и они могут быть вам недоступны.\n\nВ случае отказа, сервер сбросит соединение. (conection closed)';
+
+  @override
+  String get securityConfidentialityDecline => 'Не';
 
   @override
   String get securityBlacklistTitle => 'Чёрный список';
@@ -2340,6 +2383,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get attachSheetNoImagesFound => 'Изображений не найдено';
 
   @override
+  String get attachSheetMoreActions => 'Ещё';
+
+  @override
+  String get attachSheetSendSeparately => 'Отправить по отдельности';
+
+  @override
   String get attachSheetLimitedAccessInfo => 'Доступны не все фото';
 
   @override
@@ -2366,6 +2415,12 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get attachSheetAllow => 'Разрешить';
+
+  @override
+  String get attachSheetGalleryFailedTitle => 'Не удалось загрузить галерею';
+
+  @override
+  String get attachSheetRetry => 'Повторить';
 
   @override
   String get attachSheetSettings => 'Настройки';
@@ -2660,6 +2715,12 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get downloadsOpenFailed => 'Не удалось открыть файл';
+
+  @override
+  String get audioPlaybackChannel => 'Воспроизведение аудио';
+
+  @override
+  String get audioPlaybackFailed => 'Не удалось воспроизвести файл';
 
   @override
   String get downloadsClearHistory => 'Очистить историю загрузок';
@@ -2990,4 +3051,258 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get authLimitsConfirm => 'Понятно';
+
+  @override
+  String get e2eeTitle => 'Сквозное шифрование';
+
+  @override
+  String get e2eeStatusNone => 'Выключено';
+
+  @override
+  String e2eeStatusOffered(String name) {
+    return 'Ждём, пока $name примет запрос';
+  }
+
+  @override
+  String e2eeStatusPending(String name) {
+    return '$name предлагает включить шифрование';
+  }
+
+  @override
+  String get e2eeStatusEstablished => 'Включено';
+
+  @override
+  String e2eeStatusKeyChanged(String name) {
+    return 'Ключ шифрования $name изменился';
+  }
+
+  @override
+  String get e2eeEnable => 'Включить';
+
+  @override
+  String get e2eeAccept => 'Принять';
+
+  @override
+  String get e2eeDecline => 'Отклонить';
+
+  @override
+  String get e2eeCancelOffer => 'Отменить запрос';
+
+  @override
+  String get e2eeReset => 'Сбросить сессию';
+
+  @override
+  String get e2eeResetConfirm =>
+      'Сбросить зашифрованную сессию? Обеим сторонам придётся включить шифрование заново.';
+
+  @override
+  String get e2eeFingerprint => 'Код безопасности';
+
+  @override
+  String e2eeFingerprintHint(String name) {
+    return 'Сравните эти 60 цифр с $name вне MAX — при встрече или по другому каналу. Совпадают — значит, сервер не подменил ключи.';
+  }
+
+  @override
+  String get e2eeVerified => 'Проверено лично';
+
+  @override
+  String get e2eeCeiling =>
+      'Шифруется только текст сообщений и фото. Сервер по-прежнему видит, кто с кем и когда переписывается, видит, что переписка зашифрована, и может не доставлять сообщения. Скрыть это нельзя.';
+
+  @override
+  String e2eeNeedsKomet(String name) {
+    return 'Чтобы это работало, $name должен пользоваться Komet.';
+  }
+
+  @override
+  String get e2eeOfferSent => 'Запрос отправлен';
+
+  @override
+  String get e2eeOfferFailed => 'Не удалось отправить запрос';
+
+  @override
+  String get e2eeAcceptFailed => 'Не удалось принять запрос';
+
+  @override
+  String e2eeBannerPending(String name) {
+    return '$name предлагает включить сквозное шифрование';
+  }
+
+  @override
+  String e2eeBannerKeyChanged(String name) {
+    return 'Ключ шифрования $name изменился. Проверьте код безопасности, прежде чем принять.';
+  }
+
+  @override
+  String get e2eeTransferTitle => 'Перенос на другое устройство';
+
+  @override
+  String get e2eeTransferHint =>
+      'Файл переноса содержит ваш ключ и сессии. После импорта на новом устройстве перестаньте пользоваться этим для зашифрованных чатов.';
+
+  @override
+  String get e2eeExport => 'Экспортировать';
+
+  @override
+  String get e2eeImport => 'Импортировать';
+
+  @override
+  String get e2eeTransferPassword => 'Пароль переноса';
+
+  @override
+  String get e2eeExportFailed => 'Не удалось экспортировать';
+
+  @override
+  String e2eeImported(int count) {
+    return 'Перенесено сессий: $count';
+  }
+
+  @override
+  String get e2eeImportFailed =>
+      'Не удалось импортировать — неверный пароль или повреждённый файл';
+
+  @override
+  String get e2eeLegacyNote =>
+      'Парольный режим для групп: без forward secrecy, любой, кто знает пароль, читает всю историю.';
+
+  @override
+  String get e2eeTooLong =>
+      'Сообщение слишком длинное для зашифрованного чата. Разделите его.';
+
+  @override
+  String get e2eeEncryptFailed => 'Не удалось зашифровать сообщение';
+
+  @override
+  String get e2eeRotateIdentity => 'Сменить свой ключ';
+
+  @override
+  String get e2eeRotateConfirm =>
+      'Создать новый ключ? Все зашифрованные сессии сбросятся, собеседники увидят предупреждение о смене ключа, коды безопасности изменятся.';
+
+  @override
+  String get e2eeRotated => 'Ключ заменён';
+
+  @override
+  String get e2eeRotateFailed => 'Не удалось заменить ключ';
+
+  @override
+  String get e2eeForwardBlocked =>
+      'В зашифрованном чате пересылка недоступна: текст сообщения подставил бы сервер, а не ваше устройство.';
+
+  @override
+  String get e2eeEditUnavailable =>
+      'Это сообщение не расшифровать на этом устройстве, поэтому его нельзя изменить.';
+
+  @override
+  String get e2eeScheduledMediaBlocked =>
+      'Отложенные фото в зашифрованном чате пока не поддерживаются. Отправьте сейчас или выключите шифрование.';
+
+  @override
+  String get e2eeSearchBlocked =>
+      'В зашифрованном чате поиск недоступен: запрос ушёл бы на сервер, а сервер видит только шифртекст.';
+
+  @override
+  String get e2eeAwaitingPeer =>
+      'Сессия перенесена с другого устройства. Дождитесь одного сообщения от собеседника, иначе оба устройства выведут одинаковый ключ.';
+
+  @override
+  String e2eeBannerRehandshake(String name) {
+    return '$name заново включает шифрование. Принимайте, только если этого ждали — иначе сервер повторяет старый запрос, чтобы сбросить вашу сессию.';
+  }
+
+  @override
+  String get e2eeExportedAndDisabled =>
+      'Перенос создан. На этом устройстве шифрование выключено: импортируйте файл на новом и включите там.';
+
+  @override
+  String get chatNoAccessMessage => 'У вас нет доступа к этому чату';
+
+  @override
+  String get chatNoAccessOk => 'Ок';
+
+  @override
+  String get chatEmptyTitle => 'Сообщений пока нет';
+
+  @override
+  String get chatGreetingHint => 'Напишите сообщение или отправьте этот стикер';
+
+  @override
+  String get chatCallBannerTitle => 'Звонок в чате';
+
+  @override
+  String get chatVideoCallBannerTitle => 'Видеозвонок в чате';
+
+  @override
+  String chatCallParticipants(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count участника',
+      many: '$count участников',
+      few: '$count участника',
+      one: '$count участник',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatCallJoin => 'Присоединиться';
+
+  @override
+  String get composerHintMessage => 'Сообщение';
+
+  @override
+  String get composerHintComment => 'Комментарий';
+
+  @override
+  String get composerHintCommandArgs => 'Заполните аргументы команды';
+
+  @override
+  String get emojiPanelRecent => 'Недавние';
+
+  @override
+  String get emojiPanelAnimated => 'Анимированные';
+
+  @override
+  String get attachmentFileFallback => 'Файл';
+
+  @override
+  String get attachmentContactFallback => 'Контакт';
+
+  @override
+  String userFallbackName(Object id) {
+    return 'Пользователь #$id';
+  }
+
+  @override
+  String get devicesUnknownValue => 'Неизвестно';
+
+  @override
+  String infoLoadError(Object error) {
+    return 'Ошибка: $error';
+  }
+
+  @override
+  String get chatInfoTabInfo => 'Инфо';
+
+  @override
+  String get callInfoConversationId => 'ID разговора';
+
+  @override
+  String get chatQrTitle => 'QR-код';
+
+  @override
+  String get chatQrHint => 'Отсканируйте код, чтобы открыть чат';
+
+  @override
+  String get linkQrUnavailable => 'Не удалось получить ссылку';
+
+  @override
+  String get notificationsDesktopNote =>
+      'На компьютере уведомления пока не показываются. Ниже — push-настройки аккаунта для телефонов.';
+
+  @override
+  String get fileNoAppToOpen =>
+      'Нет приложения, чтобы открыть этот файл. Выберите, куда его отправить.';
 }

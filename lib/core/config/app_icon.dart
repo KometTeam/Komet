@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// #***! две иконки, на андроиде activity-alias на иосе alternate icon
 enum AppIcon {
   defaultIcon(
     'default',
@@ -35,6 +36,7 @@ enum AppIcon {
   );
 }
 
+// #***! переключение иконки
 class AppIconConfig {
   static const prefKey = 'app_icon';
   static const _channel = MethodChannel('ru.komet.app/app_icon');
@@ -43,8 +45,10 @@ class AppIconConfig {
     AppIcon.defaultIcon,
   );
 
+  // #***! на десктопе и в вебе иконку не поменять
   static bool get isSupported => Platform.isAndroid || Platform.isIOS;
 
+  // #***! иос может сбросить иконку сам, на старте сверяемся
   static Future<void> load() async {
     if (!isSupported) return;
     final prefs = await SharedPreferences.getInstance();
@@ -57,6 +61,7 @@ class AppIconConfig {
     current.value = icon;
   }
 
+  // #***! меняем через натив потом сохраняем выбор
   static Future<void> apply(AppIcon icon) async {
     if (!isSupported) return;
     if (current.value == icon) return;

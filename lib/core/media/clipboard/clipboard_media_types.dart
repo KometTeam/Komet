@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+// #***! файл из буфера
 class ClipboardFileRef {
   const ClipboardFileRef({
     required this.path,
@@ -12,6 +13,7 @@ class ClipboardFileRef {
   final int size;
 }
 
+// #***! картинка из буфера с расширением
 class ClipboardImageData {
   const ClipboardImageData({required this.bytes, required this.extension});
 
@@ -19,6 +21,7 @@ class ClipboardImageData {
   final String extension;
 }
 
+// #***! что реально достали из буфера
 class ClipboardMediaPayload {
   const ClipboardMediaPayload({
     this.files = const <ClipboardFileRef>[],

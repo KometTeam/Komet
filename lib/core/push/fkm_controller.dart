@@ -9,6 +9,7 @@ import '../../backend/modules/chats.dart';
 import '../../backend/modules/messages.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
+import '../crypto/e2ee_service.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../config/komet_settings.dart';
@@ -19,6 +20,7 @@ import 'push_service.dart';
 const _fallbackSender = 'MAX';
 const _hiddenPreview = 'Новое сообщение';
 
+// #***! FKM, своё фоновое уведомление для флейвора без гугла
 /// FKM — уведомления через собственное фоновое соединение, без FCM.
 ///
 /// Пуш из сокета превращается в тот же набор полей, что присылает FCM, и
@@ -27,6 +29,7 @@ class FkmController {
   FkmController._();
   static final FkmController instance = FkmController._();
 
+  // #***! enabled, на него подписан переключатель в настройках
   final ValueNotifier<bool> enabled = ValueNotifier(false);
 
   Api? _api;
@@ -36,6 +39,7 @@ class FkmController {
 
   bool get isSupported => FkmBridge.instance.isSupported;
 
+  // #***! подписка на пуши сокета и сессию
   Future<void> init(Api api) async {
     if (_started || !isSupported) return;
     _started = true;
@@ -60,6 +64,7 @@ class FkmController {
     }
   }
 
+  // #***! включение и выключение сервиса
   /// Возвращает false, если пользователь не выдал разрешение на уведомления.
   Future<bool> setEnabled(bool value) async {
     if (!isSupported) return false;
@@ -73,6 +78,7 @@ class FkmController {
     return true;
   }
 
+  // #***! выключили FKM кнопкой в уведомлении
   void _onDisabledFromNotification() => enabled.value = false;
 
   void _onSessionState(SessionState state) {
@@ -80,10 +86,12 @@ class FkmController {
     unawaited(FkmBridge.instance.setConnected(state == SessionState.online));
   }
 
+  // #***! говорим нативу есть ли связь, от этого текст постоянного уведомления
   Future<void> _pushConnectionState() => FkmBridge.instance.setConnected(
     _api?.state == SessionState.online,
   );
 
+  // #***! входящий звонок, натив рисует полноэкранное
   /// Входящий звонок, когда приложение не на переднем плане.
   ///
   /// Отдаётся тому же нативному коду, что и FCM-пуш: CallStyle, полноэкранный
@@ -132,6 +140,7 @@ class FkmController {
     };
   }
 
+  // #***! роутер пушей, новое правка удаление
   Future<void> _onPush(Packet packet) async {
     if (!enabled.value) return;
     try {
@@ -145,6 +154,7 @@ class FkmController {
     }
   }
 
+  // #***! новое сообщение в уведомление
   Future<void> _onMessagePush(Packet packet) async {
     final payload = packet.payload;
     if (payload is! Map) return;
@@ -171,6 +181,7 @@ class FkmController {
     if (data != null) await FkmBridge.instance.showMessage(data);
   }
 
+  // #***! сообщение удалили, гасим уведомление
   Future<void> _onDeletePush(Packet packet) async {
     final payload = packet.payload;
     if (payload is! Map) return;
@@ -199,6 +210,7 @@ class FkmController {
         'keep': KometSettings.viewDeleted.value ? 'true' : 'false',
       });
 
+  // #***! отредактировали, правим показанное
   Future<void> _editNotification(
     int chatId,
     String msgId,
@@ -224,6 +236,7 @@ class FkmController {
     });
   }
 
+  // #***! сборка уведомления, заголовок текст аватарка
   Future<Map<String, String>?> _buildNotification(
     int chatId,
     Map<dynamic, dynamic> msg,
@@ -252,7 +265,10 @@ class FkmController {
         ? (chat.title ?? senderName)
         : senderName;
 
-    final text = showPreview ? _previewText(msg) : _hiddenPreview;
+    await E2eeService.instance.ensureLoaded(accountId);
+    final text = showPreview && !E2eeService.instance.isOn(accountId, chatId)
+        ? _previewText(msg)
+        : _hiddenPreview;
     final time = msg['time'];
     final msgId = msg['id'];
 
@@ -268,6 +284,7 @@ class FkmController {
     };
   }
 
+  // #***! текст превью, для вложений их описание
   String _previewText(Map<dynamic, dynamic> msg) {
     final text = msg['text']?.toString().trim();
     if (text != null && text.isNotEmpty) return text;

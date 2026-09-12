@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! свайп назад на десктопе, по дефолту выключен мешает выделять текст
 class AppSwipeBackDesktop {
   static const prefKey = 'dev_swipe_back_desktop';
   static const bool defaultValue = false;

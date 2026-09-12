@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:kolibri/kolibri.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -10,6 +8,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import '../core/cache/self_presence.dart';
 import '../core/config/config.dart';
 import '../core/config/countries.dart';
+import '../core/config/device_profile.dart';
 import '../core/config/komet_settings.dart';
 import '../core/config/proxy_config.dart';
 import '../core/protocol/opcode_map.dart';
@@ -20,26 +19,25 @@ import '../core/transport/dispatcher.dart';
 import '../core/transport/tls_config.dart';
 import '../core/transport/traffic_monitor.dart';
 import '../core/transport/vpn_bypass.dart';
+import '../core/utils/app_foreground.dart';
 import '../core/utils/debug_session_log.dart';
 import '../core/utils/device_locale.dart';
 import '../core/utils/logger.dart';
+import 'login_gate.dart';
 
+// #***! состояния сеськи
 enum SessionState { disconnected, connecting, connected, online }
 
-/// Клиент API.
-///
-/// Тонкий адаптер над Rust-ядром [KolibriSession] (пакет kolibri): подключение,
-/// хэндшейк, пинг и реконнект живут в ядре, здесь — оркестрация жизненного цикла
-/// и сохранение прежнего интерфейса для модулей (Packet/пуши/стримы).
+// #***! весь жизненный цикл соединения
+/// Клиент API
 class Api {
   KolibriSession? _session;
 
-  /// Роутер пушей (ответы на запросы ядро матчит само, диспетчер держим только
-  /// ради registerHandler/pushStream).
   final PacketDispatcher _dispatcher = PacketDispatcher();
   StreamSubscription<(int, Map<String, dynamic>)>? _pushSub;
   StreamSubscription<WireLogEvent>? _wireLogSub;
 
+  // #***! текущее состояние плюс четыре стрима наружу на которые юишка подписана
   SessionState _sessionState = SessionState.disconnected;
   final _stateController = StreamController<SessionState>.broadcast();
   final _sessionExpiredController =
@@ -50,6 +48,7 @@ class Api {
   Map<dynamic, dynamic>? _userAgent;
   Map<dynamic, dynamic>? get userAgent => _userAgent;
 
+  // #***! полезные данные после логина кому то нужные
   int? _callsSeed;
   String? _deviceId;
   String? _callsDevice;
@@ -60,7 +59,7 @@ class Api {
   String? get callsDevice => _callsDevice;
   String? get callsOsVersion => _callsOsVersion;
 
-  /// Сырой доступ к сессии ядра — для медиа-загрузок (data-plane).
+  /// Сырой доступ к сессии для медиа загрузок
   KolibriSession? get session => _session;
 
   String? spoofScope;
@@ -80,39 +79,50 @@ class Api {
   Stream<String> get errorStream => _errorController.stream;
   SessionState get state => _sessionState;
 
+  // #***! таймеры и счётчики автореконнекта
   Timer? _livenessTimer;
   Timer? _reconnectTimer;
   Timer? _connectWatchdog;
+  // #***! поколение попытки конекта
   int _connectGen = 0;
   int _reconnectAttempts = 0;
   bool _autoReconnect = false;
   int _sessionEpoch = 0;
   bool? _lastInteractive;
+  final LoginGate _loginGate = LoginGate();
 
+  // #***! тайминги
   static const Duration _connectWatchdogTimeout = Duration(seconds: 75);
   static const Duration _shouldArmTimeout = Duration(seconds: 5);
   static const Duration _endpointTimeout = Duration(seconds: 5);
   static const Duration _livenessInterval = Duration(seconds: 5);
+  static const int _foregroundReconnectCapSec = 15;
+  static const int _backgroundReconnectCapSec = 60;
 
   int get sessionEpoch => _sessionEpoch;
 
   // Публичное API
 
-  /// Подключается к серверу, шлёт хэндшейк, запускает пинг.
+  // #***!сокет, хэндшейк, пинг, автологин
+  /// Подключается к серверу и хендшейк шлет
   Future<void> connect() async {
     if (_sessionState != SessionState.disconnected) {
       logger.i('connect пропущен: состояние ${_sessionState.name}');
       return;
     }
     _autoReconnect = true;
+    // #***! номер поколения
     final gen = ++_connectGen;
     _setSessionState(SessionState.connecting);
     logger.i('connect: старт (поколение $gen)');
+    // #***! Сторож если конект залип на всякий
     _armConnectWatchdog(gen);
 
+    KolibriSession? built;
     try {
       bool useBypass;
       try {
+        // #***! Если обход впн подвиснет нахуй пойдет
         useBypass = await VpnBypassService.instance.shouldArm().timeout(
           _shouldArmTimeout,
         );
@@ -138,6 +148,7 @@ class Api {
       setTrustMincifryCa(enabled: endpoint.trustMincifryCa);
 
       final (session, wireLog) = await _buildSessionOptions(endpoint);
+      built = session;
       if (gen != _connectGen) return;
 
       logger.i(
@@ -152,10 +163,11 @@ class Api {
         }
       }
 
+      _loginGate.close();
       _session = session;
-      // Подписываемся на wire-лог ядра ДО connect(), чтобы поймать пакеты
-      // SESSION_INIT-хендшейка (иначе они уходят до listen и теряются).
+      _wireLogSub?.cancel();
       _wireLogSub = wireLog.listen(_onWireLog);
+      _pushSub?.cancel();
       _pushSub = session.pushesMap().listen(_onPush);
       TrafficMonitor.instance.recordEvent(
         'connect',
@@ -165,6 +177,7 @@ class Api {
       _setSessionState(SessionState.connected);
       _reconnectAttempts = 0;
 
+      // #***! Сервер отвечает кто мы для него💔
       HandshakeInfo info;
       try {
         logger.i('connect: сокет готов, отправляю хэндшейк');
@@ -189,6 +202,7 @@ class Api {
       _cancelConnectWatchdog();
       _startLiveness();
       logger.i('Сессия онлайн, хэндшейк ок');
+      // #***! автологин токеном
       if (_onReconnectCallback != null) {
         try {
           await _onReconnectCallback!();
@@ -196,6 +210,15 @@ class Api {
           logger.w('Авто-логин при хэндшейке не удался: $e');
         }
       }
+      if (gen != _connectGen) return;
+      if (_loginGate.loginUnanswered) {
+        await _handleConnectFailure(
+          StateError('сервер не ответил на вход'),
+          phase: 'Авто-логин',
+        );
+        return;
+      }
+      _loginGate.open();
       if (_sessionState == SessionState.online) {
         _stateController.add(SessionState.online);
         _handshakeSuccessController.add(info.deviceName ?? 'Unknown');
@@ -203,9 +226,13 @@ class Api {
     } catch (e, st) {
       logger.e('connect: непредвиденная ошибка: $e\n$st');
       if (gen == _connectGen) await _resetStuckConnect(gen);
+    } finally {
+      // #***! на случай если несколько раз подключиться решили
+      if (built != null && !identical(_session, built)) _releaseSession(built);
     }
   }
 
+  // #***! сторож коннекта
   void _armConnectWatchdog(int gen) {
     _connectWatchdog?.cancel();
     _connectWatchdog = Timer(_connectWatchdogTimeout, () {
@@ -227,6 +254,7 @@ class Api {
     _connectWatchdog = null;
   }
 
+  // #***! принудительный сброс
   Future<void> _resetStuckConnect(int gen) async {
     if (gen != _connectGen) return;
     _connectGen++;
@@ -249,6 +277,7 @@ class Api {
     }
   }
 
+  // #***! ручное отключение
   /// Отключается без автореконнекта.
   Future<void> disconnect() async {
     _autoReconnect = false;
@@ -258,6 +287,7 @@ class Api {
     _setSessionState(SessionState.disconnected);
   }
 
+  // #***! вернулись с свертывания если оффлайн коннектимся, если онлайн проверяем живость
   void wakeUp() {
     if (!_autoReconnect) return;
     switch (_sessionState) {
@@ -273,18 +303,23 @@ class Api {
     }
   }
 
-  /// Отправляет запрос и ждёт ответ от сервера.
   Future<Packet> sendRequest(
     int opcode,
     Map<dynamic, dynamic> payload, {
     bool silent = false,
   }) async {
+    if (_session == null) {
+      throw StateError('Нет соединения (${Opcode.name(opcode)})');
+    }
+    if (opcode != Opcode.login) {
+      await _loginGate.wait(ServerConfig.requestTimeout, Opcode.name(opcode));
+    }
     final session = _session;
     if (session == null) {
       throw StateError('Нет соединения (${Opcode.name(opcode)})');
     }
-    // Лог запроса/ответа ведётся из wire-лога ядра (_onWireLog) по настоящему
-    // проводному seq, поэтому здесь ничего не пишем.
+    if (opcode == Opcode.login) _loginGate.noteLoginSent();
+
     final KolibriResponse resp = await session
         .requestMapFull(opcode, Map<String, dynamic>.from(payload))
         .timeout(
@@ -298,7 +333,11 @@ class Api {
       opcode: resp.opcode,
       payload: resp.payload,
     );
+    if (opcode == Opcode.login && identical(session, _session)) {
+      _loginGate.noteLoginAnswer(ok: !packet.isError);
+    }
 
+    // #***! единственное место где протухший токен уезжает в sessionExpiredStream
     if (packet.isError) {
       if (isSessionExpiredPayload(packet.payload)) {
         final ex = SessionExpiredException(
@@ -341,19 +380,21 @@ class Api {
     return response;
   }
 
-  /// Вешает обработчик на пуши с указанным опкодом.
+  // #***! модули бэкенда подписываются на свои пуши
+  /// Вешается😘 обработчик на пуши с указанным опкодом
   void registerPushHandler(int opcode, void Function(Packet) handler) {
     _dispatcher.registerHandler(opcode, handler);
   }
 
-  /// Снимает обработчик пушей с указанного опкода.
+  /// Снимает обработчик пушей с опкода
   void unregisterPushHandler(int opcode) {
     _dispatcher.unregisterHandler(opcode);
   }
 
-  /// Стрим всех входящих пушей от сервера.
+  /// Стрим всех входящих пушей
   Stream<Packet> get pushStream => _dispatcher.pushStream;
 
+  // #***! закрытие всего
   Future<void> dispose() async {
     _autoReconnect = false;
     _reconnectTimer?.cancel();
@@ -367,21 +408,21 @@ class Api {
 
   // Внутрянка
 
-  /// Строит устройство-поля и создаёт сессию ядра. Заодно заполняет
-  /// [_userAgent] и [_deviceId] для геттеров.
+  // #***! сборка полей устройства для хэндшейка и создание сессии ядра. СПУФ <------
   Future<(KolibriSession, Stream<WireLogEvent>)> _buildSessionOptions(
     ({String host, int port, bool trustMincifryCa}) endpoint,
   ) async {
-    final deviceInfo = DeviceInfoPlugin();
+    final device = await DeviceProfile.load();
 
     String deviceType = 'ANDROID';
-    String osVersion = '';
-    String deviceName = 'Unknown';
+    String osVersion = device.osVersion;
+    String deviceName = device.deviceName;
     String architecture = SpoofingService.defaultArchitecture;
     String appVersion = SpoofingService.hardcodedAppVersion;
     int buildNumber = SpoofingService.hardcodedBuildNumber;
     String screen = '420dpi 420dpi 1080x2340';
 
+    // #***! таймзона инициалализацириуется один раз
     if (!_tzInitialized) {
       tz.initializeTimeZones();
       _tzInitialized = true;
@@ -395,30 +436,12 @@ class Api {
     String instanceId = await DeviceIdentity.instanceId();
     int clientSessionId = DeviceIdentity.clientSessionId;
 
-    String? androidManufacturer;
-    String? androidModel;
-    int? androidSdkInt;
-
-    if (Platform.isLinux) {
-      final linuxInfo = await deviceInfo.linuxInfo;
-      osVersion = linuxInfo.name;
-    } else if (Platform.isIOS) {
-      final iosInfo = await deviceInfo.iosInfo;
-      osVersion = iosInfo.systemVersion;
-      deviceName = iosInfo.utsname.machine;
-    } else if (Platform.isAndroid) {
-      final androidInfo = await deviceInfo.androidInfo;
-      osVersion = 'Android ${androidInfo.version.release}';
-      deviceName = '${androidInfo.manufacturer} ${androidInfo.model}';
-      androidManufacturer = androidInfo.manufacturer;
-      androidModel = androidInfo.model;
-      androidSdkInt = androidInfo.version.sdkInt;
-    } else if (Platform.isWindows) {
-      final windowsInfo = await deviceInfo.windowsInfo;
-      osVersion = windowsInfo.productName;
-    }
+    final androidManufacturer = device.manufacturer;
+    final androidModel = device.model;
+    final androidSdkInt = device.sdkInt;
 
     String? spoofUserAgent;
+    // #***! включена подмена, накрываем реальные значения спуфом
     final spoofed = await SpoofingService.getSpoofedSessionData(
       scope: spoofScope,
     );
@@ -465,6 +488,7 @@ class Api {
       if (sClientSession is int) clientSessionId = sClientSession;
     }
 
+    // #***! звонкам нужен формат производитель/модель и номер SDK
     _callsDevice = _resolveCallsDevice(
       spoofed: spoofed != null,
       deviceName: deviceName,
@@ -478,6 +502,7 @@ class Api {
       sdkInt: androidSdkInt,
     );
 
+    // #***! то же самое мапом для отладочного экрана
     _userAgent = {
       'deviceType': deviceType,
       'appVersion': appVersion,
@@ -496,6 +521,7 @@ class Api {
     final insecureTls = await TlsConfig.isInsecureAllowed();
     final proxy = await _buildProxyUrl();
 
+    // #***! тут реально открывается сокет в расте
     return openSessionWithWireLog(
       host: endpoint.host,
       port: endpoint.port,
@@ -521,6 +547,7 @@ class Api {
     );
   }
 
+  // #***! звонкам нужен вид Samsung/SM-G991B, при спуфе собираем из подменённого
   static String? _resolveCallsDevice({
     required bool spoofed,
     required String deviceName,
@@ -545,6 +572,7 @@ class Api {
         '${_modelFromUserAgent(spoofUserAgent) ?? fallbackModel}';
   }
 
+  // #***! модель телефона выдираем из юзерагента регуляркой
   static String? _modelFromUserAgent(String? userAgent) {
     if (userAgent == null || userAgent.isEmpty) return null;
     final match = RegExp(r'Android\s+[\d.]+;\s*([^;)]+)').firstMatch(userAgent);
@@ -555,6 +583,7 @@ class Api {
     return model == null || model.isEmpty ? null : model;
   }
 
+  // #***! звонки хотят номер SDK а не Android 14
   static String _resolveCallsOsVersion({
     required bool spoofed,
     required String osVersion,
@@ -567,6 +596,7 @@ class Api {
     return '${_androidSdkForRelease(int.tryParse(release ?? ''))}';
   }
 
+  // #***! таблица релиз -> уровень API
   static int _androidSdkForRelease(int? release) => switch (release) {
     null => 34,
     <= 9 => 28,
@@ -579,6 +609,7 @@ class Api {
     _ => 36,
   };
 
+  // #***! прокси в строку socks5h://user:pass@host:port
   static Future<String?> _buildProxyUrl() async {
     final p = await ProxyConfig.load();
     if (!p.isEnabled) return null;
@@ -590,6 +621,7 @@ class Api {
     return '$scheme://$auth${p.host}:${p.port}';
   }
 
+  // #***! пуш из ядра заворачиваем в Packet и в диспетчер
   void _onPush((int, Map<String, dynamic>) event) {
     final packet = Packet(
       cmd: CmdType.push,
@@ -600,20 +632,25 @@ class Api {
     _dispatcher.dispatch(packet);
   }
 
+  // #***! весь лог трафика отсюда, ядро отдаёт обе стороны с настоящим seq
   /// Единый источник лога трафика: ядро отдаёт сюда каждый пакет обеих сторон —
   /// включая SESSION_INIT-хендшейк и пинги — с настоящим проводным seq. Раньше
   /// лог вёлся вручную из [sendRequest] по локальному счётчику, из-за чего
   /// хендшейк/пинги в дамп не попадали, а seq был смещён относительно провода.
   void _onWireLog(WireLogEvent e) {
+    // #***! в фоне и без монитора не тратим время на разбор
+    if (!AppForeground.value && !TrafficMonitor.instance.enabled) return;
     final payload = _decodeWireJson(e.json);
     final cmd = _wireCmdCode(e.cmd);
     if (e.direction == 'out') {
-      DebugSessionLog.instance.recordRequest(e.opcode, e.seq, payload);
+      if (KometSettings.recordDebugLogs.value) {
+        DebugSessionLog.instance.recordRequest(e.opcode, e.seq, payload);
+      }
       TrafficMonitor.instance.recordOutgoing(e.opcode, payload, e.seq, 0);
       return;
     }
     // Входящие: ответы матчатся по seq, пуши идут только в монитор трафика.
-    if (e.cmd != 'push') {
+    if (e.cmd != 'push' && KometSettings.recordDebugLogs.value) {
       DebugSessionLog.instance.recordResponse(e.seq, cmd, payload);
     }
     TrafficMonitor.instance.recordIncoming(
@@ -643,6 +680,7 @@ class Api {
     }
   }
 
+  // #***! смена состояния с оповещением
   void _setSessionState(SessionState state) {
     if (_sessionState == state) return;
     _sessionState = state;
@@ -650,6 +688,7 @@ class Api {
     logger.i('Сессия: ${state.name}');
   }
 
+  // #***! разрыв, чистимся и планируем реконнект
   void _onDisconnected() {
     _connectGen++;
     _cleanup();
@@ -657,6 +696,7 @@ class Api {
     if (_autoReconnect) _scheduleReconnect();
   }
 
+  // #***! проверка живости настоящим пингом
   /// Пробный запрос-пинг: если не ответил — форсируем реконнект.
   Future<void> _probeLiveness() async {
     if (_sessionState != SessionState.online) return;
@@ -678,6 +718,7 @@ class Api {
     }
   }
 
+  // #***! реконнект прямо сейчас, знаем что связь мертва
   Future<void> _forceReconnect() async {
     _connectGen++;
     _cleanup();
@@ -687,7 +728,9 @@ class Api {
     if (_autoReconnect) unawaited(connect());
   }
 
+  // #***! общая уборка, таймеры подписки сессия
   void _cleanup() {
+    _loginGate.fail();
     _cancelConnectWatchdog();
     _livenessTimer?.cancel();
     _livenessTimer = null;
@@ -698,25 +741,37 @@ class Api {
     _lastInteractive = null;
     final session = _session;
     _session = null;
-    if (session != null) {
-      try {
-        session.disconnect();
-      } catch (_) {}
-    }
+    if (session != null) _releaseSession(session);
     _dispatcher.clearPending();
     _handshakeSuccessController.add('disconnected');
+  }
+
+  // #***! раст освобождаем руками, иначе рантаймы копятся всю ночь
+  /// Рвёт соединение и сразу освобождает Rust-объект: иначе tokio-рантайм
+  /// сессии (поток на ядро) живёт до сборки мусора Dart, а в фоне она может не
+  /// случиться часами — за ночь реконнектов набегает десяток живых рантаймов.
+  static void _releaseSession(KolibriSession session) {
+    if (session.isDisposed) return;
+    try {
+      session.disconnect();
+    } catch (_) {}
+    try {
+      session.dispose();
+    } catch (_) {}
   }
 
   Future<void> reconnectAndLogin() async {
     await connect();
   }
 
+  // #***! колбэк автологина ставит аккаунт, api про токены не знает
   Future<void> Function()? _onReconnectCallback;
 
   void setReconnectCallback(Future<void> Function() callback) {
     _onReconnectCallback = callback;
   }
 
+  // #***! у ядра нет стрима состояний, опрашиваем сами раз в 5 сек
   /// Поллит состояние ядра (стрима состояний нет) — детект разрыва, плюс
   /// синхронизация interactive-флага пинга и присутствия.
   void _startLiveness() {
@@ -725,6 +780,7 @@ class Api {
     _livenessTimer = Timer.periodic(_livenessInterval, (_) => _tickLiveness());
   }
 
+  // #***! заодно синхроним невидимку
   void _tickLiveness() {
     final session = _session;
     if (session == null || _sessionState != SessionState.online) return;
@@ -748,6 +804,7 @@ class Api {
     }
   }
 
+  // #***! ручная смена невидимки из настроек
   void sendPing({required bool interactive}) {
     final session = _session;
     if (session != null && _sessionState == SessionState.online) {
@@ -763,6 +820,7 @@ class Api {
     }
   }
 
+  // #***! текст ошибки который не стыдно показать
   static String? _serverErrorText(dynamic payload) {
     if (payload is! Map) return null;
     for (final key in ['localizedMessage', 'title']) {
@@ -772,6 +830,7 @@ class Api {
     return null;
   }
 
+  // #***! сервер шлёт свой список стран, он важнее нашего
   static List<CountryName>? _parseRegistrationCountries(dynamic payload) {
     if (payload is! Map) return null;
     final raw = payload['reg-country-code'];
@@ -784,6 +843,7 @@ class Api {
     var list = countriesInServerOrder(codes);
     if (list.isEmpty) return null;
 
+    // #***! страну по геолокации наверх списка
     final loc = payload['location'];
     if (loc is String && loc.length == 2) {
       final home = countriesByCode[loc.toUpperCase()];
@@ -794,8 +854,15 @@ class Api {
     return list;
   }
 
+  // #***! задержка реконнекта 2 4 8, в фоне потолок выше чтоб батарею не жрать
   void _scheduleReconnect() {
-    final delaySec = (2 * (1 << _reconnectAttempts.clamp(0, 3))).clamp(2, 15);
+    final capSec = AppForeground.value
+        ? _foregroundReconnectCapSec
+        : _backgroundReconnectCapSec;
+    final delaySec = (2 * (1 << _reconnectAttempts.clamp(0, 6))).clamp(
+      2,
+      capSec,
+    );
     _reconnectAttempts++;
     logger.i('Реконнект через $delaySecс (попытка $_reconnectAttempts)');
 

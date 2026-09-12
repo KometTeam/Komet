@@ -1,3 +1,4 @@
+// #***! вариант ответа плюс результаты
 class PollAnswer {
   final int answerId;
   final String text;
@@ -16,6 +17,7 @@ class PollAnswer {
   });
 }
 
+// #***! опрос, результаты приходят отдельно и обновляются пушами
 class Poll {
   final int pollId;
   final String title;
@@ -35,13 +37,16 @@ class Poll {
     this.voterPreviewIds = const [],
   });
 
+  // #***! бит 0 значит можно несколько вариантов
   bool get isMultiple => settings & 0x1 != 0;
 
+  // #***! проголосовали, показываем результаты
   bool get hasMyVote => answers.any((a) => a.mine);
 
   bool votedBy(int userId) =>
       answers.any((a) => a.mine || a.votes.contains(userId));
 
+  // #***! голоса то списком id то объектами
   static List<int> _parseVoterIds(dynamic votes) {
     if (votes is! List) return const [];
     final ids = <int>[];
@@ -55,6 +60,7 @@ class Poll {
     return ids;
   }
 
+  // #***! пуш с результатами, тексты свои цифры новые
   Poll withStateMap(Map<dynamic, dynamic> stateMap) {
     return _buildFromState(
       pollId: pollId,
@@ -66,6 +72,7 @@ class Poll {
     );
   }
 
+  // #***! полный разбор опроса
   factory Poll.fromServerMap(Map<dynamic, dynamic> map) {
     final state = map['state'];
     final stateMap = state is Map ? state : const {};
@@ -92,6 +99,7 @@ class Poll {
     );
   }
 
+  // #***! тексты из одного места цифры из state, склейка по answerId
   static Poll _buildFromState({
     required int pollId,
     required String title,

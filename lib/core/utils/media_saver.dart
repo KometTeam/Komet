@@ -5,8 +5,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import 'download_history.dart';
+import 'image_format.dart';
 import 'media_cache.dart';
 
+// #***! итог сохранения, в галерею или в папку
 class MediaSaveResult {
   final bool ok;
   final bool toGallery;
@@ -21,6 +23,7 @@ class MediaSaveResult {
   });
 }
 
+// #***! аватарка, качаем в кэш и в галерею
 Future<MediaSaveResult> saveImageFromUrl(String url) async {
   if (url.isEmpty) {
     return const MediaSaveResult(ok: false, error: 'нет ссылки');
@@ -31,7 +34,7 @@ Future<MediaSaveResult> saveImageFromUrl(String url) async {
     if (file == null) {
       return const MediaSaveResult(ok: false, error: 'не удалось загрузить');
     }
-    return _persist(
+    return await _persist(
       file,
       saveName: 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg',
       kind: SaveMediaKind.image,
@@ -41,8 +44,10 @@ Future<MediaSaveResult> saveImageFromUrl(String url) async {
   }
 }
 
+// #***! фото и видео в галерею, остальное в папку
 enum SaveMediaKind { image, video, file }
 
+// #***! сохранение вложения с записью в историю
 Future<MediaSaveResult> saveMediaFile({
   required String cacheName,
   required Future<String?> Function() resolveUrl,
@@ -74,13 +79,14 @@ Future<MediaSaveResult> saveMediaFile({
   }
 }
 
+// #***! картинка уже на диске, просто копируем
 Future<MediaSaveResult> saveLocalImage(String path, {String? saveName}) async {
   try {
     final file = File(path);
     if (!await file.exists()) {
       return const MediaSaveResult(ok: false, error: 'файл не найден');
     }
-    return _persist(
+    return await _persist(
       file,
       saveName: saveName ?? 'IMG_${DateTime.now().millisecondsSinceEpoch}.jpg',
       kind: SaveMediaKind.image,
@@ -90,7 +96,29 @@ Future<MediaSaveResult> saveLocalImage(String path, {String? saveName}) async {
   }
 }
 
+// #***! на мобилках просим доступ и в галерею, на десктопе в загрузки
 Future<MediaSaveResult> _persist(
+  File file, {
+  required String saveName,
+  required SaveMediaKind kind,
+}) async {
+  if (kind != SaveMediaKind.image) {
+    return _write(file, saveName: saveName, kind: kind);
+  }
+  final image = await prepareImageForSave(file);
+  if (image == null) return _write(file, saveName: saveName, kind: kind);
+  try {
+    return await _write(
+      image.file,
+      saveName: withImageExtension(saveName, image.extension),
+      kind: kind,
+    );
+  } finally {
+    await image.discard();
+  }
+}
+
+Future<MediaSaveResult> _write(
   File file, {
   required String saveName,
   required SaveMediaKind kind,
@@ -116,6 +144,7 @@ Future<MediaSaveResult> _persist(
   return MediaSaveResult(ok: true, location: target.path);
 }
 
+// #***! папка загрузок есть не везде, иначе документы приложения
 Future<Directory> _targetDirectory() async {
   try {
     final downloads = await getDownloadsDirectory();

@@ -2,8 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../../../core/config/app_commands.dart';
-import '../../../commands/command_registry.dart';
-import '../../../commands/slash_command.dart';
+import '../../../commands/commands.dart';
 
 class CommandPanelController {
   CommandPanelController({
@@ -16,6 +15,7 @@ class CommandPanelController {
       duration: const Duration(milliseconds: 200),
     );
     AppCommands.current.addListener(update);
+    CommandRegistry.instance.commands.addListener(update);
   }
 
   final String Function() textOf;
@@ -31,10 +31,11 @@ class CommandPanelController {
     if (!text.startsWith('/')) return const [];
     if (text.contains(RegExp(r'\s'))) return const [];
     final query = text.toLowerCase();
-    for (final c in kSlashCommands) {
+    final commands = CommandRegistry.instance.commands.value;
+    for (final c in commands) {
       if (!c.hidden && c.name.toLowerCase() == query) return const [];
     }
-    return kSlashCommands
+    return commands
         .where((c) => !c.hidden && c.name.toLowerCase().startsWith(query))
         .toList(growable: false);
   }
@@ -58,6 +59,7 @@ class CommandPanelController {
 
   void dispose() {
     AppCommands.current.removeListener(update);
+    CommandRegistry.instance.commands.removeListener(update);
     anim.dispose();
     matches.dispose();
   }

@@ -1,3 +1,4 @@
+// #***! подменённое устройство, чем представляемся серверу
 class SpoofProfile {
   final bool enabled;
   final String deviceName;
@@ -16,6 +17,7 @@ class SpoofProfile {
   final int? clientSessionId;
   final String userAgent;
 
+  // #***! дефолты как обычный андроид
   const SpoofProfile({
     required this.enabled,
     this.deviceName = '',
@@ -35,6 +37,7 @@ class SpoofProfile {
     this.userAgent = '',
   });
 
+  // #***! профиль неизменяемый, правки через copyWith
   SpoofProfile copyWith({
     bool? enabled,
     String? deviceName,
@@ -72,6 +75,7 @@ class SpoofProfile {
         userAgent: userAgent ?? this.userAgent,
       );
 
+  // #***! лежит в prefs джейсоном
   Map<String, dynamic> toJson() => {
         'enabled': enabled,
         'device_name': deviceName,
@@ -91,6 +95,7 @@ class SpoofProfile {
         'user_agent': userAgent,
       };
 
+  // #***! нет поля берём дефолт, старый профиль не должен падать
   factory SpoofProfile.fromJson(Map<String, dynamic> json) => SpoofProfile(
         enabled: json['enabled'] as bool? ?? false,
         deviceName: json['device_name'] as String? ?? '',

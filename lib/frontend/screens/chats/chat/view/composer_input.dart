@@ -20,6 +20,7 @@ import 'package:komet/frontend/widgets/liquid_glass.dart';
 import 'package:komet/frontend/widgets/paste_media_scope.dart';
 import 'package:komet/frontend/widgets/reply_preview.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
 class ComposerInputBar extends StatelessWidget {
   const ComposerInputBar({
@@ -51,15 +52,18 @@ class ComposerInputBar extends StatelessWidget {
     required this.formatElapsed,
     required this.contextMenuBuilder,
     this.onPasteMedia,
+    this.onInsertContent,
     required this.isMuted,
     required this.onToggleMute,
     this.channelSubscribed = true,
     this.channelSubscribing = false,
+    this.canPostToChannel = false,
     this.onSubscribe,
     this.showStickerButton = true,
     this.showAttachButton = true,
     this.forceSend = false,
-    this.hintText = 'Message',
+    this.readOnly = false,
+    this.hintText,
     this.bottomSafe = true,
     this.vignette = false,
   });
@@ -91,15 +95,19 @@ class ComposerInputBar extends StatelessWidget {
   final String Function(int ms) formatElapsed;
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
   final Future<bool> Function()? onPasteMedia;
+  final Future<void> Function(KeyboardInsertedContent content)?
+  onInsertContent;
   final bool isMuted;
   final VoidCallback onToggleMute;
   final bool channelSubscribed;
   final bool channelSubscribing;
+  final bool canPostToChannel;
   final VoidCallback? onSubscribe;
   final bool showStickerButton;
   final bool showAttachButton;
   final bool forceSend;
-  final String hintText;
+  final bool readOnly;
+  final String? hintText;
   final bool bottomSafe;
   final bool vignette;
 
@@ -116,50 +124,55 @@ class ComposerInputBar extends StatelessWidget {
     final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
     final hasForward = forwards.isNotEmpty;
 
-    if (chatType == "CHANNEL" && !hasForward) {
-      if (!channelSubscribed) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12.0,
-              vertical: 8.0,
+    final isChannel = chatType == "CHANNEL";
+    final isGroup = chatType == "CHAT" || chatType == "GROUP";
+    if ((isChannel || isGroup) && !hasForward && !channelSubscribed) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12.0,
+            vertical: 8.0,
+          ),
+          child: GlossyPill(
+            onTap: channelSubscribing ? null : onSubscribe,
+            color: cs.primary,
+            borderRadius: BorderRadius.circular(28),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            depth: 8,
+            borderSide: BorderSide(
+              color: cs.outlineVariant.withValues(alpha: 0.5),
+              width: 0.5,
             ),
-            child: GlossyPill(
-              onTap: channelSubscribing ? null : onSubscribe,
-              color: cs.primary,
-              borderRadius: BorderRadius.circular(28),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              depth: 8,
-              borderSide: BorderSide(
-                color: cs.outlineVariant.withValues(alpha: 0.5),
-                width: 0.5,
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                child: Center(
-                  child: channelSubscribing
-                      ? SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: cs.onPrimary,
-                          ),
-                        )
-                      : Text(
-                          'Подписаться',
-                          style: TextStyle(
-                            color: cs.onPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
+            child: SizedBox(
+              width: double.infinity,
+              child: Center(
+                child: channelSubscribing
+                    ? SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: cs.onPrimary,
                         ),
-                ),
+                      )
+                    : Text(
+                        isChannel ? 'Подписаться' : 'Вступить',
+                        style: TextStyle(
+                          color: cs.onPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
             ),
           ),
-        );
-      }
+        ),
+      );
+    }
+
+    // Regular channel members can't post — show the mute toggle instead of
+    // a composer. Groups always keep the real composer once joined.
+    if (isChannel && !hasForward && !canPostToChannel) {
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
@@ -295,6 +308,7 @@ class ComposerInputBar extends StatelessWidget {
                                           child: TextField(
                                             controller: messageController,
                                             focusNode: messageFocusNode,
+                                            readOnly: readOnly,
                                             style: TextStyle(
                                               color: cs.onSurface,
                                               fontSize: 16,
@@ -308,8 +322,16 @@ class ComposerInputBar extends StatelessWidget {
                                                 TextAlignVertical.center,
                                             contextMenuBuilder:
                                                 contextMenuBuilder,
+                                            contentInsertionConfiguration:
+                                                _insertionConfig(
+                                                  onInsertContent,
+                                                ),
                                             decoration: InputDecoration(
-                                              hintText: hintText,
+                                              hintText:
+                                                  hintText ??
+                                                  AppLocalizations.of(
+                                                    context,
+                                                  )?.composerHintMessage,
                                               hintStyle: TextStyle(
                                                 color: cs.onSurfaceVariant,
                                                 fontSize: 16,
@@ -1088,6 +1110,23 @@ class ComposerInputBar extends StatelessWidget {
       ),
     );
   }
+}
+
+const List<String> _insertableMimeTypes = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+];
+
+ContentInsertionConfiguration? _insertionConfig(
+  Future<void> Function(KeyboardInsertedContent content)? onInsert,
+) {
+  if (onInsert == null) return null;
+  return ContentInsertionConfiguration(
+    allowedMimeTypes: _insertableMimeTypes,
+    onContentInserted: onInsert,
+  );
 }
 
 class _AttachButton extends StatelessWidget {

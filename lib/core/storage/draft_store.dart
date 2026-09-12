@@ -1,5 +1,6 @@
 import 'per_chat_json_store.dart';
 
+// #***! черновики по чатам
 class DraftStore extends PerChatJsonStore<String> {
   DraftStore._()
     : super(
@@ -12,6 +13,7 @@ class DraftStore extends PerChatJsonStore<String> {
 
   String? get(int accountId, int chatId) => read(accountId, chatId);
 
+  // #***! пустой стираем, одинаковый не переписываем иначе диск на каждый символ
   Future<void> set(int accountId, int chatId, String text) async {
     if (accountId == 0) return;
     final current = read(accountId, chatId);

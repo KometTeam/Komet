@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -20,6 +22,7 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
+  final _bioController = TextEditingController();
   bool _isLoading = true;
   bool _isSaving = false;
   String? _avatarUrl;
@@ -35,6 +38,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
+    _bioController.dispose();
     super.dispose();
   }
 
@@ -44,6 +48,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (profile != null) {
       _firstNameController.text = profile.firstName;
       _lastNameController.text = profile.lastName ?? '';
+      _bioController.text = profile.description ?? '';
       _avatarUrl = profile.baseUrl;
       _photoId = profile.photoId;
       setState(() => _isLoading = false);
@@ -52,27 +57,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  Future<void> _saveName() async {
+  Future<void> _saveProfile() async {
     if (_isSaving) return;
     final firstName = _firstNameController.text.trim();
     if (firstName.isEmpty) {
       if (mounted) showCustomNotification(context, 'Имя не может быть пустым');
       return;
     }
+    final lastName = _lastNameController.text.trim();
     setState(() => _isSaving = true);
     try {
-      final newProfile = await accountModule.updateProfileName(
+      final newProfile = await accountModule.updateProfile(
         firstName,
-        _lastNameController.text.trim().isEmpty
-            ? null
-            : _lastNameController.text.trim(),
+        lastName.isEmpty ? null : lastName,
+        description: _bioController.text.trim(),
       );
       _avatarUrl = newProfile.baseUrl;
       _photoId = newProfile.photoId;
+      _bioController.text = newProfile.description ?? '';
       if (!mounted) return;
       KometApp.stateOf(context)?.notifyProfileUpdate();
       if (mounted) {
-        showCustomNotification(context, 'Имя сохранено');
+        showCustomNotification(context, 'Профиль сохранён');
         setState(() => _isSaving = false);
       }
     } catch (e) {
@@ -84,18 +90,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _changeAvatar() async {
     if (_isSaving) return;
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final picked = result.files.first;
-    final bytes = picked.bytes;
-    if (bytes == null) {
-      if (mounted) showCustomNotification(context, 'Не удалось прочитать файл');
-      return;
-    }
-    if (bytes.length > kMaxAvatarBytes) {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final path = result?.files.firstOrNull?.path;
+    if (path == null) return;
+    if (await File(path).length() > kMaxAvatarBytes) {
       if (mounted) {
         showCustomNotification(context, 'Картинка слишком большая (макс 8 МБ)');
       }
@@ -104,7 +102,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!mounted) return;
     setState(() => _isSaving = true);
     try {
-      final processed = await compressAvatar(bytes);
+      final processed = await compressAvatarFile(path);
       if (processed == null) {
         if (!mounted) return;
         showCustomNotification(context, 'Не удалось обработать изображение');
@@ -179,7 +177,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: _isLoading || _isSaving ? null : _saveName,
+            onPressed: _isLoading || _isSaving ? null : _saveProfile,
             child: _isSaving
                 ? const SmallSpinner(size: 16)
                 : Text(
@@ -264,6 +262,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   cs,
                   enabled: !_isSaving,
                 ),
+                const SizedBox(height: 12),
+                _buildTextField(
+                  l10n?.editProfileBio ?? 'About me',
+                  _bioController,
+                  cs,
+                  enabled: !_isSaving,
+                  minLines: 2,
+                  maxLines: 5,
+                ),
                 const SizedBox(height: 120),
               ],
             ),
@@ -275,6 +282,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     TextEditingController controller,
     ColorScheme cs, {
     bool enabled = true,
+    int? minLines,
+    int maxLines = 1,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,6 +298,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         TextField(
           controller: controller,
           enabled: enabled,
+          minLines: minLines,
+          maxLines: maxLines,
+          keyboardType: maxLines == 1
+              ? TextInputType.text
+              : TextInputType.multiline,
+          textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(
             filled: true,
             fillColor: cs.surfaceContainerHigh,

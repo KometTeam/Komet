@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "pw.komet.weather",
+  "name": "Komet Weather",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "Текущая погода и прогноз через wttr.in",
+  "author": "Komet",
+  "main": "main.js",
+  "permissions": ["chat.write", "ui.notify", "network"],
+  "commands": [
+    {
+      "name": "/weather",
+      "description": "погода и прогноз для города",
+      "handler": "weather",
+      "arguments": [
+        {"name": "city", "description": "название города", "rest": true}
+      ]
+    }
+  ]
+}

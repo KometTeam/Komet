@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../utils/logger.dart';
 
+// #***! канал к нативному FKM, своё фоновое уведомление вместо фаербейза
 /// Канал к нативному сервису FKM (foreground komet messaging).
 class FkmBridge {
   FkmBridge._();
@@ -14,6 +15,7 @@ class FkmBridge {
   VoidCallback? _onDisabled;
   bool _handlerSet = false;
 
+  // #***! только андроид
   bool get isSupported {
     try {
       return Platform.isAndroid;
@@ -22,6 +24,7 @@ class FkmBridge {
     }
   }
 
+  // #***! юзер может выключить FKM прямо из уведомления
   /// Вызывается, когда пользователь выключил FKM кнопкой в самом уведомлении.
   void setDisabledCallback(VoidCallback callback) {
     _onDisabled = callback;
@@ -33,6 +36,7 @@ class FkmBridge {
     });
   }
 
+  // #***! дальше по методу на операцию натива
   Future<bool> isEnabled() async {
     if (!isSupported) return false;
     return await _invoke<bool>('isEnabled') ?? false;
@@ -66,6 +70,7 @@ class FkmBridge {
     return await _invoke<bool>('requestNotificationPermission') ?? false;
   }
 
+  // #***! без отключённой оптимизации батареи андроид прибьёт сервис
   Future<bool> isIgnoringBatteryOptimizations() async {
     if (!isSupported) return true;
     return await _invoke<bool>('isIgnoringBatteryOptimizations') ?? true;
@@ -74,6 +79,7 @@ class FkmBridge {
   Future<void> requestIgnoreBatteryOptimizations() =>
       _invoke<void>('requestIgnoreBatteryOptimizations');
 
+  // #***! ошибки канала не пробрасываем, без FKM просто не будет пушей
   Future<T?> _invoke<T>(String method, [Map<String, dynamic>? args]) async {
     if (!isSupported) return null;
     try {

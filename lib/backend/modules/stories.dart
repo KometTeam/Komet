@@ -11,6 +11,7 @@ import '../../core/utils/logger.dart';
 import '../../models/story.dart';
 import '../api.dart';
 
+// #***! истории, лента колец и публикация
 /// Работа с «Историями»: лента-кольца, полные истории владельца, отметка
 /// просмотра и реакции. Кэшируется в SQLite (превью, полные истории и позиция
 /// просмотра) — переживает перезапуск; истёкшие кольца отсеиваются при загрузке.
@@ -23,6 +24,7 @@ class StoriesModule {
 
   final Api _api;
 
+  // #***! две карты, превью для колец и сами истории
   final Map<int, StoryPreview> _previews = {};
   final Map<int, List<Story>> _peerStories = {};
 
@@ -33,6 +35,7 @@ class StoriesModule {
 
   StreamSubscription<Packet>? _pushSub;
 
+  // #***! бампается на любое изменение, лента подписана
   /// Бампается при любом изменении лент/историй — UI слушает и перечитывает.
   final ValueNotifier<int> storiesChanged = ValueNotifier<int>(0);
 
@@ -45,12 +48,14 @@ class StoriesModule {
 
   int _nowMs() => DateTime.now().millisecondsSinceEpoch;
 
+  // #***! время то в секундах то в мс, приводим
   int _normMs(int t) => t <= 0
       ? 0
       : (t < 1000000000000 ? t * 1000 : t);
 
   // ── Кэш (SQLite) ───────────────────────────────────────────────────────
 
+  // #***! кэш из базы рисуется сразу, истёкшие кольца выкидываем
   /// Загружает кэш из БД (превью/истории/позиции) и показывает мгновенно,
   /// до сетевого ответа. Истёкшие кольца отбрасываются.
   Future<void> loadCache() async {
@@ -67,6 +72,7 @@ class StoriesModule {
             if (preview == null || preview.isEmpty) continue;
             final exp = _normMs(preview.lastStoryExpirationTime);
             if (exp != 0 && exp < now) continue;
+            // #***! putIfAbsent а не присвоение, сеть могла ответить раньше и там свежее
             // Не затираем уже загруженные из сети (более свежие) кольца.
             _previews.putIfAbsent(preview.owner.ownerId, () => preview);
           }
@@ -111,6 +117,7 @@ class StoriesModule {
     }
   }
 
+  // #***! три ключа в sync_state, кольца истории и позиции
   Future<void> _persistPreviews() async {
     final acc = await _acc();
     if (acc == null) return;
@@ -139,6 +146,7 @@ class StoriesModule {
 
   // ── Позиция просмотра ──────────────────────────────────────────────────
 
+  // #***! позиция просмотра, с какой истории продолжить
   /// Запоминает, что у [ownerId] пользователь остановился на [storyId].
   void setLastViewed(int ownerId, int storyId) {
     if (storyId == 0 || _lastViewed[ownerId] == storyId) return;
@@ -153,6 +161,7 @@ class StoriesModule {
     unawaited(_persistProgress());
   }
 
+  // #***! порядок колец, сначала непрочитанные потом по свежести
   /// Кольца-превью, отсортированные: сначала непрочитанные, затем по времени.
   List<StoryPreview> get previews {
     final list = _previews.values.where((p) => !p.isEmpty).toList();
@@ -167,7 +176,9 @@ class StoriesModule {
 
   StoryPreview? previewFor(int ownerId) => _previews[ownerId];
 
+  // #***! превью чужих владельцев, отдельно от ленты
   final Map<int, StoryPreview> _peerPreviews = {};
+  // #***! _requestedOwners чтоб не спрашивать про одного дважды
   final Set<int> _requestedOwners = {};
 
   static const int _ownersChunk = 20;
@@ -179,6 +190,7 @@ class StoriesModule {
     return (peer == null || peer.isEmpty) ? null : peer;
   }
 
+  // #***! пачками по 20, silent потому что фон
   Future<void> loadOwnersPreviews(List<int> ownerIds) async {
     if (_api.state != SessionState.online) return;
     final missing = ownerIds
@@ -209,6 +221,7 @@ class StoriesModule {
     if (changed) _bump();
   }
 
+  // #***! сервер не вернул владельца, считаем что историй нет
   bool _applyOwnerPayload(Object? data, List<int> requested) {
     if (data is! Map) return false;
     var changed = false;
@@ -246,6 +259,7 @@ class StoriesModule {
 
   List<Story>? cachedStories(int ownerId) => _peerStories[ownerId];
 
+  // #***! пуш об изменении колец
   /// Подписка на серверные пуши обновления колец (NOTIF_STORIES_UPDATE).
   void attach() {
     _pushSub ??= _api.pushStream
@@ -263,11 +277,13 @@ class StoriesModule {
     unawaited(_persistPreviews());
   }
 
+  // #***! обновляем кольцо только если оно в ленте, иначе лента разрастётся
   void _refreshPreview(StoryPreview preview) {
     if (!_previews.containsKey(preview.owner.ownerId)) return;
     _applyPreview(preview);
   }
 
+  // #***! пустое кольцо значит истории кончились
   void _applyPreview(StoryPreview preview) {
     if (preview.isEmpty) {
       _previews.remove(preview.owner.ownerId);
@@ -277,6 +293,7 @@ class StoriesModule {
     }
   }
 
+  // #***! первая страница, список колец заменяем целиком
   /// Первая страница ленты историй. Возвращает false при ошибке/оффлайне.
   Future<bool> loadFeed({int count = 20}) async {
     if (_api.state != SessionState.online) return false;
@@ -305,6 +322,7 @@ class StoriesModule {
     }
   }
 
+  // #***! полные истории владельца, зовётся при открытии кольца
   /// Полные истории владельца. Обновляет кэш и кольцо, возвращает список.
   Future<List<Story>> getByOwner(StoryOwner owner) async {
     if (_api.state != SessionState.online) {
@@ -346,6 +364,7 @@ class StoriesModule {
     }
   }
 
+  // #***! превью владельца для профиля
   Future<StoryPreview?> loadOwnerPreview(StoryOwner owner) async {
     final cached = _previews[owner.ownerId];
     if (_api.state != SessionState.online) return cached;
@@ -371,6 +390,7 @@ class StoriesModule {
     }
   }
 
+  // #***! отметка просмотра, счётчик поднимаем сразу чтоб кольцо гасло без задержки
   /// Отметить историю просмотренной. Оптимистично поднимает readCount кольца.
   Future<bool> mark(StoryOwner owner, int storyId) async {
     if (_api.state != SessionState.online) return false;
@@ -396,6 +416,7 @@ class StoriesModule {
     unawaited(_persistPreviews());
   }
 
+  // #***! публикация, settings 1 всем 2 только контактам
   /// Публикация фото-истории. [photoToken] — токен уже загруженного фото.
   /// [settings]: 1 = видно всем, 2 = только контактам. [expiration] — TTL, мс.
   /// Бросает [PacketError]/[TimeoutException] при ошибке сервера — чтобы UI
@@ -412,6 +433,7 @@ class StoriesModule {
     );
   }
 
+  // #***! у видео истории videoType 2 и своя длительность
   /// Публикация видео-истории. [videoToken] — токен уже загруженного видео
   /// (`VideoUploadInfo.token`), [durationMs] — длительность ролика в мс.
   Future<void> publishVideo({
@@ -432,6 +454,7 @@ class StoriesModule {
     );
   }
 
+  // #***! общая отправка, ошибку пробрасываем чтоб юишка показала причину
   Future<void> _publishMedia({
     required Map<String, dynamic> media,
     required int settings,
@@ -474,6 +497,7 @@ class StoriesModule {
     }
   }
 
+  // #***! сброс при смене аккаунта
   void clear() {
     _previews.clear();
     _peerStories.clear();

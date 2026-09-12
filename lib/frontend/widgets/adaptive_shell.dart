@@ -238,7 +238,7 @@ class _EmptyChatPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: colorScheme.surfaceContainerLow,
+      color: colorScheme.surface,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

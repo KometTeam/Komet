@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../commands/command_registry.dart';
-import '../commands/slash_command.dart';
+import '../commands/commands.dart';
 
 class CommandSuggestionsPanel extends StatelessWidget {
   final List<SlashCommand> commands;
@@ -10,7 +9,7 @@ class CommandSuggestionsPanel extends StatelessWidget {
 
   const CommandSuggestionsPanel({
     super.key,
-    this.commands = kSlashCommands,
+    required this.commands,
     this.maxHeight = 220,
     this.onSelected,
   });
@@ -53,9 +52,9 @@ class CommandSuggestionsPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(
-                      width: 84,
+                      width: 180,
                       child: Text(
-                        c.name,
+                        c.usage,
                         style: TextStyle(
                           color: cs.primary,
                           fontSize: 14,

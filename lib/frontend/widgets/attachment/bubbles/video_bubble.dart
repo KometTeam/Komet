@@ -10,6 +10,7 @@ import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
 import '../../upload_progress_ring.dart';
 import '../../photo_viewer.dart';
+import '../../text_with_meta.dart';
 import 'bubble_context.dart';
 import 'video_note_bubble.dart';
 
@@ -19,9 +20,11 @@ class VideoBubble extends StatelessWidget {
 
   const VideoBubble({super.key, required this.ctx, required this.video});
 
-  static double layoutWidth(VideoAttachment video) {
+  static double layoutWidth(VideoAttachment video, {bool hasCaption = false}) {
     return (video.width?.toDouble() ?? 200.0).clamp(
-      BubbleContext.photoMinSize,
+      hasCaption
+          ? BubbleContext.captionedMediaMinWidth
+          : BubbleContext.photoMinSize,
       BubbleContext.photoMaxSize,
     );
   }
@@ -57,7 +60,7 @@ class VideoBubble extends StatelessWidget {
         : (video.previewData ?? '');
 
     final h = video.height;
-    final width = layoutWidth(video);
+    final width = layoutWidth(video, hasCaption: hasCaption);
     final height = (h?.toDouble() ?? 150.0).clamp(
       BubbleContext.photoMinSize,
       BubbleContext.photoMaxSize,
@@ -197,12 +200,10 @@ class VideoBubble extends StatelessWidget {
               top: BubbleContext.captionPaddingTop,
               bottom: 6,
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(child: resolvedCaption),
-                ctx.meta(),
-              ],
+            child: TextWithMeta(
+              text: resolvedCaption,
+              meta: ctx.meta(),
+              fillWidth: true,
             ),
           ),
         ],
@@ -210,39 +211,45 @@ class VideoBubble extends StatelessWidget {
     );
   }
 
-  Future<void> _playVideo(BuildContext context, VideoAttachment video) async {
-    final videoId = video.videoId;
-    final token = video.videoToken;
-    if (videoId == null || token == null) {
-      showCustomNotification(context, 'Не удалось открыть видео');
-      return;
-    }
-    Haptics.tap();
+  Future<void> _playVideo(BuildContext context, VideoAttachment video) =>
+      openVideoPlayer(ctx, video);
+}
 
-    final sources = await messagesModule.getVideoSources(
-      messageId: ctx.sourceMessageId,
-      chatId: ctx.sourceChatId,
-      token: token,
-      videoId: videoId,
-    );
-    if (!context.mounted) return;
-    if (sources.isEmpty) {
-      showCustomNotification(context, 'Не удалось получить видео');
-      return;
-    }
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => PhotoViewerScreen.video(
-          attachment: video,
-          initialVideoSources: sources,
-          chatId: ctx.message.chatId,
-          message: ctx.message,
-          actions: ctx.photoActions,
-          sourceName: ctx.chatName,
-        ),
-      ),
-    );
+// #***! общий вход в плеер, зовут и одиночное видео и плитка альбома
+Future<void> openVideoPlayer(BubbleContext ctx, VideoAttachment video) async {
+  final context = ctx.context;
+  final videoId = video.videoId;
+  final token = video.videoToken;
+  if (videoId == null || token == null) {
+    showCustomNotification(context, 'Не удалось открыть видео');
+    return;
   }
+  Haptics.tap();
+
+  final sources = await messagesModule.getVideoSources(
+    messageId: ctx.sourceMessageId,
+    chatId: ctx.sourceChatId,
+    token: token,
+    videoId: videoId,
+  );
+  if (!context.mounted) return;
+  if (sources.isEmpty) {
+    showCustomNotification(context, 'Не удалось получить видео');
+    return;
+  }
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => PhotoViewerScreen.video(
+        attachment: video,
+        initialVideoSources: sources,
+        chatId: ctx.message.chatId,
+        message: ctx.message,
+        actions: ctx.photoActions,
+        sourceName: ctx.chatName,
+        videoUserAgentProvider: () => api.session?.userAgent(),
+      ),
+    ),
+  );
 }

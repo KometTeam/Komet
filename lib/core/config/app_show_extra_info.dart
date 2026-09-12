@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'persisted_setting.dart';
 
+// #***! техподробности в интерфейсе, id сообщений опкоды и прочее
 class AppShowExtraInfo {
   static const prefKey = 'dev_show_extra_info';
   static const bool defaultValue = false;

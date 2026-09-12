@@ -62,10 +62,6 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
-set(RLOTTIE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/rlottie_build")
-add_subdirectory("${RLOTTIE_DIR}" "${CMAKE_BINARY_DIR}/rlottie")
-
-
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
 # run in place. This is done instead of making a separate bundle (as on Linux)
@@ -99,10 +95,6 @@ endif()
 # (Windows has no system Opus encoder). Copied next to the executable so it can
 # be loaded via DynamicLibrary.open('opus.dll').
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/opus/opus.dll"
-  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-  COMPONENT Runtime)
-
-install(FILES "$<TARGET_FILE:rlottie>"
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 

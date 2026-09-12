@@ -7,7 +7,10 @@ import '../../core/config/komet_settings.dart';
 import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
+import '../../core/media/media_playback.dart';
+import '../../core/crypto/e2ee_service.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/utils/parse.dart';
 import '../../core/storage/profile_deletion_store.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
@@ -28,16 +31,19 @@ import 'account/sessions_module.dart';
 import 'account/two_factor_module.dart';
 export 'account/account_models.dart';
 
+// #***! номер к виду который ждёт сервер
 String _normalizeAuthPhone(String phone) {
   final digits = phone.replaceAll(RegExp(r'\D'), '');
   return '+$digits';
 }
 
+// #***! маскируем номер, в логе ему делать нечего
 String _maskPhone(String phone) {
   if (phone.length <= 5) return '***';
   return '${phone.substring(0, 3)}***${phone.substring(phone.length - 2)}';
 }
 
+// #***! аккаунт целиком, вход регистрация мультиаккаунт
 class AccountModule {
   final Api _api;
   late final SessionsModule _sessions = SessionsModule(_api);
@@ -49,6 +55,7 @@ class AccountModule {
   final _noticeController = StreamController<AccountNotice>.broadcast();
   bool _loggedIn = false;
 
+  // #***! тяжёлое в подмодулях, тут только оркестрация
   AccountModule(this._api) {
     _api.stateStream.listen((state) {
       if (state != SessionState.online) _loggedIn = false;
@@ -63,6 +70,7 @@ class AccountModule {
   /// login (opcode 19), а не просто после хэндшейка (opcode 6).
   bool get isLoggedIn => _loggedIn;
 
+  // #***! дальше обёртки над подмодулями, единая точка для юишки
   Future<PrivacyConfig> getPrivacyConfig() => _privacy.getPrivacyConfig();
 
   Future<List<BlockedContact>> getBlockedContacts() =>
@@ -94,8 +102,11 @@ class AccountModule {
   Future<void> unregisterPushToken(String pushToken) =>
       _privacy.unregisterPushToken(pushToken);
 
-  Future<ProfileData> updateProfileName(String firstName, String? lastName) =>
-      _profile.updateProfileName(firstName, lastName);
+  Future<ProfileData> updateProfile(
+    String firstName,
+    String? lastName, {
+    String? description,
+  }) => _profile.updateProfile(firstName, lastName, description: description);
 
   Future<ProfileData> updateProfileAvatar(
     String photoToken, {
@@ -159,6 +170,7 @@ class AccountModule {
   Future<ProfileData> remove2fa(String trackId) =>
       _twoFactor.remove2fa(trackId);
 
+  // #***! запрос кода, первый и повторный отличаются типом
   Future<RequestCodeResult> requestCode(
     String phone, {
     String language = 'ru',
@@ -169,6 +181,7 @@ class AccountModule {
     String language = 'ru',
   }) => _requestCodeInternal(phone, AuthRequestType.resend, language);
 
+  // #***! проверка кода, дальше вход регистрация или 2FA
   Future<VerifyCodeResult> verifyCode(String code, String token) async {
     _ensureOnline();
 
@@ -186,15 +199,16 @@ class AccountModule {
 
     final result = VerifyCodeResult(payload: data.cast<dynamic, dynamic>());
 
-    final sessionToken = result.loginToken ?? result.registerToken;
+    final loginToken = result.loginToken;
     final verifiedProfile = _profileFromVerifyPayload(result.payload);
     final accountId = result.accountId ?? verifiedProfile?.id;
 
-    if (sessionToken != null && accountId != null) {
-      if (result.loginToken != null && verifiedProfile != null) {
+    // #***! токен сохраняем сразу и переносим спуф профиль
+    if (loginToken != null && accountId != null) {
+      if (verifiedProfile != null) {
         await AppDatabase.saveProfile(verifiedProfile, isActive: true);
       }
-      await TokenStorage.saveToken(sessionToken, accountId);
+      await TokenStorage.saveToken(loginToken, accountId);
       await TokenStorage.setActiveAccount(accountId);
       await SpoofingService.commitPendingSpoof(accountId);
     }
@@ -208,7 +222,8 @@ class AccountModule {
     return ProfileData.fromServerProfile(profileMap.cast<dynamic, dynamic>());
   }
 
-  Future<int> completeRegistration({
+  // #***! регистрация после кода
+  Future<RegistrationResult> completeRegistration({
     required String token,
     required String firstName,
     String? lastName,
@@ -248,17 +263,24 @@ class AccountModule {
       throw Exception('completeRegistration: отсутствует id аккаунта');
     }
 
+    final loginToken = data['token'];
+    if (loginToken is! String || loginToken.isEmpty) {
+      throw Exception('completeRegistration: отсутствует token в ответе');
+    }
+
     final profile = ProfileData.fromServerProfile(
       profileMap.cast<dynamic, dynamic>(),
     );
     await AppDatabase.saveProfile(profile, isActive: true);
+    await TokenStorage.saveToken(loginToken, accountId);
     await TokenStorage.setActiveAccount(accountId);
     await SpoofingService.commitPendingSpoof(accountId);
 
     logger.i('Регистрация завершена, accountId=$accountId');
-    return accountId;
+    return RegistrationResult(loginToken: loginToken, accountId: accountId);
   }
 
+  // #***! основной вход, syncParams говорят серверу что у нас есть
   Future<LoginResult> login({
     int? accountId,
     String? token,
@@ -269,7 +291,7 @@ class AccountModule {
     int? resolvedAccountId =
         accountId ?? await TokenStorage.getActiveAccountId();
 
-    String? authToken = token;
+    String? authToken = token == null || token.isEmpty ? null : token;
     if (authToken == null) {
       if (resolvedAccountId == null) {
         throw StateError('login: нет активного аккаунта');
@@ -290,6 +312,7 @@ class AccountModule {
 
       final dataMap = data.cast<dynamic, dynamic>();
 
+      // #***! вошли по чужому токену, id узнаём из ответа
       if (resolvedAccountId == null) {
         resolvedAccountId = extractAccountId(dataMap);
         if (resolvedAccountId == null) {
@@ -322,6 +345,7 @@ class AccountModule {
   Future<void> authorizeWebQrLogin(String qrLink) =>
       _sessions.authorizeWebQrLogin(qrLink);
 
+  // #***! второй аккаунт, рвём сессию чистим кэши готовим спуф
   Future<void> beginAddAccount() async {
     final existing = await AppDatabase.loadAllProfiles();
     await SpoofingService.prepareNewAccountSpoof(
@@ -344,7 +368,11 @@ class AccountModule {
     logger.i('Добавление аккаунта: сессия сброшена, активный аккаунт очищен');
   }
 
+  // #***! вход по чужому токену из дев меню
   Future<LoginResult> loginWithToken(String token) async {
+    if (token.isEmpty) {
+      throw StateError('loginWithToken: пустой токен');
+    }
     await TokenStorage.clearActiveAccount();
     try {
       await _api.disconnect();
@@ -366,7 +394,9 @@ class AccountModule {
     return login(token: token);
   }
 
+  // #***! переключение аккаунта, реконнект с другим спуфом
   Future<ProfileData> switchAccount(int accountId) async {
+    MediaPlayback.instance.closeAudioFile();
     final profile = await AppDatabase.loadProfile(accountId);
     if (profile == null) {
       throw StateError('switchAccount: аккаунт $accountId не найден в базе');
@@ -414,7 +444,9 @@ class AccountModule {
     return AppDatabase.loadAllProfiles();
   }
 
+  // #***! удаляем локально, база токен спуф и заявка
   Future<void> removeAccount(int accountId) async {
+    await E2eeService.instance.eraseAccount(accountId);
     await AppDatabase.deleteAccount(accountId);
     await TokenStorage.deleteAccount(accountId);
     await SpoofingService.clearAccountSpoof(accountId);
@@ -428,6 +460,7 @@ class AccountModule {
     return ProfileDeletionStore.scheduledAt(accountId);
   }
 
+  // #***! заявка на удаление профиля, сервер вернёт дату
   Future<DateTime?> setProfileDeletion(bool delete) async {
     _ensureOnline();
 
@@ -454,7 +487,9 @@ class AccountModule {
     return DateTime.fromMillisecondsSinceEpoch(millis);
   }
 
+  // #***! выход, сначала сервер потом чистка
   Future<void> logout() async {
+    MediaPlayback.instance.closeAudioFile();
     final accountId = await TokenStorage.getActiveAccountId();
     try {
       await _logoutOnServer(accountId);
@@ -481,6 +516,7 @@ class AccountModule {
     await _api.sendRequestOrThrow(Opcode.logout, <dynamic, dynamic>{});
   }
 
+  // #***! чтоб выйти нужна живая сессия, при чём логинимся заново
   Future<void> _ensureLogoutSession(int? accountId) async {
     if (_api.state == SessionState.disconnected) {
       await _api.connect();
@@ -503,6 +539,7 @@ class AccountModule {
     _loggedIn = true;
   }
 
+  // #***! второй шаг входа при 2FA
   Future<TwoFactorResult> checkPassword({
     required String password,
     required String trackId,
@@ -563,6 +600,7 @@ class AccountModule {
     return TwoFactorResult(loginToken: loginToken, accountId: accountId);
   }
 
+  // #***! тело login, токен невидимка и маркеры синхры
   Map<dynamic, dynamic> buildLoginPayload(
     String token, {
     LoginSyncParams? sync,
@@ -571,6 +609,7 @@ class AccountModule {
     final payload = <dynamic, dynamic>{
       'token': token,
       'interactive': interactive ?? !KometSettings.ghostMode.value,
+      // #***! exp это экспериментальные фичи которые просим
       'exp': {
         'chatsCountGroups': Uint8List.fromList([0x0b, 0x32]),
       },
@@ -578,6 +617,7 @@ class AccountModule {
 
     final callsSeed = _api.callsSeed;
     final deviceId = _api.deviceId;
+    // #***! без отпечатка сборки сервер не отдаст кэш чатов
     if (callsSeed != null && deviceId != null) {
       payload['chatCacheFingerprint'] = ChatCacheFingerprint.compute(
         callsSeed,
@@ -596,6 +636,7 @@ class AccountModule {
       if (sync.serverConfigSeen && sync.configHash != null) {
         payload['configHash'] = sync.configHash;
       }
+      // #***! нет маркеров, просим всё с нуля
     } else {
       payload['presenceSync'] = -1;
       payload['chatsSync'] = -1;
@@ -604,6 +645,7 @@ class AccountModule {
     return payload;
   }
 
+  // #***! разбор login, профиль чаты контакты папки баннеры
   Future<LoginResult> _processLoginResponse(
     Map<dynamic, dynamic> data,
     int accountId,
@@ -618,6 +660,7 @@ class AccountModule {
 
     ProfileData profile;
     final profileMap = data['profile'];
+    // #***! берсерк ломает профиль специально чтоб проверить восстановление
     if (!DebugTest.berserk &&
         profileMap is Map &&
         profileMap['contact'] is Map) {
@@ -633,8 +676,10 @@ class AccountModule {
     await _saveSyncState(data, serverTime, profile.id);
     await ContactsModule.syncFromLoginPayload(data, profile.id);
     await chats.syncFromLoginPayload(data, profile.id, profile.id);
+    // #***! остальные страницы чатов в фоне, вход не ждёт
     unawaited(chats.paginateChats(_api, profile.id, profile.id, data));
 
+    // #***! каждый блок в try, упавший кусок не должен ронять вход
     try {
       await ContactsModule.syncFromServer(_api, profile.id);
     } catch (e) {
@@ -680,10 +725,13 @@ class AccountModule {
     );
   }
 
+  // #***! профиля нет нигде, тянем через контакт иначе заглушка
   Future<ProfileData> _resurrectProfile(int accountId) async {
     if (DebugTest.berserk) {
       await AppDatabase.deleteAccount(accountId);
-      logger.w('login: [BERSERK] профиль удалён из БД, форсирую регенерацию (id=$accountId)');
+      logger.w(
+        'login: [BERSERK] профиль удалён из БД, форсирую регенерацию (id=$accountId)',
+      );
     } else {
       final cached = await AppDatabase.loadProfile(accountId);
       if (cached != null) return cached;
@@ -694,17 +742,22 @@ class AccountModule {
     try {
       final fetched = await ContactsModule.fetchSelfProfile(_api, accountId);
       if (fetched != null) {
-        logger.i('login: профиль восстановлен через CONTACT_INFO (id=$accountId)');
+        logger.i(
+          'login: профиль восстановлен через CONTACT_INFO (id=$accountId)',
+        );
         return fetched;
       }
     } catch (e) {
-      logger.w('login: восстановление профиля через CONTACT_INFO не удалось: $e');
+      logger.w(
+        'login: восстановление профиля через CONTACT_INFO не удалось: $e',
+      );
     }
 
     logger.w('login: профиль недоступен, использую заглушку (id=$accountId)');
     return ProfileData.stub(accountId);
   }
 
+  // #***! маркеры синхры, считаем что знаем всё до serverTime
   Future<void> _saveSyncState(
     Map<dynamic, dynamic> data,
     int serverTime,
@@ -731,15 +784,24 @@ class AccountModule {
     }
   }
 
+  // #***! сводка login для отладочного экрана
   Future<void> _saveLoginInfo(Map<dynamic, dynamic> data, int accountId) async {
     final config = data['config'] as Map?;
     final serverConfig = config?['server'] as Map?;
     if (serverConfig != null) {
-      await AppDatabase.setSyncValue(accountId, SyncKey.serverConfigSeen, '1');
+      await AppDatabase.setSyncValue(
+        accountId,
+        SyncKey.serverConfigSeen,
+        LoginSyncParams.serverConfigRevision,
+      );
       await AppDatabase.setSyncValue(
         accountId,
         SyncKey.profileInviteLink,
         serverConfig['invite-link']?.toString().trim() ?? '',
+      );
+      await AppDatabase.setWelcomeStickerIds(
+        accountId,
+        parseIntList(serverConfig['welcome-sticker-ids']),
       );
       await _persistEntryBannerApps(accountId, serverConfig);
     }
@@ -749,24 +811,7 @@ class AccountModule {
   }
 
   Future<void> _persistEntryBannerApps(int accountId, Map serverConfig) async {
-    final banners = serverConfig['settings-entry-banners'];
-    if (banners is! List) return;
-    final resolved = <String, int>{};
-    for (final banner in banners) {
-      final items = (banner is Map) ? banner['items'] : null;
-      if (items is! List) continue;
-      for (final item in items) {
-        if (item is! Map) continue;
-        final appId = item['appid'];
-        if (appId is! int) continue;
-        final icon = item['icon']?.toString().toLowerCase() ?? '';
-        for (final entry in EntryBannerApps.iconMatchers.entries) {
-          if (!resolved.containsKey(entry.key) && icon.contains(entry.value)) {
-            resolved[entry.key] = appId;
-          }
-        }
-      }
-    }
+    final resolved = EntryBannerApps.appIdsFrom(serverConfig);
     for (final entry in resolved.entries) {
       await AppDatabase.setSyncValue(
         accountId,
@@ -776,6 +821,7 @@ class AccountModule {
     }
   }
 
+  // #***! общий запрос кода
   Future<RequestCodeResult> _requestCodeInternal(
     String phone,
     AuthRequestType type,
@@ -814,6 +860,7 @@ class AccountModule {
     return RequestCodeResult(token: token);
   }
 
+  // #***! дальше три помощника
   void _ensureOnline() {
     if (_api.state != SessionState.online) {
       throw StateError(

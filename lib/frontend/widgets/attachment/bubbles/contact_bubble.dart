@@ -65,7 +65,9 @@ class _ContactCard extends StatefulWidget {
     final fullName = '$first $last'.trim();
     if (fullName.isNotEmpty) return fullName;
     final fallback = name?.trim() ?? '';
-    return fallback.isEmpty ? 'Contact' : fallback;
+    return fallback.isEmpty
+        ? AppLocalizations.of(ctx.context)!.attachmentContactFallback
+        : fallback;
   }
 
   String get nameForAdd {

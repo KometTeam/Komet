@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+// #***! техсводка о звонке для отладочной панели
 class CallInfo {
   String? conversationId;
   String? topology;
@@ -22,7 +23,9 @@ class CallInfo {
   final List<String> turn = [];
 }
 
+// #***! разбор SDP и кандидатов ради сводки
 class CallParse {
+  // #***! строка кандидата разбирается по позициям
   static Map<String, String> candidate(String c) {
     final parts = c.trim().split(RegExp(r'\s+'));
     String? at(int i) => (i >= 0 && i < parts.length) ? parts[i] : null;
@@ -41,6 +44,7 @@ class CallParse {
     return r;
   }
 
+  // #***! network-cost говорит через что идёт трафик
   static String networkLabel(String? cost) {
     switch (cost) {
       case '0':
@@ -57,6 +61,7 @@ class CallParse {
     }
   }
 
+  // #***! движок собеседника по строке o= в SDP
   static String engine(String sdp) {
     for (final line in const LineSplitter().convert(sdp)) {
       if (!line.startsWith('o=')) continue;
@@ -89,10 +94,12 @@ class CallParse {
     return null;
   }
 
+  // #***! поддержка анимодзи видна прямо в SDP
   static bool hasAnimoji(String sdp) => sdp.contains('animoji');
 
   static bool isServerIp(String ip) => ip.startsWith('155.212.');
 
+  // #***! relay значит идём через TURN а не напрямую
   static String pathLabel(String? localType, String? remoteType) {
     final relay = localType == 'relay' || remoteType == 'relay';
     final via = relay ? 'через сервер (TURN)' : 'прямое (P2P)';

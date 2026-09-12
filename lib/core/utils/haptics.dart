@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// #***! вся вибрация в одном месте чтоб жесты ощущались одинаково
 /// Centralized tactile feedback for Komet.
 ///
 /// Wraps Flutter's [HapticFeedback] so the whole app speaks one tactile
@@ -15,6 +16,7 @@ class Haptics {
 
   static const String _prefKey = 'haptics_enabled';
 
+  // #***! общий выключатель из настроек
   /// Master switch. Silences every haptic app-wide when `false`.
   /// Controlled by the user via Settings; persisted across launches.
   static bool enabled = true;
@@ -41,6 +43,7 @@ class Haptics {
     }
   }
 
+  // #***! вибрация это приятность а не необходимость, ошибки глотаем
   static Future<void> _fire(Future<void> Function() effect) async {
     if (!enabled) return;
     try {
@@ -50,6 +53,7 @@ class Haptics {
     }
   }
 
+  // #***! дальше именованные паттерны, юишка зовёт их а не сырой HapticFeedback
   /// A crisp, light tick — taps, toggles, opening panels.
   static Future<void> tap() => _fire(HapticFeedback.lightImpact);
 
@@ -65,6 +69,7 @@ class Haptics {
   /// Message sent: a quick, instant tick (the "whoosh").
   static Future<void> send() => tap();
 
+  // #***! составные это цепочка ударов с паузой, так узнаваемее
   /// A two-beat rising pulse — success, completion, "it landed".
   static Future<void> success() async {
     if (!enabled) return;

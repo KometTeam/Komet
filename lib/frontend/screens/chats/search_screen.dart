@@ -146,7 +146,9 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   String _phoneResultName(PhoneLookupResult result) {
-    return ContactCache.get(result.id) ?? result.name ?? 'User #${result.id}';
+    return ContactCache.get(result.id) ??
+        result.name ??
+        AppLocalizations.of(context)!.userFallbackName(result.id);
   }
 
   ({String name, String? avatar, String type}) _chatIdentity(

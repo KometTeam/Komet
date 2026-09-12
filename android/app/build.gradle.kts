@@ -1,6 +1,8 @@
 import java.util.Properties
 import java.io.FileInputStream
 
+val debugAbi = providers.gradleProperty("komet.debugAbi").get()
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -37,18 +39,6 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        externalNativeBuild {
-            cmake {
-                arguments += listOf("-DBUILD_SHARED_LIBS=ON")
-            }
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-        }
     }
 
     flavorDimensions += "distribution"
@@ -65,7 +55,7 @@ android {
         }
         create("store") {
             dimension = "distribution"
-            applicationId = "ru.komet.app"
+            applicationId = "pw.komet.app"
         }
     }
 
@@ -80,14 +70,22 @@ android {
         }
     }
 
+    // format proeban? da i huy s nim))
     buildTypes {
-        release {
-            signingConfig = if (hasReleaseSigning) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+    debug {
+        if (!project.hasProperty("split-per-abi")) {
+            ndk {
+                abiFilters += debugAbi
             }
         }
+    }
+    release {
+        signingConfig = if (hasReleaseSigning) {
+            signingConfigs.getByName("release")
+        } else {
+            signingConfigs.getByName("debug")
+        }
+    }
     }
 
     packaging {
@@ -95,6 +93,7 @@ android {
             useLegacyPackaging = true
         }
     }
+
 }
 
 flutter {

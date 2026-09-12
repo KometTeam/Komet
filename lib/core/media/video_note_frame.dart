@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+// #***! размер кадра кружка, нули и бесконечности заменяем
 Size videoNoteFrameSize(Size frame, double fallback) {
   final width = frame.width.isFinite && frame.width > 0
       ? frame.width

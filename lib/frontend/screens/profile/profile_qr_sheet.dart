@@ -18,27 +18,66 @@ Future<void> showProfileQrSheet(
   required String name,
   String? avatarUrl,
 }) {
+  final l10n = AppLocalizations.of(context)!;
+  return showLinkQrSheet(
+    context,
+    name: name,
+    avatarUrl: avatarUrl,
+    title: l10n.profileQrTitle,
+    hint: l10n.profileQrHint,
+    unavailable: l10n.profileQrUnavailable,
+    loadLink: ownProfileLink,
+  );
+}
+
+Future<void> showLinkQrSheet(
+  BuildContext context, {
+  required String name,
+  String? avatarUrl,
+  required String title,
+  required String hint,
+  required String unavailable,
+  required Future<String?> Function() loadLink,
+}) {
   final cs = Theme.of(context).colorScheme;
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: cs.surfaceContainerHigh,
     shape: kSheetShape,
-    builder: (_) => _ProfileQrSheet(name: name, avatarUrl: avatarUrl),
+    builder: (_) => _LinkQrSheet(
+      name: name,
+      avatarUrl: avatarUrl,
+      title: title,
+      hint: hint,
+      unavailable: unavailable,
+      loadLink: loadLink,
+    ),
   );
 }
 
-class _ProfileQrSheet extends StatefulWidget {
+class _LinkQrSheet extends StatefulWidget {
   final String name;
   final String? avatarUrl;
+  final String title;
+  final String hint;
+  final String unavailable;
+  final Future<String?> Function() loadLink;
 
-  const _ProfileQrSheet({required this.name, this.avatarUrl});
+  const _LinkQrSheet({
+    required this.name,
+    this.avatarUrl,
+    required this.title,
+    required this.hint,
+    required this.unavailable,
+    required this.loadLink,
+  });
 
   @override
-  State<_ProfileQrSheet> createState() => _ProfileQrSheetState();
+  State<_LinkQrSheet> createState() => _LinkQrSheetState();
 }
 
-class _ProfileQrSheetState extends State<_ProfileQrSheet> {
+class _LinkQrSheetState extends State<_LinkQrSheet> {
   String? _link;
   bool _failed = false;
 
@@ -51,7 +90,7 @@ class _ProfileQrSheetState extends State<_ProfileQrSheet> {
   Future<void> _load() async {
     String? link;
     try {
-      link = await ownProfileLink();
+      link = await widget.loadLink();
     } catch (_) {
       link = null;
     }
@@ -88,7 +127,7 @@ class _ProfileQrSheetState extends State<_ProfileQrSheet> {
           children: [
             const Center(child: SheetGrabber()),
             Text(
-              l10n.profileQrTitle,
+              widget.title,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: cs.onSurface,
@@ -98,7 +137,7 @@ class _ProfileQrSheetState extends State<_ProfileQrSheet> {
             ),
             const SizedBox(height: 6),
             Text(
-              l10n.profileQrHint,
+              widget.hint,
               textAlign: TextAlign.center,
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
@@ -112,7 +151,7 @@ class _ProfileQrSheetState extends State<_ProfileQrSheet> {
                 ),
                 child: SizedBox.square(
                   dimension: qrSize,
-                  child: Center(child: _buildCode(cs, l10n, qrSize)),
+                  child: Center(child: _buildCode(cs, qrSize)),
                 ),
               ),
             ),
@@ -132,10 +171,10 @@ class _ProfileQrSheetState extends State<_ProfileQrSheet> {
     );
   }
 
-  Widget _buildCode(ColorScheme cs, AppLocalizations l10n, double qrSize) {
+  Widget _buildCode(ColorScheme cs, double qrSize) {
     if (_failed) {
       return Text(
-        l10n.profileQrUnavailable,
+        widget.unavailable,
         textAlign: TextAlign.center,
         style: const TextStyle(color: _moduleColor, fontSize: 14),
       );

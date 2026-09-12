@@ -11,6 +11,7 @@ import 'call_session.dart';
 import 'conversation_params.dart';
 import 'ws2_signaling.dart';
 
+// #***! входящий из пуша или с нативного экрана
 class IncomingCall {
   final String conversationId;
 
@@ -36,6 +37,7 @@ class IncomingCall {
   });
 }
 
+// #***! управление звонками поверх сессии
 class CallController {
   CallController._();
   static final CallController instance = CallController._();
@@ -44,10 +46,12 @@ class CallController {
   CallsModule? _calls;
   StreamSubscription<Packet>? _pushSub;
 
+  // #***! три стрима наружу
   final _incoming = StreamController<IncomingCall>.broadcast();
   final _ended = StreamController<void>.broadcast();
   final _canceled = StreamController<void>.broadcast();
 
+  // #***! приложение в фоне, звонок показывает натив а не мы
   bool appResumed = false;
 
   Stream<IncomingCall> get incomingCalls => _incoming.stream;
@@ -60,11 +64,18 @@ class CallController {
   StreamSubscription<CallSessionState>? _activeSub;
   CallSession? get activeSession => _active;
 
+  String? _activeJoinLink;
+  String? get activeJoinLink => _active == null ? null : _activeJoinLink;
+
   IncomingCall? _pending;
   IncomingCall? get pendingIncoming => _pending;
 
-  bool get isBusy => _active != null;
+  bool _starting = false;
 
+  // #***! занято, второй звонок не берём
+  bool get isBusy => _active != null || _starting;
+
+  // #***! подписка на пуши звонков
   void init(Api api) {
     if (_api != null) return;
     _api = api;
@@ -72,6 +83,7 @@ class CallController {
     _pushSub = api.pushStream.listen(_onPush);
   }
 
+  // #***! разбор пуша входящего
   void _onPush(Packet packet) {
     if (packet.opcode != Opcode.notifCallStart) return;
     final payload = packet.payload;
@@ -104,6 +116,7 @@ class CallController {
     );
   }
 
+  // #***! звонок с натива, autoAccept значит там уже нажали принять
   void injectFromNative(Map<dynamic, dynamic> data, {bool autoAccept = false}) {
     final vcp = data['vcp']?.toString();
     if (vcp == null || vcp.isEmpty) return;
@@ -136,8 +149,9 @@ class CallController {
     );
   }
 
+  // #***! входящий наружу, юишка решит что показать
   void _emitIncoming(IncomingCall incoming) {
-    if (_active != null) return;
+    if (isBusy) return;
     if (_pending?.conversationId == incoming.conversationId) return;
     _pending = incoming;
     _incoming.add(incoming);
@@ -149,47 +163,61 @@ class CallController {
     _canceled.add(null);
   }
 
-  Future<CallSession> startOutgoing(
-    int calleeId, {
-    bool isVideo = false,
-  }) async {
-    if (_active != null) throw StateError('уже идёт звонок');
-    final out = await _calls!.initiateCall(calleeId, isVideo: isVideo);
-    final config = Ws2Config.fromEndpoint(
-      out.endpoint,
-      userId: out.callsUserId,
-      device: _api?.callsDevice,
-      osVersion: _api?.callsOsVersion,
-    );
-    final session = CallSession(ws2Config: config, role: CallRole.caller);
-    return _launch(session, session.start);
-  }
+  // #***! исходящий звонок
+  Future<CallSession> startOutgoing(int calleeId, {bool isVideo = false}) =>
+      _startExclusive(() async {
+        final out = await _calls!.initiateCall(calleeId, isVideo: isVideo);
+        final config = Ws2Config.fromEndpoint(
+          out.endpoint,
+          userId: out.callsUserId,
+          device: _api?.callsDevice,
+          osVersion: _api?.callsOsVersion,
+        );
+        final session = CallSession(ws2Config: config, role: CallRole.caller);
+        return _launch(session, session.start);
+      });
 
+  // #***! конференция со ссылкой
   Future<CreatedCall> createConference() async {
-    if (_active != null) throw StateError('уже идёт звонок');
+    if (isBusy) throw StateError('уже идёт звонок');
     return _calls!.createConference();
   }
 
   Future<CallLinkPreview?> previewCallLink(String url) =>
       _calls!.resolveCallLink(url);
 
-  Future<CallSession> joinByLink(String token, {bool isVideo = false}) async {
-    if (_active != null) throw StateError('уже идёт звонок');
-    final params = await _calls!.joinByLink(token, isVideo: isVideo);
-    final config = Ws2Config.fromEndpoint(
-      params.endpoint,
-      userId: params.callsUserId,
-      device: _api?.callsDevice,
-      osVersion: _api?.callsOsVersion,
-    );
-    final session = CallSession(
-      ws2Config: config,
-      role: CallRole.joiner,
-      isGroup: true,
-    );
-    return _launch(session, session.start);
+  // #***! вход по ссылке
+  Future<CallSession> joinByLink(String token, {bool isVideo = false}) =>
+      _startExclusive(() async {
+        final params = await _calls!.joinByLink(token, isVideo: isVideo);
+        final config = Ws2Config.fromEndpoint(
+          params.endpoint,
+          userId: params.callsUserId,
+          device: _api?.callsDevice,
+          osVersion: _api?.callsOsVersion,
+        );
+        final session = CallSession(
+          ws2Config: config,
+          role: CallRole.joiner,
+          isGroup: true,
+        );
+        _activeJoinLink = token;
+        return _launch(session, session.start);
+      });
+
+  Future<CallSession> _startExclusive(
+    Future<CallSession> Function() start,
+  ) async {
+    if (isBusy) throw StateError('уже идёт звонок');
+    _starting = true;
+    try {
+      return await start();
+    } finally {
+      _starting = false;
+    }
   }
 
+  // #***! принятие входящего
   Future<CallSession> acceptIncoming(IncomingCall call) async {
     _pending = null;
     CallBridge.instance.cancelIncoming();
@@ -214,6 +242,7 @@ class CallController {
     );
   }
 
+  // #***! отклонение
   Future<void> rejectIncoming(IncomingCall call) async {
     _pending = null;
     CallBridge.instance.notifyEnded();
@@ -235,6 +264,7 @@ class CallController {
 
   Future<void> endActive() => _active?.hangup() ?? Future.value();
 
+  // #***! сигналим собеседнику про микрофон
   Future<bool> sendMicSignal(bool enabled) async {
     final session = _active;
     if (session == null) return false;
@@ -242,6 +272,7 @@ class CallController {
     return true;
   }
 
+  // #***! общий запуск сессии
   Future<CallSession> _launch(
     CallSession session,
     Future<void> Function() open, {
@@ -261,6 +292,7 @@ class CallController {
     return session;
   }
 
+  // #***! следим за состоянием, конец сессии освобождает контроллер
   void _bind(CallSession session) {
     unawaited(_activeSub?.cancel());
     _active = session;
@@ -273,6 +305,7 @@ class CallController {
   Future<void> _release(CallSession session) async {
     if (!identical(_active, session)) return;
     _active = null;
+    _activeJoinLink = null;
     await _activeSub?.cancel();
     _activeSub = null;
     CallBridge.instance.notifyEnded();

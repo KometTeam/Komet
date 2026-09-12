@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/logger.dart';
 import '../config/build_profile.dart';
 
+// #***! итог обхода впн
 class VpnBypassResult {
   final bool enabled;
   final bool tunDetected;
@@ -30,6 +31,7 @@ class VpnBypassResult {
       'iface: $boundInterface, transport: $transport, reason: $reason)';
 }
 
+// #***! при впн лезем мимо туннеля, только андроид
 /// При активном VPN (tun-интерфейс) привязывает процесс к не-VPN сети
 /// (wlan*/rmnet*). Только Android, по умолчанию выключено.
 class VpnBypassService {
@@ -44,6 +46,7 @@ class VpnBypassService {
 
   bool _bound = false;
 
+  // #***! итог попытки уезжает в юишку
   final _eventController = StreamController<VpnBypassResult>.broadcast();
 
   /// Эмитит результат каждой попытки обхода (для уведомления в UI).
@@ -51,6 +54,7 @@ class VpnBypassService {
 
   bool get _supported => Platform.isAndroid;
 
+  // #***! только в dev сборке
   Future<bool> isEnabled() async {
     if (!BuildProfile.insecureTransport) return false;
     final prefs = await SharedPreferences.getInstance();
@@ -63,6 +67,7 @@ class VpnBypassService {
     await prefs.setBool(prefKey, value);
   }
 
+  // #***! включено, платформа та и впн поднят
   /// true — обход включён, платформа поддерживается и активен VPN.
   Future<bool> shouldArm() async {
     if (!_supported) return false;
@@ -70,6 +75,7 @@ class VpnBypassService {
     return _isVpnActive();
   }
 
+  // #***! натив выбирает не впн сеть и биндит
   /// Привязывает процесс к non-VPN сети (wlan*/rmnet*).
   Future<VpnBypassResult> bind() async {
     VpnBypassResult result;
@@ -113,6 +119,7 @@ class VpnBypassService {
     return result;
   }
 
+  // #***! спрашиваем натив, молчит ищем сами
   Future<bool> _isVpnActive() async {
     try {
       final res = await _channel.invokeMapMethod<String, dynamic>(
@@ -140,6 +147,7 @@ class VpnBypassService {
     }
   }
 
+  // #***! возврат на системную маршрутизацию
   /// Возвращает маршрутизацию процесса к системной (через VPN, если он есть).
   Future<void> restoreDefault() async {
     if (!_bound) return;

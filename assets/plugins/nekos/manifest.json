@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"pw.komet.nekos","name":"Komet Nekos","version":"1.0.0","apiVersion":1,"description":"Случайные картинки кошкодевочек через nekosapi.com","author":"nyakokitsu","main":"main.js","permissions":["network","chat.photo","chat.write","ui.notify"],"commands":[{"name":"/nekogirl","description":"отправить случайную картинку кошкодевочки","handler":"nekogirl"}]}

@@ -1,5 +1,6 @@
 import 'package:kolibri/kolibri.dart' as kb;
 
+// #***! параметры звонка из пуша, строка длина:base64
 /// Параметры подключения к звонку (`vcp`), которые сервер присылает в пуше
 /// входящего звонка (opcode 137) и в ответе на инициацию исходящего.
 ///
@@ -52,6 +53,7 @@ class ConversationParams {
     this.isVideo = false,
   });
 
+  // #***! ICE серверы в виде который ждёт flutter_webrtc
   /// ICE-серверы в формате, который ожидает `flutter_webrtc`
   /// (`RTCPeerConnection`).
   List<Map<String, dynamic>> get iceServers {
@@ -69,6 +71,7 @@ class ConversationParams {
     return servers;
   }
 
+  // #***! запас 5 секунд, пока подключаемся параметры не должны протухнуть
   /// `true`, если параметры ещё действительны (с запасом в 5 секунд).
   bool get isExpired {
     if (expiresAt == null) return false;
@@ -76,6 +79,7 @@ class ConversationParams {
     return nowSec >= expiresAt! - 5;
   }
 
+  // #***! распаковку делает раст, тут только перекладывание полей
   /// Распаковывает и парсит строку `vcp` через Rust-ядро (kolibri). Возвращает
   /// `null`, если формат не распознан. Требует инициализации `initKolibri()`.
   static ConversationParams? decode(String vcp) {

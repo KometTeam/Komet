@@ -14,6 +14,7 @@ import 'folder_action_sheet.dart';
 import 'folder_edit_sheet.dart';
 import '../contacts/add_contact_sheet.dart';
 import '../../widgets/adaptive_shell.dart';
+import '../../widgets/chat_call_badge.dart';
 import '../../../core/crypto/message_decryption_cache.dart';
 import '../../widgets/decrypted_text.dart';
 import '../../widgets/encryption_lock_badge.dart';
@@ -69,9 +70,11 @@ import '../../../backend/modules/chats.dart';
 import '../../../backend/modules/cloud_storage.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/folders.dart';
+import '../../../core/cache/message_session_cache.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
+import '../../../core/crypto/e2ee_service.dart';
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
@@ -102,6 +105,10 @@ import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
 
 const String _savedWelcomeKey = 'welcome.saved.dialog.message';
+
+// #***! вкладки смонтированы все сразу, так что открытая вкладка это состояние,
+// а не отдельный экран: по нему вкладки понимают, что их только что открыли
+final ValueNotifier<int> activeNavTab = ValueNotifier<int>(0);
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -284,6 +291,8 @@ class _ChatListScreenState extends State<ChatListScreen>
   ProfileData? _profile;
 
   List<CachedChat> _chats = [];
+  List<CachedChat> _chatsWithArchived = [];
+  Set<int> _archivedIds = const {};
   int _archivedCount = 0;
   int _archivedUnread = 0;
   bool _archiveHadChats = false;
@@ -764,9 +773,10 @@ class _ChatListScreenState extends State<ChatListScreen>
         _maybeLoadStories();
       }
     });
-    chats.chatsChanged.addListener(_onChatsChanged);
+    chats.chatOrderRevision.addListener(_onChatsChanged);
     ArchivedChatsStore.instance.revision.addListener(_onArchivedChanged);
     ChatEncryptionStore.instance.revision.addListener(_onEncryptionChanged);
+    E2eeService.instance.revision.addListener(_onEncryptionChanged);
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
@@ -962,8 +972,15 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
 
     try {
-      final loadedChats = await chats.getChats(
+      final ensureLoadedFuture = chats.ensureLoaded(p.id);
+      final foldersFuture = FoldersModule.loadFolders(p.id);
+      final foldersKnownFuture = FoldersModule.hasReceivedFoldersList(p.id);
+      final contactsFuture = ContactsModule.getContacts(
         p.id,
+        includeDeleted: true,
+      );
+      await ensureLoadedFuture;
+      final loadedChats = chats.chatsSnapshot(
         includeHidden:
             widget.archiveMode || KometSettings.showHiddenChats.value,
       );
@@ -976,12 +993,9 @@ class _ChatListScreenState extends State<ChatListScreen>
         archivedCount++;
         archivedUnread += c.unreadCount;
       }
-      var folders = await FoldersModule.loadFolders(p.id);
-      final foldersKnown = await FoldersModule.hasReceivedFoldersList(p.id);
-      final contactIds = (await ContactsModule.getContacts(
-        p.id,
-        includeDeleted: true,
-      )).map((c) => c.id).toSet();
+      var folders = await foldersFuture;
+      final foldersKnown = await foldersKnownFuture;
+      final contactIds = (await contactsFuture).map((c) => c.id).toSet();
 
       const allChatsFolder = ChatFolder(
         id: FoldersModule.allChatsFolderId,
@@ -1006,8 +1020,10 @@ class _ChatListScreenState extends State<ChatListScreen>
       final pageCount = folders.isEmpty ? 1 : folders.length;
       _syncFolderChatScrollControllersForCount(pageCount);
 
-      final filteredChats = loadedChats
+      final visibleChats = loadedChats
           .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
+          .toList();
+      final filteredChats = visibleChats
           .where(
             (c) => widget.archiveMode
                 ? archivedIds.contains(c.id)
@@ -1028,6 +1044,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         setState(() {
           _profile = p;
           _chats = filteredChats;
+          _chatsWithArchived = visibleChats;
+          _archivedIds = archivedIds;
           _archivedCount = archivedCount;
           _archivedUnread = archivedUnread;
           _contactIds = contactIds;
@@ -1053,6 +1071,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         _syncShimmer();
         _prefetchContactsForChats(loadedChats);
         unawaited(_prefetchPresenceForChats(loadedChats));
+        unawaited(_prefetchMessagesForChats(filteredChats));
         if (widget.archiveMode) {
           if (filteredChats.isNotEmpty) {
             _archiveHadChats = true;
@@ -1128,6 +1147,44 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   bool _presencePrefetchRunning = false;
+  bool _messagePrefetchRunning = false;
+
+  // #***! прогревает MessageSessionCache для верхних чатов списка, чтобы
+  // открытие чата, который пользователь ещё не заходил в этой сессии, было
+  // таким же мгновенным, как повторное открытие — то же поведение, что и
+  // у Telegram/TDLib, где last_message и последние сообщения топовых чатов
+  // уже лежат в локальной БД до тапа, а не читаются с диска в момент клика.
+  static const int _messagePrefetchTopN = 20;
+
+  Future<void> _prefetchMessagesForChats(List<CachedChat> chats) async {
+    if (_messagePrefetchRunning) return;
+    final myId = _profile?.id;
+    if (myId == null) return;
+    final targets = chats
+        .take(_messagePrefetchTopN)
+        .where((c) => MessageSessionCache.get(myId, c.id) == null)
+        .toList();
+    if (targets.isEmpty) return;
+    _messagePrefetchRunning = true;
+    try {
+      for (final target in targets) {
+        if (!mounted) return;
+        final rows = await AppDatabase.loadMessages(
+          myId,
+          target.id,
+          limit: 20,
+          onlyVisible: !KometSettings.viewDeleted.value,
+        );
+        if (rows.isEmpty) continue;
+        final decoded = rows.reversed
+            .map((r) => CachedMessage.fromDbRow(r))
+            .toList();
+        MessageSessionCache.save(myId, target.id, decoded, reachedStart: false);
+      }
+    } finally {
+      _messagePrefetchRunning = false;
+    }
+  }
 
   Set<int> _dialogPeerIds(List<CachedChat> chats) {
     final myId = _profile?.id;
@@ -1192,6 +1249,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   List<CachedChat> _chatsForPageIndex(int pageIndex) {
     final baseKey = Object.hash(
       identityHashCode(_chats),
+      identityHashCode(_chatsWithArchived),
       identityHashCode(_folders),
       identityHashCode(_contactIds),
     );
@@ -1212,16 +1270,13 @@ class _ChatListScreenState extends State<ChatListScreen>
       final myId = _profile?.id ?? 0;
       base = FoldersModule.isAllChatsFolder(folder)
           ? _chats
-          : _chats
-                .where(
-                  (c) => FoldersModule.chatMatchesFolder(
-                    c,
-                    folder,
-                    myId: myId,
-                    contactIds: _contactIds,
-                  ),
-                )
-                .toList();
+          : FoldersModule.chatsForFolder(
+              _chatsWithArchived,
+              folder,
+              myId: myId,
+              contactIds: _contactIds,
+              archivedIds: _archivedIds,
+            );
     }
     final pinned = base.where((c) => (c.favIndex ?? 0) > 0).toList()
       ..sort((a, b) => a.favIndex!.compareTo(b.favIndex!));
@@ -1469,9 +1524,10 @@ class _ChatListScreenState extends State<ChatListScreen>
     _shareCaption?.dispose();
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
-    chats.chatsChanged.removeListener(_onChatsChanged);
+    chats.chatOrderRevision.removeListener(_onChatsChanged);
     ArchivedChatsStore.instance.revision.removeListener(_onArchivedChanged);
     ChatEncryptionStore.instance.revision.removeListener(_onEncryptionChanged);
+    E2eeService.instance.revision.removeListener(_onEncryptionChanged);
     DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
@@ -1537,6 +1593,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     _navPageAnimStart = fromT;
     _navPageAnimEnd = index.toDouble();
     setState(() => _currentNavIndex = index);
+    activeNavTab.value = index;
     _navPageAnimController.forward(from: 0);
     if (index == 0) _scheduleInformerPresentation();
   }
@@ -1948,18 +2005,18 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _buildFolderChatPage(int pageIndex) {
-    final chats = _chatsForPageIndex(pageIndex);
+    final pageChats = _chatsForPageIndex(pageIndex);
     final sc = _folderChatScrollControllers[pageIndex];
     final cs = Theme.of(context).colorScheme;
     final pinnedCount = _isInitialLoading
         ? 0
-        : chats.where((c) => (c.favIndex ?? 0) > 0).length;
-    final hasSeparator = pinnedCount > 0 && pinnedCount < chats.length;
+        : pageChats.where((c) => (c.favIndex ?? 0) > 0).length;
+    final hasSeparator = pinnedCount > 0 && pinnedCount < pageChats.length;
     final totalItems = _isInitialLoading
         ? 10
-        : chats.length + (hasSeparator ? 1 : 0);
+        : pageChats.length + (hasSeparator ? 1 : 0);
     final idToIndex = <String, int>{
-      for (var i = 0; i < chats.length; i++) chats[i].id.toString(): i,
+      for (var i = 0; i < pageChats.length; i++) pageChats[i].id.toString(): i,
     };
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification n) {
@@ -1988,7 +2045,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
           if (_shouldShowArchiveEntry(pageIndex))
             SliverToBoxAdapter(child: _buildArchiveEntry(cs)),
-          if (chats.isEmpty && !_isInitialLoading)
+          if (pageChats.isEmpty && !_isInitialLoading)
             SliverFillRemaining(
               child: Center(
                 child: Text(
@@ -2023,120 +2080,137 @@ class _ChatListScreenState extends State<ChatListScreen>
                   final chatIndex = hasSeparator && index > pinnedCount
                       ? index - 1
                       : index;
-                  final chat = chats[chatIndex];
-                  final isPinned = (chat.favIndex ?? 0) > 0;
+                  final baseChat = pageChats[chatIndex];
+                  return ValueListenableBuilder<CachedChat>(
+                    valueListenable: chats.chatListenable(baseChat.id),
+                    builder: (context, chat, _) {
+                      final isPinned = (chat.favIndex ?? 0) > 0;
 
-                  if (chat.type.isNotEmpty &&
-                      chat.type == "DIALOG" &&
-                      chat.id != 0) {
-                    int secondId = _profile?.id ?? 0;
-                    for (final entry in chat.participants.entries) {
-                      if (entry.key != _profile?.id) {
-                        secondId = entry.key;
-                        break;
+                      if (chat.type.isNotEmpty &&
+                          chat.type == "DIALOG" &&
+                          chat.id != 0) {
+                        int secondId = _profile?.id ?? 0;
+                        for (final entry in chat.participants.entries) {
+                          if (entry.key != _profile?.id) {
+                            secondId = entry.key;
+                            break;
+                          }
+                        }
+                        final name = ContactCache.get(secondId) ?? chat.title;
+                        final avatar =
+                            ContactCache.getAvatar(secondId) ?? chat.iconUrl;
+                        final isVerified =
+                            ContactCache.isOfficial(secondId) ||
+                            chat.isOfficial;
+
+                        final isPlaceholder = chat.isLastMsgDeleted;
+                        final previewText = isPlaceholder
+                            ? 'зайдите в чат для подгрузки'
+                            : (chat.lastMsgTextOneLine ?? '');
+                        return _animateChatTile(
+                          chat.id.toString(),
+                          _buildChatItem(
+                            chat.id.toString(),
+                            name ?? "Пользователь",
+                            previewText,
+                            _formatTime(chat.lastMsgTime),
+                            avatar ?? "",
+                            presenceUserId: secondId,
+                            unreadCount: chat.unreadCount,
+                            hasMention: chat.hasUnreadMention,
+                            isMuted: chat.isMuted,
+                            isVerified: isVerified,
+                            isPinned: isPinned,
+                            chatType: "DIALOG",
+                            messageItalic: isPlaceholder,
+                            draft: _draftFor(chat.id),
+                            ownStatus: _ownStatusFor(chat, isPlaceholder),
+                            ownRead: chat.lastMsgReadByOthers,
+                            messageRanges: isPlaceholder
+                                ? const []
+                                : chat.lastMsgFormatRanges,
+                            previewMessageId: isPlaceholder
+                                ? null
+                                : chat.lastMsgId,
+                            previewCipherText: isPlaceholder
+                                ? null
+                                : chat.lastMsgTextOneLine,
+                            previewMedia: isPlaceholder
+                                ? null
+                                : chat.lastMsgMedia,
+                            titleIcon: chatKindIcon(
+                              'DIALOG',
+                              isBot: _isBotDialog(secondId, chat),
+                            ),
+                            hasMiniApp: _hasMiniApp(secondId, chat),
+                            hasCall: chat.activeCall != null,
+                          ),
+                        );
+                      } else {
+                        final isPlaceholder = chat.isLastMsgDeleted;
+                        final isSavedWelcome =
+                            chat.id == 0 &&
+                            chat.lastMsgText == _savedWelcomeKey;
+                        final sender = chat.lastMsgSenderId != null
+                            ? ContactCache.get(chat.lastMsgSenderId!)
+                            : null;
+
+                        final senderPrefix =
+                            !isPlaceholder &&
+                                sender?.isNotEmpty == true &&
+                                chat.id != 0
+                            ? "$sender: "
+                            : "";
+                        final body = isPlaceholder
+                            ? 'зайдите в чат для подгрузки'
+                            : isSavedWelcome
+                            ? AppLocalizations.of(
+                                context,
+                              )!.savedMessagesEmptyPreview
+                            : (chat.lastMsgTextOneLine ?? '');
+
+                        return _animateChatTile(
+                          chat.id.toString(),
+                          _buildChatItem(
+                            chat.id.toString(),
+                            chat.id == 0 ? "Избранное" : chat.title ?? "Чат",
+                            body,
+                            _formatTime(chat.lastMsgTime),
+                            (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
+                                ? chat.iconUrl!
+                                : '',
+                            unreadCount: chat.unreadCount,
+                            hasMention: chat.hasUnreadMention,
+                            isMuted: chat.isMuted,
+                            isVerified: chat.isOfficial,
+                            isPinned: isPinned,
+                            chatType: chat.type,
+                            messageItalic: isPlaceholder || isSavedWelcome,
+                            draft: chat.id == 0 ? null : _draftFor(chat.id),
+                            ownStatus: _ownStatusFor(chat, isPlaceholder),
+                            ownRead: chat.lastMsgReadByOthers,
+                            messageRanges: isPlaceholder || isSavedWelcome
+                                ? const []
+                                : chat.lastMsgFormatRanges,
+                            previewMessageId: isPlaceholder
+                                ? null
+                                : chat.lastMsgId,
+                            previewPrefix: senderPrefix,
+                            previewCipherText: isPlaceholder || isSavedWelcome
+                                ? null
+                                : chat.lastMsgText,
+                            previewMedia: isPlaceholder
+                                ? null
+                                : chat.lastMsgMedia,
+                            titleIcon: chat.id == 0
+                                ? null
+                                : chatKindIcon(chat.type, isBot: false),
+                            hasCall: chat.activeCall != null,
+                          ),
+                        );
                       }
-                    }
-                    final name = ContactCache.get(secondId) ?? chat.title;
-                    final avatar =
-                        ContactCache.getAvatar(secondId) ?? chat.iconUrl;
-                    final isVerified =
-                        ContactCache.isOfficial(secondId) || chat.isOfficial;
-
-                    final isPlaceholder = chat.isLastMsgDeleted;
-                    final previewText = isPlaceholder
-                        ? 'зайдите в чат для подгрузки'
-                        : (chat.lastMsgTextOneLine ?? '');
-                    return _animateChatTile(
-                      chat.id.toString(),
-                      _buildChatItem(
-                        chat.id.toString(),
-                        name ?? "Пользователь",
-                        previewText,
-                        _formatTime(chat.lastMsgTime),
-                        avatar ?? "",
-                        presenceUserId: secondId,
-                        unreadCount: chat.unreadCount,
-                        hasMention: chat.hasUnreadMention,
-                        isMuted: chat.isMuted,
-                        isVerified: isVerified,
-                        isPinned: isPinned,
-                        chatType: "DIALOG",
-                        messageItalic: isPlaceholder,
-                        draft: _draftFor(chat.id),
-                        ownStatus: _ownStatusFor(chat, isPlaceholder),
-                        ownRead: chat.lastMsgReadByOthers,
-                        messageRanges: isPlaceholder
-                            ? const []
-                            : chat.lastMsgFormatRanges,
-                        previewMessageId: isPlaceholder ? null : chat.lastMsgId,
-                        previewCipherText: isPlaceholder
-                            ? null
-                            : chat.lastMsgTextOneLine,
-                        previewMedia: isPlaceholder ? null : chat.lastMsgMedia,
-                        titleIcon: chatKindIcon(
-                          'DIALOG',
-                          isBot: _isBotDialog(secondId, chat),
-                        ),
-                        hasMiniApp: _hasMiniApp(secondId, chat),
-                      ),
-                    );
-                  } else {
-                    final isPlaceholder = chat.isLastMsgDeleted;
-                    final isSavedWelcome =
-                        chat.id == 0 && chat.lastMsgText == _savedWelcomeKey;
-                    final sender = chat.lastMsgSenderId != null
-                        ? ContactCache.get(chat.lastMsgSenderId!)
-                        : null;
-
-                    final senderPrefix =
-                        !isPlaceholder &&
-                            sender?.isNotEmpty == true &&
-                            chat.id != 0
-                        ? "$sender: "
-                        : "";
-                    final body = isPlaceholder
-                        ? 'зайдите в чат для подгрузки'
-                        : isSavedWelcome
-                        ? AppLocalizations.of(
-                            context,
-                          )!.savedMessagesEmptyPreview
-                        : (chat.lastMsgTextOneLine ?? '');
-
-                    return _animateChatTile(
-                      chat.id.toString(),
-                      _buildChatItem(
-                        chat.id.toString(),
-                        chat.id == 0 ? "Избранное" : chat.title ?? "Чат",
-                        body,
-                        _formatTime(chat.lastMsgTime),
-                        (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
-                            ? chat.iconUrl!
-                            : '',
-                        unreadCount: chat.unreadCount,
-                        hasMention: chat.hasUnreadMention,
-                        isMuted: chat.isMuted,
-                        isVerified: chat.isOfficial,
-                        isPinned: isPinned,
-                        chatType: chat.type,
-                        messageItalic: isPlaceholder || isSavedWelcome,
-                        draft: chat.id == 0 ? null : _draftFor(chat.id),
-                        ownStatus: _ownStatusFor(chat, isPlaceholder),
-                        ownRead: chat.lastMsgReadByOthers,
-                        messageRanges: isPlaceholder || isSavedWelcome
-                            ? const []
-                            : chat.lastMsgFormatRanges,
-                        previewMessageId: isPlaceholder ? null : chat.lastMsgId,
-                        previewPrefix: senderPrefix,
-                        previewCipherText: isPlaceholder || isSavedWelcome
-                            ? null
-                            : chat.lastMsgText,
-                        previewMedia: isPlaceholder ? null : chat.lastMsgMedia,
-                        titleIcon: chat.id == 0
-                            ? null
-                            : chatKindIcon(chat.type, isBot: false),
-                      ),
-                    );
-                  }
+                    },
+                  );
                 },
                 childCount: totalItems,
                 findChildIndexCallback: (Key key) {
@@ -2276,6 +2350,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               _currentNavIndex = next;
               _navDragging = false;
             });
+            activeNavTab.value = next;
             if (next == 0) _scheduleInformerPresentation();
           },
           onHorizontalDragCancel: () {
@@ -3012,13 +3087,22 @@ class _ChatListScreenState extends State<ChatListScreen>
     ChatPreviewMedia? previewMedia,
     IconData? titleIcon,
     bool hasMiniApp = false,
+    bool hasCall = false,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
-    final isEncrypted = ChatEncryptionStore.instance.isEnabled(
+    final e2eeInfo = E2eeService.instance.info(
       _profile?.id ?? 0,
       int.tryParse(id) ?? 0,
     );
+    final isEncrypted =
+        ChatEncryptionStore.instance.isEnabled(
+          _profile?.id ?? 0,
+          int.tryParse(id) ?? 0,
+        ) ||
+        E2eeService.instance.isOn(_profile?.id ?? 0, int.tryParse(id) ?? 0);
+    final isVerified =
+        e2eeInfo?.phase == E2eePhase.established && e2eeInfo!.verified;
     final Widget? statusIcon = (ownStatus != null && draft == null)
         ? _ownStatusIcon(cs, ownStatus, ownRead)
         : null;
@@ -3046,6 +3130,14 @@ class _ChatListScreenState extends State<ChatListScreen>
               MessageDecryptionState.wrongKey => _buildPreviewLine(
                 cs,
                 'неверный ключ',
+                const [],
+                draft,
+                true,
+                prefix: previewPrefix,
+              ),
+              MessageDecryptionState.unavailable => _buildPreviewLine(
+                cs,
+                'недоступно на этом устройстве',
                 const [],
                 draft,
                 true,
@@ -3079,25 +3171,36 @@ class _ChatListScreenState extends State<ChatListScreen>
         : _storyPreviewFor(storyOwnerId);
     final avatarRadius = story == null ? 24.0 : 20.0;
 
+    // #***! id "0" это Избранное — метка-закладка вместо буквы "И"
+    final isSavedMessages = id == '0';
     final CircleAvatar rawAvatar = CircleAvatar(
       radius: avatarRadius,
-      backgroundColor: cs.surfaceContainerHighest,
-      backgroundImage: imageUrl.isNotEmpty
+      backgroundColor: isSavedMessages
+          ? cs.primary
+          : cs.surfaceContainerHighest,
+      backgroundImage: (!isSavedMessages && imageUrl.isNotEmpty)
           ? CachedNetworkImageProvider(
               imageUrl,
               maxWidth: kAvatarThumbSize,
               maxHeight: kAvatarThumbSize,
             )
           : null,
-      child: imageUrl.isEmpty
-          ? Text(
-              name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: TextStyle(
-                color: cs.onSurfaceVariant,
-                fontSize: story == null ? 20 : 17,
-              ),
+      child: isSavedMessages
+          ? Icon(
+              Symbols.bookmark,
+              fill: 1,
+              color: cs.onPrimary,
+              size: story == null ? 26 : 22,
             )
-          : null,
+          : (imageUrl.isEmpty
+                ? Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: story == null ? 20 : 17,
+                    ),
+                  )
+                : null),
     );
 
     final Widget avatarCircle = story == null
@@ -3194,10 +3297,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                   children: [
                     avatarCircle,
                     if (isEncrypted)
-                      const Positioned(
+                      Positioned(
                         left: -2,
                         bottom: -2,
-                        child: EncryptionLockBadge(size: 18),
+                        child: EncryptionLockBadge(
+                          size: 18,
+                          verified: isVerified,
+                        ),
                       ),
                     if (isSelected)
                       Positioned(
@@ -3217,6 +3323,12 @@ class _ChatListScreenState extends State<ChatListScreen>
                             size: 14,
                           ),
                         ),
+                      )
+                    else if (hasCall)
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: ChatCallBadge(borderColor: cs.surface),
                       )
                     else if (presenceUserId != 0)
                       Positioned(

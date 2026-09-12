@@ -1,11 +1,14 @@
 import 'dart:typed_data';
 
+// #***! сборка страниц Ogg, в него пакуется записанный опус
 class OggPageWriter {
+  // #***! в странице не больше 255 сегментов, это формат
   static const int maxSegmentsPerPage = 255;
   static const int continuedPacket = 0x01;
   static const int beginningOfStream = 0x02;
   static const int endOfStream = 0x04;
 
+  // #***! заголовок фиксированный, дальше смещения полей
   static const int headerSize = 27;
   static const int _granuleOffset = 6;
   static const int _serialOffset = 14;
@@ -13,6 +16,7 @@ class OggPageWriter {
   static const int _crcOffset = 22;
   static const int _segmentCountOffset = 26;
 
+  // #***! пакет длиннее 255 байт режется на сегменты
   static int segmentsFor(int length) => (length ~/ 255) + 1;
 
   static int lengthFor(List<Uint8List> packets) {
@@ -25,6 +29,7 @@ class OggPageWriter {
     return headerSize + segments + body;
   }
 
+  // #***! готовая страница одним куском
   static Uint8List page({
     required int headerType,
     required int granulePos,
@@ -45,6 +50,7 @@ class OggPageWriter {
     return out;
   }
 
+  // #***! пишем в готовый буфер без лишних копий
   static int writeInto(
     Uint8List out,
     int offset, {
@@ -91,6 +97,7 @@ class OggPageWriter {
     return cursor;
   }
 
+  // #***! таблицы CRC считаем один раз
   static final List<Uint32List> _crcTables = _buildCrcTables();
 
   static List<Uint32List> _buildCrcTables() {
@@ -122,6 +129,7 @@ class OggPageWriter {
     return tables;
   }
 
+  // #***! у Ogg свой CRC32, стандартный не подходит
   static int crc32(Uint8List data, [int start = 0, int? end]) {
     final stop = end ?? data.length;
     final t0 = _crcTables[0];

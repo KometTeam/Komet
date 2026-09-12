@@ -7,16 +7,18 @@ import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../api.dart';
 
+// #***! раз в 30 сек спрашиваем сервер каким он нас видит
 class SelfCheckService {
   SelfCheckService._();
 
   static final SelfCheckService instance = SelfCheckService._();
 
-  static const Duration interval = Duration(seconds: 10);
+  static const Duration interval = Duration(seconds: 30);
 
   Api? _api;
   Timer? _timer;
 
+  // #***! запускается один раз после логина
   void init(Api api) {
     if (_api != null) return;
     _api = api;
@@ -26,6 +28,7 @@ class SelfCheckService {
 
   void checkNow() => unawaited(_check());
 
+  // #***! пауза на звонок или уход в фон
   void pause() {
     _timer?.cancel();
     _timer = null;
@@ -37,6 +40,7 @@ class SelfCheckService {
     checkNow();
   }
 
+  // #***! своё присутствие мимо кэша и синхроним статус
   Future<void> _check() async {
     final api = _api;
     if (api == null || api.state != SessionState.online) return;

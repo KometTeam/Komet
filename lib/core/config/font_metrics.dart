@@ -1,10 +1,12 @@
 import 'dart:typed_data';
 
+// #***! подгонка размера кастомного шрифта под дефолтный
 abstract class FontMetrics {
   static const double referenceXHeight = 0.528;
   static const double minScale = 0.85;
   static const double maxScale = 1.15;
 
+  // #***! считаем по высоте строчной буквы но не больше 15%
   static double scaleForXHeight(double xHeightRatio) {
     if (xHeightRatio <= 0) return 1.0;
     return (referenceXHeight / xHeightRatio)
@@ -12,10 +14,12 @@ abstract class FontMetrics {
         .toDouble();
   }
 
+  // #***! таблицы head и OS/2 разбираем прямо из байтов, без библиотек
   static double? xHeightRatio(Uint8List bytes) {
     try {
       if (bytes.length < 12) return null;
       final data = ByteData.sublistView(bytes);
+      // #***! коллекции ttc не поддерживаем
       if (data.getUint32(0) == 0x74746366) return null;
       final numTables = data.getUint16(4);
       int? headOffset;
@@ -33,6 +37,7 @@ abstract class FontMetrics {
       }
       final unitsPerEm = data.getUint16(headOffset + 18);
       if (unitsPerEm == 0) return null;
+      // #***! x-height появился только во второй версии OS/2
       if (data.getUint16(os2Offset) < 2) return null;
       final xHeight = data.getInt16(os2Offset + 86);
       if (xHeight <= 0) return null;

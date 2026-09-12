@@ -75,7 +75,7 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
       if (_avatar != null) {
         final url = await chats.requestChatPhotoUploadUrl(api);
         if (url != null) {
-          final bytes = await compressAvatar(await _avatar!.readAsBytes());
+          final bytes = await compressAvatarFile(_avatar!.path);
           if (bytes == null) {
             if (mounted) {
               showCustomNotification(context, 'Не удалось обработать аватарку');

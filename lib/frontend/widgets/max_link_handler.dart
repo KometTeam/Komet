@@ -17,6 +17,7 @@ import 'confirm_dialog.dart';
 import 'custom_notification.dart';
 import 'max_link_nav.dart';
 import 'max_route_handler.dart';
+import 'no_chat_access_card.dart';
 import 'swipe_route.dart';
 import 'web_qr_login.dart';
 
@@ -60,16 +61,20 @@ Future<ResolvedLink?> _resolve(String url, String baseUrl) async {
   final resolved = await LinkModule.resolve(api, url);
   if (baseUrl == url) return resolved;
   if (resolved is ResolvedChat || resolved is ResolvedUser) return resolved;
+  if (resolved is ResolvedLinkError && resolved.accessDenied) return resolved;
   return LinkModule.resolve(api, baseUrl);
 }
 
 Future<bool> _openContentLink(BuildContext context, MaxContentLink link) async {
-  final resolved = await _resolve(link.url, link.baseUrl);
+  final resolved = await _resolve(link.lookup, link.baseUrl);
   if (!context.mounted) return true;
 
   switch (resolved) {
     case null:
       return false;
+    case ResolvedLinkError(accessDenied: true):
+      await showNoChatAccessCard(context);
+      return true;
     case ResolvedLinkError(:final message):
       showCustomNotification(context, message);
       return true;
@@ -272,7 +277,10 @@ Future<void> _openResolvedChat(
       name: title,
       imageUrl: icon,
       chatType: type,
-      channelSubscribed: type == 'CHANNEL' ? isMember : null,
+      channelSubscribed:
+          (type == 'CHANNEL' || type == 'CHAT' || type == 'GROUP')
+          ? isMember
+          : null,
       initialMessageId: target?.id,
       initialMessageTime: target?.time,
     ),
@@ -290,7 +298,7 @@ Future<void> _openResolvedChat(
   }
   final messageId = link.messageId;
   if (messageId == null) return null;
-  return (id: messageId.toString(), time: null);
+  return (id: messageId.toString(), time: messageIdToTime(messageId));
 }
 
 String _contactName(Map<dynamic, dynamic> contact) {

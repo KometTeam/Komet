@@ -51,7 +51,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     setState(() => _isSubmitting = true);
     try {
-      final accountId = await accountModule.completeRegistration(
+      final registration = await accountModule.completeRegistration(
         token: widget.registerToken,
         firstName: firstName,
         lastName: lastName.isEmpty ? null : lastName,
@@ -59,8 +59,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
 
       final loginResult = await accountModule.login(
-        accountId: accountId,
-        token: '',
+        accountId: registration.accountId,
+        token: registration.loginToken,
       );
 
       if (!mounted) return;

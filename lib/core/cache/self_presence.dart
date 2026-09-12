@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+// #***! свой статус для юишки
 class SelfPresence {
   static final ValueNotifier<bool> isOnline = ValueNotifier(true);
   static final ValueNotifier<int?> lastSeenSeconds = ValueNotifier(null);
@@ -15,6 +16,7 @@ class SelfPresence {
     isOnline.value = false;
   }
 
+  // #***! ушли в невидимку, время визита пишем один раз
   static void markOfflineFromPing() {
     if (isOnline.value || lastSeenSeconds.value == null) {
       lastSeenSeconds.value = _nowSeconds;
@@ -22,6 +24,7 @@ class SelfPresence {
     isOnline.value = false;
   }
 
+  // #***! правим по ответу сервера, он главный
   static void applySelfCheck({required bool online, int? seenSeconds}) {
     if (online) {
       isOnline.value = true;

@@ -3,6 +3,7 @@ import '../storage/app_database.dart';
 
 const String _host = 'https://max.ru';
 
+// #***! ссылка на профиль из имени или готового адреса
 String? profileLinkOf(String? rawLink) {
   final link = rawLink?.trim();
   if (link == null || link.isEmpty) return null;
@@ -14,6 +15,7 @@ String? profileLinkOf(String? rawLink) {
   return path.isEmpty ? null : link;
 }
 
+// #***! своя ссылка, сначала конфиг потом кэш потом сервер
 Future<String?> ownProfileLink() async {
   final profile = await AppDatabase.loadActiveProfile();
   final id = profile?.id ?? 0;

@@ -7,11 +7,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_phonebook_names.dart';
 import '../utils/logger.dart';
 
+// #***! имена из телефонной книги вместо серверных
 class DeviceContactsService {
   DeviceContactsService._();
 
   static const _deniedKey = 'phonebook_denied';
 
+  // #***! ключ последние 10 цифр, чтоб +7 и 8 сошлись
   static final Map<String, String> _byLast10 = {};
   static bool _loaded = false;
 
@@ -21,12 +23,14 @@ class DeviceContactsService {
 
   static int get knownNumbers => _byLast10.length;
 
+  // #***! номер к последним 10 цифрам
   static String? _last10(String raw) {
     final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
     if (digits.length < 10) return null;
     return digits.substring(digits.length - 10);
   }
 
+  // #***! имя по номеру
   static String? nameForPhone(int phone) {
     if (!AppPhonebookNames.current.value) return null;
     if (_byLast10.isEmpty) return null;
@@ -47,6 +51,7 @@ class DeviceContactsService {
     }
   }
 
+  // #***! на старте читаем только если разрешение уже есть
   static Future<void> loadFromStartup() async {
     if (_loaded || !_supported) return;
     if (!AppPhonebookNames.current.value) return;
@@ -55,6 +60,7 @@ class DeviceContactsService {
     await _readBook();
   }
 
+  // #***! спрашиваем разрешение, отказ запоминаем
   static Future<bool> ensureLoadedInteractive({bool force = false}) async {
     if (!_supported) return false;
     if (!AppPhonebookNames.current.value) return false;
@@ -88,6 +94,7 @@ class DeviceContactsService {
     if (prefs.getBool(_deniedKey) == true) await prefs.remove(_deniedKey);
   }
 
+  // #***! дубли номера, берём первое имя
   static Future<bool> _readBook() async {
     try {
       FlutterContacts.config.includeNonVisibleOnAndroid = true;

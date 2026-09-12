@@ -6,11 +6,13 @@ import '../../../core/storage/token_storage.dart';
 import 'account_base.dart';
 import 'account_models.dart';
 
+// #***! приватность и уведомления
 class PrivacyModule extends AccountApiBase {
   PrivacyModule(super.api);
 
   static const String _defaultPushSound = 'oki.aiff';
 
+  // #***! приватность из базы, приходит в login и живёт локально
   Future<PrivacyConfig> getPrivacyConfig() async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId != null) {
@@ -20,6 +22,7 @@ class PrivacyModule extends AccountApiBase {
     return PrivacyConfig.empty();
   }
 
+  // #***! список заблокированных
   Future<List<BlockedContact>> getBlockedContacts() async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.contactList, {
@@ -36,6 +39,7 @@ class PrivacyModule extends AccountApiBase {
         .toList();
   }
 
+  // #***! обновление одним config, ответ в базу
   Future<PrivacyConfig> updatePrivacyConfig(
     Map<String, dynamic> settings,
   ) async {
@@ -57,6 +61,7 @@ class PrivacyModule extends AccountApiBase {
     return config;
   }
 
+  // #***! безопасный режим это пачка настроек разом
   Future<PrivacyConfig> setSafeMode(bool value) => updatePrivacyConfig(
     value
         ? {
@@ -70,6 +75,7 @@ class PrivacyModule extends AccountApiBase {
         : {'SAFE_MODE_NO_PIN': false, 'SAFE_MODE': false},
   );
 
+  // #***! дальше по методу на каждый переключатель
   Future<PrivacyConfig> setChatsPushNotification(bool value) =>
       updatePrivacyConfig({'CHATS_PUSH_NOTIFICATION': value ? 'ON' : 'OFF'});
 
@@ -88,6 +94,7 @@ class PrivacyModule extends AccountApiBase {
   Future<PrivacyConfig> setNewContacts(bool value) =>
       updatePrivacyConfig({'PUSH_NEW_CONTACTS': value});
 
+  // #***! регистрация push токена, ловим протухший FCM
   Future<void> registerPushToken(String pushToken) async {
     ensureOnline();
     final packet = await api.sendRequest(Opcode.config, <dynamic, dynamic>{

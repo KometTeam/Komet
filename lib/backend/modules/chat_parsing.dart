@@ -1,7 +1,9 @@
 import '../../core/utils/logger.dart';
+import '../../models/chat_call.dart';
 import 'chat_preview.dart';
 import 'chats.dart';
 
+// #***! контакты списком а нужны по id, раскладываем один раз
 Map<int, Map<dynamic, dynamic>> buildContactsMap(dynamic contacts) {
   if (contacts is! List) return {};
   final result = <int, Map<dynamic, dynamic>>{};
@@ -12,6 +14,7 @@ Map<int, Map<dynamic, dynamic>> buildContactsMap(dynamic contacts) {
   return result;
 }
 
+// #***! главный разбор, сырой чат в строку кэша
 CachedChat? parseChatRow(
   Map<dynamic, dynamic> chat,
   int accountId,
@@ -22,11 +25,13 @@ CachedChat? parseChatRow(
   Map<int, CachedChat> existing,
   int cachedAt,
 ) {
+  // #***! битый чат не должен ронять весь список
   try {
     final id = chat['id'];
     if (id is! int) return null;
 
     final type = (chat['type'] as String?) ?? 'DIALOG';
+    // #***! в диалоге имя и аватарка от собеседника
     final otherId = type == 'DIALOG'
         ? _otherParticipantId(chat['participants'], currentUserId)
         : null;
@@ -41,6 +46,7 @@ CachedChat? parseChatRow(
     );
     final lastMessage = _resolveLastMessage(chat['lastMessage']);
     final previous = existing[id];
+    // #***! сообщение то же, держим свой статус доставки сервер его не шлёт
     final sameLastMessage =
         previous != null &&
         lastMessage.id != null &&
@@ -84,13 +90,25 @@ CachedChat? parseChatRow(
       pinnedMsgTime: pinned.time,
       pinnedMsgIsPreview: pinned.isPreview,
       lastMentionMsgId: mentionId ?? existing[id]?.lastMentionMsgId,
+      activeCallData: ChatCall.fromServer(chat['videoConversation'])?.encode(),
+      publicLink: _resolvePublicLink(chat, previous),
     );
+  // #***! логируем и null, чат просто не попадёт в список
   } catch (e) {
     logger.e("Ошибка при парсинге чата: $e");
     return null;
   }
 }
 
+String? _resolvePublicLink(Map<dynamic, dynamic> chat, CachedChat? previous) {
+  final access = chat['access'];
+  if (access == null) return previous?.publicLink;
+  if (access != 'PUBLIC') return null;
+  final link = chat['link']?.toString().trim() ?? '';
+  return link.isEmpty ? null : link;
+}
+
+// #***! имя и иконка, у диалога от контакта у группы от чата
 ({String? title, String? iconUrl, Set<String> options}) _resolveTitleAndIcon(
   Map<dynamic, dynamic> chat,
   int id,
@@ -113,6 +131,7 @@ CachedChat? parseChatRow(
         options: options,
       );
     }
+    // #***! контакт не подъехал, держим старое чтоб строка не мигала
     return (
       title: existing[id]?.title,
       iconUrl: existing[id]?.iconUrl,
@@ -128,12 +147,13 @@ CachedChat? parseChatRow(
     };
   }
   return (
-    title: chat['title'] as String?,
+    title: chat['title'] as String? ?? existing[id]?.title,
     iconUrl: chat['baseIconUrl'] as String?,
     options: options,
   );
 }
 
+// #***! последнее сообщение в плоские поля
 ({
   int? id,
   int? time,
@@ -163,6 +183,7 @@ _resolveLastMessage(dynamic lastMsg) {
   );
 }
 
+// #***! числа то int то строка
 int? _asIntOrNull(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
@@ -170,6 +191,7 @@ int? _asIntOrNull(Object? value) {
   return null;
 }
 
+// #***! закреплённое, id текст и сгенерили ли мы его сами
 ({int? id, String? text, int? time, bool isPreview}) _resolvePinnedMessage(
   dynamic pinned,
 ) {
@@ -188,6 +210,7 @@ int? _asIntOrNull(Object? value) {
   );
 }
 
+// #***! мьют и избранное лежат в конфиге а не в чате
 ({int? favIndex, int dontDisturbUntil}) _resolveMuteAndFavorite(
   Map<dynamic, dynamic> chatsConfig,
   int id,
@@ -198,6 +221,7 @@ int? _asIntOrNull(Object? value) {
   if (config is Map) {
     final configFav = config['favIndex'] as int?;
     return (
+      // #***! favIndex ноль значит не задан, держим своё
       favIndex: (configFav != null && configFav > 0) ? configFav : ex?.favIndex,
       dontDisturbUntil: (config['dontDisturbUntil'] as int?) ?? 0,
     );
@@ -208,6 +232,7 @@ int? _asIntOrNull(Object? value) {
   return (favIndex: null, dontDisturbUntil: 0);
 }
 
+// #***! онлайн только у диалогов
 ({int seenTime, bool isOnline}) _resolvePresence(
   String type,
   int? otherId,
@@ -226,6 +251,7 @@ int? _asIntOrNull(Object? value) {
   return (seenTime: 0, isOnline: false);
 }
 
+// #***! владелец и админы то списком то картой
 ({int? owner, Set<int> admins}) _resolveAdmins(Map<dynamic, dynamic> chat) {
   int? owner;
   final ownerRaw = chat['owner'];
@@ -254,6 +280,7 @@ int? _asIntOrNull(Object? value) {
   return (owner: owner, admins: admins);
 }
 
+// #***! в диалоге собеседник это тот кто не мы
 int? _otherParticipantId(dynamic participants, int currentUserId) {
   if (participants is! Map) return null;
   for (final key in participants.keys) {
@@ -263,6 +290,7 @@ int? _otherParticipantId(dynamic participants, int currentUserId) {
   return null;
 }
 
+// #***! имя ONEME главнее, человек сам себя так назвал
 String? _nameFromContact(Map<dynamic, dynamic> contact) {
   final names = contact['names'];
   if (names is! List || names.isEmpty) return null;
@@ -275,6 +303,7 @@ String? _nameFromContact(Map<dynamic, dynamic> contact) {
   return name['name'] as String?;
 }
 
+// #***! разбор поиска по чатам
 List<ChatSearchHit> parseSearchResult(dynamic payload) {
   final result = (payload as Map?)?['result'];
   if (result is! List) return const [];
@@ -302,6 +331,7 @@ List<ChatSearchHit> parseSearchResult(dynamic payload) {
   return hits;
 }
 
+// #***! разбор поиска по сообщениям
 List<MessageSearchHit> parseMessageResult(dynamic payload) {
   final result = (payload as Map?)?['result'];
   if (result is! List) return const [];
@@ -325,6 +355,7 @@ List<MessageSearchHit> parseMessageResult(dynamic payload) {
   return hits;
 }
 
+// #***! ничего не изменилось значит базу не трогаем и список не перерисовываем
 bool sameChatContent(CachedChat a, CachedChat b) {
   if (a.title != b.title) return false;
   if (a.iconUrl != b.iconUrl) return false;
@@ -345,6 +376,8 @@ bool sameChatContent(CachedChat a, CachedChat b) {
   if (a.lastEventTime != b.lastEventTime) return false;
   if (a.isOnline != b.isOnline) return false;
   if (a.seenTime != b.seenTime) return false;
+  if (a.activeCallData != b.activeCallData) return false;
+  if (a.publicLink != b.publicLink) return false;
   if (a.admins.length != b.admins.length) return false;
   if (!a.admins.containsAll(b.admins)) return false;
   if (a.options.length != b.options.length) return false;
@@ -354,4 +387,21 @@ bool sameChatContent(CachedChat a, CachedChat b) {
     if (b.participants[e.key] != e.value) return false;
   }
   return true;
+}
+
+// #***! 0 это превью без членства, 1 обычный чат, 2 скрытый
+abstract final class ChatListState {
+  static const int notInList = 0;
+  static const int visible = 1;
+  static const int hidden = 2;
+}
+
+// #***! живым считаем только ACTIVE, закрытые и покинутые сервер удалять не даёт
+int chatListStateForStatus(Object? status, {int? previous}) {
+  if (status is String && status.isNotEmpty) {
+    return status == 'ACTIVE' ? ChatListState.visible : ChatListState.hidden;
+  }
+  return previous == ChatListState.hidden
+      ? ChatListState.hidden
+      : ChatListState.visible;
 }

@@ -6,6 +6,7 @@ import '../api.dart';
 import 'chats.dart';
 import 'messages.dart';
 
+// #***! файл в облаке
 class CloudFile {
   final String name;
   final int? size;
@@ -26,13 +27,16 @@ class CloudFile {
   });
 }
 
+// #***! облако это скрытая группа куда шлём файлы сами себе, сервер не в курсе
 class CloudStorageModule {
+  // #***! группа зовётся CLST<число>, по нему и опознаём
   static const _prefix = 'CLST';
   static const _tempName = 'Облачное хранилище';
 
   // Key: "$accountId:$fileId" — scoped per account
   static final Map<String, ({String url, int expires})> _linkCache = {};
 
+  // #***! число из id чата, чужую группу так не подделать
   static int _computeSpecialNumber(int groupId) {
     final s = groupId.abs().toString();
     final len = s.length;
@@ -45,6 +49,7 @@ class CloudStorageModule {
     return first + last;
   }
 
+  // #***! группа, префикс на месте, число сходится
   static bool isCloudStorageGroup(CachedChat chat) {
     if (chat.type != 'CHAT') return false;
     final title = chat.title;
@@ -55,6 +60,7 @@ class CloudStorageModule {
     return provided == _computeSpecialNumber(chat.id);
   }
 
+  // #***! ищем своё хранилище среди чатов
   static CachedChat? findEnvGroup(List<CachedChat> chats) {
     for (final c in chats) {
       if (isCloudStorageGroup(c)) return c;
@@ -62,10 +68,12 @@ class CloudStorageModule {
     return null;
   }
 
+  // #***! группы с временным именем это недоделанные, их чиним
   static List<CachedChat> findOrphanGroups(List<CachedChat> chats) =>
       chats.where((c) => c.type == 'CHAT' && c.title == _tempName).toList();
 
   // Env group ID cache — avoids scanning all chats on every screen open
+  // #***! id группы в prefs чтоб не перебирать чаты каждый раз
   static Future<void> cacheEnvGroupId(int accountId, int groupId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('cloud_storage_env_$accountId', groupId);
@@ -81,6 +89,7 @@ class CloudStorageModule {
     await prefs.remove('cloud_storage_env_$accountId');
   }
 
+  // #***! закрываем настройками чтоб никто не влез
   static Future<void> _configurePrivacy(Api api, int chatId) async {
     await chats.setChatOptions(
       api,
@@ -94,6 +103,7 @@ class CloudStorageModule {
     );
   }
 
+  // #***! сначала группа с временным именем, потом переименовываем
   static Future<CachedChat?> setupEnv(Api api) async {
     final temp = await chats.createGroupChat(
       api,
@@ -109,6 +119,7 @@ class CloudStorageModule {
   }
 
   // Turns an orphan "Облачное хранилище" group into a valid env group
+  // #***! доделываем группу застрявшую на временном имени
   static Future<CachedChat?> repairOrphan(Api api, CachedChat orphan) async {
     final name = '$_prefix${_computeSpecialNumber(orphan.id)}';
     final ok = await chats.setChatTitle(api, chatId: orphan.id, title: name);
@@ -117,6 +128,7 @@ class CloudStorageModule {
     return orphan;
   }
 
+  // #***! файлы из вложений сообщений группы
   static Iterable<CloudFile> _cloudFilesFrom(
     Iterable<CachedMessage> msgs,
     int chatId,
@@ -150,6 +162,7 @@ class CloudStorageModule {
   }
 
   // Fetches only the last few messages to find a newly uploaded file — avoids full 200-msg reload
+  // #***! после загрузки хватит последних пяти сообщений
   static Future<CloudFile?> fetchLatestFile(
     MessagesModule messages,
     int accountId,
@@ -165,6 +178,7 @@ class CloudStorageModule {
     return null;
   }
 
+  // #***! ссылки временные, кэш с проверкой срока
   static ({String url, int expires})? getCachedLink(int accountId, int fileId) {
     final key = '$accountId:$fileId';
     final entry = _linkCache[key];
@@ -176,6 +190,7 @@ class CloudStorageModule {
     return entry;
   }
 
+  // #***! срок жизни зашит в expires
   static Future<({String url, int expires})?> fetchFileUrl(
     Api api, {
     required int accountId,

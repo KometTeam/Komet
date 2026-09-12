@@ -15,6 +15,7 @@
 		AA11BB22CC33DD44EE550101 /* KometVideo.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE550001 /* KometVideo.swift */; };
 		AA11BB22CC33DD44EE550102 /* KometVideoNote.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE550002 /* KometVideoNote.swift */; };
 		AA11BB22CC33DD44EE550103 /* KometNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE550003 /* KometNotifications.swift */; };
+		AA11BB22CC33DD44EE550105 /* KometClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE550005 /* KometClipboard.swift */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
@@ -62,6 +63,7 @@
 		AA11BB22CC33DD44EE550001 /* KometVideo.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KometVideo.swift; sourceTree = "<group>"; };
 		AA11BB22CC33DD44EE550002 /* KometVideoNote.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KometVideoNote.swift; sourceTree = "<group>"; };
 		AA11BB22CC33DD44EE550003 /* KometNotifications.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KometNotifications.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE550005 /* KometClipboard.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KometClipboard.swift; sourceTree = "<group>"; };
 		AA11BB22CC33DD44EE550004 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		782E66FE4E292DCFD0D1B7D2 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		789A1AEF2F4FF7DEED202476 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -167,6 +169,7 @@
 				AA11BB22CC33DD44EE550001 /* KometVideo.swift */,
 				AA11BB22CC33DD44EE550002 /* KometVideoNote.swift */,
 				AA11BB22CC33DD44EE550003 /* KometNotifications.swift */,
+				AA11BB22CC33DD44EE550005 /* KometClipboard.swift */,
 				AA11BB22CC33DD44EE550004 /* Runner.entitlements */,
 			);
 			path = Runner;
@@ -410,6 +413,7 @@
 				AA11BB22CC33DD44EE550101 /* KometVideo.swift in Sources */,
 				AA11BB22CC33DD44EE550102 /* KometVideoNote.swift in Sources */,
 				AA11BB22CC33DD44EE550103 /* KometNotifications.swift in Sources */,
+				AA11BB22CC33DD44EE550105 /* KometClipboard.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

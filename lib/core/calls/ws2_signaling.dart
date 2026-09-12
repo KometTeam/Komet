@@ -5,6 +5,7 @@ import 'package:kolibri/kolibri.dart' as kb;
 
 import 'conversation_params.dart';
 
+// #***! параметры подключения к сигналке
 /// Параметры подключения к сигналинг-сокету ws2.
 ///
 /// Строится из двух источников:
@@ -20,6 +21,7 @@ class Ws2Config {
 
   const Ws2Config({required this.uri, required this.userId});
 
+  // #***! capabilities и версия SDK, сервер сверяет и отказывает незнакомым
   static const defaultCapabilities = '3c02f';
   static const _appVersion = 'sdk-0.2.1.3';
   static const defaultDevice = 'Android/Unknown';
@@ -81,6 +83,7 @@ class Ws2Config {
   }
 }
 
+// #***! сервер вернул ошибку на команду
 /// Ошибка, которую вернул сервер в ответе на команду.
 class Ws2CommandException implements Exception {
   final String command;
@@ -90,6 +93,7 @@ class Ws2CommandException implements Exception {
   String toString() => 'Ws2CommandException($command): $error';
 }
 
+// #***! сигналка ws2, сам сокет держит раст
 /// Клиент сигналинга звонка поверх WebSocket `ws2`.
 ///
 /// Тонкий адаптер над Rust-ядром (kolibri [kb.CallSignaling]): ядро держит
@@ -106,6 +110,7 @@ class Ws2Signaling {
   kb.CallSignaling? _call;
   StreamSubscription<String>? _notifSub;
 
+  // #***! уведомления стримом, ответы на команды по завершению future
   final _notifications = StreamController<Map<String, dynamic>>.broadcast();
   final _closed = Completer<Object?>();
 
@@ -119,6 +124,7 @@ class Ws2Signaling {
 
   bool get isConnected => _call?.isConnected() ?? false;
 
+  // #***! подключение к сигналке
   Future<void> connect() async {
     final call = await kb.connectCallSignaling(
       url: config.uri.toString(),
@@ -146,6 +152,7 @@ class Ws2Signaling {
     if (!_notifications.isClosed) _notifications.close();
   }
 
+  // #***! отправка команды с ожиданием ответа
   /// Отправляет команду и ждёт ответ сервера. Бросает [Ws2CommandException],
   /// если сервер вернул ошибку.
   Future<Map<String, dynamic>> sendCommand(
@@ -168,6 +175,7 @@ class Ws2Signaling {
     }
   }
 
+  // #***! SDP и кандидаты гоняются теми же командами
   /// Передаёт SDP (offer/answer) другому участнику.
   Future<void> transmitSdp({
     required int participantId,
@@ -217,6 +225,7 @@ class Ws2Signaling {
     );
   }
 
+  // #***! смена состояния микрофона и камеры
   Future<void> changeMediaSettings({
     bool isAudioEnabled = true,
     bool isVideoEnabled = false,
@@ -240,6 +249,7 @@ class Ws2Signaling {
     );
   }
 
+  // #***! переход P2P в SFU когда участников больше двух
   Future<void> switchTopology({
     String topology = 'SERVER',
     bool force = false,
@@ -252,6 +262,7 @@ class Ws2Signaling {
 
   Future<void> requestRealloc() => sendCommand('request-realloc');
 
+  // #***! принятие входящего
   /// Принять входящий звонок (сторона вызываемого).
   Future<void> acceptCall({
     bool isAudioEnabled = true,
@@ -272,9 +283,11 @@ class Ws2Signaling {
     );
   }
 
+  // #***! завершение
   Future<void> hangup({String reason = 'HUNGUP'}) =>
       sendCommand('hangup', extra: {'reason': reason});
 
+  // #***! дальше выделение и приём потоков в SFU
   Future<Map<String, dynamic>> allocateConsumer() => sendCommand(
     'allocate-consumer',
     extra: const {

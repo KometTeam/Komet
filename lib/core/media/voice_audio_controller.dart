@@ -11,8 +11,10 @@ import '../utils/logger.dart';
 import '../utils/media_cache.dart';
 import 'opus_ogg_index.dart';
 
+// #***! почему не играет, не скачалось или плеер не открыл
 enum VoiceAudioFailure { none, download, playback }
 
+// #***! воспроизведение одного голосового
 class VoiceAudioController {
   VoiceAudioController({
     required this.cacheName,
@@ -25,12 +27,15 @@ class VoiceAudioController {
   final String cacheName;
   final Future<String?> Function() resolveUrl;
 
+  // #***! у конца считаем что дослушали иначе последний тик не совпадёт
   static const double _endEpsilon = 0.05;
 
+  // #***! играет всегда одно голосовое на всё приложение
   static VoiceAudioController? _active;
   static int _sliceCounter = 0;
   static Directory? _sliceDir;
 
+  // #***! состояние наружу, пузырь подписан
   final ValueNotifier<bool> playing = ValueNotifier(false);
   final ValueNotifier<double> position = ValueNotifier(0);
   final ValueNotifier<double> duration;
@@ -53,12 +58,14 @@ class VoiceAudioController {
   Future<void>? _loading;
   double _sliceOffset = 0;
   double _speed = 1;
+  // #***! поколение старта, пока грузились могли нажать другое
   int _startGeneration = 0;
   bool _scrubbing = false;
   bool _resumeAfterScrub = false;
   bool _finished = false;
   bool _disposed = false;
 
+  // #***! тап по кнопке
   Future<void> toggle() async {
     if (playing.value) {
       pause();
@@ -67,6 +74,7 @@ class VoiceAudioController {
     await play();
   }
 
+  // #***! запуск с текущей позиции
   Future<void> play() async {
     if (_disposed) return;
     if (!await _ensureLoaded()) return;
@@ -131,12 +139,14 @@ class VoiceAudioController {
     }
   }
 
+  // #***! перемотка тапом по волне
   Future<void> seekTo(double seconds) async {
     scrubStart();
     scrubTo(seconds);
     await scrubEnd();
   }
 
+  // #***! тащим пальцем по волне, обычную перемотку в это время не делаем
   void scrubStart() {
     if (_scrubbing) return;
     _scrubbing = true;
@@ -166,6 +176,7 @@ class VoiceAudioController {
     if (resume) await _startAt(position.value);
   }
 
+  // #***! качаем один раз, повторные нажатия ждут ту же загрузку
   Future<bool> _ensureLoaded() async {
     if (_file != null) return true;
     final running = _loading;
@@ -216,6 +227,7 @@ class VoiceAudioController {
     }
   }
 
+  // #***! индекс ogg чтоб начинать с середины без перекодирования
   Future<void> _buildIndex(File file) async {
     try {
       final bytes = await file.readAsBytes();
@@ -229,6 +241,7 @@ class VoiceAudioController {
     }
   }
 
+  // #***! режем кусок с нужной позиции и кормим плееру, перемотка мгновенная
   Future<void> _startAt(double seconds) async {
     final file = _file;
     if (file == null) return;
@@ -276,6 +289,7 @@ class VoiceAudioController {
     }
   }
 
+  // #***! кусок пишем на диск, плеер умеет только файлы
   Future<File?> _writeSlice(Uint8List bytes) async {
     try {
       final dir = _sliceDir ??= await getTemporaryDirectory();
@@ -291,6 +305,7 @@ class VoiceAudioController {
     }
   }
 
+  // #***! конец трека или ошибка плеера
   void _onPlayerState() {
     final state = _player?.state.value;
     if (state == null || _disposed) return;
@@ -308,6 +323,7 @@ class VoiceAudioController {
     }
   }
 
+  // #***! тикер двигает позицию между событиями плеера иначе полоска дёргается
   void _startTicker() {
     _ticker ??= Timer.periodic(
       const Duration(milliseconds: 50),
@@ -337,6 +353,7 @@ class VoiceAudioController {
     player.dispose();
   }
 
+  // #***! временные куски чистим молча
   static Future<void> _deleteQuietly(File? file) async {
     if (file == null) return;
     try {

@@ -4,6 +4,7 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../api.dart';
 
+// #***! что оказалось по ссылке, чат юзер или ошибка
 sealed class ResolvedLink {
   const ResolvedLink();
 }
@@ -23,11 +24,16 @@ class ResolvedUser extends ResolvedLink {
 
 class ResolvedLinkError extends ResolvedLink {
   final String message;
+  final String? code;
 
-  const ResolvedLinkError(this.message);
+  const ResolvedLinkError(this.message, {this.code});
+
+  bool get accessDenied => code == 'chat.denied';
 }
 
+// #***! разбор ссылок приглашений и вступление
 abstract class LinkModule {
+  // #***! silent, ошибку покажем сами в диалоге
   static Future<ResolvedLink?> resolve(Api api, String url) async {
     final Packet response;
     try {
@@ -37,15 +43,19 @@ abstract class LinkModule {
     } on TimeoutException {
       return const ResolvedLinkError('Превышено время ожидания');
     } on PacketError catch (e) {
-      return ResolvedLinkError(e.message);
+      return ResolvedLinkError(e.message, code: e.errorKey);
     }
 
     final payload = response.payload;
     if (payload is! Map) return null;
     if (!response.isOk) {
-      return ResolvedLinkError(messageFromErrorPayload(payload));
+      return ResolvedLinkError(
+        messageFromErrorPayload(payload),
+        code: payload['error']?.toString(),
+      );
     }
 
+    // #***! в ответе или чат или контакт
     final chat = payload['chat'];
     if (chat is Map) {
       final message = payload['message'];
@@ -60,6 +70,7 @@ abstract class LinkModule {
     return null;
   }
 
+  // #***! вступление по ссылке, вернёт текст ошибки или null
   static Future<String?> join(Api api, String url) async {
     try {
       final response = await api.sendRequest(Opcode.chatJoin, {'link': url});

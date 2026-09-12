@@ -7,7 +7,9 @@ import 'password_2fa_screen.dart';
 import 'registration_screen.dart';
 import 'session_stale_recovery.dart';
 import '../../../backend/api.dart';
+import '../../../core/config/review_access.dart';
 import '../../../core/protocol/packet.dart';
+import '../../../core/storage/spoofing_service.dart';
 import '../../../core/utils/sms_code_listener.dart';
 import '../../../main.dart';
 import '../../widgets/auth_limits_sheet.dart';
@@ -19,13 +21,21 @@ class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
   final String rawPhone;
   final String token;
+  final bool reviewAccess;
 
   const CodeConfirmationScreen({
     super.key,
     required this.phoneNumber,
     required this.rawPhone,
     required this.token,
-  });
+  }) : reviewAccess = false;
+
+  const CodeConfirmationScreen.review({
+    super.key,
+    required this.phoneNumber,
+    required this.rawPhone,
+  }) : token = '',
+       reviewAccess = true;
 
   @override
   State<CodeConfirmationScreen> createState() => _CodeConfirmationScreenState();
@@ -60,8 +70,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     super.initState();
     _token = widget.token;
     startSessionRecovery();
-    _startTimer();
-    _listenForSmsCode();
+    if (!widget.reviewAccess) {
+      _startTimer();
+      _listenForSmsCode();
+    }
 
     _shakeController = AnimationController(
       vsync: this,
@@ -246,8 +258,62 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     unawaited(_requestFreshCode('Выслали новый код', resend: true));
   }
 
+  Future<void> _completeLogin(String? avatarUrl) async {
+    if (!mounted) return;
+
+    final avatar = await precacheLoginAvatar(context, avatarUrl);
+
+    if (!mounted) return;
+
+    await markAuthLimitsPending(AuthEntry.login);
+
+    if (!mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 240),
+        pageBuilder: (_, _, _) => LoginSuccessScreen(avatar: avatar),
+        transitionsBuilder: (_, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+      (route) => false,
+    );
+  }
+
+  Future<void> _verifyReviewCode() async {
+    setState(() => _verifying = true);
+    try {
+      final credentials = await ReviewAccess.unlock(_codeController.text);
+      if (!mounted) return;
+      if (credentials == null) {
+        _showError(AppLocalizations.of(context)!.codeErrorInvalid);
+        return;
+      }
+
+      final spoof = credentials.spoof;
+      if (spoof != null) {
+        await SpoofingService.saveProfile(SpoofingService.pendingScope, spoof);
+      }
+
+      final loginResult = await accountModule.loginWithToken(credentials.token);
+
+      await _completeLogin(loginResult.profile.baseUrl);
+    } catch (e) {
+      if (!mounted) return;
+      _showError(e.toString());
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
+
   Future<void> _verifyCode() async {
     if (_codeController.text.length != 6 || recovering || _verifying) return;
+
+    if (widget.reviewAccess) {
+      await _verifyReviewCode();
+      return;
+    }
 
     if (sessionStale) {
       await recoverStaleSession();
@@ -302,29 +368,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
 
       final loginResult = await accountModule.login();
 
-      if (!mounted) return;
-
-      final avatar = await precacheLoginAvatar(
-        context,
-        loginResult.profile.baseUrl,
-      );
-
-      if (!mounted) return;
-
-      await markAuthLimitsPending(AuthEntry.login);
-
-      if (!mounted) return;
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 240),
-          pageBuilder: (_, _, _) => LoginSuccessScreen(avatar: avatar),
-          transitionsBuilder: (_, animation, _, child) =>
-              FadeTransition(opacity: animation, child: child),
-        ),
-        (route) => false,
-      );
+      await _completeLogin(loginResult.profile.baseUrl);
     } catch (e) {
       if (!mounted) return;
       if (verified) {
@@ -519,22 +563,23 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                       )
                     : const SizedBox.shrink(),
               ),
-              GestureDetector(
-                onTap: _resendCode,
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 200),
-                  style: TextStyle(
-                    color: _timerSeconds > 0 ? cs.outline : cs.tertiary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  child: Text(
-                    _timerSeconds > 0
-                        ? l10n.codeResendInSeconds(_timerSeconds)
-                        : l10n.codeResendSms,
+              if (!widget.reviewAccess)
+                GestureDetector(
+                  onTap: _resendCode,
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: TextStyle(
+                      color: _timerSeconds > 0 ? cs.outline : cs.tertiary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    child: Text(
+                      _timerSeconds > 0
+                          ? l10n.codeResendInSeconds(_timerSeconds)
+                          : l10n.codeResendSms,
+                    ),
                   ),
                 ),
-              ),
               const Spacer(),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -564,7 +609,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(50),
                     ),
-                    child: recovering
+                    child: (recovering || _verifying)
                         ? SmallSpinner(size: 24, color: cs.onPrimaryContainer)
                         : Icon(
                             Symbols.arrow_forward,

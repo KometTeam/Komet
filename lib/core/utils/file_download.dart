@@ -3,14 +3,22 @@ import 'package:open_filex/open_filex.dart';
 import 'download_history.dart';
 import 'media_cache.dart';
 
+// #***! итог скачивания, путь или ошибка
 class FileDownloadResult {
   final bool ok;
   final String? path;
   final String? error;
+  final bool noAppToOpen;
 
-  const FileDownloadResult({required this.ok, this.path, this.error});
+  const FileDownloadResult({
+    required this.ok,
+    this.path,
+    this.error,
+    this.noAppToOpen = false,
+  });
 }
 
+// #***! открыть файл, скачав если надо
 /// Открывает файл из кэша, скачивая его при отсутствии.
 ///
 /// [cacheName] — стабильное имя в кэше (например, `<fileId>_имя.ext`).
@@ -26,6 +34,40 @@ Future<FileDownloadResult> openCachedFile(
   void Function()? onReady,
   DownloadMetadata? download,
 }) async {
+  final result = await ensureCachedFile(
+    cacheName,
+    resolveUrl,
+    onProgress: onProgress,
+    onReady: onReady,
+    download: download,
+  );
+  if (!result.ok || result.path == null) return result;
+  try {
+    final opened = await OpenFilex.open(result.path!);
+    return FileDownloadResult(
+      ok: opened.type == ResultType.done,
+      path: result.path,
+      error: opened.type == ResultType.done ? null : opened.message,
+      noAppToOpen: opened.type == ResultType.noAppToOpen,
+    );
+  } catch (e) {
+    return FileDownloadResult(
+      ok: false,
+      path: result.path,
+      error: e.toString(),
+    );
+  }
+}
+
+// #***! скачивание в кэш, onReady зовётся как только файл на диске
+Future<FileDownloadResult> ensureCachedFile(
+  String cacheName,
+  Future<String?> Function() resolveUrl, {
+  void Function(double progress)? onProgress,
+  void Function()? onReady,
+  DownloadMetadata? download,
+}) async {
+  // #***! ready зовётся из разных веток, защита от повтора
   var readyFired = false;
   void ready() {
     if (readyFired) return;
@@ -59,12 +101,7 @@ Future<FileDownloadResult> openCachedFile(
         await DownloadHistory.record(download, file);
       } catch (_) {}
     }
-    final opened = await OpenFilex.open(file.path);
-    return FileDownloadResult(
-      ok: opened.type == ResultType.done,
-      path: file.path,
-      error: opened.type == ResultType.done ? null : opened.message,
-    );
+    return FileDownloadResult(ok: true, path: file.path);
   } catch (e) {
     ready();
     return FileDownloadResult(ok: false, error: e.toString());

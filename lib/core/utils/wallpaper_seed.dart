@@ -6,8 +6,14 @@ import 'package:image/image.dart' as img;
 import '../config/chat_wallpaper_themes.dart';
 import '../storage/chat_wallpaper_store.dart';
 
+// #***! цвет для подкраски интерфейса под обои
 Future<Color?> computeWallpaperSeed(ChatWallpaper? wallpaper) async {
   if (wallpaper == null) return null;
+  if (wallpaper.isGradient) {
+    final colors = wallpaper.gradientColors;
+    if (colors == null || colors.isEmpty) return null;
+    return _mostVivid(colors);
+  }
   if (!wallpaper.isImage) {
     final theme = chatWallpaperThemeById(wallpaper.themeId);
     if (theme == null) return null;
@@ -19,6 +25,7 @@ Future<Color?> computeWallpaperSeed(ChatWallpaper? wallpaper) async {
     final bytes = await File(path).readAsBytes();
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
+    // #***! усредняем до 8x8, дёшево и даёт нужный средний цвет
     final small = img.copyResize(decoded, width: 8, height: 8);
     var r = 0, g = 0, b = 0, n = 0;
     for (final pixel in small) {
@@ -34,6 +41,7 @@ Future<Color?> computeWallpaperSeed(ChatWallpaper? wallpaper) async {
   }
 }
 
+// #***! у темы берём самый сочный цвет
 Color _mostVivid(List<Color> colors) {
   var best = colors.first;
   var bestScore = -1.0;

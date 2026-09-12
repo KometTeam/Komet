@@ -44,27 +44,46 @@ jobs:
           echo "org.gradle.parallel=true" >> ~/.gradle/gradle.properties
           echo "org.gradle.configureondemand=true" >> ~/.gradle/gradle.properties
 
-      - name: Setup upload key
+      - name: Setup signing key
         env:
           PLAY_KEYSTORE_BASE64: ${{ secrets.PLAY_KEYSTORE_BASE64 }}
           PLAY_KEYSTORE_PASSWORD: ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
           PLAY_KEY_PASSWORD: ${{ secrets.PLAY_KEY_PASSWORD }}
           PLAY_KEY_ALIAS: ${{ secrets.PLAY_KEY_ALIAS }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          if [ -z "$PLAY_KEYSTORE_BASE64" ]; then
-            echo "PLAY_KEYSTORE_BASE64 secret not set — refusing to produce an unsigned Play bundle."
+          if [ -n "$PLAY_KEYSTORE_BASE64" ]; then
+            echo "Signing with the Play upload key."
+            KEYSTORE="$PLAY_KEYSTORE_BASE64"
+            STORE_PASS="$PLAY_KEYSTORE_PASSWORD"
+            KEY_PASS="$PLAY_KEY_PASSWORD"
+            ALIAS="$PLAY_KEY_ALIAS"
+          elif [ -n "$KEYSTORE_BASE64" ]; then
+            echo "::warning::PLAY_KEYSTORE_BASE64 is not set — signing with the release key. Google Play rejects the bundle unless this key is the registered upload key."
+            KEYSTORE="$KEYSTORE_BASE64"
+            STORE_PASS="$KEYSTORE_PASSWORD"
+            KEY_PASS="$KEY_PASSWORD"
+            ALIAS="$KEY_ALIAS"
+          else
+            echo "::error::Neither PLAY_KEYSTORE_BASE64 nor KEYSTORE_BASE64 is set — refusing to produce unsigned store artifacts."
             exit 1
           fi
-          echo "$PLAY_KEYSTORE_BASE64" | base64 -d > android/app/komet-upload.jks
+          echo "$KEYSTORE" | base64 -d > android/app/komet-store.jks
           {
-            echo "storePassword=$PLAY_KEYSTORE_PASSWORD"
-            echo "keyPassword=$PLAY_KEY_PASSWORD"
-            echo "keyAlias=$PLAY_KEY_ALIAS"
-            echo "storeFile=komet-upload.jks"
+            echo "storePassword=$STORE_PASS"
+            echo "keyPassword=$KEY_PASS"
+            echo "keyAlias=$ALIAS"
+            echo "storeFile=komet-store.jks"
           } > android/key.properties
 
-      - name: Build App Bundle
-        run: flutter build appbundle --release --flavor store --obfuscate --split-debug-info=build/symbols
+      - name: Build Universal APK
+        env:
+          KOMET_REVIEW_PHONE: ${{ secrets.KOMET_REVIEW_PHONE }}
+          KOMET_REVIEW_PAYLOAD: ${{ secrets.KOMET_REVIEW_PAYLOAD }}
+        run: flutter build apk --release --flavor store --obfuscate --split-debug-info=build/symbols --dart-define=KOMET_REVIEW_PHONE="$KOMET_REVIEW_PHONE" --dart-define=KOMET_REVIEW_PAYLOAD="$KOMET_REVIEW_PAYLOAD"
 
       - name: Verify store manifest
         run: |
@@ -84,7 +103,55 @@ jobs:
             echo "::error::Firebase is still initialized in the store manifest"
             exit 1
           fi
+          if ! grep -q 'package="pw.komet.app"' "$MANIFEST"; then
+            echo "::error::The store manifest does not declare pw.komet.app"
+            exit 1
+          fi
           echo "Store manifest is clean."
+
+      - name: Build Split APKs
+        env:
+          KOMET_REVIEW_PHONE: ${{ secrets.KOMET_REVIEW_PHONE }}
+          KOMET_REVIEW_PAYLOAD: ${{ secrets.KOMET_REVIEW_PAYLOAD }}
+        run: flutter build apk --release --split-per-abi --flavor store --obfuscate --split-debug-info=build/symbols --dart-define=KOMET_REVIEW_PHONE="$KOMET_REVIEW_PHONE" --dart-define=KOMET_REVIEW_PAYLOAD="$KOMET_REVIEW_PAYLOAD"
+
+      - name: Build App Bundle
+        env:
+          KOMET_REVIEW_PHONE: ${{ secrets.KOMET_REVIEW_PHONE }}
+          KOMET_REVIEW_PAYLOAD: ${{ secrets.KOMET_REVIEW_PAYLOAD }}
+        run: flutter build appbundle --release --flavor store --obfuscate --split-debug-info=build/symbols --dart-define=KOMET_REVIEW_PHONE="$KOMET_REVIEW_PHONE" --dart-define=KOMET_REVIEW_PAYLOAD="$KOMET_REVIEW_PAYLOAD"
+
+      - name: Upload Universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-universal
+          path: build/app/outputs/flutter-apk/app-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload arm64-v8a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-arm64-v8a
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload armeabi-v7a APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-armeabi-v7a
+          path: build/app/outputs/flutter-apk/app-armeabi-v7a-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-play-x86_64
+          path: build/app/outputs/flutter-apk/app-x86_64-store-release.apk
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload App Bundle
         uses: actions/upload-artifact@v4

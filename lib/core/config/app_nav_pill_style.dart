@@ -4,8 +4,10 @@ import '../../frontend/widgets/liquid_glass.dart';
 import 'app_visual_style.dart';
 import 'persisted_setting.dart';
 
+// #***! оформление нижней таблетки
 enum NavPillStyle { auto, glossy, frostBlur, liquidGlass }
 
+// #***! auto подстраивается под общий стиль, стекло только если платформа тянет
 class NavPillMaterial {
   static NavPillStyle resolve(NavPillStyle style) {
     if (style != NavPillStyle.auto) return style;
@@ -24,6 +26,7 @@ class NavPillMaterial {
   }
 }
 
+// #***! настройка нижней панели
 class AppNavPillStyle {
   static const prefKey = 'app_nav_pill_style';
 

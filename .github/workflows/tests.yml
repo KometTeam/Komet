@@ -1,0 +1,39 @@
+name: Tests
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.3'
+          channel: 'stable'
+          cache: true
+
+      - name: Build crypto core
+        run: make -C native/crypto-core shared
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Flutter test
+        run: flutter test

@@ -7,6 +7,8 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/utils/download_history.dart';
+import '../../core/media/audio_file_track.dart';
+import '../../core/media/media_playback.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/save_file_as.dart';
 import '../../l10n/app_localizations.dart';
@@ -15,6 +17,7 @@ import '../widgets/confirm_dialog.dart';
 import '../widgets/custom_notification.dart';
 import '../widgets/small_spinner.dart';
 import '../widgets/sheet_helpers.dart';
+import '../widgets/share_unopenable_file.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
@@ -55,8 +58,41 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       }
       return;
     }
+    if (record.kind == DownloadKind.audio) {
+      try {
+        await MediaPlayback.instance.activateAudioFile(
+          AudioFileTrack(
+            cacheName: record.cacheName,
+            path: file.path,
+            name: record.name.trim().isEmpty
+                ? AppLocalizations.of(context)!.downloadsAudio
+                : record.name.trim(),
+            sourceName: record.sourceName,
+            chatId: record.chatId,
+            messageId: record.messageId,
+            messageTime: record.messageTime,
+            thumbnailUrl: record.thumbnailUrl,
+          ),
+          notificationChannelName: AppLocalizations.of(
+            context,
+          )!.audioPlaybackChannel,
+        );
+      } catch (_) {
+        if (mounted) {
+          showCustomNotification(
+            context,
+            AppLocalizations.of(context)!.downloadsOpenFailed,
+          );
+        }
+      }
+      return;
+    }
     final result = await OpenFilex.open(file.path);
     if (!mounted || result.type == ResultType.done) return;
+    if (result.type == ResultType.noAppToOpen) {
+      await shareUnopenableFile(context, file.path);
+      return;
+    }
     showCustomNotification(
       context,
       AppLocalizations.of(context)!.downloadsOpenFailed,

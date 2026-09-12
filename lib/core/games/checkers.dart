@@ -1,5 +1,7 @@
+// #***! шашки прямо в чате
 enum CheckersSide { white, black }
 
+// #***! правила, доска это плоский список на 64 клетки
 class Checkers {
   static const int size = 8;
   static const int empty = 0;
@@ -8,6 +10,7 @@ class Checkers {
   static const int blackMan = 3;
   static const int blackKing = 4;
 
+  // #***! направления ходов по диагоналям
   static const List<List<int>> _dirs = [
     [-1, -1],
     [-1, 1],
@@ -15,6 +18,7 @@ class Checkers {
     [1, 1],
   ];
 
+  // #***! стартовая расстановка
   static List<int> initial() {
     final board = List<int>.filled(size * size, empty);
     for (var r = 0; r < size; r++) {
@@ -48,6 +52,7 @@ class Checkers {
   static int _kingOf(CheckersSide side) =>
       side == CheckersSide.white ? whiteKing : blackKing;
 
+  // #***! легальные ходы, взятие обязательно
   static List<List<int>> legalMoves(List<int> board, CheckersSide side) {
     final captures = <List<int>>[];
     for (var i = 0; i < board.length; i++) {
@@ -64,6 +69,7 @@ class Checkers {
     return quiet;
   }
 
+  // #***! цепочки взятий рекурсией
   static void _collectCaptures(
     List<int> work,
     int at,
@@ -98,6 +104,7 @@ class Checkers {
     }
   }
 
+  // #***! один шаг взятия, у дамки без ограничений
   static List<List<int>> _captureSteps(
     List<int> work,
     int at,
@@ -147,6 +154,7 @@ class Checkers {
     return result;
   }
 
+  // #***! тихие ходы только если взятий нет
   static void _collectQuiet(
     List<int> board,
     int at,
@@ -178,6 +186,7 @@ class Checkers {
     }
   }
 
+  // #***! применяем ход, снимаем побитые и делаем дамку
   static List<int> applyMove(List<int> board, List<int> path) {
     final next = List<int>.of(board);
     if (path.length < 2) return next;
@@ -213,6 +222,7 @@ class Checkers {
   static bool _hasPieces(List<int> board, CheckersSide side) =>
       board.any((p) => sideOf(p) == side);
 
+  // #***! кончились фигуры или ходы значит проиграл
   static CheckersSide? winner(List<int> board, CheckersSide toMove) {
     if (!_hasPieces(board, toMove) || legalMoves(board, toMove).isEmpty) {
       return opponent(toMove);

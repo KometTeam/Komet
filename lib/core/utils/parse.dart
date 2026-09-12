@@ -1,3 +1,4 @@
+// #***! числа то int то строкой, безопасный разбор
 int? parseIntOrNull(Object? v) {
   if (v is int) return v;
   if (v is num) return v.toInt();

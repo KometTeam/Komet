@@ -1530,7 +1530,7 @@ class _CallInfoSheet extends StatelessWidget {
     add(l10n.callInfoCodec, info?.audioCodec);
     add(l10n.callInfoServer, info?.region);
     add(l10n.callInfoTopology, info?.topology);
-    add('Conversation ID', info?.conversationId);
+    add(l10n.callInfoConversationId, info?.conversationId);
     if (info?.dtlsFingerprint != null) {
       add('DTLS', _shortFp(info!.dtlsFingerprint!));
     }
@@ -1547,7 +1547,7 @@ class _CallInfoSheet extends StatelessWidget {
       );
       add(
         l10n.callInfoPeerCamera,
-        session!.peerVideo ? l10n.callCameraValueOn : l10n.callCameraValueOff,
+        session!.peerCamera ? l10n.callCameraValueOn : l10n.callCameraValueOff,
       );
     }
 
@@ -1565,7 +1565,6 @@ class _CallInfoSheet extends StatelessWidget {
     );
 
     final badges = <Widget>[
-      _badge(cs, Symbols.lock, l10n.callBadgeEncrypted),
       _badge(cs, Symbols.call, l10n.callBadgeAudio),
       if (info?.record == true)
         _badge(cs, Symbols.radio_button_checked, l10n.callBadgeRecording),
