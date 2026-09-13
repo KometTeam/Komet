@@ -239,24 +239,27 @@ class MediaCache {
     }
 
     final dir = await _cacheDir();
-    final files = <File>[];
+    // #***! stat снимаем по разу на файл: в компараторе он звался бы
+    // синхронно и по два раза на сравнение, то есть тысячи блокирующих
+    // сисколлов на изоляте интерфейса
+    final entries = <({File file, DateTime modified, int size})>[];
     await for (final entity in dir.list()) {
-      if (entity is File && !entity.path.endsWith('.part')) {
-        files.add(entity);
-      }
+      if (entity is! File || entity.path.endsWith('.part')) continue;
+      try {
+        final stat = await entity.stat();
+        entries.add((file: entity, modified: stat.modified, size: stat.size));
+      } catch (_) {}
     }
 
     // #***! сортируем по времени доступа и удаляем старое
-    files.sort(
-      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
-    );
+    entries.sort((a, b) => a.modified.compareTo(b.modified));
 
-    for (final file in files) {
+    for (final entry in entries) {
       if (total <= limit) break;
       try {
-        total -= await file.length();
-        await file.delete();
-        _markAbsentByBasename(p.basename(file.path));
+        await entry.file.delete();
+        total -= entry.size;
+        _markAbsentByBasename(p.basename(entry.file.path));
       } catch (_) {}
     }
     _cachedSize = total;

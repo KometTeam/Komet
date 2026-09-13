@@ -487,6 +487,9 @@ class AudioUploadInfo {
   });
 }
 
+final Expando<List<FormatRange>> _formatRangesCache =
+    Expando<List<FormatRange>>('formatRanges');
+
 // #***! сообщение как оно в базе, плоские поля плюс сырой payload
 class CachedMessage {
   final String id;
@@ -695,8 +698,10 @@ class CachedMessage {
 
   ReplyInfo? get replyInfo => ReplyInfo.fromPayload(payload);
 
+  // #***! геттер зовётся на каждую перестройку пузыря, а разбор payload
+  // каждый раз рождал новый список объектов
   List<FormatRange> get formatRanges =>
-      parseFormatElements(payload?['elements']);
+      _formatRangesCache[this] ??= parseFormatElements(payload?['elements']);
 
   // #***! 20+ строк разбираем в изоляте иначе анимация проседает
   static List<CachedMessage> _decodeRows(List<Map<String, dynamic>> rows) =>

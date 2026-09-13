@@ -100,6 +100,7 @@ class ComposerArea extends StatelessWidget {
   final VoidCallback onReplySelected;
   final VoidCallback onForwardSelected;
   final bool forwardDisabled;
+  final bool replyDisabled;
 
   final bool composerFrosted;
 
@@ -161,6 +162,7 @@ class ComposerArea extends StatelessWidget {
     required this.onReplySelected,
     required this.onForwardSelected,
     required this.forwardDisabled,
+    this.replyDisabled = false,
     required this.composerFrosted,
   });
 
@@ -327,6 +329,7 @@ class ComposerArea extends StatelessWidget {
               onReply: onReplySelected,
               onForward: onForwardSelected,
               allowForward: !forwardDisabled,
+              allowReply: !replyDisabled,
             ),
           ),
         ),

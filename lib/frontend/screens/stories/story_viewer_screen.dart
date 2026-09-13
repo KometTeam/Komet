@@ -730,12 +730,24 @@ String _timeAgo(int epochTime) {
   return '${diff ~/ 86400} дн';
 }
 
-ImageProvider? _previewProvider(String? previewData) {
+// #***! превью декодируется один раз на историю: вертикальный свайп гонит
+// setState каждый кадр, а новый MemoryImage заставлял бы заново раскодировать
+// картинку и пересобирать размытый фон
+final Expando<ImageProvider> _storyPreviews = Expando('storyPreview');
+
+ImageProvider? _previewProvider(StoryMedia media) {
+  final cached = _storyPreviews[media];
+  if (cached != null) return cached;
+  final previewData = media.previewData;
   if (previewData == null) return null;
   final comma = previewData.indexOf(',');
   if (comma < 0) return null;
   try {
-    return MemoryImage(base64Decode(previewData.substring(comma + 1)));
+    final provider = MemoryImage(
+      base64Decode(previewData.substring(comma + 1)),
+    );
+    _storyPreviews[media] = provider;
+    return provider;
   } catch (_) {
     return null;
   }
@@ -749,7 +761,7 @@ class _StoryMediaView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final preview = _previewProvider(media.previewData);
+    final preview = _previewProvider(media);
     final Widget blurBg = preview != null
         ? Positioned.fill(
             child: ImageFiltered(

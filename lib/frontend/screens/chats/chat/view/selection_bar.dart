@@ -151,6 +151,7 @@ class SelectionBottomBar extends StatelessWidget {
   final VoidCallback onReply;
   final VoidCallback onForward;
   final bool allowForward;
+  final bool allowReply;
 
   const SelectionBottomBar({
     super.key,
@@ -159,17 +160,18 @@ class SelectionBottomBar extends StatelessWidget {
     required this.onReply,
     required this.onForward,
     this.allowForward = true,
+    this.allowReply = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    final single = selected.length == 1;
+    final showReply = allowReply && selected.length == 1;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            if (single) ...[
+            if (showReply) ...[
               Expanded(
                 child: _pill(
                   context,
@@ -194,7 +196,7 @@ class SelectionBottomBar extends StatelessWidget {
                   onTap: onForward,
                 ),
               )
-            else if (!single)
+            else if (!showReply)
               const Spacer(),
           ],
         ),

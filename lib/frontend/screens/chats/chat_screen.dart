@@ -2265,6 +2265,19 @@ class _ChatScreenState extends State<ChatScreen>
   bool _mentionsAvailable() =>
       !_commentsMode && (chat?.type ?? widget.chatType) == 'CHAT';
 
+  // #***! отвечать можно только там, где вообще есть поле ввода: в канале без
+  // прав и в непросмотренной подписке композер заменён плашкой, и «Ответить»
+  // раньше открывало ответ в никуда
+  bool get _canReply {
+    if (_commentsMode) return true;
+    final type = chat?.type ?? widget.chatType;
+    if (type == 'CHANNEL' || type == 'CHAT' || type == 'GROUP') {
+      if (_previewChat) return false;
+    }
+    if (type != 'CHANNEL') return true;
+    return chat?.iAmAdmin(_myId) ?? false;
+  }
+
   void _onMentionSelected(MentionCandidate candidate, MentionQuery query) {
     _messageController.insertMention(
       userId: candidate.id,
@@ -2690,6 +2703,7 @@ class _ChatScreenState extends State<ChatScreen>
       onReplySelected: _replySelected,
       onForwardSelected: _forwardSelected,
       forwardDisabled: chat?.forwardDisabled ?? false,
+      replyDisabled: !_canReply,
       composerFrosted: _composerFrosted,
     );
   }
@@ -4738,7 +4752,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 onEdit: _canEditMessage(message)
                                     ? () => _startEditMessage(message)
                                     : null,
-                                onReply: message.isControl
+                                onReply: message.isControl || !_canReply
                                     ? null
                                     : () => _textSend.startReply(message),
                                 onForward:
@@ -4783,7 +4797,10 @@ class _ChatScreenState extends State<ChatScreen>
 
                               final isChannel =
                                   (chat?.type ?? widget.chatType) == 'CHANNEL';
-                              final swipeable = (message.isControl || isChannel)
+                              final swipeable =
+                                  (message.isControl ||
+                                      isChannel ||
+                                      !_canReply)
                                   ? pressable
                                   : SwipeToReply(
                                       isMe: isMe,
