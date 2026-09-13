@@ -173,7 +173,11 @@ class CallController {
           device: _api?.callsDevice,
           osVersion: _api?.callsOsVersion,
         );
-        final session = CallSession(ws2Config: config, role: CallRole.caller);
+        final session = CallSession(
+          ws2Config: config,
+          role: CallRole.caller,
+          initialVideo: isVideo,
+        );
         return _launch(session, session.start);
       });
 
@@ -200,6 +204,7 @@ class CallController {
           ws2Config: config,
           role: CallRole.joiner,
           isGroup: true,
+          initialVideo: isVideo,
         );
         _activeJoinLink = token;
         return _launch(session, session.start);

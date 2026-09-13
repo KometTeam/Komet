@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../config/app_microphone.dart';
+import '../config/app_audio_output.dart';
 import '../config/app_pulse_source.dart';
 import '../config/call_no_mute.dart';
 import '../utils/logger.dart';
@@ -76,7 +77,10 @@ class CallSession {
     required this.role,
     this.params,
     this.isGroup = false,
+    this.initialVideo = false,
   });
+
+  final bool initialVideo;
 
   Ws2Signaling? _signaling;
   // #***! _pc это единственное соединение, в SFU оно пересоздаётся
@@ -102,10 +106,17 @@ class CallSession {
   // #***! кандидаты пришедшие до remote SDP придерживаем тут
   final List<RTCIceCandidate> _pendingCandidates = [];
   Future<void> _tail = Future.value();
+  Map<String, dynamic>? _pendingProducerUpdate;
+  bool _processingProducerUpdate = false;
 
   // #***! участники и их видео, экран звонка подписан
   final Map<int, CallParticipant> _participants = {};
   final Map<int, MediaStream> _participantStreams = {};
+  final Map<int, MediaStream> _participantScreens = {};
+  final Map<String, MediaStream> _remoteTrackStreams = {};
+  final Set<String> _borrowedRemoteStreamIds = {};
+  final List<MediaStream> _retiredParticipantStreams = [];
+  final Set<int> _screenSlots = {};
   final _participantStreamUpdates = StreamController<int>.broadcast();
 
   String? _topology;
@@ -113,6 +124,22 @@ class CallSession {
   Object? _sfuSessionId;
   Set<int> _speaking = const {};
 
+  Future<void> _mediaTail = Future.value();
+  int _captureEpoch = 0;
+  Timer? _captureHealthTimer;
+  bool _checkingCapture = false;
+  String? _screenSourceId;
+  SourceType? _screenSourceType;
+  String? mediaError;
+  bool _initialMediaOpened = false;
+  String? _cameraDeviceId;
+  bool cameraMirrored = true;
+  String? _screenSourceName;
+  String? get cameraDeviceId => _cameraDeviceId;
+  String? get screenSourceName => _screenSourceName;
+  bool get isDesktop => _isDesktop;
+  bool get peerScreen => _peerScreen;
+  bool get peerHasVideo => _peerVideo || _peerScreen;
   bool _localVideo = false;
   bool _localScreen = false;
   MediaStream? _cameraStream;
@@ -121,12 +148,13 @@ class CallSession {
   RTCRtpSender? _audioSender;
   RTCRtpSender? _videoSender;
   RTCRtpSender? _screenSender;
+  RTCRtpTransceiver? _directVideoTransceiver;
+  bool _directScreenSubstitution = false;
   String? _micDeviceId = AppMicrophone.deviceId;
+  String? _audioOutputDeviceId = AppAudioOutput.deviceId;
   String? _pulseSource = AppPulseSource.name;
   bool _monitorCapture = false;
 
-  Completer<void>? _gatherDone;
-  // #***! автопереподключение, до 12 попыток с растущей задержкой
   bool _gotConnection = false;
 
   bool _reconnecting = false;
@@ -152,11 +180,14 @@ class CallSession {
   // #***! каналы SFU, раскладка слоты и уровни
   final List<RTCDataChannel> _sfuChannels = [];
   SfuCommandChannel? _sfuCommands;
-  StreamSubscription<Map<String, int>>? _sfuSlotSub;
+  StreamSubscription<Map<int, String>>? _sfuSlotSub;
   StreamSubscription<Map<String, int>>? _sfuLevelSub;
   final Map<int, int> _slotParticipant = {};
   Timer? _layoutDebounce;
+  int _layoutRetry = 0;
   Timer? _videoStatsTimer;
+  Future<void> _slotRebindTail = Future.value();
+  int _slotRevision = 0;
   List<String> _lastLayout = const [];
   bool _layoutSent = false;
 
@@ -189,6 +220,8 @@ class CallSession {
 
   bool get localVideo => _localVideo;
   bool get localScreen => _localScreen;
+  bool get _signaledVideo => _directScreenSubstitution || _localVideo;
+  bool get _signaledScreen => !_directScreenSubstitution && _localScreen;
   MediaStream? get localVideoStream =>
       _localScreen ? _screenStream : _cameraStream;
   MediaStream? get localCameraStream => _cameraStream;
@@ -207,8 +240,9 @@ class CallSession {
 
   Stream<int> get participantStreamUpdates => _participantStreamUpdates.stream;
 
-  MediaStream? streamOf(int participantId) =>
-      _participantStreams[participantId];
+  MediaStream? streamOf(int participantId, {bool screen = false}) => screen
+      ? _participantScreens[participantId]
+      : _participantStreams[participantId];
 
   int get participantCount => _participants.length;
 
@@ -216,7 +250,7 @@ class CallSession {
 
   String? get topology => _topology;
 
-  bool get _wantVideo => params?.isVideo == true;
+  bool get _wantVideo => initialVideo || params?.isVideo == true;
 
   final CallInfo info = CallInfo();
 
@@ -238,6 +272,7 @@ class CallSession {
   bool get isMuted => _muted;
   bool get audioTransmitting => !_muted || CallNoMute.enabled;
   String? get micDeviceId => _micDeviceId;
+  String? get audioOutputDeviceId => _audioOutputDeviceId;
   String? get pulseSource => _pulseSource;
   bool get isSpeaker => _speakerOn;
   bool get peerMuted => _peerMuted;
@@ -327,9 +362,9 @@ class CallSession {
         'change-media-settings',
         extra: {
           'mediaSettings': {
-            'isVideoEnabled': _localVideo,
+            'isVideoEnabled': _signaledVideo,
             'isAudioEnabled': !_muted,
-            'isScreenSharingEnabled': _localScreen,
+            'isScreenSharingEnabled': _signaledScreen,
             'isAnimojiEnabled': false,
           },
         },
@@ -413,6 +448,7 @@ class CallSession {
 
   // #***! полный сброс медиа перед новой попыткой
   Future<void> _resetForReconnect() async {
+    _captureEpoch++;
     try {
       await _signaling?.close();
     } catch (_) {}
@@ -432,6 +468,8 @@ class CallSession {
     _audioSender = null;
     _videoSender = null;
     _screenSender = null;
+    _directVideoTransceiver = null;
+    _directScreenSubstitution = false;
     _remoteDescSet = false;
     _pendingCandidates.clear();
     _accepted = false;
@@ -456,6 +494,7 @@ class CallSession {
     _screenStream = null;
     _localVideo = false;
     _localScreen = false;
+    await CallBridge.instance.setScreenShare(false);
   }
 
   // #***! замер уровней звука для подсветки говорящего
@@ -567,7 +606,7 @@ class CallSession {
         await _onTopologyChanged(msg);
         break;
       case 'producer-updated':
-        await _onProducerUpdated(msg);
+        _queueProducerUpdate(msg);
         break;
       case 'session-state':
         _onSessionState(msg);
@@ -578,7 +617,33 @@ class CallSession {
     }
   }
 
-  // #***! сервер вернул ошибку
+  void _queueProducerUpdate(Map<String, dynamic> msg) {
+    _pendingProducerUpdate = Map<String, dynamic>.from(msg);
+    if (_processingProducerUpdate) return;
+    _processingProducerUpdate = true;
+    unawaited(_drainProducerUpdates());
+  }
+
+  Future<void> _drainProducerUpdates() async {
+    try {
+      while (!_ended) {
+        final msg = _pendingProducerUpdate;
+        _pendingProducerUpdate = null;
+        if (msg == null) return;
+        try {
+          await _onProducerUpdated(msg);
+        } catch (e, st) {
+          logger.w('[call][sfu] producer update failed: $e\n$st');
+        }
+      }
+    } finally {
+      _processingProducerUpdate = false;
+      if (!_ended && _pendingProducerUpdate != null) {
+        _queueProducerUpdate(_pendingProducerUpdate!);
+      }
+    }
+  }
+
   void _onWs2Error(Map<String, dynamic> msg) {
     final err = msg['error'];
     logger.w('[call] ws2 error: $err raw=$msg');
@@ -744,10 +809,19 @@ class CallSession {
       'screen=${p.screenSharing} raw=${msg['mediaSettings']}',
     );
     _maybeAdoptPeer(id, msg);
+    if (!p.videoEnabled) unawaited(_removeParticipantStream(id, screen: false));
+    if (!p.screenSharing) unawaited(_removeParticipantStream(id, screen: true));
     _notifyInfo();
   }
 
-  // #***! кто то вошёл
+  Future<void> _removeParticipantStream(int id, {required bool screen}) async {
+    final streams = screen ? _participantScreens : _participantStreams;
+    final stream = streams.remove(id);
+    if (stream == null) return;
+    if (!_participantStreamUpdates.isClosed) _participantStreamUpdates.add(id);
+    _retiredParticipantStreams.add(stream);
+  }
+
   void _onParticipantJoined(Map<String, dynamic> msg) {
     final nested = msg['participant'];
     final p = nested is Map ? nested : msg;
@@ -848,13 +922,20 @@ class CallSession {
     }
 
     final pc = await _createPc(ice);
+    if (_ended) {
+      await pc.close();
+      return;
+    }
     _pc = pc;
     await _addLocalMedia(pc);
 
-    await pc.addTransceiver(
-      kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
-      init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
-    );
+    if (_videoSender == null) {
+      _directVideoTransceiver = await pc.addTransceiver(
+        kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+        init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
+      );
+      _videoSender = _directVideoTransceiver!.sender;
+    }
 
     await _setupKometProbe(pc);
 
@@ -883,9 +964,6 @@ class CallSession {
     pc.onIceCandidate = _onLocalCandidate;
     pc.onIceGatheringState = (s) {
       logger.i('[call] ice gathering $s');
-      if (s != RTCIceGatheringState.RTCIceGatheringStateComplete) return;
-      final done = _gatherDone;
-      if (done != null && !done.isCompleted) done.complete();
     };
     pc.onTrack = (event) => unawaited(_onRemoteTrack(event));
     pc.onDataChannel = (channel) {
@@ -914,6 +992,7 @@ class CallSession {
         _notifyInfo();
         if (connected) {
           _iceRestarts = 0;
+          _startVideoDiagnostics(pc);
           if (role == CallRole.joiner || _topology == 'SERVER') {
             _setState(CallSessionState.active);
           }
@@ -947,19 +1026,36 @@ class CallSession {
       await _resetMicRoute();
     }
     await _selectMicInsideEngine();
-    _localStream = await navigator.mediaDevices.getUserMedia({
+    final local = await navigator.mediaDevices.getUserMedia({
       'audio': AudioDevices.micConstraints(
         _micDeviceId,
         monitorCapture: _monitorCapture,
       ),
-      'video': _wantVideo,
+      'video': false,
     });
-    for (final track in _localStream!.getTracks()) {
+    if (_ended || !identical(pc, _pc)) {
+      await _disposeStream(local);
+      return;
+    }
+    _localStream = local;
+    for (final track in local.getTracks()) {
       final sender = await pc.addTrack(track, _localStream!);
       if (track.kind == 'audio') _audioSender = sender;
     }
     _applyAudioTracks();
     await applyAudioRoute();
+    if (!_initialMediaOpened) {
+      _initialMediaOpened = true;
+      if (_wantVideo) {
+        try {
+          await _startCamera(announce: false);
+        } catch (e) {
+          logger.w('[call] initial camera unavailable: $e');
+          mediaError = 'Не удалось включить камеру: $e';
+          _notifyInfo();
+        }
+      }
+    }
   }
 
   // #***! на мобилках микрофон выбирает движок
@@ -1043,53 +1139,89 @@ class CallSession {
     _micDeviceId = device;
   }
 
-  // #***! смена микрофона на ходу, подменяем дорожку в идущем звонке
-  Future<void> setMicrophone(String? deviceId) async {
+  Future<void> setMicrophone(String? deviceId) => _mediaOperation(() async {
+    final previousDevice = _micDeviceId;
+    final previousPulse = _pulseSource;
+    final previousMonitor = _monitorCapture;
     final next = (deviceId == null || deviceId.isEmpty) ? null : deviceId;
     _micDeviceId = next;
     _pulseSource = null;
     _monitorCapture = false;
-    await AppMicrophone.save(next ?? '');
-    await AppPulseSource.save('');
-    await PulseAudio.closeBridge();
-    if (AudioDevices.switchesInsideEngine) {
-      await _selectMicInsideEngine();
-    } else {
-      await _replaceMicTrack();
+    try {
+      if (AudioDevices.switchesInsideEngine) {
+        if (next == null) {
+          throw StateError('Выберите микрофон из списка устройств');
+        }
+        final devices = await AudioDevices.microphones();
+        if (!devices.any((device) => device.id == next)) {
+          throw StateError('Микрофон отключён. Обновите список устройств.');
+        }
+        await AudioDevices.selectInput(next);
+      } else {
+        if (next != null &&
+            !await AudioDevices.microphones().then(
+              (devices) => devices.any((d) => d.id == next),
+            )) {
+          throw StateError('Микрофон отключён. Обновите список устройств.');
+        }
+        await _replaceMicTrack();
+      }
+      if (_ended) return;
+      await AppMicrophone.save(next ?? '');
+      await AppPulseSource.save('');
+      await PulseAudio.closeBridge();
+    } catch (_) {
+      _micDeviceId = previousDevice;
+      _pulseSource = previousPulse;
+      _monitorCapture = previousMonitor;
+      rethrow;
+    } finally {
+      _notifyInfo();
     }
-    _notifyInfo();
-  }
+  });
 
   Future<void> _replaceMicTrack() async {
     await _prepareMicRoute();
     final sender = _audioSender;
-    if (sender == null) return;
-    final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+    final epoch = _captureEpoch;
+    if (sender == null || _ended) return;
+    final stream = await navigator.mediaDevices.getUserMedia({
       'audio': AudioDevices.micConstraints(
         _micDeviceId,
         monitorCapture: _monitorCapture,
       ),
       'video': false,
     });
-    final tracks = stream.getAudioTracks();
-    if (tracks.isEmpty) {
-      await _disposeStream(stream);
-      return;
-    }
-    final track = tracks.first;
-    track.enabled = audioTransmitting;
-    await sender.replaceTrack(track);
-    final previous = _micStream;
-    _micStream = stream;
-    if (previous != null) {
-      await _disposeStream(previous);
-    } else {
-      for (final old
-          in _localStream?.getAudioTracks() ?? const <MediaStreamTrack>[]) {
-        try {
-          await old.stop();
-        } catch (_) {}
+    try {
+      if (_ended || epoch != _captureEpoch || sender != _audioSender) {
+        await _disposeStream(stream);
+        return;
       }
+      final tracks = stream.getAudioTracks();
+      if (tracks.isEmpty) {
+        throw StateError('Микрофон не предоставил аудиопоток');
+      }
+      tracks.first.enabled = audioTransmitting;
+      await sender.replaceTrack(tracks.first);
+      if (_ended || epoch != _captureEpoch || sender != _audioSender) {
+        await _disposeStream(stream);
+        return;
+      }
+      final previous = _micStream;
+      _micStream = stream;
+      if (previous != null) {
+        await _disposeStream(previous);
+      } else {
+        for (final old
+            in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
+          try {
+            await old.stop();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {
+      await _disposeStream(stream);
+      rethrow;
     }
   }
 
@@ -1101,8 +1233,20 @@ class CallSession {
     _notifyInfo();
   }
 
+  Future<void> setAudioOutput(String? deviceId) async {
+    final previous = _audioOutputDeviceId;
+    try {
+      _audioOutputDeviceId = await AudioDevices.selectOutput(deviceId);
+      await AppAudioOutput.save(_audioOutputDeviceId ?? '');
+    } catch (_) {
+      _audioOutputDeviceId = previous;
+      rethrow;
+    } finally {
+      _notifyInfo();
+    }
+  }
+
   Future<void> _prepareAudioSession() async {
-    if (!_canRouteAudio) return;
     if (defaultTargetPlatform == TargetPlatform.android) {
       try {
         await Helper.setAndroidAudioConfiguration(
@@ -1117,11 +1261,30 @@ class CallSession {
 
   // #***! маршрут звука, динамик наушники гарнитура
   Future<void> applyAudioRoute() async {
-    if (!_canRouteAudio) return;
+    if (_canRouteAudio) {
+      try {
+        await Helper.setSpeakerphoneOn(_speakerOn);
+      } catch (e) {
+        logger.w('[call] setSpeakerphoneOn($_speakerOn) недоступен: $e');
+      }
+      return;
+    }
+    if (!_isDesktop) return;
     try {
-      await Helper.setSpeakerphoneOn(_speakerOn);
+      _audioOutputDeviceId = await AudioDevices.selectOutput(
+        _audioOutputDeviceId,
+      );
     } catch (e) {
-      logger.w('[call] setSpeakerphoneOn($_speakerOn) недоступен: $e');
+      logger.w('[call][audio] saved output unavailable: $e');
+      if (_audioOutputDeviceId != null) {
+        _audioOutputDeviceId = null;
+        await AppAudioOutput.save('');
+        try {
+          await AudioDevices.selectOutput(null);
+        } catch (fallbackError) {
+          logger.w('[call][audio] default output unavailable: $fallbackError');
+        }
+      }
     }
   }
 
@@ -1177,29 +1340,87 @@ class CallSession {
     _notifyInfo();
   }
 
-  // #***! слот -> участник, сервер шлёт видео слотами а не по id
-  void _onSfuSlots(Map<String, int> slots) {
-    if (slots.isEmpty) return;
-    _slotParticipant.clear();
-    slots.forEach((key, slot) {
+  void _onSfuSlots(Map<int, String> slots) {
+    final participants = <int, int>{};
+    final screens = <int>{};
+    slots.forEach((slot, key) {
       if (slot < 0) return;
       final id = _participantIdFrom(key.split(':').first);
-      if (id != null) _slotParticipant[slot] = id;
+      if (id == null || id == ws2Config.userId) return;
+      final participant = _participants[id];
+      if (participant == null ||
+          (!participant.videoEnabled && !participant.screenSharing)) {
+        return;
+      }
+      participants[slot] = id;
+      final requested = slot < _lastLayout.length ? _lastLayout[slot] : null;
+      final requestedId = _participantIdFrom(requested?.split(':').first);
+      final isScreen = requestedId == id
+          ? requested!.endsWith(':sSCREEN')
+          : participant.screenSharing && !participant.videoEnabled;
+      if (isScreen) screens.add(slot);
     });
-    unawaited(_rebindSlotTracks());
+    final wantsVideo = _participants.values.any(
+      (participant) =>
+          !participant.isSelf &&
+          (participant.videoEnabled || participant.screenSharing),
+    );
+    if (wantsVideo && participants.length < _lastLayout.length) {
+      for (final entry in _slotParticipant.entries) {
+        if (participants.containsKey(entry.key) ||
+            entry.key >= _lastLayout.length) {
+          continue;
+        }
+        final requested = _lastLayout[entry.key];
+        if (_participantIdFrom(requested.split(':').first) != entry.value) {
+          continue;
+        }
+        participants[entry.key] = entry.value;
+        if (requested.endsWith(':sSCREEN')) screens.add(entry.key);
+      }
+      logger.i(
+        '[call][sfu] incomplete slots retained: '
+        '${participants.length}/${_lastLayout.length}',
+      );
+      _scheduleDisplayLayout(delay: const Duration(seconds: 1), force: true);
+    }
+    final unchanged =
+        participants.length == _slotParticipant.length &&
+        participants.entries.every((e) => _slotParticipant[e.key] == e.value) &&
+        screens.length == _screenSlots.length &&
+        screens.containsAll(_screenSlots);
+    if (unchanged) return;
+    _slotParticipant
+      ..clear()
+      ..addAll(participants);
+    _screenSlots
+      ..clear()
+      ..addAll(screens);
+    logger.i(
+      '[call][video] SFU slots changed: participants=${participants.length} '
+      'screens=${screens.length}',
+    );
+    final revision = ++_slotRevision;
+    _slotRebindTail = _slotRebindTail.catchError((_) {}).then((_) async {
+      if (_ended || revision != _slotRevision) return;
+      await _rebindSlotTracks();
+    });
   }
 
   Future<void> _rebindSlotTracks() async {
-    await _clearParticipantStreams();
+    await _clearParticipantStreams(dispose: false);
     await _collectReceivers();
     _notifyInfo();
   }
 
-  void _scheduleDisplayLayout() {
+  void _scheduleDisplayLayout({
+    Duration delay = const Duration(milliseconds: 300),
+    bool force = false,
+  }) {
     _layoutDebounce?.cancel();
     _layoutDebounce = Timer(
-      const Duration(milliseconds: 300),
-      () => unawaited(_publishDisplayLayout()),
+      delay,
+      () => unawaited(_publishDisplayLayout(force: force)),
     );
   }
 
@@ -1208,24 +1429,39 @@ class CallSession {
     final commands = _sfuCommands;
     if (commands == null || _topology != 'SERVER' || _ended) return;
     final items = <SfuLayoutItem>[];
+    final requested = <String>[];
     for (final p in _participants.values) {
       if (p.isSelf || items.length >= _maxVideoSlots) continue;
       if (!p.videoEnabled && !p.screenSharing) continue;
-      items.add(
-        SfuLayoutItem(
-          trackKey: 'u${p.id}:${p.screenSharing ? 'sSCREEN' : 'sCAMERA'}',
-        ),
-      );
+      if (p.screenSharing) {
+        items.add(
+          SfuLayoutItem(
+            trackKey: 'u${p.id}',
+            width: _isDesktop ? 1920 : 1280,
+            height: _isDesktop ? 1080 : 720,
+          ),
+        );
+        requested.add('u${p.id}:sSCREEN');
+      } else {
+        items.add(SfuLayoutItem(trackKey: 'u${p.id}'));
+        requested.add('u${p.id}:sCAMERA');
+      }
     }
-    final keys = items.map((i) => i.trackKey).toList(growable: false);
     if (!force &&
         _layoutSent &&
-        keys.length == _lastLayout.length &&
-        keys.every(_lastLayout.contains)) {
+        requested.length == _lastLayout.length &&
+        requested.indexed.every((entry) => _lastLayout[entry.$1] == entry.$2)) {
       return;
     }
-    if (!await commands.sendDisplayLayout(items)) return;
-    _lastLayout = keys;
+    if (!await commands.sendDisplayLayout(items)) {
+      if (_layoutRetry < 8) {
+        _layoutRetry++;
+        _scheduleDisplayLayout(delay: const Duration(seconds: 1));
+      }
+      return;
+    }
+    _layoutRetry = 0;
+    _lastLayout = requested;
     _layoutSent = true;
   }
 
@@ -1260,28 +1496,52 @@ class CallSession {
   // #***! перед чужим видео надо завести под него слот в SDP
   Future<void> _prepareVideoSlot(RTCPeerConnection pc, String offerSdp) async {
     final mids = _videoSlotMids(offerSdp);
-    if (mids.isEmpty) return;
-    for (final transceiver in await pc.getTransceivers()) {
-      final mid = transceiver.mid;
-      if (!mids.contains(mid)) continue;
-      final tracks =
-          _cameraStream?.getVideoTracks() ?? const <MediaStreamTrack>[];
-      if (tracks.isNotEmpty) {
-        try {
-          await transceiver.sender.replaceTrack(tracks.first);
-        } catch (e) {
-          logger.w('[call][sfu] video slot $mid replaceTrack failed: $e');
-        }
-      }
-      try {
-        await transceiver.setDirection(TransceiverDirection.SendOnly);
-      } catch (e) {
-        logger.w('[call][sfu] video slot $mid setDirection failed: $e');
+    final slots = (await pc.getTransceivers())
+        .where((t) => mids.contains(t.mid))
+        .toList();
+    final media = <({MediaStream stream, bool screen})>[
+      if (_screenStream != null) (stream: _screenStream!, screen: true),
+      if (_cameraStream != null) (stream: _cameraStream!, screen: false),
+    ];
+    _videoSender = null;
+    _screenSender = null;
+    _directVideoTransceiver = null;
+    final used = <String>{};
+    for (final item in media) {
+      final tracks = item.stream.getVideoTracks();
+      if (tracks.isEmpty) continue;
+      final track = tracks.first;
+      final matches = slots.where((t) => t.sender.track?.id == track.id);
+      final available = slots.where((t) => !used.contains(t.mid));
+      if (matches.isEmpty && available.isEmpty) {
+        logger.w(
+          '[call][sfu] awaiting slot for ${item.screen ? 'screen' : 'camera'}',
+        );
         continue;
       }
-      _videoSender = transceiver.sender;
-      logger.i('[call][sfu] video slot mid=$mid -> sendonly');
-      return;
+      final slot = matches.isNotEmpty ? matches.first : available.first;
+      used.add(slot.mid);
+      logger.i(
+        '[call][sfu] attach ${item.screen ? 'screen' : 'camera'} '
+        'track=${track.id} enabled=${track.enabled} mid=${slot.mid} '
+        'previous=${slot.sender.track?.id}',
+      );
+      await slot.sender.replaceTrack(track);
+      await slot.setDirection(TransceiverDirection.SendOnly);
+      logger.i(
+        '[call][sfu] attached ${item.screen ? 'screen' : 'camera'} '
+        'mid=${slot.mid} senderTrack=${slot.sender.track?.id}',
+      );
+      if (item.screen) {
+        _screenSender = slot.sender;
+      } else {
+        _videoSender = slot.sender;
+      }
+    }
+    for (final slot in slots.where((t) => !used.contains(t.mid))) {
+      await slot.sender.replaceTrack(null);
+      await slot.setDirection(TransceiverDirection.SendOnly);
+      _videoSender ??= slot.sender;
     }
   }
 
@@ -1295,8 +1555,10 @@ class CallSession {
     await _sfuCommands?.dispose();
     _sfuCommands = null;
     _slotParticipant.clear();
+    _screenSlots.clear();
     _lastLayout = const [];
     _layoutSent = false;
+    _layoutRetry = 0;
     final channels = List<RTCDataChannel>.from(_sfuChannels);
     _sfuChannels.clear();
     for (final channel in channels) {
@@ -1425,9 +1687,14 @@ class CallSession {
       _audioSender = null;
       _videoSender = null;
       _screenSender = null;
+      _directVideoTransceiver = null;
     }
     _setState(CallSessionState.connecting);
     final pc = await _createPc(_iceServers);
+    if (_ended) {
+      await pc.close();
+      return;
+    }
     _pc = pc;
     await _addLocalMedia(pc);
     await _republishVideo(pc);
@@ -1452,6 +1719,7 @@ class CallSession {
     _audioSender = null;
     _videoSender = null;
     _screenSender = null;
+    _directVideoTransceiver = null;
     _remoteDescSet = false;
     _pendingCandidates.clear();
     await _clearParticipantStreams();
@@ -1467,6 +1735,10 @@ class CallSession {
     _localStream = null;
 
     final pc = await _createPc(_iceServers);
+    if (_ended) {
+      await pc.close();
+      return;
+    }
     _pc = pc;
     await _addLocalMedia(pc);
     await _republishVideo(pc);
@@ -1475,18 +1747,27 @@ class CallSession {
 
   // #***! после пересборки видео надо опубликовать заново
   Future<void> _republishVideo(RTCPeerConnection pc) async {
+    if (_topology == 'SERVER') return;
     final camera = _cameraStream;
-    if (camera != null) {
+    if (camera != null && _videoSender == null) {
       final tracks = camera.getVideoTracks();
       if (tracks.isNotEmpty) {
         _videoSender = await pc.addTrack(tracks.first, camera);
+        logger.i(
+          '[call][video] republished camera track=${tracks.first.id} '
+          'senderTrack=${_videoSender?.track?.id} topology=$_topology',
+        );
       }
     }
     final screen = _screenStream;
-    if (screen != null) {
+    if (screen != null && _screenSender == null) {
       final tracks = screen.getVideoTracks();
       if (tracks.isNotEmpty) {
         _screenSender = await pc.addTrack(tracks.first, screen);
+        logger.i(
+          '[call][video] republished screen track=${tracks.first.id} '
+          'senderTrack=${_screenSender?.track?.id} topology=$_topology',
+        );
       }
     }
   }
@@ -1496,8 +1777,21 @@ class CallSession {
     final topo = msg['topology']?.toString();
     if (topo == null) return;
     logger.i('[call] topology-changed -> $topo');
+    if (topo == 'SERVER' &&
+        !isGroup &&
+        _topology == 'DIRECT' &&
+        (_pc?.connectionState ==
+                RTCPeerConnectionState.RTCPeerConnectionStateConnected ||
+            _pc?.iceConnectionState ==
+                RTCIceConnectionState.RTCIceConnectionStateConnected ||
+            _pc?.iceConnectionState ==
+                RTCIceConnectionState.RTCIceConnectionStateCompleted)) {
+      logger.i('[call] keeping connected one-to-one call on DIRECT topology');
+      return;
+    }
     info.topology = topo;
     final switchingToSfu = topo == 'SERVER' && _topology != 'SERVER';
+    if (switchingToSfu) _directScreenSubstitution = false;
     _topology = topo;
     _notifyInfo();
     if (switchingToSfu) await _setupSfu();
@@ -1549,6 +1843,7 @@ class CallSession {
     await _flushCandidates();
     await _addRemoteCandidatesFromSdp(pc, sdp);
     await _prepareVideoSlot(pc, sdp);
+    await _applyVideoQuality();
 
     final answer = await pc.createAnswer({});
     if (_pc != pc) return;
@@ -1601,14 +1896,7 @@ class CallSession {
     Timer(const Duration(seconds: 5), () {
       if (_pc == pc && !_ended) unawaited(_dumpIceStats(pc));
     });
-    _videoStatsTimer?.cancel();
-    _videoStatsTimer = Timer.periodic(const Duration(seconds: 5), (t) {
-      if (_pc != pc || _ended) {
-        t.cancel();
-        return;
-      }
-      unawaited(_dumpVideoStats(pc));
-    });
+    _startVideoDiagnostics(pc);
 
     if (_accepted) await _sendMediaSettings();
     unawaited(_collectReceivers());
@@ -1660,37 +1948,79 @@ class CallSession {
 
   Future<void> _dumpVideoStats(RTCPeerConnection pc) async {
     try {
+      final reports = await pc.getStats();
+      final senderTracks = <String, String>{};
+      for (final transceiver in await pc.getTransceivers()) {
+        final mid = transceiver.mid;
+        final track = transceiver.sender.track;
+        if (track != null) senderTracks[mid] = track.id!;
+      }
       final rows = <String>[];
-      for (final r in await pc.getStats()) {
-        if (r.type != 'inbound-rtp') continue;
+      for (final r in reports) {
+        if (r.type != 'inbound-rtp' && r.type != 'outbound-rtp') continue;
         final v = r.values;
         if (v['kind'] != 'video' && v['mediaType'] != 'video') continue;
+        final mid = v['mid']?.toString();
         rows.add(
-          '[ssrc=${v['ssrc']} bytes=${v['bytesReceived']} '
-          'packets=${v['packetsReceived']} decoded=${v['framesDecoded']} '
-          '${v['frameWidth']}x${v['frameHeight']}]',
+          '[${r.type == 'inbound-rtp' ? 'in' : 'out'} '
+          'mid=$mid track=${v['trackIdentifier'] ?? senderTracks[mid]} '
+          'ssrc=${v['ssrc']} '
+          'bytes=${v['bytesReceived'] ?? v['bytesSent']} '
+          'packets=${v['packetsReceived'] ?? v['packetsSent']} '
+          'lost=${v['packetsLost']} frames='
+          '${v['framesDecoded'] ?? v['framesEncoded'] ?? v['framesSent']} '
+          'dropped=${v['framesDropped']} '
+          '${v['frameWidth']}x${v['frameHeight']} fps='
+          '${v['framesPerSecond']} key=${v['keyFramesDecoded'] ?? v['keyFramesEncoded']} '
+          'nack=${v['nackCount']} pli=${v['pliCount']} fir=${v['firCount']} '
+          'quality=${v['qualityLimitationReason']}]',
         );
       }
       var transportBytes = 0;
       var audioBytes = 0;
-      for (final r in await pc.getStats()) {
+      final audioRows = <String>[];
+      for (final r in reports) {
         final v = r.values;
         if (r.type == 'transport') {
           final b = v['bytesReceived'];
           if (b is num) transportBytes += b.toInt();
-        } else if (r.type == 'inbound-rtp' &&
+        } else if ((r.type == 'inbound-rtp' || r.type == 'outbound-rtp') &&
             (v['kind'] == 'audio' || v['mediaType'] == 'audio')) {
-          final b = v['bytesReceived'];
-          if (b is num) audioBytes += b.toInt();
+          if (r.type == 'inbound-rtp') {
+            final b = v['bytesReceived'];
+            if (b is num) audioBytes += b.toInt();
+          }
+          audioRows.add(
+            '[${r.type == 'inbound-rtp' ? 'in' : 'out'} '
+            'mid=${v['mid']} ssrc=${v['ssrc']} '
+            'bytes=${v['bytesReceived'] ?? v['bytesSent']} '
+            'packets=${v['packetsReceived'] ?? v['packetsSent']} '
+            'lost=${v['packetsLost']} jitter=${v['jitter']} '
+            'level=${v['audioLevel']} concealed=${v['concealedSamples']} '
+            'samples=${v['totalSamplesReceived']}]',
+          );
         }
       }
       logger.i(
-        '[call][sfu] inbound video: ${rows.join(' ')} '
+        '[call][video] stats: ${rows.join(' ')} '
         '| transport=$transportBytes audio=$audioBytes',
       );
+      logger.i('[call][audio] stats: ${audioRows.join(' ')}');
     } catch (e) {
-      logger.w('[call][sfu] video stats failed: $e');
+      logger.w('[call][video] stats failed: $e');
     }
+  }
+
+  void _startVideoDiagnostics(RTCPeerConnection pc) {
+    _videoStatsTimer?.cancel();
+    _videoStatsTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_pc != pc || _ended) {
+        timer.cancel();
+        return;
+      }
+      unawaited(_dumpVideoStats(pc));
+    });
+    unawaited(_dumpVideoStats(pc));
   }
 
   Future<void> _dumpIceStats(RTCPeerConnection pc) async {
@@ -1890,17 +2220,26 @@ class CallSession {
 
   // #***! пришла чужая дорожка
   Future<void> _onRemoteTrack(RTCTrackEvent event) async {
-    logger.t(
-      '[call] remote track: ${event.track.kind} id=${event.track.id} '
-      'streams=${event.streams.length}',
+    logger.i(
+      '[call][video] remote track kind=${event.track.kind} '
+      'id=${event.track.id} mid=${event.transceiver?.mid} '
+      'enabled=${event.track.enabled} '
+      'streams=${event.streams.map((s) => s.id).join(',')}',
     );
-    await _bindParticipantTrack(event.track);
-    if (event.streams.isNotEmpty) {
-      _remoteStreamRef = event.streams.first;
-      _remoteStream.add(event.streams.first);
-    } else {
-      await _collectReceivers();
+    if (event.track.kind != 'video') {
+      unawaited(applyAudioRoute());
+      return;
     }
+    final source = _sourceStreamForTrack(event.track, event.streams);
+    if (source != null) {
+      _remoteTrackStreams[event.track.id!] = source;
+      _borrowedRemoteStreamIds.add(source.id);
+    }
+    if (_topology == 'SERVER') {
+      await _bindParticipantTrack(event.track);
+      return;
+    }
+    await _pushRemoteTrack(event.track, event.streams);
   }
 
   int? _participantFromTrackId(String? trackId) {
@@ -1909,6 +2248,8 @@ class CallSession {
     if (slot != null) {
       return _slotParticipant[int.parse(slot.group(1)!)];
     }
+    final named = RegExp(r'^u?(\d+):s(?:CAMERA|SCREEN)$').firstMatch(trackId);
+    if (named != null) return int.tryParse(named.group(1)!);
     for (final prefix in const ['video-', 'audio-']) {
       if (trackId.length > prefix.length && trackId.startsWith(prefix)) {
         final parsed = _participantIdFrom(trackId.substring(prefix.length));
@@ -1920,15 +2261,41 @@ class CallSession {
 
   // #***! привязываем дорожку к участнику по слоту
   Future<void> _bindParticipantTrack(MediaStreamTrack track) async {
-    final id = _participantFromTrackId(track.id);
-    if (id == null || id == ws2Config.userId) return;
-    var stream = _participantStreams[id];
+    final id =
+        _participantFromTrackId(track.id) ??
+        (_topology != 'SERVER' ? _peerId : null);
+    if (id == null || id == ws2Config.userId || track.kind != 'video') return;
+    final slot = RegExp(r'^video-pat-(\d+)$').firstMatch(track.id ?? '');
+    final screen =
+        (track.id?.endsWith(':sSCREEN') ?? false) ||
+        (slot != null && _screenSlots.contains(int.parse(slot.group(1)!))) ||
+        (_topology != 'SERVER' && _peerScreen && !_peerVideo);
+    final streams = screen ? _participantScreens : _participantStreams;
+    final source = _remoteTrackStreams[track.id];
+    if (source != null && source.getVideoTracks().length == 1) {
+      streams[id] = source;
+      logger.t('[call] remote stream ${source.id} -> participant $id');
+      if (!_participantStreamUpdates.isClosed) {
+        _participantStreamUpdates.add(id);
+      }
+      return;
+    }
+    var stream = streams[id];
     if (stream == null) {
-      stream = await createLocalMediaStream('komet_p$id');
-      _participantStreams[id] = stream;
+      stream = await createLocalMediaStream(
+        'komet_p${id}_${screen ? 'screen' : 'camera'}',
+      );
+      if (_ended) {
+        await stream.dispose();
+        return;
+      }
+      streams[id] = stream;
     }
     if (stream.getTracks().any((t) => t.id == track.id)) return;
     try {
+      for (final old in stream.getVideoTracks().toList()) {
+        await stream.removeTrack(old);
+      }
       await stream.addTrack(track);
     } catch (_) {
       return;
@@ -1937,19 +2304,51 @@ class CallSession {
     if (!_participantStreamUpdates.isClosed) _participantStreamUpdates.add(id);
   }
 
-  Future<void> _pushRemoteTrack(MediaStreamTrack track) async {
+  Future<void> _pushRemoteTrack(
+    MediaStreamTrack track,
+    List<MediaStream> sourceStreams,
+  ) async {
+    final source = _sourceStreamForTrack(track, sourceStreams);
+    if (source != null) {
+      final previous = _remoteStreamRef;
+      final disposePrevious = _ownRemoteStream && !identical(previous, source);
+      _remoteStreamRef = source;
+      _ownRemoteStream = false;
+      _remoteStream.add(source);
+      if (disposePrevious) {
+        try {
+          await previous?.dispose();
+        } catch (_) {}
+      }
+      return;
+    }
     var stream = _remoteStreamRef;
-    if (stream == null) {
+    if (stream == null || !_ownRemoteStream) {
       stream = await createLocalMediaStream('komet_remote');
       _ownRemoteStream = true;
     }
     _remoteStreamRef = stream;
+    for (final old in stream.getVideoTracks().toList()) {
+      if (old.id == track.id) continue;
+      try {
+        await stream.removeTrack(old);
+      } catch (_) {}
+    }
     if (!stream.getTracks().any((t) => t.id == track.id)) {
       try {
         await stream.addTrack(track);
       } catch (_) {}
     }
     _remoteStream.add(stream);
+  }
+
+  MediaStream? _sourceStreamForTrack(
+    MediaStreamTrack track,
+    List<MediaStream> streams,
+  ) {
+    return streams.where((stream) {
+      return stream.getVideoTracks().any((item) => item.id == track.id);
+    }).firstOrNull;
   }
 
   Future<void> _logSenders() async {
@@ -1974,17 +2373,18 @@ class CallSession {
 
   Future<void> _collectReceivers() async {
     final pc = _pc;
-    if (pc == null) return;
+    if (pc == null || _topology != 'SERVER') return;
     try {
       for (final tr in await pc.getTransceivers()) {
         final track = tr.receiver.track;
-        if (track != null) {
+        if (track != null && track.kind == 'video') {
           logger.t('[call] receiver track: ${track.kind} id=${track.id}');
           await _bindParticipantTrack(track);
-          await _pushRemoteTrack(track);
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      logger.w('[call][video] receiver collection failed: $e');
+    }
   }
 
   // #***! создание и отправка offer
@@ -1993,6 +2393,7 @@ class CallSession {
     final peerId = _peerId;
     if (pc == null || peerId == null) return;
 
+    await _applyVideoQuality();
     final offer = await pc.createOffer(iceRestart ? {'iceRestart': true} : {});
     final sdp = offer.sdp ?? '';
     await pc.setLocalDescription(RTCSessionDescription(sdp, offer.type));
@@ -2067,6 +2468,7 @@ class CallSession {
       await pc.setRemoteDescription(RTCSessionDescription(desc, type));
       _remoteDescSet = true;
       await _flushCandidates();
+      await _applyVideoQuality();
 
       if (type == 'offer') {
         final answer = await pc.createAnswer({});
@@ -2124,31 +2526,50 @@ class CallSession {
   // #***! ждём сбора кандидатов но не бесконечно
   Future<void> _awaitIceGathering(
     RTCPeerConnection pc, {
-    Duration timeout = const Duration(seconds: 5),
+    Duration timeout = const Duration(seconds: 3),
   }) async {
     if (pc.iceGatheringState ==
         RTCIceGatheringState.RTCIceGatheringStateComplete) {
       return;
     }
-    final done = Completer<void>();
-    _gatherDone = done;
-    try {
-      await done.future.timeout(timeout);
-      logger.i('[call][sfu] relay candidate gathered');
-    } catch (_) {
-      logger.w('[call][sfu] no relay candidate within $timeout');
-    } finally {
-      _gatherDone = null;
+    final started = DateTime.now();
+    var candidateCount = 0;
+    var stableSince = started;
+    while (!_ended && identical(pc, _pc)) {
+      if (pc.iceGatheringState ==
+          RTCIceGatheringState.RTCIceGatheringStateComplete) {
+        logger.i('[call][sfu] ICE gathering completed');
+        return;
+      }
+      try {
+        final local = await pc.getLocalDescription();
+        final nextCount = _countCandidates(local?.sdp ?? '');
+        if (nextCount != candidateCount) {
+          candidateCount = nextCount;
+          stableSince = DateTime.now();
+        } else if (candidateCount > 0 &&
+            DateTime.now().difference(stableSince) >=
+                const Duration(milliseconds: 400)) {
+          logger.i(
+            '[call][sfu] ICE candidates settled while gathering: '
+            '$candidateCount',
+          );
+          return;
+        }
+      } catch (_) {}
+      if (DateTime.now().difference(started) >= timeout) {
+        logger.w(
+          '[call][sfu] ICE gathering incomplete after $timeout; '
+          'sending $candidateCount candidates gathered so far',
+        );
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
   }
 
   // #***! свой кандидат уходит собеседнику
   void _onLocalCandidate(RTCIceCandidate candidate) {
-    final line = candidate.candidate;
-    if (line != null && line.contains(' typ relay')) {
-      final done = _gatherDone;
-      if (done != null && !done.isCompleted) done.complete();
-    }
     if (_topology == 'SERVER') return;
     final peerId = _peerId;
     if (peerId == null || candidate.candidate == null) return;
@@ -2169,15 +2590,19 @@ class CallSession {
     logger.i('[call] accept-call sent (activate=$activate)');
     await _signaling?.acceptCall(
       isAudioEnabled: !_muted,
-      isVideoEnabled: _localVideo,
-      isScreenSharingEnabled: _localScreen,
+      isVideoEnabled: _signaledVideo,
+      isScreenSharingEnabled: _signaledScreen,
     );
     if (activate) _setState(CallSessionState.active);
   }
 
   // #***! говорим собеседнику про свой микрофон
   Future<void> sendAudioEnabledSignal(bool enabled) async {
-    await _signaling?.changeMediaSettings(isAudioEnabled: enabled);
+    await _signaling?.changeMediaSettings(
+      isAudioEnabled: enabled,
+      isVideoEnabled: _signaledVideo,
+      isScreenSharingEnabled: _signaledScreen,
+    );
   }
 
   // #***! мьют, дорожку не убираем а глушим иначе собеседник увидит разрыв
@@ -2195,173 +2620,690 @@ class CallSession {
   Future<void> _sendMediaSettings() async {
     await _signaling?.changeMediaSettings(
       isAudioEnabled: !_muted,
-      isVideoEnabled: _localVideo,
-      isScreenSharingEnabled: _localScreen,
+      isVideoEnabled: _signaledVideo,
+      isScreenSharingEnabled: _signaledScreen,
     );
   }
 
-  // #***! камера и демонстрация экрана
-  Future<void> setVideoEnabled(bool on) => on ? _startCamera() : _stopCamera();
+  Future<void> _mediaOperation(Future<void> Function() operation) {
+    final epoch = _captureEpoch;
+    final next = _mediaTail.then((_) async {
+      if (_ended || epoch != _captureEpoch) return;
+      await operation();
+    });
+    _mediaTail = next.catchError((Object e) {
+      logger.w('[call] media operation failed: $e');
+    });
+    return next;
+  }
 
-  Future<void> setScreenSharing(bool on) =>
-      on ? _startScreenShare() : _stopScreenShare();
+  Future<void> setVideoEnabled(bool on) =>
+      _mediaOperation(() => on ? _startCamera() : _stopCamera());
+
+  Future<void> setCameraDevice(String? deviceId) => _mediaOperation(() async {
+    if (_cameraDeviceId == deviceId && _localVideo) return;
+    final pc = _pc;
+    if (pc == null || _ended) return;
+    final epoch = _captureEpoch;
+    final previousStream = _cameraStream;
+    final previousDevice = _cameraDeviceId;
+    final previousMirror = cameraMirrored;
+    MediaStream? stream;
+    var senderChanged = false;
+    final started = DateTime.now();
+    try {
+      if (deviceId != null) {
+        final devices = await navigator.mediaDevices.enumerateDevices();
+        if (!devices.any(
+          (device) =>
+              device.kind == 'videoinput' && device.deviceId == deviceId,
+        )) {
+          throw StateError('Камера отключена. Выберите доступное устройство.');
+        }
+      }
+      logger.i(
+        '[call][video] camera switch capture requested device='
+        '${deviceId?.hashCode.toUnsigned(32).toRadixString(16) ?? 'default'} '
+        'topology=$_topology',
+      );
+      stream = await navigator.mediaDevices.getUserMedia({
+        'video': {
+          if (deviceId != null) ...{
+            'deviceId': deviceId,
+            'optional': [
+              {'sourceId': deviceId},
+            ],
+          } else
+            'facingMode': 'user',
+          'width': 1280,
+          'height': 720,
+          'frameRate': 30,
+        },
+        'audio': false,
+      });
+      if (!_captureValid(epoch, pc)) {
+        await _disposeStream(stream);
+        return;
+      }
+      final tracks = stream.getVideoTracks();
+      if (tracks.isEmpty) throw StateError('Камера не предоставила видеопоток');
+      _logCaptureCreated('camera switch', stream, started);
+      if (!_captureValid(epoch, pc)) {
+        await _disposeStream(stream);
+        return;
+      }
+      final track = tracks.first;
+      final senderWasAdded =
+          _videoSender == null &&
+          !_directScreenSubstitution &&
+          _topology != 'SERVER';
+      if (senderWasAdded) {
+        _videoSender = await pc.addTrack(track, stream);
+      } else if (!_directScreenSubstitution && _videoSender != null) {
+        await _videoSender!.replaceTrack(track);
+      }
+      senderChanged = true;
+      _cameraStream = stream;
+      _cameraDeviceId = deviceId;
+      cameraMirrored = track.getSettings()['facingMode'] != 'environment';
+      _localVideo = true;
+      mediaError = null;
+      _watchCapture();
+      final captured = stream;
+      track.onEnded = () {
+        if (identical(_cameraStream, captured)) {
+          unawaited(
+            setVideoEnabled(false).catchError((Object e) {
+              logger.w('[call] camera ended: $e');
+            }),
+          );
+        }
+      };
+      _notifyInfo();
+      await _publishMedia(renegotiate: senderWasAdded);
+      _scheduleCaptureDiagnostics(
+        'camera switch',
+        stream,
+        _directScreenSubstitution ? _screenSender : _videoSender,
+      );
+      if (previousStream != null && !identical(previousStream, stream)) {
+        await _disposeStream(previousStream);
+      }
+    } catch (e, st) {
+      logger.e('[call][video] camera switch failed', error: e, stackTrace: st);
+      if (senderChanged) {
+        try {
+          await _videoSender?.replaceTrack(
+            previousStream?.getVideoTracks().firstOrNull,
+          );
+        } catch (_) {}
+      }
+      if (identical(_cameraStream, stream)) {
+        _cameraStream = previousStream;
+        _cameraDeviceId = previousDevice;
+        cameraMirrored = previousMirror;
+        _localVideo = previousStream != null;
+      }
+      await _disposeStream(stream);
+      if (_captureValid(epoch, pc)) await _restoreMediaSettings();
+      rethrow;
+    }
+  });
+
+  Future<void> switchCamera() => _mediaOperation(() async {
+    final tracks = _cameraStream?.getVideoTracks();
+    if (tracks == null || tracks.isEmpty) return;
+    cameraMirrored = await Helper.switchCamera(tracks.first);
+    _cameraDeviceId = null;
+    _notifyInfo();
+  });
+
+  Future<void> setScreenSharing(bool on, {DesktopCapturerSource? source}) =>
+      _mediaOperation(
+        () => on ? _startScreenShare(source) : _stopScreenShare(),
+      );
 
   // #***! ручной переход на серверную топологию
   Future<void> switchToServerTopology({bool force = false}) async {
     if (_topology == 'SERVER') return;
+    await _signaling?.switchTopology(force: force);
+  }
+
+  bool _captureValid(int epoch, RTCPeerConnection pc) =>
+      !_ended && epoch == _captureEpoch && identical(pc, _pc);
+
+  Future<void> _publishMedia({bool renegotiate = true}) async {
+    await _sendMediaSettings();
+    await _applyVideoQuality();
+    if (renegotiate && _topology != 'SERVER') await _createAndSendOffer();
+  }
+
+  Future<void> _applyVideoQuality() async {
+    await _configureVideoSender(
+      _videoSender,
+      maxBitrate: 3000000,
+      maxFramerate: 30,
+      maintainFramerate: false,
+    );
+    await _configureVideoSender(
+      _screenSender,
+      maxBitrate: _isDesktop ? 6000000 : 3000000,
+      maxFramerate: _isDesktop ? 30 : 20,
+      maintainFramerate: true,
+      scaleResolutionDownBy: _isDesktop ? 1 : 2,
+    );
+  }
+
+  Future<void> _configureVideoSender(
+    RTCRtpSender? sender, {
+    required int maxBitrate,
+    required int maxFramerate,
+    required bool maintainFramerate,
+    double scaleResolutionDownBy = 1,
+  }) async {
+    if (sender?.track?.kind != 'video') return;
     try {
-      await _signaling?.switchTopology(force: force);
+      final parameters = sender!.parameters;
+      parameters.degradationPreference = maintainFramerate
+          ? RTCDegradationPreference.MAINTAIN_FRAMERATE
+          : RTCDegradationPreference.BALANCED;
+      for (final encoding in parameters.encodings ?? const <RTCRtpEncoding>[]) {
+        encoding.active = true;
+        encoding.maxBitrate = maxBitrate;
+        encoding.maxFramerate = maxFramerate;
+        encoding.scaleResolutionDownBy = scaleResolutionDownBy;
+        encoding.priority = RTCPriorityType.high;
+        encoding.networkPriority = RTCPriorityType.high;
+      }
+      final applied = await sender.setParameters(parameters);
+      logger.i(
+        '[call][video] RTP quality applied=$applied '
+        'track=${sender.track?.id} maxBitrate=$maxBitrate '
+        'maxFramerate=$maxFramerate scale=$scaleResolutionDownBy',
+      );
     } catch (e) {
-      logger.w('[call] switch-topology failed: $e');
+      logger.w('[call][video] RTP quality unavailable: $e');
     }
   }
 
-  // #***! включение камеры
-  Future<void> _startCamera() async {
-    final pc = _pc;
-    if (pc == null) return;
+  Future<void> _restoreMediaSettings() async {
+    _notifyInfo();
+    if (_ended) return;
+    try {
+      await _publishMedia();
+    } catch (e) {
+      logger.w('[call] restore media settings failed: $e');
+    }
+  }
 
-    final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
-      'video': true,
-      'audio': false,
-    });
+  void _logCaptureCreated(String source, MediaStream stream, DateTime started) {
+    final track = stream.getVideoTracks().firstOrNull;
+    logger.i(
+      '[call][video] $source capture created in '
+      '${DateTime.now().difference(started).inMilliseconds}ms '
+      'stream=${stream.id} track=${track?.id} enabled=${track?.enabled} '
+      'settings=${_diagnosticTrackSettings(track)}',
+    );
+  }
 
-    await _disposeStream(_cameraStream);
-    _cameraStream = stream;
-
-    final tracks = stream.getVideoTracks();
-    final track = tracks.isEmpty ? null : tracks.first;
-    if (track != null) {
-      if (_videoSender == null) {
-        _videoSender = await pc.addTrack(track, stream);
-      } else {
-        await _videoSender!.replaceTrack(track);
+  Map<String, dynamic> _diagnosticTrackSettings(MediaStreamTrack? track) {
+    if (track == null) return const {};
+    final settings = Map<String, dynamic>.from(track.getSettings());
+    for (final key in const ['deviceId', 'groupId', 'sourceId']) {
+      final value = settings[key];
+      if (value is String && value.isNotEmpty) {
+        settings[key] = value.hashCode.toUnsigned(32).toRadixString(16);
       }
     }
+    return settings;
+  }
 
-    _localVideo = true;
-    await _renegotiate();
-    await _sendMediaSettings();
-    _notifyInfo();
+  void _scheduleCaptureDiagnostics(
+    String source,
+    MediaStream stream,
+    RTCRtpSender? sender,
+  ) {
+    for (final delay in const [Duration(seconds: 1), Duration(seconds: 5)]) {
+      Timer(delay, () {
+        if (_ended) return;
+        final track = stream.getVideoTracks().firstOrNull;
+        final active =
+            identical(_cameraStream, stream) ||
+            identical(_screenStream, stream);
+        logger.i(
+          '[call][video] $source capture health after ${delay.inSeconds}s '
+          'active=$active stream=${stream.id} track=${track?.id} '
+          'enabled=${track?.enabled} senderTrack=${sender?.track?.id} '
+          'senderAttached=${track != null && sender?.track?.id == track.id} '
+          'cameraSender=${_videoSender?.track?.id} '
+          'screenSender=${_screenSender?.track?.id} '
+          'topology=$_topology pc=${_pc?.connectionState} '
+          'ice=${_pc?.iceConnectionState} '
+          'settings=${_diagnosticTrackSettings(track)}',
+        );
+      });
+    }
+  }
+
+  void _watchCapture() {
+    _captureHealthTimer ??= Timer.periodic(const Duration(seconds: 4), (_) {
+      unawaited(_checkCaptureSources());
+    });
+  }
+
+  Future<void> _checkCaptureSources() async {
+    if (_checkingCapture || _ended || !_isDesktop) return;
+    _checkingCapture = true;
+    try {
+      final camera = _cameraStream;
+      if (camera != null) {
+        final devices = await navigator.mediaDevices.enumerateDevices();
+        final id = camera.getVideoTracks().first.getSettings()['deviceId'];
+        if (id is String &&
+            id.isNotEmpty &&
+            !devices.any((d) => d.kind == 'videoinput' && d.deviceId == id) &&
+            identical(camera, _cameraStream) &&
+            !_ended) {
+          mediaError = 'Камера отключена. Выберите доступное устройство.';
+          await setVideoEnabled(false);
+        }
+      }
+      final source = _screenSourceId;
+      final type = _screenSourceType;
+      if (_localScreen && source != null && type != null) {
+        final sources = await desktopCapturer.getSources(
+          types: [type],
+          thumbnailSize: ThumbnailSize(1, 1),
+        );
+        if (!sources.any((s) => s.id == source) &&
+            source == _screenSourceId &&
+            !_ended) {
+          mediaError =
+              'Источник демонстрации закрыт или недоступен. Выберите другое окно или экран.';
+          await setScreenSharing(false);
+        }
+      }
+    } catch (e) {
+      logger.w('[call] capture source check: $e');
+    } finally {
+      _checkingCapture = false;
+    }
+  }
+
+  Future<void> _startCamera({bool announce = true}) async {
+    if (_localVideo) return;
+    final pc = _pc;
+    if (pc == null || _ended) return;
+    final epoch = _captureEpoch;
+    MediaStream? stream;
+    final started = DateTime.now();
+    try {
+      final device = _cameraDeviceId;
+      if (device != null) {
+        final devices = await navigator.mediaDevices.enumerateDevices();
+        if (!devices.any(
+          (d) => d.kind == 'videoinput' && d.deviceId == device,
+        )) {
+          throw StateError('Камера отключена. Выберите доступное устройство.');
+        }
+      }
+      logger.i(
+        '[call][video] camera capture requested device='
+        '${device?.hashCode.toUnsigned(32).toRadixString(16) ?? 'default'} '
+        'topology=$_topology',
+      );
+      stream = await navigator.mediaDevices.getUserMedia({
+        'video': {
+          if (device != null) ...{
+            'deviceId': device,
+            'optional': [
+              {'sourceId': device},
+            ],
+          } else
+            'facingMode': 'user',
+          'width': 1280,
+          'height': 720,
+          'frameRate': 30,
+        },
+        'audio': false,
+      });
+      if (!_captureValid(epoch, pc)) {
+        await _disposeStream(stream);
+        return;
+      }
+      final tracks = stream.getVideoTracks();
+      if (tracks.isEmpty) throw StateError('Камера не предоставила видеопоток');
+      _logCaptureCreated('camera', stream, started);
+      if (!_captureValid(epoch, pc)) {
+        await _disposeStream(stream);
+        return;
+      }
+      final track = tracks.first;
+      final sender = _videoSender;
+      final senderWasAdded =
+          sender == null && !_directScreenSubstitution && _topology != 'SERVER';
+      if (senderWasAdded) {
+        final added = await pc.addTrack(track, stream);
+        if (_captureValid(epoch, pc)) _videoSender = added;
+      } else if (!_directScreenSubstitution && sender != null) {
+        await sender.replaceTrack(track);
+      }
+      if (!_captureValid(epoch, pc)) {
+        await _disposeStream(stream);
+        return;
+      }
+      _cameraStream = stream;
+      cameraMirrored = track.getSettings()['facingMode'] != 'environment';
+      _localVideo = true;
+      mediaError = null;
+      _watchCapture();
+      final captured = stream;
+      track.onEnded = () {
+        if (identical(_cameraStream, captured)) {
+          unawaited(
+            setVideoEnabled(false).catchError((Object e) {
+              logger.w('[call] camera ended: $e');
+            }),
+          );
+        }
+      };
+      _notifyInfo();
+      if (announce) await _publishMedia(renegotiate: senderWasAdded);
+      _scheduleCaptureDiagnostics(
+        'camera',
+        stream,
+        _directScreenSubstitution ? _screenSender : _videoSender,
+      );
+    } catch (e, st) {
+      logger.e('[call][video] camera start failed', error: e, stackTrace: st);
+      if (identical(_cameraStream, stream)) {
+        _cameraStream = null;
+        _localVideo = false;
+      }
+      await _disposeStream(stream);
+      if (_captureValid(epoch, pc)) {
+        try {
+          await _videoSender?.replaceTrack(null);
+        } catch (_) {}
+        if (announce) await _restoreMediaSettings();
+      }
+      rethrow;
+    }
   }
 
   Future<void> _stopCamera() async {
-    try {
-      await _videoSender?.replaceTrack(null);
-    } catch (_) {}
-    await _disposeStream(_cameraStream);
+    final stream = _cameraStream;
     _cameraStream = null;
     _localVideo = false;
-    await _sendMediaSettings();
-    _notifyInfo();
-  }
-
-  // #***! демонстрация экрана, на мобилках нужно своё разрешение
-  Future<void> _startScreenShare() async {
-    if (_pc == null) return;
-
-    await CallBridge.instance.setScreenShare(true);
-
-    _localScreen = true;
-    await _sendMediaSettings();
-    _notifyInfo();
-
-    final MediaStream stream;
+    await _disposeStream(stream);
     try {
-      stream = await _captureScreen();
-    } catch (e) {
-      _localScreen = false;
-      await CallBridge.instance.setScreenShare(false);
-      await _sendMediaSettings();
-      _notifyInfo();
-      rethrow;
-    }
-    logger.i('[call] screen captured, topology=$_topology');
-
-    await _disposeStream(_screenStream);
-    _screenStream = stream;
-
-    final pc = _pc;
-    if (pc == null) return;
-
-    final tracks = stream.getVideoTracks();
-    final track = tracks.isEmpty ? null : tracks.first;
-    if (track != null) {
-      if (_screenSender == null) {
-        _screenSender = await pc.addTrack(track, stream);
-      } else {
-        await _screenSender!.replaceTrack(track);
+      if (!_directScreenSubstitution) {
+        await _videoSender?.replaceTrack(null);
       }
-    }
-
-    logger.i('[call] screen share published, topology=$_topology');
-    await _renegotiate();
-    await _sendMediaSettings();
+    } catch (_) {}
     _notifyInfo();
+    if (!_ended) await _sendMediaSettings();
   }
 
-  Future<MediaStream> _captureScreen() async {
-    if (!_isDesktop) {
-      return navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
-        'video': true,
+  Future<void> _startScreenShare(DesktopCapturerSource? source) async {
+    final pc = _pc;
+    if (pc == null || _ended) return;
+    final epoch = _captureEpoch;
+    final previousStream = _screenStream;
+    final previousName = _screenSourceName;
+    final previousId = _screenSourceId;
+    final previousType = _screenSourceType;
+    final previousVideoSender = _videoSender;
+    final previousScreenSender = _screenSender;
+    final previousVideoTrack = previousVideoSender?.track;
+    final previousDirectSubstitution = _directScreenSubstitution;
+    MediaStream? stream;
+    DesktopCapturerSource? selectedSource = source;
+    var senderChanged = false;
+    var bridgeEnabled = false;
+    final started = DateTime.now();
+    try {
+      if (_isDesktop && source == null) {
+        throw StateError('Выберите окно или экран для демонстрации');
+      }
+      if (_isDesktop && source != null) {
+        final current = await desktopCapturer.getSources(
+          types: [source.type],
+          thumbnailSize: ThumbnailSize(1, 1),
+        );
+        selectedSource = current
+            .where((candidate) => candidate.id == source.id)
+            .firstOrNull;
+        if (selectedSource == null) {
+          throw StateError(
+            'Выбранное окно или экран больше недоступны. Обновите список источников.',
+          );
+        }
+      }
+      logger.i(
+        '[call][video] screen capture requested type=${selectedSource?.type} '
+        'source=${selectedSource?.id.hashCode.toUnsigned(32).toRadixString(16)} '
+        'topology=$_topology platform=$defaultTargetPlatform',
+      );
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        if (!await Helper.requestCapturePermission()) {
+          throw StateError('Демонстрация экрана отменена');
+        }
+      }
+      if (!_captureValid(epoch, pc)) return;
+      if (previousStream == null) {
+        await CallBridge.instance.setScreenShare(true);
+        bridgeEnabled = true;
+      }
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        'video': selectedSource == null
+            ? {
+                'mandatory': {
+                  'maxWidth': 1280,
+                  'maxHeight': 1280,
+                  'maxFrameRate': 20.0,
+                },
+              }
+            : {
+                'deviceId': {'exact': selectedSource.id},
+                'mandatory': {
+                  'frameRate': 30.0,
+                  'maxWidth': 1920,
+                  'maxHeight': 1080,
+                },
+              },
         'audio': false,
       });
+      if (!_captureValid(epoch, pc)) {
+        await _disposeStream(stream);
+        await CallBridge.instance.setScreenShare(false);
+        return;
+      }
+      final tracks = stream.getVideoTracks();
+      if (tracks.isEmpty) {
+        throw StateError('Источник не предоставил видеопоток');
+      }
+      _logCaptureCreated('screen', stream, started);
+      if (!_captureValid(epoch, pc)) {
+        await _disposeStream(stream);
+        await CallBridge.instance.setScreenShare(false);
+        return;
+      }
+      final track = tracks.first;
+      final useDirectSubstitution = !isGroup && _topology != 'SERVER';
+      var senderWasAdded = false;
+      if (useDirectSubstitution) {
+        final sender = _screenSender ?? _videoSender;
+        if (sender == null) {
+          final added = await pc.addTrack(track, stream);
+          if (_captureValid(epoch, pc)) _screenSender = added;
+          senderWasAdded = true;
+        } else {
+          await sender.replaceTrack(track);
+          _screenSender = sender;
+        }
+        _videoSender = null;
+        _directScreenSubstitution = true;
+        logger.i(
+          '[call][video] one-to-one DIRECT sender switched to screen '
+          'track=${track.id}',
+        );
+      } else if (_screenSender == null && _topology != 'SERVER') {
+        final added = await pc.addTrack(track, stream);
+        if (_captureValid(epoch, pc)) _screenSender = added;
+        senderWasAdded = true;
+      } else if (_screenSender != null) {
+        await _screenSender!.replaceTrack(track);
+      }
+      senderChanged = true;
+      if (!_captureValid(epoch, pc)) {
+        final restoreTrack = previousDirectSubstitution
+            ? previousStream?.getVideoTracks().firstOrNull
+            : previousVideoTrack;
+        await (_screenSender ?? previousScreenSender)?.replaceTrack(
+          restoreTrack,
+        );
+        _videoSender = previousVideoSender;
+        _screenSender = previousScreenSender;
+        _directScreenSubstitution = previousDirectSubstitution;
+        await _disposeStream(stream);
+        if (bridgeEnabled) await CallBridge.instance.setScreenShare(false);
+        return;
+      }
+      _screenStream = stream;
+      _screenSourceName = selectedSource?.name;
+      _screenSourceId = selectedSource?.id;
+      _screenSourceType = selectedSource?.type;
+      _localScreen = true;
+      mediaError = null;
+      _watchCapture();
+      final captured = stream;
+      track.onEnded = () {
+        if (identical(_screenStream, captured)) {
+          unawaited(
+            setScreenSharing(false).catchError((Object e) {
+              logger.w('[call] screen capture ended: $e');
+            }),
+          );
+        }
+      };
+      logger.i(
+        '[call][video] screen capture started type=${selectedSource?.type} '
+        'source=${selectedSource?.id.hashCode.toUnsigned(32).toRadixString(16)} '
+        'track=${track.id} settings=${_diagnosticTrackSettings(track)}',
+      );
+      _notifyInfo();
+      await _publishMedia(renegotiate: senderWasAdded);
+      _scheduleCaptureDiagnostics('screen', stream, _screenSender);
+      if (previousStream != null && !identical(previousStream, stream)) {
+        await _disposeStream(previousStream);
+      }
+    } catch (e, st) {
+      logger.e(
+        '[call][video] screen capture start failed',
+        error: e,
+        stackTrace: st,
+      );
+      if (senderChanged) {
+        try {
+          final restoreTrack = previousDirectSubstitution
+              ? previousStream?.getVideoTracks().firstOrNull
+              : previousVideoTrack;
+          await (_screenSender ?? previousScreenSender)?.replaceTrack(
+            restoreTrack,
+          );
+        } catch (_) {}
+      }
+      _videoSender = previousVideoSender;
+      _screenSender = previousScreenSender;
+      _directScreenSubstitution = previousDirectSubstitution;
+      if (identical(_screenStream, stream)) {
+        _screenStream = previousStream;
+        _screenSourceName = previousName;
+        _screenSourceId = previousId;
+        _screenSourceType = previousType;
+        _localScreen = previousStream != null;
+      }
+      await _disposeStream(stream);
+      if (bridgeEnabled) await CallBridge.instance.setScreenShare(false);
+      if (_captureValid(epoch, pc)) {
+        await _restoreMediaSettings();
+      }
+      rethrow;
     }
-    final sources = await desktopCapturer.getSources(
-      types: [SourceType.Screen],
-    );
-    if (sources.isEmpty) {
-      throw StateError('нет доступных экранов для захвата');
-    }
-    return navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
-      'video': {
-        'deviceId': {'exact': sources.first.id},
-        'mandatory': {'frameRate': 30.0},
-      },
-      'audio': false,
-    });
   }
 
   Future<void> _stopScreenShare() async {
-    try {
-      await _screenSender?.replaceTrack(null);
-    } catch (_) {}
-    await _disposeStream(_screenStream);
+    final stream = _screenStream;
+    final directSubstitution = _directScreenSubstitution;
+    final sender = _screenSender;
     _screenStream = null;
+    _screenSourceName = null;
+    _screenSourceId = null;
+    _screenSourceType = null;
     _localScreen = false;
-    await CallBridge.instance.setScreenShare(false);
-    await _sendMediaSettings();
-    _notifyInfo();
-  }
-
-  // #***! пересогласование после смены дорожек
-  Future<void> _renegotiate() async {
-    if (_topology == 'SERVER') return;
-    try {
-      await _createAndSendOffer();
-    } catch (e) {
-      logger.w('[call] renegotiation offer failed: $e');
+    if (directSubstitution) {
+      try {
+        final cameraTrack = _cameraStream?.getVideoTracks().firstOrNull;
+        await sender?.replaceTrack(cameraTrack);
+      } catch (_) {}
+      _videoSender = sender;
+      _screenSender = null;
+      _directScreenSubstitution = false;
+      await _applyVideoQuality();
+      logger.i(
+        '[call][video] one-to-one DIRECT sender restored to camera '
+        'track=${_videoSender?.track?.id}',
+      );
+    } else {
+      try {
+        await _screenSender?.replaceTrack(null);
+      } catch (_) {}
     }
+    await _disposeStream(stream);
+    await CallBridge.instance.setScreenShare(false);
+    _notifyInfo();
+    if (!_ended) await _sendMediaSettings();
   }
 
-  Future<void> _clearParticipantStreams() async {
-    final entries = Map<int, MediaStream>.from(_participantStreams);
+  Future<void> _clearParticipantStreams({bool dispose = true}) async {
+    final candidates = [
+      ..._participantStreams.values,
+      ..._participantScreens.values,
+      if (dispose) ..._retiredParticipantStreams,
+    ];
+    final streamsById = <String, MediaStream>{};
+    for (final stream in candidates) {
+      streamsById[stream.id] = stream;
+    }
+    final entries = streamsById.values.toList(growable: false);
+    final ids = {..._participantStreams.keys, ..._participantScreens.keys};
     _participantStreams.clear();
-    for (final id in entries.keys) {
+    _participantScreens.clear();
+    if (dispose) {
+      _retiredParticipantStreams.clear();
+    } else {
+      _retiredParticipantStreams.addAll(entries);
+    }
+    for (final id in ids) {
       if (!_participantStreamUpdates.isClosed) {
         _participantStreamUpdates.add(id);
       }
     }
-    for (final stream in entries.values) {
-      try {
-        await stream.dispose();
-      } catch (_) {}
+    if (dispose) {
+      for (final stream in entries) {
+        if (_borrowedRemoteStreamIds.contains(stream.id)) continue;
+        try {
+          await stream.dispose();
+        } catch (_) {}
+      }
     }
   }
 
   Future<void> _disposeStream(MediaStream? stream) async {
     if (stream == null) return;
     for (final track in stream.getTracks()) {
+      track.onEnded = null;
       try {
         await track.stop();
       } catch (_) {}
@@ -2393,12 +3335,19 @@ class CallSession {
   void _end() {
     if (_ended) return;
     _ended = true;
+    _captureEpoch++;
+    _captureHealthTimer?.cancel();
+    _captureHealthTimer = null;
+    _pendingProducerUpdate = null;
     _setState(CallSessionState.ended);
     _dispose();
   }
 
   // #***! освобождаем всё, соединение дорожки подписки стримы
   Future<void> _dispose() async {
+    _localVideo = false;
+    _localScreen = false;
+    await CallBridge.instance.setScreenShare(false);
     _levelTimer?.cancel();
     _videoStatsTimer?.cancel();
     try {
@@ -2423,6 +3372,8 @@ class CallSession {
       } catch (_) {}
     }
     await _clearParticipantStreams();
+    _remoteTrackStreams.clear();
+    _borrowedRemoteStreamIds.clear();
     await _signaling?.close();
     if (!_participantStreamUpdates.isClosed) {
       await _participantStreamUpdates.close();
@@ -2491,6 +3442,15 @@ class CallSession {
       _peerMuted = muted;
       _peerVideo = video;
       _peerScreen = screen;
+      final participant = _peerId;
+      if (participant != null) {
+        if (!video) {
+          unawaited(_removeParticipantStream(participant, screen: false));
+        }
+        if (!screen) {
+          unawaited(_removeParticipantStream(participant, screen: true));
+        }
+      }
       _notifyInfo();
       if (video || screen) unawaited(_collectReceivers());
     }

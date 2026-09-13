@@ -182,8 +182,8 @@ class SfuLayoutItem {
 
   const SfuLayoutItem({
     required this.trackKey,
-    this.width = 640,
-    this.height = 360,
+    this.width = 1280,
+    this.height = 720,
   });
 }
 
@@ -202,10 +202,11 @@ class SfuCommandChannel {
 
   // #***! сервер шлёт короткие алиасы вместо ключей треков, держим таблицу
   final Map<int, String> _aliases = {};
-  final _slots = StreamController<Map<String, int>>.broadcast();
+  List<int>? _slotAliases;
+  final _slots = StreamController<Map<int, String>>.broadcast();
   final _levels = StreamController<Map<String, int>>.broadcast();
 
-  Stream<Map<String, int>> get slotUpdates => _slots.stream;
+  Stream<Map<int, String>> get slotUpdates => _slots.stream;
   Stream<Map<String, int>> get audioLevels => _levels.stream;
 
   // #***! привязка к открытому каналу
@@ -320,16 +321,16 @@ class SfuCommandChannel {
             final key = reader.readString();
             _aliases[reader.readInt()] = key;
           }
+          _emitSlots();
           break;
         case _notifySlots:
           final count = reader.readArrayHeader();
-          final slots = <String, int>{};
+          final aliases = <int>[];
           for (var i = 0; i < count; i++) {
-            final key = _aliases[reader.readInt()];
-            if (key != null) slots[key] = i;
+            aliases.add(reader.readInt());
           }
-          logger.i('[call][sfu] slots: $slots');
-          if (!_slots.isClosed) _slots.add(slots);
+          _slotAliases = aliases;
+          _emitSlots();
           break;
         case _notifyAudioLevels:
           final count = reader.readMapHeader();
@@ -347,9 +348,27 @@ class SfuCommandChannel {
     }
   }
 
+  void _emitSlots() {
+    final aliases = _slotAliases;
+    if (aliases == null) return;
+    final slots = <int, String>{};
+    var unresolved = 0;
+    for (var i = 0; i < aliases.length; i++) {
+      final key = _aliases[aliases[i]];
+      if (key == null) {
+        unresolved++;
+      } else {
+        slots[i] = key;
+      }
+    }
+    logger.i('[call][sfu] slots: $slots unresolved=$unresolved');
+    if (!_slots.isClosed) _slots.add(slots);
+  }
+
   Future<void> dispose() async {
     _command = null;
     _aliases.clear();
+    _slotAliases = null;
     if (!_slots.isClosed) await _slots.close();
     if (!_levels.isClosed) await _levels.close();
   }

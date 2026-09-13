@@ -147,13 +147,14 @@ class _MicrophoneSheetState extends State<_MicrophoneSheet> {
                   shrinkWrap: true,
                   padding: EdgeInsets.zero,
                   children: [
-                    _tile(
-                      cs,
-                      id: null,
-                      label: l10n.callMicrophoneSystem,
-                      icon: Symbols.settings_voice,
-                      viaDevice: true,
-                    ),
+                    if (!AudioDevices.switchesInsideEngine)
+                      _tile(
+                        cs,
+                        id: null,
+                        label: l10n.callMicrophoneSystem,
+                        icon: Symbols.settings_voice,
+                        viaDevice: true,
+                      ),
                     if (options.isEmpty)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
@@ -212,10 +213,12 @@ class _MicrophoneSheetState extends State<_MicrophoneSheet> {
           ),
         ),
         IconButton(
-          onPressed: () {
-            setState(() => _options = null);
-            _load();
-          },
+          onPressed: _switching
+              ? null
+              : () {
+                  setState(() => _options = null);
+                  _load();
+                },
           tooltip: l10n.callMicrophoneRefresh,
           icon: Icon(Symbols.refresh, color: cs.onSurfaceVariant),
         ),

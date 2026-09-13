@@ -38,6 +38,7 @@ import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
 import 'core/config/custom_font_service.dart';
 import 'core/config/app_message_actions_style.dart';
+import 'core/config/app_audio_output.dart';
 import 'core/config/app_microphone.dart';
 import 'core/config/app_swipe_back_desktop.dart';
 import 'core/config/app_pranks.dart';
@@ -240,6 +241,7 @@ void main(List<String> args) async {
   final messageActionsFuture = AppMessageActionsStyle.load();
   final swipeBackFuture = AppSwipeBackDesktop.load();
   final microphoneFuture = AppMicrophone.load();
+  final audioOutputFuture = AppAudioOutput.load();
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
   final commandsFuture = AppCommands.load();
@@ -309,6 +311,7 @@ void main(List<String> args) async {
     messageActionsFuture,
     swipeBackFuture,
     microphoneFuture,
+    audioOutputFuture,
     pranksFuture,
     storiesFuture,
     commandsFuture,

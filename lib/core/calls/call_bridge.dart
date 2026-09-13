@@ -101,6 +101,7 @@ class CallBridge {
       });
     } catch (e) {
       logger.w('CallBridge.setScreenShare: enabled=$enabled $e');
+      if (enabled) rethrow;
     }
   }
 
