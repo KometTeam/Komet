@@ -653,6 +653,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgActionsEditHistory => 'Edit history';
 
   @override
+  String get msgActionsInfo => 'Info';
+
+  @override
   String get msgActionsReadBy => 'Read by';
 
   @override

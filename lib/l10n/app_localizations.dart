@@ -1334,6 +1334,12 @@ abstract class AppLocalizations {
   /// **'Edit history'**
   String get msgActionsEditHistory;
 
+  /// No description provided for @msgActionsInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Info'**
+  String get msgActionsInfo;
+
   /// No description provided for @msgActionsReadBy.
   ///
   /// In en, this message translates to:

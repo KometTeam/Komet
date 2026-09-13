@@ -220,6 +220,7 @@
   "msgActionsUnpin": "Открепить",
   "pinnedMessageTitle": "Закреплённое сообщение",
   "msgActionsEditHistory": "История изменений",
+  "msgActionsInfo": "Info",
   "msgActionsReadBy": "Кем прочитано",
   "msgActionsReadByEmpty": "Пока никто не прочитал",
   "msgActionsReadByUnknownUser": "Пользователь",

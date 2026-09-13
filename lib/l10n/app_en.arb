@@ -227,6 +227,7 @@
   "msgActionsUnpin": "Unpin",
   "pinnedMessageTitle": "Pinned message",
   "msgActionsEditHistory": "Edit history",
+  "msgActionsInfo": "Info",
   "msgActionsReadBy": "Read by",
   "msgActionsReadByEmpty": "Nobody has read it yet",
   "msgActionsReadByUnknownUser": "User",
