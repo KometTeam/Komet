@@ -703,6 +703,19 @@ class CachedMessage {
   List<FormatRange> get formatRanges =>
       _formatRangesCache[this] ??= parseFormatElements(payload?['elements']);
 
+  // #***! у своего сообщения до ответа сервера payload'а нет, собираем его
+  // из вложений чтобы превью считал тот же код что и для входящих
+  Map<String, dynamic> get previewPayload =>
+      payload ??
+      {
+        'text': text,
+        'attaches': [
+          for (final attachment
+              in attachments ?? const <MessageAttachment>[])
+            attachment.toMap(),
+        ],
+      };
+
   // #***! 20+ строк разбираем в изоляте иначе анимация проседает
   static List<CachedMessage> _decodeRows(List<Map<String, dynamic>> rows) =>
       rows.map(CachedMessage.fromDbRow).toList();

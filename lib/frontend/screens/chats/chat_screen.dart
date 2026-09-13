@@ -1471,15 +1471,8 @@ class _ChatScreenState extends State<ChatScreen>
     showCustomNotification(context, 'Сообщение откреплено');
   }
 
-  ({String? text, bool isPreview}) _pinnedPreviewFor(CachedMessage message) {
-    final payload = message.payload;
-    if (payload != null) return pinnedMessagePreview(payload);
-    return pinnedMessagePreview({
-      'text': message.text,
-      'attaches':
-          message.attachments?.map((a) => a.toMap()).toList() ?? const [],
-    });
-  }
+  ({String? text, bool isPreview}) _pinnedPreviewFor(CachedMessage message) =>
+      pinnedMessagePreview(message.previewPayload);
 
   void _applyPinnedMessageLocally({
     int? messageId,

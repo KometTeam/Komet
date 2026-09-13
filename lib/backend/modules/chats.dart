@@ -638,6 +638,27 @@ class ChatsModule {
     });
   }
 
+  // #***! своё медиа в строку чата на всех стадиях: часики пока грузится,
+  // галочка когда сервер принял, крестик если не ушло
+  Future<void> applyOutgoingMessage(
+    CachedMessage message, {
+    required String status,
+  }) {
+    final payload = {
+      ...message.previewPayload,
+      if (message.e2ee != CachedMessage.e2eeNone) 'text': null,
+    };
+    return applyOutgoing(
+      message.accountId,
+      message.chatId,
+      messageId: message.id,
+      time: message.time,
+      text: messagePreviewText(payload) ?? '',
+      preview: messagePreviewMedia(payload),
+      status: status,
+    );
+  }
+
   // #***! chatsChanged на любое изменение, список чатов подписан
   final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   void _bump() => chatsChanged.value = chatsChanged.value + 1;

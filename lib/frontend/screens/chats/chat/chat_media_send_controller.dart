@@ -5,7 +5,6 @@ import 'dart:io' show File;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
-import '../../../../backend/modules/chat_preview.dart';
 import '../../../../backend/modules/chats.dart';
 import '../../../../backend/modules/contacts.dart';
 import '../../../../backend/modules/messages.dart';
@@ -89,10 +88,17 @@ class ChatMediaSendController {
     );
     setLastSentId(tempId);
     chatController.addMessage(msg);
+    _previewInChatList(msg, 'sending');
     bumpMessages();
     Haptics.send();
     scrollToBottom();
     return msg;
+  }
+
+  // #***! строку в списке чатов обновляем сами: экран чата к моменту
+  // доставки могли уже закрыть, а пуш на своё сообщение не приходит
+  void _previewInChatList(CachedMessage message, String status) {
+    unawaited(chats.applyOutgoingMessage(message, status: status));
   }
 
   void updateFileMessageStatus(
@@ -119,6 +125,7 @@ class ChatMediaSendController {
         attachments: attachment != null ? [attachment] : old.attachments,
       ),
     );
+    _previewInChatList(chatController.messages[idx], status);
     bumpMessages();
   }
 
@@ -129,6 +136,7 @@ class ChatMediaSendController {
         idx,
         chatController.messages[idx].copyWith(status: 'error'),
       );
+      _previewInChatList(chatController.messages[idx], 'error');
       bumpMessages();
     }
     Haptics.error();
@@ -153,6 +161,7 @@ class ChatMediaSendController {
     );
     chatController.addMessage(tempMessage);
     setLastSentId(tempId);
+    _previewInChatList(tempMessage, 'sending');
     bumpMessages();
     Haptics.send();
     scrollToBottom();
@@ -171,17 +180,7 @@ class ChatMediaSendController {
       chatController.setMessageAt(idx, real);
       bumpMessages();
       unawaited(chatController.persistOutgoing(real, removeId: tempId));
-      unawaited(
-        chats.applyOutgoing(
-          _myId,
-          _chatId,
-          messageId: real.id,
-          time: real.time,
-          text: messagePreviewText(serverMsg) ?? '',
-          preview: messagePreviewMedia(serverMsg),
-          status: 'sent',
-        ),
-      );
+      _previewInChatList(real, 'sent');
     } catch (e) {
       if (!isMounted()) return;
       updateFileMessageStatus(tempId, 'error');
@@ -441,6 +440,7 @@ class ChatMediaSendController {
 
     chatController.addMessage(placeholder);
     setLastSentId(tempId);
+    _previewInChatList(placeholder, 'sending');
     bumpMessages();
     Haptics.send();
     scrollToBottom();
@@ -528,6 +528,7 @@ class ChatMediaSendController {
       );
       chatController.addMessage(placeholder);
       setLastSentId(tempId);
+      _previewInChatList(placeholder, 'sending');
       bumpMessages();
       Haptics.send();
       scrollToBottom();

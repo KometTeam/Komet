@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -194,7 +195,12 @@ class _PreviewThumb extends StatelessWidget {
           children: [
             ColoredBox(color: cs.surfaceContainerHighest),
             if (provider != null)
-              Image(image: provider, fit: BoxFit.cover, gaplessPlayback: true),
+              Image(
+                image: provider,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
             if (thumb.video)
               Center(
                 child: Icon(
@@ -215,6 +221,9 @@ class _PreviewThumb extends StatelessWidget {
 }
 
 const int _thumbCacheLimit = 128;
+// #***! миниатюра в строке чата размером с букву, снимок с камеры туда
+// целиком декодировать незачем
+const int _localThumbWidth = 128;
 final Map<String, ImageProvider> _thumbCache = {};
 
 ImageProvider? _thumbProvider(String source) {
@@ -225,6 +234,11 @@ ImageProvider? _thumbProvider(String source) {
     provider = _decodeDataUri(source);
   } else if (source.startsWith('http')) {
     provider = CachedNetworkImageProvider(source, maxWidth: 64, maxHeight: 64);
+  } else if (source.startsWith('file:')) {
+    provider = ResizeImage(
+      FileImage(File.fromUri(Uri.parse(source))),
+      width: _localThumbWidth,
+    );
   } else {
     provider = null;
   }
