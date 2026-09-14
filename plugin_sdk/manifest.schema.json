@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/KometTeam/Komet/main/plugin_sdk/manifest.schema.json",
+  "title": "Komet plugin manifest",
+  "description": "manifest.json в корне пакета .kinet. Описание полей — PLUGINS.md.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "version",
+    "apiVersion",
+    "main",
+    "permissions",
+    "commands"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "description": "Уникальный id в обратной доменной записи. Префикс pw.komet. зарезервирован за встроенными плагинами.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z0-9]+)+$"
+    },
+    "name": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "apiVersion": {
+      "description": "Версия komet:api, которую ждёт плагин.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "main": {
+      "description": "Путь к главному модулю внутри пакета.",
+      "type": "string",
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*//)(?!(?:.*/)?\\.\\.(?:/|$)).+\\.js$"
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/permission"
+      },
+      "uniqueItems": true
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/command"
+      }
+    },
+    "updateUrl": {
+      "description": "HTTPS-адрес манифеста обновлений (update-manifest.schema.json).",
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "signature": {
+      "$ref": "#/$defs/signature"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "version": {
+      "description": "SemVer: 1.2.3, 1.2.3-beta.1, 1.2.3+build.5.",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "permission": {
+      "type": "string",
+      "enum": [
+        "chat.write",
+        "chat.edit",
+        "chat.photo",
+        "chat.file",
+        "ui.notify",
+        "contact.read",
+        "message.readReply",
+        "network",
+        "storage"
+      ]
+    },
+    "command": {
+      "type": "object",
+      "required": ["name", "description", "handler"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Имя команды; ведущий / можно не писать.",
+          "type": "string",
+          "pattern": "^/?[A-Za-z][A-Za-z0-9_-]{0,31}$"
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "handler": {
+          "description": "Имя функции, экспортированной из main.",
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/argument"
+          }
+        },
+        "hidden": {
+          "description": "Не показывать команду в подсказках.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "argument": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true
+        },
+        "rest": {
+          "description": "Забирает весь остаток строки. Только у последнего аргумента.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "signature": {
+      "description": "Добавляется tool/kinet_sign.dart, вручную не заполняется.",
+      "type": "object",
+      "required": ["algorithm", "publicKey", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "ed25519"
+        },
+        "publicKey": {
+          "description": "32 байта в base64.",
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "value": {
+          "description": "64 байта в base64.",
+          "type": "string",
+          "contentEncoding": "base64"
+        }
+      }
+    }
+  }
+}

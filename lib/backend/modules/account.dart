@@ -8,7 +8,9 @@ import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/media/media_playback.dart';
+import '../../core/crypto/e2ee_service.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/utils/parse.dart';
 import '../../core/storage/profile_deletion_store.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
@@ -100,8 +102,11 @@ class AccountModule {
   Future<void> unregisterPushToken(String pushToken) =>
       _privacy.unregisterPushToken(pushToken);
 
-  Future<ProfileData> updateProfileName(String firstName, String? lastName) =>
-      _profile.updateProfileName(firstName, lastName);
+  Future<ProfileData> updateProfile(
+    String firstName,
+    String? lastName, {
+    String? description,
+  }) => _profile.updateProfile(firstName, lastName, description: description);
 
   Future<ProfileData> updateProfileAvatar(
     String photoToken, {
@@ -194,16 +199,16 @@ class AccountModule {
 
     final result = VerifyCodeResult(payload: data.cast<dynamic, dynamic>());
 
-    final sessionToken = result.loginToken ?? result.registerToken;
+    final loginToken = result.loginToken;
     final verifiedProfile = _profileFromVerifyPayload(result.payload);
     final accountId = result.accountId ?? verifiedProfile?.id;
 
     // #***! токен сохраняем сразу и переносим спуф профиль
-    if (sessionToken != null && accountId != null) {
-      if (result.loginToken != null && verifiedProfile != null) {
+    if (loginToken != null && accountId != null) {
+      if (verifiedProfile != null) {
         await AppDatabase.saveProfile(verifiedProfile, isActive: true);
       }
-      await TokenStorage.saveToken(sessionToken, accountId);
+      await TokenStorage.saveToken(loginToken, accountId);
       await TokenStorage.setActiveAccount(accountId);
       await SpoofingService.commitPendingSpoof(accountId);
     }
@@ -218,7 +223,7 @@ class AccountModule {
   }
 
   // #***! регистрация после кода
-  Future<int> completeRegistration({
+  Future<RegistrationResult> completeRegistration({
     required String token,
     required String firstName,
     String? lastName,
@@ -258,15 +263,21 @@ class AccountModule {
       throw Exception('completeRegistration: отсутствует id аккаунта');
     }
 
+    final loginToken = data['token'];
+    if (loginToken is! String || loginToken.isEmpty) {
+      throw Exception('completeRegistration: отсутствует token в ответе');
+    }
+
     final profile = ProfileData.fromServerProfile(
       profileMap.cast<dynamic, dynamic>(),
     );
     await AppDatabase.saveProfile(profile, isActive: true);
+    await TokenStorage.saveToken(loginToken, accountId);
     await TokenStorage.setActiveAccount(accountId);
     await SpoofingService.commitPendingSpoof(accountId);
 
     logger.i('Регистрация завершена, accountId=$accountId');
-    return accountId;
+    return RegistrationResult(loginToken: loginToken, accountId: accountId);
   }
 
   // #***! основной вход, syncParams говорят серверу что у нас есть
@@ -280,7 +291,7 @@ class AccountModule {
     int? resolvedAccountId =
         accountId ?? await TokenStorage.getActiveAccountId();
 
-    String? authToken = token;
+    String? authToken = token == null || token.isEmpty ? null : token;
     if (authToken == null) {
       if (resolvedAccountId == null) {
         throw StateError('login: нет активного аккаунта');
@@ -359,6 +370,9 @@ class AccountModule {
 
   // #***! вход по чужому токену из дев меню
   Future<LoginResult> loginWithToken(String token) async {
+    if (token.isEmpty) {
+      throw StateError('loginWithToken: пустой токен');
+    }
     await TokenStorage.clearActiveAccount();
     try {
       await _api.disconnect();
@@ -432,6 +446,7 @@ class AccountModule {
 
   // #***! удаляем локально, база токен спуф и заявка
   Future<void> removeAccount(int accountId) async {
+    await E2eeService.instance.eraseAccount(accountId);
     await AppDatabase.deleteAccount(accountId);
     await TokenStorage.deleteAccount(accountId);
     await SpoofingService.clearAccountSpoof(accountId);
@@ -621,7 +636,7 @@ class AccountModule {
       if (sync.serverConfigSeen && sync.configHash != null) {
         payload['configHash'] = sync.configHash;
       }
-    // #***! нет маркеров, просим всё с нуля
+      // #***! нет маркеров, просим всё с нуля
     } else {
       payload['presenceSync'] = -1;
       payload['chatsSync'] = -1;
@@ -774,11 +789,19 @@ class AccountModule {
     final config = data['config'] as Map?;
     final serverConfig = config?['server'] as Map?;
     if (serverConfig != null) {
-      await AppDatabase.setSyncValue(accountId, SyncKey.serverConfigSeen, '1');
+      await AppDatabase.setSyncValue(
+        accountId,
+        SyncKey.serverConfigSeen,
+        LoginSyncParams.serverConfigRevision,
+      );
       await AppDatabase.setSyncValue(
         accountId,
         SyncKey.profileInviteLink,
         serverConfig['invite-link']?.toString().trim() ?? '',
+      );
+      await AppDatabase.setWelcomeStickerIds(
+        accountId,
+        parseIntList(serverConfig['welcome-sticker-ids']),
       );
       await _persistEntryBannerApps(accountId, serverConfig);
     }
@@ -787,26 +810,8 @@ class AccountModule {
     await AppDatabase.saveLoginInfo(accountId, jsonEncode(info));
   }
 
-  // #***! id мини аппок ловим по имени иконки в конфиге
   Future<void> _persistEntryBannerApps(int accountId, Map serverConfig) async {
-    final banners = serverConfig['settings-entry-banners'];
-    if (banners is! List) return;
-    final resolved = <String, int>{};
-    for (final banner in banners) {
-      final items = (banner is Map) ? banner['items'] : null;
-      if (items is! List) continue;
-      for (final item in items) {
-        if (item is! Map) continue;
-        final appId = item['appid'];
-        if (appId is! int) continue;
-        final icon = item['icon']?.toString().toLowerCase() ?? '';
-        for (final entry in EntryBannerApps.iconMatchers.entries) {
-          if (!resolved.containsKey(entry.key) && icon.contains(entry.value)) {
-            resolved[entry.key] = appId;
-          }
-        }
-      }
-    }
+    final resolved = EntryBannerApps.appIdsFrom(serverConfig);
     for (final entry in resolved.entries) {
       await AppDatabase.setSyncValue(
         accountId,

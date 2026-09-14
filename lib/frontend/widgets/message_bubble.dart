@@ -853,6 +853,8 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  static const double _groupAvatarSize = 30;
+
   Widget _buildLeadingAvatar(ColorScheme cs) {
     final senderAvatar =
         senderAvatarOverride ?? ContactCache.getAvatar(message.senderId);
@@ -861,7 +863,7 @@ class MessageBubble extends StatelessWidget {
     final Widget avatar;
     if (senderAvatar != null && senderAvatar.isNotEmpty) {
       avatar = CircleAvatar(
-        radius: 15,
+        radius: _groupAvatarSize / 2,
         backgroundImage: CachedNetworkImageProvider(
           senderAvatar,
           maxWidth: 96,
@@ -871,7 +873,7 @@ class MessageBubble extends StatelessWidget {
       );
     } else {
       avatar = CircleAvatar(
-        radius: 15,
+        radius: _groupAvatarSize / 2,
         backgroundColor: cs.primaryContainer,
         child: Text(
           displaySender != null && displaySender.isNotEmpty
@@ -1121,7 +1123,12 @@ class MessageBubble extends StatelessWidget {
         AppBubbleBehavior.current,
       ]),
       builder: (context, child) => Container(
-        constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+        constraints: BoxConstraints(
+          maxWidth: maxBubbleWidth,
+          minHeight: showAvatarSlot && chatType == "CHAT"
+              ? _groupAvatarSize
+              : 0,
+        ),
         decoration: BoxDecoration(
           color: bubbleColor,
           borderRadius: noBubbleBackground
@@ -1164,7 +1171,7 @@ class MessageBubble extends StatelessWidget {
             if (showAvatar)
               _buildLeadingAvatar(cs)
             else if (showAvatarSlot && chatType == "CHAT")
-              const SizedBox(width: 30),
+              const SizedBox(width: _groupAvatarSize),
             Column(
               crossAxisAlignment: isMe
                   ? CrossAxisAlignment.end
@@ -1490,7 +1497,7 @@ class MessageBubble extends StatelessWidget {
 
     // #***! у медиа ширину диктует само медиа, реакции переносим по строкам
     // чтобы длинный ряд чипов не растягивал бабл шире картинки
-    if (_mediaDictatesWidth) {
+    if (_mediaDictatesWidth || _isVideoNote) {
       return _StackMatchTopWidth(top: content, bottom: footer);
     }
 
@@ -1802,10 +1809,13 @@ class MessageBubble extends StatelessWidget {
     );
 
     final Widget textWidget;
-    if (decryption?.state == MessageDecryptionState.wrongKey) {
+    if (decryption?.state == MessageDecryptionState.wrongKey ||
+        decryption?.state == MessageDecryptionState.unavailable) {
       textWidget = _wrapSelectable(
         Text(
-          'неверный ключ',
+          decryption?.state == MessageDecryptionState.wrongKey
+              ? 'неверный ключ'
+              : 'недоступно на этом устройстве',
           style: textStyle.copyWith(
             color: ctx.cs.error,
             fontStyle: FontStyle.italic,
@@ -1976,7 +1986,9 @@ class MessageBubble extends StatelessWidget {
       messageId: quotedId ?? '',
       cipherText: quotedId == null ? '' : rawPreview,
       builder: (decryption) {
-        final wrongKey = decryption?.state == MessageDecryptionState.wrongKey;
+        final wrongKey =
+            decryption?.state == MessageDecryptionState.wrongKey ||
+            decryption?.state == MessageDecryptionState.unavailable;
         final color = wrongKey ? cs.error : textColor.withValues(alpha: 0.85);
         return Row(
           mainAxisSize: MainAxisSize.min,
@@ -1987,7 +1999,9 @@ class MessageBubble extends StatelessWidget {
             ],
             Flexible(
               child: Text(
-                wrongKey
+                decryption?.state == MessageDecryptionState.unavailable
+                    ? 'недоступно на этом устройстве'
+                    : wrongKey
                     ? 'неверный ключ'
                     : (decryption?.plaintext ?? rawPreview),
                 maxLines: 1,

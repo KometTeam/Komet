@@ -1,3 +1,3 @@
-[submodule "third_party/rlottie"]
-	path = third_party/rlottie
-	url = https://github.com/Samsung/rlottie.git
+[submodule "native/crypto-core"]
+	path = native/crypto-core
+	url = https://github.com/KometTeam/crypto-core.git

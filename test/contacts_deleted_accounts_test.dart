@@ -126,4 +126,69 @@ void main() {
 
     expect(visible.map((c) => c.id).toSet(), {11, 13});
   });
+
+  test('a login delta keeps contacts it does not mention', () async {
+    await ContactsModule.syncFromLoginPayload({
+      'contacts': [
+        _serverContact(id: 13, firstName: 'Fresh', phone: 700000013),
+      ],
+    }, accountId);
+
+    final all = await ContactsModule.getContacts(
+      accountId,
+      includeDeleted: true,
+    );
+
+    expect(all.map((c) => c.id).toSet(), {11, 12, 13});
+  });
+
+  test('a login delta drops contacts marked as removed', () async {
+    await ContactsModule.syncFromLoginPayload({
+      'contacts': [
+        {
+          ..._serverContact(id: 11, firstName: 'Alive', phone: 700000011),
+          'status': 'REMOVED',
+        },
+      ],
+    }, accountId);
+
+    final all = await ContactsModule.getContacts(
+      accountId,
+      includeDeleted: true,
+    );
+
+    expect(all.map((c) => c.id).toSet(), {12});
+  });
+
+  test('a full list drops contacts removed elsewhere', () async {
+    await ContactsModule.applyFullContactList({
+      'contacts': [
+        _serverContact(
+          id: 12,
+          firstName: 'Gone',
+          phone: 700000012,
+          accountStatus: 2,
+        ),
+        _serverContact(id: 13, firstName: 'Fresh', phone: 700000013),
+      ],
+    }, accountId);
+
+    final all = await ContactsModule.getContacts(
+      accountId,
+      includeDeleted: true,
+    );
+
+    expect(all.map((c) => c.id).toSet(), {12, 13});
+  });
+
+  test('an empty full list does not wipe the contacts', () async {
+    await ContactsModule.applyFullContactList({'contacts': []}, accountId);
+
+    final all = await ContactsModule.getContacts(
+      accountId,
+      includeDeleted: true,
+    );
+
+    expect(all.map((c) => c.id).toSet(), {11, 12});
+  });
 }

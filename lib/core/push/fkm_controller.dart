@@ -9,6 +9,7 @@ import '../../backend/modules/chats.dart';
 import '../../backend/modules/messages.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
+import '../crypto/e2ee_service.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../config/komet_settings.dart';
@@ -264,7 +265,10 @@ class FkmController {
         ? (chat.title ?? senderName)
         : senderName;
 
-    final text = showPreview ? _previewText(msg) : _hiddenPreview;
+    await E2eeService.instance.ensureLoaded(accountId);
+    final text = showPreview && !E2eeService.instance.isOn(accountId, chatId)
+        ? _previewText(msg)
+        : _hiddenPreview;
     final time = msg['time'];
     final msgId = msg['id'];
 

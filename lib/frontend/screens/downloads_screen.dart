@@ -17,6 +17,7 @@ import '../widgets/confirm_dialog.dart';
 import '../widgets/custom_notification.dart';
 import '../widgets/small_spinner.dart';
 import '../widgets/sheet_helpers.dart';
+import '../widgets/share_unopenable_file.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
@@ -88,6 +89,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     }
     final result = await OpenFilex.open(file.path);
     if (!mounted || result.type == ResultType.done) return;
+    if (result.type == ResultType.noAppToOpen) {
+      await shareUnopenableFile(context, file.path);
+      return;
+    }
     showCustomNotification(
       context,
       AppLocalizations.of(context)!.downloadsOpenFailed,

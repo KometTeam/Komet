@@ -267,6 +267,7 @@ class MainActivity : AudioServiceActivity() {
                 "start" -> noteRecorder?.start(result)
                     ?: result.error("NOT_READY", "recorder not initialized", null)
                 "switch" -> noteRecorder?.switchCamera(result)
+                    ?: result.error("NOT_READY", "recorder not initialized", null)
                 "torch" -> noteRecorder?.setTorch(
                     call.argument<Boolean>("on") ?: false,
                     result,
@@ -435,7 +436,7 @@ class MainActivity : AudioServiceActivity() {
                     stashChatOpen(intent, emit = false)
                     val chatId = pendingChat
                     pendingChat = 0L
-                    result.success(if (chatId > 0L) chatId else null)
+                    result.success(if (chatId != 0L) chatId else null)
                 }
                 "setActiveChat" -> {
                     ChatNotifications.activeChatId = longArg(call.argument<Any>("chatId"))
@@ -444,6 +445,15 @@ class MainActivity : AudioServiceActivity() {
                 "clearActiveChat" -> {
                     ChatNotifications.activeChatId = 0L
                     result.success(null)
+                }
+                "cancelChat" -> {
+                    KometNotifier(applicationContext).cancelChat(
+                        longArg(call.argument<Any>("chatId")),
+                    )
+                    result.success(null)
+                }
+                "notifiedChats" -> {
+                    result.success(KometNotifier(applicationContext).notifiedChats())
                 }
                 else -> result.notImplemented()
             }
@@ -510,6 +520,8 @@ class MainActivity : AudioServiceActivity() {
             }
         })
 
+        ClipboardMedia.attach(flutterEngine, this)
+
         FkmChannel.attach(flutterEngine, this)
     }
 
@@ -517,6 +529,7 @@ class MainActivity : AudioServiceActivity() {
         if (intent?.hasExtra(CallConst.EXTRA_CALL) == true) applyCallWindowFlags()
         super.onCreate(savedInstanceState)
         applyKeepAwake()
+        requestHighRefreshRate()
         intent?.let { if (it.hasExtra(CallConst.EXTRA_CALL)) stashCall(it, emit = false) }
         stashChatOpen(intent, emit = false)
         stashShare(intent, emit = false)
@@ -537,6 +550,9 @@ class MainActivity : AudioServiceActivity() {
         val chatId = ChatNotifications.chatIdFrom(source)
         if (chatId == 0L) return
         source?.removeExtra(ChatNotifications.EXTRA_CHAT)
+        val fromRecents =
+            (source?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        if (fromRecents) return
         val sink = ChatNotifications.sink
         if (emit && sink != null) {
             sink.success(chatId)
@@ -629,6 +645,25 @@ class MainActivity : AudioServiceActivity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    private fun requestHighRefreshRate() {
+        val screen = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay
+        } ?: return
+        val current = screen.mode
+        val fastest = screen.supportedModes
+            .filter {
+                it.physicalWidth == current.physicalWidth &&
+                    it.physicalHeight == current.physicalHeight
+            }
+            .maxByOrNull { it.refreshRate } ?: return
+        window.attributes = window.attributes.apply {
+            preferredDisplayModeId = fastest.modeId
         }
     }
 

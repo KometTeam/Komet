@@ -133,4 +133,51 @@ void main() {
     expect(find.textContaining('Share at'), findsNothing);
     expect(find.textContaining('Copy Frame'), findsNothing);
   });
+
+  testWidgets('a video that fails to load can be closed from the error view', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1800);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => PhotoViewerScreen.video(
+                    attachment: _video,
+                    initialVideoSources: const {
+                      '720p': 'https://media.example.test/video-720.mp4',
+                    },
+                    message: _message,
+                  ),
+                ),
+              ),
+              child: const Text('Открыть'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Открыть'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Не удалось воспроизвести видео'), findsOneWidget);
+    expect(find.text('Повторить'), findsOneWidget);
+
+    await tester.tap(find.text('Закрыть'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.byType(PhotoViewerScreen), findsNothing);
+    expect(find.text('Открыть'), findsOneWidget);
+  });
 }

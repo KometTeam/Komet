@@ -75,8 +75,28 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
   int _sourceBytes = 0;
   bool _busy = false;
   bool _scrubbing = false;
+  bool _wantsPlay = false;
+  bool _rewinding = false;
+  bool _resumeAfterScrub = false;
 
   VideoEditState get _edit => widget.edit;
+
+  // #***! длительность из пробы и длительность плеера расходятся на кадр-другой,
+  // поэтому границы воспроизведения всегда сводим к тому, что знает плеер:
+  // иначе после подрезки позиция никогда не дотягивает до конца окна, петля не
+  // срабатывает и видео залипает на последнем кадре
+  Duration get _playbackEnd {
+    final total = _controller?.value.duration ?? Duration.zero;
+    final end = _edit.end > Duration.zero ? _edit.end : total;
+    return end > total ? total : end;
+  }
+
+  Duration get _playbackStart {
+    final end = _playbackEnd;
+    final start = _edit.start;
+    if (start < Duration.zero) return Duration.zero;
+    return start >= end ? Duration.zero : start;
+  }
 
   @override
   void initState() {
@@ -128,6 +148,7 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     controller.addListener(_onTick);
     await controller.setVolume(_edit.muted ? 0 : 1);
     setState(() => _controller = controller);
+    _wantsPlay = true;
     unawaited(controller.play());
     unawaited(_loadStrip(file, duration));
   }
@@ -152,16 +173,35 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     setState(() => _strip = frames);
   }
 
+  static const Duration _seekSlack = Duration(milliseconds: 120);
+
   void _onTick() {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
-    if (_scrubbing) return;
-    final position = controller.value.position;
-    if (position >= _edit.end && _edit.end > Duration.zero) {
-      controller.seekTo(_edit.start);
-      if (!controller.value.isPlaying) unawaited(controller.play());
-    } else if (position < _edit.start - const Duration(milliseconds: 120)) {
-      controller.seekTo(_edit.start);
+    if (_scrubbing || _rewinding || !_wantsPlay) return;
+    final value = controller.value;
+    final position = value.position;
+    final end = _playbackEnd;
+    if (end <= Duration.zero) return;
+    if (value.isCompleted || position >= end) {
+      unawaited(_rewindAndPlay());
+    } else if (position < _playbackStart - _seekSlack) {
+      unawaited(controller.seekTo(_playbackStart));
+    }
+  }
+
+  Future<void> _rewindAndPlay() async {
+    final controller = _controller;
+    if (controller == null || _rewinding) return;
+    _rewinding = true;
+    try {
+      await controller.seekTo(_playbackStart);
+      if (!mounted || !identical(_controller, controller) || !_wantsPlay) {
+        return;
+      }
+      await controller.play();
+    } finally {
+      _rewinding = false;
     }
   }
 
@@ -190,18 +230,25 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     widget.onEditChanged?.call();
   }
 
-  void _togglePlay() {
+  Future<void> _togglePlay() async {
     final controller = _controller;
-    if (controller == null) return;
+    if (controller == null || !controller.value.isInitialized) return;
     if (controller.value.isPlaying) {
-      controller.pause();
-    } else {
-      if (controller.value.position >= _edit.end) {
-        controller.seekTo(_edit.start);
-      }
-      controller.play();
+      _wantsPlay = false;
+      await controller.pause();
+      return;
     }
-    setState(() {});
+    _wantsPlay = true;
+    final value = controller.value;
+    final end = _playbackEnd;
+    if (end > Duration.zero &&
+        (value.isCompleted ||
+            value.position >= end ||
+            value.position < _playbackStart)) {
+      await _rewindAndPlay();
+      return;
+    }
+    await controller.play();
   }
 
   void _toggleMute() {
@@ -315,32 +362,37 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
   }
 
   Future<(ui.Image, ui.Image)?> _prepare({required bool withMarks}) async {
-    _controller?.pause();
+    _wantsPlay = false;
+    _resumeAfterScrub = false;
+    unawaited(_controller?.pause());
     setState(() => _busy = true);
-    final frame = await _grabFrame();
+    ui.Image? frame;
     ui.Image? flight;
-    if (frame != null) {
-      flight = await composeVideoStill(
-        frame,
-        _geometry,
-        _edit.adjust,
-        marks: withMarks ? _edit.marks : const [],
-        marksCanvas: withMarks ? _edit.marksCanvas : Size.zero,
-      );
+    try {
+      frame = await _grabFrame();
+      if (frame != null) {
+        flight = await composeVideoStill(
+          frame,
+          _geometry,
+          _edit.adjust,
+          marks: withMarks ? _edit.marks : const [],
+          marksCanvas: withMarks ? _edit.marksCanvas : Size.zero,
+        );
+      }
+    } catch (e) {
+      logger.w('_prepare: кадр не подготовлен: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    if (!mounted) {
+    if (frame == null || flight == null || !mounted) {
       frame?.dispose();
       flight?.dispose();
-      return null;
-    }
-    setState(() => _busy = false);
-    if (frame == null || flight == null) {
-      frame?.dispose();
-      flight?.dispose();
-      showCustomNotification(
-        context,
-        AppLocalizations.of(context)!.videoEditorFrameFailed,
-      );
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.videoEditorFrameFailed,
+        );
+      }
       return null;
     }
     return (frame, flight);
@@ -533,8 +585,14 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
                         ),
                       ),
                     ),
-                  if (!controller.value.isPlaying)
-                    const IgnorePointer(child: Center(child: _PlayBadge())),
+                  ValueListenableBuilder<VideoPlayerValue>(
+                    valueListenable: controller,
+                    builder: (context, value, _) => value.isPlaying
+                        ? const SizedBox.shrink()
+                        : const IgnorePointer(
+                            child: Center(child: _PlayBadge()),
+                          ),
+                  ),
                 ],
               ),
             );
@@ -597,16 +655,53 @@ class _VideoPreviewScreenState extends State<VideoPreviewScreen> {
     );
   }
 
+  void _beginScrub() {
+    if (_scrubbing) return;
+    _scrubbing = true;
+    _resumeAfterScrub = _wantsPlay;
+    _wantsPlay = false;
+  }
+
   void _onScrub(Duration position, bool active) {
-    _scrubbing = active;
     final controller = _controller;
-    if (controller == null) return;
-    if (active && controller.value.isPlaying) controller.pause();
-    controller.seekTo(position);
+    if (active) {
+      _beginScrub();
+      if (controller == null) return;
+      if (controller.value.isPlaying) unawaited(controller.pause());
+      unawaited(controller.seekTo(position));
+      return;
+    }
+    _scrubbing = false;
+    if (controller == null) {
+      _resumeAfterScrub = false;
+      return;
+    }
+    unawaited(_settleScrub(controller, position));
+  }
+
+  Future<void> _settleScrub(
+    VideoPlayerController controller,
+    Duration position,
+  ) async {
+    final resume = _resumeAfterScrub;
+    _resumeAfterScrub = false;
+    await controller.seekTo(position);
+    if (!mounted || !identical(_controller, controller) || !resume) return;
+    _wantsPlay = true;
+    final end = _playbackEnd;
+    if (end > Duration.zero && controller.value.position >= end) {
+      await _rewindAndPlay();
+    } else {
+      await controller.play();
+    }
   }
 
   void _onTrim(Duration start, Duration end, bool active) {
-    _scrubbing = active;
+    if (active) {
+      _beginScrub();
+    } else {
+      _scrubbing = false;
+    }
     setState(() {
       _edit.start = start;
       _edit.end = end;
@@ -798,8 +893,23 @@ class TrimBar extends StatefulWidget {
 class _TrimBarState extends State<TrimBar> {
   static const double _handle = 13;
   static const double _height = 48;
+  static const double _grabRadius = 28;
 
+  // #***! пока палец на дорожке, ручки живут здесь: onPanUpdate и onPanEnd
+  // прилетают одним пакетом раньше перестройки, и widget.start/widget.end в
+  // этот момент ещё хранят значения до жеста — подрезка откатывалась бы назад
+  late Duration _start = widget.start;
+  late Duration _end = widget.end;
   int _target = -1;
+
+  @override
+  void didUpdateWidget(TrimBar old) {
+    super.didUpdateWidget(old);
+    if (_target < 0) {
+      _start = widget.start;
+      _end = widget.end;
+    }
+  }
 
   double _fraction(Duration value) {
     final total = widget.duration.inMilliseconds;
@@ -813,13 +923,14 @@ class _TrimBarState extends State<TrimBar> {
   );
 
   void _down(Offset pos, double width) {
-    final startX = _fraction(widget.start) * width;
-    final endX = _fraction(widget.end) * width;
+    if (width <= 0) return;
+    final startX = _fraction(_start) * width;
+    final endX = _fraction(_end) * width;
     final toStart = (pos.dx - startX).abs();
     final toEnd = (pos.dx - endX).abs();
-    if (toStart <= toEnd && toStart < 28) {
+    if (toStart <= toEnd && toStart < _grabRadius) {
       _target = 0;
-    } else if (toEnd < 28) {
+    } else if (toEnd < _grabRadius) {
       _target = 1;
     } else {
       _target = 2;
@@ -828,39 +939,40 @@ class _TrimBarState extends State<TrimBar> {
   }
 
   Duration _clamp(Duration value) {
-    if (value < widget.start) return widget.start;
-    if (widget.end > Duration.zero && value > widget.end) return widget.end;
+    if (value < _start) return _start;
+    if (_end > Duration.zero && value > _end) return _end;
     return value;
   }
 
   void _move(Offset pos, double width) {
-    if (width <= 0) return;
+    if (width <= 0 || _target < 0) return;
     final value = _at(pos.dx / width);
     switch (_target) {
       case 0:
-        final limit = widget.end - kMinTrimDuration;
-        widget.onTrim(
-          value > limit
-              ? (limit > Duration.zero ? limit : Duration.zero)
-              : value,
-          widget.end,
-          true,
-        );
-        widget.onScrub(value, true);
+        final limit = _end - kMinTrimDuration;
+        final start = value > limit
+            ? (limit > Duration.zero ? limit : Duration.zero)
+            : value;
+        setState(() => _start = start);
+        widget.onTrim(_start, _end, true);
+        widget.onScrub(start, true);
       case 1:
-        final limit = widget.start + kMinTrimDuration;
-        widget.onTrim(widget.start, value < limit ? limit : value, true);
-        widget.onScrub(value < limit ? limit : value, true);
+        final limit = _start + kMinTrimDuration;
+        final end = value < limit ? limit : value;
+        setState(() => _end = end);
+        widget.onTrim(_start, _end, true);
+        widget.onScrub(end, true);
       case 2:
         widget.onScrub(_clamp(value), true);
     }
   }
 
   void _up() {
-    if (_target < 0) return;
-    if (_target != 2) widget.onTrim(widget.start, widget.end, false);
-    widget.onScrub(_clamp(widget.controller.value.position), false);
+    final target = _target;
     _target = -1;
+    if (target < 0) return;
+    if (target != 2) widget.onTrim(_start, _end, false);
+    widget.onScrub(_clamp(widget.controller.value.position), false);
   }
 
   @override
@@ -871,8 +983,8 @@ class _TrimBarState extends State<TrimBar> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.maxWidth;
-          final startX = _fraction(widget.start) * width;
-          final endX = _fraction(widget.end) * width;
+          final startX = _fraction(_start) * width;
+          final endX = _fraction(_end) * width;
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onPanDown: (d) => _down(d.localPosition, width),

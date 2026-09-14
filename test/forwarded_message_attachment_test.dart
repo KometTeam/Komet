@@ -125,6 +125,48 @@ void main() {
       expect(attachment.originalSenderAvatar, isNull);
     });
 
+    test('marks a forward from a private channel', () {
+      final attachment = ForwardedMessageAttachment.fromMap({
+        'link': {
+          'type': 'FORWARD',
+          'message': {
+            'id': '103',
+            'time': 3000,
+            'type': 'CHANNEL',
+            'text': 'Synthetic private post',
+            'attaches': const [],
+          },
+          'chatId': -30,
+          'chatName': 'Example Private Channel',
+          'chatAccessType': 'PRIVATE',
+        },
+      });
+
+      expect(attachment.isChannel, isTrue);
+      expect(attachment.originalChatAccess, 'PRIVATE');
+      expect(attachment.isFromPrivateChat, isTrue);
+    });
+
+    test('does not mark a forward without an access type as private', () {
+      final attachment = ForwardedMessageAttachment.fromMap({
+        'link': {
+          'type': 'FORWARD',
+          'message': {
+            'id': '104',
+            'time': 4000,
+            'type': 'CHANNEL',
+            'text': 'Synthetic public post',
+            'attaches': const [],
+          },
+          'chatId': -40,
+          'chatName': 'Example Public Channel',
+        },
+      });
+
+      expect(attachment.originalChatAccess, isNull);
+      expect(attachment.isFromPrivateChat, isFalse);
+    });
+
     test('keeps channel metadata in an optimistic forward', () {
       final forwarded = MessagesModule.buildForwardMessage(
         myId: 1,
@@ -544,6 +586,49 @@ void main() {
 
       expect(tappedSource, same(attachment));
       expect(tappedSource?.originalSenderId, 42);
+    });
+
+    Finder headerAvatar() => find.descendant(
+      of: find.byType(ForwardedHeader),
+      matching: find.byType(CircleAvatar),
+    );
+
+    CachedMessage channelForward({String? access}) => CachedMessage(
+      id: '204',
+      accountId: 1,
+      chatId: 2,
+      senderId: 43,
+      time: 9000,
+      attachments: [
+        ForwardedMessageAttachment(
+          originalSenderId: 0,
+          originalSenderName: 'Example Channel',
+          originalType: 'CHANNEL',
+          originalMessageId: '105',
+          originalTime: 8500,
+          originalText: 'Synthetic channel post',
+          originalChatId: -50,
+          originalChatAccess: access,
+        ),
+      ],
+    );
+
+    testWidgets('shows the avatar of an accessible forward source', (
+      tester,
+    ) async {
+      await _pumpBubble(tester, channelForward());
+
+      expect(find.text('Example Channel'), findsOneWidget);
+      expect(headerAvatar(), findsOneWidget);
+    });
+
+    testWidgets('hides the avatar of a private chat we are not in', (
+      tester,
+    ) async {
+      await _pumpBubble(tester, channelForward(access: 'PRIVATE'));
+
+      expect(find.text('Example Channel'), findsOneWidget);
+      expect(headerAvatar(), findsNothing);
     });
   });
 }

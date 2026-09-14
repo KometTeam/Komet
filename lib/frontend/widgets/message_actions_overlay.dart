@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -106,6 +107,7 @@ void showMessageActions({
   required MessageActionsStyle style,
   required VoidCallback onDispose,
   List<Map<String, dynamic>>? editHistory,
+  List<({String label, String value})>? infoRows,
   Future<List<MessageReader>> Function()? loadReadBy,
   void Function(int userId)? onReaderTap,
   Future<List<({int id, String title})>> Function()? loadReportReasons,
@@ -118,6 +120,7 @@ void showMessageActions({
   VoidCallback? onForward,
   VoidCallback? onMarkUnread,
   VoidCallback? onPin,
+  VoidCallback? onCopyLink,
   bool isPinned = false,
   void Function(String emoji)? onReact,
   String? selectedReaction,
@@ -134,9 +137,13 @@ void showMessageActions({
       MessageActionsInteraction.dragAndRelease,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
+  final route = ModalRoute.of(context);
+  final layerKey = GlobalKey<_MessageActionsLayerState>();
+  final backEntry = _CloseOnBack(() => layerKey.currentState?._close());
   late OverlayEntry entry;
   entry = OverlayEntry(
     builder: (ctx) => _MessageActionsLayer(
+      key: layerKey,
       snapshot: snapshot,
       originRect: originRect,
       tapPoint: tapPoint,
@@ -148,6 +155,7 @@ void showMessageActions({
       style: style,
       interaction: interaction,
       editHistory: editHistory,
+      infoRows: infoRows,
       loadReadBy: loadReadBy,
       onReaderTap: onReaderTap,
       loadReportReasons: loadReportReasons,
@@ -160,18 +168,36 @@ void showMessageActions({
       onForward: onForward,
       onMarkUnread: onMarkUnread,
       onPin: onPin,
+      onCopyLink: onCopyLink,
       isPinned: isPinned,
       onReact: onReact,
       selectedReaction: selectedReaction,
       quickReactions: quickReactions,
       loadReactionEmojis: loadReactionEmojis,
       onDismiss: () {
+        route?.unregisterPopEntry(backEntry);
+        backEntry.canPopNotifier.dispose();
         if (entry.mounted) entry.remove();
         onDispose();
       },
     ),
   );
   overlay.insert(entry);
+  route?.registerPopEntry(backEntry);
+}
+
+class _CloseOnBack extends PopEntry<Object?> {
+  _CloseOnBack(this.onBack);
+
+  final VoidCallback onBack;
+
+  @override
+  final ValueNotifier<bool> canPopNotifier = ValueNotifier<bool>(false);
+
+  @override
+  void onPopInvokedWithResult(bool didPop, Object? result) {
+    if (!didPop) onBack();
+  }
 }
 
 class _MessageActionsLayer extends StatefulWidget {
@@ -190,6 +216,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final MessageActionsInteraction interaction;
   final VoidCallback onDismiss;
   final List<Map<String, dynamic>>? editHistory;
+  final List<({String label, String value})>? infoRows;
   final Future<List<MessageReader>> Function()? loadReadBy;
   final void Function(int userId)? onReaderTap;
   final Future<List<({int id, String title})>> Function()? loadReportReasons;
@@ -202,6 +229,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final VoidCallback? onForward;
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
+  final VoidCallback? onCopyLink;
   final bool isPinned;
   final void Function(String emoji)? onReact;
   final String? selectedReaction;
@@ -209,6 +237,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final Future<List<ReactionEmoji>> Function()? loadReactionEmojis;
 
   const _MessageActionsLayer({
+    super.key,
     required this.snapshot,
     required this.originRect,
     required this.tapPoint,
@@ -221,6 +250,7 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.interaction,
     required this.onDismiss,
     this.editHistory,
+    this.infoRows,
     this.loadReadBy,
     this.onReaderTap,
     this.loadReportReasons,
@@ -233,6 +263,7 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onForward,
     this.onMarkUnread,
     this.onPin,
+    this.onCopyLink,
     this.isPinned = false,
     this.onReact,
     this.selectedReaction,
@@ -274,13 +305,15 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   bool _showHistory = false;
   bool _showReport = false;
   bool _showReadBy = false;
+  bool _showInfo = false;
   bool _reportLoading = false;
   bool _reportSending = false;
   bool _readByLoading = false;
   List<({int id, String title})>? _reasons;
   List<MessageReader>? _readers;
 
-  bool get _panelOpen => _showHistory || _showReport || _showReadBy;
+  bool get _panelOpen =>
+      _showHistory || _showReport || _showReadBy || _showInfo;
 
   @override
   void initState() {
@@ -522,6 +555,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       if (widget.onForward != null)
         _Action(Symbols.forward, l10n.msgActionsForward, _forward),
       if (canCopy) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
+      if (widget.onCopyLink != null)
+        _Action(Symbols.link, l10n.msgActionsCopyLink, _copyLink),
       if (widget.isMe && widget.onEdit != null)
         _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
       if (widget.onPin != null)
@@ -540,6 +575,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
         _Action(Symbols.history, l10n.msgActionsEditHistory, _showHistoryView),
       if (widget.loadReadBy != null)
         _Action(Symbols.visibility, l10n.msgActionsReadBy, _showReadByView),
+      if (widget.infoRows != null && widget.infoRows!.isNotEmpty)
+        _Action(Symbols.info, l10n.msgActionsInfo, _showInfoView),
       if (widget.onReport != null && widget.loadReportReasons != null)
         _Action(
           Symbols.flag,
@@ -560,6 +597,11 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   void _showHistoryView() {
     if (!mounted) return;
     setState(() => _showHistory = true);
+  }
+
+  void _showInfoView() {
+    if (!mounted) return;
+    setState(() => _showInfo = true);
   }
 
   Future<void> _showReadByView() async {
@@ -611,6 +653,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       _showHistory = false;
       _showReport = false;
       _showReadBy = false;
+      _showInfo = false;
     });
   }
 
@@ -707,6 +750,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     onPin?.call();
   }
 
+  Future<void> _copyLink() async {
+    final onCopyLink = widget.onCopyLink;
+    await _close();
+    onCopyLink?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -786,6 +835,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
                             _buildReportMenu()
                           else if (_showHistory)
                             _buildHistoryMenu()
+                          else if (_showInfo)
+                            _buildInfoMenu()
                           else if (_showReadBy)
                             _buildReadByMenu(),
                         ],
@@ -1252,6 +1303,69 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       body: SingleChildScrollView(
         child: Column(mainAxisSize: MainAxisSize.min, children: rows),
       ),
+    );
+  }
+
+  Widget _buildInfoMenu() {
+    final cs = Theme.of(context).colorScheme;
+    final rows = widget.infoRows ?? const <({String label, String value})>[];
+    return _buildAnchoredPanel(
+      title: AppLocalizations.of(context)!.msgActionsInfo,
+      width: 280,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) _historyDivider(cs),
+              _infoRow(cs, rows[i]),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoRow(ColorScheme cs, ({String label, String value}) row) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => unawaited(_copyInfoValue(row.value)),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                row.label,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                row.value,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  height: 1.25,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _copyInfoValue(String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    Haptics.tap();
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.msgActionsCopied,
     );
   }
 

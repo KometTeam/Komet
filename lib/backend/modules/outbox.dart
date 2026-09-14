@@ -65,6 +65,7 @@ class OutboxService {
             elements: elements,
           );
           // #***! отправилось, сервер дал настоящий id а временный удаляем
+          // #***! sealedText не терять, ключ потрачен и текста больше нигде нет
           final sent = CachedMessage(
             id: actualId.isNotEmpty ? actualId : pending.id,
             accountId: accountId,
@@ -74,6 +75,8 @@ class OutboxService {
             time: pending.time,
             status: 'sent',
             payload: payload,
+            sealedText: pending.sealedText,
+            e2ee: pending.e2ee,
           );
           await AppDatabase.saveMessages([sent.toDbRow()]);
           if (sent.id != pending.id) {

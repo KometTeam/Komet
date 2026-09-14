@@ -8,8 +8,14 @@ class FileDownloadResult {
   final bool ok;
   final String? path;
   final String? error;
+  final bool noAppToOpen;
 
-  const FileDownloadResult({required this.ok, this.path, this.error});
+  const FileDownloadResult({
+    required this.ok,
+    this.path,
+    this.error,
+    this.noAppToOpen = false,
+  });
 }
 
 // #***! открыть файл, скачав если надо
@@ -42,6 +48,7 @@ Future<FileDownloadResult> openCachedFile(
       ok: opened.type == ResultType.done,
       path: result.path,
       error: opened.type == ResultType.done ? null : opened.message,
+      noAppToOpen: opened.type == ResultType.noAppToOpen,
     );
   } catch (e) {
     return FileDownloadResult(

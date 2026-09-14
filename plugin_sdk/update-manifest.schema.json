@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/KometTeam/Komet/main/plugin_sdk/update-manifest.schema.json",
+  "title": "Komet plugin update manifest",
+  "description": "JSON по адресу updateUrl из manifest.json. Описание полей — PLUGINS.md.",
+  "type": "object",
+  "required": ["version", "packageUrl", "size", "sha256"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "description": "Версия нового пакета; должна совпадать с version в его manifest.json.",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "packageUrl": {
+      "description": "Адрес .kinet, абсолютный или относительный к updateUrl. Итоговый адрес — только HTTPS.",
+      "type": "string",
+      "format": "uri-reference",
+      "pattern": "^(?:https://|(?![A-Za-z][A-Za-z0-9+.-]*:))"
+    },
+    "size": {
+      "description": "Размер пакета в байтах; 0 отключает проверку.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "sha256": {
+      "description": "SHA-256 пакета в hex; пустая строка отключает проверку.",
+      "type": "string",
+      "pattern": "^(?:[0-9A-Fa-f]{64})?$"
+    }
+  }
+}

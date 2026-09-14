@@ -82,13 +82,22 @@ class PhoneLookupResult {
   });
 }
 
+// #***! ids идут параллельно urls, по ним удаляем конкретное фото
 class ContactPhotos {
   final List<String> urls;
+  final List<int> ids;
   final int total;
 
-  const ContactPhotos({required this.urls, required this.total});
+  const ContactPhotos({
+    required this.urls,
+    this.ids = const [],
+    required this.total,
+  });
 
   static const empty = ContactPhotos(urls: [], total: 0);
+
+  int? idAt(int index) =>
+      index >= 0 && index < ids.length ? ids[index] : null;
 }
 
 // #***! итог добавления, добавили не нашли или ошибка
@@ -422,7 +431,18 @@ class ContactsModule {
   static Future<void> syncFromLoginPayload(
     Map<dynamic, dynamic> data,
     int accountId,
-  ) async {
+  ) => _applyContacts(data, accountId, complete: false);
+
+  static Future<void> applyFullContactList(
+    Map<dynamic, dynamic> data,
+    int accountId,
+  ) => _applyContacts(data, accountId, complete: true);
+
+  static Future<void> _applyContacts(
+    Map<dynamic, dynamic> data,
+    int accountId, {
+    required bool complete,
+  }) async {
     final contacts = data['contacts'];
     if (contacts is! List) {
       logger.i('Контакты: сервер не прислал список (акк $accountId)');
@@ -434,19 +454,33 @@ class ContactsModule {
     }
 
     final rows = <Map<String, dynamic>>[];
+    final removedIds = <int>{};
+    final presentIds = <int>{};
     for (final raw in contacts.whereType<Map>()) {
       final contact = raw.cast<dynamic, dynamic>();
+      primeContactCache(contact);
+      final id = contact['id'];
+      if (contact['status'] == 'REMOVED') {
+        if (id is int) removedIds.add(id);
+        continue;
+      }
+      if (id is int) presentIds.add(id);
       final row = _parseContact(contact, accountId);
       if (row != null) rows.add(row);
-      primeContactCache(contact);
+    }
+    if (complete) {
+      final localIds = await AppDatabase.loadContactIds(accountId);
+      removedIds.addAll(localIds.where((id) => !presentIds.contains(id)));
     }
 
-    if (rows.isNotEmpty) {
-      await AppDatabase.saveContacts(rows);
-      revision.value++;
+    if (rows.isNotEmpty) await AppDatabase.saveContacts(rows);
+    if (removedIds.isNotEmpty) {
+      await AppDatabase.deleteContacts(accountId, removedIds.toList());
     }
+    if (rows.isNotEmpty || removedIds.isNotEmpty) revision.value++;
     logger.i(
-      'Контакты: получено ${contacts.length}, сохранено ${rows.length} (акк $accountId)',
+      'Контакты: получено ${contacts.length}, сохранено ${rows.length}, '
+      'удалено ${removedIds.length} (акк $accountId)',
     );
   }
 
@@ -456,7 +490,7 @@ class ContactsModule {
       'contactsSync': 0,
     });
     if (map == null) return;
-    await syncFromLoginPayload(map.cast<dynamic, dynamic>(), accountId);
+    await applyFullContactList(map.cast<dynamic, dynamic>(), accountId);
   }
 
   // #***! своя карточка для профиля
@@ -524,10 +558,22 @@ class ContactsModule {
     final urls = rawUrls is List
         ? rawUrls.whereType<String>().toList()
         : <String>[];
+    final rawIds = map['ids'];
+    final ids = rawIds is List ? rawIds.whereType<int>().toList() : <int>[];
     final total = map['total'] is int ? map['total'] as int : urls.length;
-    final photos = ContactPhotos(urls: urls, total: total);
+    final photos = ContactPhotos(
+      urls: urls,
+      // #***! разъехавшиеся списки хуже отсутствующих, id тогда не берём
+      ids: ids.length == urls.length ? ids : const [],
+      total: total,
+    );
     if (from == 0) _photosHead[contactId] = photos;
     return photos;
+  }
+
+  // #***! после удаления фото голова кэша протухла
+  static void invalidatePhotos(int contactId) {
+    _photosHead.remove(contactId);
   }
 
   // #***! чтение из базы, основной путь для юишки

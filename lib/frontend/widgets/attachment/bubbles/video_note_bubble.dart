@@ -98,7 +98,9 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
 
   bool get _ready {
     final controller = _controller;
-    return controller != null && controller.value.isInitialized;
+    return controller != null &&
+        controller.value.isInitialized &&
+        !controller.value.hasError;
   }
 
   @override
@@ -249,7 +251,9 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     }
     final running = _initializing;
     if (running != null) {
-      await running;
+      try {
+        await running;
+      } catch (_) {}
       return _controller;
     }
 
@@ -261,10 +265,10 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     } catch (e) {
       logger.w('VideoNoteBubble: инициализация не удалась: $e');
       await controller.dispose();
-      _initializing = null;
       return null;
+    } finally {
+      if (identical(_initializing, future)) _initializing = null;
     }
-    _initializing = null;
 
     if (!mounted) {
       await controller.dispose();
@@ -291,8 +295,28 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     if (mounted) setState(() => _frameSize = Size.zero);
   }
 
+  // #***! файл из кэша могли вычистить прямо под играющим контроллером,
+  // после такой ошибки он уже не оживает — выбрасываем и качаем заново
+  void _dropFailedController() {
+    final controller = _controller;
+    if (controller == null || !controller.value.hasError) return;
+    logger.w('VideoNoteBubble: ${controller.value.errorDescription}');
+    if (MediaPlayback.instance.isActiveVideoNote(controller)) {
+      MediaPlayback.instance.closeVideoNote();
+    }
+    if (_playingNote == this) _playingNote = null;
+    _controller = null;
+    controller.removeListener(_onTick);
+    _PreviewPool.unregister(this);
+    MediaPlayback.instance.releaseVideoNote(controller);
+    _frameSize = Size.zero;
+    _playing = false;
+    _ringProgress.value = 0;
+  }
+
   Future<void> _toggle() async {
     if (_videoId == null) return;
+    _dropFailedController();
     if (_ready) {
       if (_controller!.value.isPlaying) {
         await _pause();
@@ -309,9 +333,15 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     });
     Haptics.tap();
 
-    final file = await _fetch(priority: true);
-    if (!mounted) return;
-    final controller = file == null ? null : await _ensureController(file);
+    VideoPlayerController? controller;
+    try {
+      final file = await _fetch(priority: true);
+      if (!mounted) return;
+      controller = file == null ? null : await _ensureController(file);
+    } catch (e) {
+      logger.w('VideoNoteBubble: кружок не открылся: $e');
+      controller = null;
+    }
     if (!mounted) return;
 
     setState(() {
@@ -322,12 +352,14 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   }
 
   Future<void> _play() async {
-    final controller = _controller;
-    if (controller == null) return;
+    if (_controller == null) return;
+    _PreviewPool.pin(this);
     final other = _playingNote;
     if (other != null && other != this) await other._pause();
+    if (!mounted) return;
+    final controller = _controller;
+    if (controller == null) return;
     _playingNote = this;
-    _PreviewPool.pin(this);
     _claimPlayback();
     await controller.play();
     _expand.forward();

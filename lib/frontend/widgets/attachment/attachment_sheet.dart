@@ -16,12 +16,14 @@ import 'package:komet/core/config/app_visual_style.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/media/video_transcoder.dart';
 import 'package:komet/core/utils/format.dart';
+import 'package:komet/core/utils/logger.dart';
 import 'package:komet/frontend/widgets/attachment/contact_picker_page.dart';
 import 'package:komet/frontend/widgets/attachment/media_preview_screen.dart';
 import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/attachment/photo_hero.dart';
 import 'package:komet/frontend/widgets/attachment/video_edit.dart';
 import 'package:komet/frontend/widgets/attachment/video_preview_screen.dart';
+import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
@@ -39,10 +41,14 @@ List<PillNavItem> _buildNavItems(AppLocalizations l10n) => [
   PillNavItem(icon: Symbols.person, label: l10n.attachSheetContact),
 ];
 
+typedef PickedPhotosCallback =
+    void Function(List<PickedPhoto> photos, String caption);
+
 Future<void> showAttachmentSheet(
   BuildContext context, {
   String? title,
-  void Function(List<PickedPhoto> photos, String caption)? onSend,
+  PickedPhotosCallback? onSend,
+  PickedPhotosCallback? onSendSeparately,
   VoidCallback? onPickFile,
   VoidCallback? onShareLocation,
   VoidCallback? onCreatePoll,
@@ -57,6 +63,7 @@ Future<void> showAttachmentSheet(
     builder: (_) => AttachmentSheet(
       title: title,
       onSend: onSend,
+      onSendSeparately: onSendSeparately,
       onPickFile: onPickFile,
       onShareLocation: onShareLocation,
       onCreatePoll: onCreatePoll,
@@ -67,7 +74,8 @@ Future<void> showAttachmentSheet(
 
 class AttachmentSheet extends StatefulWidget {
   final String? title;
-  final void Function(List<PickedPhoto> photos, String caption)? onSend;
+  final PickedPhotosCallback? onSend;
+  final PickedPhotosCallback? onSendSeparately;
   final VoidCallback? onPickFile;
   final VoidCallback? onShareLocation;
   final VoidCallback? onCreatePoll;
@@ -77,6 +85,7 @@ class AttachmentSheet extends StatefulWidget {
     super.key,
     this.title,
     this.onSend,
+    this.onSendSeparately,
     this.onPickFile,
     this.onShareLocation,
     this.onCreatePoll,
@@ -114,6 +123,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   bool _loadingMore = false;
   bool _hasMore = false;
   int _loadToken = 0;
+  Object? _loadError;
   GalleryPermission _permission = GalleryPermission.granted;
   List<GalleryItem> _items = const [];
 
@@ -149,29 +159,48 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
 
   Future<void> _loadGallery({bool silent = false}) async {
     final token = ++_loadToken;
-    if (!silent) setState(() => _loading = true);
-    final permission = await _source.ensurePermission();
-    if (!mounted || token != _loadToken) return;
-    if (permission == GalleryPermission.denied) {
-      _cachedItems = null;
-      _cachedHasMore = false;
+    if (!silent) {
       setState(() {
-        _permission = permission;
-        _items = const [];
-        _hasMore = false;
-        _loading = false;
+        _loading = true;
+        _loadError = null;
       });
-      return;
     }
-    final loaded = _items.length;
-    final page = await _source.load(
-      offset: 0,
-      limit: loaded > GallerySource.pageSize ? loaded : GallerySource.pageSize,
-    );
-    if (!mounted || token != _loadToken) return;
-    _permission = permission;
-    _loading = false;
-    _publishItems(page.items, page.hasMore);
+    try {
+      final permission = await _source.ensurePermission();
+      if (!mounted || token != _loadToken) return;
+      if (permission == GalleryPermission.denied) {
+        _cachedItems = null;
+        _cachedHasMore = false;
+        setState(() {
+          _permission = permission;
+          _items = const [];
+          _hasMore = false;
+          _loading = false;
+        });
+        return;
+      }
+      final loaded = _items.length;
+      final page = await _source.load(
+        offset: 0,
+        limit: loaded > GallerySource.pageSize
+            ? loaded
+            : GallerySource.pageSize,
+      );
+      if (!mounted || token != _loadToken) return;
+      _permission = permission;
+      _loading = false;
+      _loadError = null;
+      _publishItems(page.items, page.hasMore);
+    } catch (error, stackTrace) {
+      logger.w('Галерея не загрузилась', error: error, stackTrace: stackTrace);
+      if (!mounted || token != _loadToken) return;
+      if (silent && _items.isNotEmpty) return;
+      _cachedItems = null;
+      setState(() {
+        _loading = false;
+        _loadError = error;
+      });
+    }
   }
 
   Future<void> _loadMore() async {
@@ -179,8 +208,19 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     final token = _loadToken;
     final offset = _items.length;
     _loadingMore = true;
-    final page = await _source.load(offset: offset);
-    _loadingMore = false;
+    final GalleryPage page;
+    try {
+      page = await _source.load(offset: offset);
+    } catch (error, stackTrace) {
+      logger.w(
+        'Следующая страница галереи не загрузилась',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return;
+    } finally {
+      _loadingMore = false;
+    }
     if (!mounted || token != _loadToken || offset != _items.length) return;
     if (page.items.isEmpty) {
       _cachedHasMore = false;
@@ -379,7 +419,10 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     return ok;
   }
 
-  Future<void> _sendSelection({GalleryItem? fallback}) async {
+  Future<void> _sendSelection({
+    GalleryItem? fallback,
+    bool separately = false,
+  }) async {
     if (_exporting) return;
     final ids = _selected.value;
     var chosen = _items.where((it) => ids.contains(it.id)).toList();
@@ -396,7 +439,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           ),
         )
         .toList();
-    final callback = widget.onSend;
+    final callback = separately ? widget.onSendSeparately : widget.onSend;
     if (callback != null) {
       for (final photo in picked) {
         final path = photo.editedFile?.path;
@@ -429,7 +472,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
-              const SheetGrabber(),
+              _buildGrabberBar(cs),
               Expanded(
                 child: Stack(
                   children: [
@@ -438,36 +481,41 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      child: _buildBottomBar(),
-                    ),
-                    Positioned(
-                      right: 16,
-                      bottom:
-                          barReserve +
-                          8 +
-                          MediaQuery.viewInsetsOf(context).bottom,
-                      child: AnimatedBuilder(
-                        animation: Listenable.merge([
-                          _selected,
-                          _pageController,
-                        ]),
-                        builder: (context, _) {
-                          final count = _selected.value.length;
-                          final galleryT = (1 - _currentPageT()).clamp(
-                            0.0,
-                            1.0,
-                          );
-                          if (count == 0 || galleryT == 0) {
-                            return const SizedBox.shrink();
-                          }
-                          return Opacity(
-                            opacity: galleryT,
-                            child: IgnorePointer(
-                              ignoring: galleryT < 0.5,
-                              child: _buildSendButton(cs),
-                            ),
-                          );
-                        },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          AnimatedBuilder(
+                            animation: Listenable.merge([
+                              _selected,
+                              _pageController,
+                            ]),
+                            builder: (context, _) {
+                              final count = _selected.value.length;
+                              final galleryT = (1 - _currentPageT()).clamp(
+                                0.0,
+                                1.0,
+                              );
+                              if (count == 0 || galleryT == 0) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                  right: 16,
+                                  bottom: 8,
+                                ),
+                                child: Opacity(
+                                  opacity: galleryT,
+                                  child: IgnorePointer(
+                                    ignoring: galleryT < 0.5,
+                                    child: _buildSendButton(cs),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          _buildBottomBar(),
+                        ],
                       ),
                     ),
                   ],
@@ -482,6 +530,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
 
   static const double _pillMargin = 10;
   static const double _barHeight = SlidingPillNav.height + _pillMargin;
+  static const double _captionMinHeight = 52;
   static const Duration _navAnim = Duration(milliseconds: 300);
 
   Color _composerColor(ColorScheme cs) => Color.alphaBlend(
@@ -614,6 +663,10 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     }
     if (_permission == GalleryPermission.denied) {
       return _buildDenied(scrollController, cs, bottomReserve);
+    }
+    final loadError = _loadError;
+    if (loadError != null) {
+      return _buildLoadError(scrollController, cs, bottomReserve, loadError);
     }
     if (_items.isEmpty) {
       return _buildMessage(
@@ -843,6 +896,47 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     );
   }
 
+  Widget _buildLoadError(
+    ScrollController scrollController,
+    ColorScheme cs,
+    double bottomReserve,
+    Object error,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    return _scrollableCenter(
+      scrollController,
+      bottomReserve,
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Symbols.broken_image, size: 48, color: cs.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text(
+              l10n.attachSheetGalleryFailedTitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: cs.onSurface, fontSize: 16),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '$error',
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _loadGallery,
+              child: Text(l10n.attachSheetRetry),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessage(
     ScrollController scrollController,
     ColorScheme cs,
@@ -870,6 +964,44 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
             padding: EdgeInsets.only(bottom: bottomReserve),
             child: Center(child: child),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGrabberBar(ColorScheme cs) {
+    if (widget.onSendSeparately == null) return const SheetGrabber();
+    return SheetGrabberBar(
+      action: AnimatedBuilder(
+        animation: Listenable.merge([_selected, _pageController]),
+        builder: (context, child) {
+          final galleryT = (1 - _currentPageT()).clamp(0.0, 1.0);
+          if (_selected.value.isEmpty || galleryT == 0) {
+            return const SizedBox.shrink();
+          }
+          return Opacity(
+            opacity: galleryT,
+            child: IgnorePointer(ignoring: galleryT < 0.5, child: child),
+          );
+        },
+        child: _GalleryMenuButton(cs: cs, onTap: _openGalleryMenu),
+      ),
+    );
+  }
+
+  void _openGalleryMenu(BuildContext anchorContext) {
+    if (widget.onSendSeparately == null) return;
+    final box = anchorContext.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    showChatMenu(
+      context: context,
+      anchorRect: box.localToGlobal(Offset.zero) & box.size,
+      compact: true,
+      items: [
+        ChatMenuItem(
+          icon: Symbols.arrow_split,
+          label: AppLocalizations.of(context)!.attachSheetSendSeparately,
+          onTap: () => _sendSelection(separately: true),
         ),
       ],
     );
@@ -1005,38 +1137,70 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
 
   Widget _buildCaptionBar(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
-    return SizedBox(
+    return Padding(
       key: const ValueKey('caption'),
-      height: SlidingPillNav.height,
-      child: Center(
-        child: Container(
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: _composerColor(cs),
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: _composerBorderColor(cs), width: 0.5),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _captionCtrl,
-                  style: TextStyle(color: cs.onSurface, fontSize: 15),
-                  cursorColor: cs.primary,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    isCollapsed: true,
-                    border: InputBorder.none,
-                    hintText: l10n.attachSheetAddCaptionHint,
-                    hintStyle: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontSize: 15,
-                    ),
+      padding: const EdgeInsets.symmetric(
+        vertical: (SlidingPillNav.height - _captionMinHeight) / 2,
+      ),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: _captionMinHeight),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: _composerColor(cs),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: _composerBorderColor(cs), width: 0.5),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _captionCtrl,
+                minLines: 1,
+                maxLines: 5,
+                style: TextStyle(color: cs.onSurface, fontSize: 15),
+                cursorColor: cs.primary,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  hintText: l10n.attachSheetAddCaptionHint,
+                  hintStyle: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 15,
                   ),
                 ),
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GalleryMenuButton extends StatelessWidget {
+  final ColorScheme cs;
+  final void Function(BuildContext anchorContext) onTap;
+
+  const _GalleryMenuButton({required this.cs, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: AppLocalizations.of(context)!.attachSheetMoreActions,
+      child: Material(
+        color: cs.surfaceContainerHighest,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => onTap(context),
+          child: Padding(
+            padding: const EdgeInsets.all(5),
+            child: Icon(
+              Symbols.more_horiz,
+              size: 20,
+              color: cs.onSurfaceVariant,
+            ),
           ),
         ),
       ),

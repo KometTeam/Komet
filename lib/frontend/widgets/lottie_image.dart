@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:lottie/lottie.dart';
 
-import '../../core/media/rlottie/rlottie.dart';
+import '../../core/media/tlottie/tlottie.dart';
 
 class LottieLoadGovernor {
   LottieLoadGovernor._() {
@@ -126,7 +126,7 @@ class _LottiePlayerState extends State<LottiePlayer>
   final ValueNotifier<int> _frameIndex = ValueNotifier(0);
   late final Ticker _ticker;
   late final bool _native;
-  RlottieClip? _clip;
+  TlottieClip? _clip;
   ValueListenable<bool>? _scrollState;
   ValueListenable<bool>? _holdState;
   int? _px;
@@ -153,7 +153,7 @@ class _LottiePlayerState extends State<LottiePlayer>
   @override
   void initState() {
     super.initState();
-    _native = RlottieEngine.instance.available;
+    _native = TlottieEngine.instance.available;
     _ticker = createTicker(_onTick);
     LottieLoadGovernor.instance.throttled.addListener(_onGateChanged);
   }
@@ -218,7 +218,7 @@ class _LottiePlayerState extends State<LottiePlayer>
     final clip = _clip;
     if (clip != null) {
       clip.ready.removeListener(_onReady);
-      RlottieEngine.instance.release(clip);
+      TlottieEngine.instance.release(clip);
       _clip = null;
     }
   }
@@ -280,7 +280,7 @@ class _LottiePlayerState extends State<LottiePlayer>
     if (mounted) setState(() {});
   }
 
-  void _maybeStartTicker(RlottieClip clip) {
+  void _maybeStartTicker(TlottieClip clip) {
     if (!widget.animate || _completed) return;
     if (clip.frameCount <= 1) {
       if (!widget.repeat) _completePlayback();
@@ -347,10 +347,10 @@ class _LottiePlayerState extends State<LottiePlayer>
     _deferTimer?.cancel();
     _deferTimer = null;
     _started = true;
-    RlottieEngine.instance.acquire(widget.lottieUrl, px).then((clip) {
+    TlottieEngine.instance.acquire(widget.lottieUrl, px).then((clip) {
       if (clip == null) return;
       if (!mounted) {
-        RlottieEngine.instance.release(clip);
+        TlottieEngine.instance.release(clip);
         return;
       }
       clip.ready.addListener(_onReady);

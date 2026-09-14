@@ -48,7 +48,9 @@ void main() {
     expect(find.textContaining('сегодня в'), findsOneWidget);
   });
 
-  testWidgets('rotate button turns the photo by 90 degrees', (tester) async {
+  testWidgets('rotate button turns the photo counter-clockwise, as its icon', (
+    tester,
+  ) async {
     await _pumpViewer(tester, message: _message());
 
     expect(
@@ -61,7 +63,7 @@ void main() {
 
     expect(
       tester.widget<RotatedBox>(find.byType(RotatedBox).first).quarterTurns,
-      1,
+      3,
     );
   });
 
@@ -128,10 +130,7 @@ void main() {
     await _pumpViewer(
       tester,
       message: _message(),
-      actions: PhotoViewerActions(
-        goToMessage: (_, _) {},
-        delete: (_, _) {},
-      ),
+      actions: PhotoViewerActions(goToMessage: (_, _) {}, delete: (_, _) {}),
     );
     expect(find.byIcon(Symbols.more_vert), findsOneWidget);
 

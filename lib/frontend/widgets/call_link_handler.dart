@@ -16,7 +16,6 @@ Future<bool> tryHandleCallLink(BuildContext context, String url) async {
     return true;
   }
 
-  final navigator = Navigator.of(context);
   final preview = await controller.previewCallLink(url);
   if (!context.mounted) return true;
 
@@ -36,11 +35,41 @@ Future<bool> tryHandleCallLink(BuildContext context, String url) async {
   );
   if (!confirmed || !context.mounted) return true;
 
+  await joinGroupCall(
+    context,
+    token: token,
+    name: name,
+    isVideo: preview?.isVideo ?? false,
+  );
+  return true;
+}
+
+Future<void> joinGroupCall(
+  BuildContext context, {
+  required String token,
+  required String name,
+  bool isVideo = false,
+}) async {
+  final controller = CallController.instance;
+  final navigator = Navigator.of(context);
+  if (controller.isBusy) {
+    final active = controller.activeSession;
+    if (active == null) return;
+    if (controller.activeJoinLink == token) {
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) =>
+              CallScreen(name: name, session: active, isGroup: true),
+        ),
+      );
+    } else {
+      showCustomNotification(context, 'Звонок уже идёт');
+    }
+    return;
+  }
+
   try {
-    final session = await controller.joinByLink(
-      token,
-      isVideo: preview?.isVideo ?? false,
-    );
+    final session = await controller.joinByLink(token, isVideo: isVideo);
     navigator.push(
       MaterialPageRoute(
         builder: (_) => CallScreen(name: name, session: session, isGroup: true),
@@ -51,5 +80,4 @@ Future<bool> tryHandleCallLink(BuildContext context, String url) async {
       showCustomNotification(context, 'Не удалось присоединиться к звонку');
     }
   }
-  return true;
 }

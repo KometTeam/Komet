@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:komet_crypto/komet_crypto.dart' as kc;
+import 'package:komet_crypto/komet_crypto.dart';
 
 import '../storage/chat_encryption_store.dart';
 import '../utils/logger.dart';
+import 'noise_png.dart';
 
 const int kMaxEncryptedMessageLength = 1000;
 
@@ -22,7 +24,34 @@ class CryptoResult {
   bool get isOk => text != null;
 }
 
-// #***! шифрование сообщений и картинок, сама крипта в расте
+// #***! байты либо причина неудачи
+class CryptoBytesResult {
+  final Uint8List? bytes;
+  final CryptoFailure? failure;
+
+  const CryptoBytesResult.ok(Uint8List this.bytes) : failure = null;
+  const CryptoBytesResult.failed(CryptoFailure this.failure) : bytes = null;
+
+  bool get isOk => bytes != null;
+}
+
+CryptoFailure cryptoFailureOf(Object error) {
+  if (error is KometCryptoException) {
+    switch (error.status) {
+      case CryptoStatus.wrongKey:
+        return CryptoFailure.wrongKey;
+      case CryptoStatus.notEncrypted:
+        return CryptoFailure.notEncrypted;
+      case CryptoStatus.malformed:
+        return CryptoFailure.malformed;
+      default:
+        return CryptoFailure.unavailable;
+    }
+  }
+  return CryptoFailure.unavailable;
+}
+
+// #***! парольное шифрование групп и старой истории, сама крипта в C-ядре
 class ChatCryptoService {
   ChatCryptoService._() {
     ChatEncryptionStore.instance.revision.addListener(clearKeys);
@@ -33,28 +62,17 @@ class ChatCryptoService {
   // #***! ключи в памяти по аккаунт/чат, _pending схлопывает параллельный вывод
   final Map<String, Uint8List> _keys = {};
   final Map<String, Future<Uint8List?>> _pending = {};
-  Future<void>? _init;
-  bool _unavailable = false;
 
   String _cacheKey(int accountId, int chatId) => '$accountId/$chatId';
 
+  bool get _unavailable => !KometCrypto.isAvailable;
+
   void clearKeys() {
+    for (final key in _keys.values) {
+      KometCrypto.wipe(key);
+    }
     _keys.clear();
     _pending.clear();
-  }
-
-  // #***! нативка может не собраться, тогда фича выключена
-  Future<bool> _ensureInitialized() async {
-    if (_unavailable) return false;
-    try {
-      await (_init ??= kc.RustLib.init());
-      return true;
-    } catch (e) {
-      _init = null;
-      _unavailable = true;
-      logger.w('komet_crypto init failed: $e');
-      return false;
-    }
   }
 
   // #***! ключ выводится из парольной фразы и это дорого, отсюда кэш
@@ -71,13 +89,13 @@ class ChatCryptoService {
     String cacheKey,
   ) async {
     try {
-      if (!await _ensureInitialized()) return null;
+      if (_unavailable) return null;
       final password = await ChatEncryptionStore.instance.readKey(
         accountId,
         chatId,
       );
       if (password == null || password.isEmpty) return null;
-      final key = await kc.deriveKey(password: password);
+      final key = await Isolate.run(() => KometCrypto.deriveKey(password));
       _keys[cacheKey] = key;
       return key;
     } catch (e) {
@@ -94,6 +112,9 @@ class ChatCryptoService {
 
   Future<void> warmKey(int accountId, int chatId) => _keyFor(accountId, chatId);
 
+  CryptoFailure _noKeyFailure() =>
+      _unavailable ? CryptoFailure.unavailable : CryptoFailure.noKey;
+
   // #***! шифрование и расшифровка текста
   Future<CryptoResult> encrypt(
     int accountId,
@@ -101,15 +122,9 @@ class ChatCryptoService {
     String plaintext,
   ) async {
     final key = await _keyFor(accountId, chatId);
-    if (key == null) {
-      return CryptoResult.failed(
-        _unavailable ? CryptoFailure.unavailable : CryptoFailure.noKey,
-      );
-    }
+    if (key == null) return CryptoResult.failed(_noKeyFailure());
     try {
-      return CryptoResult.ok(
-        await kc.encryptMessage(plaintext: plaintext, key: key),
-      );
+      return CryptoResult.ok(KometCrypto.encryptMessage(plaintext, key));
     } catch (e) {
       logger.w('encrypt for chat $chatId: $e');
       return const CryptoResult.failed(CryptoFailure.unavailable);
@@ -118,100 +133,87 @@ class ChatCryptoService {
 
   Future<CryptoResult> decrypt(int accountId, int chatId, String text) async {
     final key = await _keyFor(accountId, chatId);
-    if (key == null) {
-      return CryptoResult.failed(
-        _unavailable ? CryptoFailure.unavailable : CryptoFailure.noKey,
-      );
-    }
+    if (key == null) return CryptoResult.failed(_noKeyFailure());
     try {
-      return CryptoResult.ok(await kc.decryptMessage(text: text, key: key));
+      return CryptoResult.ok(KometCrypto.decryptMessage(text, key));
     } catch (e) {
-      return CryptoResult.failed(_failureFromCode(e.toString()));
+      return CryptoResult.failed(cryptoFailureOf(e));
     }
   }
 
-  // #***! картинки файл в файл, мимо памяти
-  Future<CryptoFailure?> encryptImageFile(
+  // #***! картинки байт в байт, шум заворачивается в PNG уже здесь
+  Future<CryptoBytesResult> encryptImageBytes(
     int accountId,
     int chatId,
-    String sourcePath,
-    String destPath,
-  ) => _imageOp(
-    accountId,
-    chatId,
-    () => kc.encryptImageFile(
-      sourcePath: sourcePath,
-      destPath: destPath,
-      key: _keys[_cacheKey(accountId, chatId)]!,
-    ),
-  );
-
-  Future<CryptoFailure?> decryptImageFile(
-    int accountId,
-    int chatId,
-    String sourcePath,
-    String destPath,
-  ) => _imageOp(
-    accountId,
-    chatId,
-    () => kc.decryptImageFile(
-      sourcePath: sourcePath,
-      destPath: destPath,
-      key: _keys[_cacheKey(accountId, chatId)]!,
-    ),
-  );
-
-  Future<CryptoFailure?> _imageOp(
-    int accountId,
-    int chatId,
-    Future<void> Function() run,
+    Uint8List png,
   ) async {
     final key = await _keyFor(accountId, chatId);
-    if (key == null) {
-      return _unavailable ? CryptoFailure.unavailable : CryptoFailure.noKey;
+    if (key == null) return CryptoBytesResult.failed(_noKeyFailure());
+    try {
+      final blob = KometCrypto.encryptImageBlob(png, key);
+      final wrapped = wrapNoisePng(blob);
+      if (wrapped == null) {
+        return const CryptoBytesResult.failed(CryptoFailure.malformed);
+      }
+      return CryptoBytesResult.ok(wrapped);
+    } catch (e) {
+      logger.w('image encrypt for chat $chatId: $e');
+      return CryptoBytesResult.failed(cryptoFailureOf(e));
+    }
+  }
+
+  Future<CryptoBytesResult> decryptImageBytes(
+    int accountId,
+    int chatId,
+    Uint8List noisePng,
+  ) async {
+    final key = await _keyFor(accountId, chatId);
+    if (key == null) return CryptoBytesResult.failed(_noKeyFailure());
+    final raw = unwrapNoisePng(noisePng);
+    if (raw == null) {
+      return const CryptoBytesResult.failed(CryptoFailure.notEncrypted);
     }
     try {
-      await run();
-      return null;
+      return CryptoBytesResult.ok(KometCrypto.decryptImageBlob(raw, key));
     } catch (e) {
-      logger.w('image crypto for chat $chatId: $e');
-      return _failureFromCode(e.toString());
+      logger.w('image decrypt for chat $chatId: $e');
+      return CryptoBytesResult.failed(cryptoFailureOf(e));
     }
   }
 
   // #***! похоже ли это вообще на наш шифр, чтоб отличить чужой ключ от обычного текста
-  Future<bool> looksEncryptedImage(String path) async {
-    if (!await _ensureInitialized()) return false;
+  bool looksEncryptedImage(Uint8List noisePng) {
+    if (_unavailable) return false;
+    final raw = unwrapNoisePng(noisePng);
+    if (raw == null) return false;
     try {
-      return await kc.looksEncryptedImageFile(path: path);
+      return KometCrypto.looksEncryptedImageBlob(raw);
     } catch (_) {
       return false;
     }
   }
 
+  // #***! разовая расшифровка чужим паролем, ключ не кэшируем
   Future<String?> decryptWithPassword(String text, String password) async {
-    if (!await _ensureInitialized()) return null;
+    if (_unavailable) return null;
     try {
-      final key = await kc.deriveKey(password: password);
-      return await kc.decryptMessage(text: text, key: key);
+      final key = await Isolate.run(() => KometCrypto.deriveKey(password));
+      try {
+        return KometCrypto.decryptMessage(text, key);
+      } finally {
+        KometCrypto.wipe(key);
+      }
     } catch (_) {
       return null;
     }
   }
 
-  Future<bool> looksEncrypted(String text) async {
-    if (!await _ensureInitialized()) return false;
+  bool looksEncrypted(String text) {
+    if (_unavailable) return false;
     try {
-      return await kc.looksEncrypted(text: text);
+      return KometCrypto.looksEncryptedMessage(text);
     } catch (_) {
       return false;
     }
-  }
-
-  CryptoFailure _failureFromCode(String message) {
-    if (message.contains('wrong_key')) return CryptoFailure.wrongKey;
-    if (message.contains('not_encrypted')) return CryptoFailure.notEncrypted;
-    if (message.contains('malformed')) return CryptoFailure.malformed;
-    return CryptoFailure.unavailable;
   }
 }

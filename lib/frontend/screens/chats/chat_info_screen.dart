@@ -45,6 +45,7 @@ import '../../widgets/swipe_route.dart';
 import '../../../backend/modules/chats.dart';
 import '../calls/call_screen.dart';
 import '../contacts/open_contact_profile.dart';
+import '../profile/profile_qr_sheet.dart';
 import '../stories/story_owner_info.dart';
 import '../stories/story_peanut.dart';
 import '../stories/story_ring.dart';
@@ -118,8 +119,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   bool _blocked = false;
   bool _muteBusy = false;
   bool _addContactBusy = false;
-  bool _channelPreview = false;
-  bool _subscribingChannel = false;
+  bool _notMember = false;
+  bool _joining = false;
 
   StoryPreview? _storyPreview;
   List<Story> _unreadStories = const [];
@@ -217,7 +218,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       case 'DIALOG':
         if (_isBot) {
           return [
-            if (showInfo) 'Info',
+            if (showInfo) l10n.chatInfoTabInfo,
             l10n.chatInfoTabMedia,
             l10n.chatInfoTabFiles,
             l10n.chatInfoTabVoice,
@@ -227,7 +228,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         return [
           l10n.chatInfoTabGeneralChats,
           l10n.chatInfoTabMedia,
-          if (showInfo) 'Info',
+          if (showInfo) l10n.chatInfoTabInfo,
           l10n.chatInfoTabFiles,
           l10n.chatInfoTabVoice,
           l10n.chatInfoTabLinks,
@@ -235,7 +236,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       case 'CHAT':
         return [
           l10n.chatInfoTabMembers,
-          if (showInfo) 'Info',
+          if (showInfo) l10n.chatInfoTabInfo,
           l10n.chatInfoTabMedia,
           l10n.chatInfoTabFiles,
           l10n.chatInfoTabVoice,
@@ -243,14 +244,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         ];
       case 'CHANNEL':
         return [
-          if (showInfo) 'Info',
+          if (showInfo) l10n.chatInfoTabInfo,
           l10n.chatInfoTabMedia,
           l10n.chatInfoTabFiles,
           l10n.chatInfoTabVoice,
           l10n.chatInfoTabLinks,
         ];
       default:
-        return [if (showInfo) 'Info'];
+        return [if (showInfo) l10n.chatInfoTabInfo];
     }
   }
 
@@ -270,8 +271,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
     _mediaChatId = (info?.raw['id'] as int?) ?? widget.chatId;
 
-    if (widget.chatType == 'CHANNEL') {
-      _channelPreview = !await AppDatabase.isChatInList(_myId, _mediaChatId);
+    if (_isGroupOrChannel) {
+      _notMember = !await AppDatabase.isChatInList(_myId, _mediaChatId);
       if (!mounted) return;
     }
 
@@ -1265,13 +1266,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       label: l10n.chatInfoActionLeave,
       onTap: _leaveChat,
     );
-    final subscribeBtn = (
+    final joinBtn = (
       icon: Symbols.add_circle_outline,
       slashedIcon: null,
       slashed: false,
-      label: l10n.chatInfoActionSubscribe,
-      onTap: _subscribingChannel ? null : _subscribeChannel,
+      label: widget.chatType == 'CHANNEL'
+          ? l10n.chatInfoActionSubscribe
+          : l10n.chatInfoActionJoin,
+      onTap: _joining ? null : _joinChat,
     );
+    final membershipBtn = _notMember ? joinBtn : leaveBtn;
 
     final List<
       ({
@@ -1297,9 +1301,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           ),
       ];
     } else if (widget.chatType == 'CHANNEL') {
-      btns = [muteBtn, _channelPreview ? subscribeBtn : leaveBtn];
+      btns = [muteBtn, membershipBtn];
     } else {
-      btns = [chatBtn, muteBtn, leaveBtn];
+      btns = [chatBtn, muteBtn, membershipBtn];
     }
 
     return Column(
@@ -1477,9 +1481,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
-  Future<void> _subscribeChannel() async {
-    if (_subscribingChannel) return;
-    setState(() => _subscribingChannel = true);
+  Future<void> _joinChat() async {
+    if (_joining) return;
+    final isChannel = widget.chatType == 'CHANNEL';
+    setState(() => _joining = true);
     try {
       var link = _chatInfo?.link;
       if (link == null || link.isEmpty) {
@@ -1492,15 +1497,21 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       final result = await chats.joinChannel(api, link, _myId);
       if (!mounted) return;
       setState(() {
-        _channelPreview = false;
-        _subscribingChannel = false;
+        _notMember = false;
+        _joining = false;
       });
       ChatMembersStore.instance.setCount(_mediaChatId, result.subscribersCount);
-      showCustomNotification(context, l10n.chatInfoSubscribed);
+      showCustomNotification(
+        context,
+        isChannel ? l10n.chatInfoSubscribed : l10n.chatInfoJoinedGroup,
+      );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _subscribingChannel = false);
-      showCustomNotification(context, l10n.chatInfoSubscribeFailed);
+      setState(() => _joining = false);
+      showCustomNotification(
+        context,
+        isChannel ? l10n.chatInfoSubscribeFailed : l10n.chatInfoJoinGroupFailed,
+      );
     }
   }
 
@@ -1726,10 +1737,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     } else {
       final info = _chatInfo;
       final link = info?.link;
-      if (link != null &&
+      if (info != null &&
+          link != null &&
           link.isNotEmpty &&
-          (info?.canSeeInviteLink(_myId) ?? false)) {
-        items.add(_linkCard(cs, link));
+          info.canSeeLink(_myId)) {
+        items.add(_linkCard(cs, link, isPublic: info.isPublic));
       }
       final desc = _chatInfo?.description;
       if (desc != null && desc.isNotEmpty) {
@@ -1784,7 +1796,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
   }
 
-  Widget _linkCard(ColorScheme cs, String link) {
+  Widget _linkCard(ColorScheme cs, String link, {required bool isPublic}) {
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
@@ -1797,7 +1809,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  l10n.chatInfoInviteLink,
+                  isPublic
+                      ? l10n.contactProfileInfoLink
+                      : l10n.chatInfoInviteLink,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
                 const SizedBox(height: 4),
@@ -1812,7 +1826,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           ),
           IconButton(
             icon: Icon(Symbols.qr_code_2, color: cs.primary, size: 22),
-            onPressed: () {},
+            onPressed: () => showLinkQrSheet(
+              context,
+              name: widget.name,
+              avatarUrl: widget.imageUrl,
+              title: l10n.chatQrTitle,
+              hint: l10n.chatQrHint,
+              unavailable: l10n.linkQrUnavailable,
+              loadLink: () async => link,
+            ),
           ),
         ],
       ),
@@ -1969,7 +1991,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _tabBody(ColorScheme cs) {
-    if (_selectedTab == 'Info') return _buildInfoTabContent(cs);
+    if (_selectedTab == l10n.chatInfoTabInfo) {
+      return _buildInfoTabContent(cs);
+    }
     if (_selectedTab == l10n.chatInfoTabMembers) {
       return _buildMembersTabContent(cs);
     }

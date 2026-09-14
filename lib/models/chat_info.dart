@@ -36,6 +36,10 @@ class ChatInfo {
   bool canSeeInviteLink(int id) =>
       isAdmin(id) || isOwner(id) || option('MEMBERS_CAN_SEE_PRIVATE_LINK');
 
+  bool get isPublic => raw['access'] == 'PUBLIC';
+
+  bool canSeeLink(int id) => isPublic || canSeeInviteLink(id);
+
   // #***! у админа бывает подпись должность
   String? adminAlias(int id) {
     final source = raw['adminParticipants'];

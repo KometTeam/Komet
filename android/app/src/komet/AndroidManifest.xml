@@ -18,7 +18,10 @@
         <receiver
             android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingReceiver"
             tools:node="remove" />
-        <activity android:name="ru.komet.app.MainActivity">
+        <activity-alias
+            android:name="ru.komet.app.IntentEntry"
+            android:exported="true"
+            android:targetActivity="ru.komet.app.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -34,6 +37,6 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="max"/>
             </intent-filter>
-        </activity>
+        </activity-alias>
     </application>
 </manifest>

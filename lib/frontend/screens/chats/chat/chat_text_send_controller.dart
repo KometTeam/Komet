@@ -12,6 +12,8 @@ import '../../../../core/plugins/plugin_outgoing_text.dart';
 import '../../../../core/protocol/packet.dart';
 import '../../../../core/storage/app_database.dart';
 import '../../../../core/storage/draft_store.dart';
+import '../../../../core/crypto/e2ee_service.dart';
+import '../../../../core/storage/chat_encryption_store.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -73,6 +75,7 @@ class ForwardRequest {
 // живёт отдельно в ChatMediaSendController — здесь то, что завязано на
 // reply/draft/slash-команды/подтверждение отправки
 class ChatTextSendController {
+  // #***! сквозное шифрование живёт рядом: открытый текст запечатывается локально
   final ChatController chatController;
   final RichMessageController messageController;
   final ValueNotifier<bool> hasText;
@@ -88,13 +91,9 @@ class ChatTextSendController {
   final bool Function() isMounted;
   final BuildContext Function() contextOf;
   final CachedChat? Function() chatOf;
-  final void Function(CachedChat) setChat;
-  final bool Function() isChatListed;
-  final VoidCallback markChatListed;
   final Future<String?> Function(String text, {bool notify}) encryptOutgoing;
   final Future<void> Function(SlashCommand command, String args) executeCommand;
   final void Function(CachedMessage) checkPrankTrigger;
-  final VoidCallback syncOtherReadTime;
 
   ChatTextSendController({
     required this.chatController,
@@ -112,17 +111,32 @@ class ChatTextSendController {
     required this.isMounted,
     required this.contextOf,
     required this.chatOf,
-    required this.setChat,
-    required this.isChatListed,
-    required this.markChatListed,
     required this.encryptOutgoing,
     required this.executeCommand,
     required this.checkPrankTrigger,
-    required this.syncOtherReadTime,
   });
 
   int get _myId => chatController.myId;
   int get _chatId => chatController.chatId;
+
+  bool get _e2eeActive => E2eeService.instance.isActive(_myId, _chatId);
+
+  bool get _encrypted =>
+      _e2eeActive || ChatEncryptionStore.instance.isEnabled(_myId, _chatId);
+
+  Future<Uint8List?> _seal(String plaintext) =>
+      _e2eeActive
+      ? E2eeService.instance.sealText(_myId, _chatId, plaintext)
+      : Future.value(null);
+
+  static const int _maxClockSkewMs = 24 * 60 * 60 * 1000;
+
+  static int _serverTimeOf(String messageId, {required int fallback}) {
+    final id = int.tryParse(messageId);
+    if (id == null || id <= 0) return fallback;
+    final time = messageIdToTime(id);
+    return (time - fallback).abs() < _maxClockSkewMs ? time : fallback;
+  }
 
   // #***! доступен _pickReplyChat (остаётся в chat_screen.dart, навигация)
   int? replySourceChatId;
@@ -172,6 +186,12 @@ class ChatTextSendController {
   Future<bool> sendForwardRequest() async {
     var request = forwardRequest;
     if (request == null) return true;
+    // #***! пересылка это серверная копия, текст подставляет сервер а не мы
+    if (_encrypted) {
+      cancelForward();
+      notify(AppLocalizations.of(contextOf())!.e2eeForwardBlocked);
+      return false;
+    }
     if (api.state != SessionState.online) {
       notify('Нет соединения');
       return false;
@@ -309,6 +329,10 @@ class ChatTextSendController {
     final wireText = await encryptOutgoing(text);
     if (wireText == null || !isMounted()) return;
     final encrypted = wireText != text;
+    final sealedText = encrypted ? await _seal(text) : null;
+    final e2eeFlag =
+        sealedText == null ? CachedMessage.e2eeNone : CachedMessage.e2eeText;
+    if (!isMounted()) return;
 
     final tempId = chatController.nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -319,6 +343,7 @@ class ChatTextSendController {
     final int? replySrcChatId = replyId == null ? null : replySourceChatId;
     Map<String, dynamic>? replyPayload;
     if (reply != null && replyId != null) {
+      final sourceLink = reply.payload?['link'];
       replyPayload = {
         'link': {
           'type': 'REPLY',
@@ -329,6 +354,8 @@ class ChatTextSendController {
             'text': reply.text,
             'time': reply.time,
             'attaches': reply.payload?['attaches'] ?? const [],
+            if (sourceLink is Map && sourceLink['type'] == 'FORWARD')
+              'link': sourceLink,
           },
         },
       };
@@ -353,6 +380,8 @@ class ChatTextSendController {
       time: now,
       status: online ? 'sending' : 'pending',
       payload: composedPayload,
+      sealedText: sealedText,
+      e2ee: e2eeFlag,
     );
     if (encrypted) MessageDecryptionCache.instance.seed(tempId, text);
 
@@ -409,15 +438,18 @@ class ChatTextSendController {
 
       final index = chatController.indexOfId(tempId);
       if (index != -1 && isMounted()) {
+        final sentTime = _serverTimeOf(actualId, fallback: now);
         final sent = CachedMessage(
           id: actualId.isNotEmpty ? actualId : tempId,
           accountId: _myId,
           chatId: _chatId,
           senderId: _myId,
           text: wireText,
-          time: now,
+          time: sentTime,
           status: 'sent',
           payload: composedPayload,
+          sealedText: sealedText,
+          e2ee: e2eeFlag,
         );
         if (encrypted) {
           MessageDecryptionCache.instance.adopt(tempId, sent.id);
@@ -431,25 +463,13 @@ class ChatTextSendController {
               _myId,
               _chatId,
               messageId: sent.id,
-              time: now,
+              time: sentTime,
               text: wireText,
               status: 'sent',
               elements: elements,
             ),
           );
         }
-      }
-
-      if (!commentsMode && !isChatListed()) {
-        unawaited(
-          chats.refreshChats(api, [_chatId]).then((list) {
-            if (!isMounted() || list.isEmpty) return;
-            setChat(list.first);
-            markChatListed();
-            bumpMessages();
-            syncOtherReadTime();
-          }),
-        );
       }
     } catch (e) {
       if (replySrcChatId != null) {
@@ -476,10 +496,12 @@ class ChatTextSendController {
           accountId: _myId,
           chatId: _chatId,
           senderId: _myId,
-          text: text,
+          text: wireText,
           time: now,
           status: status,
           payload: composedPayload,
+          sealedText: sealedText,
+          e2ee: e2eeFlag,
         );
         chatController.setMessageAt(index, queued);
         bumpMessages();
@@ -520,6 +542,8 @@ class ChatTextSendController {
       attachments: old.attachments,
       isControl: old.isControl,
       editHistory: old.editHistory,
+      sealedText: old.sealedText,
+      e2ee: old.e2ee,
     );
     chatController.setMessageAt(index, updated);
     bumpMessages();

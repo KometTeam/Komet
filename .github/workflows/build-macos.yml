@@ -46,7 +46,9 @@ jobs:
         run: brew install create-dmg
 
       - name: Build signed DMG
-        run: ./scripts/build_dmg.sh
+        run: |
+          flutter config --no-enable-swift-package-manager
+          ./scripts/build_dmg.sh
 
       - name: Upload macOS DMG artifact
         uses: actions/upload-artifact@v4

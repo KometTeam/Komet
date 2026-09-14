@@ -852,7 +852,7 @@ class _ColorPickerCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ColorWheelPicker(
-                          color: col,
+                          color: swatchColor,
                           onChanged: onColorChanged,
                         ),
                         const SizedBox(height: 20),

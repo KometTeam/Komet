@@ -242,7 +242,8 @@ List<ChatPreviewThumb> _previewThumbs(dynamic attaches) {
   return thumbs;
 }
 
-// #***! берём base64 превьюшку если не гигантская, иначе url
+// #***! берём base64 превьюшку если не гигантская, иначе url, а у своего
+// ещё не улетевшего фото нет ни того ни другого — только файл на диске
 String? _thumbSource(Map attach, bool isVideo) {
   final data = decodeAttachPreview(attach['previewData']);
   if (data != null && data.length <= _maxThumbLength) return data;
@@ -250,7 +251,9 @@ String? _thumbSource(Map attach, bool isVideo) {
       ? _nonEmpty(attach['thumbnail'])
       : _nonEmpty(attach['baseUrl']);
   if (url != null && url.startsWith('http')) return url;
-  return null;
+  if (isVideo) return null;
+  final local = _nonEmpty(attach['localPath']);
+  return local == null ? null : Uri.file(local).toString();
 }
 
 // #***! подписи покороче для закреплённого

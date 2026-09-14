@@ -38,7 +38,7 @@ jobs:
         run: flutter pub get
 
       - name: Flutter analyze
-        run: flutter analyze lib test tool native/komet_crypto/lib
+        run: flutter analyze lib test tool
 
       - name: Configure Gradle
         run: |

@@ -180,27 +180,42 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                     ),
                     const SizedBox(height: 20),
                   ],
-                  SectionHeader(
-                    l10n.notificationsFkmSectionTitle,
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    fontSize: 14,
-                  ),
-                  SettingsCard(
-                    children: [
-                      ValueListenableBuilder<bool>(
-                        valueListenable: FkmController.instance.enabled,
-                        builder: (context, fkmEnabled, _) => SettingsToggleTile(
-                          icon: Symbols.notifications_active,
-                          label: l10n.notificationsFkmEnableLabel,
-                          subtitle: l10n.notificationsFkmEnableSubtitle,
-                          value: fkmEnabled,
-                          enabled: !_fkmBusy,
-                          onChanged: _onFkmChanged,
+                  if (FkmController.instance.isSupported) ...[
+                    SectionHeader(
+                      l10n.notificationsFkmSectionTitle,
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                      fontSize: 14,
+                    ),
+                    SettingsCard(
+                      children: [
+                        ValueListenableBuilder<bool>(
+                          valueListenable: FkmController.instance.enabled,
+                          builder: (context, fkmEnabled, _) =>
+                              SettingsToggleTile(
+                                icon: Symbols.notifications_active,
+                                label: l10n.notificationsFkmEnableLabel,
+                                subtitle: l10n.notificationsFkmEnableSubtitle,
+                                value: fkmEnabled,
+                                enabled: !_fkmBusy,
+                                onChanged: _onFkmChanged,
+                              ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                  if (!Platform.isAndroid && !Platform.isIOS)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+                      child: Text(
+                        l10n.notificationsDesktopNote,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 13,
+                          height: 1.4,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
+                    ),
                   SectionHeader(
                     l10n.notificationsMainSectionTitle,
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),

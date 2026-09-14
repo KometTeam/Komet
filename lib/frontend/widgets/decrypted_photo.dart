@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/crypto/encrypted_photo_cache.dart';
@@ -11,6 +12,7 @@ class DecryptedPhoto extends StatefulWidget {
   final String cacheName;
   final int size;
   final EncryptedPhotoUrlLoader urlLoader;
+  final Uint8List? sealedTicket;
   final Widget Function(EncryptedPhotoView? view) builder;
 
   const DecryptedPhoto({
@@ -21,6 +23,7 @@ class DecryptedPhoto extends StatefulWidget {
     required this.size,
     required this.urlLoader,
     required this.builder,
+    this.sealedTicket,
   });
 
   @override
@@ -57,6 +60,7 @@ class _DecryptedPhotoState extends State<DecryptedPhoto> {
       cacheName: widget.cacheName,
       urlLoader: widget.urlLoader,
       size: widget.size,
+      sealedTicket: widget.sealedTicket,
     );
   }
 

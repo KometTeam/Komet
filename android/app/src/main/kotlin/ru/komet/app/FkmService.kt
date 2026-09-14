@@ -78,7 +78,7 @@ object FkmNotification {
         val open = PendingIntent.getActivity(
             ctx,
             0,
-            Intent(ctx, MainActivity::class.java)
+            LaunchIntents.app(ctx)
                 .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             immutable,
         )

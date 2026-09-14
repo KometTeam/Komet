@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import 'download_history.dart';
+import 'image_format.dart';
 import 'media_cache.dart';
 
 // #***! итог сохранения, в галерею или в папку
@@ -33,7 +34,7 @@ Future<MediaSaveResult> saveImageFromUrl(String url) async {
     if (file == null) {
       return const MediaSaveResult(ok: false, error: 'не удалось загрузить');
     }
-    return _persist(
+    return await _persist(
       file,
       saveName: 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg',
       kind: SaveMediaKind.image,
@@ -85,7 +86,7 @@ Future<MediaSaveResult> saveLocalImage(String path, {String? saveName}) async {
     if (!await file.exists()) {
       return const MediaSaveResult(ok: false, error: 'файл не найден');
     }
-    return _persist(
+    return await _persist(
       file,
       saveName: saveName ?? 'IMG_${DateTime.now().millisecondsSinceEpoch}.jpg',
       kind: SaveMediaKind.image,
@@ -97,6 +98,27 @@ Future<MediaSaveResult> saveLocalImage(String path, {String? saveName}) async {
 
 // #***! на мобилках просим доступ и в галерею, на десктопе в загрузки
 Future<MediaSaveResult> _persist(
+  File file, {
+  required String saveName,
+  required SaveMediaKind kind,
+}) async {
+  if (kind != SaveMediaKind.image) {
+    return _write(file, saveName: saveName, kind: kind);
+  }
+  final image = await prepareImageForSave(file);
+  if (image == null) return _write(file, saveName: saveName, kind: kind);
+  try {
+    return await _write(
+      image.file,
+      saveName: withImageExtension(saveName, image.extension),
+      kind: kind,
+    );
+  } finally {
+    await image.discard();
+  }
+}
+
+Future<MediaSaveResult> _write(
   File file, {
   required String saveName,
   required SaveMediaKind kind,

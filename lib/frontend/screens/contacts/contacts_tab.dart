@@ -369,12 +369,12 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
       navigator.pop();
       navigator.push(
         MaterialPageRoute(
-          builder: (_) => ChatInfoScreen(
+          builder: (routeContext) => ChatInfoScreen(
             chatId: chatId,
             name:
                 ContactCache.get(result.id) ??
                 result.name ??
-                'User #${result.id}',
+                AppLocalizations.of(routeContext)!.userFallbackName(result.id),
             imageUrl: result.avatarUrl ?? '',
             chatType: 'DIALOG',
             dialogPeerId: result.id,
@@ -430,9 +430,12 @@ class _SearchContactSheetState extends State<_SearchContactSheet> {
       navigator.pop();
       navigator.push(
         MaterialPageRoute(
-          builder: (_) => ChatInfoScreen(
+          builder: (routeContext) => ChatInfoScreen(
             chatId: chatId,
-            name: ContactCache.get(id) ?? info.displayName ?? 'User #$id',
+            name:
+                ContactCache.get(id) ??
+                info.displayName ??
+                AppLocalizations.of(routeContext)!.userFallbackName(id),
             imageUrl: info.avatarUrl ?? '',
             chatType: 'DIALOG',
             dialogPeerId: id,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show File;
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
@@ -16,6 +17,7 @@ import 'package:komet/backend/modules/webapp.dart';
 import 'package:komet/frontend/screens/webapp/open_mini_app.dart';
 import 'package:komet/core/media/clipboard/clipboard_media.dart';
 import 'package:komet/core/media/clipboard/pasted_attachment.dart';
+import 'package:komet/frontend/widgets/paste_media_toolbar.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -33,7 +35,7 @@ import '../../../backend/modules/contacts.dart';
 import '../../../models/animoji.dart';
 import '../../../backend/modules/complaints.dart';
 import '../../../core/calls/call_controller.dart';
-import '../../../core/media/rlottie/rlottie.dart';
+import '../../../core/media/tlottie/tlottie.dart';
 import '../calls/call_screen.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
@@ -43,11 +45,14 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/chat_activity_store.dart';
 import '../../../core/storage/chat_members_store.dart';
 import '../../../core/crypto/chat_crypto_service.dart';
+import '../../../core/crypto/e2ee_service.dart';
+import '../../../core/crypto/message_decryption_cache.dart';
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
 import '../../../core/cache/info_cache.dart';
+import '../../../core/links/message_link_token.dart';
 import '../../../core/cache/message_session_cache.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/emoji_keyword_index.dart';
@@ -70,6 +75,7 @@ import 'chat/upload_status.dart';
 import 'chat/mention_panel_controller.dart';
 import 'chat/chat_media_send_controller.dart';
 import 'chat/chat_text_send_controller.dart';
+import 'chat/view/greeting_sticker_card.dart';
 import 'chat/view/message_list_decorations.dart';
 import 'chat/view/message_row_widgets.dart';
 import 'chat/view/scroll_down_button.dart';
@@ -88,12 +94,14 @@ import '../../../models/contact_info.dart';
 import '../../commands/commands.dart';
 import '../../widgets/rich_message_controller.dart';
 import '../../../core/utils/text_format.dart';
+import '../../widgets/call_link_handler.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/photo_viewer.dart';
 import '../../widgets/message_actions_overlay.dart';
 import '../../widgets/lottie_image.dart';
+import '../../widgets/no_chat_access_card.dart';
 import '../../widgets/attachment/attachment_sheet.dart';
 import '../../widgets/attachment/paste_preview_sheet.dart';
 import '../../widgets/sticker_pack_sheet.dart';
@@ -104,6 +112,7 @@ import '../../widgets/schedule_time_picker.dart';
 import '../../widgets/chat_wallpaper_sheet.dart';
 import 'scheduled_messages_screen.dart';
 import 'chat_encryption_screen.dart';
+import 'e2ee_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
 import 'profile_action_sheets.dart';
 import '../../../core/media/media_playback.dart';
@@ -169,6 +178,17 @@ class ChatScreen extends StatefulWidget {
   });
 
   static final List<_ChatScreenState> _open = [];
+
+  static bool revealOpenChat(int chatId) {
+    for (final screen in _open.reversed) {
+      if (screen.widget.chatId != chatId || !screen.mounted) continue;
+      final route = ModalRoute.of(screen.context);
+      if (route == null) return false;
+      Navigator.of(screen.context).popUntil((r) => r == route);
+      return true;
+    }
+    return false;
+  }
 
   static bool startBotInVisibleChat(int chatId, String startPayload) {
     for (final screen in _open.reversed) {
@@ -433,10 +453,6 @@ class _ChatScreenState extends State<ChatScreen>
   late AnimationController _shimmerController;
   Timer? _shimmerStartTimer;
   bool _previewChat = false;
-  // #***! чат ещё не в списке (первое сообщение новому диалогу/каналу без
-  // подписки) — сброшено в true по умолчанию, чтобы не мешать обычным
-  // чатам; настоящее состояние узнаём асинхронно в _fastPreloadCache.
-  bool _chatInList = true;
   bool _subscribing = false;
   String? _channelLink;
   final ChatController _chatController = ChatController();
@@ -473,6 +489,8 @@ class _ChatScreenState extends State<ChatScreen>
   set _myId(int v) => _chatController.myId = v;
   CachedChat? chat;
   bool _peerIsBot = false;
+  bool _peerKindKnown = false;
+  bool _greetingMounted = false;
   bool _botStartRequested = false;
   ChatWallpaper? _wallpaper;
 
@@ -533,7 +551,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool get _selectionMode => _selectedIds.value.isNotEmpty;
 
   void _prewarmQuickReactions() {
-    if (!mounted || !RlottieEngine.instance.available) return;
+    if (!mounted || !TlottieEngine.instance.available) return;
     final dpr = (MediaQuery.maybeOf(context)?.devicePixelRatio ?? 2.0).clamp(
       1.0,
       2.0,
@@ -542,7 +560,7 @@ class _ChatScreenState extends State<ChatScreen>
     for (final a in animojiModule.quickAnimojis) {
       for (final url in [a.lottieUrl, a.lottiePlayUrl]) {
         if (url != null && url.isNotEmpty) {
-          unawaited(RlottieEngine.instance.prewarm(url, px));
+          unawaited(TlottieEngine.instance.prewarm(url, px));
         }
       }
     }
@@ -658,17 +676,9 @@ class _ChatScreenState extends State<ChatScreen>
       isMounted: () => mounted,
       contextOf: () => context,
       chatOf: () => chat,
-      setChat: (value) {
-        if (mounted) setState(() => chat = value);
-      },
-      isChatListed: () => _chatInList,
-      markChatListed: () {
-        if (mounted) setState(() => _chatInList = true);
-      },
       encryptOutgoing: _encryptOutgoing,
       executeCommand: _executeCommand,
       checkPrankTrigger: _prank.checkTrigger,
-      syncOtherReadTime: _syncOtherReadTime,
     );
     final incomingReply = widget.replyRequest;
     if (incomingReply != null) {
@@ -806,8 +816,11 @@ class _ChatScreenState extends State<ChatScreen>
         avatar.isNotEmpty &&
         ContactCache.getAvatar(peerId) != avatar;
     if (avatarIsNew) ContactCache.putAvatar(peerId, avatar);
-    if (_peerIsBot == info.isBot && !avatarIsNew) return;
-    setState(() => _peerIsBot = info.isBot);
+    if (_peerKindKnown && _peerIsBot == info.isBot && !avatarIsNew) return;
+    setState(() {
+      _peerKindKnown = true;
+      _peerIsBot = info.isBot;
+    });
   }
 
   Future<void> _fastPreloadCache() async {
@@ -834,7 +847,6 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted) return;
       final inList = await AppDatabase.isChatInList(_myId, widget.chatId);
       if (!mounted) return;
-      if (inList != _chatInList) setState(() => _chatInList = inList);
       if (widget.chatType == 'CHANNEL') {
         final preview = !inList;
         if (preview != _previewChat) setState(() => _previewChat = preview);
@@ -1379,6 +1391,28 @@ class _ChatScreenState extends State<ChatScreen>
     return readers;
   }
 
+  bool _canLinkMessage(CachedMessage message) {
+    if (_commentsMode || message.isControl) return false;
+    final type = chat?.type ?? widget.chatType;
+    if (type != 'CHAT' && type != 'GROUP' && type != 'CHANNEL') return false;
+    return MessageLinkToken.encode(message.id) != null;
+  }
+
+  Future<void> _copyMessageLink(CachedMessage message) async {
+    final url = MessageLinkToken.messageUrl(
+      chatId: widget.chatId,
+      messageId: message.id,
+      publicLink: chat?.publicLink,
+    );
+    if (url == null) return;
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.sharedLinkCopied,
+    );
+  }
+
   bool _canPinMessage(CachedMessage message) {
     if (message.isControl) return false;
     if (int.tryParse(message.id) == null) return false;
@@ -1437,15 +1471,8 @@ class _ChatScreenState extends State<ChatScreen>
     showCustomNotification(context, 'Сообщение откреплено');
   }
 
-  ({String? text, bool isPreview}) _pinnedPreviewFor(CachedMessage message) {
-    final payload = message.payload;
-    if (payload != null) return pinnedMessagePreview(payload);
-    return pinnedMessagePreview({
-      'text': message.text,
-      'attaches':
-          message.attachments?.map((a) => a.toMap()).toList() ?? const [],
-    });
-  }
+  ({String? text, bool isPreview}) _pinnedPreviewFor(CachedMessage message) =>
+      pinnedMessagePreview(message.previewPayload);
 
   void _applyPinnedMessageLocally({
     int? messageId,
@@ -1484,12 +1511,26 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(_runBadgeRefresh());
   }
 
+  bool _mergeReadMarks(CachedChat into, CachedChat from) {
+    var changed = false;
+    from.participants.forEach((userId, mark) {
+      if (mark > (into.participants[userId] ?? 0)) {
+        into.participants[userId] = mark;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
   Future<void> _reloadChatMeta() async {
     if (_myId == 0) return;
     final rows = await chats.getChat(_myId, widget.chatId);
     if (!mounted || rows.isEmpty) return;
     final fresh = rows.first;
     final current = chat;
+    if (current != null && _mergeReadMarks(current, fresh)) {
+      _syncOtherReadTime();
+    }
     if (current != null &&
         current.pinnedMsgId == fresh.pinnedMsgId &&
         current.pinnedMsgText == fresh.pinnedMsgText &&
@@ -1499,10 +1540,36 @@ class _ChatScreenState extends State<ChatScreen>
         current.options.length == fresh.options.length &&
         current.options.containsAll(fresh.options) &&
         current.admins.length == fresh.admins.length &&
-        current.admins.containsAll(fresh.admins)) {
+        current.admins.containsAll(fresh.admins) &&
+        current.activeCallData == fresh.activeCallData &&
+        current.publicLink == fresh.publicLink) {
       return;
     }
+    if (current != null) _mergeReadMarks(fresh, current);
     setState(() => chat = fresh);
+    _syncOtherReadTime();
+  }
+
+  void _notePeerReadThrough(CachedMessage message) {
+    if (widget.chatType != 'DIALOG' || message.senderId == _myId) return;
+    final c = chat;
+    if (c == null) return;
+    if ((c.participants[message.senderId] ?? 0) >= message.time) return;
+    c.participants[message.senderId] = message.time;
+    _syncOtherReadTime();
+  }
+
+  bool get _showsCallBanner => !_commentsMode && chat?.activeCall != null;
+
+  Future<void> _joinChatCall() async {
+    final call = chat?.activeCall;
+    if (call == null) return;
+    await joinGroupCall(
+      context,
+      token: call.joinLink,
+      name: _headerName(),
+      isVideo: call.isVideo,
+    );
   }
 
   Future<void> _runBadgeRefresh() async {
@@ -2147,6 +2214,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (_encryptionListening) {
       ChatEncryptionStore.instance.revision.removeListener(_applyEncryption);
+      E2eeService.instance.revision.removeListener(_applyEncryption);
     }
     _headerStatusNotifier.dispose();
     _otherReadTime.dispose();
@@ -2189,6 +2257,19 @@ class _ChatScreenState extends State<ChatScreen>
 
   bool _mentionsAvailable() =>
       !_commentsMode && (chat?.type ?? widget.chatType) == 'CHAT';
+
+  // #***! отвечать можно только там, где вообще есть поле ввода: в канале без
+  // прав и в непросмотренной подписке композер заменён плашкой, и «Ответить»
+  // раньше открывало ответ в никуда
+  bool get _canReply {
+    if (_commentsMode) return true;
+    final type = chat?.type ?? widget.chatType;
+    if (type == 'CHANNEL' || type == 'CHAT' || type == 'GROUP') {
+      if (_previewChat) return false;
+    }
+    if (type != 'CHANNEL') return true;
+    return chat?.iAmAdmin(_myId) ?? false;
+  }
 
   void _onMentionSelected(MentionCandidate candidate, MentionQuery query) {
     _messageController.insertMention(
@@ -2284,6 +2365,13 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _saveDraft() {
     if (_myId == 0 || _commentsMode) return;
+    // #***! черновик зашифрованного чата осел бы на диске открытым текстом
+    if (_encryptionEnabled) {
+      if (DraftStore.instance.get(_myId, widget.chatId) != null) {
+        unawaited(DraftStore.instance.clear(_myId, widget.chatId));
+      }
+      return;
+    }
     unawaited(
       DraftStore.instance.set(
         _myId,
@@ -2424,7 +2512,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   List<CachedMessage> _copyableSelection(Set<String> ids) => [
     for (final m in _messages)
-      if (ids.contains(m.id) && (m.selectableText ?? '').isNotEmpty) m,
+      if (ids.contains(m.id) &&
+          (MessageDecryptionCache.instance.readableText(m) ?? '').isNotEmpty)
+        m,
   ];
 
   CachedMessage? _singleEditable(Set<String> ids) {
@@ -2436,7 +2526,10 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _copySelected(List<CachedMessage> messages) {
     if (messages.isEmpty) return;
-    final text = messages.map((m) => m.selectableText!).join('\n\n');
+    final text = messages
+        .map((m) => MessageDecryptionCache.instance.readableText(m) ?? '')
+        .where((t) => t.isNotEmpty)
+        .join('\n\n');
     Clipboard.setData(ClipboardData(text: text));
     Haptics.tap();
     showCustomNotification(context, 'Скопировано');
@@ -2496,12 +2589,20 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(_forwardMessages(msgs));
   }
 
+  // #***! пересылка это серверная копия, текст подставляет сервер а не мы
   Future<void> _forwardMessages(List<CachedMessage> msgs) async {
     final forwardable = msgs
         .where((message) => int.tryParse(message.id) != null)
         .toList();
     if (forwardable.isEmpty) {
       showCustomNotification(context, 'Нечего пересылать');
+      return;
+    }
+    if (_encryptionEnabled) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.e2eeForwardBlocked,
+      );
       return;
     }
 
@@ -2553,6 +2654,9 @@ class _ChatScreenState extends State<ChatScreen>
       onSendFileById: _mediaSend.sendFileById,
       commentsMode: _commentsMode,
       chatType: widget.chatType,
+      chatId: widget.chatId,
+      peerName: widget.name,
+      onOpenEncryption: _openEncryptionSettings,
       chrome: _effectiveChrome,
       chromeVignette: _chromeVignette,
       pillBackdrop: _pillBackdrop,
@@ -2577,11 +2681,13 @@ class _ChatScreenState extends State<ChatScreen>
       onPickReplyChat: _pickReplyChat,
       formatElapsed: formatVoiceElapsed,
       formatContextMenu: _formatContextMenu,
-      pasteMenuItems: _pasteMenuItems,
+      pasteMenuItem: _pasteMenuItem,
       onPasteMedia: ClipboardMedia.supported ? _handlePasteMedia : null,
+      onInsertContent: _insertKeyboardContent,
       isMuted: chat?.isMuted ?? false,
       onToggleMute: _toggleChatMute,
       channelSubscribed: !_previewChat,
+      canPostToChannel: chat?.iAmAdmin(_myId) ?? false,
       channelSubscribing: _subscribing,
       onSubscribe: _subscribeChannel,
       onStickerTap: _mediaSend.sendSticker,
@@ -2590,6 +2696,7 @@ class _ChatScreenState extends State<ChatScreen>
       onReplySelected: _replySelected,
       onForwardSelected: _forwardSelected,
       forwardDisabled: chat?.forwardDisabled ?? false,
+      replyDisabled: !_canReply,
       composerFrosted: _composerFrosted,
     );
   }
@@ -2604,7 +2711,32 @@ class _ChatScreenState extends State<ChatScreen>
     return true;
   }
 
+  Future<String?> _editableText(CachedMessage message) async {
+    final text = message.text ?? '';
+    final decryption = await MessageDecryptionCache.instance.resolve(
+      accountId: message.accountId,
+      chatId: message.chatId,
+      messageId: message.id,
+      cipherText: text,
+    );
+    if (decryption == null) return text;
+    return decryption.isDecrypted ? decryption.plaintext : null;
+  }
+
   Future<void> _startEditMessage(CachedMessage message) async {
+    final original = await _editableText(message);
+    if (!mounted) return;
+    if (original == null) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.e2eeEditUnavailable,
+      );
+      return;
+    }
+    final decrypted = original != (message.text ?? '');
+    final formatRanges = decrypted
+        ? const <FormatRange>[]
+        : message.formatRanges;
     final cs = Theme.of(context).colorScheme;
 
     final content =
@@ -2618,8 +2750,8 @@ class _ChatScreenState extends State<ChatScreen>
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           builder: (sheetContext) => EditMessageSheet(
-            text: message.text ?? '',
-            formatRanges: message.formatRanges,
+            text: original,
+            formatRanges: formatRanges,
             contextMenuBuilder: _formatContextMenu,
           ),
         );
@@ -2631,18 +2763,20 @@ class _ChatScreenState extends State<ChatScreen>
     final elements = trimmedElements(content.elements, rawText, newText);
 
     final oldElements = serializeFormatElements(
-      message.formatRanges.where((r) => composerFormats.contains(r.format)),
+      formatRanges.where((r) => composerFormats.contains(r.format)),
     );
-    if (newText == (message.text ?? '') &&
-        _sameElements(elements, oldElements)) {
+    if (newText == original && _sameElements(elements, oldElements)) {
       return;
     }
 
+    final wireText = await _encryptOutgoing(newText);
+    if (wireText == null || !mounted) return;
+    final editEncrypted = wireText != newText;
     final ok = await messagesModule.editMessage(
       widget.chatId,
       message.id,
-      text: newText,
-      elements: elements,
+      text: wireText,
+      elements: editEncrypted ? const [] : elements,
     );
     if (!mounted) return;
     if (!ok) {
@@ -2661,19 +2795,32 @@ class _ChatScreenState extends State<ChatScreen>
               DateTime.now().millisecondsSinceEpoch,
             )
           : old.editHistory;
+      final editSealed = editEncrypted && _e2eeActive
+          ? await E2eeService.instance.sealText(_myId, widget.chatId, newText)
+          : null;
       final edited = CachedMessage(
         id: old.id,
         accountId: old.accountId,
         chatId: old.chatId,
         senderId: old.senderId,
-        text: newText.isEmpty ? null : newText,
+        text: wireText.isEmpty ? null : wireText,
         time: old.time,
         status: 'EDITED',
-        payload: {...?old.payload, 'elements': elements},
+        payload: {
+          ...?old.payload,
+          'elements': editEncrypted ? const <Map<String, dynamic>>[] : elements,
+        },
         attachments: old.attachments,
         isControl: old.isControl,
         editHistory: newHistory,
+        sealedText: editSealed,
+        e2ee: editSealed == null
+            ? CachedMessage.e2eeNone
+            : CachedMessage.e2eeText,
       );
+      if (editEncrypted) {
+        MessageDecryptionCache.instance.seed(message.id, newText);
+      }
       _chatController.setMessageAt(idx, edited);
       _bumpMessages();
       unawaited(_chatController.persistOutgoing(edited));
@@ -2812,6 +2959,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (!nearBottom) _deferredIds.add(message.id);
         _lastSentId = message.id;
         _chatController.addMessage(message);
+        _notePeerReadThrough(message);
         _bumpMessages();
         _clearTyping(message.senderId);
         Haptics.tap();
@@ -3047,24 +3195,33 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _loadEncryption() async {
     await ChatEncryptionStore.instance.load();
+    await E2eeService.instance.ensureLoaded(_myId);
     if (!mounted) return;
     if (!_encryptionListening) {
       _encryptionListening = true;
       ChatEncryptionStore.instance.revision.addListener(_applyEncryption);
+      E2eeService.instance.revision.addListener(_applyEncryption);
     }
     _applyEncryption();
   }
 
+  bool get _e2eeActive =>
+      widget.chatType == 'DIALOG' &&
+      E2eeService.instance.isActive(_myId, widget.chatId);
+
+  bool get _e2eeVerified =>
+      _e2eeActive &&
+      (E2eeService.instance.info(_myId, widget.chatId)?.verified ?? false);
+
   void _applyEncryption() {
     if (!mounted) return;
-    final enabled = ChatEncryptionStore.instance.isEnabled(
-      _myId,
-      widget.chatId,
-    );
+    final e2ee = _e2eeActive;
+    final enabled =
+        e2ee || ChatEncryptionStore.instance.isEnabled(_myId, widget.chatId);
     if (enabled != _encryptionEnabled) {
       setState(() => _encryptionEnabled = enabled);
     }
-    if (enabled && _myId != 0) {
+    if (enabled && !e2ee && _myId != 0) {
       unawaited(ChatCryptoService.instance.warmKey(_myId, widget.chatId));
     }
   }
@@ -3073,8 +3230,14 @@ class _ChatScreenState extends State<ChatScreen>
     if (_myId == 0) return;
     await pushSwipeable(
       context,
-      (context) =>
-          ChatEncryptionScreen(accountId: _myId, chatId: widget.chatId),
+      (context) => widget.chatType == 'DIALOG'
+          ? E2eeScreen(
+              accountId: _myId,
+              chatId: widget.chatId,
+              peerId: _resolveOtherId() ?? 0,
+              peerName: widget.name,
+            )
+          : ChatEncryptionScreen(accountId: _myId, chatId: widget.chatId),
     );
     if (!mounted) return;
     _applyEncryption();
@@ -3414,7 +3577,7 @@ class _ChatScreenState extends State<ChatScreen>
     RichMessageController controller,
     BuildContext context,
     EditableTextState editableState, {
-    List<ContextMenuButtonItem> extraItems = const [],
+    ContextMenuButtonItem? pasteItem,
   }) {
     final selection = controller.selection;
     final buttonItems = <ContextMenuButtonItem>[];
@@ -3432,11 +3595,18 @@ class _ChatScreenState extends State<ChatScreen>
         );
       }
     }
-    buttonItems.addAll(extraItems);
+    if (pasteItem != null) buttonItems.add(pasteItem);
     buttonItems.addAll(editableState.contextMenuButtonItems);
-    return AdaptiveTextSelectionToolbar.buttonItems(
+    if (pasteItem == null) {
+      return AdaptiveTextSelectionToolbar.buttonItems(
+        anchors: editableState.contextMenuAnchors,
+        buttonItems: buttonItems,
+      );
+    }
+    return PasteMediaToolbar(
       anchors: editableState.contextMenuAnchors,
       buttonItems: buttonItems,
+      pasteItem: pasteItem,
     );
   }
 
@@ -3511,6 +3681,30 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<String?> _encryptOutgoing(String text, {bool notify = true}) async {
     if (!_encryptionEnabled || _myId == 0) return text;
+    if (_e2eeActive) {
+      final l10n = AppLocalizations.of(context)!;
+      if (!E2eeService.instance.fitsTransport(utf8.encode(text).length)) {
+        if (mounted && notify) showCustomNotification(context, l10n.e2eeTooLong);
+        return null;
+      }
+      final String? wire;
+      try {
+        wire = await E2eeService.instance.encryptText(
+          _myId,
+          widget.chatId,
+          text,
+        );
+      } on E2eeAwaitingPeer {
+        if (mounted && notify) {
+          showCustomNotification(context, l10n.e2eeAwaitingPeer);
+        }
+        return null;
+      }
+      if (wire == null && mounted && notify) {
+        showCustomNotification(context, l10n.e2eeEncryptFailed);
+      }
+      return wire;
+    }
     final result = await ChatCryptoService.instance.encrypt(
       _myId,
       widget.chatId,
@@ -3699,11 +3893,14 @@ class _ChatScreenState extends State<ChatScreen>
     final when = await _pickScheduleTime();
     if (when == null || !mounted) return;
 
+    final wireText = await _encryptOutgoing(text);
+    if (wireText == null || !mounted) return;
+
     try {
       await messagesModule.sendMessage(
         _myId,
         widget.chatId,
-        text,
+        wireText,
         scheduledTime: when.millisecondsSinceEpoch,
       );
       if (!mounted) return;
@@ -3804,6 +4001,7 @@ class _ChatScreenState extends State<ChatScreen>
             originalTime: a.originalTime,
             originalText: a.originalText,
             originalChatId: a.originalChatId,
+            originalChatAccess: a.originalChatAccess,
             originalFormatRanges: a.originalFormatRanges,
             originalAttachments: a.originalAttachments,
             originalContact: a.originalContact,
@@ -3861,7 +4059,9 @@ class _ChatScreenState extends State<ChatScreen>
       openContactDialogProfile(
         context,
         contactId: senderId,
-        name: ContactCache.get(senderId) ?? 'User #$senderId',
+        name:
+            ContactCache.get(senderId) ??
+            AppLocalizations.of(context)!.userFallbackName(senderId),
         avatarUrl: ContactCache.getAvatar(senderId),
       ),
     );
@@ -3881,7 +4081,7 @@ class _ChatScreenState extends State<ChatScreen>
         name:
             forwarded.originalSenderName ??
             ContactCache.get(senderId) ??
-            'User #$senderId',
+            AppLocalizations.of(context)!.userFallbackName(senderId),
         avatarUrl:
             forwarded.originalSenderAvatar ?? ContactCache.getAvatar(senderId),
       ),
@@ -3906,6 +4106,13 @@ class _ChatScreenState extends State<ChatScreen>
       );
       return;
     }
+
+    if (!await chats.canOpenForwardSource(api, _myId, forwarded)) {
+      if (!mounted) return;
+      await showNoChatAccessCard(context);
+      return;
+    }
+    if (!mounted) return;
 
     await chats.ensureChatCached(api, _myId, sourceChatId);
     if (!mounted) return;
@@ -3948,6 +4155,14 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _openSearch() {
     if (_search.searchMode.value || _selectionMode) return;
+    // #***! запрос уходит на сервер, а сервер видит только шифртекст
+    if (_encryptionEnabled) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.e2eeSearchBlocked,
+      );
+      return;
+    }
     _search.searchMode.value = true;
     _searchAnim.forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -4181,6 +4396,7 @@ class _ChatScreenState extends State<ChatScreen>
                     myId: _myId,
                     onJumpToPinnedMessage: _jumpToPinnedMessage,
                     onUnpinCurrentMessage: _unpinCurrentMessage,
+                    onJoinCall: _commentsMode ? null : _joinChatCall,
                     composerFrosted: _composerFrosted,
                     composerHeight: _composerHeight,
                     pinnedBannerHeight: _pinnedBannerHeight,
@@ -4222,6 +4438,7 @@ class _ChatScreenState extends State<ChatScreen>
                     chatType: widget.chatType,
                     isOfficial: chat?.isOfficial ?? false,
                     encrypted: _encryptionEnabled,
+                    verified: _e2eeVerified,
                     myId: _myId,
                     headerStatus: _headerStatusNotifier,
                     scheduledCount: _scheduledCount,
@@ -4294,7 +4511,41 @@ class _ChatScreenState extends State<ChatScreen>
         ),
         if (showShimmer)
           Positioned.fill(child: ShimmerLoading(shimmer: _shimmerController)),
+        Positioned.fill(
+          child: ValueListenableBuilder<int>(
+            valueListenable: _messagesRev,
+            builder: (context, _, _) => _buildEmptyState(),
+          ),
+        ),
       ],
+    );
+  }
+
+  bool get _isPersonDialog =>
+      !_commentsMode && widget.chatType == 'DIALOG' && widget.chatId != 0;
+
+  Widget _buildEmptyState() {
+    final empty = _messages.isEmpty && !_isLoading;
+    final greetingDue =
+        empty && _isPersonDialog && _peerKindKnown && !_peerIsBot;
+    if (greetingDue) _greetingMounted = true;
+    if (_greetingMounted) {
+      return GreetingStickerCard(
+        accountId: _myId,
+        visible: greetingDue,
+        onSend: _mediaSend.sendSticker,
+      );
+    }
+    if (!empty) return const SizedBox.shrink();
+    return IgnorePointer(
+      child: Center(
+        child: Text(
+          AppLocalizations.of(context)!.chatEmptyTitle,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
     );
   }
 
@@ -4314,7 +4565,9 @@ class _ChatScreenState extends State<ChatScreen>
       final glossy = AppVisualStyle.current.value.glossyChrome;
       return glossy ? 2 : 4;
     }
-    if (chat?.hasPinnedMessage == true && pinnedHeight > 0) {
+    final hasBanner =
+        chat?.hasPinnedMessage == true || _showsCallBanner;
+    if (hasBanner && pinnedHeight > 0) {
       return _pinnedBannerTop() + pinnedHeight + 2;
     }
     return _pinnedBannerTop() + 2;
@@ -4322,16 +4575,7 @@ class _ChatScreenState extends State<ChatScreen>
 
 
   Widget _buildMessagesListContent() {
-    if (_messages.isEmpty) {
-      return Center(
-        child: Text(
-          'No messages yet',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
+    if (_messages.isEmpty) return const SizedBox.shrink();
 
     final items = _buildCombinedItems();
     final visibleCount = _visibleMessageCount;
@@ -4501,7 +4745,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 onEdit: _canEditMessage(message)
                                     ? () => _startEditMessage(message)
                                     : null,
-                                onReply: message.isControl
+                                onReply: message.isControl || !_canReply
                                     ? null
                                     : () => _textSend.startReply(message),
                                 onForward:
@@ -4515,6 +4759,9 @@ class _ChatScreenState extends State<ChatScreen>
                                     : () => _markMessageUnread(message),
                                 onPin: _canPinMessage(message)
                                     ? () => _togglePinMessage(message)
+                                    : null,
+                                onCopyLink: _canLinkMessage(message)
+                                    ? () => _copyMessageLink(message)
                                     : null,
                                 isPinned: () =>
                                     chat?.pinnedMsgId ==
@@ -4543,7 +4790,10 @@ class _ChatScreenState extends State<ChatScreen>
 
                               final isChannel =
                                   (chat?.type ?? widget.chatType) == 'CHANNEL';
-                              final swipeable = (message.isControl || isChannel)
+                              final swipeable =
+                                  (message.isControl ||
+                                      isChannel ||
+                                      !_canReply)
                                   ? pressable
                                   : SwipeToReply(
                                       isMe: isMe,
@@ -4689,6 +4939,15 @@ class _ChatScreenState extends State<ChatScreen>
           ? _mediaSend.sendPhotos
           : (picked, caption) =>
                 _mediaSend.sendScheduledPhotos(picked, caption, scheduledTime),
+      onSendSeparately: scheduledTime == null
+          ? (picked, caption) =>
+                _mediaSend.sendPhotos(picked, caption, separate: true)
+          : (picked, caption) => _mediaSend.sendScheduledPhotos(
+              picked,
+              caption,
+              scheduledTime,
+              separate: true,
+            ),
       onPickFile: _encryptionEnabled
           ? () => _refuseUnencrypted('Файлы')
           : (scheduledTime == null
@@ -4750,20 +5009,18 @@ class _ChatScreenState extends State<ChatScreen>
     showCustomNotification(context, '$what пока нельзя зашифровать');
   }
 
-  List<ContextMenuButtonItem> _pasteMenuItems(
+  ContextMenuButtonItem? _pasteMenuItem(
     BuildContext context,
     EditableTextState editableState,
   ) {
-    if (!ClipboardMedia.supported) return const [];
-    return [
-      ContextMenuButtonItem(
-        label: AppLocalizations.of(context)!.composerPasteAttachment,
-        onPressed: () {
-          editableState.hideToolbar();
-          unawaited(_pasteClipboardMedia());
-        },
-      ),
-    ];
+    if (!ClipboardMedia.supported) return null;
+    return ContextMenuButtonItem(
+      label: AppLocalizations.of(context)!.composerPasteAttachment,
+      onPressed: () {
+        editableState.hideToolbar();
+        unawaited(_pasteClipboardMedia());
+      },
+    );
   }
 
   Future<bool> _handlePasteMedia() async {
@@ -4773,7 +5030,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _pasteClipboardMedia() async {
-    if (_myId == 0 || _pastePending) return;
+    if (_pastePending) return;
     _pastePending = true;
     try {
       final payload = await ClipboardMedia.read();
@@ -4782,46 +5039,71 @@ class _ChatScreenState extends State<ChatScreen>
           ? const <PastedAttachment>[]
           : await materializeClipboardMedia(payload);
       if (!mounted) return;
-      if (items.isEmpty) {
-        showCustomNotification(
-          context,
-          AppLocalizations.of(context)!.pasteAttachFailed,
-        );
-        return;
-      }
-
-      final media = items.where((it) => it.isMedia).toList();
-      final documents = items.where((it) => !it.isMedia).toList();
-      if (_encryptionEnabled && documents.isNotEmpty) {
-        _refuseUnencrypted('Файлы');
-        if (media.isEmpty) return;
-        documents.clear();
-      }
-
-      final caption = await showPastePreviewSheet(
-        context,
-        items: [...media, ...documents],
-      );
-      if (caption == null || !mounted) return;
-
-      if (media.isNotEmpty) {
-        await _mediaSend.sendPhotos(
-          media
-              .map((it) => PickedPhoto(item: GalleryItem.fromFile(it.file)))
-              .toList(),
-          caption,
-        );
-      }
-      for (final document in documents) {
-        if (!mounted) return;
-        await _mediaSend.uploadAsFile(
-          source: document.file,
-          filename: document.name,
-          size: document.size,
-        );
-      }
+      await _offerPastedAttachments(items);
     } finally {
       _pastePending = false;
+    }
+  }
+
+  Future<void> _insertKeyboardContent(KeyboardInsertedContent content) async {
+    if (_pastePending) return;
+    _pastePending = true;
+    try {
+      final data = content.data;
+      final stored = data == null || data.isEmpty
+          ? null
+          : await storePastedImage(
+              ClipboardImageData(
+                bytes: data,
+                extension: pastedImageExtension(content.mimeType),
+              ),
+            );
+      if (!mounted) return;
+      await _offerPastedAttachments(stored == null ? const [] : [stored]);
+    } finally {
+      _pastePending = false;
+    }
+  }
+
+  Future<void> _offerPastedAttachments(List<PastedAttachment> items) async {
+    if (_myId == 0) return;
+    if (items.isEmpty) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.pasteAttachFailed,
+      );
+      return;
+    }
+
+    final media = items.where((it) => it.isMedia).toList();
+    final documents = items.where((it) => !it.isMedia).toList();
+    if (_encryptionEnabled && documents.isNotEmpty) {
+      _refuseUnencrypted('Файлы');
+      if (media.isEmpty) return;
+      documents.clear();
+    }
+
+    final caption = await showPastePreviewSheet(
+      context,
+      items: [...media, ...documents],
+    );
+    if (caption == null || !mounted) return;
+
+    if (media.isNotEmpty) {
+      await _mediaSend.sendPhotos(
+        media
+            .map((it) => PickedPhoto(item: GalleryItem.fromFile(it.file)))
+            .toList(),
+        caption,
+      );
+    }
+    for (final document in documents) {
+      if (!mounted) return;
+      await _mediaSend.uploadAsFile(
+        source: document.file,
+        filename: document.name,
+        size: document.size,
+      );
     }
   }
 

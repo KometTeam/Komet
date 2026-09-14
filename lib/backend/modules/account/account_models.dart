@@ -394,6 +394,16 @@ class VerifyCodeResult {
   }
 }
 
+class RegistrationResult {
+  final String loginToken;
+  final int accountId;
+
+  const RegistrationResult({
+    required this.loginToken,
+    required this.accountId,
+  });
+}
+
 class TwoFactorResult {
   final String loginToken;
   final int accountId;
@@ -413,6 +423,11 @@ class LoginSyncParams {
   final String? configHash;
   final String? chatCacheFingerprint;
   final bool serverConfigSeen;
+
+  static const String serverConfigRevision = '2';
+
+  static Future<void> forgetServerConfig(int accountId) =>
+      AppDatabase.setSyncValue(accountId, SyncKey.serverConfigSeen, '');
 
   const LoginSyncParams({
     required this.chatsSync,
@@ -443,7 +458,8 @@ class LoginSyncParams {
       lastLogin: int.tryParse(lastLogin) ?? 0,
       configHash: values[SyncKey.configHash],
       chatCacheFingerprint: values[SyncKey.chatCacheFingerprint],
-      serverConfigSeen: values[SyncKey.serverConfigSeen] == '1',
+      serverConfigSeen:
+          values[SyncKey.serverConfigSeen] == serverConfigRevision,
     );
   }
 }

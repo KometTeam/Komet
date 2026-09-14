@@ -115,6 +115,7 @@ class PhotoAttachment extends MessageAttachment {
       width: map['width'] as int?,
       height: map['height'] as int?,
       size: map['size'] as int?,
+      localPath: map['localPath'] as String?,
     );
   }
 
@@ -128,6 +129,7 @@ class PhotoAttachment extends MessageAttachment {
     'width': width,
     'height': height,
     'size': size,
+    'localPath': localPath,
   };
 }
 
@@ -175,6 +177,7 @@ class VideoAttachment extends MessageAttachment {
       duration: map['duration'] as int?,
       size: map['size'] as int?,
       videoType: map['videoType'] as int?,
+      localPath: map['localPath'] as String?,
     );
   }
 
@@ -191,6 +194,7 @@ class VideoAttachment extends MessageAttachment {
     'duration': duration,
     'size': size,
     'videoType': videoType,
+    'localPath': localPath,
   };
 }
 
@@ -724,6 +728,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
   final int? originalTime;
   final String? originalText;
   final int? originalChatId;
+  final String? originalChatAccess;
   final List<FormatRange> originalFormatRanges;
   final List<MessageAttachment>? originalAttachments;
   final ContactAttachment? originalContact;
@@ -737,6 +742,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
     this.originalTime,
     this.originalText,
     this.originalChatId,
+    this.originalChatAccess,
     this.originalFormatRanges = const [],
     this.originalAttachments,
     this.originalContact,
@@ -744,6 +750,8 @@ class ForwardedMessageAttachment extends MessageAttachment {
 
   // #***! переслали из канала значит автор это канал
   bool get isChannel => originalType == 'CHANNEL';
+
+  bool get isFromPrivateChat => originalChatAccess == 'PRIVATE';
 
   // #***! самое закрученное, оригинал спрятан в link.message
   factory ForwardedMessageAttachment.fromMap(Map<String, dynamic> map) {
@@ -807,6 +815,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
       originalTime: parseIntOrNull(message?['time']),
       originalText: message?['text']?.toString(),
       originalChatId: parseIntOrNull(link?['chatId']),
+      originalChatAccess: link?['chatAccessType']?.toString().toUpperCase(),
       originalFormatRanges: parseFormatElements(message?['elements']),
       originalAttachments: originalAttaches,
       originalContact: originalContact,
@@ -824,6 +833,7 @@ class ForwardedMessageAttachment extends MessageAttachment {
     'originalTime': originalTime,
     'originalText': originalText,
     'originalChatId': originalChatId,
+    'originalChatAccess': originalChatAccess,
     'originalElements': serializeFormatElements(originalFormatRanges),
   };
 }

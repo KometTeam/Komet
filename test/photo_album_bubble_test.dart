@@ -30,10 +30,16 @@ List<PhotoAttachment> _local(int count) => List.generate(
   (i) => PhotoAttachment(localPath: '/tmp/photo$i.jpg', width: 1200, height: 1600),
 );
 
-Future<void> _pumpBubble(WidgetTester tester, CachedMessage message) async {
+Future<void> _pumpBubble(
+  WidgetTester tester,
+  CachedMessage message, {
+  bool withInsets = true,
+}) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.5;
-  tester.view.padding = const FakeViewPadding(top: 210, bottom: 120);
+  tester.view.padding = withInsets
+      ? const FakeViewPadding(top: 210, bottom: 120)
+      : FakeViewPadding.zero;
   addTearDown(tester.view.reset);
 
   await tester.pumpWidget(
@@ -71,10 +77,14 @@ Size _bubbleSize(WidgetTester tester) => tester.getSize(
 
 void main() {
   testWidgets('album grid ignores safe area insets', (tester) async {
-    await _pumpBubble(tester, _album(_remote(4)));
+    await _pumpBubble(tester, _album(_remote(4)), withInsets: false);
+    final plain = _bubbleSize(tester);
 
-    final size = _bubbleSize(tester);
-    expect(size.height, closeTo(size.width, 1));
+    await _pumpBubble(tester, _album(_remote(4)));
+    final inset = _bubbleSize(tester);
+
+    expect(inset.width, closeTo(plain.width, 1));
+    expect(inset.height, closeTo(plain.height, 1));
   });
 
   testWidgets('tapping an album photo opens the viewer at its index', (
@@ -90,17 +100,32 @@ void main() {
     expect(_viewerIndex(tester), 2);
   });
 
-  testWidgets('the +N tile opens the viewer', (tester) async {
+  testWidgets('an album of six shows every photo', (tester) async {
     await _pumpBubble(tester, _album(_remote(6)));
 
-    expect(find.text('+2'), findsOneWidget);
+    expect(find.textContaining('+'), findsNothing);
 
-    await tester.tap(find.byType(GestureDetector).at(3));
+    await tester.tap(find.byType(GestureDetector).at(5));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.byType(PhotoViewerScreen), findsOneWidget);
-    expect(_viewerIndex(tester), 3);
+    expect(_viewerIndex(tester), 5);
+  });
+
+  testWidgets('the +N tile appears past ten photos and opens the viewer', (
+    tester,
+  ) async {
+    await _pumpBubble(tester, _album(_remote(12)));
+
+    expect(find.text('+2'), findsOneWidget);
+
+    await tester.tap(find.text('+2'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byType(PhotoViewerScreen), findsOneWidget);
+    expect(_viewerIndex(tester), 9);
   });
 
   testWidgets('photos still uploading open from their local file', (

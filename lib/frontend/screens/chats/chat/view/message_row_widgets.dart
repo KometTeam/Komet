@@ -6,10 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/backend/modules/animoji.dart' show AnimojiModule;
+import 'package:komet/backend/modules/message_info.dart';
 import 'package:komet/backend/modules/messages.dart' show CachedMessage;
+import 'package:komet/core/config/app_show_extra_info.dart';
 import 'package:komet/core/config/app_fonts.dart';
 import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_message_actions_style.dart';
+import 'package:komet/core/crypto/message_decryption_cache.dart';
 import 'package:komet/core/utils/haptics.dart';
 import 'package:komet/core/utils/text_format.dart';
 import 'package:komet/frontend/widgets/animated_text_swap.dart';
@@ -350,6 +353,7 @@ class SelectableMessageRow extends StatefulWidget {
   final bool allowCopy;
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
+  final VoidCallback? onCopyLink;
   final bool Function() isPinned;
   final Future<List<MessageReader>> Function()? loadReadBy;
   final void Function(int userId)? onReaderTap;
@@ -379,6 +383,7 @@ class SelectableMessageRow extends StatefulWidget {
     this.allowCopy = true,
     this.onMarkUnread,
     this.onPin,
+    this.onCopyLink,
     required this.isPinned,
     this.loadReadBy,
     this.onReaderTap,
@@ -437,11 +442,12 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       isMe: widget.isMe,
       bottomReservedSpace: widget.composerHeight?.value ?? 0,
       messageText: widget.message.text,
-      copyText: widget.message.selectableText,
+      copyText: MessageDecryptionCache.instance.readableText(widget.message),
       controller: controller,
       style: AppMessageActionsStyle.current.value,
       interaction: MessageActionsInteraction.tap,
       editHistory: widget.message.editHistory,
+      infoRows: _infoRows(),
       loadReadBy: widget.loadReadBy,
       onReaderTap: widget.onReaderTap,
       loadReportReasons: widget.loadReportReasons,
@@ -454,6 +460,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       allowCopy: widget.allowCopy,
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
+      onCopyLink: widget.onCopyLink,
       isPinned: _isPinnedNow(),
       onReact: widget.onReact,
       selectedReaction: widget.reactions?.value?['yourReaction']?.toString(),
@@ -465,6 +472,12 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onDispose: controller.dispose,
     );
   }
+
+  // #***! панель «Info» живёт под тем же тумблером, что и остальные
+  // техподробности в интерфейсе
+  List<MessageInfoRow>? _infoRows() => AppShowExtraInfo.current.value
+      ? buildMessageInfoRows(widget.message)
+      : null;
 
   List<ReactionEmoji> _quickReactionEmojis() {
     final quick = animojiModule.quickAnimojis;
@@ -509,11 +522,12 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       isMe: widget.isMe,
       bottomReservedSpace: widget.composerHeight?.value ?? 0,
       messageText: widget.message.text,
-      copyText: widget.message.selectableText,
+      copyText: MessageDecryptionCache.instance.readableText(widget.message),
       controller: controller,
       style: MessageActionsStyle.list,
       interaction: MessageActionsInteraction.click,
       editHistory: widget.message.editHistory,
+      infoRows: _infoRows(),
       loadReadBy: widget.loadReadBy,
       onReaderTap: widget.onReaderTap,
       loadReportReasons: widget.loadReportReasons,
@@ -526,6 +540,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       allowCopy: widget.allowCopy,
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
+      onCopyLink: widget.onCopyLink,
       isPinned: _isPinnedNow(),
       onDispose: controller.dispose,
     );

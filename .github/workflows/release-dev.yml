@@ -191,7 +191,9 @@ jobs:
       - name: Fix opus/ogg libs for macOS
         run: ./scripts/fix_opus_macos.sh
       - name: Build macOS
-        run: flutter build macos --release --dart-define=KOMET_UPDATE_BASE_URL=${{ vars.S3_PUBLIC_BASE_URL || 'https://dl.komet.pw' }}
+        run: |
+          flutter config --no-enable-swift-package-manager
+          flutter build macos --release --dart-define=KOMET_UPDATE_BASE_URL=${{ vars.S3_PUBLIC_BASE_URL || 'https://dl.komet.pw' }}
       - name: Package macOS
         run: |
           mkdir -p dist

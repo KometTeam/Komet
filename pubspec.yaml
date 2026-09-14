@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.5.20+20
+version: 0.5.21+21
 
 environment:
   sdk: ^3.10.4
@@ -39,11 +39,18 @@ dependencies:
   # app build time and pulled from that repo by git tag.
   kolibri: ^0.1.4
 
-  # Rust message-encryption core — Argon2id + ChaCha20-Poly1305, output encoded
-  # as lowercase Cyrillic base32. Separate from kolibri: that is vendored
-  # transport, this is Komet's own crypto.
+  # Message-encryption core (C over monocypher): legacy passphrase scheme and
+  # v2 end-to-end encryption. KometTeam/crypto-core is a git submodule at
+  # native/crypto-core, so the version is pinned by the submodule commit;
+  # run `git submodule update --init --recursive` after cloning.
   komet_crypto:
-    path: native/komet_crypto
+    path: native/crypto-core/flutter/komet_crypto
+
+  # Lottie renderer (tlottie, Rust) for animated stickers, animoji and
+  # reactions — local FFI plugin; its wrapper crate pins tlottie by git rev and
+  # cargokit compiles it at app build time, like kolibri.
+  komet_tlottie:
+    path: native/komet_tlottie
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -108,10 +115,6 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  # Needed by test/chat_crypto_roundtrip_test.dart to open the built
-  # komet_crypto shared library directly.
-  flutter_rust_bridge: 2.12.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

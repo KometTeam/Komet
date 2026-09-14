@@ -126,7 +126,7 @@ class CallForegroundService : Service() {
     private fun startAsForeground(caller: String) {
         val immutable = android.app.PendingIntent.FLAG_UPDATE_CURRENT or
             android.app.PendingIntent.FLAG_IMMUTABLE
-        val open = Intent(this, MainActivity::class.java).apply {
+        val open = LaunchIntents.app(this).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         val pi = android.app.PendingIntent.getActivity(this, 4, open, immutable)

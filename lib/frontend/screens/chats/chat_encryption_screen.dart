@@ -173,7 +173,9 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
                         Text(
                           'Ключ хранится только на этом устройстве. '
                           'Собеседник должен ввести такой же ключ, иначе он '
-                          'не прочитает сообщения.',
+                          'не прочитает сообщения. Это парольный режим для '
+                          'групп: без forward secrecy, любой, кто знает '
+                          'пароль, читает всю историю.',
                           style: TextStyle(
                             color: cs.onSurfaceVariant,
                             fontSize: 13,

@@ -81,8 +81,10 @@ class MediaPlayback {
   final ValueNotifier<VoiceTrack?> voice = ValueNotifier(null);
   final ValueNotifier<double> voiceSpeed = ValueNotifier(speeds.first);
 
-  // #***! держатели не дают освободить контроллер пока его рисует виджет
-  final Set<VoiceAudioController> _heldVoice = {};
+  // #***! держатели не дают освободить контроллер пока его рисует виджет,
+  // считаем их по головам: один и тот же контроллер могут рисовать сразу
+  // два бабла, отпускать его можно только когда ушёл последний
+  final Map<VoiceAudioController, int> _heldVoice = {};
 
   VoiceAudioController acquireVoice({
     required String cacheName,
@@ -91,7 +93,7 @@ class MediaPlayback {
   }) {
     final active = voice.value;
     if (active != null && active.cacheName == cacheName) {
-      _heldVoice.add(active.audio);
+      _retain(_heldVoice, active.audio);
       return active.audio;
     }
     final created = VoiceAudioController(
@@ -99,13 +101,25 @@ class MediaPlayback {
       resolveUrl: resolveUrl,
       fallbackDuration: fallbackDuration,
     );
-    _heldVoice.add(created);
+    _retain(_heldVoice, created);
     return created;
   }
 
   void releaseVoice(VoiceAudioController audio) {
-    _heldVoice.remove(audio);
-    _disposeVoiceIfIdle(audio);
+    if (_releasedByLastHolder(_heldVoice, audio)) _disposeVoiceIfIdle(audio);
+  }
+
+  static void _retain<T>(Map<T, int> holders, T value) =>
+      holders.update(value, (count) => count + 1, ifAbsent: () => 1);
+
+  static bool _releasedByLastHolder<T>(Map<T, int> holders, T value) {
+    final left = (holders[value] ?? 0) - 1;
+    if (left > 0) {
+      holders[value] = left;
+      return false;
+    }
+    holders.remove(value);
+    return true;
   }
 
   // #***! включили голосовое, кружок и музыка гаснут
@@ -146,7 +160,7 @@ class MediaPlayback {
 
   // #***! освобождаем только когда никто не держит и он не активен
   void _disposeVoiceIfIdle(VoiceAudioController audio) {
-    if (_heldVoice.contains(audio)) return;
+    if (_heldVoice.containsKey(audio)) return;
     if (voice.value?.audio == audio) return;
     audio.dispose();
   }
@@ -155,24 +169,25 @@ class MediaPlayback {
   final ValueNotifier<VideoNoteTrack?> videoNote = ValueNotifier(null);
   final ValueNotifier<double> videoNoteSpeed = ValueNotifier(speeds.first);
 
-  final Set<VideoPlayerController> _heldNotes = {};
+  final Map<VideoPlayerController, int> _heldNotes = {};
 
   VideoPlayerController? liveVideoNote(String cacheName) {
     final active = videoNote.value;
     if (active == null || active.cacheName != cacheName) return null;
-    _heldNotes.add(active.controller);
+    _retain(_heldNotes, active.controller);
     return active.controller;
   }
 
   void holdVideoNote(VideoPlayerController controller) =>
-      _heldNotes.add(controller);
+      _retain(_heldNotes, controller);
 
   bool isActiveVideoNote(VideoPlayerController controller) =>
       videoNote.value?.controller == controller;
 
   void releaseVideoNote(VideoPlayerController controller) {
-    _heldNotes.remove(controller);
-    _disposeNoteIfIdle(controller);
+    if (_releasedByLastHolder(_heldNotes, controller)) {
+      _disposeNoteIfIdle(controller);
+    }
   }
 
   void activateVideoNote(VideoNoteTrack track) {
@@ -212,7 +227,7 @@ class MediaPlayback {
   }
 
   void _disposeNoteIfIdle(VideoPlayerController controller) {
-    if (_heldNotes.contains(controller)) return;
+    if (_heldNotes.containsKey(controller)) return;
     if (videoNote.value?.controller == controller) return;
     controller.dispose();
   }

@@ -7,13 +7,13 @@ import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../api.dart';
 
-// #***! раз в 10 сек спрашиваем сервер каким он нас видит
+// #***! раз в 30 сек спрашиваем сервер каким он нас видит
 class SelfCheckService {
   SelfCheckService._();
 
   static final SelfCheckService instance = SelfCheckService._();
 
-  static const Duration interval = Duration(seconds: 10);
+  static const Duration interval = Duration(seconds: 30);
 
   Api? _api;
   Timer? _timer;

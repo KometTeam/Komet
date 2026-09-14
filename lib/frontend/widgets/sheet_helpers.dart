@@ -52,6 +52,31 @@ class SheetButton extends StatelessWidget {
   }
 }
 
+/// Grabber row that keeps the pill centred while an action sits at the edge.
+class SheetGrabberBar extends StatelessWidget {
+  static const double height = 34;
+  static const double actionInset = 8;
+
+  final Widget action;
+
+  const SheetGrabberBar({super.key, required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          const SheetGrabber(margin: EdgeInsets.zero),
+          Positioned(right: actionInset, child: action),
+        ],
+      ),
+    );
+  }
+}
+
 /// The little drag "grabber" pill shown at the top of a bottom sheet.
 class SheetGrabber extends StatelessWidget {
   final EdgeInsetsGeometry margin;

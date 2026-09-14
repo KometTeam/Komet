@@ -14,6 +14,7 @@ import 'folder_action_sheet.dart';
 import 'folder_edit_sheet.dart';
 import '../contacts/add_contact_sheet.dart';
 import '../../widgets/adaptive_shell.dart';
+import '../../widgets/chat_call_badge.dart';
 import '../../../core/crypto/message_decryption_cache.dart';
 import '../../widgets/decrypted_text.dart';
 import '../../widgets/encryption_lock_badge.dart';
@@ -73,6 +74,7 @@ import '../../../core/cache/message_session_cache.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
+import '../../../core/crypto/e2ee_service.dart';
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
@@ -103,6 +105,10 @@ import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
 
 const String _savedWelcomeKey = 'welcome.saved.dialog.message';
+
+// #***! вкладки смонтированы все сразу, так что открытая вкладка это состояние,
+// а не отдельный экран: по нему вкладки понимают, что их только что открыли
+final ValueNotifier<int> activeNavTab = ValueNotifier<int>(0);
 
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
@@ -770,6 +776,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     chats.chatOrderRevision.addListener(_onChatsChanged);
     ArchivedChatsStore.instance.revision.addListener(_onArchivedChanged);
     ChatEncryptionStore.instance.revision.addListener(_onEncryptionChanged);
+    E2eeService.instance.revision.addListener(_onEncryptionChanged);
     DraftStore.instance.revision.addListener(_onDraftsChanged);
     AppStories.current.addListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
@@ -1520,6 +1527,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     chats.chatOrderRevision.removeListener(_onChatsChanged);
     ArchivedChatsStore.instance.revision.removeListener(_onArchivedChanged);
     ChatEncryptionStore.instance.revision.removeListener(_onEncryptionChanged);
+    E2eeService.instance.revision.removeListener(_onEncryptionChanged);
     DraftStore.instance.revision.removeListener(_onDraftsChanged);
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
@@ -1585,6 +1593,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     _navPageAnimStart = fromT;
     _navPageAnimEnd = index.toDouble();
     setState(() => _currentNavIndex = index);
+    activeNavTab.value = index;
     _navPageAnimController.forward(from: 0);
     if (index == 0) _scheduleInformerPresentation();
   }
@@ -2134,6 +2143,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               isBot: _isBotDialog(secondId, chat),
                             ),
                             hasMiniApp: _hasMiniApp(secondId, chat),
+                            hasCall: chat.activeCall != null,
                           ),
                         );
                       } else {
@@ -2195,6 +2205,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             titleIcon: chat.id == 0
                                 ? null
                                 : chatKindIcon(chat.type, isBot: false),
+                            hasCall: chat.activeCall != null,
                           ),
                         );
                       }
@@ -2339,6 +2350,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               _currentNavIndex = next;
               _navDragging = false;
             });
+            activeNavTab.value = next;
             if (next == 0) _scheduleInformerPresentation();
           },
           onHorizontalDragCancel: () {
@@ -3075,13 +3087,22 @@ class _ChatListScreenState extends State<ChatListScreen>
     ChatPreviewMedia? previewMedia,
     IconData? titleIcon,
     bool hasMiniApp = false,
+    bool hasCall = false,
   }) {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedChats.contains(id);
-    final isEncrypted = ChatEncryptionStore.instance.isEnabled(
+    final e2eeInfo = E2eeService.instance.info(
       _profile?.id ?? 0,
       int.tryParse(id) ?? 0,
     );
+    final isEncrypted =
+        ChatEncryptionStore.instance.isEnabled(
+          _profile?.id ?? 0,
+          int.tryParse(id) ?? 0,
+        ) ||
+        E2eeService.instance.isOn(_profile?.id ?? 0, int.tryParse(id) ?? 0);
+    final isVerified =
+        e2eeInfo?.phase == E2eePhase.established && e2eeInfo!.verified;
     final Widget? statusIcon = (ownStatus != null && draft == null)
         ? _ownStatusIcon(cs, ownStatus, ownRead)
         : null;
@@ -3109,6 +3130,14 @@ class _ChatListScreenState extends State<ChatListScreen>
               MessageDecryptionState.wrongKey => _buildPreviewLine(
                 cs,
                 'неверный ключ',
+                const [],
+                draft,
+                true,
+                prefix: previewPrefix,
+              ),
+              MessageDecryptionState.unavailable => _buildPreviewLine(
+                cs,
+                'недоступно на этом устройстве',
                 const [],
                 draft,
                 true,
@@ -3268,10 +3297,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                   children: [
                     avatarCircle,
                     if (isEncrypted)
-                      const Positioned(
+                      Positioned(
                         left: -2,
                         bottom: -2,
-                        child: EncryptionLockBadge(size: 18),
+                        child: EncryptionLockBadge(
+                          size: 18,
+                          verified: isVerified,
+                        ),
                       ),
                     if (isSelected)
                       Positioned(
@@ -3291,6 +3323,12 @@ class _ChatListScreenState extends State<ChatListScreen>
                             size: 14,
                           ),
                         ),
+                      )
+                    else if (hasCall)
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: ChatCallBadge(borderColor: cs.surface),
                       )
                     else if (presenceUserId != 0)
                       Positioned(

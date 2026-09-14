@@ -18,7 +18,9 @@ import 'package:komet/frontend/screens/chats/chat/upload_status.dart'
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/attachment_panel.dart';
+import 'package:komet/frontend/widgets/e2ee_banner.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
 import 'command_arguments_form.dart';
 import 'composer_input.dart';
@@ -44,6 +46,9 @@ class ComposerArea extends StatelessWidget {
 
   final bool commentsMode;
   final String chatType;
+  final int chatId;
+  final String peerName;
+  final VoidCallback onOpenEncryption;
   final ChatChromeStyle chrome;
   final bool chromeVignette;
   final BackdropKey? pillBackdrop;
@@ -71,19 +76,21 @@ class ComposerArea extends StatelessWidget {
     RichMessageController controller,
     BuildContext context,
     EditableTextState editableState, {
-    List<ContextMenuButtonItem> extraItems,
+    ContextMenuButtonItem? pasteItem,
   })
   formatContextMenu;
-  final List<ContextMenuButtonItem> Function(
+  final ContextMenuButtonItem? Function(
     BuildContext context,
     EditableTextState editableState,
   )
-  pasteMenuItems;
+  pasteMenuItem;
   final Future<bool> Function()? onPasteMedia;
+  final Future<void> Function(KeyboardInsertedContent content) onInsertContent;
   final bool isMuted;
   final VoidCallback onToggleMute;
   final bool channelSubscribed;
   final bool channelSubscribing;
+  final bool canPostToChannel;
   final VoidCallback onSubscribe;
 
   final void Function(StickerItem sticker) onStickerTap;
@@ -93,6 +100,7 @@ class ComposerArea extends StatelessWidget {
   final VoidCallback onReplySelected;
   final VoidCallback onForwardSelected;
   final bool forwardDisabled;
+  final bool replyDisabled;
 
   final bool composerFrosted;
 
@@ -112,6 +120,9 @@ class ComposerArea extends StatelessWidget {
     required this.onSendFileById,
     required this.commentsMode,
     required this.chatType,
+    required this.chatId,
+    required this.peerName,
+    required this.onOpenEncryption,
     required this.chrome,
     required this.chromeVignette,
     required this.pillBackdrop,
@@ -136,12 +147,14 @@ class ComposerArea extends StatelessWidget {
     required this.onPickReplyChat,
     required this.formatElapsed,
     required this.formatContextMenu,
-    required this.pasteMenuItems,
+    required this.pasteMenuItem,
     required this.onPasteMedia,
+    required this.onInsertContent,
     required this.isMuted,
     required this.onToggleMute,
     required this.channelSubscribed,
     required this.channelSubscribing,
+    this.canPostToChannel = false,
     required this.onSubscribe,
     required this.onStickerTap,
     required this.onEmojiTap,
@@ -149,6 +162,7 @@ class ComposerArea extends StatelessWidget {
     required this.onReplySelected,
     required this.onForwardSelected,
     required this.forwardDisabled,
+    this.replyDisabled = false,
     required this.composerFrosted,
   });
 
@@ -158,6 +172,13 @@ class ComposerArea extends StatelessWidget {
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (chatType == 'DIALOG' && myId != 0)
+          E2eeBanner(
+            accountId: myId,
+            chatId: chatId,
+            peerName: peerName,
+            onOpenDetails: onOpenEncryption,
+          ),
         AnimatedBuilder(
           animation: selectionAnim,
           builder: (context, child) {
@@ -254,14 +275,16 @@ class ComposerArea extends StatelessWidget {
                     messageController,
                     ctx,
                     state,
-                    extraItems: pasteMenuItems(ctx, state),
+                    pasteItem: pasteMenuItem(ctx, state),
                   ),
                   onPasteMedia: ClipboardMedia.supported
                       ? onPasteMedia
                       : null,
+                  onInsertContent: onInsertContent,
                   isMuted: isMuted,
                   onToggleMute: onToggleMute,
                   channelSubscribed: channelSubscribed,
+                  canPostToChannel: canPostToChannel,
                   channelSubscribing: channelSubscribing,
                   onSubscribe: onSubscribe,
                   showStickerButton: !commentsMode && selectedCommand == null,
@@ -269,10 +292,10 @@ class ComposerArea extends StatelessWidget {
                   forceSend: commentsMode || selectedCommand != null,
                   readOnly: selectedCommand != null,
                   hintText: selectedCommand != null
-                      ? 'Заполните аргументы команды'
+                      ? AppLocalizations.of(context)!.composerHintCommandArgs
                       : commentsMode
-                      ? 'Комментарий'
-                      : 'Message',
+                      ? AppLocalizations.of(context)!.composerHintComment
+                      : null,
                 ),
               ),
               StickerPanelView(
@@ -306,6 +329,7 @@ class ComposerArea extends StatelessWidget {
               onReply: onReplySelected,
               onForward: onForwardSelected,
               allowForward: !forwardDisabled,
+              allowReply: !replyDisabled,
             ),
           ),
         ),

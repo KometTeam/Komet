@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../main.dart' show animojiModule;
 import '../../models/animoji.dart';
 import 'lottie_image.dart';
@@ -86,12 +87,13 @@ class _EmojiPanelState extends State<EmojiPanel> {
   }
 
   void _buildSections() {
+    final l10n = AppLocalizations.of(context)!;
     final sections = <_EmojiSection>[];
     final recent = animojiModule.recentAnimojis;
     if (recent.isNotEmpty) {
       sections.add(
         _EmojiSection(
-          title: 'Недавние',
+          title: l10n.emojiPanelRecent,
           icon: Symbols.schedule,
           items: recent,
         ),
@@ -101,7 +103,7 @@ class _EmojiPanelState extends State<EmojiPanel> {
     if (all.isNotEmpty) {
       sections.add(
         _EmojiSection(
-          title: 'Animated',
+          title: l10n.emojiPanelAnimated,
           icon: Symbols.animation,
           items: all,
         ),

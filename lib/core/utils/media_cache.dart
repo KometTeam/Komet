@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../config/app_media_cache.dart';
+import 'logger.dart';
 import '../storage/app_instance.dart';
 
 // #***! дисковый кэш медиа, имя детерминированное поэтому повторно не качаем
@@ -89,10 +90,12 @@ class MediaCache {
   ///
   /// Загрузка идёт во временный `.part` и переименовывается атомарно —
   /// прерванная закачка не считается валидным кэшем.
+  // #***! maxBytes рвёт поток, объявленный килобайт бывает гигабайтами
   static Future<File?> getOrDownload(
     String name,
     String url, {
     void Function(double progress)? onProgress,
+    int? maxBytes,
   }) async {
     final existingFile = await existing(name);
     if (existingFile != null) return existingFile;
@@ -100,7 +103,7 @@ class MediaCache {
     final running = _inFlight[name];
     if (running != null) return running;
 
-    final future = _download(name, url, onProgress);
+    final future = _download(name, url, onProgress, maxBytes);
     _inFlight[name] = future;
     try {
       return await future;
@@ -114,6 +117,7 @@ class MediaCache {
     String name,
     String url,
     void Function(double progress)? onProgress,
+    int? maxBytes,
   ) async {
     final file = await fileFor(name);
     final part = File('${file.path}.part');
@@ -124,16 +128,33 @@ class MediaCache {
       if (response.statusCode != 200) return null;
 
       final total = response.contentLength;
+      // #***! сервер врёт и в обещанном размере, и в потоке
+      if (maxBytes != null && total > maxBytes) {
+        logger.w('[cache] $name: обещано $total байт, предел $maxBytes');
+        return null;
+      }
       var received = 0;
       final sink = part.openWrite();
+      var overflowed = false;
       await for (final chunk in response) {
         received += chunk.length;
+        if (maxBytes != null && received > maxBytes) {
+          overflowed = true;
+          break;
+        }
         sink.add(chunk);
         if (onProgress != null && total > 0) {
           onProgress(received / total);
         }
       }
       await sink.close();
+      if (overflowed) {
+        logger.w('[cache] $name: поток превысил предел $maxBytes байт');
+        try {
+          if (await part.exists()) await part.delete();
+        } catch (_) {}
+        return null;
+      }
       await part.rename(file.path);
       _markPresent(name, true);
       final known = _cachedSize;
@@ -218,24 +239,27 @@ class MediaCache {
     }
 
     final dir = await _cacheDir();
-    final files = <File>[];
+    // #***! stat снимаем по разу на файл: в компараторе он звался бы
+    // синхронно и по два раза на сравнение, то есть тысячи блокирующих
+    // сисколлов на изоляте интерфейса
+    final entries = <({File file, DateTime modified, int size})>[];
     await for (final entity in dir.list()) {
-      if (entity is File && !entity.path.endsWith('.part')) {
-        files.add(entity);
-      }
+      if (entity is! File || entity.path.endsWith('.part')) continue;
+      try {
+        final stat = await entity.stat();
+        entries.add((file: entity, modified: stat.modified, size: stat.size));
+      } catch (_) {}
     }
 
     // #***! сортируем по времени доступа и удаляем старое
-    files.sort(
-      (a, b) => a.statSync().modified.compareTo(b.statSync().modified),
-    );
+    entries.sort((a, b) => a.modified.compareTo(b.modified));
 
-    for (final file in files) {
+    for (final entry in entries) {
       if (total <= limit) break;
       try {
-        total -= await file.length();
-        await file.delete();
-        _markAbsentByBasename(p.basename(file.path));
+        await entry.file.delete();
+        total -= entry.size;
+        _markAbsentByBasename(p.basename(entry.file.path));
       } catch (_) {}
     }
     _cachedSize = total;

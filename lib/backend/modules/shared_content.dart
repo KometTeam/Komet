@@ -247,7 +247,7 @@ class SharedContentModule {
     index.items.addAll(fresh);
     // #***! пришло что то новее, пересортировываем иначе лента ломается
     if (oldest != null && fresh.first.time > oldest.time) {
-      index.items.sort((a, b) => b.time.compareTo(a.time));
+      sortMediaNewestFirst(index.items);
     }
   }
 
@@ -309,7 +309,7 @@ class SharedContentModule {
         }
       }
 
-      out.sort((a, b) => b.time.compareTo(a.time));
+      sortMediaNewestFirst(out);
       final total = (data['total'] as num?)?.toInt() ?? out.length;
       return SharedMediaPage(items: out, total: total);
     } catch (e) {
@@ -346,5 +346,16 @@ class SharedContentModule {
       logger.w('SharedContent.fetchCommonChats failed: $e');
       return const [];
     }
+  }
+}
+
+void sortMediaNewestFirst(List<SharedMediaItem> items) {
+  final ordered = [for (var i = 0; i < items.length; i++) (i, items[i])];
+  ordered.sort((a, b) {
+    final byTime = b.$2.time.compareTo(a.$2.time);
+    return byTime != 0 ? byTime : a.$1.compareTo(b.$1);
+  });
+  for (var i = 0; i < ordered.length; i++) {
+    items[i] = ordered[i].$2;
   }
 }

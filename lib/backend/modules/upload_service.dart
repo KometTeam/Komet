@@ -10,6 +10,7 @@ import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
 import '../../main.dart' show fileUploader, messagesModule;
 import '../../models/attachment.dart';
+import 'chats.dart' show chats;
 import 'file_uploader.dart';
 import 'messages.dart';
 import 'upload_notification_service.dart';
@@ -416,6 +417,7 @@ class UploadService {
     required String filename,
     required int size,
     CachedMessage? placeholder,
+    String? text,
     int? scheduledTime,
   }) {
     return _run(
@@ -437,6 +439,7 @@ class UploadService {
           source: source,
           filename: filename,
           size: size,
+          text: text,
           scheduledTime: scheduledTime,
         );
         FileHistoryCache.add(
@@ -472,6 +475,8 @@ class UploadService {
               size: size,
             ),
           ],
+          sealedText: base?.sealedText,
+          e2ee: base?.e2ee ?? CachedMessage.e2eeNone,
         );
       },
     );
@@ -484,6 +489,7 @@ class UploadService {
     required File source,
     required String filename,
     required int size,
+    String? text,
     int? scheduledTime,
   }) async {
     final result = Completer<UploadDone>();
@@ -494,6 +500,7 @@ class UploadService {
           file: source,
           filename: filename,
           totalSize: size,
+          text: text,
           scheduledTime: scheduledTime,
         )
         .listen(
@@ -556,6 +563,7 @@ class UploadService {
       if (!job.scheduled) {
         _replaceInSessionCache(job.accountId, job.chatId, job.id, null);
         _remember(job.id, null);
+        _syncChatPreview(job.placeholder, 'error');
       }
       _events.add(
         UploadJobFailed(
@@ -597,6 +605,7 @@ class UploadService {
     }
     _replaceInSessionCache(job.accountId, job.chatId, job.id, message);
     _remember(job.id, message);
+    _syncChatPreview(message, 'sent');
     _events.add(
       UploadJobDone(
         chatId: job.chatId,
@@ -608,6 +617,13 @@ class UploadService {
         fileToken: job.resultFileToken,
       ),
     );
+  }
+
+  // #***! строку в списке чатов двигаем отсюда, а не с экрана чата: его
+  // могли закрыть сразу после выбора файла, а загрузка живёт дальше
+  void _syncChatPreview(CachedMessage? message, String status) {
+    if (message == null) return;
+    unawaited(chats.applyOutgoingMessage(message, status: status));
   }
 
   // #***! память о завершённых пока экран чата не подхватит

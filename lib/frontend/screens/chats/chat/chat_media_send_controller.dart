@@ -5,10 +5,13 @@ import 'dart:io' show File;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../../../backend/modules/chats.dart';
 import '../../../../backend/modules/contacts.dart';
 import '../../../../backend/modules/messages.dart';
 import '../../../../backend/modules/upload_service.dart';
 import '../../../../core/crypto/chat_crypto_service.dart';
+import '../../../../core/crypto/e2ee_service.dart';
+import 'package:komet_crypto/komet_crypto.dart' show ContentType;
 import '../../../../core/crypto/encrypted_photo.dart';
 import '../../../../core/media/desktop_video_probe.dart';
 import '../../../../core/media/gallery_source.dart';
@@ -54,6 +57,8 @@ class ChatMediaSendController {
   int get _myId => chatController.myId;
   int get _chatId => chatController.chatId;
 
+  bool get _e2eeActive => E2eeService.instance.isActive(_myId, _chatId);
+
   String? _uploadStatusJobId;
   ValueListenable<UploadBytes>? _uploadStatusBytes;
 
@@ -61,7 +66,12 @@ class ChatMediaSendController {
     _detachUploadStatus();
   }
 
-  CachedMessage addOptimisticMediaMessage(MessageAttachment attachment) {
+  CachedMessage addOptimisticMediaMessage(
+    MessageAttachment attachment, {
+    String? text,
+    Uint8List? sealedText,
+    int e2ee = CachedMessage.e2eeNone,
+  }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = chatController.nextTempId();
     final msg = CachedMessage(
@@ -69,16 +79,26 @@ class ChatMediaSendController {
       accountId: _myId,
       chatId: _chatId,
       senderId: _myId,
+      text: text,
       time: now,
       status: 'sending',
       attachments: [attachment],
+      sealedText: sealedText,
+      e2ee: e2ee,
     );
     setLastSentId(tempId);
     chatController.addMessage(msg);
+    _previewInChatList(msg, 'sending');
     bumpMessages();
     Haptics.send();
     scrollToBottom();
     return msg;
+  }
+
+  // #***! строку в списке чатов обновляем сами: экран чата к моменту
+  // доставки могли уже закрыть, а пуш на своё сообщение не приходит
+  void _previewInChatList(CachedMessage message, String status) {
+    unawaited(chats.applyOutgoingMessage(message, status: status));
   }
 
   void updateFileMessageStatus(
@@ -105,6 +125,7 @@ class ChatMediaSendController {
         attachments: attachment != null ? [attachment] : old.attachments,
       ),
     );
+    _previewInChatList(chatController.messages[idx], status);
     bumpMessages();
   }
 
@@ -115,6 +136,7 @@ class ChatMediaSendController {
         idx,
         chatController.messages[idx].copyWith(status: 'error'),
       );
+      _previewInChatList(chatController.messages[idx], 'error');
       bumpMessages();
     }
     Haptics.error();
@@ -139,6 +161,7 @@ class ChatMediaSendController {
     );
     chatController.addMessage(tempMessage);
     setLastSentId(tempId);
+    _previewInChatList(tempMessage, 'sending');
     bumpMessages();
     Haptics.send();
     scrollToBottom();
@@ -157,6 +180,7 @@ class ChatMediaSendController {
       chatController.setMessageAt(idx, real);
       bumpMessages();
       unawaited(chatController.persistOutgoing(real, removeId: tempId));
+      _previewInChatList(real, 'sent');
     } catch (e) {
       if (!isMounted()) return;
       updateFileMessageStatus(tempId, 'error');
@@ -353,6 +377,7 @@ class ChatMediaSendController {
     List<PickedPhoto> picked,
     String caption, {
     bool waitForUpload = false,
+    bool separate = false,
   }) async {
     if (_myId == 0) return;
     if (encryptionEnabled()) return sendEncryptedPhotos(picked, caption);
@@ -366,6 +391,24 @@ class ChatMediaSendController {
     }
     if (photos.isEmpty) return;
 
+    if (separate && photos.length > 1) {
+      for (var i = 0; i < photos.length; i++) {
+        await _sendPhotoAlbum(
+          [photos[i]],
+          i == 0 ? caption : '',
+          waitForUpload: waitForUpload,
+        );
+      }
+      return;
+    }
+    await _sendPhotoAlbum(photos, caption, waitForUpload: waitForUpload);
+  }
+
+  Future<void> _sendPhotoAlbum(
+    List<PickedPhoto> photos,
+    String caption, {
+    required bool waitForUpload,
+  }) async {
     final jobs = <({File file, GalleryItem? item})>[];
     final attachments = <PhotoAttachment>[];
     for (final photo in photos) {
@@ -397,6 +440,7 @@ class ChatMediaSendController {
 
     chatController.addMessage(placeholder);
     setLastSentId(tempId);
+    _previewInChatList(placeholder, 'sending');
     bumpMessages();
     Haptics.send();
     scrollToBottom();
@@ -484,6 +528,7 @@ class ChatMediaSendController {
       );
       chatController.addMessage(placeholder);
       setLastSentId(tempId);
+      _previewInChatList(placeholder, 'sending');
       bumpMessages();
       Haptics.send();
       scrollToBottom();
@@ -505,8 +550,9 @@ class ChatMediaSendController {
   Future<void> sendScheduledPhotos(
     List<PickedPhoto> picked,
     String caption,
-    int scheduledTime,
-  ) async {
+    int scheduledTime, {
+    bool separate = false,
+  }) async {
     if (_myId == 0) return;
     final videos = picked.where((ph) => ph.item.isVideo).toList();
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
@@ -518,6 +564,24 @@ class ChatMediaSendController {
     }
     if (photos.isEmpty) return;
 
+    if (separate && photos.length > 1) {
+      for (var i = 0; i < photos.length; i++) {
+        await _sendScheduledPhotoAlbum(
+          [photos[i]],
+          i == 0 ? caption : '',
+          scheduledTime,
+        );
+      }
+      return;
+    }
+    await _sendScheduledPhotoAlbum(photos, caption, scheduledTime);
+  }
+
+  Future<void> _sendScheduledPhotoAlbum(
+    List<PickedPhoto> photos,
+    String caption,
+    int scheduledTime,
+  ) async {
     final jobs = <({File file, GalleryItem? item})>[];
     for (final photo in photos) {
       final edited = photo.editedFile;
@@ -528,6 +592,11 @@ class ChatMediaSendController {
       }
     }
     if (jobs.isEmpty || !isMounted()) return;
+
+    if (encryptionEnabled()) {
+      notify('Отложенные фото в зашифрованном чате пока не поддерживаются');
+      return;
+    }
 
     notify('Загрузка…');
     unawaited(
@@ -562,6 +631,41 @@ class ChatMediaSendController {
       showAttachmentPanel.value = false;
       uploadStatus.value = const UploadStatus(active: true);
       final stamp = DateTime.now().microsecondsSinceEpoch.toString();
+      if (_e2eeActive) {
+        final e2eePhoto = await prepareE2eePhoto(source: source, stamp: stamp);
+        if (!isMounted()) return;
+        final wire = e2eePhoto == null
+            ? null
+            : await E2eeService.instance.encryptBytes(
+                _myId,
+                _chatId,
+                ContentType.file,
+                e2eePhoto.ticket,
+              );
+        if (e2eePhoto == null || wire == null) {
+          uploadStatus.value = const UploadStatus();
+          if (isMounted()) {
+            notify('Не удалось зашифровать фото');
+          }
+          return;
+        }
+        final sealed = await E2eeService.instance.sealBytes(
+          _myId,
+          _chatId,
+          e2eePhoto.ticket,
+        );
+        if (!isMounted()) return;
+        await uploadAsFile(
+          source: e2eePhoto.file,
+          filename: 'photo_$stamp$kE2eePhotoExtension',
+          size: await e2eePhoto.file.length(),
+          text: wire,
+          sealedText: sealed,
+          e2ee: CachedMessage.e2eeFile,
+        );
+        if (!isMounted()) return;
+        continue;
+      }
       final prepared = await prepareEncryptedPhoto(
         accountId: _myId,
         chatId: _chatId,
@@ -601,6 +705,9 @@ class ChatMediaSendController {
     required String filename,
     required int size,
     int? scheduledTime,
+    String? text,
+    Uint8List? sealedText,
+    int e2ee = CachedMessage.e2eeNone,
   }) async {
     if (_myId == 0) return;
 
@@ -610,6 +717,9 @@ class ChatMediaSendController {
         ? null
         : addOptimisticMediaMessage(
             FileAttachment(name: filename, size: size),
+            text: text,
+            sealedText: sealedText,
+            e2ee: e2ee,
           );
 
     final sending = UploadService.instance.sendFile(
@@ -620,6 +730,7 @@ class ChatMediaSendController {
       filename: filename,
       size: size,
       placeholder: placeholder,
+      text: text,
       scheduledTime: scheduledTime,
     );
     syncUploadStatus();
@@ -690,7 +801,7 @@ class ChatMediaSendController {
     if (changed) bumpMessages();
   }
 
-  String? _uploadFailureText(UploadKind kind, String reason) {
+  String _uploadFailureText(UploadKind kind, String reason) {
     final detail = switch (reason) {
       'no_upload_url' => 'сервер не выдал ссылку',
       'upload_failed' => 'загрузка отклонена',
@@ -698,10 +809,11 @@ class ChatMediaSendController {
       _ => reason,
     };
     return switch (kind) {
-      UploadKind.file => 'Ошибка: $reason',
+      UploadKind.file => 'Файл не отправлен: $detail',
       UploadKind.videoNote => 'Кружок не отправлен: $detail',
       UploadKind.voice => 'Голосовое не отправлено: $detail',
-      UploadKind.photo || UploadKind.video => null,
+      UploadKind.photo => 'Фото не отправлено: $detail',
+      UploadKind.video => 'Видео не отправлено: $detail',
     };
   }
 
@@ -735,8 +847,7 @@ class ChatMediaSendController {
         return;
       }
       failPhotoMessage(event.tempId);
-      final text = _uploadFailureText(event.kind, event.reason);
-      if (text != null) notify(text);
+      notify(_uploadFailureText(event.kind, event.reason));
     }
   }
 }

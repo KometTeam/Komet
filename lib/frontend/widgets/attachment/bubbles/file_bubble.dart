@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:komet/backend/modules/messages.dart';
 import 'package:komet/main.dart';
 
 import '../../../../core/utils/download_progress.dart';
@@ -21,6 +23,7 @@ import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
 import '../../decrypted_photo.dart';
 import '../../photo_viewer.dart';
+import '../../share_unopenable_file.dart';
 import '../../upload_progress_ring.dart';
 import 'bubble_context.dart';
 
@@ -42,7 +45,8 @@ class FileBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMe = ctx.isMe;
-    final name = file.name ?? 'File';
+    final name =
+        file.name ?? AppLocalizations.of(context)!.attachmentFileFallback;
     final size = file.size ?? 0;
     final sizeStr = formatBytes(size);
     final fileId = file.fileId;
@@ -240,7 +244,11 @@ class FileBubble extends StatelessWidget {
   };
 
   static bool _isViewableImage(String name) =>
-      name.toLowerCase().endsWith('.png');
+      name.toLowerCase().endsWith('.png') ||
+      name.toLowerCase().endsWith('.kce');
+
+  Uint8List? get _sealedTicket =>
+      ctx.message.e2ee == CachedMessage.e2eeFile ? ctx.message.sealedText : null;
 
   static bool _hasCover(String name) {
     final dot = name.lastIndexOf('.');
@@ -249,11 +257,12 @@ class FileBubble extends StatelessWidget {
   }
 
   bool _isEncryptedImage(String name) =>
-      _isViewableImage(name) &&
-      ChatCryptoService.instance.isEnabled(
-        ctx.message.accountId,
-        ctx.message.chatId,
-      );
+      _sealedTicket != null ||
+      (_isViewableImage(name) &&
+          ChatCryptoService.instance.isEnabled(
+            ctx.message.accountId,
+            ctx.message.chatId,
+          ));
 
   Widget? _preview({
     required String name,
@@ -268,6 +277,7 @@ class FileBubble extends StatelessWidget {
         cacheName: cacheName,
         size: file.size ?? 0,
         urlLoader: _fileUrl,
+        sealedTicket: _sealedTicket,
         builder: (view) => _encryptedPreview(view, previewUrl),
       );
     }
@@ -439,13 +449,19 @@ class FileBubble extends StatelessWidget {
   ) async {
     final accountId = ctx.message.accountId;
     final chatId = ctx.message.chatId;
-    if (!ChatCryptoService.instance.isEnabled(accountId, chatId)) return local;
+    final sealedTicket = _sealedTicket;
+    if (sealedTicket == null &&
+        !ChatCryptoService.instance.isEnabled(accountId, chatId)) {
+      return local;
+    }
 
     final view = await EncryptedPhotoCache.instance.resolve(
       accountId: accountId,
       chatId: chatId,
       cacheName: cacheName,
       urlLoader: _fileUrl,
+      size: file.size ?? 0,
+      sealedTicket: sealedTicket,
     );
     if (!context.mounted) return null;
 
@@ -504,6 +520,11 @@ class FileBubble extends StatelessWidget {
       ),
     );
     if (!context.mounted) return;
+    final path = result.path;
+    if (result.noAppToOpen && path != null) {
+      await shareUnopenableFile(context, path);
+      return;
+    }
     if (!result.ok) {
       showCustomNotification(
         context,

@@ -1,11 +1,13 @@
 package ru.komet.app
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.Ringtone
@@ -86,34 +88,50 @@ object CallNotifier {
 
         ensureChannel(ctx)
 
-        val avatar = NotifAvatars.load(ctx, callerId, name)
-        val person = Person.Builder()
-            .setName(name)
-            .setKey(callerId)
-            .setIcon(IconCompat.createWithBitmap(avatar))
-            .build()
-
         val fullScreen = launchIntent(ctx, callJson, CallConst.ACTION_RING, name, 1)
         val answer = launchIntent(ctx, callJson, CallConst.ACTION_ANSWER, name, 2)
         val decline = declineIntent(ctx, vcp, conversationId, account)
+        val video = isVideo(data)
 
-        val builder = NotificationCompat.Builder(ctx, CallConst.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setColor(CallConst.ACCENT)
-            .setColorized(true)
-            .setOngoing(true)
-            .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(fullScreen)
-            .setFullScreenIntent(fullScreen, true)
-            .setStyle(
-                NotificationCompat.CallStyle.forIncomingCall(person, decline, answer)
-                    .setIsVideo(isVideo(data)),
-            )
+        fun notification(avatar: Bitmap, update: Boolean): Notification {
+            val person = Person.Builder()
+                .setName(name)
+                .setKey(callerId)
+                .setIcon(IconCompat.createWithBitmap(avatar))
+                .build()
+            return NotificationCompat.Builder(ctx, CallConst.CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setColor(CallConst.ACCENT)
+                .setColorized(true)
+                .setOngoing(true)
+                .setOnlyAlertOnce(update)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setContentIntent(fullScreen)
+                .setFullScreenIntent(fullScreen, true)
+                .setStyle(
+                    NotificationCompat.CallStyle.forIncomingCall(person, decline, answer)
+                        .setIsVideo(video),
+                )
+                .build()
+        }
 
-        NotificationManagerCompat.from(ctx).notify(CallConst.NOTIF_ID, builder.build())
+        val manager = NotificationManagerCompat.from(ctx)
+        manager.notify(CallConst.NOTIF_ID, notification(NotifAvatars.initials(name), update = false))
         CallRinger.start(ctx, conversationId)
+
+        val photo = NotifAvatars.photo(ctx, callerId) ?: return
+        if (!isIncomingShowing(ctx)) return
+        manager.notify(CallConst.NOTIF_ID, notification(photo, update = true))
+    }
+
+    private fun isIncomingShowing(ctx: Context): Boolean = try {
+        ctx.getSystemService(NotificationManager::class.java)
+            ?.activeNotifications
+            ?.any { it.id == CallConst.NOTIF_ID } == true
+    } catch (e: Exception) {
+        false
     }
 
     fun finishCall(ctx: Context, data: Map<String, String>) {
@@ -137,7 +155,7 @@ object CallNotifier {
         caller: String,
         requestCode: Int,
     ): PendingIntent {
-        val intent = Intent(ctx, MainActivity::class.java).apply {
+        val intent = LaunchIntents.app(ctx).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra(CallConst.EXTRA_CALL, callJson)
             putExtra(CallConst.EXTRA_ACTION, action)
