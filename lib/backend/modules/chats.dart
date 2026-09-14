@@ -11,6 +11,7 @@ import '../../core/cache/info_cache.dart';
 import '../../core/cache/message_session_cache.dart';
 import 'shared_content.dart';
 import '../../core/crypto/e2ee_service.dart';
+import '../../core/media/deleted_media_keeper.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/chat_members_store.dart';
 import '../../core/storage/token_storage.dart';
@@ -1056,6 +1057,7 @@ class ChatsModule {
       if (messageIds.isNotEmpty) {
         if (keepDeleted) {
           await AppDatabase.markMessagesDeleted(accountId, chatId, messageIds);
+          unawaited(keepDeletedMedia(accountId, chatId, messageIds));
         } else {
           await AppDatabase.deleteMessages(accountId, chatId, messageIds);
         }
@@ -1128,6 +1130,7 @@ class ChatsModule {
       final keepDeleted = KometSettings.viewDeleted.value;
       if (keepDeleted) {
         await AppDatabase.markMessageDeleted(accountId, chatId, msgIdStr);
+        unawaited(keepDeletedMedia(accountId, chatId, [msgIdStr]));
       } else {
         await AppDatabase.deleteMessage(accountId, chatId, msgIdStr);
       }
@@ -1159,76 +1162,60 @@ class ChatsModule {
       return;
     }
 
-    CachedMessage? emittedMessage;
-    if (status == 'EDITED' && msgIdStr != null) {
-      final existing = await AppDatabase.loadMessage(
-        accountId,
-        chatId,
-        msgIdStr,
-      );
-      if (existing != null) {
-        final mergedPayload =
-            _decodePayload(existing['payload']) ??
-            Map<String, dynamic>.from(msg);
-        for (final entry in msg.entries) {
-          if (entry.key == 'reactionInfo') continue;
-          mergedPayload[entry.key.toString()] = entry.value;
-        }
-        final newRow = Map<String, dynamic>.from(existing);
-        if (KometSettings.viewRedacted.value) {
-          final oldText = existing['text']?.toString();
-          if ((oldText ?? '') != (msgText ?? '') &&
-              oldText != null &&
-              oldText.isNotEmpty) {
-            final history = CachedMessage.appendEditHistory(
-              CachedMessage.parseEditHistory(existing['edit_history']),
-              oldText,
-              DateTime.now().millisecondsSinceEpoch,
-            );
-            newRow['edit_history'] = jsonEncode(history);
-          }
-        }
-        final wasEncrypted =
-            (existing['e2ee'] as int? ?? CachedMessage.e2eeNone) !=
-            CachedMessage.e2eeNone;
-        newRow['text'] = msgText;
-        newRow['status'] = status;
-        newRow['payload'] = jsonEncode(mergedPayload);
-        newRow['text_sealed'] = null;
-        newRow['e2ee'] = CachedMessage.e2eeNone;
-        final inspected = await E2eeService.instance.inspect(
-          CachedMessage.fromDbRow(newRow),
-        );
-        // #***! правка без расшифровки не от собеседника, применять нельзя
-        if (wasEncrypted && inspected.e2ee != CachedMessage.e2eeText) {
-          logger.w('notifMessage: отклонена правка $msgIdStr без расшифровки');
-          return;
-        }
-        newRow['text_sealed'] = inspected.sealedText;
-        newRow['e2ee'] = inspected.e2ee;
-        await AppDatabase.saveMessages([newRow]);
-        emittedMessage = CachedMessage.fromDbRow(newRow);
-        _messageEventsController.add(
-          MessageEditedEvent(chatId, emittedMessage),
-        );
+    final existing = msgIdStr == null
+        ? null
+        : await AppDatabase.loadMessage(accountId, chatId, msgIdStr);
+    if (status == 'EDITED' && existing != null) {
+      final mergedPayload =
+          _decodePayload(existing['payload']) ?? Map<String, dynamic>.from(msg);
+      for (final entry in msg.entries) {
+        if (entry.key == 'reactionInfo') continue;
+        mergedPayload[entry.key.toString()] = entry.value;
       }
-    } else if (msgIdStr != null) {
-      final existing = await AppDatabase.loadMessage(
-        accountId,
-        chatId,
-        msgIdStr,
-      );
-      if (existing == null) {
-        final cached = await E2eeService.instance.inspect(
-          CachedMessage.fromPushPayload(accountId, chatId, msg),
-          commit: (decrypted) =>
-              AppDatabase.saveMessages([decrypted.toDbRow()]),
-        );
-        await AppDatabase.saveMessages([cached.toDbRow()]);
-        emittedMessage = cached;
-        _applyMembershipControl(accountId, chatId, cached);
-        _messageEventsController.add(MessageAddedEvent(chatId, cached));
+      final newRow = Map<String, dynamic>.from(existing);
+      if (KometSettings.viewRedacted.value) {
+        final oldText = existing['text']?.toString();
+        if ((oldText ?? '') != (msgText ?? '') &&
+            oldText != null &&
+            oldText.isNotEmpty) {
+          final history = CachedMessage.appendEditHistory(
+            CachedMessage.parseEditHistory(existing['edit_history']),
+            oldText,
+            DateTime.now().millisecondsSinceEpoch,
+          );
+          newRow['edit_history'] = jsonEncode(history);
+        }
       }
+      final wasEncrypted =
+          (existing['e2ee'] as int? ?? CachedMessage.e2eeNone) !=
+          CachedMessage.e2eeNone;
+      newRow['text'] = msgText;
+      newRow['status'] = status;
+      newRow['payload'] = jsonEncode(mergedPayload);
+      newRow['text_sealed'] = null;
+      newRow['e2ee'] = CachedMessage.e2eeNone;
+      final inspected = await E2eeService.instance.inspect(
+        CachedMessage.fromDbRow(newRow),
+      );
+      // #***! правка без расшифровки не от собеседника, применять нельзя
+      if (wasEncrypted && inspected.e2ee != CachedMessage.e2eeText) {
+        logger.w('notifMessage: отклонена правка $msgIdStr без расшифровки');
+        return;
+      }
+      newRow['text_sealed'] = inspected.sealedText;
+      newRow['e2ee'] = inspected.e2ee;
+      await AppDatabase.saveMessages([newRow]);
+      _messageEventsController.add(
+        MessageEditedEvent(chatId, CachedMessage.fromDbRow(newRow)),
+      );
+    } else if (msgIdStr != null && existing == null) {
+      final cached = await E2eeService.instance.inspect(
+        CachedMessage.fromPushPayload(accountId, chatId, msg),
+        commit: (decrypted) => AppDatabase.saveMessages([decrypted.toDbRow()]),
+      );
+      await AppDatabase.saveMessages([cached.toDbRow()]);
+      _applyMembershipControl(accountId, chatId, cached);
+      _messageEventsController.add(MessageAddedEvent(chatId, cached));
     }
 
     final cached = CachedChat.fromDbRow(rows.first);
@@ -1427,6 +1414,7 @@ class ChatsModule {
 
     if (newlyDeleted.isNotEmpty) {
       await AppDatabase.markMessagesDeleted(accountId, chatId, newlyDeleted);
+      unawaited(keepDeletedMedia(accountId, chatId, newlyDeleted));
     }
     return newlyDeleted;
   }

@@ -302,6 +302,7 @@ class DownloadHistory {
       final cacheName = p.basename(file.path);
       if (cacheName.startsWith('avatar_') ||
           cacheName.startsWith('decrypted_') ||
+          cacheName.startsWith(MediaCache.keptPrefix) ||
           cacheName.startsWith('download_thumb_')) {
         continue;
       }

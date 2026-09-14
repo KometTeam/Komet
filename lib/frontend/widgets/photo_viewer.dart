@@ -18,6 +18,7 @@ import '../../core/utils/format.dart';
 import '../../core/utils/image_format.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/media_cache.dart';
+import '../../core/utils/media_cache_names.dart';
 import '../../core/utils/media_saver.dart';
 import '../../core/utils/save_file_as.dart';
 import '../../core/media/video_request_headers.dart';
@@ -500,7 +501,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   String _cacheNameFor(PhotoAttachment photo, String url) =>
-      'photo_${photo.photoId ?? (url.hashCode & 0x7fffffff)}.jpg';
+      photoCacheName(photo, url);
 
   String _downloadSource(_ViewerMedia item) {
     final sourceName = widget.sourceName?.trim();
@@ -524,7 +525,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   );
 
   String _videoCacheName(_ViewerMedia item, VideoAttachment video) =>
-      'video_${video.videoId ?? item.messageId}.mp4';
+      videoCacheName(video, item.messageId);
 
   DownloadMetadata _videoDownload(
     _ViewerMedia item,
@@ -1053,10 +1054,13 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       return Image.file(
         File(localPath),
         fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => _broken(),
+        errorBuilder: (_, _, _) => _buildRemoteImage(photo),
       );
     }
+    return _buildRemoteImage(photo);
+  }
 
+  Widget _buildRemoteImage(PhotoAttachment photo) {
     final url = photo.baseUrl ?? '';
     if (url.isEmpty) return _broken();
 

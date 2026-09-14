@@ -162,7 +162,8 @@ class ChatController extends ChangeNotifier {
         a.status == b.status &&
         a.text == b.text &&
         a.senderId == b.senderId &&
-        a.deleted == b.deleted;
+        a.deleted == b.deleted &&
+        a.editHistory?.length == b.editHistory?.length;
   }
 
   Future<List<CachedMessage>> loadInitialFromDb({

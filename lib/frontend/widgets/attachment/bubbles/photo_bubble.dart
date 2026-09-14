@@ -285,6 +285,7 @@ class PhotoBubble extends StatelessWidget {
     required int memWidth,
     required int memHeight,
   }) {
+    final embedded = dataUriImage(photo, photo.previewData);
     final localPath = _localPathOf(photo);
     if (localPath != null) {
       return Image.file(
@@ -294,11 +295,16 @@ class PhotoBubble extends StatelessWidget {
         fit: BoxFit.cover,
         cacheWidth: memWidth,
         gaplessPlayback: true,
-        errorBuilder: (_, _, _) =>
-            _buildPhotoPlaceholder(ctx.cs, width, height),
+        errorBuilder: (_, _, _) => embedded == null
+            ? _buildPhotoPlaceholder(ctx.cs, width, height)
+            : Image(
+                image: embedded,
+                width: width,
+                height: height,
+                fit: BoxFit.cover,
+              ),
       );
     }
-    final embedded = dataUriImage(photo, photo.previewData);
     final imageUrl = _previewUrlOf(photo);
     if (imageUrl.isNotEmpty && !imageUrl.startsWith('data:')) {
       return CachedNetworkImage(

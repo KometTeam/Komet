@@ -813,7 +813,7 @@ class MessagesModule {
       }
     }
 
-    final merged = KometSettings.viewRedacted.value && results.isNotEmpty
+    final merged = results.isNotEmpty
         ? await _mergeEditHistory(accountId, chatId, results)
         : results;
     final toSave = await E2eeService.instance.inspectHistory(
@@ -886,7 +886,8 @@ class MessagesModule {
       }
       var history = CachedMessage.parseEditHistory(existing['edit_history']);
       final oldText = existing['text']?.toString();
-      if ((oldText ?? '') != (msg.text ?? '') &&
+      if (KometSettings.viewRedacted.value &&
+          (oldText ?? '') != (msg.text ?? '') &&
           oldText != null &&
           oldText.isNotEmpty) {
         history = CachedMessage.appendEditHistory(history, oldText, now);

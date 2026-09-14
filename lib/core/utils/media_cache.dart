@@ -15,8 +15,10 @@ import '../storage/app_instance.dart';
 /// (обычно по id вложения), чтобы повторные открытия не качали заново.
 class MediaCache {
   /// Максимальный размер кэша (настраивается в дев-меню); при превышении
-  /// вытесняются старые файлы (LRU).
+  /// вытесняются старые файлы (LRU), кроме закреплённых.
   static int get maxBytes => AppMediaCacheLimit.current.value;
+
+  static const String keptPrefix = 'keep_';
 
   // #***! размер держим в памяти, каталог не пересканируем
   static Directory? _dir;
@@ -50,6 +52,33 @@ class MediaCache {
     }
     _dir = dir;
     return dir;
+  }
+
+  /// Имя закреплённой копии файла [name].
+  ///
+  /// Закреплённые файлы не вытесняются по LRU: удалённое медиа сервер уже
+  /// стёр, скачать его заново неоткуда.
+  static String keptName(String name) => '$keptPrefix${_sanitize(name)}';
+
+  /// Кладёт [name] в закреплённую часть кэша — копией готового [source]
+  /// либо загрузкой [url]. Возвращает закреплённый файл.
+  static Future<File?> keep(String name, {File? source, String? url}) async {
+    final pinned = keptName(name);
+    final ready = await existing(pinned);
+    if (ready != null) return ready;
+    if (source != null) {
+      try {
+        final target = await fileFor(pinned);
+        await source.copy(target.path);
+        _markPresent(pinned, true);
+        _cachedSize = null;
+        return target;
+      } catch (e) {
+        logger.w('[cache] не закрепил $name: $e');
+      }
+    }
+    if (url == null || url.isEmpty) return null;
+    return getOrDownload(pinned, url);
   }
 
   /// Путь к кэш-файлу с именем [name] (файл может ещё не существовать).
@@ -245,6 +274,7 @@ class MediaCache {
     final entries = <({File file, DateTime modified, int size})>[];
     await for (final entity in dir.list()) {
       if (entity is! File || entity.path.endsWith('.part')) continue;
+      if (p.basename(entity.path).startsWith(keptPrefix)) continue;
       try {
         final stat = await entity.stat();
         entries.add((file: entity, modified: stat.modified, size: stat.size));
