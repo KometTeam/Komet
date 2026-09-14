@@ -5300,6 +5300,30 @@ abstract class AppLocalizations {
   /// **'Nobody is blocked'**
   String get blacklistEmpty;
 
+  /// Join requests screen title.
+  String get joinRequestsTitle;
+
+  /// Empty state for the join requests list.
+  String get joinRequestsEmpty;
+
+  /// Approve join request button.
+  String get joinRequestsApprove;
+
+  /// Decline join request button.
+  String get joinRequestsDecline;
+
+  /// Notification after approving a join request.
+  String get joinRequestsApproved;
+
+  /// Notification after declining a join request.
+  String get joinRequestsDeclined;
+
+  /// Notification when a join request action failed.
+  String get joinRequestsActionFailed;
+
+  /// Notification when join requests failed to load.
+  String get joinRequestsLoadError;
+
   /// No description provided for @blacklistLoadError.
   ///
   /// In en, this message translates to:

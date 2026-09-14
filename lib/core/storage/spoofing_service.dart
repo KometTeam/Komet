@@ -12,8 +12,8 @@ import '../utils/logger.dart';
 // #***! подмена устройства, профиль свой у каждого аккаунта
 class SpoofingService {
   // #***! версия которой представляемся, от неё зависит функционал
-  static const String hardcodedAppVersion = '26.23.2';
-  static const int hardcodedBuildNumber = 6779;
+  static const String hardcodedAppVersion = '26.31.0';
+  static const int hardcodedBuildNumber = 6822;
   // #***! незалогиненный профиль живёт под pending пока не узнаем id
   static const String pendingScope = 'pending';
   static const String androidDeviceType = 'ANDROID';

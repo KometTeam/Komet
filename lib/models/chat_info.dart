@@ -53,6 +53,9 @@ class ChatInfo {
 
   int? get participantsCount => raw['participantsCount'] as int?;
   int? get blockedParticipantsCount => raw['blockedParticipantsCount'] as int?;
+  // #***! счётчик заявок на вступление, приходит в объекте чата
+  int get pendingJoinRequestsCount =>
+      (raw['pendingJoinRequestsCount'] as int?) ?? 0;
   String? get link => raw['link'] as String?;
   String? get description => raw['description'] as String?;
 

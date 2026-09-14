@@ -53,11 +53,13 @@ class Api {
   String? _deviceId;
   String? _callsDevice;
   String? _callsOsVersion;
+  String _architecture = SpoofingService.defaultArchitecture;
 
   int? get callsSeed => _callsSeed;
   String? get deviceId => _deviceId;
   String? get callsDevice => _callsDevice;
   String? get callsOsVersion => _callsOsVersion;
+  String get architecture => _architecture;
 
   /// Сырой доступ к сессии для медиа загрузок
   KolibriSession? get session => _session;
@@ -517,6 +519,7 @@ class Api {
       'deviceLocale': deviceLocale,
     };
     _deviceId = deviceId;
+    _architecture = architecture;
 
     final insecureTls = await TlsConfig.isInsecureAllowed();
     final proxy = await _buildProxyUrl();

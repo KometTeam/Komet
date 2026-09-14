@@ -622,6 +622,7 @@ class AccountModule {
       payload['chatCacheFingerprint'] = ChatCacheFingerprint.compute(
         callsSeed,
         deviceId,
+        arch: _api.architecture,
       );
     }
 
@@ -840,7 +841,11 @@ class AccountModule {
     final callsSeed = _api.callsSeed;
     final deviceId = _api.deviceId;
     if (callsSeed != null && deviceId != null) {
-      payload['mode'] = ChatCacheFingerprint.compute(callsSeed, deviceId);
+      payload['mode'] = ChatCacheFingerprint.compute(
+        callsSeed,
+        deviceId,
+        arch: _api.architecture,
+      );
     }
 
     logger.i(

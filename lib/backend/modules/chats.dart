@@ -481,6 +481,17 @@ class MessageSentEvent extends MessageEvent {
   const MessageSentEvent(super.chatId, this.tempId, this.message);
 }
 
+// #***! битмаска прав админа канала, складывается через |
+abstract class ChatPermission {
+  static const int addRemoveMember = 2;
+  static const int addAdmin = 4;
+  static const int changeChatInfo = 8;
+  static const int pinMessage = 16;
+  static const int postMessage = 256;
+  static const int editMessage = 512;
+  static const int deleteMessage = 1024;
+}
+
 // #***! главный модуль чатов, кэш пуши и все операции
 class ChatsModule {
   // #***! 0 звук есть, -1 выключен навсегда
@@ -2384,60 +2395,7 @@ class ChatsModule {
       if (!packet.isOk) return null;
       final payload = packet.payload;
       if (payload is! Map) return null;
-
-      final entries = <ChatMemberEntry>[];
-      final presenceById = <int, Map<String, dynamic>>{};
-      final rawMembers = payload['members'];
-      if (rawMembers is List) {
-        for (final m in rawMembers.whereType<Map>()) {
-          final contact = m['contact'];
-          if (contact is! Map) continue;
-          final id = contact['id'];
-          if (id is! int) continue;
-
-          final info = ContactInfo.fromMap(Map<String, dynamic>.from(contact));
-          final name = info.displayName;
-          if (name != null && name.isNotEmpty) ContactCache.put(id, name);
-          final avatar = info.avatarUrl;
-          if (avatar != null && avatar.isNotEmpty) {
-            ContactCache.putAvatar(id, avatar);
-          }
-          final phone = contact['phone'];
-          if (phone is int && phone > 0) ContactCache.putPhone(id, phone);
-          ContactInfoFetch.putContact(id, contact.cast<dynamic, dynamic>());
-
-          final presence = m['presence'];
-          var status = 0;
-          int? seen;
-          if (presence is Map) {
-            final p = Map<String, dynamic>.from(presence);
-            presenceById[id] = p;
-            status = (p['status'] as int?) ?? 0;
-            final s = p['seen'];
-            seen = s is int ? s : null;
-          }
-
-          entries.add(
-            ChatMemberEntry(
-              id: id,
-              name: name,
-              fullName: info.fullName,
-              avatarUrl: avatar,
-              seenTime: seen,
-              presenceStatus: status,
-              blocked: info.isDeleted,
-              isContact: info.isSavedContact,
-            ),
-          );
-        }
-      }
-      if (presenceById.isNotEmpty) PresenceFetch.primeAll(presenceById);
-
-      final next = payload['marker'];
-      return ChatMembersPage(
-        members: entries,
-        marker: next is int ? next : marker,
-      );
+      return _parseMembersPage(payload, marker);
     } on PacketError catch (e) {
       logger.w('getChatMembers $chatId: ${e.message}');
       return null;
@@ -2445,6 +2403,163 @@ class ChatsModule {
       logger.w('getChatMembers $chatId: $e');
       return null;
     }
+  }
+
+  // #***! разбор страницы участников, общий для members и join-request
+  ChatMembersPage _parseMembersPage(Map payload, int fallbackMarker) {
+    final entries = <ChatMemberEntry>[];
+    final presenceById = <int, Map<String, dynamic>>{};
+    final rawMembers = payload['members'];
+    if (rawMembers is List) {
+      for (final m in rawMembers.whereType<Map>()) {
+        final contact = m['contact'];
+        if (contact is! Map) continue;
+        final id = contact['id'];
+        if (id is! int) continue;
+
+        final info = ContactInfo.fromMap(Map<String, dynamic>.from(contact));
+        final name = info.displayName;
+        if (name != null && name.isNotEmpty) ContactCache.put(id, name);
+        final avatar = info.avatarUrl;
+        if (avatar != null && avatar.isNotEmpty) {
+          ContactCache.putAvatar(id, avatar);
+        }
+        final phone = contact['phone'];
+        if (phone is int && phone > 0) ContactCache.putPhone(id, phone);
+        ContactInfoFetch.putContact(id, contact.cast<dynamic, dynamic>());
+
+        final presence = m['presence'];
+        var status = 0;
+        int? seen;
+        if (presence is Map) {
+          final p = Map<String, dynamic>.from(presence);
+          presenceById[id] = p;
+          status = (p['status'] as int?) ?? 0;
+          final s = p['seen'];
+          seen = s is int ? s : null;
+        }
+
+        entries.add(
+          ChatMemberEntry(
+            id: id,
+            name: name,
+            fullName: info.fullName,
+            avatarUrl: avatar,
+            seenTime: seen,
+            presenceStatus: status,
+            blocked: info.isDeleted,
+            isContact: info.isSavedContact,
+          ),
+        );
+      }
+    }
+    if (presenceById.isNotEmpty) PresenceFetch.primeAll(presenceById);
+
+    final next = payload['marker'];
+    return ChatMembersPage(
+      members: entries,
+      marker: next is int ? next : fallbackMarker,
+    );
+  }
+
+  // #***! входящие заявки на вступление (закрытые группы и каналы)
+  Future<ChatMembersPage?> getJoinRequests(
+    Api api,
+    int chatId, {
+    int count = 100,
+  }) async {
+    try {
+      final packet = await api.sendRequest(Opcode.chatMembers, {
+        'type': 'JOIN_REQUEST',
+        'chatId': chatId,
+        'count': count,
+      });
+      if (!packet.isOk) return null;
+      final payload = packet.payload;
+      if (payload is! Map) return null;
+      return _parseMembersPage(payload, 0);
+    } on PacketError catch (e) {
+      logger.w('getJoinRequests $chatId: ${e.message}');
+      return null;
+    } catch (e) {
+      logger.w('getJoinRequests $chatId: $e');
+      return null;
+    }
+  }
+
+  // #***! одобрить заявки, showHistory открывает историю до вступления
+  Future<bool> approveJoinRequests(
+    Api api, {
+    required int chatId,
+    required List<int> userIds,
+    bool showHistory = true,
+  }) async {
+    if (userIds.isEmpty) return false;
+    try {
+      final ok = await api.sendRequestOk(Opcode.chatMembersUpdate, {
+        'chatId': chatId,
+        'userIds': userIds,
+        'type': 'JOIN_REQUEST',
+        'showHistory': showHistory,
+        'operation': 'add',
+      });
+      if (ok) _refreshChatInfo(chatId);
+      return ok;
+    } catch (e) {
+      logger.w('approveJoinRequests $chatId: $e');
+      return false;
+    }
+  }
+
+  // #***! отклонить заявки
+  Future<bool> declineJoinRequests(
+    Api api, {
+    required int chatId,
+    required List<int> userIds,
+  }) async {
+    if (userIds.isEmpty) return false;
+    try {
+      return await api.sendRequestOk(Opcode.chatMembersUpdate, {
+        'chatId': chatId,
+        'userIds': userIds,
+        'type': 'JOIN_REQUEST',
+        'operation': 'remove',
+      });
+    } catch (e) {
+      logger.w('declineJoinRequests $chatId: $e');
+      return false;
+    }
+  }
+
+  // #***! назначить админом с набором прав из ChatPermission (битмаска)
+  Future<bool> addAdmin(
+    Api api, {
+    required int chatId,
+    required int userId,
+    required int permissions,
+  }) async {
+    try {
+      final ok = await api.sendRequestOk(Opcode.chatMembersUpdate, {
+        'chatId': chatId,
+        'userIds': [userId],
+        'type': 'ADMIN',
+        'operation': 'add',
+        'permissions': permissions,
+      });
+      if (ok) _refreshChatInfo(chatId);
+      return ok;
+    } catch (e) {
+      logger.w('addAdmin $chatId: $e');
+      return false;
+    }
+  }
+
+  // #***! инфо об организации / бизнес-профиле.
+  // opcode сверен (ORG_INFO=256), но форма payload НЕ подтверждена: её нет
+  // ни в pymax, ни в открытых строках dex. chatId — предположение, проверить
+  // дампом трафика перед завязкой UI на это.
+  Future<Map<dynamic, dynamic>?> fetchOrgInfo(Api api, int chatId) async {
+    return api.sendRequestMap(Opcode.orgInfo, {'chatId': chatId});
   }
 
   // #***! принудительно обновить конкретные чаты

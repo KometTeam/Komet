@@ -52,6 +52,7 @@ import '../stories/story_ring.dart';
 import '../stories/story_viewer_screen.dart';
 import 'chat_screen.dart';
 import 'group_invite_sheets.dart';
+import 'join_requests_screen.dart';
 import 'profile_action_sheets.dart';
 import '../../../core/config/app_fonts.dart';
 import 'chat_info/chat_members_controller.dart';
@@ -1049,6 +1050,19 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           ({IconData icon, String label, bool destructive, VoidCallback onTap})
         >[];
 
+    // #***! заявки на вступление, только админам группы/канала при наличии
+    if (_isGroupOrChannel && _iAmAdmin) {
+      final pending = _chatInfo?.pendingJoinRequestsCount ?? 0;
+      if (pending > 0) {
+        entries.add((
+          icon: Symbols.how_to_reg,
+          label: '${l10n.joinRequestsTitle} ($pending)',
+          destructive: false,
+          onTap: _openJoinRequests,
+        ));
+      }
+    }
+
     if (widget.chatType == 'DIALOG') {
       if (_isContact) {
         entries.add((
@@ -1082,6 +1096,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     ));
 
     return entries;
+  }
+
+  void _openJoinRequests() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => JoinRequestsScreen(chatId: widget.chatId),
+      ),
+    );
   }
 
   Future<void> _openEdit() async {

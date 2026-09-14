@@ -2804,6 +2804,30 @@ class AppLocalizationsRu extends AppLocalizations {
   String get blacklistEmpty => 'Никто не заблокирован';
 
   @override
+  String get joinRequestsTitle => 'Заявки на вступление';
+
+  @override
+  String get joinRequestsEmpty => 'Нет заявок';
+
+  @override
+  String get joinRequestsApprove => 'Принять';
+
+  @override
+  String get joinRequestsDecline => 'Отклонить';
+
+  @override
+  String get joinRequestsApproved => 'Заявка принята';
+
+  @override
+  String get joinRequestsDeclined => 'Заявка отклонена';
+
+  @override
+  String get joinRequestsActionFailed => 'Не удалось, попробуйте ещё раз';
+
+  @override
+  String get joinRequestsLoadError => 'Не удалось загрузить заявки';
+
+  @override
   String get blacklistLoadError => 'Не удалось загрузить чёрный список';
 
   @override

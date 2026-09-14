@@ -2792,6 +2792,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get blacklistEmpty => 'Nobody is blocked';
 
   @override
+  String get joinRequestsTitle => 'Join requests';
+
+  @override
+  String get joinRequestsEmpty => 'No pending requests';
+
+  @override
+  String get joinRequestsApprove => 'Approve';
+
+  @override
+  String get joinRequestsDecline => 'Decline';
+
+  @override
+  String get joinRequestsApproved => 'Request approved';
+
+  @override
+  String get joinRequestsDeclined => 'Request declined';
+
+  @override
+  String get joinRequestsActionFailed => 'Failed, try again';
+
+  @override
+  String get joinRequestsLoadError => 'Failed to load requests';
+
+  @override
   String get blacklistLoadError => 'Failed to load the blacklist';
 
   @override

@@ -226,6 +226,17 @@ abstract class Opcode {
   static const int storiesDelete = 218; // Удаление историй
   static const int storiesGetByStoryId = 220; // Истории по ID
 
+  // ── Дополнительные опкоды (сверено с официалкой 26.31) ─────────────
+  static const int searchFeedback = 31; // Фидбэк по результатам поиска
+  static const int chatLivestreamInfo = 62; // Инфо о трансляции в чате
+  static const int locationSend = 125; // Отправка геолокации
+  static const int locationRequest = 126; // Запрос геолокации собеседника
+  static const int orgInfo = 256; // Инфо об организации / бизнес-профиле
+  static const int getQr = 288; // Получение QR для входа
+  static const int getQrStatus = 289; // Статус QR-входа
+  static const int loginByQr = 291; // Вход по QR
+  static const int msgDelivery = 303; // Подтверждение доставки сообщения
+
   // ── Human-readable names ───────────────────────────────────────────
 
   // #***! имя опкода для логов
@@ -405,5 +416,14 @@ abstract class Opcode {
     storiesEdit: 'STORIES_EDIT',
     storiesDelete: 'STORIES_DELETE',
     storiesGetByStoryId: 'STORIES_GET_BY_STORY_ID',
+    searchFeedback: 'SEARCH_FEEDBACK',
+    chatLivestreamInfo: 'CHAT_LIVESTREAM_INFO',
+    locationSend: 'LOCATION_SEND',
+    locationRequest: 'LOCATION_REQUEST',
+    orgInfo: 'ORG_INFO',
+    getQr: 'GET_QR',
+    getQrStatus: 'GET_QR_STATUS',
+    loginByQr: 'LOGIN_BY_QR',
+    msgDelivery: 'MSG_DELIVERY',
   };
 }

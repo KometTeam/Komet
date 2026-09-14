@@ -439,6 +439,7 @@ class _SecurityScreenState extends State<SecurityScreen>
   Widget _buildPrivacySettings(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
     final isSafeMode = _privacyConfig?.safeMode ?? false;
+    final contentLevelAccess = _privacyConfig?.contentLevelAccess ?? false;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: AppShape.cardRadius,
@@ -511,10 +512,24 @@ class _SecurityScreenState extends State<SecurityScreen>
               cs,
               icon: Symbols.filter_alt,
               label: l10n.securityShowContact,
-              trailingText: _privacyConfig?.contentLevelAccess == true
+              trailingText: contentLevelAccess
                   ? l10n.securityContentSafe
                   : l10n.securityContentAll,
               lockedBySafeMode: true,
+            )
+          else
+            _settingsRow(
+              cs,
+              icon: Symbols.filter_alt,
+              label: l10n.securityShowContact,
+              trailingWidget: Switch(
+                value: contentLevelAccess,
+                onChanged: (v) => _updateSetting('CONTENT_LEVEL_ACCESS', v),
+              ),
+              showChevron: false,
+              verticalPadding: 14,
+              onTap: () =>
+                  _updateSetting('CONTENT_LEVEL_ACCESS', !contentLevelAccess),
             ),
           _settingsRow(
             cs,
