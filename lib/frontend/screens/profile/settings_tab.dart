@@ -507,7 +507,8 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
     }
     await resetDigitalIdSession();
     try {
-      await api.connect();
+      // #***! вышли из аккаунта — дальше экран входа по телефону, прошлая версия
+      await api.connect(authenticated: false);
     } catch (_) {}
     if (navState != null) {
       await navState.pushAndRemoveUntil(

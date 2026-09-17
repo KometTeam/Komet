@@ -361,7 +361,8 @@ class _SpoofScreenState extends State<SpoofScreen> {
       if (accountId != null) {
         await TokenStorage.deleteToken(accountId);
       }
-      await api.connect();
+      // #***! перелогин — токен удалён, впереди экран входа, прошлая версия
+      await api.connect(authenticated: false);
       if (mounted) {
         final navState = KometApp.navigatorKey.currentState;
         if (navState != null) {

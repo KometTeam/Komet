@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 import '../api.dart';
 import '../../core/config/debug_test.dart';
@@ -302,6 +303,13 @@ class AccountModule {
       }
     }
 
+    // #***! сокет мог быть pre-login (прошлая версия): токен шлём только по
+    // боевой версии, поэтому при необходимости переподнимаем соединение
+    if (!_api.isAuthenticatedHandshake) {
+      await _api.reconnectForLogin();
+      _ensureOnline();
+    }
+
     final requestPayload = buildLoginPayload(authToken, sync: syncParams);
 
     _loginStatusController.add(LoginStatus.loading);
@@ -385,13 +393,243 @@ class AccountModule {
     banners.clear();
     chats.resetForAccountSwitch();
 
-    await _api.connect();
+    await _api.connect(authenticated: true);
     if (_api.state != SessionState.online) {
       throw StateError('loginWithToken: нет соединения с сервером');
     }
 
     logger.i('Вход по токену: сессия поднята со спуфом, выполняю login');
     return login(token: token);
+  }
+
+  // #***! Экспериментальный SMS-вход через веб. Веб-клиент MAX всегда шлёт код по
+  // SMS, но выдаёт веб-токен. Хитрость: остаёмся залогинены как веб (сессия A —
+  // текущий _api), параллельно поднимаем настоящий сокет (сессия B) и просим на
+  // нём код — сервер, видя активную веб-сессию, присылает код сообщением в неё.
+  // Ловим код, входим на сокете кодом+паролем, получаем сокетовый токен и
+  // перезаходим боевой версией. Веб-сессию за собой убираем.
+  //
+  // Вызывается когда включён "Всегда слать СМС" и первичный веб-вход уже отдал
+  // [webToken] (после verifyCode/checkPassword). [existingPassword] != null, если
+  // у аккаунта уже была 2FA и пользователь ввёл пароль сам.
+  Future<void> completeWebSmsSocketLogin({
+    required String phone,
+    required int accountId,
+    required String webToken,
+    String? existingPassword,
+  }) async {
+    // #***! шаг 1: логинимся на веб-сессии (её НЕ закрываем — в неё придёт код)
+    await _bareLogin(webToken);
+
+    // #***! шаг 2: пароль. Есть 2FA — помним введённый; нет — ставим свой рандом.
+    // Наш временный пароль ОБЯЗАН быть снят к концу — иначе аккаунт без 2FA
+    // останется с паролем, который знаем только мы. Всё, что после установки,
+    // обёрнуто в try с откатом.
+    final bool weSetPassword = existingPassword == null;
+    final String password = existingPassword ?? _generateStrongPassword();
+    var passwordCleared = !weSetPassword;
+
+    try {
+      if (weSetPassword) {
+        final trackId = await create2faTrack();
+        await set2faPassword(trackId, password);
+        await confirm2fa(
+          trackId: trackId,
+          password: password,
+          hint: null,
+          withEmail: false,
+        );
+        logger.i('SMS-вход: поставлен временный пароль на аккаунт');
+      }
+
+      String? socketToken;
+      int? socketAccountId;
+
+      // #***! шаг 3: настоящий сокет 26.23.2 — отдельной сессией B
+      final apiB = Api();
+      final accountB = AccountModule(apiB);
+      StreamSubscription<Packet>? codeSub;
+      try {
+        await apiB.connect(authenticated: false, web: false);
+        if (apiB.state != SessionState.online) {
+          throw StateError('SMS-вход: не удалось поднять сокет-сессию');
+        }
+
+        // #***! шаг 4: слушаем входящий код на веб-сессии ДО запроса на сокете
+        final codeCompleter = Completer<String>();
+        codeSub = _api.pushStream
+            .where((p) => p.opcode == Opcode.notifMessage)
+            .listen((p) {
+              final code = _extractLoginCode(p.payload);
+              if (code != null && !codeCompleter.isCompleted) {
+                codeCompleter.complete(code);
+              }
+            });
+
+        // #***! шаг 5: запрос кода на сокете — сервер шлёт его сообщением в веб
+        final req = await accountB.requestCode(phone);
+
+        // #***! шаг 6: ждём код из сообщения (opcode 128) на веб-сессии
+        final code = await codeCompleter.future.timeout(
+          const Duration(seconds: 90),
+          onTimeout: () =>
+              throw TimeoutException('SMS-вход: код так и не пришёл'),
+        );
+        logger.i('SMS-вход: код получен из веб-сессии');
+
+        // #***! шаг 7: код + пароль на сокете → сокетовый токен
+        final verify = await accountB.verifyCode(code, req.token);
+        if (verify.requiresPassword) {
+          final trackId = verify.challengeTrackId;
+          if (trackId == null) {
+            throw StateError('SMS-вход: нет trackId для ввода пароля');
+          }
+          final tf = await accountB.checkPassword(
+            password: password,
+            trackId: trackId,
+          );
+          socketToken = tf.loginToken;
+          socketAccountId = tf.accountId;
+        } else {
+          socketToken = verify.loginToken;
+          socketAccountId = verify.accountId ?? accountId;
+        }
+      } finally {
+        await codeSub?.cancel();
+        try {
+          await apiB.disconnect();
+        } catch (_) {}
+        try {
+          apiB.dispose();
+        } catch (_) {}
+      }
+
+      final resolvedToken = socketToken;
+      if (resolvedToken == null) {
+        throw StateError('SMS-вход: сокетовый токен не получен');
+      }
+      // #***! socketAccountId тут гарантированно не null (обе ветви его задают)
+      final resolvedAccountId = socketAccountId;
+
+      // #***! шаг 8: наш временный пароль снимаем на веб-сессии
+      if (weSetPassword) {
+        passwordCleared = await _removeTempPassword(password);
+      }
+
+      // #***! шаг 9: серверный выход из веб-сессии и разрыв
+      try {
+        await _api.sendRequestOrThrow(Opcode.logout, <dynamic, dynamic>{});
+      } catch (e) {
+        logger.w('SMS-вход: серверный выход из веб-сессии не удался: $e');
+      }
+      _loggedIn = false;
+      await _api.disconnect();
+
+      // #***! шаг 10: боевой сокет 26.31.0 + сокетовый токен — финальный вход.
+      // Автологин-колбэк сам выполнит login по активному аккаунту.
+      await TokenStorage.saveToken(resolvedToken, resolvedAccountId);
+      await TokenStorage.setActiveAccount(resolvedAccountId);
+      await SpoofingService.commitPendingSpoof(resolvedAccountId);
+      await _api.connect(authenticated: true, web: false);
+      if (_api.state != SessionState.online) {
+        throw StateError('SMS-вход: не удалось поднять боевой сокет');
+      }
+      if (!_loggedIn) {
+        await login(accountId: resolvedAccountId, token: resolvedToken);
+      }
+
+      // #***! не сняли на веб-сессии — снимаем на боевой
+      if (!passwordCleared) {
+        passwordCleared = await _removeTempPassword(password);
+      }
+      if (!passwordCleared) {
+        logger.e('SMS-вход: ВРЕМЕННЫЙ ПАРОЛЬ НЕ СНЯТ. Пароль: $password');
+      }
+    } catch (e) {
+      // #***! любой сбой после установки пароля — откатываем, пока веб-сессия
+      // ещё жива; если не вышло, пароль хотя бы попадёт в лог
+      if (weSetPassword && !passwordCleared) {
+        if (_api.state == SessionState.online) {
+          passwordCleared = await _removeTempPassword(password);
+        }
+        if (!passwordCleared) {
+          logger.e(
+            'SMS-вход: сбой, ВРЕМЕННЫЙ ПАРОЛЬ НЕ СНЯТ. Пароль: $password',
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
+  // #***! снятие временного пароля: панель 2FA → проверка пароля → удаление
+  Future<bool> _removeTempPassword(String password) async {
+    try {
+      final trackId = await enter2faPanel();
+      await check2faPassword(trackId, password);
+      await remove2fa(trackId);
+      return true;
+    } catch (e) {
+      logger.w('SMS-вход: снять временный пароль не удалось: $e');
+      return false;
+    }
+  }
+
+  // #***! логин без полной обработки: веб-сессии нужно лишь быть залогиненной,
+  // чтобы принять код и снять/поставить пароль; чаты/пуши тут не поднимаем
+  Future<void> _bareLogin(String token) async {
+    _ensureOnline();
+    final packet = await _api.sendRequest(
+      Opcode.login,
+      buildLoginPayload(token, interactive: false),
+    );
+    throwIfPacketError(packet);
+  }
+
+  static String _generateStrongPassword() {
+    const chars =
+        'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    final rng = Random.secure();
+    return List.generate(16, (_) => chars[rng.nextInt(chars.length)]).join();
+  }
+
+  // #***! код входа приходит сообщением от MAX: чистый код в payload кнопки
+  // INLINE_KEYBOARD, дубль — в тексте "Код: 123456"
+  static String? _extractLoginCode(dynamic payload) {
+    if (payload is! Map) return null;
+    final msg = payload['message'];
+    if (msg is! Map) return null;
+    final text = msg['text'];
+    final looksLikeLogin =
+        text is String &&
+        RegExp(
+          r'код|code|войти|профил',
+          caseSensitive: false,
+        ).hasMatch(text);
+    if (!looksLikeLogin) return null;
+
+    final attaches = msg['attaches'];
+    if (attaches is List) {
+      for (final a in attaches.whereType<Map>()) {
+        if (a['_type'] != 'INLINE_KEYBOARD') continue;
+        final kb = a['keyboard'];
+        if (kb is! Map) continue;
+        final buttons = kb['buttons'];
+        if (buttons is! List) continue;
+        for (final row in buttons.whereType<List>()) {
+          for (final btn in row.whereType<Map>()) {
+            final p = btn['payload'];
+            if (p is String && RegExp(r'^\d{4,8}$').hasMatch(p)) return p;
+          }
+        }
+      }
+    }
+    final m = RegExp(
+      r'(?:код|code)\D{0,4}(\d{4,8})',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (m != null) return m.group(1);
+    return null;
   }
 
   // #***! переключение аккаунта, реконнект с другим спуфом
@@ -422,7 +660,7 @@ class AccountModule {
     await ContactsModule.primeCacheFromDb(accountId);
 
     try {
-      await _api.connect();
+      await _api.connect(authenticated: true);
     } catch (e) {
       logger.e(
         'switchAccount: ошибка соединения при переключении на $accountId: $e',
@@ -519,7 +757,7 @@ class AccountModule {
   // #***! чтоб выйти нужна живая сессия, при чём логинимся заново
   Future<void> _ensureLogoutSession(int? accountId) async {
     if (_api.state == SessionState.disconnected) {
-      await _api.connect();
+      await _api.connect(authenticated: true);
     }
     if (_api.state != SessionState.online) {
       await _api.stateStream
@@ -617,12 +855,14 @@ class AccountModule {
 
     final callsSeed = _api.callsSeed;
     final deviceId = _api.deviceId;
-    // #***! без отпечатка сборки сервер не отдаст кэш чатов
-    if (callsSeed != null && deviceId != null) {
+    // #***! без отпечатка сборки сервер не отдаст кэш чатов; у веба нативных
+    // либ нет, поэтому в веб-режиме отпечаток не шлём вовсе
+    if (!_api.webHandshake && callsSeed != null && deviceId != null) {
       payload['chatCacheFingerprint'] = ChatCacheFingerprint.compute(
         callsSeed,
         deviceId,
         arch: _api.architecture,
+        preLogin: !_api.isAuthenticatedHandshake,
       );
     }
 
@@ -840,11 +1080,14 @@ class AccountModule {
 
     final callsSeed = _api.callsSeed;
     final deviceId = _api.deviceId;
-    if (callsSeed != null && deviceId != null) {
+    // #***! веб mode не шлёт — вместе с веб-рукопожатием это и заставляет
+    // сервер отдать код по SMS, а не пушем
+    if (!_api.webHandshake && callsSeed != null && deviceId != null) {
       payload['mode'] = ChatCacheFingerprint.compute(
         callsSeed,
         deviceId,
         arch: _api.architecture,
+        preLogin: !_api.isAuthenticatedHandshake,
       );
     }
 

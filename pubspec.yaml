@@ -39,6 +39,11 @@ dependencies:
   # app build time and pulled from that repo by git tag.
   kolibri: ^0.1.4
 
+  # Пробрасывается только ради RustStreamSink: kolibri 0.1.4 не отдаёт isPwa и
+  # headerUserAgent через openSessionWithWireLog, а веб-хэндшейку они нужны, так
+  # что SessionOptions собираем сами. Версия обязана совпадать с пином kolibri.
+  flutter_rust_bridge: 2.12.0
+
   # Message-encryption core (C over monocypher): legacy passphrase scheme and
   # v2 end-to-end encryption. KometTeam/crypto-core is a git submodule at
   # native/crypto-core, so the version is pinned by the submodule commit;

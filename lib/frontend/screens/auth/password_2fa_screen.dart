@@ -14,8 +14,15 @@ import 'session_stale_recovery.dart';
 class Password2FAScreen extends StatefulWidget {
   final String trackId;
   final String? hint;
+  // #***! нужен для эксперим. SMS-входа через веб (запрос кода на сокете)
+  final String? rawPhone;
 
-  const Password2FAScreen({super.key, required this.trackId, this.hint});
+  const Password2FAScreen({
+    super.key,
+    required this.trackId,
+    this.hint,
+    this.rawPhone,
+  });
 
   @override
   State<Password2FAScreen> createState() => _Password2FAScreenState();
@@ -73,17 +80,28 @@ class _Password2FAScreenState extends State<Password2FAScreen>
 
       if (!mounted) return;
 
-      final loginResult = await accountModule.login(
-        accountId: result.accountId,
-        token: result.loginToken,
-      );
+      String? avatarUrl;
+      // #***! эксперим. SMS-вход через веб: пароль пользователя уже есть, добываем
+      // сокетовый токен и перезаходим боевой версией
+      if (api.webHandshake && widget.rawPhone != null) {
+        stopSessionRecovery();
+        await accountModule.completeWebSmsSocketLogin(
+          phone: widget.rawPhone!,
+          accountId: result.accountId,
+          webToken: result.loginToken,
+          existingPassword: _passwordController.text,
+        );
+      } else {
+        final loginResult = await accountModule.login(
+          accountId: result.accountId,
+          token: result.loginToken,
+        );
+        avatarUrl = loginResult.profile.baseUrl;
+      }
 
       if (!mounted) return;
 
-      final avatar = await precacheLoginAvatar(
-        context,
-        loginResult.profile.baseUrl,
-      );
+      final avatar = await precacheLoginAvatar(context, avatarUrl);
 
       if (!mounted) return;
 

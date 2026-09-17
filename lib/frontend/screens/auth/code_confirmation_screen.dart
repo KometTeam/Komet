@@ -345,8 +345,11 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                Password2FAScreen(trackId: trackId, hint: result.challengeHint),
+            builder: (context) => Password2FAScreen(
+              trackId: trackId,
+              hint: result.challengeHint,
+              rawPhone: widget.rawPhone,
+            ),
           ),
         );
         return;
@@ -363,6 +366,25 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
             ),
           ),
         );
+        return;
+      }
+
+      // #***! эксперим. SMS-вход через веб: получаем сокетовый токен хитрой схемой
+      if (api.webHandshake) {
+        final token = result.loginToken;
+        final accId = result.accountId;
+        if (token == null || accId == null) {
+          _showError('SMS-вход: сервер не вернул токен');
+          return;
+        }
+        stopSessionRecovery();
+        await accountModule.completeWebSmsSocketLogin(
+          phone: widget.rawPhone,
+          accountId: accId,
+          webToken: token,
+          existingPassword: null,
+        );
+        await _completeLogin(null);
         return;
       }
 

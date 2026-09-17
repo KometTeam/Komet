@@ -42,6 +42,9 @@ class _LoginScreenState extends State<LoginScreen> {
   late CountryName _selectedCountry;
   bool _isPhoneValid = false;
   bool _isTOSRead = false;
+  // #***! экспериментально: представляемся веб-клиентом, чтобы код пришёл по SMS
+  late bool _alwaysSendSms = api.webHandshake;
+  bool _switchingSmsMode = false;
   String? _phoneError;
   Timer? _phoneErrorTimer;
   int _logoTapCount = 0;
@@ -56,7 +59,8 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     _sessionState = api.state;
     if (api.state == SessionState.disconnected) {
-      unawaited(api.connect());
+      // #***! экран входа по телефону — сокет без токена, прошлая версия
+      unawaited(api.connect(authenticated: false, web: _alwaysSendSms));
     }
     _stateSub = api.stateStream.listen((state) {
       if (mounted) setState(() => _sessionState = state);
@@ -64,6 +68,112 @@ class _LoginScreenState extends State<LoginScreen> {
     _selectedCountry = countriesByCode['RU'] ?? allCountries.first;
     _clampCountryToAllowed();
     _checkTOS();
+  }
+
+  // #***! режим зашит в рукопожатие, так что переподнимаем сессию целиком
+  Future<void> _setAlwaysSendSms(bool value) async {
+    if (_switchingSmsMode) return;
+    setState(() {
+      _alwaysSendSms = value;
+      _switchingSmsMode = true;
+    });
+    try {
+      await api.disconnect();
+      await api.connect(authenticated: false, web: value);
+    } catch (e) {
+      if (!mounted) return;
+      showCustomNotification(context, 'Не удалось переподключиться: $e');
+    } finally {
+      if (mounted) setState(() => _switchingSmsMode = false);
+    }
+  }
+
+  // #***! предупреждение перед эксперим. SMS-входом: true=Принять, false=Отмена,
+  // null=закрыли мимо (галочку не трогаем, но и дальше не идём)
+  Future<bool?> _showExperimentalSmsWarning() {
+    return showGeneralDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: AppFrost.scrim(),
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim1, anim2, child) {
+        final cs = Theme.of(context).colorScheme;
+        final curve = Curves.easeOutQuart.transform(anim1.value);
+        return Opacity(
+          opacity: anim1.value,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - curve)),
+            child: Transform.scale(
+              scale: 0.8 + (0.2 * curve),
+              child: AlertDialog(
+                backgroundColor: cs.surfaceContainerHigh,
+                surfaceTintColor: Colors.transparent,
+                shape: AppShape.dialogBorder,
+                contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ЕСЛИ НА ВАШЕМ АККАУНТЕ НЕТ 2FA ВСЕ СЕССИИ БУДУТ СБРОШЕНЫ',
+                      style: TextStyle(
+                        color: cs.error,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Способ экспериментальный, его использование на ваш '
+                      'страх и риск.',
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text(
+                          'Отмена',
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text(
+                          'Принять',
+                          style: TextStyle(
+                            color: cs.primary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _onBackPressed() async {
@@ -496,6 +606,18 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             );
                             return;
+                          }
+
+                          // #***! эксперим. SMS-вход: предупреждаем про сброс
+                          // сессий, Отмена снимает галочку и не пускает дальше
+                          if (_alwaysSendSms) {
+                            final choice = await _showExperimentalSmsWarning();
+                            if (choice == false) {
+                              await _setAlwaysSendSms(false);
+                              return;
+                            }
+                            if (choice != true) return;
+                            if (!screenContext.mounted) return;
                           }
 
                           try {
@@ -934,7 +1056,39 @@ class _LoginScreenState extends State<LoginScreen> {
                                   )
                                 : const SizedBox.shrink(),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 4),
+                          InkWell(
+                            onTap: _switchingSmsMode
+                                ? null
+                                : () => _setAlwaysSendSms(!_alwaysSendSms),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Всегда слать СМС (ЭКСПЕРИМЕНТАЛЬНО)',
+                                      style: TextStyle(
+                                        color: cs.onSurface,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w400,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Switch(
+                                    value: _alwaysSendSms,
+                                    onChanged: _switchingSmsMode
+                                        ? null
+                                        : _setAlwaysSendSms,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                           if (BuildProfile.qrLogin || BuildProfile.tokenLogin)
                             TextButton(
                               onPressed: () => _showOtherLoginMethods(context),
