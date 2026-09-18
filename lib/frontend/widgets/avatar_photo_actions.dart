@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -13,17 +11,16 @@ import 'custom_notification.dart';
 import 'sheet_helpers.dart';
 
 // #***! на телефоне аватарка едет в галерею, на десктопе в выбранную папку
-bool get _savesToGallery =>
-    defaultTargetPlatform == TargetPlatform.android ||
-    defaultTargetPlatform == TargetPlatform.iOS;
-
-String avatarSaveLabel(BuildContext context) => _savesToGallery
-    ? 'Сохранить в галерею'
-    : (AppLocalizations.of(context)?.photoViewerSaveAs ?? 'Сохранить как…');
+String avatarSaveLabel(BuildContext context) {
+  final l10n = AppLocalizations.of(context);
+  return savesToGallery
+      ? (l10n?.photoViewerSaveToGallery ?? 'Сохранить в галерею')
+      : (l10n?.photoViewerSaveAs ?? 'Сохранить как…');
+}
 
 Future<void> saveAvatarPhoto(BuildContext context, String url) async {
   if (url.isEmpty) return;
-  if (_savesToGallery) {
+  if (savesToGallery) {
     final result = await saveImageFromUrl(url);
     if (!context.mounted) return;
     showCustomNotification(

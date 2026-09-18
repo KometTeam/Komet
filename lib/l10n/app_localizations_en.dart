@@ -1548,6 +1548,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photoViewerSaveAs => 'Save as…';
 
   @override
+  String get photoViewerSaveToGallery => 'Save to gallery';
+
+  @override
   String get photoViewerViewAll => 'View all photos';
 
   @override

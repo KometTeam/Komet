@@ -553,43 +553,33 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     return MediaCache.getOrDownload(_cacheNameFor(photo, url), url);
   }
 
-  Future<File?> _videoFileFor(_ViewerMedia item) async {
-    final video = item.video;
-    if (video == null) return null;
+  Future<String?> _videoUrlFor(_ViewerMedia item) async {
     final sources = await _loadVideoSources(item);
     if (sources.isEmpty) return null;
     final sessionQuality = _videoSessions[item.id]?.quality;
-    final url = sessionQuality != null
+    return sessionQuality != null
         ? sources[sessionQuality] ?? sources.values.first
         : sources.values.first;
+  }
+
+  Future<File?> _videoFileFor(_ViewerMedia item) async {
+    final video = item.video;
+    if (video == null) return null;
+    final url = await _videoUrlFor(item);
+    if (url == null) return null;
     return MediaCache.getOrDownload(_videoCacheName(item, video), url);
   }
 
-  Future<void> _save() async {
-    final photo = _current.photo;
-    if (photo == null || _saving) return;
+  Future<void> _saveToDevice() async {
+    if (_saving) return;
     setState(() => _saving = true);
-    final localPath = photo.localPath;
-    final url = photo.baseUrl ?? '';
-    final cacheName = _cacheNameFor(photo, url);
-
     final MediaSaveResult result;
-    if (localPath != null) {
-      result = await saveLocalImage(localPath);
-    } else if (url.isEmpty) {
-      result = const MediaSaveResult(ok: false, error: 'нет ссылки');
-    } else {
-      result = await saveMediaFile(
-        cacheName: cacheName,
-        resolveUrl: () async => url,
-        saveName: 'IMG_${DateTime.now().millisecondsSinceEpoch}.jpg',
-        kind: SaveMediaKind.image,
-        download: _photoDownload(_current, photo, cacheName),
-      );
+    try {
+      result = await _persistToDevice(_current);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-
     if (!mounted) return;
-    setState(() => _saving = false);
     if (result.ok) {
       showCustomNotification(
         context,
@@ -601,6 +591,45 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         'Не удалось сохранить: ${result.error ?? ''}',
       );
     }
+  }
+
+  Future<MediaSaveResult> _persistToDevice(_ViewerMedia item) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final photo = item.photo;
+    if (photo != null) {
+      final localPath = photo.localPath;
+      if (localPath != null) {
+        return saveLocalMedia(
+          File(localPath),
+          saveName: 'IMG_$now.jpg',
+          kind: SaveMediaKind.image,
+        );
+      }
+      final url = photo.baseUrl ?? '';
+      if (url.isEmpty) {
+        return const MediaSaveResult(ok: false, error: 'нет ссылки');
+      }
+      final cacheName = _cacheNameFor(photo, url);
+      return saveMediaFile(
+        cacheName: cacheName,
+        resolveUrl: () async => url,
+        saveName: 'IMG_$now.jpg',
+        kind: SaveMediaKind.image,
+        download: _photoDownload(item, photo, cacheName),
+      );
+    }
+    final video = item.video;
+    if (video == null) {
+      return const MediaSaveResult(ok: false, error: 'нет медиа');
+    }
+    final cacheName = _videoCacheName(item, video);
+    return saveMediaFile(
+      cacheName: cacheName,
+      resolveUrl: () => _videoUrlFor(item),
+      saveName: 'VID_$now.mp4',
+      kind: SaveMediaKind.video,
+      download: _videoDownload(item, video, cacheName),
+    );
   }
 
   Future<void> _saveAs() async {
@@ -702,6 +731,12 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
             onTap: () =>
                 _popThen(() => actions!.delete!(item.messageId, item.senderId)),
           ),
+        if (savesToGallery)
+          ChatMenuItem(
+            icon: Symbols.photo_library,
+            label: l10n.photoViewerSaveToGallery,
+            onTap: _saveToDevice,
+          ),
         ChatMenuItem(
           icon: Symbols.download,
           label: l10n.photoViewerSaveAs,
@@ -775,6 +810,14 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                                 onPressed: () => Navigator.of(context).pop(),
                               ),
                               const Spacer(),
+                              if (_saving && _current.isVideo)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 14),
+                                  child: SmallSpinner(
+                                    size: 20,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               if (hasMenu)
                                 Builder(
                                   builder: (btnContext) => IconButton(
@@ -919,7 +962,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                   icon: _saving
                       ? const SmallSpinner(size: 20, color: Colors.white)
                       : const Icon(Symbols.download, color: Colors.white),
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving ? null : _saveToDevice,
                   tooltip: l10n.sharedDownload,
                 ),
               IconButton(

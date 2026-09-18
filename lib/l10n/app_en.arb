@@ -630,6 +630,7 @@
     }
   },
   "photoViewerSaveAs": "Save as…",
+  "photoViewerSaveToGallery": "Save to gallery",
   "photoViewerViewAll": "View all photos",
   "photoViewerRotate": "Rotate",
   "mediaViewerCounter": "{index} of {total}",

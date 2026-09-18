@@ -496,6 +496,7 @@
   "photoViewerSentToday": "{sender} • сегодня в {time}",
   "photoViewerSentOn": "{sender} • {date} в {time}",
   "photoViewerSaveAs": "Сохранить как…",
+  "photoViewerSaveToGallery": "Сохранить в галерею",
   "photoViewerViewAll": "Все фото чата",
   "photoViewerRotate": "Повернуть",
   "mediaViewerCounter": "{index} из {total}",

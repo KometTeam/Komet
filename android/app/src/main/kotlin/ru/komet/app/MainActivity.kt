@@ -522,7 +522,14 @@ class MainActivity : AudioServiceActivity() {
 
         ClipboardMedia.attach(flutterEngine, this)
 
+        MediaExport.attach(flutterEngine, this)
+
         FkmChannel.attach(flutterEngine, this)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        MediaExport.onActivityResult(this, requestCode, resultCode, data)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

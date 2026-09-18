@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
+import '../config/device_profile.dart';
 import 'download_history.dart';
 import 'image_format.dart';
 import 'media_cache.dart';
@@ -47,6 +48,10 @@ Future<MediaSaveResult> saveImageFromUrl(String url) async {
 // #***! фото и видео в галерею, остальное в папку
 enum SaveMediaKind { image, video, file }
 
+bool get savesToGallery => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+const _scopedStorageSdk = 29;
+
 // #***! сохранение вложения с записью в историю
 Future<MediaSaveResult> saveMediaFile({
   required String cacheName,
@@ -79,18 +84,17 @@ Future<MediaSaveResult> saveMediaFile({
   }
 }
 
-// #***! картинка уже на диске, просто копируем
-Future<MediaSaveResult> saveLocalImage(String path, {String? saveName}) async {
+// #***! медиа уже на диске, просто копируем
+Future<MediaSaveResult> saveLocalMedia(
+  File file, {
+  required String saveName,
+  required SaveMediaKind kind,
+}) async {
   try {
-    final file = File(path);
     if (!await file.exists()) {
       return const MediaSaveResult(ok: false, error: 'файл не найден');
     }
-    return await _persist(
-      file,
-      saveName: saveName ?? 'IMG_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      kind: SaveMediaKind.image,
-    );
+    return await _persist(file, saveName: saveName, kind: kind);
   } catch (e) {
     return MediaSaveResult(ok: false, error: e.toString());
   }
@@ -124,9 +128,8 @@ Future<MediaSaveResult> _write(
   required SaveMediaKind kind,
 }) async {
   final toGallery = kind == SaveMediaKind.image || kind == SaveMediaKind.video;
-  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS) && toGallery) {
-    final state = await PhotoManager.requestPermissionExtend();
-    if (!state.isAuth && !state.hasAccess) {
+  if (savesToGallery && toGallery) {
+    if (!await _mayWriteGallery()) {
       return const MediaSaveResult(ok: false, error: 'нет доступа к галерее');
     }
     if (kind == SaveMediaKind.video) {
@@ -142,6 +145,15 @@ Future<MediaSaveResult> _write(
   final target = File('${dir.path}${Platform.pathSeparator}$saveName');
   await file.copy(target.path);
   return MediaSaveResult(ok: true, location: target.path);
+}
+
+Future<bool> _mayWriteGallery() async {
+  if (Platform.isAndroid) {
+    final sdkInt = (await DeviceProfile.load()).sdkInt ?? 0;
+    if (sdkInt >= _scopedStorageSdk) return true;
+  }
+  final state = await PhotoManager.requestPermissionExtend();
+  return state.isAuth || state.hasAccess;
 }
 
 // #***! папка загрузок есть не везде, иначе документы приложения

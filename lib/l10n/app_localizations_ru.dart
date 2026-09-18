@@ -1553,6 +1553,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get photoViewerSaveAs => 'Сохранить как…';
 
   @override
+  String get photoViewerSaveToGallery => 'Сохранить в галерею';
+
+  @override
   String get photoViewerViewAll => 'Все фото чата';
 
   @override

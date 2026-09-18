@@ -2990,6 +2990,12 @@ abstract class AppLocalizations {
   /// **'Save as…'**
   String get photoViewerSaveAs;
 
+  /// No description provided for @photoViewerSaveToGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to gallery'**
+  String get photoViewerSaveToGallery;
+
   /// No description provided for @photoViewerViewAll.
   ///
   /// In en, this message translates to:

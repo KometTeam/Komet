@@ -10,6 +10,7 @@ import '../../core/utils/download_history.dart';
 import '../../core/media/audio_file_track.dart';
 import '../../core/media/media_playback.dart';
 import '../../core/utils/format.dart';
+import '../../core/utils/media_saver.dart';
 import '../../core/utils/save_file_as.dart';
 import '../../l10n/app_localizations.dart';
 import '../widgets/chat_menu_overlay.dart';
@@ -99,19 +100,41 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     );
   }
 
-  Future<void> _saveAs(DownloadRecord record) async {
+  Future<File?> _existingFile(DownloadRecord record) async {
     final file = await DownloadHistory.fileFor(record);
-    if (!mounted) return;
-    if (file == null) {
-      await DownloadHistory.remove(record.cacheName);
-      if (mounted) {
-        showCustomNotification(
-          context,
-          AppLocalizations.of(context)!.downloadsOpenFailed,
-        );
-      }
-      return;
+    if (file != null || !mounted) return file;
+    await DownloadHistory.remove(record.cacheName);
+    if (mounted) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.downloadsOpenFailed,
+      );
     }
+    return null;
+  }
+
+  Future<void> _saveToGallery(DownloadRecord record) async {
+    final file = await _existingFile(record);
+    if (file == null || !mounted) return;
+    final result = await saveLocalMedia(
+      file,
+      saveName: _saveName(record),
+      kind: record.kind == DownloadKind.video
+          ? SaveMediaKind.video
+          : SaveMediaKind.image,
+    );
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      result.ok
+          ? 'Сохранено в галерею'
+          : 'Не удалось сохранить: ${result.error ?? ''}',
+    );
+  }
+
+  Future<void> _saveAs(DownloadRecord record) async {
+    final file = await _existingFile(record);
+    if (file == null || !mounted) return;
     final result = await saveFileAs(
       source: file,
       fileName: _saveName(record),
@@ -123,6 +146,14 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       result.saved ? 'Файл сохранён' : 'Не удалось сохранить файл',
     );
   }
+
+  bool _fitsGallery(DownloadRecord record) =>
+      savesToGallery &&
+      const {
+        DownloadKind.photo,
+        DownloadKind.video,
+        DownloadKind.gif,
+      }.contains(record.kind);
 
   void _goToMessage(DownloadRecord record) {
     if (record.chatId == null || record.messageId?.isNotEmpty != true) return;
@@ -228,6 +259,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     return _DownloadTile(
                       record: record,
                       onTap: () => _open(record),
+                      onSaveToGallery: _fitsGallery(record)
+                          ? () => _saveToGallery(record)
+                          : null,
                       onSaveAs: () => _saveAs(record),
                       onGoToMessage:
                           record.chatId != null &&
@@ -278,12 +312,14 @@ class _DownloadsEmpty extends StatelessWidget {
 class _DownloadTile extends StatelessWidget {
   final DownloadRecord record;
   final VoidCallback onTap;
+  final VoidCallback? onSaveToGallery;
   final VoidCallback onSaveAs;
   final VoidCallback? onGoToMessage;
 
   const _DownloadTile({
     required this.record,
     required this.onTap,
+    required this.onSaveToGallery,
     required this.onSaveAs,
     required this.onGoToMessage,
   });
@@ -301,6 +337,12 @@ class _DownloadTile extends StatelessWidget {
             icon: Symbols.visibility,
             label: l10n.sharedGoToMessage,
             onTap: onGoToMessage,
+          ),
+        if (onSaveToGallery != null)
+          ChatMenuItem(
+            icon: Symbols.photo_library,
+            label: l10n.photoViewerSaveToGallery,
+            onTap: onSaveToGallery,
           ),
         ChatMenuItem(
           icon: Symbols.download,
