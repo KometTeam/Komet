@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart';
-
 import '../../backend/api.dart';
 import '../../frontend/widgets/max_link_nav.dart';
 import '../../main.dart';
 import '../storage/app_database.dart';
 import '../storage/token_storage.dart';
 import '../utils/logger.dart';
+import 'push_proxy_client.dart';
 
 // #***! открытие чата по тапу на уведомление
 class NotificationBridge {
@@ -49,16 +50,23 @@ class NotificationBridge {
     }
   }
 
-  // #***! подписка на уведомления и сессию
+  bool get _iosPush => _native && Platform.isIOS;
   void init() {
     if (_started || !_native) return;
     _started = true;
+    if (_iosPush) {
+      _method.setMethodCallHandler(_handleMethodCall);
+      unawaited(_consumePushToken());
+      unawaited(_consumeVoipToken());
+    }
     _events.receiveBroadcastStream().listen(
       _onEvent,
       onError: (e) => logger.w('NotificationBridge: events stream error: $e'),
     );
     api.stateStream.listen((state) {
-      if (state == SessionState.online) _flushPending();
+      if (state == SessionState.online) {
+        _flushPending();
+      }
     });
   }
 
@@ -157,7 +165,62 @@ class NotificationBridge {
     _flushPending();
   }
 
-  // #***! ждём дерево и сессию иначе ретраим, открытый чат не переоткрываем
+  Future<void> _handleMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case 'onPushToken':
+        final token = call.arguments as String?;
+        if (token != null && token.isNotEmpty) {
+          PushProxyClient.instance.setApnsToken(token);
+          if (kDebugMode) {
+            logger.i('NotificationBridge: APNs device token: $token');
+          }
+        }
+        break;
+      case 'onPushTokenError':
+        logger.w('NotificationBridge: APNs register failed: ${call.arguments}');
+        break;
+      case 'onVoipToken':
+        final token = call.arguments as String?;
+        if (token != null && token.isNotEmpty) {
+          PushProxyClient.instance.setVoipToken(token);
+          if (kDebugMode) {
+            logger.i('NotificationBridge: VoIP token: $token');
+          }
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  Future<void> _consumePushToken() async {
+    try {
+      final token = await _method.invokeMethod<String>('consumePushToken');
+      if (token != null && token.isNotEmpty) {
+        PushProxyClient.instance.setApnsToken(token);
+        if (kDebugMode) {
+          logger.i('NotificationBridge: APNs device token (consumed): $token');
+        }
+      }
+    } catch (e) {
+      logger.w('NotificationBridge.consumePushToken: $e');
+    }
+  }
+
+  Future<void> _consumeVoipToken() async {
+    try {
+      final token = await _method.invokeMethod<String>('consumeVoipToken');
+      if (token != null && token.isNotEmpty) {
+        PushProxyClient.instance.setVoipToken(token);
+        if (kDebugMode) {
+          logger.i('NotificationBridge: VoIP token (consumed): $token');
+        }
+      }
+    } catch (e) {
+      logger.w('NotificationBridge.consumeVoipToken: $e');
+    }
+  }
+
   void _flushPending() {
     final chatId = _pendingChatId;
     if (chatId == 0) return;

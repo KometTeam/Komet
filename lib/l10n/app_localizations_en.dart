@@ -1691,6 +1691,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatInfoCallFailed => 'Could not start the call';
 
   @override
+  String get chatInfoMenuCallViaPhone => 'Call via phone';
+
+  @override
   String get chatInfoBlockConfirmTitle => 'Block';
 
   @override
@@ -2820,6 +2823,59 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webPushTitle => 'Notifications on iOS';
+
+  @override
+  String get pushLinkIntro =>
+      'MAX on iOS has no regular push channel: its servers cannot deliver notifications via APNs. Komet solves this with its own push server: it keeps a lightweight notification session and relays messages to Apple.\n\nTo enable it, confirm a QR code — a separate session will be created, which you can revoke at any time in MAX settings.';
+
+  @override
+  String get pushLinkConnect => 'Link';
+
+  @override
+  String get pushLinkLinked => 'Notifications linked';
+
+  @override
+  String get pushLinkLinkedBody => 'The push session is active on this device.';
+
+  @override
+  String get pushLinkLinkedDone => 'Notifications linked';
+
+  @override
+  String get pushLinkUnlink => 'Unlink';
+
+  @override
+  String get pushLinkUnlinkConfirm =>
+      'The push session will be terminated. You can link again at any time.';
+
+  @override
+  String get pushLinkUnlinkedDone => 'Notifications unlinked';
+
+  @override
+  String get pushLinkScan =>
+      'Scan the QR code with the MAX app on another device, or open the link on a device where MAX is installed.';
+
+  @override
+  String get pushLinkWaiting => 'Waiting for confirmation…';
+
+  @override
+  String get pushLinkOpenMax => 'Open MAX';
+
+  @override
+  String get pushLinkApnsMissing =>
+      'Restart Komet so the notification token gets registered';
+
+  @override
+  String get pushLinkPasswordBody =>
+      'Two-factor protection is enabled on this account. Enter the password.';
+
+  @override
+  String get pushLinkPasswordInvalid => 'Enter the password';
+
+  @override
+  String get pushLinkPasswordWrong => 'Wrong password';
+
+  @override
+  String get pushLinkConfirm => 'Confirm';
 
   @override
   String get webPushIntro =>

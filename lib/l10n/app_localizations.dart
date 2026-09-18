@@ -3260,6 +3260,12 @@ abstract class AppLocalizations {
   /// **'Could not start the call'**
   String get chatInfoCallFailed;
 
+  /// No description provided for @chatInfoMenuCallViaPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Call via phone'**
+  String get chatInfoMenuCallViaPhone;
+
   /// No description provided for @chatInfoBlockConfirmTitle.
   ///
   /// In en, this message translates to:
@@ -5359,6 +5365,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Notifications on iOS'**
   String get webPushTitle;
+
+  /// No description provided for @pushLinkIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'MAX on iOS has no regular push channel: its servers cannot deliver notifications via APNs. Komet solves this with its own push server: it keeps a lightweight notification session and relays messages to Apple.\n\nTo enable it, confirm a QR code — a separate session will be created, which you can revoke at any time in MAX settings.'**
+  String get pushLinkIntro;
+
+  /// No description provided for @pushLinkConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Link'**
+  String get pushLinkConnect;
+
+  /// No description provided for @pushLinkLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications linked'**
+  String get pushLinkLinked;
+
+  /// No description provided for @pushLinkLinkedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The push session is active on this device.'**
+  String get pushLinkLinkedBody;
+
+  /// No description provided for @pushLinkLinkedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications linked'**
+  String get pushLinkLinkedDone;
+
+  /// No description provided for @pushLinkUnlink.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink'**
+  String get pushLinkUnlink;
+
+  /// No description provided for @pushLinkUnlinkConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'The push session will be terminated. You can link again at any time.'**
+  String get pushLinkUnlinkConfirm;
+
+  /// No description provided for @pushLinkUnlinkedDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications unlinked'**
+  String get pushLinkUnlinkedDone;
+
+  /// No description provided for @pushLinkScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the QR code with the MAX app on another device, or open the link on a device where MAX is installed.'**
+  String get pushLinkScan;
+
+  /// No description provided for @pushLinkWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for confirmation…'**
+  String get pushLinkWaiting;
+
+  /// No description provided for @pushLinkOpenMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Open MAX'**
+  String get pushLinkOpenMax;
+
+  /// No description provided for @pushLinkApnsMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart Komet so the notification token gets registered'**
+  String get pushLinkApnsMissing;
+
+  /// No description provided for @pushLinkPasswordBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-factor protection is enabled on this account. Enter the password.'**
+  String get pushLinkPasswordBody;
+
+  /// No description provided for @pushLinkPasswordInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the password'**
+  String get pushLinkPasswordInvalid;
+
+  /// No description provided for @pushLinkPasswordWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong password'**
+  String get pushLinkPasswordWrong;
+
+  /// No description provided for @pushLinkConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get pushLinkConfirm;
 
   /// No description provided for @webPushIntro.
   ///

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:kolibri/kolibri.dart' show initKolibri;
@@ -149,6 +150,55 @@ Future<void> _handleReply(String payloadJson, String text) async {
   }
 }
 
+/// Отправляет ответ из уведомления через временное фоновое соединение.
+/// Используется и Android-фоновым изолятом, и iOS-ответом из шторки (когда
+/// основной `api` не онлайн). Возвращает true при успехе.
+Future<bool> sendReplyViaBackgroundConnection({
+  required int account,
+  required int chatId,
+  required String text,
+  int? replyTo,
+  int mark = 0,
+}) async {
+  Api? api;
+  try {
+    final token = await TokenStorage.readToken(account);
+    if (token == null || token.isEmpty) return false;
+    api = Api()..spoofScope = '$account';
+    await api.connect();
+    if (api.state != SessionState.online) {
+      await api.stateStream
+          .firstWhere((s) => s == SessionState.online)
+          .timeout(const Duration(seconds: 20));
+    }
+    final login = await api.sendRequest(
+      Opcode.login,
+      AccountModule(api).buildLoginPayload(token, interactive: false),
+    );
+    if (!login.isOk) return false;
+    final session = await AppDatabase.loadE2eeSession(account, chatId);
+    if (session != null) return false;
+    if (replyTo != null && replyTo > 0 && mark > 0) {
+      try {
+        await api.sendRequest(Opcode.chatMark, {
+          'type': 'READ_MESSAGE',
+          'chatId': chatId,
+          'messageId': replyTo,
+          'mark': mark,
+        }, silent: true);
+      } catch (_) {}
+    }
+    await MessagesModule(
+      api,
+    ).sendMessage(account, chatId, text, replyToMessageId: replyTo);
+    return true;
+  } catch (_) {
+    return false;
+  } finally {
+    await api?.disconnect();
+  }
+}
+
 bool _localActionsReady = false;
 
 // #***! каналы и обработчики уведомлений при старте
@@ -163,6 +213,7 @@ Future<void> initLocalNotificationActions() async {
   await plugin.initialize(
     settings: const InitializationSettings(
       android: AndroidInitializationSettings('ic_notification'),
+      iOS: DarwinInitializationSettings(),
     ),
     onDidReceiveNotificationResponse: _onNotificationResponse,
     onDidReceiveBackgroundNotificationResponse: _onNotificationResponse,
@@ -225,6 +276,9 @@ class PushService {
       _token = await messaging.getToken() ?? _token;
       if (_token != null) await _persistToken(_token!);
       logger.i('Push: FCM-токен получен (${_token?.length ?? 0} симв.)');
+      if (kDebugMode && _token != null) {
+        logger.i('Push: FCM token: $_token');
+      }
     } catch (e) {
       logger.w('Push: getToken не удался: $e');
     }
@@ -238,6 +292,9 @@ class PushService {
         _token = await FirebaseMessaging.instance.getToken();
         if (_token != null) await _persistToken(_token!);
       } catch (_) {}
+    }
+    if (kDebugMode && _token != null) {
+      logger.i('Push: FCM token: $_token');
     }
     await _registerWithServer();
   }

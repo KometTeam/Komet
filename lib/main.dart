@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -20,6 +21,8 @@ import 'core/config/build_profile.dart';
 import 'core/utils/app_foreground.dart';
 import 'core/utils/logger.dart';
 import 'core/cache/self_presence.dart';
+import 'core/push/push_proxy_client.dart';
+import 'core/push/app_badge_service.dart';
 import 'core/storage/app_instance.dart';
 import 'core/storage/draft_store.dart';
 import 'core/storage/archived_chats_store.dart';
@@ -387,6 +390,10 @@ class KometAppState extends State<KometApp>
   );
   final ValueNotifier<Color?> wallpaperSeed = ValueNotifier(null);
   ChatWallpaper? _globalWallpaper;
+  String? _avatarLightBg;
+  String? _avatarLightFg;
+  String? _avatarDarkBg;
+  String? _avatarDarkFg;
   StreamSubscription<SessionExpiredException>? _sessionExpiredSub;
   StreamSubscription<LoginStatus>? _loginStatusSub;
   StreamSubscription<VpnBypassResult>? _vpnBypassSub;
@@ -459,6 +466,9 @@ class KometAppState extends State<KometApp>
           await PushService.instance.init(api: api, account: accountModule);
           await PushService.instance.onLoginSuccess();
           await _ensureFullScreenIntentPermission();
+        } else if (Platform.isIOS) {
+          await PushService.instance.onLoginSuccess();
+          unawaited(PushProxyClient.instance.verifyAndSync());
         }
       }
     });
@@ -470,6 +480,7 @@ class KometAppState extends State<KometApp>
     CallBridge.instance.init();
     NotificationBridge.instance.init();
     ShareIntentBridge.instance.init();
+    AppBadgeService.instance.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       CallBridge.instance.checkInitialCall();
       unawaited(NotificationBridge.instance.checkInitialChat());
@@ -483,6 +494,9 @@ class KometAppState extends State<KometApp>
       _isLoggingOut = true;
 
       await PushService.instance.unregister();
+      if (Platform.isIOS) {
+        await PushProxyClient.instance.unregister();
+      }
 
       final accountId = await TokenStorage.getActiveAccountId();
       if (accountId != null) {
@@ -660,10 +674,17 @@ class KometAppState extends State<KometApp>
       DebugSessionLog.instance.flushNow();
       SelfCheckService.instance.pause();
       E2eeService.instance.lock();
+      if (Platform.isIOS) {
+        unawaited(PushProxyClient.instance.setForeground(false));
+        unawaited(AppBadgeService.instance.syncToServer());
+      }
     }
     if (state != AppLifecycleState.resumed) return;
     api.wakeUp();
     SelfCheckService.instance.resume();
+    if (Platform.isIOS) {
+      unawaited(PushProxyClient.instance.setForeground(true));
+    }
     if (!CallController.instance.isBusy) {
       unawaited(CallBridge.instance.dropOngoing());
     }
@@ -870,6 +891,36 @@ class KometAppState extends State<KometApp>
     accentSeed.value = seed;
   }
 
+  void _syncAvatarColors(ColorScheme light, ColorScheme dark) {
+    final lBg = _hexColor(light.primaryContainer);
+    final lFg = _hexColor(light.onPrimaryContainer);
+    final dBg = _hexColor(dark.primaryContainer);
+    final dFg = _hexColor(dark.onPrimaryContainer);
+    if (lBg == _avatarLightBg &&
+        lFg == _avatarLightFg &&
+        dBg == _avatarDarkBg &&
+        dFg == _avatarDarkFg) {
+      return;
+    }
+    _avatarLightBg = lBg;
+    _avatarLightFg = lFg;
+    _avatarDarkBg = dBg;
+    _avatarDarkFg = dFg;
+    unawaited(
+      PushProxyClient.instance.setAvatarColors(
+        lightBg: lBg,
+        lightFg: lFg,
+        darkBg: dBg,
+        darkFg: dFg,
+      ),
+    );
+  }
+
+  static String _hexColor(Color c) {
+    final rgb = c.toARGB32() & 0xFFFFFF;
+    return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+  }
+
   void _onWallpaperTintChanged() => unawaited(_refreshWallpaperSeed());
 
   Future<void> _refreshWallpaperSeed() async {
@@ -1074,6 +1125,7 @@ class KometAppState extends State<KometApp>
             final darkScheme = _adjustDarkScheme(darkBase);
 
             _rebuildThemesIfNeeded(lightScheme, darkScheme);
+            _syncAvatarColors(lightScheme, darkScheme);
 
             return MaterialApp(
               title: 'Komet',
@@ -1108,7 +1160,8 @@ class KometAppState extends State<KometApp>
                         final gradientWallpaper = _globalGradientActive
                             ? _globalWallpaper
                             : null;
-                        final gradientColors = gradientWallpaper?.gradientColors;
+                        final gradientColors =
+                            gradientWallpaper?.gradientColors;
                         final brightness = Theme.of(context).brightness;
                         final overlayStyle = brightness == Brightness.dark
                             ? SystemUiOverlayStyle.light
@@ -1118,40 +1171,45 @@ class KometAppState extends State<KometApp>
                             statusBarColor: Colors.transparent,
                           ),
                           child: Stack(
-                          fit: StackFit.expand,
-                          clipBehavior: Clip.none,
-                          children: [
-                            if (gradientColors != null && gradientColors.isNotEmpty)
-                              Positioned.fill(
-                                child: MeshGradientBackground(
-                                  colors: gradientColors,
-                                  animate: gradientWallpaper!.gradientAnimated,
-                                  rotation: gradientWallpaper.gradientRotation,
+                            fit: StackFit.expand,
+                            clipBehavior: Clip.none,
+                            children: [
+                              if (gradientColors != null &&
+                                  gradientColors.isNotEmpty)
+                                Positioned.fill(
+                                  child: MeshGradientBackground(
+                                    colors: gradientColors,
+                                    animate:
+                                        gradientWallpaper!.gradientAnimated,
+                                    rotation:
+                                        gradientWallpaper.gradientRotation,
+                                  ),
+                                ),
+                              RepaintBoundary(
+                                key: _captureBoundaryKey,
+                                child: NotificationListener<ScrollNotification>(
+                                  onNotification: (notification) {
+                                    if (notification is ScrollEndNotification) {
+                                      PerformanceMonitor.instance
+                                          .markActivityEnd();
+                                    } else {
+                                      PerformanceMonitor.instance.mark(
+                                        'scroll',
+                                      );
+                                    }
+                                    return false;
+                                  },
+                                  child: sChild!,
                                 ),
                               ),
-                            RepaintBoundary(
-                              key: _captureBoundaryKey,
-                              child: NotificationListener<ScrollNotification>(
-                                onNotification: (notification) {
-                                  if (notification is ScrollEndNotification) {
-                                    PerformanceMonitor.instance
-                                        .markActivityEnd();
-                                  } else {
-                                    PerformanceMonitor.instance.mark('scroll');
-                                  }
-                                  return false;
-                                },
-                                child: sChild!,
+                              const Positioned.fill(
+                                child: FloatingVideoNoteLayer(),
                               ),
-                            ),
-                            const Positioned.fill(
-                              child: FloatingVideoNoteLayer(),
-                            ),
-                            const Positioned.fill(
-                              child: FloatingCallBadgeLayer(),
-                            ),
-                            if (fpsOn) const FpsOverlayLayer(),
-                          ],
+                              const Positioned.fill(
+                                child: FloatingCallBadgeLayer(),
+                              ),
+                              if (fpsOn) const FpsOverlayLayer(),
+                            ],
                           ),
                         );
                       },
@@ -1192,6 +1250,10 @@ class _StartupScreenState extends State<_StartupScreen> {
       );
       KometApp.stateOf(context)?.markShellReady();
       return;
+    }
+
+    if (Platform.isIOS) {
+      unawaited(PushService.instance.init(api: api, account: accountModule));
     }
 
     unawaited(api.connect());

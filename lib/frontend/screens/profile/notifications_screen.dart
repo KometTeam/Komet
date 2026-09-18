@@ -16,7 +16,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/small_spinner.dart';
-import 'web_push_screen.dart';
+import 'push_link_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -91,10 +91,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     if (mounted) setState(() => _hapticsEnabled = value);
   }
 
-  void _openWebPush() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const WebPushScreen()),
-    );
+  void _openPushLink() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const PushLinkScreen()));
   }
 
   Future<void> _onFkmChanged(bool value) async {
@@ -173,7 +173,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                         SettingsNavTile(
                           icon: Symbols.install_mobile,
                           label: l10n.webPushTitle,
-                          onTap: _openWebPush,
+                          onTap: _openPushLink,
                           isLast: true,
                         ),
                       ],
