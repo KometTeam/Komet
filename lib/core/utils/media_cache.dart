@@ -114,6 +114,17 @@ class MediaCache {
     return null;
   }
 
+  static Future<void> discard(String name) async {
+    final file = await fileFor(name);
+    try {
+      if (await file.exists()) await file.delete();
+    } catch (e) {
+      logger.w('[cache] не удалил $name: $e');
+    }
+    _markPresent(name, false);
+    _cachedSize = null;
+  }
+
   // #***! скачивание с защитой от параллельных запросов
   /// Возвращает кэш-файл [name], скачивая [url] при отсутствии.
   ///

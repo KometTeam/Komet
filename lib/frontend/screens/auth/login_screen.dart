@@ -362,6 +362,19 @@ class _LoginScreenState extends State<LoginScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             final cs = Theme.of(context).colorScheme;
+            void trackReading(ScrollMetrics metrics) {
+              if (_isTOSRead) return;
+              final newProgress = metrics.maxScrollExtent > 0
+                  ? (metrics.pixels / metrics.maxScrollExtent).clamp(0.0, 1.0)
+                  : 1.0;
+              if (newProgress >= 0.99) {
+                _markTOSRead();
+                setModalState(() => progress = 1.0);
+              } else {
+                setModalState(() => progress = newProgress);
+              }
+            }
+
             return DraggableScrollableSheet(
               initialChildSize: 0.7,
               minChildSize: 0.5,
@@ -393,42 +406,31 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     Expanded(
-                      child: NotificationListener<ScrollUpdateNotification>(
-                        onNotification:
-                            (ScrollUpdateNotification notification) {
-                              if (_isTOSRead) return false;
-                              final metrics = notification.metrics;
-                              if (metrics.maxScrollExtent > 0) {
-                                double newProgress =
-                                    metrics.pixels / metrics.maxScrollExtent;
-                                newProgress = newProgress.clamp(0.0, 1.0);
-                                if (newProgress >= 0.99 && !_isTOSRead) {
-                                  _markTOSRead();
-                                  setModalState(() {
-                                    progress = 1.0;
-                                  });
-                                } else {
-                                  setModalState(() {
-                                    progress = newProgress;
-                                  });
-                                }
-                              }
-                              return false;
-                            },
-                        child: ListView(
-                          controller: scrollController,
-                          children: [
-                            Text(
-                              termsOfServiceBody(termsLocale),
-                              style: TextStyle(
-                                color: cs.onSurfaceVariant,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w400,
-                                height: 1.5,
+                      child: NotificationListener<ScrollMetricsNotification>(
+                        onNotification: (notification) {
+                          trackReading(notification.metrics);
+                          return false;
+                        },
+                        child: NotificationListener<ScrollUpdateNotification>(
+                          onNotification: (notification) {
+                            trackReading(notification.metrics);
+                            return false;
+                          },
+                          child: ListView(
+                            controller: scrollController,
+                            children: [
+                              Text(
+                                termsOfServiceBody(termsLocale),
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w400,
+                                  height: 1.5,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 32),
-                          ],
+                              const SizedBox(height: 32),
+                            ],
+                          ),
                         ),
                       ),
                     ),

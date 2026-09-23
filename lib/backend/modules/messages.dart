@@ -9,6 +9,7 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/crypto/e2ee_service.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/message_ranges.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
@@ -139,6 +140,8 @@ class ContactCache {
 
 // #***! результат расшифровки голосового
 class TranscriptionResult {
+  static const String emptyText = 'Не распознали голос';
+
   final int status;
   final String? text;
   final String? messageId;
@@ -237,7 +240,7 @@ class TranscriptionPushHandler {
       TranscriptionResult(
         status: 1,
         text: (rawText == null || rawText.isEmpty)
-            ? 'не удалось распознать текст'
+            ? TranscriptionResult.emptyText
             : rawText,
         messageId: messageId,
         chatId: source['chatId'] as int?,
@@ -827,10 +830,44 @@ class MessagesModule {
         await AppDatabase.saveMessages(toSave.map((m) => m.toDbRow()).toList());
       } catch (e) {
         logger.e('saveMessages error: $e');
+        return toSave;
       }
     }
 
+    await _recordCoverage(
+      accountId,
+      chatId,
+      fromTime: fromTime,
+      forward: forward,
+      backward: backward ?? count,
+      messagesData: messagesData,
+    );
     return toSave;
+  }
+
+  Future<void> _recordCoverage(
+    int accountId,
+    int chatId, {
+    required int? fromTime,
+    required int forward,
+    required int backward,
+    required List<dynamic> messagesData,
+  }) async {
+    final range = MessageRanges.coverageOfFetch(
+      fromTime: fromTime,
+      forward: forward,
+      backward: backward,
+      times: [
+        for (final m in messagesData)
+          if (m is Map && m['time'] is int) m['time'] as int,
+      ],
+    );
+    if (range == null) return;
+    try {
+      await AppDatabase.addMessageRange(accountId, chatId, range);
+    } catch (e) {
+      logger.w('addMessageRange error: $e');
+    }
   }
 
   // #***! поиск по сообщениям чата
@@ -1533,7 +1570,7 @@ class MessagesModule {
       if (text.isEmpty) {
         return TranscriptionResult(
           status: 1,
-          text: 'не удалось распознать текст',
+          text: TranscriptionResult.emptyText,
         );
       }
       return TranscriptionResult(status: 1, text: text);

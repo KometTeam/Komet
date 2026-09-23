@@ -19,6 +19,8 @@ import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import 'blacklist_screen.dart';
 import 'password_entry_screen.dart';
+import 'passcode_settings_screen.dart';
+import '../../../core/security/app_lock.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
 
@@ -343,6 +345,15 @@ class _SecurityScreenState extends State<SecurityScreen>
       child: Column(
         children: [
           _buildPasswordRow(cs),
+          Padding(
+            padding: const EdgeInsets.only(left: 58),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: cs.outlineVariant.withValues(alpha: 0.35),
+            ),
+          ),
+          _buildPasscodeRow(cs),
           if (_showFamilyProtection)
             _settingsRow(
               cs,
@@ -354,6 +365,67 @@ class _SecurityScreenState extends State<SecurityScreen>
               isLast: true,
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPasscodeRow(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PasscodeSettingsScreen()),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+          child: Row(
+            children: [
+              Icon(
+                Symbols.lock,
+                color: cs.onSurfaceVariant,
+                size: 22,
+                weight: 400,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.passcodeTitle,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: AppLock.instance.enabled,
+                      builder: (context, enabled, _) => Text(
+                        enabled
+                            ? l10n.securityEnabledMasc
+                            : l10n.securityDisabledMasc,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Symbols.chevron_right,
+                color: cs.outline,
+                size: 20,
+                weight: 400,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

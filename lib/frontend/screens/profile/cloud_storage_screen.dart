@@ -21,6 +21,7 @@ import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../core/security/app_lock.dart';
 
 enum _EnvState { loading, notConfigured, ready }
 
@@ -290,7 +291,9 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     final accountId = _accountId;
     if (chatId == null || accountId == null) return;
 
-    final result = await FilePicker.platform.pickFiles();
+    final result = await AppLock.instance.external(
+      () => FilePicker.platform.pickFiles(),
+    );
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.first;
     if (picked.path == null) return;

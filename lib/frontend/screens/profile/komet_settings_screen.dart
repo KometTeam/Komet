@@ -112,6 +112,18 @@ class KometSettingsScreen extends StatelessWidget {
                     onChanged: KometSettings.setShowHiddenChats,
                   ),
                 ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.archiveOnPull,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.archive,
+                    label: 'Pull-down archive',
+                    subtitle:
+                        'Прятать архив и показывать его, если потянуть '
+                        'список чатов вниз, после историй',
+                    value: value,
+                    onChanged: KometSettings.setArchiveOnPull,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),

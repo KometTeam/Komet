@@ -4862,6 +4862,30 @@ abstract class AppLocalizations {
   /// **'Add'**
   String get fontSettingsAddFontConfirm;
 
+  /// No description provided for @fontSettingsPickFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose file'**
+  String get fontSettingsPickFile;
+
+  /// No description provided for @fontSettingsPickFileHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A .ttf, .otf or .ttc font'**
+  String get fontSettingsPickFileHint;
+
+  /// No description provided for @fontSettingsNotAFont.
+  ///
+  /// In en, this message translates to:
+  /// **'This is not a font file'**
+  String get fontSettingsNotAFont;
+
+  /// No description provided for @fontSettingsCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get fontSettingsCancel;
+
   /// No description provided for @fontSettingsTitle.
   ///
   /// In en, this message translates to:
@@ -5306,28 +5330,52 @@ abstract class AppLocalizations {
   /// **'Nobody is blocked'**
   String get blacklistEmpty;
 
-  /// Join requests screen title.
+  /// No description provided for @joinRequestsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Join requests'**
   String get joinRequestsTitle;
 
-  /// Empty state for the join requests list.
+  /// No description provided for @joinRequestsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No pending requests'**
   String get joinRequestsEmpty;
 
-  /// Approve join request button.
+  /// No description provided for @joinRequestsApprove.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
   String get joinRequestsApprove;
 
-  /// Decline join request button.
+  /// No description provided for @joinRequestsDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
   String get joinRequestsDecline;
 
-  /// Notification after approving a join request.
+  /// No description provided for @joinRequestsApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Request approved'**
   String get joinRequestsApproved;
 
-  /// Notification after declining a join request.
+  /// No description provided for @joinRequestsDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Request declined'**
   String get joinRequestsDeclined;
 
-  /// Notification when a join request action failed.
+  /// No description provided for @joinRequestsActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed, try again'**
   String get joinRequestsActionFailed;
 
-  /// Notification when join requests failed to load.
+  /// No description provided for @joinRequestsLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load requests'**
   String get joinRequestsLoadError;
 
   /// No description provided for @blacklistLoadError.
@@ -6163,6 +6211,300 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No app on this device can open this file. Choose where to send it.'**
   String get fileNoAppToOpen;
+
+  /// No description provided for @lockTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your passcode'**
+  String get lockTitle;
+
+  /// No description provided for @lockBiometricReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Komet'**
+  String get lockBiometricReason;
+
+  /// No description provided for @lockBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Try again in {time}'**
+  String lockBlocked(String time);
+
+  /// No description provided for @lockAttemptsLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong passcode. Attempts left: {count}'**
+  String lockAttemptsLeft(int count);
+
+  /// No description provided for @lockNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock Komet'**
+  String get lockNow;
+
+  /// No description provided for @passcodeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Passcode'**
+  String get passcodeTitle;
+
+  /// No description provided for @passcodeCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a passcode'**
+  String get passcodeCreate;
+
+  /// No description provided for @passcodeRepeat.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat the passcode'**
+  String get passcodeRepeat;
+
+  /// No description provided for @passcodeMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The passcodes didn\'t match, try again'**
+  String get passcodeMismatch;
+
+  /// No description provided for @passcodeDigitsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Four digits'**
+  String get passcodeDigitsHint;
+
+  /// No description provided for @passcodeEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn passcode on'**
+  String get passcodeEnable;
+
+  /// No description provided for @passcodeEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Passcode is on'**
+  String get passcodeEnabled;
+
+  /// No description provided for @passcodeChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Passcode changed'**
+  String get passcodeChanged;
+
+  /// No description provided for @passcodeChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change passcode'**
+  String get passcodeChange;
+
+  /// No description provided for @passcodeBiometric.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with biometrics'**
+  String get passcodeBiometric;
+
+  /// No description provided for @passcodeBiometricHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fingerprint or face instead of the passcode'**
+  String get passcodeBiometricHint;
+
+  /// No description provided for @passcodeAutoLock.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-lock'**
+  String get passcodeAutoLock;
+
+  /// No description provided for @passcodeAutoLockHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock Komet when you don\'t touch it for a while'**
+  String get passcodeAutoLockHint;
+
+  /// No description provided for @passcodeAutoLockOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get passcodeAutoLockOff;
+
+  /// No description provided for @passcodeAutoLockAfter.
+  ///
+  /// In en, this message translates to:
+  /// **'After {minutes} min'**
+  String passcodeAutoLockAfter(int minutes);
+
+  /// No description provided for @passcodeDisable.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn passcode off'**
+  String get passcodeDisable;
+
+  /// No description provided for @passcodeDisableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn passcode off?'**
+  String get passcodeDisableTitle;
+
+  /// No description provided for @passcodeDisableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet will open without asking for the passcode.'**
+  String get passcodeDisableMessage;
+
+  /// No description provided for @passcodeDisableAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off'**
+  String get passcodeDisableAction;
+
+  /// No description provided for @passcodeCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get passcodeCancel;
+
+  /// No description provided for @passcodeDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Passcode is off'**
+  String get passcodeDisabled;
+
+  /// No description provided for @passcodeOnDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet asks for the passcode every time you open it. The lock in the chat list header locks it right away.'**
+  String get passcodeOnDescription;
+
+  /// No description provided for @passcodeOffDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Protect your chats: Komet will ask for a passcode every time you open it.'**
+  String get passcodeOffDescription;
+
+  /// No description provided for @passcodeForgotHint.
+  ///
+  /// In en, this message translates to:
+  /// **'If you forget the passcode, you\'ll have to clear Komet\'s data or reinstall it and sign in again. After five wrong attempts input is blocked for five minutes.'**
+  String get passcodeForgotHint;
+
+  /// No description provided for @mediaDevicesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera and microphone'**
+  String get mediaDevicesTitle;
+
+  /// No description provided for @mediaDevicesMicrophone.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get mediaDevicesMicrophone;
+
+  /// No description provided for @mediaDevicesMicrophoneHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Used for calls and voice messages'**
+  String get mediaDevicesMicrophoneHint;
+
+  /// No description provided for @mediaDevicesCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get mediaDevicesCamera;
+
+  /// No description provided for @mediaDevicesCameraHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Used for calls and, if you like, for video messages'**
+  String get mediaDevicesCameraHint;
+
+  /// No description provided for @mediaDevicesSystemMicrophone.
+  ///
+  /// In en, this message translates to:
+  /// **'System microphone'**
+  String get mediaDevicesSystemMicrophone;
+
+  /// No description provided for @mediaDevicesSystemCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'System camera'**
+  String get mediaDevicesSystemCamera;
+
+  /// No description provided for @mediaDevicesCameraFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera {number}'**
+  String mediaDevicesCameraFallback(int number);
+
+  /// No description provided for @mediaDevicesFront.
+  ///
+  /// In en, this message translates to:
+  /// **'Front'**
+  String get mediaDevicesFront;
+
+  /// No description provided for @mediaDevicesBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Rear'**
+  String get mediaDevicesBack;
+
+  /// No description provided for @mediaDevicesVideoNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Video messages'**
+  String get mediaDevicesVideoNotes;
+
+  /// No description provided for @mediaDevicesVideoNoteCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'My camera'**
+  String get mediaDevicesVideoNoteCustom;
+
+  /// No description provided for @mediaDevicesVideoNoteCustomHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Record video messages with the camera chosen above'**
+  String get mediaDevicesVideoNoteCustomHint;
+
+  /// No description provided for @mediaDevicesVideoNoteCustomMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a camera above, until then the system one is used'**
+  String get mediaDevicesVideoNoteCustomMissing;
+
+  /// No description provided for @mediaDevicesVideoNoteRear.
+  ///
+  /// In en, this message translates to:
+  /// **'Start with the rear camera'**
+  String get mediaDevicesVideoNoteRear;
+
+  /// No description provided for @mediaDevicesVideoNoteRearHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Otherwise a video message starts with the front camera'**
+  String get mediaDevicesVideoNoteRearHint;
+
+  /// No description provided for @chatPreviewMarkRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as read'**
+  String get chatPreviewMarkRead;
+
+  /// No description provided for @chatPreviewOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get chatPreviewOpen;
+
+  /// No description provided for @attachSheetSendAsVideoNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Send as video message'**
+  String get attachSheetSendAsVideoNote;
+
+  /// No description provided for @attachSheetVideoNoteTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'A video message can\'t be longer than {seconds} s'**
+  String attachSheetVideoNoteTooLong(int seconds);
 }
 
 class _AppLocalizationsDelegate

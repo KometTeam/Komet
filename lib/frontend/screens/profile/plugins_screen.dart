@@ -10,6 +10,7 @@ import '../../../core/plugins/plugin_store.dart';
 import '../../../core/plugins/plugin_updater.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/settings_card.dart';
+import '../../../core/security/app_lock.dart';
 
 class PluginsScreen extends StatefulWidget {
   const PluginsScreen({super.key});
@@ -24,9 +25,8 @@ class _PluginsScreenState extends State<PluginsScreen> {
   final Set<String> _busy = {};
 
   Future<void> _installFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.any,
-      withData: true,
+    final result = await AppLock.instance.external(
+      () => FilePicker.platform.pickFiles(type: FileType.any, withData: true),
     );
     final picked = result?.files.single;
     if (picked == null || !mounted) return;

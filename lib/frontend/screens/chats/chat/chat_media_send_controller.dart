@@ -9,6 +9,7 @@ import '../../../../backend/modules/chats.dart';
 import '../../../../backend/modules/contacts.dart';
 import '../../../../backend/modules/messages.dart';
 import '../../../../backend/modules/upload_service.dart';
+import '../../../../core/cache/message_session_cache.dart';
 import '../../../../core/crypto/chat_crypto_service.dart';
 import '../../../../core/crypto/e2ee_service.dart';
 import 'package:komet_crypto/komet_crypto.dart' show ContentType;
@@ -97,8 +98,18 @@ class ChatMediaSendController {
 
   // #***! строку в списке чатов обновляем сами: экран чата к моменту
   // доставки могли уже закрыть, а пуш на своё сообщение не приходит
-  void _previewInChatList(CachedMessage message, String status) {
-    unawaited(chats.applyOutgoingMessage(message, status: status));
+  void _previewInChatList(
+    CachedMessage message,
+    String status, {
+    int? replacesTime,
+  }) {
+    unawaited(
+      chats.applyOutgoingMessage(
+        message,
+        status: status,
+        replacesTime: replacesTime,
+      ),
+    );
   }
 
   void updateFileMessageStatus(
@@ -168,19 +179,29 @@ class ChatMediaSendController {
 
     try {
       final serverMsg = await send();
-      if (!isMounted()) return;
+      final mounted = isMounted();
       final idx = chatController.indexOfId(tempId);
-      if (idx == -1) return;
+      if (mounted && idx == -1) return;
       if (serverMsg == null) {
-        updateFileMessageStatus(tempId, 'error');
-        notify('Ошибка отправки');
+        if (mounted) {
+          updateFileMessageStatus(tempId, 'error');
+          notify('Ошибка отправки');
+        } else {
+          _previewInChatList(
+            tempMessage.copyWith(status: 'error'),
+            'error',
+          );
+        }
         return;
       }
       final real = CachedMessage.fromPushPayload(_myId, _chatId, serverMsg);
-      chatController.setMessageAt(idx, real);
-      bumpMessages();
+      if (mounted) {
+        chatController.setMessageAt(idx, real);
+        bumpMessages();
+      }
+      MessageSessionCache.replace(_myId, _chatId, tempId, (_) => real);
       unawaited(chatController.persistOutgoing(real, removeId: tempId));
-      _previewInChatList(real, 'sent');
+      _previewInChatList(real, 'sent', replacesTime: now);
     } catch (e) {
       if (!isMounted()) return;
       updateFileMessageStatus(tempId, 'error');

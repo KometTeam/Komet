@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_nav_pill_style.dart';
+import 'package:komet/core/config/app_video_note_quality.dart';
 import 'package:komet/core/config/app_visual_style.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/media/video_transcoder.dart';
@@ -30,6 +32,7 @@ import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
 import 'package:komet/l10n/app_localizations.dart';
 
 import '../small_spinner.dart';
+import '../../../core/security/app_lock.dart';
 
 const int _navItemCount = 5;
 
@@ -44,11 +47,19 @@ List<PillNavItem> _buildNavItems(AppLocalizations l10n) => [
 typedef PickedPhotosCallback =
     void Function(List<PickedPhoto> photos, String caption);
 
+class VideoNoteSend {
+  final Duration limit;
+  final void Function(File video, int durationMs) send;
+
+  const VideoNoteSend({required this.limit, required this.send});
+}
+
 Future<void> showAttachmentSheet(
   BuildContext context, {
   String? title,
   PickedPhotosCallback? onSend,
   PickedPhotosCallback? onSendSeparately,
+  VideoNoteSend? videoNote,
   VoidCallback? onPickFile,
   VoidCallback? onShareLocation,
   VoidCallback? onCreatePoll,
@@ -64,6 +75,7 @@ Future<void> showAttachmentSheet(
       title: title,
       onSend: onSend,
       onSendSeparately: onSendSeparately,
+      videoNote: videoNote,
       onPickFile: onPickFile,
       onShareLocation: onShareLocation,
       onCreatePoll: onCreatePoll,
@@ -76,6 +88,7 @@ class AttachmentSheet extends StatefulWidget {
   final String? title;
   final PickedPhotosCallback? onSend;
   final PickedPhotosCallback? onSendSeparately;
+  final VideoNoteSend? videoNote;
   final VoidCallback? onPickFile;
   final VoidCallback? onShareLocation;
   final VoidCallback? onCreatePoll;
@@ -86,6 +99,7 @@ class AttachmentSheet extends StatefulWidget {
     this.title,
     this.onSend,
     this.onSendSeparately,
+    this.videoNote,
     this.onPickFile,
     this.onShareLocation,
     this.onCreatePoll,
@@ -318,7 +332,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     final l10n = AppLocalizations.of(context)!;
     XFile? shot;
     try {
-      shot = await ImagePicker().pickImage(source: ImageSource.camera);
+      shot = await AppLock.instance.external(
+        () => ImagePicker().pickImage(source: ImageSource.camera),
+      );
     } catch (_) {
       if (mounted) showCustomNotification(context, l10n.attachSheetCameraError);
       return;
@@ -336,6 +352,22 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     }
     if (jobs.isEmpty) return true;
 
+    final (ok, cancelled) = await _withExportProgress(
+      (progress) => _runVideoExports(jobs, progress),
+    );
+    if (!mounted) return false;
+    if (!ok && !cancelled) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.videoEditorExportFailed,
+      );
+    }
+    return ok;
+  }
+
+  Future<(T, bool)> _withExportProgress<T>(
+    Future<T> Function(ValueNotifier<double> progress) job,
+  ) async {
     final progress = ValueNotifier<double>(0);
     final navigator = Navigator.of(context, rootNavigator: true);
     var cancelled = false;
@@ -354,7 +386,19 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
         ),
       ),
     );
+    try {
+      return (await job(progress), cancelled);
+    } finally {
+      progress.dispose();
+      navigator.pop();
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
 
+  Future<bool> _runVideoExports(
+    List<(GalleryItem, VideoEditState)> jobs,
+    ValueNotifier<double> progress,
+  ) async {
     var ok = true;
     for (final (item, edit) in jobs) {
       final file = item.localFile ?? await item.originFile();
@@ -405,18 +449,102 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       edit.exportedSignature = signature;
       _tempFiles.add(spec.output);
     }
+    return ok;
+  }
 
-    progress.dispose();
-    navigator.pop();
-    if (!mounted) return false;
-    setState(() => _exporting = false);
-    if (!ok && !cancelled) {
+  GalleryItem? get _videoNoteCandidate {
+    final ids = _selected.value;
+    if (ids.length != 1) return null;
+    for (final item in _items) {
+      if (ids.contains(item.id)) return item.isVideo ? item : null;
+    }
+    return null;
+  }
+
+  Duration? _effectiveDuration(GalleryItem item) {
+    final edit = _videoEdits[item.id];
+    if (edit != null && edit.trimmed && edit.duration > Duration.zero) {
+      return edit.duration;
+    }
+    return item.duration;
+  }
+
+  bool _fitsVideoNote(VideoNoteSend note) {
+    final item = _videoNoteCandidate;
+    if (item == null) return false;
+    final duration = _effectiveDuration(item);
+    return duration == null || duration <= note.limit;
+  }
+
+  Future<void> _sendAsVideoNote() async {
+    final note = widget.videoNote;
+    final item = _videoNoteCandidate;
+    if (note == null || item == null || _exporting) return;
+    final l10n = AppLocalizations.of(context)!;
+    if (!await _exportVideos([item]) || !mounted) return;
+    final source =
+        _videoEdits[item.id]?.exported ??
+        item.localFile ??
+        await item.originFile();
+    if (!mounted) return;
+    final ready = source != null && await VideoTranscoder.ensureAvailable();
+    if (!mounted) return;
+    if (!ready) {
+      showCustomNotification(context, l10n.videoEditorExportFailed);
+      return;
+    }
+    final info = await VideoTranscoder.probe(source.path);
+    if (!mounted) return;
+    if (info == null || info.width <= 0 || info.height <= 0) {
+      showCustomNotification(context, l10n.videoEditorExportFailed);
+      return;
+    }
+    if (info.durationMs > note.limit.inMilliseconds + 500) {
       showCustomNotification(
         context,
-        AppLocalizations.of(context)!.videoEditorExportFailed,
+        l10n.attachSheetVideoNoteTooLong(note.limit.inSeconds),
       );
+      return;
     }
-    return ok;
+    final output = await VideoTranscoder.outputFile('note');
+    if (output == null || !mounted) return;
+    final spec = VideoExportSpec(
+      input: source.path,
+      output: output.path,
+      outWidth: _noteSide(info),
+      outHeight: _noteSide(info),
+      crop: _centerSquare(info),
+    );
+    final (done, cancelled) = await _withExportProgress(
+      (progress) => VideoTranscoder.export(
+        spec,
+        onProgress: (value) => progress.value = value,
+      ),
+    );
+    if (!mounted) return;
+    if (!done) {
+      if (!cancelled) {
+        showCustomNotification(context, l10n.videoEditorExportFailed);
+      }
+      return;
+    }
+    Navigator.of(context).pop();
+    note.send(output, info.durationMs);
+  }
+
+  static int _noteSide(VideoInfo info) {
+    final shortSide = math.min(info.width, info.height);
+    final side = math.min(shortSide, AppVideoNoteResolution.current.value);
+    return side - side % 2;
+  }
+
+  static Rect _centerSquare(VideoInfo info) {
+    if (info.width >= info.height) {
+      final share = info.height / info.width;
+      return Rect.fromLTWH((1 - share) / 2, 0, share, 1);
+    }
+    final share = info.width / info.height;
+    return Rect.fromLTWH(0, (1 - share) / 2, 1, share);
   }
 
   Future<void> _sendSelection({
@@ -1003,6 +1131,13 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           label: AppLocalizations.of(context)!.attachSheetSendSeparately,
           onTap: () => _sendSelection(separately: true),
         ),
+        if (widget.videoNote case final note?)
+          ChatMenuItem(
+            icon: Symbols.motion_photos_on,
+            label: AppLocalizations.of(context)!.attachSheetSendAsVideoNote,
+            enabled: _fitsVideoNote(note),
+            onTap: () => unawaited(_sendAsVideoNote()),
+          ),
       ],
     );
   }

@@ -11,6 +11,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
+import '../../../core/security/app_lock.dart';
 
 Future<void> showCreateChannelFlow(BuildContext context) async {
   final cs = Theme.of(context).colorScheme;
@@ -43,7 +44,9 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
 
   Future<void> _pickAvatar() async {
     if (_creating) return;
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final result = await AppLock.instance.external(
+      () => FilePicker.platform.pickFiles(type: FileType.image),
+    );
     if (result == null || result.files.isEmpty) return;
     final path = result.files.first.path;
     if (path == null) return;

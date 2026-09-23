@@ -64,6 +64,7 @@ import 'chat/chat_prank_controller.dart';
 import 'chat/chat_controller.dart';
 import 'chat/read_marker_gate.dart';
 import 'chat/chat_scroll_navigator.dart';
+import 'chat/view/anchored_message_list.dart';
 import 'chat/voice_record_controller.dart';
 import 'chat/video_note_controller.dart';
 import 'chat/command_panel_controller.dart';
@@ -95,7 +96,6 @@ import '../../commands/commands.dart';
 import '../../widgets/rich_message_controller.dart';
 import '../../../core/utils/text_format.dart';
 import '../../widgets/call_link_handler.dart';
-import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/photo_viewer.dart';
@@ -117,6 +117,7 @@ import 'chat_wallpaper_preview_screen.dart';
 import 'profile_action_sheets.dart';
 import '../../../core/media/media_playback.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../core/security/app_lock.dart';
 
 class _DateSeparatorItem {
   final DateTime date;
@@ -148,6 +149,7 @@ class ChatScreen extends StatefulWidget {
   final String chatType;
   final bool? channelSubscribed;
   final bool embedded;
+  final bool preview;
   final VoidCallback? onClose;
   final ForwardRequest? forwardRequest;
   final ReplyRequest? replyRequest;
@@ -166,6 +168,7 @@ class ChatScreen extends StatefulWidget {
     required this.chatType,
     this.channelSubscribed,
     this.embedded = false,
+    this.preview = false,
     this.onClose,
     this.forwardRequest,
     this.replyRequest,
@@ -213,8 +216,6 @@ class _ChatScreenState extends State<ChatScreen>
   bool _keyboardBeforeStickers = false;
   final ScrollController _scrollController = ScrollController();
   bool _userDidScroll = false;
-  String? _pinnedMessageId;
-  double _pinnedAlignment = 0;
   int? _unreadAnchorTime;
   bool _awaitingPosition = false;
   bool _initialPositionDone = false;
@@ -587,9 +588,11 @@ class _ChatScreenState extends State<ChatScreen>
       encryptOutgoing: _encryptOutgoing,
       markHasScheduled: _markHasScheduled,
     );
-    if (!_commentsMode) ChatScreen._open.add(this);
-    unawaited(PushService.clearChatNotification(widget.chatId));
-    if (!_commentsMode) {
+    if (!_commentsMode && !widget.preview) ChatScreen._open.add(this);
+    if (!widget.preview) {
+      unawaited(PushService.clearChatNotification(widget.chatId));
+    }
+    if (!_commentsMode && !widget.preview) {
       unawaited(NotificationBridge.instance.pushActiveChat(widget.chatId));
     }
     unawaited(
@@ -612,7 +615,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.addListener(_maybeLoadMoreHistory);
     _scrollController.addListener(_recordScrollPixels);
     _scrollController.addListener(_scheduleReadMarker);
-    MediaPlayback.instance.enterChat(widget.chatId);
+    if (!widget.preview) MediaPlayback.instance.enterChat(widget.chatId);
     AppVisualStyle.current.addListener(_onVisualStyleChanged);
     AppChatChrome.current.addListener(_onVisualStyleChanged);
     AppComposerStyle.current.addListener(_onVisualStyleChanged);
@@ -751,24 +754,21 @@ class _ChatScreenState extends State<ChatScreen>
       chatController: _chatController,
       shimmerController: _shimmerController,
       scrollDownAnimController: _scrollDownAnimController,
-      scrollDownCurved: _scrollDownCurved,
       readMarker: _readMarker,
       listKey: _listKey,
-      keyForMessage: _keyForMessage,
-      buildCombinedItems: _buildCombinedItems,
-      messageIdOf: _messageIdOfItem,
-      messageOffsetInList: _messageOffsetInList,
+      existingKeyFor: (id) => _messageKeys[id],
       loadMessageWindow: _loadMessageWindow,
+      resetToLatest: _resetToLatest,
       flushDeferredMessages: _flushDeferredMessages,
       isDeferred: (id) => _deferredIds.contains(id),
       hasDeferredMessages: () => _deferredIds.isNotEmpty,
       bumpMessages: _bumpMessages,
-      clearPinnedMessage: () => _pinnedMessageId = null,
       isMounted: () => mounted,
       notifyState: setState,
       showNotification: (message) => showCustomNotification(context, message),
       initialMessageIdOf: () => widget.initialMessageId,
       initialMessageTimeOf: () => widget.initialMessageTime,
+      onNavigated: _maybeLoadMoreHistory,
     );
     _scrollController.addListener(_scrollNav.updateScrollDownVisible);
 
@@ -885,11 +885,13 @@ class _ChatScreenState extends State<ChatScreen>
       limit: 20,
       onlyVisible: !KometSettings.viewDeleted.value,
     );
+    final ranges = await AppDatabase.loadMessageRanges(_myId, widget.chatId);
     if (!mounted) return;
-    if (firstRows.isNotEmpty) {
-      final first = firstRows.reversed
-          .map((r) => CachedMessage.fromDbRow(r))
-          .toList();
+    final first = ranges.clipLatest(
+      firstRows.reversed.map((r) => CachedMessage.fromDbRow(r)).toList(),
+      (m) => m.time,
+    );
+    if (first.isNotEmpty) {
       setState(() {
         _messages = first;
         _deferredIds.clear();
@@ -910,7 +912,8 @@ class _ChatScreenState extends State<ChatScreen>
       final myMark = c.participants[_myId] ?? 0;
       _unreadAnchorTime = myMark > 0 ? myMark : null;
     }
-    _awaitingPosition = c != null && c.unreadCount > 0;
+    _awaitingPosition =
+        c != null && c.unreadCount > 0 && widget.initialMessageId == null;
   }
 
   void _resolveCountBasedAnchor() {
@@ -1037,7 +1040,6 @@ class _ChatScreenState extends State<ChatScreen>
         _scrollController.position.userScrollDirection !=
             ScrollDirection.idle) {
       _userDidScroll = true;
-      _pinnedMessageId = null;
     }
   }
 
@@ -1060,44 +1062,10 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _positionToMessage(String messageId) {
-    _pinnedMessageId = messageId;
-    _scrollNav.jumpCacheExtent.value = ChatScrollNavigator.jumpCacheExtentPx;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      _pinnedAlignment = _unreadAnchorAlignment();
-      _scrollNav.scrollToLoadedMessage(
-        messageId,
-        alignment: _pinnedAlignment,
-        highlight: false,
-        notifyIfMissing: false,
-        onSettled: () {
-          if (!mounted) return;
-          setState(_markPositioned);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            _scrollNav.jumpCacheExtent.value = null;
-            _reapplyPinIfNeeded();
-          });
-        },
-      );
-    });
-  }
-
-  void _reapplyPinIfNeeded() {
-    final id = _pinnedMessageId;
-    if (id == null || _userDidScroll || !_scrollController.hasClients) return;
-    _holdReadMarker();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _pinnedMessageId != id || _userDidScroll) {
-        _releaseReadMarker();
-        return;
-      }
-      _scrollNav.alignLoadedMessage(
-        id,
-        _pinnedAlignment,
-        0,
-        onSettled: _releaseReadMarker,
-      );
+      await _scrollNav.positionAt(messageId, _unreadAnchorAlignment());
+      if (mounted) setState(_markPositioned);
     });
   }
 
@@ -1119,6 +1087,10 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (_messages.isEmpty) {
       if (!_hasMoreHistory) _markPositioned();
+      return;
+    }
+    if (widget.initialMessageId != null) {
+      _markPositioned();
       return;
     }
 
@@ -1237,7 +1209,7 @@ class _ChatScreenState extends State<ChatScreen>
   void _releaseReadMarker() => _readMarker.release();
 
   void _updateReadMarker() {
-    if (_commentsMode) return;
+    if (_commentsMode || widget.preview) return;
     if (!mounted || _myId == 0 || _messages.isEmpty) return;
     if (_awaitingPosition || !_initialPositionDone) return;
     if (_readMarker.held) return;
@@ -1279,9 +1251,12 @@ class _ChatScreenState extends State<ChatScreen>
 
     if (candidate.time <= _readMarkTime) return;
     _readMarkTime = candidate.time;
-    final remaining = _messages
+    var remaining = _messages
         .where((m) => m.time > _readMarkTime && m.senderId != _myId)
         .length;
+    if (_chatController.hasNewer) {
+      remaining = math.max(remaining, chat?.unreadCount ?? 0);
+    }
     unawaited(
       chats.markReadUpTo(
         api,
@@ -1327,7 +1302,15 @@ class _ChatScreenState extends State<ChatScreen>
       showCustomNotification(context, 'Не удалось пометить непрочитанным');
       return;
     }
-    Navigator.of(context).pop();
+    _leaveChat();
+  }
+
+  void _leaveChat() {
+    if (widget.embedded) {
+      widget.onClose?.call();
+    } else {
+      Navigator.of(context).pop();
+    }
   }
 
   bool _canShowReadBy(CachedMessage message) {
@@ -1493,9 +1476,10 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _jumpToPinnedMessage() {
-    _scrollNav.jumpToPinnedMessage(
-      pinnedMsgId: chat?.pinnedMsgId,
-      pinnedMsgTime: chat?.pinnedMsgTime,
+    final pinnedId = chat?.pinnedMsgId;
+    if (pinnedId == null) return;
+    unawaited(
+      _scrollNav.goTo(pinnedId.toString(), time: chat?.pinnedMsgTime ?? 0),
     );
   }
 
@@ -1634,19 +1618,18 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _maybeLoadMoreHistory() {
     if (!_scrollController.hasClients) return;
-    if (_historyAutoloadSuppressed) return;
+    if (_historyAutoloadSuppressed || _scrollNav.busy) return;
     if (_isLoading) return;
     if (_commentsMode) {
       if (_commentsLoadingMore || !_commentsHasMore || _messages.isEmpty) {
         return;
       }
-      final pos = _scrollController.position;
-      if (pos.pixels - pos.minScrollExtent <= _historyPrefetchExtent) {
+      if (_scrollNav.distanceFromBottom() <= _historyPrefetchExtent) {
         unawaited(_loadMoreComments());
       }
       return;
     }
-    _maybeFillGap();
+    _maybeLoadNewerHistory();
     if (_isLoadingMore || !_hasMoreHistory) return;
     if (_messages.isEmpty) return;
     final pos = _scrollController.position;
@@ -1656,70 +1639,33 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  void _maybeFillGap() {
+  void _maybeLoadNewerHistory() {
     final controller = _chatController;
-    if (!controller.hasGap || controller.loadingGap) return;
-    final oldestRendered = _oldestRenderedMessageTime();
-    for (final gap in controller.gaps) {
-      if (!ChatController.gapFillLeavesViewportInPlace(gap, oldestRendered)) {
-        continue;
-      }
-      unawaited(_fillGapForward(gap));
-      return;
-    }
+    if (!controller.hasNewer || controller.isLoadingNewer) return;
+    if (_scrollNav.distanceFromBottom() > _historyPrefetchExtent) return;
+    unawaited(_loadNewerHistory());
   }
 
-  int? _oldestRenderedMessageTime() {
-    for (final message in _messages) {
-      final box = _messageKeys[message.id]?.currentContext?.findRenderObject();
-      if (box is RenderBox && box.attached) return message.time;
-    }
-    return null;
-  }
-
-  Future<void> _fillGapForward(HistoryGap gap) async {
-    String? anchorId;
-    double? anchorAt;
-    double? anchorAlignment;
-    final added = await _chatController.fillGapForward(
-      gap,
-      beforeApply: () {
-        final id = _viewportAnchorId();
-        anchorId = id;
-        if (id == null) return;
-        anchorAt = _messageContentOffset(id);
-        anchorAlignment = _messageAlignmentInList(id);
-      },
-    );
-    if (!mounted || added == 0) return;
-
-    _syncReactionNotifiersFromMessages();
-    _holdReadMarker();
+  Future<void> _loadNewerHistory() async {
     _bumpMessages();
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) {
-      _releaseReadMarker();
-      return;
-    }
+    final added = await _chatController.loadNewerHistory(
+      newestKnownTime: chat?.lastMsgTime,
+    );
+    if (!mounted) return;
+    if (added > 0) _syncReactionNotifiersFromMessages();
+    _bumpMessages();
+    _scrollNav.updateScrollDownVisible();
+    if (added == 0) return;
+    _loadForwardedSenderNames();
+    _loadGroupSenderNames();
+  }
 
-    final id = anchorId;
-    final at = anchorAt;
-    final alignment = anchorAlignment;
-    if (id != null && at != null && !_restoreContentOffset(id, at)) {
-      _historyAutoloadSuppressCount++;
-      _scrollNav.alignLoadedMessage(
-        id,
-        alignment ?? 0,
-        0,
-        epoch: _scrollNav.gestureEpoch,
-        onSettled: () {
-          _historyAutoloadSuppressCount--;
-          _releaseReadMarker();
-        },
-      );
-    } else {
-      _releaseReadMarker();
-    }
+  Future<void> _resetToLatest() async {
+    await _chatController.resetToLatest();
+    if (!mounted) return;
+    _deferredIds.clear();
+    _syncReactionNotifiersFromMessages();
+    _bumpMessages();
     _loadForwardedSenderNames();
     _loadGroupSenderNames();
   }
@@ -1755,7 +1701,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   double? _messageOffsetInList(String messageId) {
     final listBox = _listKey.currentContext?.findRenderObject();
-    final box = _keyForMessage(messageId).currentContext?.findRenderObject();
+    final box = _messageKeys[messageId]?.currentContext?.findRenderObject();
     if (listBox is! RenderBox || box is! RenderBox || !box.attached) {
       return null;
     }
@@ -1793,25 +1739,34 @@ class _ChatScreenState extends State<ChatScreen>
     return true;
   }
 
-  Future<void> _loadMessageWindow(String messageId, int targetTime) async {
+  Future<void> _loadMessageWindow(
+    String messageId,
+    int targetTime,
+    bool Function() stillWanted,
+  ) async {
     if (targetTime <= 0) {
       await _walkHistoryBack(
-        reached: () => _chatController.containsId(messageId),
+        reached: () =>
+            _chatController.containsId(messageId) || !stillWanted(),
         maxPages: 10,
       );
       return;
     }
 
     _historyAutoloadSuppressCount++;
+    final WindowLoad result;
     try {
-      await _chatController.loadMessageWindow(
+      result = await _chatController.loadMessageWindow(
         targetId: messageId,
         targetTime: targetTime,
+        newestKnownTime: chat?.lastMsgTime,
+        stillWanted: stillWanted,
       );
     } finally {
       _historyAutoloadSuppressCount--;
     }
     if (!mounted) return;
+    if (result == WindowLoad.replaced) _deferredIds.clear();
     _syncReactionNotifiersFromMessages();
     _bumpMessages();
     _loadForwardedSenderNames();
@@ -1899,12 +1854,10 @@ class _ChatScreenState extends State<ChatScreen>
       _pruneReactionNotifiers();
       _chatController.persistSessionCache();
       _restoreViewportAfterMerge(anchor);
-      _reapplyPinIfNeeded();
     }
   }
 
   ({String id, double at, double alignment})? _captureViewportAnchor() {
-    if (_pinnedMessageId != null && !_userDidScroll) return null;
     if (!_scrollController.hasClients || _scrollNav.isNearBottom()) return null;
     final id = _viewportAnchorId();
     if (id == null) return null;
@@ -1928,15 +1881,11 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
       _historyAutoloadSuppressCount++;
-      _scrollNav.alignLoadedMessage(
-        anchor.id,
-        anchor.alignment,
-        0,
-        epoch: _scrollNav.gestureEpoch,
-        onSettled: () {
+      unawaited(
+        _scrollNav.keepInPlace(anchor.id, anchor.alignment).whenComplete(() {
           _historyAutoloadSuppressCount--;
           _releaseReadMarker();
-        },
+        }),
       );
     });
   }
@@ -2087,10 +2036,8 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  bool _isNearListBottom() {
-    if (!_scrollController.hasClients) return true;
-    return _scrollController.position.pixels <= _historyPrefetchExtent;
-  }
+  bool _isNearListBottom() =>
+      _scrollNav.distanceFromBottom() <= _historyPrefetchExtent;
 
   Future<void> _resolveCommentNames(List<CachedMessage> list) async {
     final ids = list
@@ -2148,7 +2095,7 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void dispose() {
     ChatScreen._open.remove(this);
-    if (!_commentsMode) {
+    if (!_commentsMode && !widget.preview) {
       unawaited(NotificationBridge.instance.popActiveChat(widget.chatId));
     }
     _chatController.persistSessionCache();
@@ -2169,7 +2116,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollController.removeListener(_scrollNav.updateScrollDownVisible);
     _readMarker.dispose();
     AppVisualStyle.current.removeListener(_onVisualStyleChanged);
-    MediaPlayback.instance.leaveChat(widget.chatId);
+    if (!widget.preview) MediaPlayback.instance.leaveChat(widget.chatId);
     AppChatChrome.current.removeListener(_onVisualStyleChanged);
     AppComposerStyle.current.removeListener(_onVisualStyleChanged);
     AppComposerBackground.current.removeListener(_onVisualStyleChanged);
@@ -2364,7 +2311,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _saveDraft() {
-    if (_myId == 0 || _commentsMode) return;
+    if (_myId == 0 || _commentsMode || widget.preview) return;
     // #***! черновик зашифрованного чата осел бы на диске открытым текстом
     if (_encryptionEnabled) {
       if (DraftStore.instance.get(_myId, widget.chatId) != null) {
@@ -2637,6 +2584,18 @@ class _ChatScreenState extends State<ChatScreen>
       ),
     );
   }
+
+  PreferredSizeWidget _previewSafeBar(PreferredSizeWidget bar) =>
+      widget.preview
+      ? PreferredSize(
+          preferredSize: bar.preferredSize,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {},
+            child: bar,
+          ),
+        )
+      : bar;
 
   Widget _composerAreaWidget() {
     return ComposerArea(
@@ -2955,20 +2914,24 @@ class _ChatScreenState extends State<ChatScreen>
           return;
         }
         if (_chatController.containsId(message.id)) return;
-        final nearBottom = _scrollNav.isNearBottom();
-        if (!nearBottom) _deferredIds.add(message.id);
         _lastSentId = message.id;
-        _chatController.addMessage(message);
         _notePeerReadThrough(message);
-        _bumpMessages();
         _clearTyping(message.senderId);
         Haptics.tap();
+        if (_chatController.hasNewer) {
+          _scrollNav.noteMissedMessage();
+          _prank.checkTrigger(message);
+          return;
+        }
+        final nearBottom = _scrollNav.isNearBottom();
+        if (!nearBottom) _deferredIds.add(message.id);
+        _chatController.addMessage(message);
+        _bumpMessages();
         if (nearBottom) {
           _scrollNav.scrollToBottom();
           _scheduleReadMarker();
         } else {
           _scrollNav.noteMissedMessage();
-          _reapplyPinIfNeeded();
         }
         _prank.checkTrigger(message);
       case MessageEditedEvent(:final message):
@@ -3323,11 +3286,16 @@ class _ChatScreenState extends State<ChatScreen>
     _applyEffectiveWallpaper();
   }
 
+  bool get _canActForAll {
+    final type = chat?.type ?? widget.chatType;
+    if (type == 'DIALOG') return widget.chatId != 0;
+    return (type == 'CHAT' || type == 'CHANNEL') &&
+        (chat?.iAmAdmin(_myId) ?? false);
+  }
+
   Future<void> _clearHistory() async {
     final current = chat;
-    final canClearForAll =
-        (widget.chatType == 'CHAT' || widget.chatType == 'CHANNEL') &&
-        (current?.iAmAdmin(_myId) ?? false);
+    final canClearForAll = _canActForAll;
     final choice = await showBlurredConfirm(
       context,
       title: 'Очистить историю',
@@ -3361,26 +3329,29 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _deleteChat() async {
-    final confirmed = await showConfirmDialog(
+    final canDeleteForAll = _canActForAll;
+    final choice = await showBlurredConfirm(
       context,
       title: 'Удалить чат',
       message: 'Чат будет удалён вместе со всей перепиской.',
       confirmLabel: 'Удалить',
+      cancelLabel: 'Отмена',
       destructive: true,
+      checkboxLabel: canDeleteForAll ? 'Для всех' : null,
     );
-    if (!mounted || !confirmed) return;
+    if (!mounted || !choice.confirmed) return;
     final err = await chats.deleteChat(
       api,
       chatId: widget.chatId,
       lastEventTime: chat?.lastEventTime ?? 0,
-      forAll: false,
+      forAll: canDeleteForAll && choice.checked,
     );
     if (!mounted) return;
     if (err != null) {
       showCustomNotification(context, err);
       return;
     }
-    Navigator.of(context).pop();
+    _leaveChat();
   }
 
   Future<void> _startCall() async {
@@ -4099,10 +4070,9 @@ class _ChatScreenState extends State<ChatScreen>
     final sourceMessageId = forwarded.originalMessageId;
     if (sourceChatId == widget.chatId) {
       if (sourceMessageId == null) return;
-      _scrollNav.beginTargetNavigation();
-      await _scrollNav.runGoToMessage(
+      await _scrollNav.goTo(
         sourceMessageId,
-        forwarded.originalTime ?? 0,
+        time: forwarded.originalTime ?? 0,
       );
       return;
     }
@@ -4179,14 +4149,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _openSearchResult(MessageSearchResult result) async {
     _closeSearch();
-    if (_chatController.containsId(result.id)) {
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return;
-      _scrollNav.scrollToLoadedMessage(result.id);
-      return;
-    }
-    setState(_scrollNav.beginTargetNavigation);
-    await _scrollNav.runGoToMessage(result.id, result.time);
+    await _scrollNav.goTo(result.id, time: result.time);
   }
 
 
@@ -4400,7 +4363,9 @@ class _ChatScreenState extends State<ChatScreen>
                     composerFrosted: _composerFrosted,
                     composerHeight: _composerHeight,
                     pinnedBannerHeight: _pinnedBannerHeight,
-                    composerAreaBuilder: (context) => _composerAreaWidget(),
+                    composerAreaBuilder: (context) => widget.preview
+                        ? const SizedBox.shrink()
+                        : _composerAreaWidget(),
                     messagesArea: _buildMessagesArea(),
                     mentionPanel: _mentionPanel,
                     commandPanel: _commandPanel,
@@ -4420,7 +4385,7 @@ class _ChatScreenState extends State<ChatScreen>
                 builder: (context, body) => Scaffold(
                   backgroundColor: cs.surface,
                   extendBodyBehindAppBar: underlap,
-                  appBar: ChatAppBar(
+                  appBar: _previewSafeBar(ChatAppBar(
                     cs: cs,
                     searchAnim: _searchAnim,
                     selectionAnim: _selectionAnim,
@@ -4463,7 +4428,7 @@ class _ChatScreenState extends State<ChatScreen>
                     search: _search,
                     searchFocusNode: _searchFocusNode,
                     onCloseSearch: _closeSearch,
-                  ),
+                  )),
                   body: body,
                 ),
               ),
@@ -4608,29 +4573,26 @@ class _ChatScreenState extends State<ChatScreen>
                     behavior: ScrollConfiguration.of(
                       context,
                     ).copyWith(scrollbars: false),
-                    child: CustomScrollView(
+                    child: AnchoredMessageList(
                     controller: _scrollController,
-                    reverse: true,
-                    scrollCacheExtent: ScrollCacheExtent.pixels(cacheExtent),
-                    slivers: [
-                      SliverPadding(
-                        padding: _messagesListPadding(context),
-                        sliver: SliverList(
-                          key: ValueKey(_scrollNav.listEpoch),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              if (index == 0) {
-                                return ValueListenableBuilder<double>(
-                                  valueListenable: _composerHeight,
-                                  builder: (context, height, _) => SizedBox(
-                                    height: _composerUnderlap ? height : 0,
-                                  ),
-                                );
-                              }
-                              if (index > items.length) {
-                                return const MessageListLoadMoreIndicator();
-                              }
-                              final item = items[items.length - index];
+                    cacheExtent: cacheExtent,
+                    padding: _messagesListPadding(context),
+                    epoch: _scrollNav.listEpoch,
+                    itemCount: items.length,
+                    anchorIndex: _scrollNav.anchorIndexIn(
+                      items,
+                      _messageIdOfItem,
+                    ),
+                    loadingOlder: _isLoadingMore,
+                    loadingNewer: _chatController.isLoadingNewer,
+                    bottomSpacer: ValueListenableBuilder<double>(
+                      valueListenable: _composerHeight,
+                      builder: (context, height, _) => SizedBox(
+                        height: _composerUnderlap ? height : 0,
+                      ),
+                    ),
+                    itemBuilder: (context, itemIndex) {
+                              final item = items[itemIndex];
 
                               if (item is _DateSeparatorItem) {
                                 return DateSeparatorLabel(
@@ -4683,9 +4645,12 @@ class _ChatScreenState extends State<ChatScreen>
                                 ),
                                 reactionAnimation: _reactionAnimation,
                                 uploadProgress: _photoProgressFor(message),
-                                onReplyTap: (id) => _scrollNav.jumpToMessage(
-                                  id,
-                                  fromId: message.id,
+                                onReplyTap: (id) => unawaited(
+                                  _scrollNav.goTo(
+                                    id,
+                                    time: message.replyInfo?.time ?? 0,
+                                    fromId: message.id,
+                                  ),
                                 ),
                                 resolveLocalMessage: _chatController.byId,
                                 listWidth: listWidth,
@@ -4849,6 +4814,9 @@ class _ChatScreenState extends State<ChatScreen>
                                   child: highlightable,
                                 ),
                               );
+                              if (widget.preview) {
+                                return IgnorePointer(child: builtItem);
+                              }
                               return message.id == _prank.bubbleId
                                   ? KeyedSubtree(
                                       key: _prank.bubbleKey,
@@ -4856,12 +4824,6 @@ class _ChatScreenState extends State<ChatScreen>
                                     )
                                   : builtItem;
                             },
-                            childCount:
-                                items.length + 1 + (_isLoadingMore ? 1 : 0),
-                          ),
-                        ),
-                      ),
-                    ],
                     ),
                   );
                 },
@@ -4939,6 +4901,12 @@ class _ChatScreenState extends State<ChatScreen>
           ? _mediaSend.sendPhotos
           : (picked, caption) =>
                 _mediaSend.sendScheduledPhotos(picked, caption, scheduledTime),
+      videoNote: scheduledTime == null
+          ? VideoNoteSend(
+              limit: const Duration(milliseconds: VideoNoteController.maxMs),
+              send: _mediaSend.sendVideoNote,
+            )
+          : null,
       onSendSeparately: scheduledTime == null
           ? (picked, caption) =>
                 _mediaSend.sendPhotos(picked, caption, separate: true)
@@ -5108,7 +5076,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _pickAndUploadFile({int? scheduledTime}) async {
-    final result = await FilePicker.platform.pickFiles();
+    final result = await AppLock.instance.external(() => FilePicker.platform.pickFiles());
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.first;
     if (picked.path == null) return;

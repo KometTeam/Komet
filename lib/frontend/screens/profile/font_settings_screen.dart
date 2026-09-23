@@ -1,16 +1,21 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:m3e_collection/m3e_collection.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/config/app_fonts.dart';
+import '../../../core/config/app_shape.dart';
 import '../../../core/config/custom_font_service.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/prompt_dialog.dart';
 import '../../widgets/settings_card.dart';
+import '../../../core/security/app_lock.dart';
 
 class FontSettingsScreen extends StatefulWidget {
   const FontSettingsScreen({super.key});
@@ -67,6 +72,10 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
       );
       return;
     }
+    await _applyAdded(family);
+  }
+
+  Future<void> _applyAdded(String family) async {
     await _reloadCustom();
     if (!mounted) return;
     KometApp.stateOf(context)?.applyAppFont(AppFonts.customId(family));
@@ -75,6 +84,38 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
       context,
       AppLocalizations.of(context)!.fontSettingsFontAdded(family),
     );
+  }
+
+  Future<void> _addFontFromFile() async {
+    final result = await AppLock.instance.external(
+      () => FilePicker.platform.pickFiles(type: FileType.any, withData: true),
+    );
+    final picked = result?.files.single;
+    if (picked == null || !mounted) return;
+    setState(() => _adding = true);
+    String? family;
+    try {
+      final path = picked.path;
+      final Uint8List? bytes =
+          picked.bytes ??
+          (path == null ? null : await File(path).readAsBytes());
+      if (bytes != null) {
+        family = await CustomFontService.addFromFile(bytes, picked.name);
+      }
+    } catch (_) {
+      family = null;
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+    if (!mounted) return;
+    if (family == null) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.fontSettingsNotAFont,
+      );
+      return;
+    }
+    await _applyAdded(family);
   }
 
   Future<void> _removeFont(String family) async {
@@ -92,15 +133,18 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
   }
 
   Future<void> _showAddFontDialog() async {
-    final l10n = AppLocalizations.of(context)!;
-    final result = await showTextInputDialog(
-      context,
-      title: l10n.fontSettingsAddFontTitle,
-      description: l10n.fontSettingsAddFontDescription,
-      hint: 'fonts.google.com/specimen/Roboto',
-      confirmLabel: l10n.fontSettingsAddFontConfirm,
+    final choice = await showDialog<_AddFontChoice>(
+      context: context,
+      builder: (_) => const _AddFontDialog(),
     );
-    if (result != null) await _addFont(result);
+    switch (choice) {
+      case _AddFontByName(:final input):
+        await _addFont(input);
+      case _AddFontFromFile():
+        await _addFontFromFile();
+      case null:
+        return;
+    }
   }
 
   @override
@@ -387,6 +431,111 @@ class _FontSizeControl extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+sealed class _AddFontChoice {
+  const _AddFontChoice();
+}
+
+class _AddFontByName extends _AddFontChoice {
+  final String input;
+
+  const _AddFontByName(this.input);
+}
+
+class _AddFontFromFile extends _AddFontChoice {
+  const _AddFontFromFile();
+}
+
+class _AddFontDialog extends StatefulWidget {
+  const _AddFontDialog();
+
+  @override
+  State<_AddFontDialog> createState() => _AddFontDialogState();
+}
+
+class _AddFontDialogState extends State<_AddFontDialog> {
+  final TextEditingController _input = TextEditingController();
+
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = _input.text.trim();
+    Navigator.pop(context, text.isEmpty ? null : _AddFontByName(text));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    return AlertDialog(
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: AppShape.dialogBorder,
+      title: Text(
+        l10n.fontSettingsAddFontTitle,
+        style: TextStyle(
+          fontFamily: displayFontOf(context),
+          fontWeight: FontWeight.w600,
+          fontSize: 18,
+          color: cs.onSurface,
+        ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.fontSettingsAddFontDescription,
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontSize: 13,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 18),
+          TextField(
+            controller: _input,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'fonts.google.com/specimen/Roboto',
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.pop(context, const _AddFontFromFile()),
+              icon: const Icon(Symbols.upload_file, size: 20),
+              label: Text(l10n.fontSettingsPickFile),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            l10n.fontSettingsPickFileHint,
+            style: TextStyle(color: cs.outline, fontSize: 12),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            l10n.fontSettingsCancel,
+            style: TextStyle(color: cs.onSurfaceVariant),
+          ),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(l10n.fontSettingsAddFontConfirm),
+        ),
+      ],
     );
   }
 }

@@ -20,6 +20,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../widgets/animated_slash_icon.dart';
+import 'media_devices_screen.dart';
 import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/avatar_photo_actions.dart';
 import '../../widgets/connection_status.dart';
@@ -657,6 +658,19 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                               MaterialPageRoute(
                                 builder: (context) =>
                                     const NotificationsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.videocam,
+                          label: 'Камера и микрофон',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const MediaDevicesScreen(),
                               ),
                             );
                           },

@@ -7,20 +7,11 @@ import '../../../../backend/modules/messages.dart';
 import '../../../../core/cache/message_session_cache.dart';
 import '../../../../core/config/komet_settings.dart';
 import '../../../../core/storage/app_database.dart';
+import '../../../../core/storage/message_ranges.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../main.dart';
 
-class HistoryGap {
-  HistoryGap({
-    required this.edgeId,
-    required this.edgeTime,
-    required this.tailTime,
-  });
-
-  String edgeId;
-  int edgeTime;
-  final int tailTime;
-}
+enum WindowLoad { missing, merged, replaced }
 
 class ChatController extends ChangeNotifier {
   static const int historyPageSize = 30;
@@ -28,7 +19,8 @@ class ChatController extends ChangeNotifier {
   static const int jumpWindowBefore = 40;
   static const int jumpWindowAfter = 20;
   static const int historyWalkPageSize = 200;
-  static const int gapPageSize = 60;
+  static const int newerPageSize = 60;
+  static const int _endOfTime = 1 << 62;
 
   int chatId = 0;
   int myId = 0;
@@ -87,16 +79,10 @@ class ChatController extends ChangeNotifier {
   bool hasMoreHistory = true;
   bool isLoadingMore = false;
   bool historyKickedOff = false;
-  bool loadingGap = false;
-
-  final List<HistoryGap> gaps = [];
-
-  bool get hasGap => gaps.isNotEmpty;
-
-  static bool gapFillLeavesViewportInPlace(
-    HistoryGap gap,
-    int? oldestRenderedTime,
-  ) => oldestRenderedTime != null && oldestRenderedTime >= gap.tailTime;
+  bool hasNewer = false;
+  bool isLoadingNewer = false;
+  int _newerStalledAt = -1;
+  bool latestCovered = false;
 
   bool Function() isMounted = () => true;
 
@@ -131,10 +117,19 @@ class ChatController extends ChangeNotifier {
     return toAdd.length;
   }
 
-  bool mergeMessages(List<CachedMessage> decodedDesc) {
+  bool mergeMessages(
+    List<CachedMessage> decodedDesc, {
+    bool contiguous = false,
+  }) {
+    final newestLoaded = hasNewer && !contiguous && messages.isNotEmpty
+        ? messages.last.time
+        : null;
     final updates = <String, CachedMessage>{};
     for (final fresh in decodedDesc) {
       final old = byId(fresh.id);
+      if (old == null && newestLoaded != null && fresh.time > newestLoaded) {
+        continue;
+      }
       if (old == null || !_sameMessage(old, fresh)) {
         updates[fresh.id] = fresh;
       }
@@ -142,19 +137,20 @@ class ChatController extends ChangeNotifier {
 
     if (updates.isEmpty) return false;
 
-    final merged = <CachedMessage>[
+    messages = _sorted([
       for (final m in messages) updates[m.id] ?? m,
       for (final entry in updates.entries)
         if (!containsId(entry.key)) entry.value,
-    ]..sort((a, b) {
-      final byTime = a.time.compareTo(b.time);
-      return byTime != 0 ? byTime : a.id.compareTo(b.id);
-    });
-
-    messages = merged;
+    ]);
     messagesRev.value++;
     return true;
   }
+
+  static List<CachedMessage> _sorted(List<CachedMessage> list) =>
+      list..sort((a, b) {
+        final byTime = a.time.compareTo(b.time);
+        return byTime != 0 ? byTime : a.id.compareTo(b.id);
+      });
 
   bool _sameMessage(CachedMessage a, CachedMessage b) {
     return a.id == b.id &&
@@ -175,7 +171,56 @@ class ChatController extends ChangeNotifier {
       limit: historyInitialLimit,
       onlyVisible: onlyVisible,
     );
-    return CachedMessage.fromDbRowsAsync(rows);
+    final ranges = await AppDatabase.loadMessageRanges(myId, chatId);
+    final latest = await CachedMessage.fromDbRowsAsync(rows);
+    latestCovered =
+        latest.isNotEmpty &&
+        ranges.coversNewest(latest.map((m) => m.time).reduce(_max));
+    return ranges.clipLatest(latest, _timeOf);
+  }
+
+  static int _timeOf(CachedMessage m) => m.time;
+  static int _max(int a, int b) => a > b ? a : b;
+  static List<int> _timesOf(List<CachedMessage> list) => [
+    for (final m in list) m.time,
+  ];
+
+  Future<void> _fetchQuietly(
+    int? fromTime, {
+    int forward = 0,
+    int? backward,
+    int count = historyPageSize,
+  }) async {
+    try {
+      final fetched = await messagesModule.fetchHistory(
+        myId,
+        chatId,
+        fromTime: fromTime,
+        forward: forward,
+        backward: backward,
+        count: count,
+      );
+      if (fetched.isNotEmpty && KometSettings.viewDeleted.value) {
+        await chats.reconcileDeletedFromFetch(myId, chatId, fetched);
+      }
+    } catch (e) {
+      logger.w('Error fetching history page: $e');
+    }
+  }
+
+  bool pruneUncovered(MessageRanges ranges) {
+    if (hasNewer) return false;
+    final range = ranges.newest;
+    if (range == null) return false;
+    final kept = [
+      for (final m in messages)
+        if (m.time >= range.start || m.id.startsWith('temp_')) m,
+    ];
+    if (kept.length == messages.length) return false;
+    messages = kept;
+    hasMoreHistory = true;
+    messagesRev.value++;
+    return true;
   }
 
   Future<List<CachedMessage>> loadOlderFromDb(
@@ -193,17 +238,16 @@ class ChatController extends ChangeNotifier {
     return CachedMessage.fromDbRowsAsync(rows);
   }
 
-  Future<List<CachedMessage>> loadGapSliceFromDb(
+  Future<List<CachedMessage>> loadNewerFromDb(
     int afterTime,
-    int beforeTime,
     bool onlyVisible,
   ) async {
     final rows = await AppDatabase.loadMessagesBetween(
       myId,
       chatId,
       afterTime: afterTime,
-      beforeTime: beforeTime,
-      limit: gapPageSize,
+      beforeTime: _endOfTime,
+      limit: newerPageSize,
       onlyVisible: onlyVisible,
     );
     return CachedMessage.fromDbRowsAsync(rows);
@@ -224,142 +268,157 @@ class ChatController extends ChangeNotifier {
     return CachedMessage.fromDbRowsAsync(rows);
   }
 
-  Future<bool> loadMessageWindow({
+  Future<WindowLoad> loadMessageWindow({
     required String targetId,
     required int targetTime,
+    int? newestKnownTime,
+    bool Function()? stillWanted,
   }) async {
-    if (myId == 0 || targetTime <= 0) return false;
+    if (myId == 0 || targetTime <= 0) return WindowLoad.missing;
     final onlyVisible = !KometSettings.viewDeleted.value;
+    bool wanted() => isMounted() && (stillWanted?.call() ?? true);
 
+    var ranges = await AppDatabase.loadMessageRanges(myId, chatId);
     var window = await loadWindowFromDb(targetTime, onlyVisible);
-    if (!isMounted()) return false;
+    if (!wanted()) return WindowLoad.missing;
 
-    if (!window.any((m) => m.id == targetId)) {
-      final fetched = await messagesModule.fetchHistory(
-        myId,
-        chatId,
-        fromTime: targetTime + 1,
+    final covered =
+        window.any((m) => m.id == targetId) &&
+        ranges.coversWindow(
+          centerTime: targetTime,
+          windowTimes: _timesOf(window),
+          before: jumpWindowBefore,
+          after: jumpWindowAfter,
+          newestKnownTime: newestKnownTime,
+        );
+    if (!covered) {
+      await _fetchQuietly(
+        targetTime + 1,
         forward: jumpWindowAfter,
         backward: jumpWindowBefore + 1,
       );
-      if (!isMounted()) return false;
-      if (fetched.isNotEmpty && KometSettings.viewDeleted.value) {
-        await chats.reconcileDeletedFromFetch(myId, chatId, fetched);
-      }
+      if (!wanted()) return WindowLoad.missing;
       window = await loadWindowFromDb(targetTime, onlyVisible);
-      if (!isMounted()) return false;
+      ranges = await AppDatabase.loadMessageRanges(myId, chatId);
+      if (!wanted()) return WindowLoad.missing;
     }
+    window = ranges.clipAround(window, targetTime, _timeOf);
 
-    if (window.isEmpty) return false;
+    if (!window.any((m) => m.id == targetId)) return WindowLoad.missing;
 
-    final oldestLoaded = messages.isEmpty ? 0 : messages.first.time;
-    final reachesLoaded =
-        messages.isEmpty || window.any((m) => m.time >= oldestLoaded);
-
-    mergeMessages(window);
-
-    if (reachesLoaded) {
+    if (_overlapsLoaded(window)) {
+      mergeMessages(window, contiguous: true);
       persistSessionCache();
-    } else {
-      _markGapAfterWindow(window);
+      return WindowLoad.merged;
     }
-    return containsId(targetId);
+
+    messages = _sorted([...window]);
+    hasMoreHistory = true;
+    isLoadingMore = false;
+    hasNewer = newestKnownTime == null || messages.last.time < newestKnownTime;
+    _newerStalledAt = -1;
+    messagesRev.value++;
+    return WindowLoad.replaced;
   }
 
-  void _markGapAfterWindow(List<CachedMessage> window) {
-    var edge = window.first;
+  bool _overlapsLoaded(List<CachedMessage> window) {
+    if (messages.isEmpty) return true;
+    var oldest = window.first.time;
+    var newest = oldest;
     for (final m in window) {
-      if (m.time > edge.time) edge = m;
+      if (m.time < oldest) oldest = m.time;
+      if (m.time > newest) newest = m.time;
     }
-    final idx = indexOfId(edge.id);
-    if (idx == -1 || idx + 1 >= messages.length) return;
-    final tailTime = messages[idx + 1].time;
-    gaps.removeWhere((g) => g.tailTime == tailTime);
-    gaps.add(
-      HistoryGap(edgeId: edge.id, edgeTime: edge.time, tailTime: tailTime),
-    );
+    final upper = _newestServerMessage()?.time ?? messages.last.time;
+    return newest >= messages.first.time && oldest <= upper;
   }
 
-  void _closeGap(HistoryGap gap) {
-    gaps.remove(gap);
-    if (gaps.isEmpty) persistSessionCache();
+  CachedMessage? _newestServerMessage() {
+    for (var i = messages.length - 1; i >= 0; i--) {
+      if (!messages[i].id.startsWith('temp_')) return messages[i];
+    }
+    return null;
   }
 
-  Future<int> fillGapForward(
-    HistoryGap gap, {
-    void Function()? beforeApply,
-  }) async {
-    if (loadingGap || myId == 0 || !gaps.contains(gap)) return 0;
-    if (gap.edgeTime <= 0 || gap.tailTime <= gap.edgeTime) {
-      _closeGap(gap);
-      return 0;
-    }
+  Future<int> loadNewerHistory({int? newestKnownTime}) async {
+    if (isLoadingNewer || !hasNewer || myId == 0) return 0;
+    final edge = _newestServerMessage();
+    if (edge == null || edge.time == _newerStalledAt) return 0;
 
-    loadingGap = true;
+    isLoadingNewer = true;
     try {
       final onlyVisible = !KometSettings.viewDeleted.value;
-      var slice = await loadGapSliceFromDb(
-        gap.edgeTime,
-        gap.tailTime,
-        onlyVisible,
-      );
+      var ranges = await AppDatabase.loadMessageRanges(myId, chatId);
+      var newer = await loadNewerFromDb(edge.time, onlyVisible);
       if (!isMounted()) return 0;
 
-      if (slice.length < gapPageSize) {
-        final fetched = await messagesModule.fetchHistory(
-          myId,
-          chatId,
-          fromTime: gap.edgeTime,
-          forward: gapPageSize,
-          backward: 0,
-        );
+      final covered = ranges.coversNewerPage(
+        edgeTime: edge.time,
+        pageTimes: _timesOf(newer),
+        limit: newerPageSize,
+        newestKnownTime: newestKnownTime,
+      );
+      if (!covered) {
+        await _fetchQuietly(edge.time, forward: newerPageSize, backward: 0);
         if (!isMounted()) return 0;
-        if (fetched.isNotEmpty && KometSettings.viewDeleted.value) {
-          await chats.reconcileDeletedFromFetch(myId, chatId, fetched);
-        }
-        final refreshed = await loadGapSliceFromDb(
-          gap.edgeTime,
-          gap.tailTime,
-          onlyVisible,
-        );
+        newer = await loadNewerFromDb(edge.time, onlyVisible);
+        ranges = await AppDatabase.loadMessageRanges(myId, chatId);
         if (!isMounted()) return 0;
-        if (refreshed.length <= slice.length) {
-          if (refreshed.isNotEmpty) {
-            beforeApply?.call();
-            mergeMessages(refreshed);
-          }
-          _closeGap(gap);
-          return refreshed.length;
-        }
-        slice = refreshed;
       }
 
-      if (slice.isEmpty) {
-        _closeGap(gap);
-        return 0;
+      final range = ranges.at(edge.time);
+      final page = range == null
+          ? newer
+          : ranges.clipNewer(newer, edge.time, _timeOf);
+      final fresh = page.where((m) => !containsId(m.id)).toList();
+      if (fresh.isNotEmpty) {
+        messages = _sorted([...messages, ...fresh]);
+        messagesRev.value++;
       }
 
-      beforeApply?.call();
-      mergeMessages(slice);
-
-      var edge = slice.first;
-      for (final m in slice) {
-        if (m.time > edge.time) edge = m;
+      final newest = _newestServerMessage()?.time ?? edge.time;
+      final reachedKnown = newestKnownTime != null && newest >= newestKnownTime;
+      if (reachedKnown) {
+        hasNewer = false;
+        persistSessionCache();
+      } else if (fresh.isEmpty) {
+        _newerStalledAt = edge.time;
       }
-      gap.edgeId = edge.id;
-      gap.edgeTime = edge.time;
-      if (edge.time >= gap.tailTime) _closeGap(gap);
-      return slice.length;
+      return fresh.length;
     } catch (e) {
-      logger.e('Error filling history gap: $e');
+      logger.e('Error loading newer history: $e');
       return 0;
     } finally {
-      loadingGap = false;
+      isLoadingNewer = false;
     }
+  }
+
+  Future<void> resetToLatest() async {
+    final onlyVisible = !KometSettings.viewDeleted.value;
+    final latest = await loadInitialFromDb(onlyVisible: onlyVisible);
+    if (!isMounted()) return;
+
+    final floor = latest.isEmpty
+        ? 0
+        : latest.map((m) => m.time).reduce((a, b) => a < b ? a : b);
+    final byId = {for (final m in latest) m.id: m};
+    for (final m in messages) {
+      if (m.time >= floor || m.id.startsWith('temp_')) {
+        byId.putIfAbsent(m.id, () => m);
+      }
+    }
+
+    messages = _sorted(byId.values.toList());
+    hasNewer = false;
+    hasMoreHistory = true;
+    isLoadingMore = false;
+    _newerStalledAt = -1;
+    messagesRev.value++;
+    persistSessionCache();
   }
 
   void persistSessionCache() {
-    if (myId == 0 || messages.isEmpty || hasGap) return;
+    if (myId == 0 || messages.isEmpty || hasNewer) return;
     MessageSessionCache.save(
       myId,
       chatId,
@@ -384,27 +443,34 @@ class ChatController extends ChangeNotifier {
     final onlyVisible = !KometSettings.viewDeleted.value;
 
     try {
-      var older = await loadOlderFromDb(oldest.time, onlyVisible, limit: size);
+      final edge = oldest.time;
+      var ranges = await AppDatabase.loadMessageRanges(myId, chatId);
+      var older = await loadOlderFromDb(edge, onlyVisible, limit: size);
 
-      if (older.length < size) {
-        final fetched = await messagesModule.fetchHistory(
-          myId,
-          chatId,
-          fromTime: oldest.time,
-          count: size,
-        );
-        if (fetched.isNotEmpty) {
-          if (KometSettings.viewDeleted.value) {
-            await chats.reconcileDeletedFromFetch(myId, chatId, fetched);
-          }
-          older = await loadOlderFromDb(oldest.time, onlyVisible, limit: size);
-        }
+      final covered = ranges.at(edge) == null
+          ? older.length >= size
+          : ranges.coversOlderPage(
+              edgeTime: edge,
+              pageTimes: _timesOf(older),
+              limit: size,
+            );
+      if (!covered) {
+        await _fetchQuietly(edge, count: size);
+        if (!isMounted()) return;
+        older = await loadOlderFromDb(edge, onlyVisible, limit: size);
+        ranges = await AppDatabase.loadMessageRanges(myId, chatId);
       }
 
       if (!isMounted()) return;
-      final added = prependOlder(older);
+      final range = ranges.at(edge);
+      final page = range == null
+          ? older
+          : ranges.clipOlder(older, edge, _timeOf);
+      final added = prependOlder(page);
       isLoadingMore = false;
-      if (added == 0) hasMoreHistory = false;
+      if (added == 0 && (range == null || range.start == 0)) {
+        hasMoreHistory = false;
+      }
       if (persist) persistSessionCache();
       onLoaded(added);
     } catch (e) {
@@ -449,7 +515,9 @@ class ChatController extends ChangeNotifier {
 
     final fullDecoded = localDecoded;
 
-    if (fullDecoded.isNotEmpty && chats.wasHistoryFetched(chatId)) {
+    if (fullDecoded.isNotEmpty &&
+        latestCovered &&
+        chats.wasHistoryFetched(chatId)) {
       if (isMounted()) {
         onLoadingFinished();
       }
@@ -464,7 +532,9 @@ class ChatController extends ChangeNotifier {
         await chats.reconcileDeletedFromFetch(myId, chatId, serverMessages);
       }
       final updatedDecoded = await loadInitialFromDb(onlyVisible: onlyVisible);
+      final ranges = await AppDatabase.loadMessageRanges(myId, chatId);
       if (isMounted()) {
+        pruneUncovered(ranges);
         onApplyMerged(updatedDecoded, markLoaded: true);
       }
       unawaited(chats.reconcileLastMessageIfPlaceholder(myId, chatId));

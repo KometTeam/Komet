@@ -35,6 +35,7 @@ final class KometVideoNote: NSObject {
   private var deviceInput: AVCaptureDeviceInput?
   private var audioInput: AVCaptureDeviceInput?
   private var position: AVCaptureDevice.Position = .front
+  private var preferredCameraId: String?
   private var edge: Int = 480
   private var fps: Int = 30
 
@@ -62,8 +63,12 @@ final class KometVideoNote: NSObject {
     }
   }
 
-  func initialize(front: Bool, edge: Int, fps: Int, result: @escaping FlutterResult) {
+  func initialize(
+    front: Bool, cameraId: String?, edge: Int, fps: Int,
+    result: @escaping FlutterResult
+  ) {
     self.position = front ? .front : .back
+    self.preferredCameraId = cameraId?.isEmpty == false ? cameraId : nil
     self.edge = max(16, edge)
     self.fps = max(1, fps)
 
@@ -96,6 +101,7 @@ final class KometVideoNote: NSObject {
   func switchCamera(result: @escaping FlutterResult) {
     queue.async {
       self.position = self.position == .front ? .back : .front
+      self.preferredCameraId = nil
       do {
         try self.configureSession()
       } catch {
@@ -204,8 +210,14 @@ final class KometVideoNote: NSObject {
       deviceInput = nil
     }
 
-    guard let device = AVCaptureDevice.default(
-      .builtInWideAngleCamera, for: .video, position: position)
+    if let id = preferredCameraId,
+       let chosen = AVCaptureDevice(uniqueID: id),
+       chosen.position != .unspecified {
+      position = chosen.position
+    }
+    guard let device = preferredCameraId.flatMap({ AVCaptureDevice(uniqueID: $0) })
+      ?? AVCaptureDevice.default(
+        .builtInWideAngleCamera, for: .video, position: position)
       ?? AVCaptureDevice.default(for: .video) else {
       throw NSError(domain: "KometVideoNote", code: 1,
                     userInfo: [NSLocalizedDescriptionKey: "no camera found"])

@@ -15,6 +15,7 @@ import '../../widgets/glossy_pill.dart';
 import '../../widgets/primary_loading_button.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/small_spinner.dart';
+import '../../../core/security/app_lock.dart';
 
 class E2eeScreen extends StatefulWidget {
   final int accountId;
@@ -203,7 +204,7 @@ class _E2eeScreenState extends State<E2eeScreen> {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/komet-e2ee-${widget.accountId}.kct');
     await file.writeAsBytes(bytes, flush: true);
-    await Share.shareXFiles([XFile(file.path)]);
+    await AppLock.instance.external(() => Share.shareXFiles([XFile(file.path)]));
     // #***! файл содержит ключ личности и все сессии, в кэше ему делать нечего
     try {
       await file.delete();
@@ -214,7 +215,7 @@ class _E2eeScreenState extends State<E2eeScreen> {
 
   Future<void> _import() async {
     final l10n = AppLocalizations.of(context)!;
-    final picked = await FilePicker.platform.pickFiles(withData: true);
+    final picked = await AppLock.instance.external(() => FilePicker.platform.pickFiles(withData: true));
     final file = picked?.files.singleOrNull;
     if (file == null || !mounted) return;
     Uint8List? bytes = file.bytes;

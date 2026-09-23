@@ -16,6 +16,7 @@ import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
+import '../../../core/security/app_lock.dart';
 
 Future<void> showCreateGroupFlow(BuildContext context) async {
   final cs = Theme.of(context).colorScheme;
@@ -99,7 +100,9 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
 
   Future<void> _pickAvatar() async {
     if (_creating) return;
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final result = await AppLock.instance.external(
+      () => FilePicker.platform.pickFiles(type: FileType.image),
+    );
     if (result == null || result.files.isEmpty) return;
     final path = result.files.first.path;
     if (path == null) return;

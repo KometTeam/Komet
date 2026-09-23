@@ -5,12 +5,14 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import '../config/app_camera.dart';
 import '../config/app_microphone.dart';
 import '../config/app_pulse_source.dart';
 import '../config/call_no_mute.dart';
 import '../utils/logger.dart';
 import '../utils/parse.dart';
 import 'audio_devices.dart';
+import 'camera_devices.dart';
 import 'call_admin.dart';
 import 'call_bridge.dart';
 import 'call_info.dart';
@@ -2222,7 +2224,7 @@ class CallSession {
     if (pc == null) return;
 
     final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
-      'video': true,
+      'video': CameraDevices.constraints(AppCamera.deviceId),
       'audio': false,
     });
 

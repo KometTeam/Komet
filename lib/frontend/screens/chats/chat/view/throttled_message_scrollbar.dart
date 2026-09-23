@@ -84,10 +84,11 @@ class _ThrottledMessageScrollbarState extends State<ThrottledMessageScrollbar>
 
   double get _avgItemExtent {
     if (!_hasMetrics) return _defaultAvgExtent;
-    final maxExtent = widget.controller.position.maxScrollExtent;
+    final pos = widget.controller.position;
+    final extent = pos.maxScrollExtent - pos.minScrollExtent;
     final count = widget.itemCountOf();
-    if (count <= 0 || maxExtent <= 0) return _defaultAvgExtent;
-    return (maxExtent / count).clamp(16.0, 400.0);
+    if (count <= 0 || extent <= 0) return _defaultAvgExtent;
+    return (extent / count).clamp(16.0, 400.0);
   }
 
   void _startTicker() {
@@ -113,7 +114,7 @@ class _ThrottledMessageScrollbarState extends State<ThrottledMessageScrollbar>
     if (magnitude <= 0) return;
 
     // #***! тянешь вниз (offset > 0) — едем к новым сообщениям, то есть
-    // pixels убывает (reverse:true, pixels=0 внизу списка).
+    // pixels убывает (reverse:true, низ списка — minScrollExtent).
     final velocityPxPerSec =
         -_pullOffset.sign * magnitude * widget.messagesPerSecond * _avgItemExtent;
 
@@ -155,7 +156,9 @@ class _ThrottledMessageScrollbarState extends State<ThrottledMessageScrollbar>
 
   @override
   Widget build(BuildContext context) {
-    if (!_hasMetrics || widget.controller.position.maxScrollExtent <= 0) {
+    if (!_hasMetrics) return const SizedBox.shrink();
+    final metrics = widget.controller.position;
+    if (metrics.maxScrollExtent - metrics.minScrollExtent <= 0) {
       return const SizedBox.shrink();
     }
     final cs = Theme.of(context).colorScheme;
@@ -169,7 +172,10 @@ class _ThrottledMessageScrollbarState extends State<ThrottledMessageScrollbar>
       child: LayoutBuilder(
         builder: (context, constraints) {
           final trackHeight = constraints.maxHeight;
-          final totalExtent = pos.maxScrollExtent + pos.viewportDimension;
+          final totalExtent =
+              pos.maxScrollExtent -
+              pos.minScrollExtent +
+              pos.viewportDimension;
           final viewportFraction = totalExtent > 0
               ? (pos.viewportDimension / totalExtent).clamp(0.04, 1.0)
               : 1.0;

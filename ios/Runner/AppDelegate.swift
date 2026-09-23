@@ -121,6 +121,7 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
         self.videoNote = recorder
         recorder.initialize(
           front: (args["front"] as? NSNumber)?.boolValue ?? true,
+          cameraId: args["cameraId"] as? String,
           edge: (args["size"] as? NSNumber)?.intValue ?? 480,
           fps: (args["fps"] as? NSNumber)?.intValue ?? 30,
           result: result)

@@ -15,6 +15,7 @@ import '../../../main.dart' show api, messagesModule, webAppModule;
 import '../../widgets/confirm_dialog.dart';
 import '../chats/chat_list_screen.dart' show openForwardScreen;
 import '../profile/web_qr_scan_screen.dart';
+import '../../../core/security/app_lock.dart';
 
 abstract class WebAppEntryPoint {
   static const String webApp = 'web_app';
@@ -434,10 +435,10 @@ class WebAppBridge {
       return;
     }
     try {
-      final result = await Share.share(
+      final result = await AppLock.instance.external(() => Share.share(
         text,
         sharePositionOrigin: shareOriginOf(contextResolver()),
-      );
+      ));
       _send(method, {
         'requestId': ?requestId,
         'status': result.status == ShareResultStatus.dismissed

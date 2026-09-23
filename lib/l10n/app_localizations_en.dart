@@ -2541,6 +2541,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fontSettingsAddFontConfirm => 'Add';
 
   @override
+  String get fontSettingsPickFile => 'Choose file';
+
+  @override
+  String get fontSettingsPickFileHint => 'A .ttf, .otf or .ttc font';
+
+  @override
+  String get fontSettingsNotAFont => 'This is not a font file';
+
+  @override
+  String get fontSettingsCancel => 'Cancel';
+
+  @override
   String get fontSettingsTitle => 'Fonts';
 
   @override
@@ -3318,4 +3330,171 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get fileNoAppToOpen =>
       'No app on this device can open this file. Choose where to send it.';
+
+  @override
+  String get lockTitle => 'Enter your passcode';
+
+  @override
+  String get lockBiometricReason => 'Unlock Komet';
+
+  @override
+  String lockBlocked(String time) {
+    return 'Too many attempts. Try again in $time';
+  }
+
+  @override
+  String lockAttemptsLeft(int count) {
+    return 'Wrong passcode. Attempts left: $count';
+  }
+
+  @override
+  String get lockNow => 'Lock Komet';
+
+  @override
+  String get passcodeTitle => 'Passcode';
+
+  @override
+  String get passcodeCreate => 'Create a passcode';
+
+  @override
+  String get passcodeRepeat => 'Repeat the passcode';
+
+  @override
+  String get passcodeMismatch => 'The passcodes didn\'t match, try again';
+
+  @override
+  String get passcodeDigitsHint => 'Four digits';
+
+  @override
+  String get passcodeEnable => 'Turn passcode on';
+
+  @override
+  String get passcodeEnabled => 'Passcode is on';
+
+  @override
+  String get passcodeChanged => 'Passcode changed';
+
+  @override
+  String get passcodeChange => 'Change passcode';
+
+  @override
+  String get passcodeBiometric => 'Unlock with biometrics';
+
+  @override
+  String get passcodeBiometricHint =>
+      'Fingerprint or face instead of the passcode';
+
+  @override
+  String get passcodeAutoLock => 'Auto-lock';
+
+  @override
+  String get passcodeAutoLockHint =>
+      'Lock Komet when you don\'t touch it for a while';
+
+  @override
+  String get passcodeAutoLockOff => 'Off';
+
+  @override
+  String passcodeAutoLockAfter(int minutes) {
+    return 'After $minutes min';
+  }
+
+  @override
+  String get passcodeDisable => 'Turn passcode off';
+
+  @override
+  String get passcodeDisableTitle => 'Turn passcode off?';
+
+  @override
+  String get passcodeDisableMessage =>
+      'Komet will open without asking for the passcode.';
+
+  @override
+  String get passcodeDisableAction => 'Turn off';
+
+  @override
+  String get passcodeCancel => 'Cancel';
+
+  @override
+  String get passcodeDisabled => 'Passcode is off';
+
+  @override
+  String get passcodeOnDescription =>
+      'Komet asks for the passcode every time you open it. The lock in the chat list header locks it right away.';
+
+  @override
+  String get passcodeOffDescription =>
+      'Protect your chats: Komet will ask for a passcode every time you open it.';
+
+  @override
+  String get passcodeForgotHint =>
+      'If you forget the passcode, you\'ll have to clear Komet\'s data or reinstall it and sign in again. After five wrong attempts input is blocked for five minutes.';
+
+  @override
+  String get mediaDevicesTitle => 'Camera and microphone';
+
+  @override
+  String get mediaDevicesMicrophone => 'Microphone';
+
+  @override
+  String get mediaDevicesMicrophoneHint => 'Used for calls and voice messages';
+
+  @override
+  String get mediaDevicesCamera => 'Camera';
+
+  @override
+  String get mediaDevicesCameraHint =>
+      'Used for calls and, if you like, for video messages';
+
+  @override
+  String get mediaDevicesSystemMicrophone => 'System microphone';
+
+  @override
+  String get mediaDevicesSystemCamera => 'System camera';
+
+  @override
+  String mediaDevicesCameraFallback(int number) {
+    return 'Camera $number';
+  }
+
+  @override
+  String get mediaDevicesFront => 'Front';
+
+  @override
+  String get mediaDevicesBack => 'Rear';
+
+  @override
+  String get mediaDevicesVideoNotes => 'Video messages';
+
+  @override
+  String get mediaDevicesVideoNoteCustom => 'My camera';
+
+  @override
+  String get mediaDevicesVideoNoteCustomHint =>
+      'Record video messages with the camera chosen above';
+
+  @override
+  String get mediaDevicesVideoNoteCustomMissing =>
+      'Choose a camera above, until then the system one is used';
+
+  @override
+  String get mediaDevicesVideoNoteRear => 'Start with the rear camera';
+
+  @override
+  String get mediaDevicesVideoNoteRearHint =>
+      'Otherwise a video message starts with the front camera';
+
+  @override
+  String get chatPreviewMarkRead => 'Mark as read';
+
+  @override
+  String get chatPreviewOpen => 'Open';
+
+  @override
+  String get attachSheetSendAsVideoNote => 'Send as video message';
+
+  @override
+  String attachSheetVideoNoteTooLong(int seconds) {
+    return 'A video message can\'t be longer than $seconds s';
+  }
 }

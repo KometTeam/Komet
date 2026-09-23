@@ -116,6 +116,8 @@ dependencies:
   flutter_svg: ^2.0.10
   fjs: ^3.3.0
   cryptography: ^2.7.0
+  local_auth: ^3.0.2
+  visibility_detector: ^0.4.0+2
 
 dev_dependencies:
   flutter_test:

@@ -11,6 +11,7 @@ import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/small_spinner.dart';
+import '../../../core/security/app_lock.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -90,7 +91,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _changeAvatar() async {
     if (_isSaving) return;
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final result = await AppLock.instance.external(
+      () => FilePicker.platform.pickFiles(type: FileType.image),
+    );
     final path = result?.files.firstOrNull?.path;
     if (path == null) return;
     if (await File(path).length() > kMaxAvatarBytes) {

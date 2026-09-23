@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
+import 'chat_preview_card.dart';
 import 'chat_screen.dart';
 import 'search_screen.dart';
 import 'create_channel_flow.dart';
@@ -103,6 +104,8 @@ import '../stories/story_viewer_screen.dart';
 import '../downloads_screen.dart';
 import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
+import '../lock/lock_glyph.dart';
+import '../../../core/security/app_lock.dart';
 
 const String _savedWelcomeKey = 'welcome.saved.dialog.message';
 
@@ -247,6 +250,12 @@ class _ChatListScreenState extends State<ChatListScreen>
   double _revealAnimBegin = 0.0;
   double _closeAnimBegin = 0.0;
   static const double _kStoriesPullTriggerPx = 16.0;
+  static const double _kArchivePullTriggerPx = 56.0;
+  bool _archiveRevealed = false;
+  bool _archivePullArmed = true;
+  bool _archiveRevealAnimates = false;
+  bool _collapsingArchive = false;
+  final GlobalKey _archiveEntryKey = GlobalKey();
 
   final _StoriesUi _storiesUi = _StoriesUi();
   double get _pullRatio => _storiesUi.pullRatio;
@@ -294,7 +303,6 @@ class _ChatListScreenState extends State<ChatListScreen>
   List<CachedChat> _chatsWithArchived = [];
   Set<int> _archivedIds = const {};
   int _archivedCount = 0;
-  int _archivedUnread = 0;
   bool _archiveHadChats = false;
 
   int _chatListRevision = 0;
@@ -567,12 +575,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
     final kind = cats.single;
 
-    final confirmed = await _showDeleteConfirmDialog(selectedAfter, kind);
-    if (!mounted || confirmed != true) return;
+    final choice = await _showDeleteConfirmDialog(selectedAfter, kind);
+    if (!mounted || choice == null) return;
 
     final errors = <String>[];
     for (final c in selectedAfter) {
-      final forAll = kind == _DeleteKind.ownerGroup;
+      final forAll =
+          kind == _DeleteKind.ownerGroup || (choice.forAll && c.id != 0);
       final err = await chats.deleteChat(
         api,
         chatId: c.id,
@@ -591,7 +600,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     _clearSelection();
   }
 
-  Future<bool?> _showDeleteConfirmDialog(
+  Future<({bool forAll})?> _showDeleteConfirmDialog(
     List<CachedChat> selected,
     _DeleteKind kind,
   ) {
@@ -618,15 +627,18 @@ class _ChatListScreenState extends State<ChatListScreen>
             : 'Действие нельзя отменить';
         primaryLabel = count == 1 ? 'Удалить чат у всех' : 'Удалить у всех';
       case _DeleteKind.blocked:
-        return Future.value(false);
+        return Future.value(null);
     }
 
-    return showModalBottomSheet<bool>(
+    final offerForAll =
+        kind == _DeleteKind.personalLike && selected.any((c) => c.id != 0);
+    var forAll = false;
+    return showModalBottomSheet<({bool forAll})>(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
       shape: kSheetShape,
-      builder: (ctx) {
-        return SafeArea(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
             child: Column(
@@ -646,6 +658,26 @@ class _ChatListScreenState extends State<ChatListScreen>
                   body,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 ),
+                if (offerForAll) ...[
+                  const SizedBox(height: 8),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => setSheetState(() => forAll = !forAll),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: forAll,
+                          onChanged: (v) =>
+                              setSheetState(() => forAll = v ?? false),
+                        ),
+                        Text(
+                          'Для всех',
+                          style: TextStyle(color: cs.onSurface, fontSize: 15),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 if (kind == _DeleteKind.ownerGroup && single != null) ...[
                   Container(
@@ -667,7 +699,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   const SizedBox(height: 8),
                 ],
                 GestureDetector(
-                  onTap: () => Navigator.pop(ctx, true),
+                  onTap: () => Navigator.pop(ctx, (forAll: forAll)),
                   child: Container(
                     height: 44,
                     alignment: Alignment.center,
@@ -688,8 +720,8 @@ class _ChatListScreenState extends State<ChatListScreen>
               ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -708,7 +740,25 @@ class _ChatListScreenState extends State<ChatListScreen>
     return false;
   }
 
+  void _onArchiveModeChanged() {
+    if (!mounted) return;
+    setState(() {
+      _archiveRevealed = false;
+      _archiveRevealAnimates = false;
+    });
+  }
+
+  bool get _archiveAwaitsPull =>
+      KometSettings.archiveOnPull.value &&
+      !_archiveRevealed &&
+      _shouldShowArchiveEntry(_selectedFolderIndex, ignorePull: true);
+
+  bool get _storiesStagePassed =>
+      !AppStories.current.value ||
+      (_storiesDockedOpen && !_storiesRevealController.isAnimating);
+
   bool _allowStoriesPullOverscrollTop() {
+    if (_archiveAwaitsPull && _storiesStagePassed) return true;
     if (!AppStories.current.value) return false;
     if (_storiesDockedOpen ||
         _storiesRevealController.isAnimating ||
@@ -781,6 +831,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     AppStories.current.addListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.addListener(_requestReload);
+    KometSettings.archiveOnPull.addListener(_onArchiveModeChanged);
     KometSettings.showHiddenChats.addListener(_requestReload);
     ContactsModule.revision.addListener(_requestReload);
     FoldersModule.revision.addListener(_requestReload);
@@ -986,12 +1037,10 @@ class _ChatListScreenState extends State<ChatListScreen>
       );
       final archivedIds = ArchivedChatsStore.instance.archivedChatIds(p.id);
       var archivedCount = 0;
-      var archivedUnread = 0;
       for (final c in loadedChats) {
         if (!archivedIds.contains(c.id)) continue;
         if (CloudStorageModule.isCloudStorageGroup(c)) continue;
         archivedCount++;
-        archivedUnread += c.unreadCount;
       }
       var folders = await foldersFuture;
       final foldersKnown = await foldersKnownFuture;
@@ -1047,7 +1096,6 @@ class _ChatListScreenState extends State<ChatListScreen>
           _chatsWithArchived = visibleChats;
           _archivedIds = archivedIds;
           _archivedCount = archivedCount;
-          _archivedUnread = archivedUnread;
           _contactIds = contactIds;
           _enteringChatIds = entering;
           _chatListRevision++;
@@ -1334,6 +1382,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
 
     if (offset < 0) {
+      if (_archiveAwaitsPull &&
+          _archivePullArmed &&
+          _storiesStagePassed &&
+          offset.abs() >= _kArchivePullTriggerPx) {
+        _revealArchive();
+        return;
+      }
       if (!_allowStoriesPullOverscrollTop()) {
         return;
       }
@@ -1350,6 +1405,8 @@ class _ChatListScreenState extends State<ChatListScreen>
         }
       }
     } else {
+      if (offset > 3) _archivePullArmed = false;
+      _collapseArchiveIfScrolledPast(c);
       if (_storiesDockedOpen &&
           offset > 12 &&
           DateTime.now().isAfter(_storiesRevealLayoutSettleUntil)) {
@@ -1482,6 +1539,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
     if (n is ScrollEndNotification) {
       if (n.metrics.pixels <= 0.5) {
+        _archivePullArmed = true;
         _storiesOverscrollRevealArmed = true;
         _storiesUi.notify();
       }
@@ -1532,6 +1590,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     AppStories.current.removeListener(_onStoriesEnabledChanged);
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.removeListener(_requestReload);
+    KometSettings.archiveOnPull.removeListener(_onArchiveModeChanged);
     KometSettings.showHiddenChats.removeListener(_requestReload);
     ContactsModule.revision.removeListener(_requestReload);
     FoldersModule.revision.removeListener(_requestReload);
@@ -1849,6 +1908,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         onPressed: () =>
                                             unawaited(_openDownloads()),
                                       ),
+                                    if (!widget.forwardMode &&
+                                        !widget.archiveMode &&
+                                        !_shareMode)
+                                      const _LockNowButton(),
                                     PopupMenuButton<int>(
                                       icon: Icon(
                                         Symbols.more_vert,
@@ -1970,7 +2033,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               children: [
                                 for (var i = 0; i < _folders.length; i++) ...[
                                   if (i > 0) const SizedBox(width: 8),
-                                  _buildFolderChip(_folders[i]),
+                                  _buildFolderChip(_folders[i], i),
                                 ],
                               ],
                             );
@@ -1985,7 +2048,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                   for (var i = 0; i < _folders.length; i++) ...[
                                     if (i > 0) const SizedBox(width: 8),
                                     Expanded(
-                                      child: _buildFolderChip(_folders[i]),
+                                      child: _buildFolderChip(_folders[i], i),
                                     ),
                                   ],
                                 ],
@@ -2044,7 +2107,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         slivers: [
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
           if (_shouldShowArchiveEntry(pageIndex))
-            SliverToBoxAdapter(child: _buildArchiveEntry(cs)),
+            SliverToBoxAdapter(child: _buildRevealableArchiveEntry(cs)),
           if (pageChats.isEmpty && !_isInitialLoading)
             SliverFillRemaining(
               child: Center(
@@ -2681,15 +2744,64 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  bool _shouldShowArchiveEntry(int pageIndex) {
+  bool _shouldShowArchiveEntry(int pageIndex, {bool ignorePull = false}) {
     if (widget.archiveMode || widget.forwardMode) return false;
     if (_isInitialLoading) return false;
     if (_archivedCount <= 0) return false;
+    if (!ignorePull && KometSettings.archiveOnPull.value && !_archiveRevealed) {
+      return false;
+    }
     if (_folders.isEmpty) return pageIndex == 0;
     final allIdx = _folders.indexWhere(
       (f) => FoldersModule.isAllChatsFolder(f),
     );
     return pageIndex == (allIdx >= 0 ? allIdx : 0);
+  }
+
+  void _revealArchive() {
+    Haptics.medium();
+    setState(() {
+      _archiveRevealed = true;
+      _archiveRevealAnimates = true;
+    });
+  }
+
+  void _collapseArchiveIfScrolledPast(ScrollController c) {
+    if (_collapsingArchive || !_archiveRevealed) return;
+    if (!KometSettings.archiveOnPull.value) return;
+    final box = _archiveEntryKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+    final height = box.size.height;
+    if (c.offset <= height + 8) return;
+    _collapsingArchive = true;
+    setState(() {
+      _archiveRevealed = false;
+      _archiveRevealAnimates = false;
+    });
+    c.jumpTo(c.offset - height);
+    _collapsingArchive = false;
+  }
+
+  Widget _buildRevealableArchiveEntry(ColorScheme cs) {
+    final entry = KeyedSubtree(
+      key: _archiveEntryKey,
+      child: _buildArchiveEntry(cs),
+    );
+    if (!_archiveRevealAnimates) return entry;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      onEnd: () => _archiveRevealAnimates = false,
+      builder: (context, t, child) => ClipRect(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          heightFactor: t,
+          child: Opacity(opacity: t, child: child),
+        ),
+      ),
+      child: entry,
+    );
   }
 
   Widget _buildArchiveEntry(ColorScheme cs) {
@@ -2722,23 +2834,34 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
               ),
             ),
-            if (_archivedUnread > 0)
-              Container(
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: cs.primary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _archivedUnread > 99 ? '99+' : '$_archivedUnread',
-                  style: TextStyle(
-                    color: cs.onPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+            ValueListenableBuilder<int>(
+              valueListenable: chats.chatsChanged,
+              builder: (context, _, _) {
+                final unread = _liveUnread(
+                  _chatsWithArchived.where((c) => _archivedIds.contains(c.id)),
+                ).total;
+                if (unread <= 0) return const SizedBox.shrink();
+                return Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
                   ),
-                ),
-              ),
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    unread > 99 ? '99+' : '$unread',
+                    style: TextStyle(
+                      color: cs.onPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                );
+              },
+            ),
             Icon(Symbols.chevron_right, color: cs.outline),
           ],
         ),
@@ -2920,7 +3043,20 @@ class _ChatListScreenState extends State<ChatListScreen>
     return true;
   }
 
-  Widget _buildFolderChip(ChatFolder folder) {
+  static ({int total, int loud}) _liveUnread(Iterable<CachedChat> list) {
+    var total = 0;
+    var loud = 0;
+    for (final stale in list) {
+      final chat = chats.chatListenable(stale.id).value;
+      final count = chat.unreadCount;
+      if (count <= 0) continue;
+      total += count;
+      if (!chat.isMuted) loud += count;
+    }
+    return (total: total, loud: loud);
+  }
+
+  Widget _buildFolderChip(ChatFolder folder, int pageIndex) {
     final cs = Theme.of(context).colorScheme;
     final folderId = folder.id;
     final isSelected = _selectedFolderId == folderId;
@@ -2936,14 +3072,39 @@ class _ChatListScreenState extends State<ChatListScreen>
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         depth: 4,
         child: Center(
-          child: Text(
-            _folderChipLabel(folder),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: isSelected ? cs.onPrimaryContainer : cs.primary,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  _folderChipLabel(folder),
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isSelected ? cs.onPrimaryContainer : cs.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              ValueListenableBuilder<int>(
+                valueListenable: chats.chatsChanged,
+                builder: (context, _, _) {
+                  final (:total, :loud) = _liveUnread(
+                    _chatsForPageIndex(pageIndex),
+                  );
+                  if (total <= 0) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: _countBadge(
+                      cs,
+                      total > 99 ? '99+' : '$total',
+                      muted: loud == 0,
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
         ),
       ),
@@ -3059,6 +3220,88 @@ class _ChatListScreenState extends State<ChatListScreen>
           height: 1.1,
         ),
       ),
+    );
+  }
+
+  bool get _canPreviewChats =>
+      !widget.forwardMode && !_shareMode && !_isSelectionMode;
+
+  void _openChatFromList(
+    String id,
+    String name,
+    String imageUrl,
+    String chatType,
+  ) {
+    if (imageUrl.isNotEmpty) {
+      unawaited(
+        precacheImage(
+          CachedNetworkImageProvider(
+            imageUrl,
+            maxWidth: kAvatarThumbSize,
+            maxHeight: kAvatarThumbSize,
+          ),
+          context,
+        ),
+      );
+    }
+    if (widget.onChatSelected != null) {
+      widget.onChatSelected!(
+        DesktopChatSelection(
+          chatId: int.parse(id),
+          name: name,
+          imageUrl: imageUrl,
+          chatType: chatType,
+        ),
+      );
+    } else {
+      pushSwipeable(
+        context,
+        (context) => ChatScreen(
+          chatId: int.parse(id),
+          name: name,
+          imageUrl: imageUrl,
+          chatType: chatType,
+        ),
+      );
+    }
+  }
+
+  CachedChat? _chatById(int chatId) {
+    for (final chat in _chatsWithArchived) {
+      if (chat.id == chatId) return chats.chatListenable(chatId).value;
+    }
+    return null;
+  }
+
+  void _previewChat(String id, String name, String imageUrl, String chatType) {
+    final chatId = int.tryParse(id);
+    if (chatId == null) return;
+    final chat = _chatById(chatId);
+    unawaited(
+      showChatPreview(
+        context,
+        chatId: chatId,
+        name: name,
+        imageUrl: imageUrl,
+        chatType: chatType,
+        hasUnread: (chat?.unreadCount ?? 0) > 0 && chat?.lastMsgId != null,
+        onOpen: () => _openChatFromList(id, name, imageUrl, chatType),
+        onMarkRead: () => _markChatRead(chatId),
+      ),
+    );
+  }
+
+  Future<void> _markChatRead(int chatId) async {
+    final myId = _profile?.id;
+    final chat = _chatById(chatId);
+    final lastId = chat?.lastMsgId;
+    if (myId == null || chat == null || lastId == null) return;
+    await chats.markRead(
+      api,
+      myId,
+      chatId,
+      lastId.toString(),
+      chat.lastMsgTime ?? 0,
     );
   }
 
@@ -3246,38 +3489,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             _toggleSelection(id);
             return;
           }
-          if (imageUrl.isNotEmpty) {
-            unawaited(
-              precacheImage(
-                CachedNetworkImageProvider(
-                  imageUrl,
-                  maxWidth: kAvatarThumbSize,
-                  maxHeight: kAvatarThumbSize,
-                ),
-                context,
-              ),
-            );
-          }
-          if (widget.onChatSelected != null) {
-            widget.onChatSelected!(
-              DesktopChatSelection(
-                chatId: int.parse(id),
-                name: name,
-                imageUrl: imageUrl,
-                chatType: chatType,
-              ),
-            );
-          } else {
-            pushSwipeable(
-              context,
-              (context) => ChatScreen(
-                chatId: int.parse(id),
-                name: name,
-                imageUrl: imageUrl,
-                chatType: chatType,
-              ),
-            );
-          }
+          _openChatFromList(id, name, imageUrl, chatType);
         },
         onLongPress: (widget.forwardMode || _shareMode)
             ? null
@@ -3292,54 +3504,59 @@ class _ChatListScreenState extends State<ChatListScreen>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    avatarCircle,
-                    if (isEncrypted)
-                      Positioned(
-                        left: -2,
-                        bottom: -2,
-                        child: EncryptionLockBadge(
-                          size: 18,
-                          verified: isVerified,
-                        ),
-                      ),
-                    if (isSelected)
-                      Positioned(
-                        right: -2,
-                        bottom: -2,
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: cs.primary,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: cs.surface, width: 2),
-                          ),
-                          child: Icon(
-                            Symbols.check,
-                            color: cs.onPrimary,
-                            size: 14,
+                GestureDetector(
+                  onLongPress: _canPreviewChats
+                      ? () => _previewChat(id, name, imageUrl, chatType)
+                      : null,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      avatarCircle,
+                      if (isEncrypted)
+                        Positioned(
+                          left: -2,
+                          bottom: -2,
+                          child: EncryptionLockBadge(
+                            size: 18,
+                            verified: isVerified,
                           ),
                         ),
-                      )
-                    else if (hasCall)
-                      Positioned(
-                        right: -2,
-                        bottom: -2,
-                        child: ChatCallBadge(borderColor: cs.surface),
-                      )
-                    else if (presenceUserId != 0)
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: OnlineDot(
-                          userId: presenceUserId,
-                          borderColor: cs.surface,
+                      if (isSelected)
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: cs.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: cs.surface, width: 2),
+                            ),
+                            child: Icon(
+                              Symbols.check,
+                              color: cs.onPrimary,
+                              size: 14,
+                            ),
+                          ),
+                        )
+                      else if (hasCall)
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: ChatCallBadge(borderColor: cs.surface),
+                        )
+                      else if (presenceUserId != 0)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: OnlineDot(
+                            userId: presenceUserId,
+                            borderColor: cs.surface,
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -3786,4 +4003,55 @@ class _StoriesUi extends ChangeNotifier {
   bool shouldCollapseSearch = false;
 
   void notify() => notifyListeners();
+}
+
+class _LockNowButton extends StatefulWidget {
+  const _LockNowButton();
+
+  @override
+  State<_LockNowButton> createState() => _LockNowButtonState();
+}
+
+class _LockNowButtonState extends State<_LockNowButton> {
+  final GlobalKey _glyphKey = GlobalKey();
+
+  void _lock() {
+    final box = _glyphKey.currentContext?.findRenderObject();
+    final origin = box is RenderBox && box.hasSize
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
+    Haptics.medium();
+    AppLock.instance.lock(origin: origin);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final lock = AppLock.instance;
+    return ValueListenableBuilder<bool>(
+      valueListenable: lock.enabled,
+      builder: (context, enabled, _) {
+        if (!enabled) return const SizedBox.shrink();
+        return IconButton(
+          tooltip: AppLocalizations.of(context)!.lockNow,
+          onPressed: _lock,
+          icon: ValueListenableBuilder<bool>(
+            valueListenable: lock.locked,
+            builder: (context, locked, child) => AnimatedOpacity(
+              opacity: locked ? 0 : 1,
+              duration: const Duration(milliseconds: 180),
+              child: child,
+            ),
+            child: LockGlyph(
+              key: _glyphKey,
+              closed: 0,
+              size: 24,
+              color: cs.outline,
+              holeColor: cs.surface,
+            ),
+          ),
+        );
+      },
+    );
+  }
 }

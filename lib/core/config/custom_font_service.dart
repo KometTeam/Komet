@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/logger.dart';
+import 'font_file_info.dart';
 import 'font_metrics.dart';
 
 // #***! шрифты с гугл фонтс, скачали в кэш зарегистрировали
@@ -66,6 +67,20 @@ class CustomFontService {
     }
   }
 
+  static Future<String> addFromFile(Uint8List bytes, String fileName) async {
+    if (!_isSfnt(bytes)) {
+      throw const FormatException('not a ttf/otf/ttc font');
+    }
+    final family =
+        FontFileInfo.familyName(bytes) ??
+        FontFileInfo.familyFromFileName(fileName);
+    final file = _fileFor(await _cacheDir(), family);
+    await file.writeAsBytes(bytes, flush: true);
+    if (!_loaded.contains(family)) await _register(family, bytes);
+    await _persist(family);
+    return family;
+  }
+
   // #***! удаляем из списка и файл с диска
   static Future<void> removeFamily(String family) async {
     final prefs = await SharedPreferences.getInstance();
@@ -86,7 +101,17 @@ class CustomFontService {
   // #***! имя семейства в имя файла, лишнее в подчёркивания
   static File _fileFor(Directory dir, String family) {
     final safe = family.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
-    return File('${dir.path}/$safe.ttf');
+    final ascii = RegExp(r'^[A-Za-z0-9 _-]*$').hasMatch(family);
+    final name = ascii ? safe : '${safe}_${_stableHash(family)}';
+    return File('${dir.path}/$name.ttf');
+  }
+
+  static String _stableHash(String value) {
+    var hash = 0x811c9dc5;
+    for (final unit in value.codeUnits) {
+      hash = ((hash ^ unit) * 0x01000193) & 0xffffffff;
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
   }
 
   // #***! проверяем что это шрифт и считаем метрику

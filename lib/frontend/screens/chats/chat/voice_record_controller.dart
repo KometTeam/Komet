@@ -6,6 +6,8 @@ import 'package:flutter/widgets.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../../core/calls/audio_devices.dart';
+import '../../../../core/config/app_microphone.dart';
 import '../../../../core/media/opus_ogg_encoder.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/screen_wake.dart';
@@ -55,6 +57,31 @@ class VoiceRecordController {
   ValueListenable<double> get lockDrag => _lockDrag;
   List<double> get amps => _amps;
 
+  static Future<InputDevice?> _preferredInput(AudioRecorder rec) async {
+    final id = AppMicrophone.deviceId;
+    if (id == null) return null;
+    try {
+      final mics = await AudioDevices.microphones();
+      final label = mics
+          .where((m) => m.id == id)
+          .map((m) => m.label.toLowerCase())
+          .firstOrNull;
+      final inputs = await rec.listInputDevices();
+      return inputs.where((d) => d.id == id).firstOrNull ??
+          (label == null || label.isEmpty
+              ? null
+              : inputs.where((d) {
+                  final other = d.label.toLowerCase();
+                  if (other.isEmpty) return false;
+                  return other == label ||
+                      other.contains(label) ||
+                      label.contains(other);
+                }).firstOrNull);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> start() async {
     if (_isRecording.value || myId() == 0) return;
     _stopRequested = false;
@@ -96,7 +123,12 @@ class VoiceRecordController {
       _cancelled = false;
       _path = path;
       await rec.start(
-        RecordConfig(encoder: encoder, numChannels: 1, sampleRate: 48000),
+        RecordConfig(
+          encoder: encoder,
+          numChannels: 1,
+          sampleRate: 48000,
+          device: await _preferredInput(rec),
+        ),
         path: path,
       );
       if (!isMounted()) {

@@ -20,6 +20,7 @@ import 'max_route_handler.dart';
 import 'no_chat_access_card.dart';
 import 'swipe_route.dart';
 import 'web_qr_login.dart';
+import '../../core/security/app_lock.dart';
 
 Future<bool> tryHandleMaxLink(BuildContext context, String url) async {
   final link = MaxLink.parse(url);
@@ -128,7 +129,7 @@ Future<bool> _shareOwnLink(BuildContext context) async {
     return true;
   }
   try {
-    await Share.share(link, sharePositionOrigin: shareOriginOf(context));
+    await AppLock.instance.external(() => Share.share(link, sharePositionOrigin: shareOriginOf(context)));
   } catch (_) {
     if (context.mounted) {
       showCustomNotification(context, 'Не удалось поделиться ссылкой');

@@ -3,9 +3,13 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'chat_controller.dart';
 import 'read_marker_gate.dart';
+import 'view/anchored_message_list.dart';
+
+typedef ReturnPoint = ({String id, int time, double alignment});
 
 class ChatScrollNavigator {
   ChatScrollNavigator({
@@ -13,509 +17,466 @@ class ChatScrollNavigator {
     required this.chatController,
     required this.shimmerController,
     required this.scrollDownAnimController,
-    required this.scrollDownCurved,
     required this.readMarker,
     required this.listKey,
-    required this.keyForMessage,
-    required this.buildCombinedItems,
-    required this.messageIdOf,
-    required this.messageOffsetInList,
+    required this.existingKeyFor,
     required this.loadMessageWindow,
+    required this.resetToLatest,
     required this.flushDeferredMessages,
     required this.isDeferred,
     required this.hasDeferredMessages,
     required this.bumpMessages,
-    required this.clearPinnedMessage,
     required this.isMounted,
     required this.notifyState,
     required this.showNotification,
     required this.initialMessageIdOf,
     required this.initialMessageTimeOf,
+    required this.onNavigated,
   });
 
   final ScrollController scrollController;
   final ChatController chatController;
   final AnimationController shimmerController;
   final AnimationController scrollDownAnimController;
-  final CurvedAnimation scrollDownCurved;
   final ReadMarkerGate readMarker;
   final GlobalKey listKey;
-  final GlobalKey Function(String messageId) keyForMessage;
-  final List<Object> Function() buildCombinedItems;
-  final String? Function(Object item) messageIdOf;
-  final double? Function(String messageId) messageOffsetInList;
-  final Future<void> Function(String messageId, int targetTime)
+  final GlobalKey? Function(String messageId) existingKeyFor;
+  final Future<void> Function(
+    String messageId,
+    int targetTime,
+    bool Function() stillWanted,
+  )
   loadMessageWindow;
+  final Future<void> Function() resetToLatest;
   final VoidCallback flushDeferredMessages;
   final bool Function(String messageId) isDeferred;
   final bool Function() hasDeferredMessages;
   final VoidCallback bumpMessages;
-  final VoidCallback clearPinnedMessage;
   final bool Function() isMounted;
   final void Function(VoidCallback fn) notifyState;
   final void Function(String message) showNotification;
   final String? Function() initialMessageIdOf;
   final int? Function() initialMessageTimeOf;
+  final VoidCallback onNavigated;
 
-  static const int _jumpStallLimit = 8;
-  static const int _jumpFrameLimit = 240;
-  static const double _jumpStepMaxScreens = 4.0;
+  static const double jumpCacheExtentPx = 800.0;
+  static const double defaultAlignment = 0.32;
+  static const double _visibleMargin = 0.15;
+  static const double _nearBottomExtent = 120.0;
+  static const int _refineFrames = 4;
+  static const int _bottomSettleFrames = 6;
   static const double _scrollDownTeleportFactor = 2.0;
   static const double _scrollDownRevealExtent = 72.0 * 30;
   static const double _scrollDownRevealFactor = 0.6;
-  static const double jumpCacheExtentPx = 800.0;
+  static const Duration _routeSettleDelay = Duration(milliseconds: 340);
+  static const Duration _highlightDuration = Duration(milliseconds: 1800);
+  static const Duration _nearScrollDuration = Duration(milliseconds: 280);
+
+  String? anchorId;
+  int? _anchorTime;
+  int listEpoch = 0;
 
   bool navigatingToTarget = false;
   bool initialTargetHandled = false;
-  Timer? _goToMessageSettleTimer;
-  final ValueNotifier<double?> jumpCacheExtent = ValueNotifier<double?>(null);
+  int _navToken = 0;
+  int? _loadingToken;
+  int _busy = 0;
+  Timer? _settleTimer;
 
+  final ValueNotifier<double?> jumpCacheExtent = ValueNotifier<double?>(null);
   final ValueNotifier<String?> highlightMessageId = ValueNotifier(null);
   Timer? _highlightTimer;
 
   int gestureEpoch = 0;
 
-  final List<({String id, double pixels, double alignment})> _returnStack =
-      [];
-  int listEpoch = 0;
-  bool _returningToAnchor = false;
+  final List<ReturnPoint> _returnStack = [];
 
   bool _scrollDownVisible = false;
   final ValueNotifier<int> newMessageCount = ValueNotifier(0);
   bool _clearCountScheduled = false;
 
+  bool get busy => _busy > 0;
+
   void dispose() {
-    _goToMessageSettleTimer?.cancel();
-    jumpCacheExtent.dispose();
+    _settleTimer?.cancel();
     _highlightTimer?.cancel();
+    jumpCacheExtent.dispose();
     highlightMessageId.dispose();
     newMessageCount.dispose();
   }
 
   void bumpGestureEpoch() => gestureEpoch++;
 
+  List<Object>? _indexedItems;
+  String? _indexedAnchor;
+  int? _anchorIndex;
+
+  int? anchorIndexIn(List<Object> items, String? Function(Object) idOf) {
+    if (identical(items, _indexedItems) && _indexedAnchor == anchorId) {
+      return _anchorIndex;
+    }
+    _indexedItems = items;
+    _indexedAnchor = anchorId;
+    return _anchorIndex = _findAnchor(items, idOf);
+  }
+
+  int? _findAnchor(List<Object> items, String? Function(Object) idOf) {
+    final id = anchorId;
+    if (id == null) return null;
+    for (var i = 0; i < items.length; i++) {
+      if (idOf(items[i]) == id) return i;
+    }
+    final time = _anchorTime;
+    if (time == null) return null;
+    for (var i = 0; i < items.length; i++) {
+      final itemId = idOf(items[i]);
+      if (itemId == null) continue;
+      final message = chatController.byId(itemId);
+      if (message != null && message.time >= time) return i;
+    }
+    return null;
+  }
+
+
   void maybeRunInitialTarget() {
-    if (initialTargetHandled || initialMessageIdOf() == null) return;
+    final id = initialMessageIdOf();
+    if (initialTargetHandled || id == null) return;
     initialTargetHandled = true;
-    beginTargetNavigation();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isMounted()) unawaited(navigateToInitialMessage());
-    });
-  }
-
-  void beginTargetNavigation() {
     navigatingToTarget = true;
-    jumpCacheExtent.value = jumpCacheExtentPx;
-    _goToMessageSettleTimer?.cancel();
     if (!shimmerController.isAnimating) shimmerController.repeat();
-  }
-
-  void finishTargetNavigation() {
-    _goToMessageSettleTimer?.cancel();
-    if (!isMounted()) {
-      navigatingToTarget = false;
-      return;
-    }
-    if (navigatingToTarget) {
-      notifyState(() => navigatingToTarget = false);
-    }
-    if (shimmerController.isAnimating) shimmerController.stop();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isMounted()) jumpCacheExtent.value = null;
+    _afterFrame((_) {
+      if (!isMounted()) return;
+      notifyState(() {});
+      unawaited(goTo(id, time: initialMessageTimeOf() ?? 0));
     });
   }
 
   void requestGoToMessage(String id, int time) {
     if (!isMounted()) return;
-    notifyState(beginTargetNavigation);
-    _goToMessageSettleTimer = Timer(const Duration(milliseconds: 340), () {
-      if (isMounted()) unawaited(runGoToMessage(id, time));
-    });
-  }
-
-  void jumpToPinnedMessage({
-    required int? pinnedMsgId,
-    required int? pinnedMsgTime,
-  }) {
-    if (pinnedMsgId == null) return;
-    final messageId = pinnedMsgId.toString();
-    if (chatController.containsId(messageId)) {
-      scrollToLoadedMessage(messageId);
-      return;
-    }
-    notifyState(beginTargetNavigation);
-    unawaited(runGoToMessage(messageId, pinnedMsgTime ?? 0));
-  }
-
-  Future<void> navigateToInitialMessage() async {
-    final id = initialMessageIdOf();
-    if (id == null) {
-      finishTargetNavigation();
-      return;
-    }
-    await runGoToMessage(id, initialMessageTimeOf() ?? 0);
-  }
-
-  Future<void> runGoToMessage(String id, int targetTime) async {
-    await WidgetsBinding.instance.endOfFrame;
-    if (!isMounted()) return;
-
-    if (!chatController.containsId(id)) {
-      await loadMessageWindow(id, targetTime);
+    final token = ++_navToken;
+    _settleTimer?.cancel();
+    _startLoading(token);
+    _settleTimer = Timer(_routeSettleDelay, () {
       if (!isMounted()) return;
-      await WidgetsBinding.instance.endOfFrame;
-      if (!isMounted()) return;
-    }
-
-    if (!chatController.containsId(id)) {
-      if (isMounted()) showNotification('Сообщение не загружено');
-      finishTargetNavigation();
-      return;
-    }
-
-    _highlightTimer?.cancel();
-    highlightMessageId.value = id;
-    _highlightTimer = Timer(const Duration(milliseconds: 2200), () {
-      if (!isMounted()) return;
-      if (highlightMessageId.value == id) highlightMessageId.value = null;
-    });
-
-    await scrollToMessagePrecise(id);
-    finishTargetNavigation();
-  }
-
-  ({int min, int max})? _laidOutMessageRange(List<Object> items) {
-    int? lo;
-    int? hi;
-    for (var i = 0; i < items.length; i++) {
-      final id = messageIdOf(items[i]);
-      if (id == null) continue;
-      final ro = keyForMessage(id).currentContext?.findRenderObject();
-      if (ro is RenderBox && ro.attached) {
-        lo ??= i;
-        hi = i;
+      if (token == _navToken) {
+        unawaited(goTo(id, time: time));
+      } else {
+        _finishLoading(token);
       }
-    }
-    if (lo == null) return null;
-    return (min: lo, max: hi!);
+    });
   }
 
-  Future<void> scrollToMessagePrecise(
+  Future<void> goTo(
     String id, {
-    double alignment = 0.32,
+    int time = 0,
+    String? fromId,
+    double alignment = defaultAlignment,
+    bool highlight = true,
   }) async {
-    if (!isMounted() || !scrollController.hasClients) return;
-    if (!chatController.containsId(id)) return;
+    if (!isMounted()) return;
+    final token = ++_navToken;
+    _settleTimer?.cancel();
+    if (fromId != null && fromId != id) _pushReturnPoint(fromId);
 
-    final epoch = gestureEpoch;
+    if (navigatingToTarget) _loadingToken = token;
+    _busy++;
     readMarker.hold();
     try {
-      var stable = 0;
-      for (var iter = 0; iter < 120; iter++) {
-        if (!isMounted() || !scrollController.hasClients) return;
-        if (gestureEpoch != epoch) return;
-        final listObj = listKey.currentContext?.findRenderObject();
-        final boxObj = keyForMessage(id).currentContext?.findRenderObject();
-        final p = scrollController.position;
-
-        if (listObj is RenderBox && boxObj is RenderBox && boxObj.attached) {
-          final viewportH = listObj.size.height;
-          final actualTop = boxObj
-              .localToGlobal(Offset.zero, ancestor: listObj)
-              .dy;
-          final desiredTop = alignment * viewportH;
-          final delta = desiredTop - actualTop;
-          final target = (p.pixels + delta).clamp(
-            p.minScrollExtent,
-            p.maxScrollExtent,
-          );
-
-          if (delta.abs() <= 2.0 || (target - p.pixels).abs() <= 1.0) {
-            stable++;
-            if (stable >= 4) return;
-            await Future.delayed(const Duration(milliseconds: 60));
-            continue;
-          }
-          stable = 0;
-          scrollController.jumpTo(target);
-          await WidgetsBinding.instance.endOfFrame;
-          continue;
-        }
-
-        stable = 0;
-        final items = buildCombinedItems();
-        final pos = items.indexWhere((it) => messageIdOf(it) == id);
-        if (pos == -1) return;
-
-        final viewportH = listObj is RenderBox ? listObj.size.height : 600.0;
-        var stepMag = viewportH * 0.8;
-        if (stepMag > 700) stepMag = 700;
-
-        final range = _laidOutMessageRange(items);
-        final step = (range != null && pos > range.max) ? -stepMag : stepMag;
-
-        final target = (p.pixels + step).clamp(
-          p.minScrollExtent,
-          p.maxScrollExtent,
-        );
-        if ((target - p.pixels).abs() < 1.0) return;
-        scrollController.jumpTo(target);
+      if (isDeferred(id)) flushDeferredMessages();
+      if (!chatController.containsId(id)) {
+        _startLoading(token);
         await WidgetsBinding.instance.endOfFrame;
+        if (!_current(token)) return;
+        await loadMessageWindow(id, time, () => _current(token));
+        if (!_current(token)) return;
+        if (!chatController.containsId(id)) {
+          showNotification('Сообщение не загружено');
+          return;
+        }
+      }
+
+      if (!_isComfortablyVisible(id)) {
+        if (!navigatingToTarget && _laidOutBox(id) != null) {
+          await _scrollNear(id, alignment, token);
+        } else {
+          await _anchorAt(id, alignment, token);
+        }
+      }
+      if (!_current(token)) return;
+      if (highlight) _highlight(id);
+    } finally {
+      _busy--;
+      readMarker.release();
+      _finishLoading(token);
+      if (isMounted() && !busy) onNavigated();
+    }
+  }
+
+  Future<void> positionAt(String id, double alignment) async {
+    if (!isMounted() || !chatController.containsId(id)) return;
+    final token = ++_navToken;
+    _busy++;
+    readMarker.hold();
+    try {
+      await _anchorAt(id, alignment, token);
+    } finally {
+      _busy--;
+      readMarker.release();
+    }
+  }
+
+  Future<void> keepInPlace(String id, double alignment) async {
+    if (!isMounted() || busy || !chatController.containsId(id)) return;
+    final token = _navToken;
+    _busy++;
+    readMarker.hold();
+    try {
+      final epoch = gestureEpoch;
+      if (_laidOutBox(id) == null) {
+        await _anchorAt(id, alignment, token);
+      } else {
+        await _refine(id, alignment, token, epoch);
       }
     } finally {
+      _busy--;
       readMarker.release();
     }
   }
 
-  void scrollToLoadedMessage(
-    String messageId, {
-    double alignment = 0.4,
-    bool highlight = true,
-    bool notifyIfMissing = true,
-    VoidCallback? onSettled,
-  }) {
-    void settle() {
-      readMarker.release();
-      onSettled?.call();
-    }
+  bool _current(int token) => isMounted() && token == _navToken;
 
-    readMarker.hold();
-    if (!scrollController.hasClients) {
-      settle();
-      return;
-    }
-    if (isDeferred(messageId)) flushDeferredMessages();
-    final items = buildCombinedItems();
-    final pos = items.indexWhere((it) => messageIdOf(it) == messageId);
-    if (pos == -1) {
-      if (notifyIfMissing) {
-        showNotification('Сообщение не загружено');
-      }
-      settle();
-      return;
-    }
-
-    final laidOut = keyForMessage(
-      messageId,
-    ).currentContext?.findRenderObject();
-    if (laidOut is! RenderBox || !laidOut.attached) {
-      jumpNearMessage(messageId);
-    }
-
-    if (highlight) {
-      _highlightTimer?.cancel();
-      highlightMessageId.value = messageId;
-      _highlightTimer = Timer(const Duration(milliseconds: 1600), () {
-        if (!isMounted()) return;
-        if (highlightMessageId.value == messageId) {
-          highlightMessageId.value = null;
-        }
-      });
-    }
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => alignLoadedMessage(messageId, alignment, 0, onSettled: settle),
-    );
+  static void _afterFrame(FrameCallback callback) {
+    WidgetsBinding.instance
+      ..addPostFrameCallback(callback)
+      ..ensureVisualUpdate();
   }
 
-  ({int oldest, int newest}) _visibleItemRange(
-    List<Object> items,
-    RenderBox listBox,
-  ) {
-    var oldest = -1;
-    var newest = -1;
-    final viewportBottom = listBox.size.height;
-    for (var i = 0; i < items.length; i++) {
-      final id = messageIdOf(items[i]);
-      if (id == null) continue;
-      final box = keyForMessage(id).currentContext?.findRenderObject();
-      if (box is! RenderBox || !box.attached) {
-        if (oldest != -1) break;
-        continue;
-      }
-      final top = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
-      if (top + box.size.height <= 0 || top >= viewportBottom) {
-        if (oldest != -1) break;
-        continue;
-      }
-      if (oldest == -1) oldest = i;
-      newest = i;
-    }
-    return (oldest: oldest, newest: newest);
+  void _startLoading(int token) {
+    _loadingToken = token;
+    if (!isMounted() || navigatingToTarget) return;
+    notifyState(() => navigatingToTarget = true);
+    if (!shimmerController.isAnimating) shimmerController.repeat();
   }
 
-  double _jumpStepScreens(int index, ({int oldest, int newest}) visible) {
-    if (visible.oldest == -1) return 1;
-    final perScreen = visible.newest - visible.oldest + 1;
-    if (perScreen <= 0) return 1;
-    final away = index < visible.oldest
-        ? visible.oldest - index
-        : index - visible.newest;
-    return (away / perScreen).clamp(1.0, _jumpStepMaxScreens);
+  void _finishLoading(int token) {
+    if (_loadingToken != token) return;
+    _loadingToken = null;
+    if (!isMounted() || !navigatingToTarget) return;
+    notifyState(() => navigatingToTarget = false);
+    if (shimmerController.isAnimating) shimmerController.stop();
   }
 
-  bool jumpNearMessage(String messageId) {
-    if (!scrollController.hasClients) return false;
-    final listBox = listKey.currentContext?.findRenderObject();
-    if (listBox is! RenderBox || listBox.size.height <= 0) return false;
-    final items = buildCombinedItems();
-    final index = items.indexWhere((it) => messageIdOf(it) == messageId);
-    if (index == -1) return false;
-
-    final visible = _visibleItemRange(items, listBox);
-    final position = scrollController.position;
-    final step = position.viewportDimension * _jumpStepScreens(index, visible);
-    final double next;
-    if (visible.oldest == -1 || index < visible.oldest) {
-      next = position.pixels + step;
-    } else if (index > visible.newest) {
-      next = position.pixels - step;
-    } else {
-      return false;
-    }
-    final clamped = next.clamp(
-      position.minScrollExtent,
-      position.maxScrollExtent,
-    );
-    if ((clamped - position.pixels).abs() < 0.5) return false;
-    scrollController.jumpTo(clamped);
-    return true;
-  }
-
-  void alignLoadedMessage(
-    String messageId,
-    double alignment,
-    int attempt, {
-    int frames = 0,
-    int? epoch,
-    VoidCallback? onSettled,
-  }) {
-    if (!isMounted() ||
-        !scrollController.hasClients ||
-        (epoch != null && epoch != gestureEpoch)) {
-      onSettled?.call();
-      return;
-    }
-    final listBox = listKey.currentContext?.findRenderObject();
-    final box = keyForMessage(messageId).currentContext?.findRenderObject();
-    if (listBox is! RenderBox || box is! RenderBox || !box.attached) {
-      if (attempt >= _jumpStallLimit || frames >= _jumpFrameLimit) {
-        onSettled?.call();
-        return;
-      }
-      final moved = jumpNearMessage(messageId);
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => alignLoadedMessage(
-          messageId,
-          alignment,
-          moved ? 0 : attempt + 1,
-          frames: frames + 1,
-          epoch: epoch,
-          onSettled: onSettled,
-        ),
-      );
-      return;
-    }
-
-    final viewportHeight = listBox.size.height;
-    final actualTop = box.localToGlobal(Offset.zero, ancestor: listBox).dy;
-    final desiredTop = alignment.clamp(0.0, 1.0) * viewportHeight;
-    final delta = desiredTop - actualTop;
-    final pos = scrollController.position;
-    final target = (pos.pixels + delta).clamp(
-      pos.minScrollExtent,
-      pos.maxScrollExtent,
-    );
-
-    if (viewportHeight <= 0 ||
-        delta.abs() <= 0.5 ||
-        (target - pos.pixels).abs() <= 0.5 ||
-        attempt >= _jumpStallLimit ||
-        frames >= _jumpFrameLimit) {
-      onSettled?.call();
-      return;
-    }
-
-    scrollController.jumpTo(target);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => alignLoadedMessage(
-        messageId,
-        alignment,
-        attempt + 1,
-        frames: frames + 1,
-        epoch: epoch,
-        onSettled: onSettled,
-      ),
-    );
-  }
-
-  void jumpToMessage(String messageId, {String? fromId}) {
-    final index = chatController.indexOfId(messageId);
-    if (index == -1) {
-      showNotification('Сообщение не загружено');
-      return;
-    }
-
-    if (fromId != null) _pushReturnAnchor(fromId);
-
-    final key = keyForMessage(messageId);
-    final ctx = key.currentContext;
-    if (ctx != null) {
-      Scrollable.ensureVisible(
-        ctx,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-        alignment: 0.4,
-      );
-    } else {
-      unawaited(scrollToMessagePrecise(messageId, alignment: 0.4));
-    }
-
+  void _highlight(String id) {
     _highlightTimer?.cancel();
-    highlightMessageId.value = messageId;
-    _highlightTimer = Timer(const Duration(milliseconds: 1400), () {
-      if (!isMounted()) return;
-      if (highlightMessageId.value == messageId) {
+    highlightMessageId.value = id;
+    _highlightTimer = Timer(_highlightDuration, () {
+      if (isMounted() && highlightMessageId.value == id) {
         highlightMessageId.value = null;
       }
     });
+  }
+
+  RenderBox? get _listBox {
+    final box = listKey.currentContext?.findRenderObject();
+    return box is RenderBox && box.hasSize && box.size.height > 0 ? box : null;
+  }
+
+  RenderBox? _laidOutBox(String id) {
+    final box = existingKeyFor(id)?.currentContext?.findRenderObject();
+    return box is RenderBox && box.attached && box.hasSize ? box : null;
+  }
+
+  double? _topOf(String id) {
+    final list = _listBox;
+    final box = _laidOutBox(id);
+    if (list == null || box == null) return null;
+    return box.localToGlobal(Offset.zero, ancestor: list).dy;
+  }
+
+  bool _isComfortablyVisible(String id) {
+    final list = _listBox;
+    final box = _laidOutBox(id);
+    final top = _topOf(id);
+    if (list == null || box == null || top == null) return false;
+    final height = list.size.height;
+    final margin = height * _visibleMargin;
+    return top >= margin && top + box.size.height <= height - margin;
+  }
+
+  Future<void> _anchorAt(String id, double alignment, int token) async {
+    if (!scrollController.hasClients) return;
+    final viewport = scrollController.position.viewportDimension;
+    final height = _laidOutBox(id)?.size.height ?? 0;
+    anchorId = id;
+    _anchorTime = chatController.byId(id)?.time;
+    bumpMessages();
+    scrollController.jumpTo(
+      AnchoredMessageList.anchoredPixels(
+        alignment: alignment,
+        viewport: viewport,
+        anchorHeight: height,
+      ),
+    );
+    await WidgetsBinding.instance.endOfFrame;
+    await _refine(id, alignment, token, gestureEpoch);
+  }
+
+  Future<void> _scrollNear(String id, double alignment, int token) async {
+    final top = _topOf(id);
+    final list = _listBox;
+    if (top == null || list == null || !scrollController.hasClients) {
+      await _anchorAt(id, alignment, token);
+      return;
+    }
+    final epoch = gestureEpoch;
+    final pos = scrollController.position;
+    final target = (pos.pixels + alignment * list.size.height - top).clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    );
+    await scrollController.animateTo(
+      target,
+      duration: _nearScrollDuration,
+      curve: Curves.easeOutCubic,
+    );
+    if (!_current(token) || epoch != gestureEpoch) return;
+    await _refine(id, alignment, token, epoch);
+  }
+
+  Future<void> _refine(
+    String id,
+    double alignment,
+    int token,
+    int epoch,
+  ) async {
+    for (var frame = 0; frame < _refineFrames; frame++) {
+      if (!_current(token) || epoch != gestureEpoch) return;
+      if (!scrollController.hasClients) return;
+      final list = _listBox;
+      final top = _topOf(id);
+      if (list == null || top == null) return;
+      final pos = scrollController.position;
+      final target = (pos.pixels + alignment * list.size.height - top).clamp(
+        pos.minScrollExtent,
+        pos.maxScrollExtent,
+      );
+      if ((target - pos.pixels).abs() <= 0.5) return;
+      scrollController.jumpTo(target);
+      await WidgetsBinding.instance.endOfFrame;
+    }
   }
 
   void scrollToBottom() {
     flushDeferredMessages();
     _returnStack.clear();
     newMessageCount.value = 0;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!scrollController.hasClients) return;
+    if (chatController.hasNewer) {
+      unawaited(_returnToLatest());
+      return;
+    }
+    _afterFrame((_) {
+      if (!isMounted() || !scrollController.hasClients) return;
       final pos = scrollController.position;
       final runway = pos.viewportDimension;
-      final teleport = pos.pixels > runway * _scrollDownTeleportFactor;
-      if (teleport) {
-        clearPinnedMessage();
-        listEpoch++;
-        jumpCacheExtent.value = jumpCacheExtentPx;
-        bumpMessages();
-        scrollController.jumpTo(runway);
+      final distance = pos.pixels - pos.minScrollExtent;
+      if (distance > runway * _scrollDownTeleportFactor) {
+        _teleportToBottom(runway);
+        return;
       }
-      unawaited(
-        scrollController
-            .animateTo(
-              pos.minScrollExtent,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            )
-            .whenComplete(() {
-              if (!teleport) return;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (isMounted()) jumpCacheExtent.value = null;
-              });
-            }),
-      );
+      unawaited(_slideToBottom());
     });
+  }
+
+  void _teleportToBottom(double runway) {
+    final token = ++_navToken;
+    anchorId = null;
+    _anchorTime = null;
+    listEpoch++;
+    jumpCacheExtent.value = jumpCacheExtentPx;
+    bumpMessages();
+    scrollController.jumpTo(runway);
+    unawaited(
+      scrollController
+          .animateTo(
+            0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          )
+          .whenComplete(() {
+            _afterFrame((_) {
+              if (isMounted()) jumpCacheExtent.value = null;
+            });
+            if (token == _navToken) unawaited(_settleAtBottom(token));
+          }),
+    );
+  }
+
+  Future<void> _slideToBottom() async {
+    final token = ++_navToken;
+    await scrollController.animateTo(
+      scrollController.position.minScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+    if (!_current(token)) return;
+    await _settleAtBottom(token);
+  }
+
+  Future<void> _settleAtBottom(int token) async {
+    for (var frame = 0; frame < _bottomSettleFrames; frame++) {
+      if (!_current(token) || !scrollController.hasClients) return;
+      final pos = scrollController.position;
+      if ((pos.pixels - pos.minScrollExtent).abs() <= 0.5) break;
+      scrollController.jumpTo(pos.minScrollExtent);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (!_current(token) || anchorId == null) return;
+    final pos = scrollController.position;
+    if ((pos.pixels - pos.minScrollExtent).abs() > 0.5) return;
+    anchorId = null;
+    _anchorTime = null;
+    bumpMessages();
+    scrollController.jumpTo(0);
+  }
+
+  Future<void> _returnToLatest() async {
+    final token = ++_navToken;
+    _busy++;
+    _startLoading(token);
+    try {
+      await resetToLatest();
+      if (!_current(token)) return;
+      anchorId = null;
+      _anchorTime = null;
+      listEpoch++;
+      bumpMessages();
+      if (scrollController.hasClients) scrollController.jumpTo(0);
+      await WidgetsBinding.instance.endOfFrame;
+    } finally {
+      _busy--;
+      _finishLoading(token);
+      if (isMounted() && !busy) onNavigated();
+    }
+  }
+
+  bool isNearBottom() {
+    if (chatController.hasNewer) return false;
+    if (!scrollController.hasClients) return true;
+    final pos = scrollController.position;
+    return pos.pixels - pos.minScrollExtent <= _nearBottomExtent;
+  }
+
+  double distanceFromBottom() {
+    if (!scrollController.hasClients) return 0;
+    final pos = scrollController.position;
+    return pos.pixels - pos.minScrollExtent;
   }
 
   void updateScrollDownVisible() {
     if (!scrollController.hasClients) {
-      _setScrollDownVisible(newMessageCount.value > 0);
+      _setScrollDownVisible(
+        newMessageCount.value > 0 || chatController.hasNewer,
+      );
       return;
     }
     final pos = scrollController.position;
@@ -533,7 +494,8 @@ class ChatScrollNavigator {
       pos.viewportDimension * _scrollDownRevealFactor,
     );
     _setScrollDownVisible(
-      pos.pixels >= reveal ||
+      distanceFromBottom() >= reveal ||
+          chatController.hasNewer ||
           _returnStack.isNotEmpty ||
           newMessageCount.value > 0,
     );
@@ -557,7 +519,7 @@ class ChatScrollNavigator {
   void clearNewMessageCountSoon() {
     if (_clearCountScheduled) return;
     _clearCountScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _afterFrame((_) {
       _clearCountScheduled = false;
       if (!isMounted() || !isNearBottom()) return;
       flushDeferredMessages();
@@ -566,86 +528,53 @@ class ChatScrollNavigator {
     });
   }
 
-  void _pushReturnAnchor(String messageId) {
-    if (!scrollController.hasClients) return;
-    final listBox = listKey.currentContext?.findRenderObject();
-    final dy = messageOffsetInList(messageId);
-    final viewportH = listBox is RenderBox ? listBox.size.height : 0.0;
-    final alignment = viewportH > 0 && dy != null
-        ? (dy / viewportH).clamp(0.0, 1.0)
-        : 0.5;
+  void _pushReturnPoint(String messageId) {
+    final message = chatController.byId(messageId);
+    if (message == null) return;
+    final list = _listBox;
+    final top = _topOf(messageId);
+    final alignment = list != null && top != null
+        ? (top / list.size.height).clamp(0.0, 1.0)
+        : defaultAlignment;
     _returnStack.add((
       id: messageId,
-      pixels: scrollController.position.pixels,
+      time: message.time,
       alignment: alignment.toDouble(),
     ));
-    if (!_scrollDownVisible) {
-      _scrollDownVisible = true;
-      scrollDownAnimController.forward();
+    _setScrollDownVisible(true);
+  }
+
+  int? _newestVisibleTime() {
+    final list = _listBox;
+    if (list == null) return null;
+    final height = list.size.height;
+    final messages = chatController.messages;
+    for (var i = messages.length - 1; i >= 0; i--) {
+      final top = _topOf(messages[i].id);
+      if (top == null) continue;
+      final box = _laidOutBox(messages[i].id)!;
+      if (top < height && top + box.size.height > 0) return messages[i].time;
     }
+    return null;
   }
 
   void onScrollDownTap() {
-    if (_returningToAnchor || navigatingToTarget) return;
-    if (!scrollController.hasClients) {
-      scrollToBottom();
-      return;
-    }
-    final pixels = scrollController.position.pixels;
+    if (busy) return;
+    final newestVisible = _newestVisibleTime();
     while (_returnStack.isNotEmpty) {
-      final anchor = _returnStack.removeLast();
-      if (anchor.pixels < pixels && chatController.containsId(anchor.id)) {
-        _returningToAnchor = true;
+      final point = _returnStack.removeLast();
+      if (newestVisible == null || point.time > newestVisible) {
         unawaited(
-          _returnToAnchor(anchor).whenComplete(() => _returningToAnchor = false),
+          goTo(
+            point.id,
+            time: point.time,
+            alignment: point.alignment,
+            highlight: false,
+          ),
         );
         return;
       }
     }
     scrollToBottom();
-  }
-
-  Future<void> _returnToAnchor(
-    ({String id, double pixels, double alignment}) anchor,
-  ) async {
-    final pos = scrollController.position;
-    final runway = pos.viewportDimension;
-    final target = anchor.pixels.clamp(pos.minScrollExtent, pos.maxScrollExtent);
-    final distance = (pos.pixels - target).abs();
-    final far = distance > runway * _scrollDownTeleportFactor;
-
-    if (!far) {
-      await scrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-      if (!isMounted()) return;
-      await scrollToMessagePrecise(anchor.id, alignment: anchor.alignment);
-      return;
-    }
-
-    jumpCacheExtent.value = jumpCacheExtentPx;
-    if (target + runway < distance) {
-      listEpoch++;
-      bumpMessages();
-      scrollController.jumpTo(target + runway);
-      await scrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-      if (!isMounted()) return;
-    }
-    await scrollToMessagePrecise(anchor.id, alignment: anchor.alignment);
-    if (!isMounted()) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isMounted()) jumpCacheExtent.value = null;
-    });
-  }
-
-  bool isNearBottom() {
-    if (!scrollController.hasClients) return true;
-    return scrollController.position.pixels <= 120;
   }
 }

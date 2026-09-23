@@ -48,6 +48,21 @@ class MessageSessionCache {
     }
   }
 
+  static void replace(
+    int accountId,
+    int chatId,
+    String messageId,
+    CachedMessage Function(CachedMessage current) change,
+  ) {
+    final cached = get(accountId, chatId);
+    if (cached == null) return;
+    final list = List<CachedMessage>.of(cached.messages);
+    final idx = list.indexWhere((m) => m.id == messageId);
+    if (idx == -1) return;
+    list[idx] = change(list[idx]);
+    save(accountId, chatId, list, reachedStart: cached.reachedStart);
+  }
+
   static void remove(int accountId, int chatId) =>
       _store.remove(_key(accountId, chatId));
 

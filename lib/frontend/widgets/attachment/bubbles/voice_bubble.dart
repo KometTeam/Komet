@@ -99,7 +99,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   void _adoptCachedTranscription() {
     final cached = TranscriptionCache.get(_sourceMessageId);
     if (cached == null || cached.status != 1) return;
-    _transcriptionText = cached.text ?? 'не удалось распознать текст';
+    _transcriptionText = cached.text ?? TranscriptionResult.emptyText;
     _transcriptionVisible = TranscriptionCache.isExpanded(_sourceMessageId);
   }
 
@@ -478,7 +478,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     if (TranscriptionCache.has(_sourceMessageId)) {
       final cached = TranscriptionCache.get(_sourceMessageId)!;
       setState(
-        () => _showTranscription(cached.text ?? 'не удалось распознать текст'),
+        () => _showTranscription(cached.text ?? TranscriptionResult.emptyText),
       );
       return;
     }
@@ -502,7 +502,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         if (result.status == 1) {
           _showTranscription(
             (result.text == null || result.text!.isEmpty)
-                ? 'не удалось распознать текст'
+                ? TranscriptionResult.emptyText
                 : result.text!,
           );
         } else if (result.status == 0) {

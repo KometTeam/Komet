@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'logger.dart';
+import '../security/app_lock.dart';
 
 const _documentExport = MethodChannel('ru.komet.app/media_export');
 
@@ -36,8 +37,8 @@ Future<SaveFileAsResult> saveFileAs({
     if (!kIsWeb && Platform.isAndroid) {
       return await _exportDocument(source, name);
     }
-    final directory = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: dialogTitle,
+    final directory = await AppLock.instance.external(
+      () => FilePicker.platform.getDirectoryPath(dialogTitle: dialogTitle),
     );
     if (directory == null) {
       return const SaveFileAsResult(saved: false, cancelled: true);

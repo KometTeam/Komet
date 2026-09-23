@@ -23,7 +23,7 @@ import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.ryanheise.audioservice.AudioServiceActivity
+import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -49,7 +49,7 @@ import java.util.Collections
 import java.util.Random
 import java.util.concurrent.atomic.AtomicBoolean
 
-class MainActivity : AudioServiceActivity() {
+class MainActivity : AudioServiceFragmentActivity() {
 
     private val channelName = "ru.komet.app/vpn_bypass"
     private val iconPackage = MainActivity::class.java.name.substringBeforeLast('.')
@@ -252,6 +252,7 @@ class MainActivity : AudioServiceActivity() {
                 "permission" -> requestNotePermissions(result)
                 "init" -> {
                     val front = call.argument<Boolean>("front") ?: true
+                    val cameraId = call.argument<String>("cameraId")
                     val size = call.argument<Int>("size") ?: 480
                     val fps = call.argument<Int>("fps") ?: 30
                     val rec = VideoNoteRecorder(
@@ -262,7 +263,7 @@ class MainActivity : AudioServiceActivity() {
                     )
                     noteRecorder?.dispose()
                     noteRecorder = rec
-                    rec.init(front, result)
+                    rec.init(front, cameraId, result)
                 }
                 "start" -> noteRecorder?.start(result)
                     ?: result.error("NOT_READY", "recorder not initialized", null)
@@ -981,7 +982,7 @@ class MainActivity : AudioServiceActivity() {
     // в обоих случаях в фоне должно жить то же соединение, что и в UI.
     private fun keepEngineAlive(): Boolean = CallState.inCall || FkmState.enabled
 
-    // Движок общий с audio_service (AudioServiceActivity.provideFlutterEngine), и
+    // Движок общий с audio_service (AudioServiceFragmentActivity.getCachedEngineId), и
     // уничтожает его AudioServicePlugin.disposeFlutterEngine, когда останавливается
     // медиа-сервис. Активити не должна рвать его из-под сервиса.
     override fun shouldDestroyEngineWithHost(): Boolean = false

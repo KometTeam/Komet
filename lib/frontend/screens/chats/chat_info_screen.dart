@@ -1537,8 +1537,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
   }
 
+  bool get _canActForAll => widget.chatType == 'DIALOG'
+      ? _mediaChatId != 0
+      : _isGroupOrChannel && _iAmAdmin;
+
   Future<void> _clearHistory() async {
-    final canClearForAll = _isGroupOrChannel && _iAmAdmin;
+    final canClearForAll = _canActForAll;
     final choice = await showBlurredConfirm(
       context,
       title: l10n.chatInfoClearHistoryTitle,
@@ -1561,6 +1565,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Future<void> _deleteChat() async {
+    final canDeleteForAll = _canActForAll;
     final choice = await showBlurredConfirm(
       context,
       title: l10n.chatInfoDeleteChatTitle,
@@ -1568,6 +1573,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       confirmLabel: l10n.chatInfoDeleteChatConfirm,
       cancelLabel: l10n.chatInfoActionCancel,
       destructive: true,
+      checkboxLabel: canDeleteForAll ? l10n.chatInfoClearHistoryForAll : null,
     );
     if (!mounted || !choice.confirmed) return;
 
@@ -1575,7 +1581,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       api,
       chatId: _mediaChatId,
       lastEventTime: _lastEventTime,
-      forAll: false,
+      forAll: canDeleteForAll && choice.checked,
     );
     if (!mounted) return;
     if (error != null) {

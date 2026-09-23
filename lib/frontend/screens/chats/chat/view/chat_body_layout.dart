@@ -218,26 +218,36 @@ class ChatBodyLayout extends StatelessWidget {
           top: pinnedBannerTop,
           left: 8,
           right: 8,
-          child: MeasureSize(
-            onHeight: (value) => pinnedBannerHeight.value = value,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (callBanner != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: callBanner,
+          child: AnimatedBuilder(
+            animation: searchAnim,
+            builder: (context, child) => IgnorePointer(
+              ignoring: searchAnim.value > 0,
+              child: Opacity(
+                opacity: (1 - searchAnim.value).clamp(0.0, 1.0),
+                child: child,
+              ),
+            ),
+            child: MeasureSize(
+              onHeight: (value) => pinnedBannerHeight.value = value,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (callBanner != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: callBanner,
+                    ),
+                  buildPinnedAndPill(
+                    chat: chat,
+                    frosted: effectiveChrome == ChatChromeStyle.transparent,
+                    liquidChrome: liquidChrome,
+                    backdropKey: pillBackdrop,
+                    onTap: onJumpToPinnedMessage,
+                    myId: myId,
+                    onUnpinRequested: () => unawaited(onUnpinCurrentMessage()),
                   ),
-                buildPinnedAndPill(
-                  chat: chat,
-                  frosted: effectiveChrome == ChatChromeStyle.transparent,
-                  liquidChrome: liquidChrome,
-                  backdropKey: pillBackdrop,
-                  onTap: onJumpToPinnedMessage,
-                  myId: myId,
-                  onUnpinRequested: () => unawaited(onUnpinCurrentMessage()),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

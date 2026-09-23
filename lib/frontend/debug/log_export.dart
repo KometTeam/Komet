@@ -9,6 +9,7 @@ import '../../core/transport/traffic_monitor.dart';
 import '../../core/utils/debug_session_log.dart';
 import '../../core/utils/format.dart';
 import '../widgets/custom_notification.dart';
+import '../../core/security/app_lock.dart';
 
 Future<void> exportDebugLog(BuildContext context) async {
   final exportFiles = await DebugSessionLog.instance.buildExportFiles(
@@ -27,11 +28,13 @@ Future<void> exportDebugLog(BuildContext context) async {
   final fileName = 'komet_debug_${formatFileStamp(DateTime.now())}.zip';
   final isMobile = Platform.isAndroid || Platform.isIOS;
   try {
-    final path = await FilePicker.platform.saveFile(
-      dialogTitle: 'Сохранить отладочный лог',
-      fileName: fileName,
-      type: FileType.any,
-      bytes: isMobile ? bytes : null,
+    final path = await AppLock.instance.external(
+      () => FilePicker.platform.saveFile(
+        dialogTitle: 'Сохранить отладочный лог',
+        fileName: fileName,
+        type: FileType.any,
+        bytes: isMobile ? bytes : null,
+      ),
     );
     if (path == null) return;
     if (!isMobile) {

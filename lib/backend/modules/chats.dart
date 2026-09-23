@@ -512,6 +512,26 @@ class ChatsModule {
 
   int? _paginatedAccountId;
 
+  Future<void> _extendHistoryCoverage(
+    int accountId,
+    int chatId,
+    Map<String, dynamic> chatRowBefore,
+    int time,
+  ) async {
+    final previousLast = CachedChat.fromDbRow(chatRowBefore).lastMsgTime;
+    if (previousLast == null || previousLast <= 0) return;
+    try {
+      await AppDatabase.extendMessageRange(
+        accountId,
+        chatId,
+        previousLastTime: previousLast,
+        time: time,
+      );
+    } catch (e) {
+      logger.w('extendMessageRange error: $e');
+    }
+  }
+
   void emitMessageSent(int chatId, String tempId, CachedMessage message) {
     _messageEventsController.add(MessageSentEvent(chatId, tempId, message));
   }
@@ -629,12 +649,19 @@ class ChatsModule {
     required String status,
     List<Map<String, dynamic>>? elements,
     String? preview,
+    int? replacesTime,
   }) async {
     if (status == 'sent') await _listPreviewChat(accountId, chatId);
     final thisId = int.tryParse(messageId);
     await _updateChat(accountId, chatId, (chat) {
       final existingTime = chat.lastMsgTime ?? 0;
-      if (time < existingTime && chat.lastMsgId != thisId) return null;
+      final confirmsPreview =
+          replacesTime != null &&
+          chat.lastMsgId == null &&
+          chat.lastMsgTime == replacesTime;
+      if (time < existingTime && chat.lastMsgId != thisId && !confirmsPreview) {
+        return null;
+      }
       return chat.copyWith(
         lastMsgId: thisId,
         lastMsgText: text,
@@ -655,6 +682,7 @@ class ChatsModule {
   Future<void> applyOutgoingMessage(
     CachedMessage message, {
     required String status,
+    int? replacesTime,
   }) {
     final payload = {
       ...message.previewPayload,
@@ -668,6 +696,7 @@ class ChatsModule {
       text: messagePreviewText(payload) ?? '',
       preview: messagePreviewMedia(payload),
       status: status,
+      replacesTime: replacesTime,
     );
   }
 
@@ -1214,6 +1243,7 @@ class ChatsModule {
         commit: (decrypted) => AppDatabase.saveMessages([decrypted.toDbRow()]),
       );
       await AppDatabase.saveMessages([cached.toDbRow()]);
+      await _extendHistoryCoverage(accountId, chatId, rows.first, cached.time);
       _applyMembershipControl(accountId, chatId, cached);
       _messageEventsController.add(MessageAddedEvent(chatId, cached));
     }

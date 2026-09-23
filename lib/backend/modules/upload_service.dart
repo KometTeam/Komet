@@ -605,7 +605,7 @@ class UploadService {
     }
     _replaceInSessionCache(job.accountId, job.chatId, job.id, message);
     _remember(job.id, message);
-    _syncChatPreview(message, 'sent');
+    _syncChatPreview(message, 'sent', replacesTime: job.placeholder?.time);
     _events.add(
       UploadJobDone(
         chatId: job.chatId,
@@ -621,9 +621,19 @@ class UploadService {
 
   // #***! строку в списке чатов двигаем отсюда, а не с экрана чата: его
   // могли закрыть сразу после выбора файла, а загрузка живёт дальше
-  void _syncChatPreview(CachedMessage? message, String status) {
+  void _syncChatPreview(
+    CachedMessage? message,
+    String status, {
+    int? replacesTime,
+  }) {
     if (message == null) return;
-    unawaited(chats.applyOutgoingMessage(message, status: status));
+    unawaited(
+      chats.applyOutgoingMessage(
+        message,
+        status: status,
+        replacesTime: replacesTime,
+      ),
+    );
   }
 
   // #***! память о завершённых пока экран чата не подхватит
@@ -717,17 +727,11 @@ class UploadService {
     String tempId,
     CachedMessage? real,
   ) {
-    final cached = MessageSessionCache.get(accountId, chatId);
-    if (cached == null) return;
-    final list = List<CachedMessage>.of(cached.messages);
-    final idx = list.indexWhere((m) => m.id == tempId);
-    if (idx == -1) return;
-    list[idx] = real ?? list[idx].copyWith(status: 'error');
-    MessageSessionCache.save(
+    MessageSessionCache.replace(
       accountId,
       chatId,
-      list,
-      reachedStart: cached.reachedStart,
+      tempId,
+      (current) => real ?? current.copyWith(status: 'error'),
     );
   }
 }

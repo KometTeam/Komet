@@ -2553,6 +2553,18 @@ class AppLocalizationsRu extends AppLocalizations {
   String get fontSettingsAddFontConfirm => 'Добавить';
 
   @override
+  String get fontSettingsPickFile => 'Выбрать файл';
+
+  @override
+  String get fontSettingsPickFileHint => 'Шрифт в формате .ttf, .otf или .ttc';
+
+  @override
+  String get fontSettingsNotAFont => 'Это не файл шрифта';
+
+  @override
+  String get fontSettingsCancel => 'Отмена';
+
+  @override
   String get fontSettingsTitle => 'Шрифты';
 
   @override
@@ -3335,4 +3347,169 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get fileNoAppToOpen =>
       'Нет приложения, чтобы открыть этот файл. Выберите, куда его отправить.';
+
+  @override
+  String get lockTitle => 'Введите код-пароль';
+
+  @override
+  String get lockBiometricReason => 'Разблокируйте Komet';
+
+  @override
+  String lockBlocked(String time) {
+    return 'Слишком много попыток. Повторите через $time';
+  }
+
+  @override
+  String lockAttemptsLeft(int count) {
+    return 'Неверный код-пароль. Осталось попыток: $count';
+  }
+
+  @override
+  String get lockNow => 'Заблокировать Komet';
+
+  @override
+  String get passcodeTitle => 'Код-пароль';
+
+  @override
+  String get passcodeCreate => 'Придумайте код-пароль';
+
+  @override
+  String get passcodeRepeat => 'Повторите код-пароль';
+
+  @override
+  String get passcodeMismatch => 'Коды не совпали, попробуйте ещё раз';
+
+  @override
+  String get passcodeDigitsHint => 'Четыре цифры';
+
+  @override
+  String get passcodeEnable => 'Включить код-пароль';
+
+  @override
+  String get passcodeEnabled => 'Код-пароль включён';
+
+  @override
+  String get passcodeChanged => 'Код-пароль изменён';
+
+  @override
+  String get passcodeChange => 'Сменить код-пароль';
+
+  @override
+  String get passcodeBiometric => 'Разблокировка по биометрии';
+
+  @override
+  String get passcodeBiometricHint => 'Отпечаток или лицо вместо кода';
+
+  @override
+  String get passcodeAutoLock => 'Автоблокировка';
+
+  @override
+  String get passcodeAutoLockHint =>
+      'Блокировать Komet, если им не пользоваться';
+
+  @override
+  String get passcodeAutoLockOff => 'Выключена';
+
+  @override
+  String passcodeAutoLockAfter(int minutes) {
+    return 'Через $minutes мин';
+  }
+
+  @override
+  String get passcodeDisable => 'Выключить код-пароль';
+
+  @override
+  String get passcodeDisableTitle => 'Выключить код-пароль?';
+
+  @override
+  String get passcodeDisableMessage =>
+      'Komet будет открываться без кода-пароля.';
+
+  @override
+  String get passcodeDisableAction => 'Выключить';
+
+  @override
+  String get passcodeCancel => 'Отмена';
+
+  @override
+  String get passcodeDisabled => 'Код-пароль выключен';
+
+  @override
+  String get passcodeOnDescription =>
+      'Komet спрашивает код при каждом входе. Замок в шапке списка чатов закрывает его сразу.';
+
+  @override
+  String get passcodeOffDescription =>
+      'Защитите переписку: Komet будет спрашивать код при каждом входе.';
+
+  @override
+  String get passcodeForgotHint =>
+      'Если забудете код, придётся очистить данные Komet или переустановить его и войти заново. После пяти неверных попыток ввод блокируется на пять минут.';
+
+  @override
+  String get mediaDevicesTitle => 'Камера и микрофон';
+
+  @override
+  String get mediaDevicesMicrophone => 'Микрофон';
+
+  @override
+  String get mediaDevicesMicrophoneHint => 'Для звонков и голосовых сообщений';
+
+  @override
+  String get mediaDevicesCamera => 'Камера';
+
+  @override
+  String get mediaDevicesCameraHint => 'Для звонков и, по желанию, для кружков';
+
+  @override
+  String get mediaDevicesSystemMicrophone => 'Системный микрофон';
+
+  @override
+  String get mediaDevicesSystemCamera => 'Системная камера';
+
+  @override
+  String mediaDevicesCameraFallback(int number) {
+    return 'Камера $number';
+  }
+
+  @override
+  String get mediaDevicesFront => 'Фронтальная';
+
+  @override
+  String get mediaDevicesBack => 'Тыловая';
+
+  @override
+  String get mediaDevicesVideoNotes => 'Кружки';
+
+  @override
+  String get mediaDevicesVideoNoteCustom => 'Своя камера';
+
+  @override
+  String get mediaDevicesVideoNoteCustomHint =>
+      'Снимать кружки камерой, выбранной выше';
+
+  @override
+  String get mediaDevicesVideoNoteCustomMissing =>
+      'Выберите камеру выше, пока снимает системная';
+
+  @override
+  String get mediaDevicesVideoNoteRear => 'Начинать с тыловой камеры';
+
+  @override
+  String get mediaDevicesVideoNoteRearHint =>
+      'Иначе кружок открывается с фронтальной';
+
+  @override
+  String get chatPreviewMarkRead => 'Пометить прочитанным';
+
+  @override
+  String get chatPreviewOpen => 'Открыть';
+
+  @override
+  String get attachSheetSendAsVideoNote => 'Отправить как кружок';
+
+  @override
+  String attachSheetVideoNoteTooLong(int seconds) {
+    return 'Кружок не может быть длиннее $seconds с';
+  }
 }

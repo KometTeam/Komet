@@ -14,6 +14,7 @@ import '../../../core/utils/format.dart';
 import '../../widgets/custom_notification.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../core/security/app_lock.dart';
 
 class TrafficMonitorScreen extends StatefulWidget {
   const TrafficMonitorScreen({super.key});
@@ -68,12 +69,14 @@ class _TrafficMonitorScreenState extends State<TrafficMonitorScreen> {
       final stamp = formatFileStamp(DateTime.now());
       final file = File('${dir.path}/komet_traffic_$stamp.json');
       await file.writeAsString(json);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/json')],
-        subject: 'Komet traffic capture',
-        sharePositionOrigin: box == null
-            ? null
-            : box.localToGlobal(Offset.zero) & box.size,
+      await AppLock.instance.external(
+        () => Share.shareXFiles(
+          [XFile(file.path, mimeType: 'application/json')],
+          subject: 'Komet traffic capture',
+          sharePositionOrigin: box == null
+              ? null
+              : box.localToGlobal(Offset.zero) & box.size,
+        ),
       );
     } catch (e) {
       if (mounted) {

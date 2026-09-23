@@ -275,58 +275,194 @@ class _RenderStackMatchTopWidth extends RenderBox
   }
 }
 
-/// A [Wrap] that reports its single-line width as the max intrinsic width, so an
-/// enclosing [IntrinsicWidth] grows the bubble to fit the chips on one line
-/// instead of collapsing to the widest single chip (which makes them stack).
-/// It still wraps to multiple lines when the available width is smaller.
-class _ReactionsWrap extends Wrap {
-  const _ReactionsWrap({
-    super.spacing,
-    super.runSpacing,
-    required super.children,
-  });
+class _ReactionsFlow extends MultiChildRenderObjectWidget {
+  _ReactionsFlow({required List<Widget> chips, Widget? meta})
+    : hasMeta = meta != null,
+      super(children: [...chips, ?meta]);
+
+  final bool hasMeta;
 
   @override
-  RenderWrap createRenderObject(BuildContext context) {
-    return _RenderReactionsWrap(
-      direction: direction,
-      alignment: alignment,
-      spacing: spacing,
-      runAlignment: runAlignment,
-      runSpacing: runSpacing,
-      crossAxisAlignment: crossAxisAlignment,
-      textDirection: textDirection ?? Directionality.maybeOf(context),
-      verticalDirection: verticalDirection,
-      clipBehavior: clipBehavior,
-    );
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderReactionsFlow(hasMeta);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderReactionsFlow renderObject,
+  ) {
+    renderObject.hasMeta = hasMeta;
   }
 }
 
-class _RenderReactionsWrap extends RenderWrap {
-  _RenderReactionsWrap({
-    super.direction,
-    super.alignment,
-    super.spacing,
-    super.runAlignment,
-    super.runSpacing,
-    super.crossAxisAlignment,
-    super.textDirection,
-    super.verticalDirection,
-    super.clipBehavior,
-  });
+class _ReactionsFlowParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderReactionsFlow extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _ReactionsFlowParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _ReactionsFlowParentData> {
+  _RenderReactionsFlow(this._hasMeta);
+
+  static const double _spacing = 4;
+  static const double _runSpacing = 4;
+  static const double _metaGap = 8;
+
+  bool _hasMeta;
+  set hasMeta(bool value) {
+    if (value == _hasMeta) return;
+    _hasMeta = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _ReactionsFlowParentData) {
+      child.parentData = _ReactionsFlowParentData();
+    }
+  }
+
+  List<RenderBox> get _children {
+    final result = <RenderBox>[];
+    var child = firstChild;
+    while (child != null) {
+      result.add(child);
+      child = childAfter(child);
+    }
+    return result;
+  }
+
+  List<RenderBox> get _chips {
+    final all = _children;
+    return _hasMeta && all.isNotEmpty ? all.sublist(0, all.length - 1) : all;
+  }
+
+  RenderBox? get _meta => _hasMeta ? lastChild : null;
 
   @override
   double computeMaxIntrinsicWidth(double height) {
+    final chips = _chips;
     var total = 0.0;
-    var count = 0;
-    RenderBox? child = firstChild;
-    while (child != null) {
-      total += child.getMaxIntrinsicWidth(double.infinity);
-      count++;
-      child = childAfter(child);
+    for (final chip in chips) {
+      total += chip.getMaxIntrinsicWidth(double.infinity);
     }
-    if (count > 1) total += spacing * (count - 1);
+    if (chips.length > 1) total += _spacing * (chips.length - 1);
+    final meta = _meta;
+    if (meta != null) {
+      total +=
+          (chips.isEmpty ? 0 : _metaGap) +
+          meta.getMaxIntrinsicWidth(double.infinity);
+    }
     return total;
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) {
+    var widest = 0.0;
+    for (final child in _children) {
+      widest = math.max(widest, child.getMinIntrinsicWidth(double.infinity));
+    }
+    return widest;
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      _flow(BoxConstraints(maxWidth: width), dry: true).height;
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      computeMinIntrinsicHeight(width);
+
+  @override
+  Size computeDryLayout(covariant BoxConstraints constraints) =>
+      _flow(constraints, dry: true);
+
+  @override
+  void performLayout() {
+    size = _flow(constraints, dry: false);
+  }
+
+  Size _flow(BoxConstraints constraints, {required bool dry}) {
+    final childConstraints = BoxConstraints(maxWidth: constraints.maxWidth);
+    Size measure(RenderBox child) {
+      if (dry) return child.getDryLayout(childConstraints);
+      child.layout(childConstraints, parentUsesSize: true);
+      return child.size;
+    }
+
+    final limit = constraints.maxWidth;
+    final placements = <RenderBox, Offset>{};
+    var x = 0.0;
+    var y = 0.0;
+    var lineHeight = 0.0;
+    var widest = 0.0;
+    var hasLine = false;
+    for (final chip in _chips) {
+      final chipSize = measure(chip);
+      if (hasLine && x + chipSize.width > limit) {
+        y += lineHeight + _runSpacing;
+        x = 0;
+        lineHeight = 0;
+      }
+      placements[chip] = Offset(x, y);
+      x += chipSize.width;
+      widest = math.max(widest, x);
+      x += _spacing;
+      lineHeight = math.max(lineHeight, chipSize.height);
+      hasLine = true;
+    }
+
+    final lineEnd = hasLine ? x - _spacing : 0.0;
+    var height = hasLine ? y + lineHeight : 0.0;
+    final meta = _meta;
+    Size? metaSize;
+    var metaTop = 0.0;
+    var metaInline = true;
+    if (meta != null) {
+      metaSize = measure(meta);
+      final gap = hasLine ? _metaGap : 0.0;
+      metaInline = lineEnd + gap + metaSize.width <= limit;
+      if (metaInline) {
+        widest = math.max(widest, lineEnd + gap + metaSize.width);
+        metaTop = hasLine ? y + lineHeight - metaSize.height : 0;
+        height = math.max(height, metaTop + metaSize.height);
+        if (metaTop < 0) {
+          for (final chip in placements.keys) {
+            placements[chip] = placements[chip]!.translate(0, -metaTop);
+          }
+          height -= metaTop;
+          metaTop = 0;
+        }
+      } else {
+        metaTop = height + _runSpacing;
+        height = metaTop + metaSize.height;
+        widest = math.max(widest, metaSize.width);
+      }
+    }
+
+    final width = constraints.hasBoundedWidth ? constraints.maxWidth : widest;
+    final result = constraints.constrain(Size(width, height));
+    if (dry) return result;
+
+    placements.forEach((chip, offset) {
+      (chip.parentData! as _ReactionsFlowParentData).offset = offset;
+    });
+    if (meta != null && metaSize != null) {
+      (meta.parentData! as _ReactionsFlowParentData).offset = Offset(
+        result.width - metaSize.width,
+        metaTop,
+      );
+    }
+    return result;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
   }
 }
 
@@ -1484,14 +1620,9 @@ class MessageBubble extends StatelessWidget {
     final content = _buildContent(ctx);
     final footer = Padding(
       padding: inset,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: _ReactionsWrap(spacing: 4, runSpacing: 4, children: chips),
-          ),
-          if (carriesMeta) ...[const SizedBox(width: 8), ctx.footerMeta()],
-        ],
+      child: _ReactionsFlow(
+        chips: chips,
+        meta: carriesMeta ? ctx.footerMeta() : null,
       ),
     );
 
@@ -1499,6 +1630,12 @@ class MessageBubble extends StatelessWidget {
     // чтобы длинный ряд чипов не растягивал бабл шире картинки
     if (_mediaDictatesWidth || _isVideoNote) {
       return _StackMatchTopWidth(top: content, bottom: footer);
+    }
+    if (_contentType != MessageType.text && !_isSticker) {
+      return _StackMatchTopWidth(
+        top: IntrinsicWidth(child: content),
+        bottom: footer,
+      );
     }
 
     return IntrinsicWidth(
@@ -1845,22 +1982,12 @@ class MessageBubble extends StatelessWidget {
           children: [
             textWidget,
             const SizedBox(height: 6),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: _ReactionsWrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: reactionChips,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: metaRow,
-                ),
-              ],
+            _ReactionsFlow(
+              chips: reactionChips,
+              meta: Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: metaRow,
+              ),
             ),
           ],
         ),

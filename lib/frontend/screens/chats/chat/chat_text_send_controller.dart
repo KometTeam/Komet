@@ -11,6 +11,7 @@ import '../../../../core/crypto/message_decryption_cache.dart';
 import '../../../../core/plugins/plugin_outgoing_text.dart';
 import '../../../../core/protocol/packet.dart';
 import '../../../../core/storage/app_database.dart';
+import '../../../../core/cache/message_session_cache.dart';
 import '../../../../core/storage/draft_store.dart';
 import '../../../../core/crypto/e2ee_service.dart';
 import '../../../../core/storage/chat_encryption_store.dart';
@@ -436,8 +437,9 @@ class ChatTextSendController {
               elements: elements,
             );
 
+      final mounted = isMounted();
       final index = chatController.indexOfId(tempId);
-      if (index != -1 && isMounted()) {
+      if (!mounted || index != -1) {
         final sentTime = _serverTimeOf(actualId, fallback: now);
         final sent = CachedMessage(
           id: actualId.isNotEmpty ? actualId : tempId,
@@ -454,9 +456,12 @@ class ChatTextSendController {
         if (encrypted) {
           MessageDecryptionCache.instance.adopt(tempId, sent.id);
         }
-        chatController.setMessageAt(index, sent);
-        bumpMessages();
+        if (mounted) {
+          chatController.setMessageAt(index, sent);
+          bumpMessages();
+        }
         if (!commentsMode) {
+          MessageSessionCache.replace(_myId, _chatId, tempId, (_) => sent);
           unawaited(chatController.persistOutgoing(sent, removeId: tempId));
           unawaited(
             chats.applyOutgoing(
@@ -467,6 +472,7 @@ class ChatTextSendController {
               text: wireText,
               status: 'sent',
               elements: elements,
+              replacesTime: now,
             ),
           );
         }

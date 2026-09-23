@@ -1064,6 +1064,10 @@
   "fontSettingsAddFontTitle": "Add font",
   "fontSettingsAddFontDescription": "Paste a Google Fonts link or font name",
   "fontSettingsAddFontConfirm": "Add",
+  "fontSettingsPickFile": "Choose file",
+  "fontSettingsPickFileHint": "A .ttf, .otf or .ttc font",
+  "fontSettingsNotAFont": "This is not a font file",
+  "fontSettingsCancel": "Cancel",
   "fontSettingsTitle": "Fonts",
   "fontSettingsSectionFont": "Font",
   "fontSettingsLoading": "Loading…",
@@ -1400,5 +1404,89 @@
   "chatQrHint": "Scan the code to open this chat",
   "linkQrUnavailable": "Couldn't get the link",
   "notificationsDesktopNote": "Notifications aren't shown on the computer yet. The settings below are your account's push settings for phones.",
-  "fileNoAppToOpen": "No app on this device can open this file. Choose where to send it."
+  "fileNoAppToOpen": "No app on this device can open this file. Choose where to send it.",
+  "lockTitle": "Enter your passcode",
+  "lockBiometricReason": "Unlock Komet",
+  "lockBlocked": "Too many attempts. Try again in {time}",
+  "@lockBlocked": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "lockAttemptsLeft": "Wrong passcode. Attempts left: {count}",
+  "@lockAttemptsLeft": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lockNow": "Lock Komet",
+  "passcodeTitle": "Passcode",
+  "passcodeCreate": "Create a passcode",
+  "passcodeRepeat": "Repeat the passcode",
+  "passcodeMismatch": "The passcodes didn't match, try again",
+  "passcodeDigitsHint": "Four digits",
+  "passcodeEnable": "Turn passcode on",
+  "passcodeEnabled": "Passcode is on",
+  "passcodeChanged": "Passcode changed",
+  "passcodeChange": "Change passcode",
+  "passcodeBiometric": "Unlock with biometrics",
+  "passcodeBiometricHint": "Fingerprint or face instead of the passcode",
+  "passcodeAutoLock": "Auto-lock",
+  "passcodeAutoLockHint": "Lock Komet when you don't touch it for a while",
+  "passcodeAutoLockOff": "Off",
+  "passcodeAutoLockAfter": "After {minutes} min",
+  "@passcodeAutoLockAfter": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "passcodeDisable": "Turn passcode off",
+  "passcodeDisableTitle": "Turn passcode off?",
+  "passcodeDisableMessage": "Komet will open without asking for the passcode.",
+  "passcodeDisableAction": "Turn off",
+  "passcodeCancel": "Cancel",
+  "passcodeDisabled": "Passcode is off",
+  "passcodeOnDescription": "Komet asks for the passcode every time you open it. The lock in the chat list header locks it right away.",
+  "passcodeOffDescription": "Protect your chats: Komet will ask for a passcode every time you open it.",
+  "passcodeForgotHint": "If you forget the passcode, you'll have to clear Komet's data or reinstall it and sign in again. After five wrong attempts input is blocked for five minutes.",
+  "mediaDevicesTitle": "Camera and microphone",
+  "mediaDevicesMicrophone": "Microphone",
+  "mediaDevicesMicrophoneHint": "Used for calls and voice messages",
+  "mediaDevicesCamera": "Camera",
+  "mediaDevicesCameraHint": "Used for calls and, if you like, for video messages",
+  "mediaDevicesSystemMicrophone": "System microphone",
+  "mediaDevicesSystemCamera": "System camera",
+  "mediaDevicesCameraFallback": "Camera {number}",
+  "@mediaDevicesCameraFallback": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "mediaDevicesFront": "Front",
+  "mediaDevicesBack": "Rear",
+  "mediaDevicesVideoNotes": "Video messages",
+  "mediaDevicesVideoNoteCustom": "My camera",
+  "mediaDevicesVideoNoteCustomHint": "Record video messages with the camera chosen above",
+  "mediaDevicesVideoNoteCustomMissing": "Choose a camera above, until then the system one is used",
+  "mediaDevicesVideoNoteRear": "Start with the rear camera",
+  "mediaDevicesVideoNoteRearHint": "Otherwise a video message starts with the front camera",
+  "chatPreviewMarkRead": "Mark as read",
+  "chatPreviewOpen": "Open",
+  "attachSheetSendAsVideoNote": "Send as video message",
+  "attachSheetVideoNoteTooLong": "A video message can't be longer than {seconds} s",
+  "@attachSheetVideoNoteTooLong": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  }
 }

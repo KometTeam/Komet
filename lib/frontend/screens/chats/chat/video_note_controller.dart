@@ -12,6 +12,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../widgets/glossy_pill.dart';
 
+import '../../../../core/config/app_camera.dart';
 import '../../../../core/config/app_video_note_quality.dart';
 import '../../../../core/media/native_video_note_recorder.dart';
 import '../../../../core/utils/haptics.dart';
@@ -112,6 +113,9 @@ class VideoNoteController {
     try {
       final ok = await _rec.init(
         front: _front,
+        cameraId: _frontOverride == null
+            ? AppVideoNoteCamera.customCameraId
+            : null,
         size: AppVideoNoteResolution.current.value,
         fps: AppVideoNoteFps.current.value,
       );

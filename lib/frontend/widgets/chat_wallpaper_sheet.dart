@@ -14,6 +14,7 @@ import 'chat_wallpaper_view.dart';
 import 'mesh_gradient_background.dart';
 import 'custom_notification.dart';
 import '../../core/config/app_fonts.dart';
+import '../../core/security/app_lock.dart';
 
 enum WallpaperPickType { none, theme, gallery, gradient }
 
@@ -51,7 +52,9 @@ class WallpaperPick {
 
 // #***! путь, а не байты: withData грузит файл в java-кучу и валит процесс на OOM
 Future<Uint8List?> pickWallpaperBytes(BuildContext context) async {
-  final result = await FilePicker.platform.pickFiles(type: FileType.image);
+  final result = await AppLock.instance.external(
+    () => FilePicker.platform.pickFiles(type: FileType.image),
+  );
   final path = result?.files.firstOrNull?.path;
   if (path == null) return null;
   if (await File(path).length() > kMaxWallpaperBytes) {
