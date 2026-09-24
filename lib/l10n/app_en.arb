@@ -1488,5 +1488,41 @@
         "type": "int"
       }
     }
-  }
+  },
+  "undoAction": "Undo",
+  "undoMessageUnpinned": "You unpinned the message",
+  "undoMessagesDeleted": "{count, plural, =1{Message deleted} other{{count} messages deleted}}",
+  "@undoMessagesDeleted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "undoChatsDeleted": "{count, plural, =1{Chat deleted} other{{count} chats deleted}}",
+  "@undoChatsDeleted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "undoChatsArchived": "{count, plural, =1{Chat archived} other{{count} chats archived}}",
+  "@undoChatsArchived": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "undoChatsUnarchived": "{count, plural, =1{Chat unarchived} other{{count} chats unarchived}}",
+  "@undoChatsUnarchived": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "undoLeftGroup": "You left the group",
+  "undoLeftChannel": "You left the channel"
 }

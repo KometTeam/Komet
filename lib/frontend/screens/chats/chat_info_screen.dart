@@ -35,6 +35,7 @@ import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import 'chat_removal_undo.dart';
 import '../../widgets/formatted_message_text.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
@@ -1494,12 +1495,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
     if (!mounted || !choice.confirmed) return;
 
-    final ok = await chats.leaveChat(api, chatId: _mediaChatId);
-    if (!mounted) return;
-    if (!ok) {
-      showCustomNotification(context, l10n.chatInfoLeaveFailed);
-      return;
-    }
+    final failure = l10n.chatInfoLeaveFailed;
+    removeChatsWithUndo(
+      context,
+      message: isChannel ? l10n.undoLeftChannel : l10n.undoLeftGroup,
+      chatIds: [_mediaChatId],
+      remove: (chatId) async =>
+          await chats.leaveChat(api, chatId: chatId) ? null : failure,
+    );
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
@@ -1577,17 +1580,19 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
     if (!mounted || !choice.confirmed) return;
 
-    final error = await chats.deleteChat(
-      api,
-      chatId: _mediaChatId,
-      lastEventTime: _lastEventTime,
-      forAll: canDeleteForAll && choice.checked,
+    final lastEventTime = _lastEventTime;
+    final forAll = canDeleteForAll && choice.checked;
+    removeChatsWithUndo(
+      context,
+      message: l10n.undoChatsDeleted(1),
+      chatIds: [_mediaChatId],
+      remove: (chatId) => chats.deleteChat(
+        api,
+        chatId: chatId,
+        lastEventTime: lastEventTime,
+        forAll: forAll,
+      ),
     );
-    if (!mounted) return;
-    if (error != null) {
-      showCustomNotification(context, error);
-      return;
-    }
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 

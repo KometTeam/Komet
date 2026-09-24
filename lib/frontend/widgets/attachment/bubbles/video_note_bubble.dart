@@ -83,6 +83,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   bool _seekInFlight = false;
   bool _resumeAfterScrub = false;
   bool _muted = false;
+  bool _ownsPlayback = false;
   bool _visible = false;
   bool _retriedCache = false;
   bool _transcriptionLoading = false;
@@ -126,6 +127,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     TranscriptionCache.listen(_sourceMessageId, _onTranscriptionPush);
     _adoptCachedTranscription();
     WidgetsBinding.instance.addObserver(this);
+    MediaPlayback.instance.videoNote.addListener(_onActiveNoteChanged);
     final local = _localPath;
     if (local != null) {
       unawaited(_openLocalPreview(File(local)));
@@ -149,6 +151,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   void dispose() {
     TranscriptionCache.unlisten(_sourceMessageId, _onTranscriptionPush);
     WidgetsBinding.instance.removeObserver(this);
+    MediaPlayback.instance.videoNote.removeListener(_onActiveNoteChanged);
     if (_playingNote == this) _playingNote = null;
     _PreviewPool.unregister(this);
     _expand.dispose();
@@ -194,6 +197,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   void _claimPlayback() {
     final controller = _controller;
     if (controller == null) return;
+    _ownsPlayback = true;
     MediaPlayback.instance.activateVideoNote(
       VideoNoteTrack(
         cacheName: _cacheName,
@@ -206,6 +210,23 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
         preview: _preview,
       ),
     );
+  }
+
+  void _onActiveNoteChanged() {
+    if (!_ownsPlayback) return;
+    final controller = _controller;
+    if (controller != null &&
+        MediaPlayback.instance.isActiveVideoNote(controller)) {
+      return;
+    }
+    _ownsPlayback = false;
+    if (_playingNote == this) _playingNote = null;
+    _expand.reverse();
+    _ringProgress.value = 0;
+    if (!mounted) return;
+    _PreviewPool.register(this);
+    setState(() => _muted = true);
+    if (_visible) unawaited(_startMuted());
   }
 
   void _onTick() {
@@ -321,6 +342,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     final controller = _controller;
     if (controller == null || !controller.value.hasError) return;
     logger.w('VideoNoteBubble: ${controller.value.errorDescription}');
+    _ownsPlayback = false;
     if (MediaPlayback.instance.isActiveVideoNote(controller)) {
       MediaPlayback.instance.closeVideoNote();
     }

@@ -176,7 +176,7 @@ class Api {
       }
       if (gen != _connectGen) return;
 
-      setTrustMincifryCa(enabled: endpoint.trustMincifryCa);
+      TlsConfig.setMincifryTrust(endpoint.trustMincifryCa);
 
       final (session, wireLog) = await _buildSessionOptions(endpoint);
       built = session;
@@ -830,6 +830,19 @@ class Api {
 
   Future<void> reconnectAndLogin() async {
     await connect();
+  }
+
+  Future<bool> reconnectToEndpoint({
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    await disconnect();
+    unawaited(connect());
+    final settled = await stateStream
+        .firstWhere(
+          (s) => s == SessionState.online || s == SessionState.disconnected,
+        )
+        .timeout(timeout, onTimeout: () => SessionState.disconnected);
+    return settled == SessionState.online;
   }
 
   // #***! pre-login сокет представляется прошлой версией; чтобы отправить токен,

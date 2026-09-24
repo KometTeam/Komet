@@ -6505,6 +6505,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A video message can\'t be longer than {seconds} s'**
   String attachSheetVideoNoteTooLong(int seconds);
+
+  /// No description provided for @undoAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get undoAction;
+
+  /// No description provided for @undoMessageUnpinned.
+  ///
+  /// In en, this message translates to:
+  /// **'You unpinned the message'**
+  String get undoMessageUnpinned;
+
+  /// No description provided for @undoMessagesDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Message deleted} other{{count} messages deleted}}'**
+  String undoMessagesDeleted(int count);
+
+  /// No description provided for @undoChatsDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Chat deleted} other{{count} chats deleted}}'**
+  String undoChatsDeleted(int count);
+
+  /// No description provided for @undoChatsArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Chat archived} other{{count} chats archived}}'**
+  String undoChatsArchived(int count);
+
+  /// No description provided for @undoChatsUnarchived.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Chat unarchived} other{{count} chats unarchived}}'**
+  String undoChatsUnarchived(int count);
+
+  /// No description provided for @undoLeftGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'You left the group'**
+  String get undoLeftGroup;
+
+  /// No description provided for @undoLeftChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'You left the channel'**
+  String get undoLeftChannel;
 }
 
 class _AppLocalizationsDelegate

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../../backend/modules/chats.dart';
 import '../../../../backend/modules/messages.dart';
+import '../../../../backend/modules/pending_message_deletions.dart';
 import '../../../../core/cache/message_session_cache.dart';
 import '../../../../core/config/komet_settings.dart';
 import '../../../../core/storage/app_database.dart';
@@ -22,16 +23,36 @@ class ChatController extends ChangeNotifier {
   static const int newerPageSize = 60;
   static const int _endOfTime = 1 << 62;
 
+  ChatController() {
+    _restoredSub = PendingMessageDeletions.instance.restored.listen(
+      _onRestored,
+    );
+  }
+
   int chatId = 0;
   int myId = 0;
 
+  late final StreamSubscription<RestoredMessages> _restoredSub;
   List<CachedMessage> _messages = [];
   final Map<String, int> _indexById = {};
 
   List<CachedMessage> get messages => _messages;
   set messages(List<CachedMessage> v) {
-    _messages = v;
+    _messages = _withoutPendingDeletions(v);
     _reindexAll();
+  }
+
+  bool _isPendingDeletion(CachedMessage m) =>
+      PendingMessageDeletions.instance.isPending(chatId, m.id);
+
+  List<CachedMessage> _withoutPendingDeletions(List<CachedMessage> list) {
+    if (!list.any(_isPendingDeletion)) return list;
+    return list.where((m) => !_isPendingDeletion(m)).toList();
+  }
+
+  void _onRestored(RestoredMessages restored) {
+    if (restored.chatId != chatId) return;
+    mergeMessages(restored.messages, contiguous: true);
   }
 
   final ValueNotifier<int> messagesRev = ValueNotifier(0);
@@ -58,6 +79,7 @@ class ChatController extends ChangeNotifier {
   }
 
   void addMessage(CachedMessage msg) {
+    if (_isPendingDeletion(msg)) return;
     _indexById[msg.id] = _messages.length;
     _messages.add(msg);
   }
@@ -549,6 +571,7 @@ class ChatController extends ChangeNotifier {
 
   @override
   void dispose() {
+    unawaited(_restoredSub.cancel());
     messagesRev.dispose();
     super.dispose();
   }

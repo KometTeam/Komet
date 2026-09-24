@@ -25,6 +25,9 @@ import 'package:komet/frontend/screens/contacts/open_contact_profile.dart';
 import 'package:komet/frontend/screens/chats/chat_list_screen.dart';
 import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/frontend/widgets/undo_notification.dart';
+import 'package:komet/backend/modules/pending_message_deletions.dart';
+import 'package:komet/frontend/screens/chats/chat_removal_undo.dart';
 import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart';
@@ -468,6 +471,7 @@ class _ChatScreenState extends State<ChatScreen>
   final GlobalKey _messageListKey = GlobalKey();
   _ChatMessageList? _messageListWidget;
   final Set<String> _deletingIds = {};
+  PendingUndo? _pendingUnpin;
 
   static const double _avgMessageHeight = 72.0;
   static const double _historyPrefetchExtent = _avgMessageHeight * 8;
@@ -1405,24 +1409,24 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _togglePinMessage(CachedMessage message) async {
     final messageId = int.tryParse(message.id);
     if (messageId == null) return;
-    final previousChat = chat;
-    final willUnpin = chat?.pinnedMsgId == messageId;
-    if (willUnpin) {
-      _applyPinnedMessageLocally();
-    } else {
-      final preview = _pinnedPreviewFor(message);
-      _applyPinnedMessageLocally(
-        messageId: messageId,
-        text: preview.text,
-        time: message.time,
-        isPreview: preview.isPreview,
-      );
+    if (chat?.pinnedMsgId == messageId) {
+      _unpinCurrentMessage();
+      return;
     }
+    _pendingUnpin?.discard();
+    _pendingUnpin = null;
+    final previousChat = chat;
+    final preview = _pinnedPreviewFor(message);
+    _applyPinnedMessageLocally(
+      messageId: messageId,
+      text: preview.text,
+      time: message.time,
+      isPreview: preview.isPreview,
+    );
     final error = await chats.setPinnedMessage(
       api,
       chatId: widget.chatId,
-      messageId: willUnpin ? null : messageId,
-      notify: !willUnpin,
+      messageId: messageId,
     );
     if (!mounted) return;
     if (error != null) {
@@ -1430,28 +1434,46 @@ class _ChatScreenState extends State<ChatScreen>
       showCustomNotification(context, error);
       return;
     }
-    showCustomNotification(
-      context,
-      willUnpin ? 'Сообщение откреплено' : 'Сообщение закреплено',
-    );
+    showCustomNotification(context, 'Сообщение закреплено');
   }
 
-  Future<void> _unpinCurrentMessage() async {
-    final previousChat = chat;
+  void _unpinCurrentMessage() {
+    if (chat?.pinnedMsgId == null) return;
+    final chatId = widget.chatId;
     _applyPinnedMessageLocally();
-    final error = await chats.setPinnedMessage(
-      api,
-      chatId: widget.chatId,
-      messageId: null,
-      notify: false,
+    late final PendingUndo pending;
+    pending = showUndoNotification(
+      context,
+      AppLocalizations.of(context)!.undoMessageUnpinned,
+      onUndo: () => _settlePendingUnpin(pending),
+      onCommit: () async {
+        final error = await chats.setPinnedMessage(
+          api,
+          chatId: chatId,
+          messageId: null,
+          notify: false,
+        );
+        _settlePendingUnpin(pending);
+        if (error != null && mounted) showCustomNotification(context, error);
+      },
     );
-    if (!mounted) return;
-    if (error != null) {
-      if (previousChat != null) setState(() => chat = previousChat);
-      showCustomNotification(context, error);
-      return;
-    }
-    showCustomNotification(context, 'Сообщение откреплено');
+    _pendingUnpin = pending;
+  }
+
+  void _settlePendingUnpin(PendingUndo pending) {
+    if (!identical(_pendingUnpin, pending)) return;
+    _pendingUnpin = null;
+    if (mounted) unawaited(_reloadChatMeta());
+  }
+
+  CachedChat _withPendingUnpin(CachedChat fresh) {
+    if (_pendingUnpin == null || fresh.pinnedMsgId == null) return fresh;
+    return fresh.copyWith(
+      pinnedMsgId: null,
+      pinnedMsgText: null,
+      pinnedMsgTime: null,
+      pinnedMsgIsPreview: false,
+    );
   }
 
   ({String? text, bool isPreview}) _pinnedPreviewFor(CachedMessage message) =>
@@ -1510,7 +1532,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (_myId == 0) return;
     final rows = await chats.getChat(_myId, widget.chatId);
     if (!mounted || rows.isEmpty) return;
-    final fresh = rows.first;
+    final fresh = _withPendingUnpin(rows.first);
     final current = chat;
     if (current != null && _mergeReadMarks(current, fresh)) {
       _syncOtherReadTime();
@@ -2505,20 +2527,10 @@ class _ChatScreenState extends State<ChatScreen>
     final forEveryone = await _showDeleteMessageDialog(canForEveryone);
     if (forEveryone == null || !mounted) return;
 
-    final ok = await messagesModule.deleteMessages(
-      widget.chatId,
-      serverMsgs.map((m) => m.id).toList(),
-      forEveryone: forEveryone,
-    );
-    if (!mounted) return;
-    if (!ok) {
-      Haptics.error();
-      showCustomNotification(context, 'Не удалось удалить сообщения');
-      return;
-    }
     for (final m in msgs) {
-      _startDeleteAnimation(m.id);
+      if (m.id.startsWith('temp_')) _startDeleteAnimation(m.id);
     }
+    _deleteWithUndo(serverMsgs, forEveryone: forEveryone);
     _clearSelection();
   }
 
@@ -2796,19 +2808,61 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
+    final message = _chatController.byId(messageId);
+    if (message == null) return;
     final forEveryone = await _showDeleteMessageDialog(canForEveryone);
     if (forEveryone == null || !mounted) return;
+    _deleteWithUndo([message], forEveryone: forEveryone);
+  }
 
-    final ok = await messagesModule.deleteMessages(widget.chatId, [
-      messageId,
-    ], forEveryone: forEveryone);
-    if (!mounted) return;
-    if (!ok) {
-      Haptics.error();
-      showCustomNotification(context, 'Не удалось удалить сообщение');
-      return;
+  void _deleteWithUndo(
+    List<CachedMessage> messages, {
+    required bool forEveryone,
+  }) {
+    final chatId = widget.chatId;
+    final accountId = _myId;
+    final ids = messages.map((m) => m.id).toList();
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final pending = PendingMessageDeletions.instance..hold(chatId, messages);
+    ids.forEach(_startDeleteAnimation);
+    void restore() {
+      if (mounted) {
+        _deletingIds.removeAll(ids);
+        _bumpMessages();
+      }
+      pending.restore(chatId, ids);
     }
-    _startDeleteAnimation(messageId);
+
+    showUndoNotification(
+      context,
+      AppLocalizations.of(context)!.undoMessagesDeleted(ids.length),
+      onUndo: restore,
+      onCommit: () async {
+        final ok = await messagesModule.deleteMessages(
+          chatId,
+          ids,
+          forEveryone: forEveryone,
+        );
+        if (!ok) {
+          restore();
+          Haptics.error();
+          if (overlay.mounted) {
+            showCustomNotificationOnOverlay(
+              overlay,
+              'Не удалось удалить сообщения',
+            );
+          }
+          return;
+        }
+        pending.drop(chatId, ids);
+        try {
+          for (final id in ids) {
+            await AppDatabase.deleteMessage(accountId, chatId, id);
+          }
+          await chats.reconcileLastMessage(accountId, chatId);
+        } catch (_) {}
+      },
+    );
   }
 
   void _startDeleteAnimation(String messageId) {
@@ -2818,14 +2872,16 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _finalizeDelete(String messageId) async {
-    if (!mounted) return;
-    _deletingIds.remove(messageId);
+    if (!mounted || !_deletingIds.remove(messageId)) return;
     final idx = _chatController.indexOfId(messageId);
     if (idx != -1) {
       _chatController.removeMessageAt(idx);
       _reactionNotifiers.remove(messageId)?.dispose();
     }
     _bumpMessages();
+    if (PendingMessageDeletions.instance.isPending(widget.chatId, messageId)) {
+      return;
+    }
     try {
       await AppDatabase.deleteMessage(_myId, widget.chatId, messageId);
       await chats.reconcileLastMessage(_myId, widget.chatId);
@@ -3340,17 +3396,19 @@ class _ChatScreenState extends State<ChatScreen>
       checkboxLabel: canDeleteForAll ? 'Для всех' : null,
     );
     if (!mounted || !choice.confirmed) return;
-    final err = await chats.deleteChat(
-      api,
-      chatId: widget.chatId,
-      lastEventTime: chat?.lastEventTime ?? 0,
-      forAll: canDeleteForAll && choice.checked,
+    final lastEventTime = chat?.lastEventTime ?? 0;
+    final forAll = canDeleteForAll && choice.checked;
+    removeChatsWithUndo(
+      context,
+      message: AppLocalizations.of(context)!.undoChatsDeleted(1),
+      chatIds: [widget.chatId],
+      remove: (chatId) => chats.deleteChat(
+        api,
+        chatId: chatId,
+        lastEventTime: lastEventTime,
+        forAll: forAll,
+      ),
     );
-    if (!mounted) return;
-    if (err != null) {
-      showCustomNotification(context, err);
-      return;
-    }
     _leaveChat();
   }
 

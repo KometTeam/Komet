@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/chats.dart' show CachedChat;
 import 'package:komet/core/config/app_chat_chrome.dart';
@@ -29,7 +27,7 @@ class ChatBodyLayout extends StatelessWidget {
   final BackdropKey? pillBackdrop;
   final int myId;
   final VoidCallback onJumpToPinnedMessage;
-  final Future<void> Function() onUnpinCurrentMessage;
+  final VoidCallback onUnpinCurrentMessage;
   final VoidCallback? onJoinCall;
   final bool composerFrosted;
   final ValueNotifier<double> composerHeight;
@@ -92,7 +90,7 @@ class ChatBodyLayout extends StatelessWidget {
       backdropKey: pillBackdrop,
       onTap: onJumpToPinnedMessage,
       myId: myId,
-      onUnpinRequested: () => unawaited(onUnpinCurrentMessage()),
+      onUnpinRequested: onUnpinCurrentMessage,
     );
   }
 
@@ -244,7 +242,7 @@ class ChatBodyLayout extends StatelessWidget {
                     backdropKey: pillBackdrop,
                     onTap: onJumpToPinnedMessage,
                     myId: myId,
-                    onUnpinRequested: () => unawaited(onUnpinCurrentMessage()),
+                    onUnpinRequested: onUnpinCurrentMessage,
                   ),
                 ],
               ),

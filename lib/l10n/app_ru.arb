@@ -1190,5 +1190,13 @@
   "chatPreviewMarkRead": "Пометить прочитанным",
   "chatPreviewOpen": "Открыть",
   "attachSheetSendAsVideoNote": "Отправить как кружок",
-  "attachSheetVideoNoteTooLong": "Кружок не может быть длиннее {seconds} с"
+  "attachSheetVideoNoteTooLong": "Кружок не может быть длиннее {seconds} с",
+  "undoAction": "Отменить",
+  "undoMessageUnpinned": "Вы открепили сообщение",
+  "undoMessagesDeleted": "{count, plural, =1{Сообщение удалено} few{{count} сообщения удалены} many{{count} сообщений удалено} other{{count} сообщения удалены}}",
+  "undoChatsDeleted": "{count, plural, =1{Чат удалён} few{{count} чата удалены} many{{count} чатов удалено} other{{count} чата удалены}}",
+  "undoChatsArchived": "{count, plural, =1{Чат в архиве} few{{count} чата в архиве} many{{count} чатов в архиве} other{{count} чата в архиве}}",
+  "undoChatsUnarchived": "{count, plural, =1{Чат возвращён из архива} few{{count} чата возвращены из архива} many{{count} чатов возвращено из архива} other{{count} чата возвращены из архива}}",
+  "undoLeftGroup": "Вы вышли из группы",
+  "undoLeftChannel": "Вы отписались от канала"
 }

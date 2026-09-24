@@ -13,6 +13,7 @@ import '../../debug/cache_section.dart';
 import '../../debug/feature_toggles_section.dart';
 import '../../debug/header_section.dart';
 import '../../debug/id_search_section.dart';
+import '../../debug/info_section.dart';
 import '../../debug/load_simulation_section.dart';
 import '../../debug/log_export.dart';
 import '../../debug/lottie_polygon_section.dart';
@@ -20,10 +21,12 @@ import '../../debug/network_section.dart';
 import '../../debug/performance_monitor_section.dart';
 import '../../debug/previews_section.dart';
 import '../../debug/quick_actions_section.dart';
+import '../../debug/server_section.dart';
 import '../../debug/sync_probe_section.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../chats/profile_action_sheets.dart';
 
 class DebugMenuScreen extends StatefulWidget {
   const DebugMenuScreen({super.key});
@@ -41,11 +44,13 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
   int _cacheSize = 0;
   bool _clearingCache = false;
   bool _micSignalOn = true;
+  final DebugServerController _server = DebugServerController();
 
   @override
   void initState() {
     super.initState();
     _loadCacheSize();
+    _server.load();
   }
 
   Future<void> _sendMicSignal(bool enabled) async {
@@ -129,6 +134,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
 
   @override
   void dispose() {
+    _server.dispose();
     _idController.dispose();
     super.dispose();
   }
@@ -199,82 +205,122 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
     }
   }
 
+  Future<void> _resetServer() async {
+    final choice = await showBlurredConfirm(
+      context,
+      title: 'Сбросить сервер?',
+      message:
+          'Адрес, порт и доверие сертификату Минцифры вернутся к '
+          'значениям по умолчанию, соединение переподнимется',
+      confirmLabel: 'Сбросить',
+      cancelLabel: 'Отмена',
+      destructive: true,
+    );
+    if (!mounted || !choice.confirmed) return;
+    final online = await _server.reset();
+    if (mounted) reportServerReconnect(context, online);
+  }
+
+  Widget _tab(List<Widget> children) => ListView(
+    physics: const BouncingScrollPhysics(),
+    padding: const EdgeInsets.only(top: 12, bottom: 120),
+    children: children,
+  );
+
+  Widget _padded(Widget child) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+    child: child,
+  );
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final appState = KometApp.stateOf(context);
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
-      floatingActionButton: const ConnectionSpinner(),
-      body: SafeArea(
-        bottom: false,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: DebugHeaderSection(),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: DebugQuickActionsSection(
-                onExportLog: () => exportDebugLog(context),
-              ),
-            ),
-            const SliverToBoxAdapter(child: DebugLottiePolygonSection()),
-            SliverToBoxAdapter(child: DebugNetworkSection(appState: appState)),
-            const SliverToBoxAdapter(child: DebugFeatureTogglesSection()),
-            SliverToBoxAdapter(
-              child: DebugCacheSection(
-                cacheSize: _cacheSize,
-                clearingCache: _clearingCache,
-                cacheLimitLabel: _limitLabel(AppMediaCacheLimit.current.value),
-                onPickCacheLimit: _pickCacheLimit,
-                onClearCache: _clearCache,
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: DebugPreviewsSection(
-                micSignalOn: _micSignalOn,
-                onMicSignalChanged: _sendMicSignal,
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: DebugIdSearchSection(
-                  idController: _idController,
-                  isSearching: _isSearching,
-                  hasSearched: _hasSearched,
-                  hits: _hits,
-                  errors: _errors,
-                  onSearch: _search,
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        backgroundColor: cs.surface,
+        floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+        floatingActionButton: const ConnectionSpinner(),
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              ListenableBuilder(
+                listenable: _server,
+                builder: (context, _) => DebugHeaderSection(
+                  onReset: _server.busy || _server.isDefault
+                      ? null
+                      : _resetServer,
                 ),
               ),
-            ),
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: DebugSyncProbeSection(),
+              TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.label,
+                indicator: UnderlineTabIndicator(
+                  borderSide: BorderSide(color: cs.primary, width: 3),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                labelColor: cs.primary,
+                unselectedLabelColor: cs.onSurfaceVariant,
+                labelStyle: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                tabs: const [
+                  Tab(text: 'Общее'),
+                  Tab(text: 'Рубильники'),
+                  Tab(text: 'Инфо'),
+                ],
               ),
-            ),
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: DebugLoadSimulationSection(),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _tab([
+                      DebugServerSection(controller: _server),
+                      DebugNetworkSection(appState: appState),
+                      DebugQuickActionsSection(
+                        onExportLog: () => exportDebugLog(context),
+                      ),
+                      DebugCacheSection(
+                        cacheSize: _cacheSize,
+                        clearingCache: _clearingCache,
+                        cacheLimitLabel: _limitLabel(
+                          AppMediaCacheLimit.current.value,
+                        ),
+                        onPickCacheLimit: _pickCacheLimit,
+                        onClearCache: _clearCache,
+                      ),
+                      DebugPreviewsSection(
+                        micSignalOn: _micSignalOn,
+                        onMicSignalChanged: _sendMicSignal,
+                      ),
+                      _padded(
+                        DebugIdSearchSection(
+                          idController: _idController,
+                          isSearching: _isSearching,
+                          hasSearched: _hasSearched,
+                          hits: _hits,
+                          errors: _errors,
+                          onSearch: _search,
+                        ),
+                      ),
+                      _padded(const DebugSyncProbeSection()),
+                      _padded(const DebugLoadSimulationSection()),
+                      _padded(const DebugPerformanceSection()),
+                      const DebugLottiePolygonSection(),
+                    ]),
+                    _tab([DebugFeatureTogglesSection(appState: appState)]),
+                    _tab([DebugInfoSection(server: _server)]),
+                  ],
+                ),
               ),
-            ),
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: DebugPerformanceSection(),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 120)),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -21,6 +21,9 @@ import '../../widgets/decrypted_text.dart';
 import '../../widgets/encryption_lock_badge.dart';
 import '../../widgets/online_dot.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/undo_notification.dart';
+import 'chat_removal_undo.dart';
+import '../contacts/find_user_sheet.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
@@ -540,18 +543,33 @@ class _ChatListScreenState extends State<ChatListScreen>
     final p = _profile;
     if (p == null) return;
     final archive = !widget.archiveMode;
-    for (final c in selected) {
-      await ArchivedChatsStore.instance.setArchived(p.id, c.id, archive);
-    }
+    final chatIds = selected.map((c) => c.id).toList();
+    await _setArchived(p.id, chatIds, archive);
     if (!mounted) return;
     _clearSelection();
-    final count = selected.length;
-    showCustomNotification(
+    final l10n = AppLocalizations.of(context)!;
+    showUndoNotification(
       context,
       archive
-          ? (count == 1 ? 'Чат в архиве' : 'Чаты в архиве ($count)')
-          : (count == 1 ? 'Чат возвращён' : 'Чаты возвращены ($count)'),
+          ? l10n.undoChatsArchived(chatIds.length)
+          : l10n.undoChatsUnarchived(chatIds.length),
+      onUndo: () => unawaited(_setArchived(p.id, chatIds, !archive)),
+      onCommit: () {},
     );
+  }
+
+  Future<void> _setArchived(
+    int accountId,
+    List<int> chatIds,
+    bool archived,
+  ) async {
+    for (final chatId in chatIds) {
+      await ArchivedChatsStore.instance.setArchived(
+        accountId,
+        chatId,
+        archived,
+      );
+    }
   }
 
   Future<void> _onDeleteTap() async {
@@ -578,26 +596,27 @@ class _ChatListScreenState extends State<ChatListScreen>
     final choice = await _showDeleteConfirmDialog(selectedAfter, kind);
     if (!mounted || choice == null) return;
 
-    final errors = <String>[];
-    for (final c in selectedAfter) {
-      final forAll =
-          kind == _DeleteKind.ownerGroup || (choice.forAll && c.id != 0);
-      final err = await chats.deleteChat(
-        api,
-        chatId: c.id,
-        lastEventTime: c.lastEventTime,
-        forAll: forAll,
-      );
-      if (err != null) errors.add(err);
-    }
-    if (!mounted) return;
-    if (errors.isNotEmpty) {
-      final msg = errors.length == 1
-          ? errors.first
-          : 'Не удалось удалить ${errors.length} чат(ов): ${errors.first}';
-      showCustomNotification(context, msg);
-    }
+    final forAllById = {
+      for (final c in selectedAfter)
+        c.id: kind == _DeleteKind.ownerGroup || (choice.forAll && c.id != 0),
+    };
+    final lastEventById = {
+      for (final c in selectedAfter) c.id: c.lastEventTime,
+    };
     _clearSelection();
+    removeChatsWithUndo(
+      context,
+      message: AppLocalizations.of(
+        context,
+      )!.undoChatsDeleted(selectedAfter.length),
+      chatIds: forAllById.keys.toList(),
+      remove: (chatId) => chats.deleteChat(
+        api,
+        chatId: chatId,
+        lastEventTime: lastEventById[chatId]!,
+        forAll: forAllById[chatId]!,
+      ),
+    );
   }
 
   Future<({bool forAll})?> _showDeleteConfirmDialog(
@@ -3786,6 +3805,15 @@ class _ChatListScreenState extends State<ChatListScreen>
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         _buildFabMenuItem(
+          Symbols.edit_square,
+          'Написать человеку',
+          onTap: () {
+            _toggleFab();
+            unawaited(_messagePerson());
+          },
+        ),
+        const SizedBox(height: 4),
+        _buildFabMenuItem(
           Symbols.group_add,
           'Создать группу',
           onTap: () {
@@ -3821,6 +3849,21 @@ class _ChatListScreenState extends State<ChatListScreen>
           },
         ),
       ],
+    );
+  }
+
+  Future<void> _messagePerson() async {
+    final found = await showFindUserSheet(
+      context,
+      title: 'Написать человеку',
+      actionLabel: 'Написать',
+    );
+    if (found == null || !mounted) return;
+    _openChatFromList(
+      found.chatId.toString(),
+      found.name,
+      found.avatarUrl,
+      'DIALOG',
     );
   }
 

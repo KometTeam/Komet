@@ -3512,4 +3512,68 @@ class AppLocalizationsRu extends AppLocalizations {
   String attachSheetVideoNoteTooLong(int seconds) {
     return 'Кружок не может быть длиннее $seconds с';
   }
+
+  @override
+  String get undoAction => 'Отменить';
+
+  @override
+  String get undoMessageUnpinned => 'Вы открепили сообщение';
+
+  @override
+  String undoMessagesDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count сообщения удалены',
+      many: '$count сообщений удалено',
+      few: '$count сообщения удалены',
+      one: 'Сообщение удалено',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String undoChatsDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count чата удалены',
+      many: '$count чатов удалено',
+      few: '$count чата удалены',
+      one: 'Чат удалён',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String undoChatsArchived(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count чата в архиве',
+      many: '$count чатов в архиве',
+      few: '$count чата в архиве',
+      one: 'Чат в архиве',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String undoChatsUnarchived(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count чата возвращены из архива',
+      many: '$count чатов возвращено из архива',
+      few: '$count чата возвращены из архива',
+      one: 'Чат возвращён из архива',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get undoLeftGroup => 'Вы вышли из группы';
+
+  @override
+  String get undoLeftChannel => 'Вы отписались от канала';
 }

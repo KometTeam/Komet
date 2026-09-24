@@ -3497,4 +3497,60 @@ class AppLocalizationsEn extends AppLocalizations {
   String attachSheetVideoNoteTooLong(int seconds) {
     return 'A video message can\'t be longer than $seconds s';
   }
+
+  @override
+  String get undoAction => 'Undo';
+
+  @override
+  String get undoMessageUnpinned => 'You unpinned the message';
+
+  @override
+  String undoMessagesDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count messages deleted',
+      one: 'Message deleted',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String undoChatsDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count chats deleted',
+      one: 'Chat deleted',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String undoChatsArchived(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count chats archived',
+      one: 'Chat archived',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String undoChatsUnarchived(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count chats unarchived',
+      one: 'Chat unarchived',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get undoLeftGroup => 'You left the group';
+
+  @override
+  String get undoLeftChannel => 'You left the channel';
 }

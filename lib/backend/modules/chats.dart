@@ -758,9 +758,29 @@ class ChatsModule {
     return true;
   }
 
+  final Set<int> _awaitingRemoval = {};
+
+  void holdForRemoval(Iterable<int> chatIds) {
+    final before = _awaitingRemoval.length;
+    _awaitingRemoval.addAll(chatIds);
+    if (_awaitingRemoval.length != before) _announceRemovalChange();
+  }
+
+  void releaseRemoval(Iterable<int> chatIds) {
+    final before = _awaitingRemoval.length;
+    _awaitingRemoval.removeAll(chatIds);
+    if (_awaitingRemoval.length != before) _announceRemovalChange();
+  }
+
+  void _announceRemovalChange() {
+    chatOrderRevision.value++;
+    _bump();
+  }
+
   // #***! снимок текущего кэша, без похода в базу
   List<CachedChat> chatsSnapshot({bool includeHidden = false}) {
     final list = _chatsById.entries
+        .where((e) => !_awaitingRemoval.contains(e.key))
         .where((e) => includeHidden || _inListById[e.key] == 1)
         .map((e) => e.value)
         .toList();
