@@ -162,54 +162,56 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/appstore.mobileprovision
 
-      - name: Prepare Flutter iOS build (pods, frameworks)
+      - name: Build unsigned app
         run: |
           flutter config --no-enable-swift-package-manager
           flutter build ios --release --no-codesign
 
-      - name: Archive with App Store signing
+      - name: Sign app bundle for App Store
         env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          PROFILE_NAME: ${{ secrets.APPSTORE_PROFILE_NAME }}
+          KEYCHAIN_PATH: ${{ runner.temp }}/appstore-signing.keychain-db
         run: |
-          xcodebuild \
-            -workspace ios/Runner.xcworkspace \
-            -scheme Runner \
-            -sdk iphoneos \
-            -configuration Release \
-            -archivePath build/ios/Runner.xcarchive \
-            PRODUCT_BUNDLE_IDENTIFIER=pw.komet.ios \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
-            archive
+          set -euo pipefail
+          APP="build/ios/iphoneos/Runner.app"
+          PP_PATH="$RUNNER_TEMP/appstore.mobileprovision"
+          BUNDLE_ID="pw.komet.ios"
+          IDENTITY="Apple Distribution"
 
-      - name: Export IPA
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          PROFILE_NAME: ${{ secrets.APPSTORE_PROFILE_NAME }}
+          # Подменяем bundle id на App Store идентификатор
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleURLTypes:0:CFBundleURLName $BUNDLE_ID" "$APP/Info.plist" || true
+
+          # Кладём сам provisioning profile внутрь бандла
+          cp "$PP_PATH" "$APP/embedded.mobileprovision"
+
+          # Достаём entitlements прямо из профиля — они уже содержат
+          # правильный application-identifier для pw.komet.ios
+          security cms -D -i "$PP_PATH" > "$RUNNER_TEMP/profile.plist"
+          ENT_PATH="$RUNNER_TEMP/appstore.entitlements"
+          /usr/libexec/PlistBuddy -x -c "Print :Entitlements" "$RUNNER_TEMP/profile.plist" > "$ENT_PATH"
+
+          # Подписываем вложенные фреймворки (без entitlements)
+          if [ -d "$APP/Frameworks" ]; then
+            find "$APP/Frameworks" -depth 1 \( -name "*.framework" -o -name "*.dylib" \) -print0 \
+              | xargs -0 -I{} codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "{}"
+          fi
+
+          # Расширения (если появятся) — с entitlements
+          if [ -d "$APP/PlugIns" ]; then
+            find "$APP/PlugIns" -depth 1 -name "*.appex" -print0 \
+              | xargs -0 -I{} codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" --entitlements "$ENT_PATH" "{}"
+          fi
+
+          # Подписываем само приложение последним
+          codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" --entitlements "$ENT_PATH" "$APP"
+
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Package IPA
         run: |
-          cat > ExportOptions.plist <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key><string>app-store</string>
-            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
-            <key>signingStyle</key><string>manual</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>pw.komet.ios</key><string>${PROFILE_NAME}</string>
-            </dict>
-          </dict>
-          </plist>
-          PLIST
-
-          xcodebuild -exportArchive \
-            -archivePath build/ios/Runner.xcarchive \
-            -exportOptionsPlist ExportOptions.plist \
-            -exportPath dist
+          mkdir -p dist build/ios/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/Payload/
+          (cd build/ios && zip -qr ../../dist/Komet-ios-appstore.ipa Payload)
 
       - name: Upload App Store IPA
         uses: actions/upload-artifact@v4
