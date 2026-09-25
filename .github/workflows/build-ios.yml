@@ -174,7 +174,7 @@ jobs:
         run: |
           set -euo pipefail
           IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
-            | grep -Eo '"(Apple Distribution|iOS Distribution)[^"]*"' \
+            | grep -Eo '"(Apple Distribution|iOS Distribution|iPhone Distribution)[^"]*"' \
             | head -1 | tr -d '"')
           if [ -z "$IDENTITY" ]; then
             echo "No distribution identity found in keychain"
