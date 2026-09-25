@@ -167,6 +167,23 @@ jobs:
           flutter config --no-enable-swift-package-manager
           flutter build ios --release --no-codesign
 
+      - name: Find signing identity
+        id: identity
+        env:
+          KEYCHAIN_PATH: ${{ runner.temp }}/appstore-signing.keychain-db
+        run: |
+          set -euo pipefail
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | grep -Eo '"(Apple Distribution|iOS Distribution)[^"]*"' \
+            | head -1 | tr -d '"')
+          if [ -z "$IDENTITY" ]; then
+            echo "No distribution identity found in keychain"
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+            exit 1
+          fi
+          echo "Found identity: $IDENTITY"
+          echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
+
       - name: Sign app bundle for App Store
         env:
           KEYCHAIN_PATH: ${{ runner.temp }}/appstore-signing.keychain-db
@@ -175,7 +192,6 @@ jobs:
           APP="build/ios/iphoneos/Runner.app"
           PP_PATH="$RUNNER_TEMP/appstore.mobileprovision"
           BUNDLE_ID="pw.komet.ios"
-          IDENTITY="Apple Distribution"
 
           # Подменяем bundle id на App Store идентификатор
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Info.plist"
