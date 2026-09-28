@@ -4,7 +4,6 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../widgets/connection_status.dart';
 
 import '../../../core/config/build_profile.dart';
-import '../../../core/config/ios_release.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../main.dart';
 import '../../widgets/section_header.dart';
@@ -37,7 +36,7 @@ class KometSettingsScreen extends StatelessWidget {
             ),
             SettingsCard(
               children: [
-                if (IosRelease.plugins)
+                if (BuildProfile.plugins)
                   SettingsNavTile(
                     icon: Symbols.extension,
                     label: 'Плагины',
