@@ -3553,4 +3553,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get undoLeftChannel => 'You left the channel';
+
+  @override
+  String get chatListYesterday => 'Yesterday';
+
+  @override
+  String get chatListDatePattern => 'M/d/yy';
 }

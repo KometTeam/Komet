@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/config/debug_test.dart';
+import '../../../core/config/ios_release.dart';
 import '../../../core/contacts/contact_labels.dart';
 import '../../../core/contacts/device_contacts_service.dart';
 import '../../../core/storage/app_database.dart';
@@ -49,6 +50,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
   }
 
   Future<void> _openNfcExchange() async {
+    if (!IosRelease.nfcContactExchange) return;
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -256,10 +258,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(Symbols.person_add, color: cs.onSurface),
-                    onPressed: _openNfcExchange,
-                  ),
+                  ContactsNfcExchangeButton(onPressed: _openNfcExchange),
                   IconButton(
                     icon: Icon(Symbols.search, color: cs.onSurface),
                     onPressed: _openSearchById,
@@ -293,6 +292,25 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Opens the contact exchange sheet. Hidden on iOS, where the exchange is
+/// not available.
+class ContactsNfcExchangeButton extends StatelessWidget {
+  const ContactsNfcExchangeButton({super.key, required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!IosRelease.nfcContactExchange) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    return IconButton(
+      key: const ValueKey('contacts-nfc-exchange'),
+      icon: Icon(Symbols.person_add, color: cs.onSurface),
+      onPressed: onPressed,
     );
   }
 }

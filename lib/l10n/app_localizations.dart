@@ -6553,6 +6553,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You left the channel'**
   String get undoLeftChannel;
+
+  /// No description provided for @chatListYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get chatListYesterday;
+
+  /// No description provided for @chatListDatePattern.
+  ///
+  /// In en, this message translates to:
+  /// **'M/d/yy'**
+  String get chatListDatePattern;
 }
 
 class _AppLocalizationsDelegate

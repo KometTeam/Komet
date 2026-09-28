@@ -1198,12 +1198,18 @@ class _VideoPlaybackSession extends ChangeNotifier {
     final old = _controller;
     final previousQuality = _quality;
     final uri = Uri.parse(url);
+    final headers = videoRequestHeaders(
+      uri,
+      sessionUserAgent: userAgentProvider?.call(),
+    );
+    logger.d(
+      'PhotoViewer video open: host=${uri.host}, '
+      'srcAg=${uri.queryParameters['srcAg'] ?? 'none'}, '
+      'ua=${headers['User-Agent'] ?? 'player default'}',
+    );
     final controller = VideoPlayerController.networkUrl(
       uri,
-      httpHeaders: videoRequestHeaders(
-        uri,
-        sessionUserAgent: userAgentProvider?.call(),
-      ),
+      httpHeaders: headers,
     );
     var installed = false;
     _quality = quality;
@@ -1244,7 +1250,8 @@ class _VideoPlaybackSession extends ChangeNotifier {
       final sourceAgent = uri.queryParameters['srcAg'] ?? 'unknown';
       logger.w(
         'PhotoViewer video init failed: host=${uri.host}, '
-        'srcAg=$sourceAgent, error=$error',
+        'srcAg=$sourceAgent, ua=${headers['User-Agent'] ?? 'player default'}, '
+        'error=$error',
       );
       if (!installed) unawaited(controller.dispose().catchError((_) {}));
       if (generation == _loadGeneration && !_disposed) {

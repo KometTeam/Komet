@@ -21,15 +21,20 @@ abstract final class AlbumLayout {
   static const double _minCroppedRatio = 2 / 3;
   static const double _maxCroppedRatio = 1.7;
 
-  static AlbumGrid layout(List<double> aspectRatios) {
+  static const double defaultOrderPenalty = 1.2;
+
+  static AlbumGrid layout(
+    List<double> aspectRatios, {
+    double orderPenalty = defaultOrderPenalty,
+  }) {
     final ratios = [
       for (final ratio in aspectRatios)
         ratio.isFinite && ratio > 0 ? ratio : 1.0,
     ];
-    return _normalize(_place(ratios));
+    return _normalize(_place(ratios, orderPenalty));
   }
 
-  static List<Rect> _place(List<double> ratios) {
+  static List<Rect> _place(List<double> ratios, double orderPenalty) {
     final count = ratios.length;
     if (count == 0) return const [];
     if (count == 1) {
@@ -47,7 +52,7 @@ abstract final class AlbumLayout {
           return _placeFour(ratios, shape);
       }
     }
-    return _placeRows(ratios);
+    return _placeRows(ratios, orderPenalty);
   }
 
   static String _orientation(double ratio) {
@@ -177,7 +182,7 @@ abstract final class AlbumLayout {
     ];
   }
 
-  static List<Rect> _placeRows(List<double> ratios) {
+  static List<Rect> _placeRows(List<double> ratios, double orderPenalty) {
     final wide = _average(ratios) > 1.1;
     final cropped = [
       for (final ratio in ratios)
@@ -186,7 +191,11 @@ abstract final class AlbumLayout {
           _maxCroppedRatio,
         ),
     ];
-    final lines = rows(cropped, narrow: _average(ratios) < 0.85);
+    final lines = rows(
+      cropped,
+      narrow: _average(ratios) < 0.85,
+      orderPenalty: orderPenalty,
+    );
 
     final tiles = <Rect>[];
     var start = 0;
@@ -207,14 +216,18 @@ abstract final class AlbumLayout {
     return tiles;
   }
 
-  static List<int> rows(List<double> cropped, {bool narrow = false}) {
+  static List<int> rows(
+    List<double> cropped, {
+    bool narrow = false,
+    double orderPenalty = defaultOrderPenalty,
+  }) {
     final count = cropped.length;
     if (count < 2) return [count];
 
     List<int>? best;
     var bestScore = double.infinity;
     void consider(List<int> lines) {
-      final score = _score(cropped, lines);
+      final score = _score(cropped, lines, orderPenalty);
       if (score < bestScore) {
         bestScore = score;
         best = lines;
@@ -245,7 +258,11 @@ abstract final class AlbumLayout {
     return best ?? [count];
   }
 
-  static double _score(List<double> cropped, List<int> lines) {
+  static double _score(
+    List<double> cropped,
+    List<int> lines,
+    double orderPenalty,
+  ) {
     var total = 0.0;
     var lowest = double.infinity;
     var start = 0;
@@ -258,7 +275,7 @@ abstract final class AlbumLayout {
     var score = (total - _targetHeight).abs();
     for (var i = 0; i + 1 < lines.length; i++) {
       if (lines[i] > lines[i + 1]) {
-        score *= 1.2;
+        score *= orderPenalty;
         break;
       }
     }

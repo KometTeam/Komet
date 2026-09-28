@@ -3576,4 +3576,10 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get undoLeftChannel => 'Вы отписались от канала';
+
+  @override
+  String get chatListYesterday => 'Вчера';
+
+  @override
+  String get chatListDatePattern => 'dd.MM.yy';
 }

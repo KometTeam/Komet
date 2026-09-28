@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/config/app_message_actions_style.dart';
+import '../../core/config/ios_release.dart';
 import '../../core/utils/emoji_keyword_index.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
@@ -365,7 +366,9 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     if (_initialized) return;
     _initialized = true;
     _actions = _buildActions();
-    _effectiveStyle = widget.interaction == MessageActionsInteraction.click
+    _effectiveStyle =
+        widget.interaction == MessageActionsInteraction.click ||
+            !IosRelease.messageActionsStyleChoice
         ? MessageActionsStyle.list
         : widget.style;
     final screenSize = MediaQuery.sizeOf(context);
@@ -496,8 +499,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final menuHeight = n * itemHeight + vPad * 2;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final bottomLimit =
-        screenSize.height -
-        math.max(keyboardInset, widget.bottomReservedSpace);
+        screenSize.height - math.max(keyboardInset, widget.bottomReservedSpace);
     final maxMenuY = math.max(8.0, bottomLimit - menuHeight - 8.0);
     late double menuX;
     late double menuY;
@@ -764,101 +766,98 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     return AnimatedBuilder(
       animation: Listenable.merge([_animation, _expandController]),
       builder: (ctx, _) {
-          final t = _animation.value.clamp(0.0, 1.0);
-          final e = showReactions ? _expandAnim.value.clamp(0.0, 1.0) : 0.0;
-          final bubbleScale = 1.0 + 0.02 * t;
-          final menuHidden = _panelOpen || _reactionsExpanded;
+        final t = _animation.value.clamp(0.0, 1.0);
+        final e = showReactions ? _expandAnim.value.clamp(0.0, 1.0) : 0.0;
+        final bubbleScale = 1.0 + 0.02 * t;
+        final menuHidden = _panelOpen || _reactionsExpanded;
 
-          return GestureDetector(
-            onTap: _close,
-            behavior: HitTestBehavior.opaque,
-            child: Stack(
-              children: [
-                if (!isClick) ...[
-                  Positioned.fill(
-                    child: ColoredBox(
-                      color: Colors.black.withValues(
-                        alpha: 0.22 * t + 0.28 * e,
-                      ),
-                    ),
+        return GestureDetector(
+          onTap: _close,
+          behavior: HitTestBehavior.opaque,
+          child: Stack(
+            children: [
+              if (!isClick) ...[
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.22 * t + 0.28 * e),
                   ),
-                  if (widget.snapshot != null)
-                    Positioned(
-                      left: widget.originRect.left,
-                      top: widget.originRect.top,
-                      width: widget.originRect.width,
-                      height: widget.originRect.height,
-                      child: Opacity(
-                        opacity: 1.0 - 0.35 * e,
-                        child: Transform.scale(
-                          scale: bubbleScale,
-                          child: RawImage(
-                            image: widget.snapshot,
-                            width: widget.originRect.width,
-                            height: widget.originRect.height,
-                            fit: BoxFit.fill,
-                          ),
+                ),
+                if (widget.snapshot != null)
+                  Positioned(
+                    left: widget.originRect.left,
+                    top: widget.originRect.top,
+                    width: widget.originRect.width,
+                    height: widget.originRect.height,
+                    child: Opacity(
+                      opacity: 1.0 - 0.35 * e,
+                      child: Transform.scale(
+                        scale: bubbleScale,
+                        child: RawImage(
+                          image: widget.snapshot,
+                          width: widget.originRect.width,
+                          height: widget.originRect.height,
+                          fit: BoxFit.fill,
                         ),
-                      ),
-                    ),
-                ],
-                Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: menuHidden,
-                    child: AnimatedOpacity(
-                      opacity: menuHidden ? 0.0 : 1.0,
-                      duration: const Duration(milliseconds: 150),
-                      curve: Curves.easeOut,
-                      child: Stack(
-                        children: [
-                          if (_effectiveStyle ==
-                              MessageActionsStyle.radial) ...[
-                            ..._buildButtons(t),
-                            _buildLabelBanner(size, t),
-                          ] else
-                            _buildListMenu(t),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: !_panelOpen,
-                    child: AnimatedOpacity(
-                      opacity: _panelOpen ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      child: Stack(
-                        children: [
-                          if (_showReport)
-                            _buildReportMenu()
-                          else if (_showHistory)
-                            _buildHistoryMenu()
-                          else if (_showInfo)
-                            _buildInfoMenu()
-                          else if (_showReadBy)
-                            _buildReadByMenu(),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                if (showReactions)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      ignoring: _panelOpen,
-                      child: AnimatedOpacity(
-                        opacity: _panelOpen ? 0.0 : 1.0,
-                        duration: const Duration(milliseconds: 150),
-                        curve: Curves.easeOut,
-                        child: _buildReactionStrip(t, e),
                       ),
                     ),
                   ),
               ],
-            ),
-          );
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: menuHidden,
+                  child: AnimatedOpacity(
+                    opacity: menuHidden ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeOut,
+                    child: Stack(
+                      children: [
+                        if (_effectiveStyle == MessageActionsStyle.radial) ...[
+                          ..._buildButtons(t),
+                          _buildLabelBanner(size, t),
+                        ] else
+                          _buildListMenu(t),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: !_panelOpen,
+                  child: AnimatedOpacity(
+                    opacity: _panelOpen ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    child: Stack(
+                      children: [
+                        if (_showReport)
+                          _buildReportMenu()
+                        else if (_showHistory)
+                          _buildHistoryMenu()
+                        else if (_showInfo)
+                          _buildInfoMenu()
+                        else if (_showReadBy)
+                          _buildReadByMenu(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (showReactions)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: _panelOpen,
+                    child: AnimatedOpacity(
+                      opacity: _panelOpen ? 0.0 : 1.0,
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOut,
+                      child: _buildReactionStrip(t, e),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
       },
     );
   }

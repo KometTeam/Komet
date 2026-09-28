@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/config/ios_release.dart';
 import '../../../core/utils/haptics.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/settings_card.dart';
@@ -15,12 +16,16 @@ class _CustomizationCategory {
   final IconData icon;
   final String title;
   final WidgetBuilder builder;
+  final bool Function() isAvailable;
 
   const _CustomizationCategory({
     required this.icon,
     required this.title,
     required this.builder,
+    this.isAvailable = _always,
   });
+
+  static bool _always() => true;
 }
 
 class CustomizationSection extends StatefulWidget {
@@ -58,6 +63,7 @@ class _CustomizationSectionState extends State<CustomizationSection> {
       icon: Symbols.touch_app,
       title: 'Меню действий',
       builder: (context) => const MessageActionsScreen(),
+      isAvailable: _messageActionsStyleChoice,
     ),
     _CustomizationCategory(
       icon: Symbols.apps,
@@ -65,6 +71,9 @@ class _CustomizationSectionState extends State<CustomizationSection> {
       builder: (context) => const AppIconScreen(),
     ),
   ];
+
+  static bool _messageActionsStyleChoice() =>
+      IosRelease.messageActionsStyleChoice;
 
   void _toggle() {
     Haptics.tap();
@@ -144,8 +153,12 @@ class _CustomizationSectionState extends State<CustomizationSection> {
 
   List<Widget> _buildCategoryTiles(ColorScheme cs) {
     final tiles = <Widget>[];
-    for (var i = 0; i < _categories.length; i++) {
-      final category = _categories[i];
+    final categories = [
+      for (final category in _categories)
+        if (category.isAvailable()) category,
+    ];
+    for (var i = 0; i < categories.length; i++) {
+      final category = categories[i];
       tiles.add(
         Padding(
           padding: const EdgeInsets.only(left: 58),
@@ -161,7 +174,7 @@ class _CustomizationSectionState extends State<CustomizationSection> {
           icon: category.icon,
           label: category.title,
           onTap: () => _open(category),
-          isLast: i == _categories.length - 1,
+          isLast: i == categories.length - 1,
         ),
       );
     }

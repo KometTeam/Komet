@@ -92,6 +92,7 @@ class ChatTextSendController {
   final bool Function() isMounted;
   final BuildContext Function() contextOf;
   final CachedChat? Function() chatOf;
+  final bool Function() encryptionAllowed;
   final Future<String?> Function(String text, {bool notify}) encryptOutgoing;
   final Future<void> Function(SlashCommand command, String args) executeCommand;
   final void Function(CachedMessage) checkPrankTrigger;
@@ -112,6 +113,7 @@ class ChatTextSendController {
     required this.isMounted,
     required this.contextOf,
     required this.chatOf,
+    this.encryptionAllowed = _alwaysAllowed,
     required this.encryptOutgoing,
     required this.executeCommand,
     required this.checkPrankTrigger,
@@ -120,10 +122,14 @@ class ChatTextSendController {
   int get _myId => chatController.myId;
   int get _chatId => chatController.chatId;
 
-  bool get _e2eeActive => E2eeService.instance.isActive(_myId, _chatId);
+  static bool _alwaysAllowed() => true;
+
+  bool get _e2eeActive =>
+      encryptionAllowed() && E2eeService.instance.isActive(_myId, _chatId);
 
   bool get _encrypted =>
-      _e2eeActive || ChatEncryptionStore.instance.isEnabled(_myId, _chatId);
+      encryptionAllowed() &&
+      (_e2eeActive || ChatEncryptionStore.instance.isEnabled(_myId, _chatId));
 
   Future<Uint8List?> _seal(String plaintext) =>
       _e2eeActive

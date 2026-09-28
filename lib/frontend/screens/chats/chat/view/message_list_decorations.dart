@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../core/config/ios_typography.dart';
 import '../../../../widgets/small_spinner.dart';
 
 // #***! плашка с датой между группами сообщений
@@ -59,7 +60,10 @@ class DateSeparatorLabel extends StatelessWidget {
             style: TextStyle(
               color: cs.onSurfaceVariant,
               fontSize: 12,
-              fontStyle: floating ? FontStyle.normal : FontStyle.italic,
+              fontWeight: IosTypography.body(FontWeight.normal),
+              fontStyle: floating
+                  ? FontStyle.normal
+                  : IosTypography.upright(FontStyle.italic),
             ),
           ),
         ),

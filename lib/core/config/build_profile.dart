@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart' show appFlavor;
 
+import 'ios_release.dart';
+
 // #***! что включено в сборке, всё считается на компиляции из flavor
 abstract final class BuildProfile {
   static const String storeFlavor = 'store';
@@ -7,9 +9,10 @@ abstract final class BuildProfile {
   // #***! store сборка урезана, без самообновления дев инструментов и спуфа
   static const bool isStore = appFlavor == storeFlavor;
 
-  static const bool selfUpdate = !isStore;
+  static bool get selfUpdate => !isStore && IosRelease.selfUpdate;
   static const bool firebasePush = appFlavor == 'oneme';
-  static const bool spoofUi = !isStore;
+  // #***! на iOS экран подмены скрыт, хендшейк при этом как у остальных
+  static bool get spoofUi => !isStore && IosRelease.spoofSettings;
   static const bool tokenLogin = false;
   static const bool qrLogin = false;
   static const bool devTools = !isStore;

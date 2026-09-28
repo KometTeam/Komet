@@ -444,7 +444,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       messageText: widget.message.text,
       copyText: MessageDecryptionCache.instance.readableText(widget.message),
       controller: controller,
-      style: AppMessageActionsStyle.current.value,
+      style: AppMessageActionsStyle.effective,
       interaction: MessageActionsInteraction.tap,
       editHistory: widget.message.editHistory,
       infoRows: _infoRows(),

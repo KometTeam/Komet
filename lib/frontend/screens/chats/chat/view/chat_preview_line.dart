@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import 'package:komet/core/config/ios_typography.dart';
 import 'package:komet/core/utils/text_format.dart';
 import 'package:komet/frontend/widgets/formatted_message_text.dart';
 import 'package:komet/models/chat_preview_media.dart';
@@ -104,7 +105,9 @@ class ChatPreviewLine extends StatelessWidget {
     final forwarded = label != null && label.startsWith(_forwardMark);
 
     final bodyStyle = style.copyWith(
-      fontStyle: italic || labelled ? FontStyle.italic : style.fontStyle,
+      fontStyle: italic || labelled
+          ? IosTypography.upright(FontStyle.italic)
+          : style.fontStyle,
     );
 
     final spans = <InlineSpan>[];

@@ -4,15 +4,22 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../core/config/ios_release.dart';
+import '../../../core/protocol/packet.dart';
+import '../../../core/storage/app_database.dart';
 import '../../../core/utils/haptics.dart';
-import '../../../main.dart' show storiesModule;
+import '../../../core/media/video_request_headers.dart';
+import '../../../main.dart' show api, storiesModule;
 import '../../../models/story.dart';
+import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
+import '../chats/profile_action_sheets.dart';
 import '../../widgets/small_spinner.dart';
 import 'story_owner_info.dart';
 import '../../../core/config/app_frost.dart';
@@ -133,6 +140,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   VideoPlayerController? _video;
 
+  int _myId = 0;
+  bool _deleting = false;
+
   StoryPreview get _owner => widget.previews[_ownerIndex];
 
   List<Story> get _ownerStories => _stories[_owner.owner.ownerId] ?? const [];
@@ -154,7 +164,20 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         if (s == AnimationStatus.completed) _advance();
       });
     _loadOwner(_ownerIndex, autostart: true);
+    unawaited(_loadMyId());
   }
+
+  Future<void> _loadMyId() async {
+    final profile = await AppDatabase.loadActiveProfile();
+    if (!mounted || profile == null) return;
+    setState(() => _myId = profile.id);
+  }
+
+  bool _isOwnStory(Story? story) =>
+      story != null &&
+      _myId != 0 &&
+      story.owner.isUser &&
+      story.owner.ownerId == _myId;
 
   @override
   void dispose() {
@@ -224,7 +247,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   }
 
   Future<void> _startVideo(String url) async {
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final uri = Uri.parse(url);
+    final controller = VideoPlayerController.networkUrl(
+      uri,
+      httpHeaders: videoRequestHeaders(
+        uri,
+        sessionUserAgent: api.session?.userAgent(),
+      ),
+    );
     _video = controller;
     try {
       await controller.initialize();
@@ -341,6 +371,126 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       _dragDy = 0;
     });
     _setPaused(false);
+  }
+
+  // #***! меню своей истории, пока открыто — история на паузе
+  Future<void> _openStoryMenu() async {
+    final story = _currentStory;
+    if (story == null || _deleting) return;
+    final wasPaused = _paused;
+    _setPaused(true);
+    final delete = await _pickDelete();
+    if (!mounted) return;
+    final confirmed = delete && await _confirmDelete();
+    if (!mounted) return;
+    if (confirmed) {
+      await _deleteStory(story);
+      if (!mounted) return;
+    }
+    if (!wasPaused && _currentStory != null) _setPaused(false);
+  }
+
+  Future<bool> _pickDelete() async {
+    if (IosRelease.isIOS) {
+      final picked = await showCupertinoModalPopup<bool>(
+        context: context,
+        builder: (sheetContext) => CupertinoActionSheet(
+          actions: [
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.of(sheetContext).pop(true),
+              child: const Text('Удалить'),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(sheetContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+        ),
+      );
+      return picked ?? false;
+    }
+    final picked = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final cs = Theme.of(sheetContext).colorScheme;
+        return SafeArea(
+          child: ListTile(
+            leading: Icon(Symbols.delete, color: cs.error),
+            title: Text('Удалить', style: TextStyle(color: cs.error)),
+            onTap: () => Navigator.of(sheetContext).pop(true),
+          ),
+        );
+      },
+    );
+    return picked ?? false;
+  }
+
+  Future<bool> _confirmDelete() async {
+    if (IosRelease.isIOS) {
+      final confirmed = await showCupertinoDialog<bool>(
+        context: context,
+        builder: (dialogContext) => CupertinoAlertDialog(
+          title: const Text('Удалить историю?'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Отмена'),
+            ),
+            CupertinoDialogAction(
+              isDestructiveAction: true,
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Удалить'),
+            ),
+          ],
+        ),
+      );
+      return confirmed ?? false;
+    }
+    final choice = await showBlurredConfirm(
+      context,
+      title: 'Удалить историю?',
+      message: 'История пропадёт у всех, кто может её посмотреть.',
+      confirmLabel: 'Удалить',
+      cancelLabel: 'Отмена',
+      destructive: true,
+    );
+    return choice.confirmed;
+  }
+
+  // #***! после удаления идём к следующей истории, последнюю — закрываем
+  Future<void> _deleteStory(Story story) async {
+    setState(() => _deleting = true);
+    try {
+      await storiesModule.deleteStories(story.owner, [story.id]);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      final reason = e is PacketError ? e.message : null;
+      showCustomNotification(
+        context,
+        reason == null || reason.isEmpty
+            ? 'Не удалось удалить историю'
+            : 'Не удалось удалить историю: $reason',
+      );
+      return;
+    }
+    if (!mounted) return;
+    final ownerId = story.owner.ownerId;
+    final left = _ownerStories.where((s) => s.id != story.id).toList();
+    setState(() {
+      _deleting = false;
+      _stories[ownerId] = left;
+    });
+    if (left.isEmpty) {
+      _disposeVideo();
+      _photoProgress.stop();
+      _nextOwner();
+      return;
+    }
+    _startStory(_storyIndex.clamp(0, left.length - 1));
   }
 
   @override
@@ -558,6 +708,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 ],
               ),
             ),
+            if (_isOwnStory(story))
+              _RoundIconButton(
+                key: const ValueKey('story-more'),
+                icon: Symbols.more_horiz,
+                onTap: _openStoryMenu,
+              ),
             _RoundIconButton(
               icon: Symbols.close,
               onTap: () => Navigator.of(context).maybePop(),
@@ -674,7 +830,7 @@ class _RoundIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _RoundIconButton({required this.icon, required this.onTap});
+  const _RoundIconButton({super.key, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

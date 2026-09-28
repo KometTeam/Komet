@@ -1524,5 +1524,7 @@
     }
   },
   "undoLeftGroup": "You left the group",
-  "undoLeftChannel": "You left the channel"
+  "undoLeftChannel": "You left the channel",
+  "chatListYesterday": "Yesterday",
+  "chatListDatePattern": "M/d/yy"
 }

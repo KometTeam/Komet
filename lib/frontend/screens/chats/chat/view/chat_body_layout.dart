@@ -17,6 +17,7 @@ import 'mention_panel_view.dart';
 import 'message_list_decorations.dart';
 import 'pinned_banner_pill.dart';
 import 'search_view.dart';
+import '../../../../../core/config/ios_release.dart';
 
 class ChatBodyLayout extends StatelessWidget {
   final bool underlap;
@@ -109,12 +110,15 @@ class ChatBodyLayout extends StatelessWidget {
   }
 
   Widget _panelsColumn() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        MentionPanelView(mentionPanel: mentionPanel),
-        CommandPanelView(commandPanel: commandPanel),
-      ],
+    return TextFieldTapRegion(
+      enabled: IosRelease.isIOS,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          MentionPanelView(mentionPanel: mentionPanel),
+          CommandPanelView(commandPanel: commandPanel),
+        ],
+      ),
     );
   }
 

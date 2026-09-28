@@ -2,6 +2,7 @@ import '../../core/utils/logger.dart';
 import '../../models/chat_call.dart';
 import 'chat_preview.dart';
 import 'chats.dart';
+import '../../core/utils/channel_comments.dart';
 
 // #***! контакты списком а нужны по id, раскладываем один раз
 Map<int, Map<dynamic, dynamic>> buildContactsMap(dynamic contacts) {
@@ -141,10 +142,10 @@ String? _resolvePublicLink(Map<dynamic, dynamic> chat, CachedChat? previous) {
   Set<String> options = const {};
   final chatOpts = chat['options'];
   if (chatOpts is Map) {
-    options = {
+    options = withCommentsMarker({
       for (final entry in chatOpts.entries)
         if (entry.value == true && entry.key is String) entry.key as String,
-    };
+    }, chatOpts);
   }
   return (
     title: chat['title'] as String? ?? existing[id]?.title,

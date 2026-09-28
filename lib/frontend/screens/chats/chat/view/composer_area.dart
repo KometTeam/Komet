@@ -27,6 +27,7 @@ import 'composer_input.dart';
 import 'frosted_panel.dart';
 import 'selection_bar.dart';
 import 'sticker_panel_view.dart';
+import '../../../../../core/config/ios_release.dart';
 
 class ComposerArea extends StatelessWidget {
   final Animation<double> selectionAnim;
@@ -49,6 +50,7 @@ class ComposerArea extends StatelessWidget {
   final int chatId;
   final String peerName;
   final VoidCallback onOpenEncryption;
+  final bool encryptionAllowed;
   final ChatChromeStyle chrome;
   final bool chromeVignette;
   final BackdropKey? pillBackdrop;
@@ -123,6 +125,7 @@ class ComposerArea extends StatelessWidget {
     required this.chatId,
     required this.peerName,
     required this.onOpenEncryption,
+    this.encryptionAllowed = true,
     required this.chrome,
     required this.chromeVignette,
     required this.pillBackdrop,
@@ -172,7 +175,7 @@ class ComposerArea extends StatelessWidget {
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (chatType == 'DIALOG' && myId != 0)
+        if (chatType == 'DIALOG' && myId != 0 && encryptionAllowed)
           E2eeBanner(
             accountId: myId,
             chatId: chatId,
@@ -357,7 +360,10 @@ class ComposerArea extends StatelessWidget {
       );
     }
 
-    final base = wrapChrome(content);
+    final base = TextFieldTapRegion(
+      enabled: IosRelease.isIOS,
+      child: wrapChrome(content),
+    );
     return AnimatedBuilder(
       animation: searchAnim,
       builder: (context, _) {

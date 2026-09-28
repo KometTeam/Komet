@@ -15,6 +15,8 @@ import '../photo_hero.dart';
 import '../../text_with_meta.dart';
 import 'album_layout.dart';
 import 'bubble_context.dart';
+import '../../../../core/config/ios_release.dart';
+import 'ios_bubble_metrics.dart';
 import 'video_bubble.dart';
 
 class PhotoBubble extends StatelessWidget {
@@ -123,6 +125,7 @@ class PhotoBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (IosRelease.isIOS) return _buildIos(context);
     final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
     final resolvedCaption = hasMessageCaption ? ctx.caption() : null;
     final hasCaption = resolvedCaption != null;
@@ -199,6 +202,159 @@ class PhotoBubble extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildIos(BuildContext context) {
+    final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
+    final resolvedCaption = hasMessageCaption ? ctx.caption() : null;
+    final hasCaption = resolvedCaption != null;
+    final limit = IosBubbleMetrics.mediaWidthLimit(
+      MediaQuery.sizeOf(context).width,
+      avatarSlot: !ctx.isMe && ctx.chatType == 'CHAT',
+    );
+    final radius = ctx.iosMediaRadius(
+      flatTop: hasContentAbove,
+      flatBottom: hasCaption,
+    );
+    final (media, mediaWidth) = this.media.length == 1
+        ? _buildIosSingle(this.media.single, limit, radius)
+        : _buildIosAlbum(limit, radius);
+    const inset = IosBubbleMetrics.mediaInset;
+    final padded = Padding(
+      padding: EdgeInsets.fromLTRB(
+        inset,
+        hasContentAbove ? 0 : inset,
+        inset,
+        hasCaption ? 0 : inset,
+      ),
+      child: media,
+    );
+    if (!hasCaption) {
+      return Stack(
+        children: [
+          padded,
+          Positioned(
+            bottom: inset + IosBubbleMetrics.mediaStatusInset,
+            right: inset + IosBubbleMetrics.mediaStatusInset,
+            child: ctx.compactTime(ios: true),
+          ),
+        ],
+      );
+    }
+    return SizedBox(
+      width: mediaWidth + inset * 2,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          padded,
+          Padding(
+            padding: IosBubbleMetrics.captionPadding,
+            child: TextWithMeta(
+              text: resolvedCaption,
+              meta: ctx.meta(),
+              fillWidth: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  (Widget, double) _buildIosSingle(
+    MessageAttachment photo,
+    double limit,
+    BorderRadius radius,
+  ) {
+    final size = IosBubbleMetrics.mediaSize(
+      _intrinsicWidth(photo),
+      _intrinsicHeight(photo),
+      maxWidth: limit,
+    );
+    final dpr = MediaQuery.devicePixelRatioOf(ctx.context);
+    final memWidth = (size.width * dpr).round();
+    final memHeight = (size.height * dpr).round();
+    final image = ClipRRect(
+      borderRadius: radius,
+      child: SizedBox.fromSize(
+        size: size,
+        child: Stack(
+          children: [
+            _buildPhotoImage(
+              ctx,
+              photo,
+              size.width,
+              size.height,
+              memWidth: memWidth,
+              memHeight: memHeight,
+            ),
+            ..._videoBadges(photo, compact: false),
+            if (ctx.uploadProgress != null)
+              _buildUploadOverlay(ctx.uploadProgress!, 0),
+            if (ctx.uploadProgress == null)
+              Positioned.fill(
+                child: Builder(
+                  builder: (tileContext) => GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _openMedia(
+                      ctx.context,
+                      0,
+                      tileContext: tileContext,
+                      radius: radius,
+                      memWidth: memWidth,
+                      memHeight: memHeight,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+    return (image, size.width);
+  }
+
+  (Widget, double) _buildIosAlbum(double limit, BorderRadius radius) {
+    final photos = media;
+    final visible = math.min(photos.length, AlbumLayout.maxTiles);
+    final remaining = photos.length - visible;
+    final grid = AlbumLayout.layout([
+      for (var i = 0; i < visible; i++) _aspectRatio(photos[i]),
+    ], orderPenalty: IosBubbleMetrics.albumOrderPenalty);
+    final width = math.min(
+      limit,
+      IosBubbleMetrics.mediaMaxHeight * grid.aspectRatio,
+    );
+    final height = width / grid.aspectRatio;
+    final album = ClipRRect(
+      borderRadius: radius,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Stack(
+          children: [
+            for (var i = 0; i < visible; i++)
+              Positioned.fromRect(
+                rect: _insetTile(
+                  grid.tiles[i],
+                  width,
+                  height,
+                  gap: IosBubbleMetrics.albumSpacing,
+                ),
+                child: _buildAlbumTile(
+                  ctx,
+                  photos[i],
+                  i,
+                  overlay: i == visible - 1 && remaining > 0
+                      ? '+$remaining'
+                      : null,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+    return (album, width);
   }
 
   Widget _buildSinglePhoto(
@@ -468,8 +624,13 @@ class PhotoBubble extends StatelessWidget {
   static const double _tileGap = 2;
   static const double _edgeEpsilon = 1e-6;
 
-  static Rect _insetTile(Rect tile, double width, double height) {
-    const half = _tileGap / 2;
+  static Rect _insetTile(
+    Rect tile,
+    double width,
+    double height, {
+    double gap = _tileGap,
+  }) {
+    final half = gap / 2;
     return Rect.fromLTRB(
       tile.left * width + (tile.left > _edgeEpsilon ? half : 0),
       tile.top * height + (tile.top > _edgeEpsilon ? half : 0),

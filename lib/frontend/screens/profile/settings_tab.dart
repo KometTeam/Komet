@@ -58,6 +58,7 @@ import 'spoof_screen.dart';
 import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../core/config/ios_typography.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -1075,7 +1076,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                         style: TextStyle(
                           color: nameColor,
                           fontSize: lerpDouble(20, 26, pt),
-                          fontWeight: FontWeight.w700,
+                          fontWeight: IosTypography.title(FontWeight.w700),
                           fontFamily: displayFontOf(context),
                         ),
                       ),
@@ -1320,7 +1321,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: IosTypography.body(FontWeight.w500),
                   ),
                 ),
               ],

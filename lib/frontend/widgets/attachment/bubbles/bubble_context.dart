@@ -3,14 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../backend/modules/messages.dart';
+import '../../../../core/config/app_bubble_behavior.dart';
+import '../../../../core/config/app_bubble_shape.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/config/komet_settings.dart';
+import '../../../../core/utils/bubble_radius.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/text_format.dart';
 import '../../../../models/attachment.dart';
 import '../../formatted_message_text.dart';
 import '../../sending_clock_icon.dart';
 import '../../photo_viewer.dart';
+import 'ios_bubble_metrics.dart';
 
 enum MessageType { text, attachment, voice, control }
 
@@ -209,7 +213,23 @@ class BubbleContext {
     );
   }
 
-  Widget compactTime() {
+  BorderRadius iosMediaRadius({bool flatTop = false, bool flatBottom = false}) {
+    final outer = computeBubbleRadius(
+      isMe: isMe,
+      isTop: shape == BubbleShape.singleTop || shape == BubbleShape.singleMiddle,
+      isBottom:
+          shape == BubbleShape.singleBottom || shape == BubbleShape.singleMiddle,
+      style: AppBubbleShape.current.value,
+      behavior: AppBubbleBehavior.current.value,
+    );
+    return IosBubbleMetrics.innerRadius(
+      outer,
+      flatTop: flatTop,
+      flatBottom: flatBottom,
+    );
+  }
+
+  Widget compactTime({bool ios = false}) {
     if (metaInFooter) return const SizedBox.shrink();
 
     final bgColor = isMe
@@ -217,19 +237,21 @@ class BubbleContext {
         : Colors.black.withValues(alpha: 0.5);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      padding: ios
+          ? const EdgeInsets.symmetric(horizontal: 7, vertical: 2)
+          : const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(ios ? 10 : 4),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             clockText,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 10,
+              fontSize: ios ? 11 : 10,
               fontWeight: FontWeight.w500,
             ),
           ),

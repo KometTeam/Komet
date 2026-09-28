@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/config/ios_typography.dart';
 import '../../core/utils/haptics.dart';
 import 'animated_overlay_popup.dart';
 
@@ -271,7 +272,7 @@ class _ChatMenuRow extends StatelessWidget {
                 style: TextStyle(
                   color: fg,
                   fontSize: compact ? 14 : 16,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: IosTypography.body(FontWeight.w500),
                 ),
               ),
             ),

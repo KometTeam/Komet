@@ -1,7 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../contacts/contact_sheet_common.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../core/config/ios_release.dart';
 
 class ConfirmChoice {
   final bool confirmed;
@@ -59,6 +61,63 @@ Future<void> showComplaintCard(
       onSend: onSend,
     ),
   );
+}
+
+/// Complaint reason picker: an action sheet on iOS, the complaint card
+/// elsewhere. Picking a reason on iOS sends right away, as the system
+/// sheets do; [onSend] shows the result.
+Future<void> showComplaintPicker(
+  BuildContext context, {
+  required String title,
+  required String subtitle,
+  required String sendLabel,
+  required String closeLabel,
+  required String emptyLabel,
+  required Future<List<({int id, String title})>> Function() loadReasons,
+  required Future<bool> Function(int reasonId) onSend,
+}) async {
+  if (!IosRelease.isIOS) {
+    return showComplaintCard(
+      context,
+      title: title,
+      subtitle: subtitle,
+      sendLabel: sendLabel,
+      closeLabel: closeLabel,
+      emptyLabel: emptyLabel,
+      loadReasons: loadReasons,
+      onSend: onSend,
+    );
+  }
+
+  List<({int id, String title})> reasons;
+  try {
+    reasons = await loadReasons();
+  } catch (_) {
+    reasons = const [];
+  }
+  if (!context.mounted) return;
+  final reasonId = await showCupertinoModalPopup<int>(
+    context: context,
+    builder: (sheetContext) => CupertinoActionSheet(
+      title: Text(title),
+      message: Text(reasons.isEmpty ? emptyLabel : subtitle),
+      actions: [
+        for (final reason in reasons)
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(sheetContext).pop(reason.id),
+            child: Text(reason.title),
+          ),
+      ],
+      cancelButton: CupertinoActionSheetAction(
+        isDefaultAction: true,
+        onPressed: () => Navigator.of(sheetContext).pop(),
+        child: Text(closeLabel),
+      ),
+    ),
+  );
+  if (reasonId == null) return;
+  await onSend(reasonId);
 }
 
 class _CardShell extends StatelessWidget {

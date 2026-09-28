@@ -1,3 +1,5 @@
+import 'ios_release.dart';
+
 // #***! откуда берём обновления, адрес зашит через --dart-define
 abstract final class UpdateConfig {
   static const String baseUrl = String.fromEnvironment(
@@ -5,8 +7,9 @@ abstract final class UpdateConfig {
     defaultValue: 'https://dl.komet.pw',
   );
 
-  // #***! пустой адрес значит обновления выключены
-  static bool get isConfigured => _normalizedBase.isNotEmpty;
+  // #***! пустой адрес значит обновления выключены, на iOS их нет вовсе
+  static bool get isConfigured =>
+      IosRelease.selfUpdate && _normalizedBase.isNotEmpty;
 
   // #***! цепляем метку минуты иначе CDN отдаст старый манифест
   static Uri get manifestUri => Uri.parse(
