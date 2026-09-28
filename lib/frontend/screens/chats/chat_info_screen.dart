@@ -1089,6 +1089,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       ));
     }
 
+    if (_canReportChannel) {
+      entries.add((
+        icon: Symbols.flag,
+        label: l10n.chatInfoComplaintTitle,
+        destructive: true,
+        onTap: _reportChannel,
+      ));
+    }
+
     entries.add((
       icon: Symbols.mop,
       label: l10n.chatInfoMenuClearHistory,
@@ -1625,6 +1634,45 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       block ? l10n.chatInfoBlockDone : l10n.chatInfoUnblockDone,
     );
     if (block) await _openComplaintCard(peerId);
+  }
+
+  // #***! свой канал не жалуем, владелец жалобу не видит
+  bool get _canReportChannel =>
+      widget.chatType == 'CHANNEL' &&
+      widget.chatId != 0 &&
+      !(_chatInfo?.isOwner(_myId) ?? false);
+
+  Future<void> _reportChannel() async {
+    await showComplaintCard(
+      context,
+      title: l10n.chatInfoComplaintTitle,
+      subtitle: l10n.chatInfoComplaintSubtitle,
+      sendLabel: l10n.chatInfoComplaintSend,
+      closeLabel: l10n.chatInfoComplaintClose,
+      emptyLabel: l10n.chatInfoComplaintEmpty,
+      loadReasons: () async {
+        final reasons = await ComplaintsModule.reasonsFor(
+          api,
+          ComplaintsModule.channelTypeId,
+        );
+        return reasons
+            .map((r) => (id: r.reasonId, title: r.reasonTitle))
+            .toList();
+      },
+      onSend: (reasonId) async {
+        final ok = await ComplaintsModule.sendChannelComplaint(
+          api,
+          chatId: widget.chatId,
+          reasonId: reasonId,
+        );
+        if (!mounted) return ok;
+        showCustomNotification(
+          context,
+          ok ? l10n.chatInfoComplaintSent : l10n.chatInfoComplaintFailed,
+        );
+        return ok;
+      },
+    );
   }
 
   Future<void> _openComplaintCard(int peerId) async {

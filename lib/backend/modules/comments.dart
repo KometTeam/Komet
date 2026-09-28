@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
+import '../../core/utils/channel_comments.dart';
+import '../../core/utils/logger.dart';
 import '../api.dart';
 import 'messages.dart' show CachedMessage;
 
@@ -142,34 +144,59 @@ class CommentsModule {
   }
 
   // #***! счётчики сразу по пачке постов
-  Future<Map<String, CommentsInfo>> fetchInfo({
+  /// Requests comment counts for [postIds] in batches.
+  ///
+  /// Returns the counts the server sent, or `null` when a batch did not
+  /// reach the server or got no reply (no connection, timeout), so the
+  /// caller can ask again once the session is back.
+  Future<Map<String, CommentsInfo>?> fetchInfo({
     required int accountId,
     required int chatId,
     required List<String> postIds,
   }) async {
     _accountId = accountId;
     if (postIds.isEmpty) return const {};
-    final response = await _api.sendRequest(Opcode.commentsInfo, {
-      'chatId': chatId,
-      'postIds': postIds.map((id) => int.tryParse(id) ?? id).toList(),
-    });
-    if (!response.isOk) return const {};
-    final payload = response.payload;
-    if (payload is! Map) return const {};
-    final updates = payload['commentsInfoUpdates'];
-    if (updates is! List) return const {};
-    handleInfoUpdate(updates);
     final byPost = <String, CommentsInfo>{};
-    for (final raw in updates.whereType<Map>()) {
-      final postId = raw['postId']?.toString();
-      final commentsInfo = raw['commentsInfo'];
-      if (postId == null || commentsInfo is! Map) continue;
-      byPost[postId] = CommentsInfo.fromPayload(
-        postId,
-        Map<String, dynamic>.from(commentsInfo.cast()),
-      );
+    var failed = false;
+    for (final batch in commentsInfoBatches(postIds)) {
+      final updates = await _fetchInfoBatch(chatId, batch);
+      if (updates == null) {
+        failed = true;
+        continue;
+      }
+      handleInfoUpdate(updates);
+      for (final raw in updates.whereType<Map>()) {
+        final postId = raw['postId']?.toString();
+        final commentsInfo = raw['commentsInfo'];
+        if (postId == null || commentsInfo is! Map) continue;
+        byPost[postId] = CommentsInfo.fromPayload(
+          postId,
+          Map<String, dynamic>.from(commentsInfo.cast()),
+        );
+      }
     }
-    return byPost;
+    return failed ? null : byPost;
+  }
+
+  Future<List?> _fetchInfoBatch(int chatId, List<String> postIds) async {
+    try {
+      final response = await _api.sendRequest(Opcode.commentsInfo, {
+        'chatId': chatId,
+        'postIds': postIds.map((id) => int.tryParse(id) ?? id).toList(),
+      });
+      if (!response.isOk) {
+        // #***! ответ с ошибкой повторять бессмысленно, в отличие от обрыва
+        logger.w('commentsInfo $chatId: ${response.payload}');
+        return const [];
+      }
+      final payload = response.payload;
+      if (payload is! Map) return const [];
+      final updates = payload['commentsInfoUpdates'];
+      return updates is List ? updates : const [];
+    } catch (e) {
+      logger.w('commentsInfo $chatId: $e');
+      return null;
+    }
   }
 
   // #***! история комментов это тот же chatHistory с postId

@@ -80,6 +80,7 @@ import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
 import '../../../core/crypto/e2ee_service.dart';
 import '../../../core/storage/chat_encryption_store.dart';
+import '../../../core/crypto/encryption_policy.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
 import '../../../main.dart'
@@ -3358,11 +3359,15 @@ class _ChatListScreenState extends State<ChatListScreen>
       int.tryParse(id) ?? 0,
     );
     final isEncrypted =
-        ChatEncryptionStore.instance.isEnabled(
-          _profile?.id ?? 0,
-          int.tryParse(id) ?? 0,
-        ) ||
-        E2eeService.instance.isOn(_profile?.id ?? 0, int.tryParse(id) ?? 0);
+        chatAllowsEncryption(chatType: chatType) &&
+        (ChatEncryptionStore.instance.isEnabled(
+              _profile?.id ?? 0,
+              int.tryParse(id) ?? 0,
+            ) ||
+            E2eeService.instance.isOn(
+              _profile?.id ?? 0,
+              int.tryParse(id) ?? 0,
+            ));
     final isVerified =
         e2eeInfo?.phase == E2eePhase.established && e2eeInfo!.verified;
     final Widget? statusIcon = (ownStatus != null && draft == null)

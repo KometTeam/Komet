@@ -51,6 +51,8 @@ import '../../../core/crypto/chat_crypto_service.dart';
 import '../../../core/crypto/e2ee_service.dart';
 import '../../../core/crypto/message_decryption_cache.dart';
 import '../../../core/storage/chat_encryption_store.dart';
+import '../../../core/crypto/encryption_policy.dart';
+import '../../../core/utils/channel_comments.dart';
 import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
@@ -683,6 +685,7 @@ class _ChatScreenState extends State<ChatScreen>
       isMounted: () => mounted,
       contextOf: () => context,
       chatOf: () => chat,
+      encryptionAllowed: () => _encryptionAllowed,
       encryptOutgoing: _encryptOutgoing,
       executeCommand: _executeCommand,
       checkPrankTrigger: _prank.checkTrigger,
@@ -718,7 +721,9 @@ class _ChatScreenState extends State<ChatScreen>
                 e.chatId == widget.chatId && e.postId == widget.commentPostId,
           )
           .listen(_onLiveComment);
-    } else if (widget.chatType == 'CHANNEL') {
+    } else {
+      // #***! тип из маршрута бывает запасным (CHAT/DIALOG), а канал
+      // #***! узнаём позже из chat; счётчики слушаем в любом чате
       _commentsInfoSub = commentsModule.infoStream.listen(_onCommentsInfo);
     }
     ChatActivityStore.instance
@@ -727,8 +732,10 @@ class _ChatScreenState extends State<ChatScreen>
     ChatMembersStore.instance
         .listenable(widget.chatId)
         .addListener(_recomputeHeaderStatus);
-    _connSub = api.stateStream.listen((_) {
-      if (mounted) _recomputeHeaderStatus();
+    _connSub = api.stateStream.listen((state) {
+      if (!mounted) return;
+      _recomputeHeaderStatus();
+      if (state == SessionState.online) _requestCommentCounts();
     });
     debugForceOffline.addListener(_recomputeHeaderStatus);
     PresenceFetch.revision.addListener(_onPresenceChanged);
@@ -825,6 +832,7 @@ class _ChatScreenState extends State<ChatScreen>
       _peerKindKnown = true;
       _peerIsBot = info.isBot;
     });
+    _applyEncryption();
   }
 
   Future<void> _fastPreloadCache() async {
@@ -1912,9 +1920,14 @@ class _ChatScreenState extends State<ChatScreen>
     });
   }
 
+  bool get _channelShowsComments => showsCommentsButton(
+    isChannelPost: (chat?.type ?? widget.chatType) == 'CHANNEL',
+    chatOptions: chat?.options ?? const {},
+  );
+
   void _requestCommentCounts() {
     if (_commentsMode) return;
-    if ((chat?.type ?? widget.chatType) != 'CHANNEL') return;
+    if (!_channelShowsComments) return;
     final pending = <String>[];
     for (final m in _messages) {
       if (m.isControl) continue;
@@ -1923,17 +1936,28 @@ class _ChatScreenState extends State<ChatScreen>
       pending.add(m.id);
     }
     if (pending.isEmpty) return;
-    unawaited(
-      commentsModule.fetchInfo(
-        accountId: _myId,
-        chatId: widget.chatId,
-        postIds: pending,
-      ),
+    unawaited(_fetchCommentCounts(pending));
+  }
+
+  // #***! запрос не дошёл (нет сети, таймаут, реконнект) — снимаем отметку,
+  // #***! иначе посты так и останутся без счётчика до переоткрытия чата
+  Future<void> _fetchCommentCounts(List<String> postIds) async {
+    final info = await commentsModule.fetchInfo(
+      accountId: _myId,
+      chatId: widget.chatId,
+      postIds: postIds,
     );
+    if (!mounted) return;
+    if (info == null) {
+      _commentCountsRequested.removeAll(postIds);
+      return;
+    }
+    _onCommentsInfo(commentsModule.infoSnapshot);
   }
 
   void _onCommentsInfo(Map<String, CommentsInfo> info) {
     if (!mounted) return;
+    if (_commentsMode) return;
     var changed = false;
     for (final m in _messages) {
       final count = info[m.id]?.totalCount;
@@ -2628,6 +2652,7 @@ class _ChatScreenState extends State<ChatScreen>
       chatId: widget.chatId,
       peerName: widget.name,
       onOpenEncryption: _openEncryptionSettings,
+      encryptionAllowed: _encryptionAllowed,
       chrome: _effectiveChrome,
       chromeVignette: _chromeVignette,
       pillBackdrop: _pillBackdrop,
@@ -3130,11 +3155,12 @@ class _ChatScreenState extends State<ChatScreen>
           label: 'Очистить историю',
           onTap: _clearHistory,
         ),
-        ChatMenuItem(
-          icon: _encryptionEnabled ? Symbols.lock : Symbols.lock_open,
-          label: 'Шифрование сообщений',
-          onTap: _openEncryptionSettings,
-        ),
+        if (_encryptionAllowed)
+          ChatMenuItem(
+            icon: _encryptionEnabled ? Symbols.lock : Symbols.lock_open,
+            label: 'Шифрование сообщений',
+            onTap: _openEncryptionSettings,
+          ),
         ChatMenuItem(
           icon: Symbols.delete,
           label: 'Удалить чат',
@@ -3224,8 +3250,12 @@ class _ChatScreenState extends State<ChatScreen>
     _applyEncryption();
   }
 
+  bool get _encryptionAllowed =>
+      chatAllowsEncryption(chatType: widget.chatType, peerIsBot: _peerIsBot);
+
   bool get _e2eeActive =>
       widget.chatType == 'DIALOG' &&
+      _encryptionAllowed &&
       E2eeService.instance.isActive(_myId, widget.chatId);
 
   bool get _e2eeVerified =>
@@ -3236,7 +3266,8 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     final e2ee = _e2eeActive;
     final enabled =
-        e2ee || ChatEncryptionStore.instance.isEnabled(_myId, widget.chatId);
+        _encryptionAllowed &&
+        (e2ee || ChatEncryptionStore.instance.isEnabled(_myId, widget.chatId));
     if (enabled != _encryptionEnabled) {
       setState(() => _encryptionEnabled = enabled);
     }
@@ -3246,7 +3277,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _openEncryptionSettings() async {
-    if (_myId == 0) return;
+    if (_myId == 0 || !_encryptionAllowed) return;
     await pushSwipeable(
       context,
       (context) => widget.chatType == 'DIALOG'
@@ -4681,6 +4712,10 @@ class _ChatScreenState extends State<ChatScreen>
                                   (chat?.type ?? widget.chatType) ==
                                       'CHANNEL' &&
                                   !message.isControl;
+                              final bool showsComments = showsCommentsButton(
+                                isChannelPost: isChannelPost,
+                                chatOptions: chat?.options ?? const {},
+                              );
                               final bool isCommentedPost =
                                   _commentsMode &&
                                   message.id == widget.commentPostId;
@@ -4730,10 +4765,10 @@ class _ChatScreenState extends State<ChatScreen>
                                 textSelection: _textSelection,
                                 textSelectionDrag: _textSelectionDrag,
                                 onExitTextSelection: _exitTextSelection,
-                                commentsLabel: isChannelPost
+                                commentsLabel: showsComments
                                     ? _commentsLabelFor(message.id)
                                     : null,
-                                onCommentsTap: isChannelPost
+                                onCommentsTap: showsComments
                                     ? () => _openComments(message)
                                     : null,
                               );

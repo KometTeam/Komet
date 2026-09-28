@@ -291,10 +291,10 @@ class StoryPreview {
   bool get isEmpty => totalCount <= 0;
 
   // #***! прочтение отмечаем сразу не дожидаясь сервера
-  StoryPreview copyWith({int? readCount}) => StoryPreview(
+  StoryPreview copyWith({int? readCount, int? totalCount}) => StoryPreview(
     owner: owner,
     updateTime: updateTime,
-    totalCount: totalCount,
+    totalCount: totalCount ?? this.totalCount,
     readCount: readCount ?? this.readCount,
     lastStoryExpirationTime: lastStoryExpirationTime,
   );
