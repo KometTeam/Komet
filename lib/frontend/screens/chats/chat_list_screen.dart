@@ -30,7 +30,9 @@ import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
 import '../../widgets/springy_tap.dart';
 import '../../widgets/informer_banner_tile.dart';
+import '../../../backend/modules/forward_sender.dart';
 import '../../../backend/modules/share_sender.dart';
+import '../../widgets/lottie_slash_icon.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/format.dart';
 import '../../../models/shared_payload.dart';
@@ -50,6 +52,8 @@ import '../profile/settings_tab.dart';
 import '../auth/login_screen.dart';
 import '../digital_id/digital_id_web_screen.dart';
 import '../../widgets/account_switcher_overlay.dart';
+import '../../widgets/local_avatar_builder.dart';
+import '../../widgets/lost_account_dialog.dart';
 import 'chat/view/chat_list_shimmer.dart';
 import 'chat/view/chat_list_tile.dart';
 import 'chat/view/chat_preview_line.dart';
@@ -166,10 +170,15 @@ class ForwardTarget {
 Future<ForwardTarget?> openForwardScreen({
   required BuildContext context,
   int messageCount = 1,
+  ForwardRequest? batch,
 }) {
   return pushSwipeable<ForwardTarget>(
     context,
-    (_) => ChatListScreen(forwardMode: true, forwardMessageCount: messageCount),
+    (_) => ChatListScreen(
+      forwardMode: true,
+      forwardMessageCount: messageCount,
+      forwardBatch: batch,
+    ),
   );
 }
 
@@ -177,6 +186,7 @@ class ChatListScreen extends StatefulWidget {
   final ValueChanged<DesktopChatSelection>? onChatSelected;
   final bool forwardMode;
   final int forwardMessageCount;
+  final ForwardRequest? forwardBatch;
   final bool archiveMode;
   final SharedPayload? sharePayload;
 
@@ -185,6 +195,7 @@ class ChatListScreen extends StatefulWidget {
     this.onChatSelected,
     this.forwardMode = false,
     this.forwardMessageCount = 1,
+    this.forwardBatch,
     this.archiveMode = false,
     this.sharePayload,
   });
@@ -280,7 +291,11 @@ class _ChatListScreenState extends State<ChatListScreen>
   bool _reloadInFlight = false;
   Timer? _settleTimer;
   bool get _shareMode => widget.sharePayload != null;
-  bool get _isSelectionMode => !_shareMode && _selectedChats.isNotEmpty;
+  bool get _picksRecipients => _shareMode || widget.forwardBatch != null;
+  bool get _forwardPicking =>
+      widget.forwardBatch != null && _selectedChats.isNotEmpty;
+  bool get _isSelectionMode =>
+      !_shareMode && !widget.forwardMode && _selectedChats.isNotEmpty;
   bool? _foldersListKnown;
 
   late AnimationController _navPageAnimController;
@@ -297,6 +312,8 @@ class _ChatListScreenState extends State<ChatListScreen>
   RichMessageController? _shareCaption;
   PreparedShare? _preparedShare;
   bool _shareSending = false;
+  late bool _forwardHideSender = widget.forwardBatch?.hideSender ?? false;
+  final Map<int, int> _forwardProgress = {};
 
   DateTime _storiesRevealLayoutSettleUntil =
       DateTime.fromMillisecondsSinceEpoch(0);
@@ -362,6 +379,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   void _initShare() {
+    if (widget.forwardBatch != null) _shareCaption = RichMessageController();
     final payload = widget.sharePayload;
     if (payload == null) return;
     _shareCaption = RichMessageController(
@@ -374,7 +392,18 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  void _toggleShareTarget(String chatId, String name) {
+  void _toggleRecipient(String chatId, String name) {
+    final myId = _profile?.id ?? 0;
+    final chatIdValue = int.tryParse(chatId) ?? 0;
+    if (widget.forwardBatch != null &&
+        !_selectedChats.contains(chatId) &&
+        ChatEncryptionStore.instance.isEnabled(myId, chatIdValue)) {
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.e2eeForwardBlocked,
+      );
+      return;
+    }
     Haptics.selection();
     setState(() {
       if (_selectedChats.remove(chatId)) {
@@ -390,7 +419,8 @@ class _ChatListScreenState extends State<ChatListScreen>
     for (final id in _selectedChats) _selectedChatNames[id] ?? 'Чат',
   ];
 
-  Future<void> _sendShare(String caption) async {
+  Future<void> _sendShare(RichMessageContent content) async {
+    final caption = content.text;
     final prepared = _preparedShare;
     final myId = _profile?.id ?? 0;
     if (prepared == null || myId == 0 || _selectedChats.isEmpty) return;
@@ -453,12 +483,118 @@ class _ChatListScreenState extends State<ChatListScreen>
     final controller = _shareCaption;
     if (prepared == null || controller == null) return const SizedBox.shrink();
     if (_selectedChats.isEmpty) return const SizedBox.shrink();
-    return ShareComposerBar(
+    return ShareComposerBar.forShare(
       share: prepared,
       controller: controller,
       recipientNames: _shareRecipientNames,
       sending: _shareSending,
       onSend: _sendShare,
+    );
+  }
+
+  Widget _buildForwardComposer() {
+    final batch = widget.forwardBatch;
+    final controller = _shareCaption;
+    if (batch == null || controller == null || _selectedChats.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final cs = Theme.of(context).colorScheme;
+    final count = batch.messages.length;
+    return ShareComposerBar(
+      title: _forwardHideSender
+          ? count == 1
+                ? l10n.forwardWithoutSender
+                : l10n.forwardWithoutSenderCount(count)
+          : count == 1
+          ? l10n.forwardOneTitle
+          : l10n.forwardBatchTitle(count),
+      hintText: l10n.forwardCommentHint,
+      controller: controller,
+      recipientNames: _shareRecipientNames,
+      sending: _shareSending,
+      onSend: _sendForward,
+      headerAction: IconButton(
+        tooltip: _forwardHideSender
+            ? l10n.forwardShowSender
+            : l10n.forwardHideSender,
+        icon: LottieSlashIcon(
+          asset: 'assets/lottie/ic_person_on_to_off.json',
+          slashed: _forwardHideSender,
+          color: _forwardHideSender
+              ? cs.primary
+              : batch.canHideSender
+              ? cs.onSurfaceVariant
+              : cs.onSurfaceVariant.withValues(alpha: 0.38),
+          size: 20,
+        ),
+        onPressed: _shareSending ? null : _toggleForwardHideSender,
+      ),
+    );
+  }
+
+  void _toggleForwardHideSender() {
+    final batch = widget.forwardBatch;
+    if (batch == null) return;
+    if (!_forwardHideSender && !batch.canHideSender) {
+      Haptics.error();
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.forwardHideSenderUnavailable,
+      );
+      return;
+    }
+    Haptics.selection();
+    setState(() => _forwardHideSender = !_forwardHideSender);
+  }
+
+  Future<void> _sendForward(RichMessageContent content) async {
+    final batch = widget.forwardBatch;
+    final myId = _profile?.id ?? 0;
+    if (batch == null || myId == 0 || _shareSending) return;
+    final targets = [
+      for (final raw in _selectedChats) ?int.tryParse(raw),
+    ];
+    if (targets.isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
+    if (api.state != SessionState.online) {
+      showCustomNotification(context, l10n.forwardOffline);
+      return;
+    }
+    setState(() => _shareSending = true);
+    Haptics.send();
+    final result = await ForwardSender.send(
+      accountId: myId,
+      chatIds: targets,
+      request: batch.withHideSender(_forwardHideSender),
+      caption: ForwardCaption(content.text, content.elements),
+      resumeFrom: {..._forwardProgress},
+    );
+    if (!mounted) return;
+    final delivered = result.delivered.length;
+    final failed = result.unfinished.length;
+    if (failed == 0) {
+      setState(() => _shareSending = false);
+      showCustomNotification(context, l10n.forwardDelivered(delivered));
+      Navigator.of(context).pop();
+      return;
+    }
+    Haptics.error();
+    setState(() {
+      _shareSending = false;
+      _forwardProgress
+        ..clear()
+        ..addAll(result.unfinished);
+      for (final chatId in result.delivered) {
+        _selectedChats.remove('$chatId');
+        _selectedChatNames.remove('$chatId');
+      }
+    });
+    showCustomNotification(
+      context,
+      delivered == 0
+          ? l10n.forwardFailed
+          : l10n.forwardDeliveredPartly(delivered, failed),
     );
   }
 
@@ -1885,7 +2021,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         ),
                                       Flexible(
                                         child: Text(
-                                          _shareMode &&
+                                          _picksRecipients &&
                                                   _selectedChats.isNotEmpty
                                               ? '${_selectedChats.length} '
                                                     '${pluralRu(_selectedChats.length, 'получатель', 'получателя', 'получателей')}'
@@ -2164,7 +2300,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       : index;
                   final baseChat = pageChats[chatIndex];
                   return ValueListenableBuilder<CachedChat>(
-                    valueListenable: chats.chatListenable(baseChat.id),
+                    valueListenable: chats.chatListenable(baseChat),
                     builder: (context, chat, _) {
                       final isPinned = (chat.favIndex ?? 0) > 0;
 
@@ -2488,7 +2624,13 @@ class _ChatListScreenState extends State<ChatListScreen>
         child: LayoutBuilder(
           builder: (context, constraints) {
             if (widget.forwardMode) {
-              return _getChatsBody();
+              if (widget.forwardBatch == null) return _getChatsBody();
+              return Column(
+                children: [
+                  Expanded(child: _getChatsBody()),
+                  _buildForwardComposer(),
+                ],
+              );
             }
             if (_shareMode) {
               return Column(
@@ -3066,7 +3208,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     var total = 0;
     var loud = 0;
     for (final stale in list) {
-      final chat = chats.chatListenable(stale.id).value;
+      final chat = chats.chatListenable(stale).value;
       final count = chat.unreadCount;
       if (count <= 0) continue;
       total += count;
@@ -3287,7 +3429,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   CachedChat? _chatById(int chatId) {
     for (final chat in _chatsWithArchived) {
-      if (chat.id == chatId) return chats.chatListenable(chatId).value;
+      if (chat.id == chatId) return chats.chatListenable(chat).value;
     }
     return null;
   }
@@ -3435,34 +3577,45 @@ class _ChatListScreenState extends State<ChatListScreen>
 
     // #***! id "0" это Избранное — метка-закладка вместо буквы "И"
     final isSavedMessages = id == '0';
-    final CircleAvatar rawAvatar = CircleAvatar(
-      radius: avatarRadius,
-      backgroundColor: isSavedMessages
-          ? cs.primary
-          : cs.surfaceContainerHighest,
-      backgroundImage: (!isSavedMessages && imageUrl.isNotEmpty)
-          ? CachedNetworkImageProvider(
-              imageUrl,
-              maxWidth: kAvatarThumbSize,
-              maxHeight: kAvatarThumbSize,
-            )
-          : null,
-      child: isSavedMessages
-          ? Icon(
-              Symbols.bookmark,
-              fill: 1,
-              color: cs.onPrimary,
-              size: story == null ? 26 : 22,
-            )
-          : (imageUrl.isEmpty
-                ? Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontSize: story == null ? 20 : 17,
-                    ),
-                  )
-                : null),
+    final Widget rawAvatar = LocalAvatarBuilder(
+      userId: chatType == 'DIALOG' ? presenceUserId : 0,
+      builder: (context, local) => CircleAvatar(
+        radius: avatarRadius,
+        backgroundColor: isSavedMessages
+            ? cs.primary
+            : cs.surfaceContainerHighest,
+        backgroundImage: isSavedMessages
+            ? null
+            : local != null
+            ? ResizeImage(
+                local,
+                width: kAvatarThumbSize,
+                height: kAvatarThumbSize,
+              )
+            : imageUrl.isNotEmpty
+            ? CachedNetworkImageProvider(
+                imageUrl,
+                maxWidth: kAvatarThumbSize,
+                maxHeight: kAvatarThumbSize,
+              )
+            : null,
+        child: isSavedMessages
+            ? Icon(
+                Symbols.bookmark,
+                fill: 1,
+                color: cs.onPrimary,
+                size: story == null ? 26 : 22,
+              )
+            : (imageUrl.isEmpty && local == null
+                  ? Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: story == null ? 20 : 17,
+                      ),
+                    )
+                  : null),
+      ),
     );
 
     final Widget avatarCircle = story == null
@@ -3489,7 +3642,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       key: ValueKey('chat_$id'),
       child: InkWell(
         onTap: () {
-          if (widget.forwardMode) {
+          if (widget.forwardMode && !_forwardPicking) {
             Navigator.of(context).pop(
               ForwardTarget(
                 chatId: int.parse(id),
@@ -3500,8 +3653,8 @@ class _ChatListScreenState extends State<ChatListScreen>
             );
             return;
           }
-          if (_shareMode) {
-            _toggleShareTarget(id, name);
+          if (_shareMode || _forwardPicking) {
+            _toggleRecipient(id, name);
             return;
           }
           if (_isSelectionMode) {
@@ -3510,7 +3663,9 @@ class _ChatListScreenState extends State<ChatListScreen>
           }
           _openChatFromList(id, name, imageUrl, chatType);
         },
-        onLongPress: (widget.forwardMode || _shareMode)
+        onLongPress: widget.forwardBatch != null
+            ? () => _toggleRecipient(id, name)
+            : (widget.forwardMode || _shareMode)
             ? null
             : () => _toggleSelection(id),
         child: AnimatedContainer(
@@ -3757,6 +3912,46 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
+  Future<void> _startAddAccount() async {
+    final previousId = await TokenStorage.getActiveAccountId();
+    await resetDigitalIdSession();
+    try {
+      await accountModule.beginAddAccount();
+    } catch (_) {}
+    if (!mounted) return;
+    await Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => LoginScreen(returnToAccountId: previousId),
+      ),
+      (route) => false,
+    );
+  }
+
+  Future<void> _resolveLostAccount(int accountId) async {
+    final profile = await AppDatabase.loadProfile(accountId);
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    final name = profile == null
+        ? l10n.contactIdFallback('$accountId')
+        : [
+            profile.firstName,
+            profile.lastName ?? '',
+          ].where((part) => part.isNotEmpty).join(' ');
+    final choice = await showLostAccountDialog(context, name: name);
+    if (!mounted) return;
+    switch (choice) {
+      case LostAccountChoice.signIn:
+        await _startAddAccount();
+      case LostAccountChoice.remove:
+        await accountModule.removeAccount(accountId);
+        if (mounted) {
+          showCustomNotification(context, l10n.accountSessionLostRemoved);
+        }
+      case null:
+        return;
+    }
+  }
+
   void _openAccountSwitcher(Offset point) {
     Haptics.medium();
     final controller = AccountSwitcherController()..attach(point);
@@ -3768,26 +3963,26 @@ class _ChatListScreenState extends State<ChatListScreen>
         controller.dispose();
         if (!mounted) return;
         if (accountId == null) {
-          final previousId = await TokenStorage.getActiveAccountId();
-          await resetDigitalIdSession();
-          try {
-            await accountModule.beginAddAccount();
-          } catch (_) {}
-          if (!mounted) return;
-          await Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (_) => LoginScreen(returnToAccountId: previousId),
-            ),
-            (route) => false,
-          );
+          await _startAddAccount();
+          return;
+        }
+        if (!await accountModule.hasStoredSession(accountId)) {
+          await _resolveLostAccount(accountId);
           return;
         }
         await resetDigitalIdSession();
         try {
           await accountModule.switchAccount(accountId);
+        } on AccountSessionLostException {
+          await _resolveLostAccount(accountId);
+          return;
         } catch (e) {
+          logger.w('Переключение на аккаунт $accountId не удалось: $e');
           if (!mounted) return;
-          showCustomNotification(context, 'Не удалось переключить аккаунт');
+          showCustomNotification(
+            context,
+            AppLocalizations.of(context)!.accountSwitchFailed,
+          );
           return;
         }
         if (!mounted) return;

@@ -12,6 +12,7 @@ import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/media/clipboard/clipboard_media.dart';
 import 'package:komet/models/animoji.dart' show Animoji;
 import 'package:komet/models/sticker.dart' show StickerItem;
+import 'package:komet/backend/modules/forward_sender.dart';
 import 'package:komet/frontend/screens/chats/chat/sticker_panel_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/upload_status.dart'
     show UploadStatus;
@@ -54,7 +55,7 @@ class ComposerArea extends StatelessWidget {
   final BackdropKey? pillBackdrop;
   final BackdropKey? barBackdrop;
   final ValueListenable<CachedMessage?> replyTo;
-  final ValueListenable<List<CachedMessage>> forwardMessages;
+  final ValueListenable<ForwardRequest?> forward;
   final int myId;
   final ValueListenable<bool> hasText;
   final ValueListenable<UploadStatus> uploadStatus;
@@ -69,6 +70,7 @@ class ComposerArea extends StatelessWidget {
   final Future<void> Function(FileHistoryEntry entry) onSendHistory;
   final VoidCallback onCancelReply;
   final VoidCallback onCancelForward;
+  final VoidCallback onToggleForwardSender;
   final bool crossChatReplySupported;
   final Future<void> Function() onPickReplyChat;
   final String Function(int ms) formatElapsed;
@@ -128,7 +130,7 @@ class ComposerArea extends StatelessWidget {
     required this.pillBackdrop,
     required this.barBackdrop,
     required this.replyTo,
-    required this.forwardMessages,
+    required this.forward,
     required this.myId,
     required this.hasText,
     required this.uploadStatus,
@@ -143,6 +145,7 @@ class ComposerArea extends StatelessWidget {
     required this.onSendHistory,
     required this.onCancelReply,
     required this.onCancelForward,
+    required this.onToggleForwardSender,
     required this.crossChatReplySupported,
     required this.onPickReplyChat,
     required this.formatElapsed,
@@ -251,7 +254,7 @@ class ComposerArea extends StatelessWidget {
                   backdropKey: pillBackdrop,
                   attachAnim: attachAnim,
                   replyTo: replyTo,
-                  forwardMessages: forwardMessages,
+                  forward: forward,
                   myId: myId,
                   hasText: hasText,
                   uploadStatus: uploadStatus,
@@ -267,6 +270,7 @@ class ComposerArea extends StatelessWidget {
                   onSendHistory: onSendHistory,
                   onCancelReply: onCancelReply,
                   onCancelForward: onCancelForward,
+                  onToggleForwardSender: onToggleForwardSender,
                   onPickReplyChat: commentsMode || !crossChatReplySupported
                       ? null
                       : () => unawaited(onPickReplyChat()),
@@ -277,9 +281,7 @@ class ComposerArea extends StatelessWidget {
                     state,
                     pasteItem: pasteMenuItem(ctx, state),
                   ),
-                  onPasteMedia: ClipboardMedia.supported
-                      ? onPasteMedia
-                      : null,
+                  onPasteMedia: ClipboardMedia.supported ? onPasteMedia : null,
                   onInsertContent: onInsertContent,
                   isMuted: isMuted,
                   onToggleMute: onToggleMute,

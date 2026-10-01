@@ -3553,4 +3553,434 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get undoLeftChannel => 'You left the channel';
+
+  @override
+  String get forwardHideSender => 'Hide sender\'s name';
+
+  @override
+  String get forwardShowSender => 'Show sender\'s name';
+
+  @override
+  String get forwardHideSenderUnavailable =>
+      'Polls, calls and service messages can only be forwarded with the sender\'s name';
+
+  @override
+  String get forwardWithoutSender => 'Forward without sender';
+
+  @override
+  String forwardWithoutSenderCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Forward without sender: $count messages',
+      one: 'Forward without sender: 1 message',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminsTitle => 'Admins';
+
+  @override
+  String get channelFollowersTitle => 'Followers';
+
+  @override
+  String get channelStatsTitle => 'Channel statistics';
+
+  @override
+  String get channelStatsUnavailable =>
+      'Channel statistics aren\'t available yet';
+
+  @override
+  String get adminsAdd => 'Add admin';
+
+  @override
+  String get channelPickAdminTitle => 'Choose a follower';
+
+  @override
+  String get adminsPickEmpty => 'No followers to appoint';
+
+  @override
+  String get membersSearchHint => 'Search by name';
+
+  @override
+  String adminRoleYou(String role) {
+    return '$role (you)';
+  }
+
+  @override
+  String get channelAddFollowers => 'Add followers';
+
+  @override
+  String get channelFollowersEmpty => 'No followers yet';
+
+  @override
+  String get membersLoadFailed => 'Couldn\'t load the list';
+
+  @override
+  String get adminAppointTitle => 'Appoint admin';
+
+  @override
+  String get adminEditTitle => 'Admin rights';
+
+  @override
+  String get channelRightEditChannel => 'Edit channel';
+
+  @override
+  String get adminRightEditInfoHint => 'Photo, name, description';
+
+  @override
+  String get channelRightCreatePosts => 'Create posts';
+
+  @override
+  String get channelRightEditPosts => 'Edit other people\'s posts';
+
+  @override
+  String get channelRightDeletePosts => 'Delete other people\'s posts';
+
+  @override
+  String get channelRightPinPosts => 'Pin posts';
+
+  @override
+  String get channelRightManageFollowers => 'Add and remove followers';
+
+  @override
+  String get channelRightViewStats => 'View channel stats';
+
+  @override
+  String get adminRightManageAdmins => 'Appoint and remove admins';
+
+  @override
+  String get adminRightManageAdminsHint =>
+      'Will only be able to remove admins they appointed themselves';
+
+  @override
+  String get adminAppointAction => 'Appoint as admin';
+
+  @override
+  String get adminSave => 'Save';
+
+  @override
+  String get adminAppointed => 'Admin appointed';
+
+  @override
+  String get adminSaved => 'Rights saved';
+
+  @override
+  String get ownershipTransfer => 'Transfer ownership';
+
+  @override
+  String ownershipTransferConfirm(String name) {
+    return '$name will become the new owner.';
+  }
+
+  @override
+  String get ownershipTransferAction => 'Transfer';
+
+  @override
+  String get ownershipTransferred => 'Ownership transferred';
+
+  @override
+  String get adminRemove => 'Remove from admins';
+
+  @override
+  String adminRemoveConfirm(String name) {
+    return '$name will no longer be an admin.';
+  }
+
+  @override
+  String get adminRemoveAction => 'Remove';
+
+  @override
+  String get adminRemoved => 'Removed from admins';
+
+  @override
+  String get adminActionFailed => 'Couldn\'t apply the change';
+
+  @override
+  String get channelInviteSendInMax => 'Send in MAX';
+
+  @override
+  String get channelInviteShowQr => 'Show QR code';
+
+  @override
+  String get channelInviteRevoke => 'Revoke link';
+
+  @override
+  String get channelInviteRevokeConfirm =>
+      'The current link will stop working. People will be able to join only with the new one.';
+
+  @override
+  String get channelInviteRevokeAction => 'Revoke';
+
+  @override
+  String get channelInviteRevoked => 'New link created';
+
+  @override
+  String get channelJoinRequests => 'Join requests';
+
+  @override
+  String get channelJoinRequestsHint =>
+      'The channel can only be joined after an admin approves the request';
+
+  @override
+  String get groupPickAdminTitle => 'Choose a member';
+
+  @override
+  String get groupRightEditInfo => 'Edit chat';
+
+  @override
+  String get groupRightDeleteMessages => 'Delete messages';
+
+  @override
+  String get groupRightPinMessages => 'Pin messages';
+
+  @override
+  String get groupRightManageMembers => 'Add and remove members';
+
+  @override
+  String get groupRightEditLink => 'Update chat link';
+
+  @override
+  String get groupSettingsTitle => 'Group settings';
+
+  @override
+  String get groupSettingsName => 'Chat name';
+
+  @override
+  String get groupSettingsDescription => 'Chat description';
+
+  @override
+  String get groupSettingsSaved => 'Changes saved';
+
+  @override
+  String get groupSettingsPhotoUpdated => 'Photo updated';
+
+  @override
+  String get groupSettingsPhotoTooLarge => 'The image is too large (8 MB max)';
+
+  @override
+  String get groupSettingsLeave => 'Leave chat';
+
+  @override
+  String get reactionsTitle => 'Reactions';
+
+  @override
+  String get reactionsSummaryAll => 'All';
+
+  @override
+  String get reactionsSummaryOff => 'Off';
+
+  @override
+  String reactionsSummaryCount(int allowed, int total) {
+    return '$allowed of $total';
+  }
+
+  @override
+  String get reactionsEnable => 'Enable reactions';
+
+  @override
+  String get reactionsCountHeader => 'Reactions per message';
+
+  @override
+  String reactionsCountValue(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count reactions',
+      one: '1 reaction',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get reactionsAllowedHeader => 'Allowed reactions';
+
+  @override
+  String get reactionsEdit => 'Edit';
+
+  @override
+  String get reactionsDone => 'Done';
+
+  @override
+  String get reactionsReset => 'Reset reaction settings';
+
+  @override
+  String get reactionsLoadFailed => 'Couldn\'t load reaction settings';
+
+  @override
+  String get reactionsNoneAllowed => 'Keep at least one reaction';
+
+  @override
+  String get memberPermissionsTitle => 'Member permissions';
+
+  @override
+  String get memberPermissionEditInfo =>
+      'Change the chat name, photo and description';
+
+  @override
+  String get memberPermissionAddMembers => 'Add members';
+
+  @override
+  String get memberPermissionPin => 'Pin messages';
+
+  @override
+  String get memberPermissionInvite => 'Invite via link';
+
+  @override
+  String get memberPermissionCall => 'Call in the chat';
+
+  @override
+  String get ownerLeaveTitle => 'You\'re the owner';
+
+  @override
+  String get ownerLeaveChannelMessage =>
+      'To leave the channel, first transfer ownership to another follower.';
+
+  @override
+  String get ownerLeaveGroupMessage =>
+      'To leave the group, first transfer ownership to another member.';
+
+  @override
+  String get ownershipPickTitle => 'New owner';
+
+  @override
+  String get ownershipPickEmpty => 'No one to transfer ownership to';
+
+  @override
+  String get forwardOneTitle => 'Forward message';
+
+  @override
+  String forwardBatchTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Forward $count messages',
+      one: 'Forward 1 message',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardCommentHint => 'Add a comment...';
+
+  @override
+  String get forwardOffline => 'No connection';
+
+  @override
+  String get forwardFailed => 'Couldn\'t forward';
+
+  @override
+  String forwardDelivered(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Forwarded to $count chats',
+      one: 'Forwarded to 1 chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String forwardDeliveredPartly(int delivered, int failed) {
+    return 'Forwarded to $delivered, failed for $failed';
+  }
+
+  @override
+  String get reactionUnavailable => 'This reaction isn\'t allowed in this chat';
+
+  @override
+  String get membersSearchMore => 'Search the rest';
+
+  @override
+  String get groupRestrictionsTitle => 'Restrictions';
+
+  @override
+  String get groupRestrictionForward => 'Disable forwarding';
+
+  @override
+  String get groupRestrictionForwardHint =>
+      'Messages from this chat can\'t be forwarded';
+
+  @override
+  String get groupRestrictionCopy => 'Disable copying';
+
+  @override
+  String get groupRestrictionCopyHint => 'Message text can\'t be copied';
+
+  @override
+  String get groupRestrictionConfirmSend => 'Confirm before sending';
+
+  @override
+  String get groupRestrictionConfirmSendHint =>
+      'Every message asks for confirmation before it is sent';
+
+  @override
+  String get notificationsBadgeSectionTitle => 'App icon badge';
+
+  @override
+  String get notificationsBadgeLabel => 'Show unread count';
+
+  @override
+  String get notificationsBadgeMutedLabel => 'Include muted chats';
+
+  @override
+  String get notificationsBadgeMessagesLabel => 'Count messages';
+
+  @override
+  String get notificationsBadgeMessagesSubtitle =>
+      'Off — count unread chats instead';
+
+  @override
+  String get accountSwitchFailed => 'Couldn\'t switch account';
+
+  @override
+  String get accountSessionLostTitle => 'Sign in again';
+
+  @override
+  String accountSessionLostBody(String name) {
+    return 'The session of “$name” is no longer valid on this device.';
+  }
+
+  @override
+  String get accountSessionLostSignIn => 'Sign in';
+
+  @override
+  String get accountSessionLostRemove => 'Remove from device';
+
+  @override
+  String get accountSessionLostRemoved => 'Account removed from this device';
+
+  @override
+  String get contactsSearchHint => 'Search contacts';
+
+  @override
+  String get contactsSearchEmpty => 'Nothing found';
+
+  @override
+  String get contactsNfcExchange => 'NFC exchange';
+
+  @override
+  String get contactsFindUser => 'Add contact';
+
+  @override
+  String get contactDeleted => 'Contact deleted';
+
+  @override
+  String get contactDeleteFailed => 'Couldn\'t delete the contact';
+
+  @override
+  String get contactLocalPhotoChoose => 'Choose photo';
+
+  @override
+  String get contactLocalPhotoReset => 'Restore profile photo';
+
+  @override
+  String get contactLocalPhotoSaved => 'Photo is visible only to you';
+
+  @override
+  String get contactLocalPhotoFailed => 'Couldn\'t process the image';
+
+  @override
+  String get contactLocalPhotoTooLarge => 'Image is too large (max 8 MB)';
 }

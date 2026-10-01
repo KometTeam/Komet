@@ -112,6 +112,7 @@ class MainActivity : AudioServiceFragmentActivity() {
                 PackageManager.DONT_KILL_APP,
             )
         }
+        iconComponents[name]?.let { LauncherBadge.reapply(this, it) }
         Handler(Looper.getMainLooper()).postDelayed({
             finishAndRemoveTask()
         }, 250L)
@@ -526,6 +527,7 @@ class MainActivity : AudioServiceFragmentActivity() {
         MediaExport.attach(flutterEngine, this)
 
         FkmChannel.attach(flutterEngine, this)
+        LauncherBadge.attach(flutterEngine, this)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -990,6 +992,7 @@ class MainActivity : AudioServiceFragmentActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         if (!keepEngineAlive()) {
             FkmChannel.detach()
+            LauncherBadge.detach()
             ChatNotifications.activeChatId = 0L
         }
         super.cleanUpFlutterEngine(flutterEngine)

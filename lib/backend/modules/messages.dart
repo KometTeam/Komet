@@ -15,6 +15,7 @@ import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
 import '../../models/attachment.dart';
 import 'chats.dart' show chats;
+import 'message_copy.dart';
 
 // #***! быстрый кэш id -> имя аватарка телефон, из него подписи в пузырях
 class ContactCache {
@@ -773,6 +774,14 @@ class MessagesModule {
 
   MessagesModule(this._api);
 
+  static int _lastCid = 0;
+
+  static int _nextCid() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _lastCid = now > _lastCid ? now : _lastCid + 1;
+    return _lastCid;
+  }
+
   // #***! история с сервера
   Future<List<CachedMessage>> fetchHistory(
     int accountId,
@@ -995,7 +1004,7 @@ class MessagesModule {
   }) async {
     final message = <String, dynamic>{
       'text': text,
-      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'cid': -_nextCid(),
       'elements': elements,
       'attaches': [],
     };
@@ -1026,7 +1035,7 @@ class MessagesModule {
     final payload = {
       'chatId': chatId,
       'message': {
-        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'cid': -_nextCid(),
         'text': '',
         'attaches': [control],
       },
@@ -1042,7 +1051,7 @@ class MessagesModule {
     final response = await _api.sendRequest(Opcode.msgSend, {
       'chatId': chatId,
       'message': {
-        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'cid': -_nextCid(),
         'attaches': [
           {
             '_type': 'CONTROL',
@@ -1128,7 +1137,7 @@ class MessagesModule {
       'detectShare': false,
       'elements': [],
       'attaches': [],
-      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'cid': -_nextCid(),
       'link': {
         'type': 'FORWARD',
         'chatId': sourceChatId,
@@ -1142,6 +1151,26 @@ class MessagesModule {
     };
 
     return _sendAndExtractMessageId(payload, 'Ошибка пересылки');
+  }
+
+  Future<Map<String, dynamic>> sendMessageCopy(
+    int chatId,
+    MessageCopy copy, {
+    bool notify = true,
+  }) async {
+    final response = await _api.sendRequest(Opcode.msgSend, {
+      'chatId': chatId,
+      'message': {
+        'cid': -_nextCid(),
+        if (copy.text.isNotEmpty) 'text': copy.text,
+        'elements': copy.elements,
+        'attaches': copy.wireAttaches,
+      },
+      'notify': notify,
+    });
+    final sent = _sentMessageMap(response);
+    if (sent == null) _throwSendError(response.payload, 'Ошибка пересылки');
+    return sent;
   }
 
   // #***! локальная копия чтоб пересланное появилось сразу
@@ -1251,7 +1280,7 @@ class MessagesModule {
   Future<bool> sendLinkMessage(int chatId, String url) async {
     final message = <String, dynamic>{
       'text': url,
-      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'cid': -_nextCid(),
       'elements': [
         {
           'type': 'LINK',
@@ -1618,7 +1647,7 @@ class MessagesModule {
       'isLive': false,
       'detectShare': false,
       'elements': <dynamic>[],
-      'cid': DateTime.now().millisecondsSinceEpoch,
+      'cid': _nextCid(),
       'attaches': [
         if (token != null)
           {'_type': 'FILE', 'token': token}
@@ -1665,7 +1694,7 @@ class MessagesModule {
     Duration retryDelay = const Duration(seconds: 1),
   }) async {
     final message = <String, dynamic>{
-      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'cid': -_nextCid(),
       'attaches': [
         for (final token in photoTokens)
           {'_type': 'PHOTO', 'photoToken': token},
@@ -1726,7 +1755,7 @@ class MessagesModule {
       'isLive': false,
       'detectShare': false,
       'elements': <dynamic>[],
-      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'cid': -_nextCid(),
       'attaches': [
         {'videoType': 0, '_type': 'VIDEO', 'token': token},
       ],
@@ -1787,7 +1816,7 @@ class MessagesModule {
       'isLive': false,
       'detectShare': false,
       'elements': <dynamic>[],
-      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'cid': -_nextCid(),
       'attaches': [
         {
           'duration': duration,
@@ -1852,7 +1881,7 @@ class MessagesModule {
       'isLive': false,
       'detectShare': false,
       'elements': <dynamic>[],
-      'cid': DateTime.now().millisecondsSinceEpoch * -1,
+      'cid': -_nextCid(),
       'attaches': [
         {
           'duration': duration,
@@ -1885,7 +1914,7 @@ class MessagesModule {
     final payload = {
       'chatId': chatId,
       'message': {
-        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'cid': -_nextCid(),
         'attaches': [
           {
             '_type': 'LOCATION',
@@ -1910,7 +1939,7 @@ class MessagesModule {
     final payload = {
       'chatId': chatId,
       'message': {
-        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'cid': -_nextCid(),
         'attaches': [
           {'_type': 'CONTACT', 'contactId': contactId},
         ],
@@ -1939,7 +1968,7 @@ class MessagesModule {
     final payload = {
       'chatId': chatId,
       'message': {
-        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'cid': -_nextCid(),
         'attaches': [
           {
             '_type': 'POLL',
@@ -1978,7 +2007,7 @@ class MessagesModule {
     final payload = {
       'chatId': chatId,
       'message': {
-        'cid': DateTime.now().millisecondsSinceEpoch * -1,
+        'cid': -_nextCid(),
         'attaches': [
           {'_type': 'STICKER', 'stickerId': stickerId},
         ],

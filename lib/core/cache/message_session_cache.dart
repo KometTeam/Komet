@@ -63,6 +63,20 @@ class MessageSessionCache {
     save(accountId, chatId, list, reachedStart: cached.reachedStart);
   }
 
+  static void append(int accountId, int chatId, List<CachedMessage> added) {
+    final cached = _store[_key(accountId, chatId)];
+    if (cached == null) return;
+    final known = {for (final message in cached.messages) message.id};
+    final fresh = [
+      for (final message in added)
+        if (!known.contains(message.id)) message,
+    ];
+    if (fresh.isEmpty) return;
+    final merged = [...cached.messages, ...fresh]
+      ..sort((a, b) => a.time.compareTo(b.time));
+    save(accountId, chatId, merged, reachedStart: cached.reachedStart);
+  }
+
   static void remove(int accountId, int chatId) =>
       _store.remove(_key(accountId, chatId));
 

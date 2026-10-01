@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/config/debug_test.dart';
@@ -6,6 +8,10 @@ import '../../../core/contacts/device_contacts_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../main.dart' show api;
+import '../../widgets/chat_menu_overlay.dart';
+import '../../widgets/confirm_dialog.dart';
+import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/small_spinner.dart';
@@ -26,8 +32,12 @@ class ContactsTab extends StatefulWidget {
 }
 
 class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
   List<CachedContact> _contacts = [];
   bool _isLoading = true;
+  bool _searching = false;
+  final Set<int> _deleting = {};
 
   @override
   void initState() {
@@ -45,6 +55,8 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
   @override
   void dispose() {
     ContactsModule.revision.removeListener(_loadContacts);
+    _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -75,7 +87,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
     );
   }
 
-  Future<void> _openSearchById() async {
+  Future<void> _openFindUser() async {
     final found = await showFindUserSheet(
       context,
       title: 'Найти контакт',
@@ -93,6 +105,17 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
         ),
       ),
     );
+  }
+
+  void _startSearch() {
+    setState(() => _searching = true);
+    _searchFocus.requestFocus();
+  }
+
+  void _stopSearch() {
+    _searchController.clear();
+    _searchFocus.unfocus();
+    setState(() => _searching = false);
   }
 
   Future<void> _loadContacts() async {
@@ -113,7 +136,11 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-    final contacts = await ContactsModule.getContacts(p.id);
+    unawaited(ContactsModule.ensureBlockedLoaded(api));
+    final blocked = ContactsModule.blockedIds;
+    final contacts = (await ContactsModule.getContacts(
+      p.id,
+    )).where((c) => !blocked.contains(c.id)).toList();
     contacts.sort((a, b) => a.firstName.compareTo(b.firstName));
     if (mounted) {
       setState(() {
@@ -123,23 +150,83 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
     }
   }
 
+  ContactLabels _labelsOf(CachedContact contact) => contactLabels(
+    idLabel: AppLocalizations.of(context)!.contactIdFallback('${contact.id}'),
+    firstName: contact.firstName,
+    lastName: contact.lastName,
+    phone: contact.phone,
+  );
+
+  List<CachedContact> get _visibleContacts {
+    final query = _searchController.text;
+    if (!_searching || query.trim().isEmpty) return _contacts;
+    return [
+      for (final contact in _contacts)
+        if (contactMatchesQuery(
+          query,
+          title: _labelsOf(contact).title,
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          phone: contact.phone,
+        ))
+          contact,
+    ];
+  }
+
+  void _showContactMenu(BuildContext anchorContext, CachedContact contact) {
+    final box = anchorContext.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final l10n = AppLocalizations.of(context)!;
+    showChatMenu(
+      context: context,
+      anchorRect: box.localToGlobal(Offset.zero) & box.size,
+      items: [
+        ChatMenuItem(
+          icon: Symbols.delete,
+          label: l10n.editContactDelete,
+          destructive: true,
+          onTap: () => _deleteContact(contact),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _deleteContact(CachedContact contact) async {
+    if (_deleting.contains(contact.id)) return;
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.editContactDeleteConfirmTitle,
+      message: l10n.editContactDeleteConfirmBody,
+      confirmLabel: l10n.editContactDelete,
+      cancelLabel: l10n.editContactDeleteCancel,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _deleting.add(contact.id));
+    final ok = await ContactsModule.removeContact(api, contact.id);
+    if (!mounted) return;
+    setState(() => _deleting.remove(contact.id));
+    showCustomNotification(
+      context,
+      ok ? l10n.contactDeleted : l10n.contactDeleteFailed,
+    );
+  }
+
   Widget _buildContactItem(
     BuildContext context,
     ColorScheme cs,
     CachedContact contact,
   ) {
-    final labels = contactLabels(
-      idLabel: AppLocalizations.of(context)!.contactIdFallback('${contact.id}'),
-      firstName: contact.firstName,
-      lastName: contact.lastName,
-      phone: contact.phone,
-    );
+    final labels = _labelsOf(contact);
     final nameToDisplay = labels.title;
     final subtitle = contact.updateTime > 0
         ? 'Был(а) недавно'
         : labels.subtitle;
+    final deleting = _deleting.contains(contact.id);
 
     return SpringyTap(
+      key: ValueKey(contact.id),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -150,7 +237,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
             avatarUrl: contact.baseUrl,
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
             child: Row(
               children: [
                 Container(
@@ -167,6 +254,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
                     name: nameToDisplay,
                     imageUrl: contact.baseUrl,
                     size: 48,
+                    userId: contact.id,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -216,6 +304,23 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
                     ],
                   ),
                 ),
+                if (deleting)
+                  const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: SmallSpinner(size: 20),
+                  )
+                else
+                  Builder(
+                    builder: (anchorContext) => IconButton(
+                      icon: Icon(
+                        Symbols.more_vert,
+                        color: cs.onSurfaceVariant,
+                        size: 20,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _showContactMenu(anchorContext, contact),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -224,73 +329,123 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
     );
   }
 
+  Widget _buildHeader(ColorScheme cs, AppLocalizations l10n) {
+    if (_searching) {
+      return Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocus,
+              onChanged: (_) => setState(() {}),
+              textInputAction: TextInputAction.search,
+              style: TextStyle(color: cs.onSurface, fontSize: 18),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                border: InputBorder.none,
+                hintText: l10n.contactsSearchHint,
+                hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 18),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Symbols.close, color: cs.onSurface),
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: _stopSearch,
+          ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Контакты',
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: displayFontOf(context),
+                ),
+              ),
+              const ConnectionStatusLine(),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: Icon(Symbols.nfc, color: cs.onSurface),
+          tooltip: l10n.contactsNfcExchange,
+          onPressed: _openNfcExchange,
+        ),
+        IconButton(
+          icon: Icon(Symbols.person_add, color: cs.onSurface),
+          tooltip: l10n.contactsFindUser,
+          onPressed: _openFindUser,
+        ),
+        IconButton(
+          icon: Icon(Symbols.search, color: cs.onSurface),
+          tooltip: l10n.contactsSearchHint,
+          onPressed: _startSearch,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final visible = _visibleContacts;
 
-    return Scaffold(
-      backgroundColor: spectrumSurfaceColor(cs),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Контакты',
+    return PopScope(
+      canPop: !_searching,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _stopSearch();
+      },
+      child: Scaffold(
+        backgroundColor: spectrumSurfaceColor(cs),
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: _buildHeader(cs, l10n),
+                ),
+              ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: SmallSpinner(size: 36))
+                    : visible.isEmpty
+                    ? Center(
+                        child: Text(
+                          _contacts.isEmpty
+                              ? 'Нет контактов'
+                              : l10n.contactsSearchEmpty,
                           style: TextStyle(
-                            color: cs.onSurface,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: displayFontOf(context),
+                            color: cs.onSurfaceVariant,
+                            fontSize: 16,
                           ),
                         ),
-                        const ConnectionStatusLine(),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Symbols.person_add, color: cs.onSurface),
-                    onPressed: _openNfcExchange,
-                  ),
-                  IconButton(
-                    icon: Icon(Symbols.search, color: cs.onSurface),
-                    onPressed: _openSearchById,
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: SmallSpinner(size: 36))
-                  : _contacts.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Нет контактов',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 16,
-                        ),
+                      )
+                    : ListView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: const EdgeInsets.only(bottom: 120),
+                        itemCount: visible.length,
+                        itemBuilder: (context, index) =>
+                            _buildContactItem(context, cs, visible[index]),
                       ),
-                    )
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(bottom: 120),
-                      itemCount: _contacts.length,
-                      itemBuilder: (context, index) {
-                        final contact = _contacts[index];
-                        return _buildContactItem(context, cs, contact);
-                      },
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

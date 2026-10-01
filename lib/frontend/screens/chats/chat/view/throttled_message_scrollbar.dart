@@ -116,7 +116,10 @@ class _ThrottledMessageScrollbarState extends State<ThrottledMessageScrollbar>
     // #***! тянешь вниз (offset > 0) — едем к новым сообщениям, то есть
     // pixels убывает (reverse:true, низ списка — minScrollExtent).
     final velocityPxPerSec =
-        -_pullOffset.sign * magnitude * widget.messagesPerSecond * _avgItemExtent;
+        -_pullOffset.sign *
+        magnitude *
+        widget.messagesPerSecond *
+        _avgItemExtent;
 
     final pos = widget.controller.position;
     final next = (pos.pixels + velocityPxPerSec * dt).clamp(

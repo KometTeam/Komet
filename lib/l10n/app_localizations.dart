@@ -6553,6 +6553,756 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You left the channel'**
   String get undoLeftChannel;
+
+  /// No description provided for @forwardHideSender.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide sender\'s name'**
+  String get forwardHideSender;
+
+  /// No description provided for @forwardShowSender.
+  ///
+  /// In en, this message translates to:
+  /// **'Show sender\'s name'**
+  String get forwardShowSender;
+
+  /// No description provided for @forwardHideSenderUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Polls, calls and service messages can only be forwarded with the sender\'s name'**
+  String get forwardHideSenderUnavailable;
+
+  /// No description provided for @forwardWithoutSender.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward without sender'**
+  String get forwardWithoutSender;
+
+  /// No description provided for @forwardWithoutSenderCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Forward without sender: 1 message} other{Forward without sender: {count} messages}}'**
+  String forwardWithoutSenderCount(int count);
+
+  /// No description provided for @adminsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Admins'**
+  String get adminsTitle;
+
+  /// No description provided for @channelFollowersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Followers'**
+  String get channelFollowersTitle;
+
+  /// No description provided for @channelStatsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Channel statistics'**
+  String get channelStatsTitle;
+
+  /// No description provided for @channelStatsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Channel statistics aren\'t available yet'**
+  String get channelStatsUnavailable;
+
+  /// No description provided for @adminsAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add admin'**
+  String get adminsAdd;
+
+  /// No description provided for @channelPickAdminTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a follower'**
+  String get channelPickAdminTitle;
+
+  /// No description provided for @adminsPickEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No followers to appoint'**
+  String get adminsPickEmpty;
+
+  /// No description provided for @membersSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name'**
+  String get membersSearchHint;
+
+  /// No description provided for @adminRoleYou.
+  ///
+  /// In en, this message translates to:
+  /// **'{role} (you)'**
+  String adminRoleYou(String role);
+
+  /// No description provided for @channelAddFollowers.
+  ///
+  /// In en, this message translates to:
+  /// **'Add followers'**
+  String get channelAddFollowers;
+
+  /// No description provided for @channelFollowersEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No followers yet'**
+  String get channelFollowersEmpty;
+
+  /// No description provided for @membersLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the list'**
+  String get membersLoadFailed;
+
+  /// No description provided for @adminAppointTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Appoint admin'**
+  String get adminAppointTitle;
+
+  /// No description provided for @adminEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin rights'**
+  String get adminEditTitle;
+
+  /// No description provided for @channelRightEditChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit channel'**
+  String get channelRightEditChannel;
+
+  /// No description provided for @adminRightEditInfoHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo, name, description'**
+  String get adminRightEditInfoHint;
+
+  /// No description provided for @channelRightCreatePosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Create posts'**
+  String get channelRightCreatePosts;
+
+  /// No description provided for @channelRightEditPosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit other people\'s posts'**
+  String get channelRightEditPosts;
+
+  /// No description provided for @channelRightDeletePosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete other people\'s posts'**
+  String get channelRightDeletePosts;
+
+  /// No description provided for @channelRightPinPosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin posts'**
+  String get channelRightPinPosts;
+
+  /// No description provided for @channelRightManageFollowers.
+  ///
+  /// In en, this message translates to:
+  /// **'Add and remove followers'**
+  String get channelRightManageFollowers;
+
+  /// No description provided for @channelRightViewStats.
+  ///
+  /// In en, this message translates to:
+  /// **'View channel stats'**
+  String get channelRightViewStats;
+
+  /// No description provided for @adminRightManageAdmins.
+  ///
+  /// In en, this message translates to:
+  /// **'Appoint and remove admins'**
+  String get adminRightManageAdmins;
+
+  /// No description provided for @adminRightManageAdminsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Will only be able to remove admins they appointed themselves'**
+  String get adminRightManageAdminsHint;
+
+  /// No description provided for @adminAppointAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Appoint as admin'**
+  String get adminAppointAction;
+
+  /// No description provided for @adminSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get adminSave;
+
+  /// No description provided for @adminAppointed.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin appointed'**
+  String get adminAppointed;
+
+  /// No description provided for @adminSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Rights saved'**
+  String get adminSaved;
+
+  /// No description provided for @ownershipTransfer.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer ownership'**
+  String get ownershipTransfer;
+
+  /// No description provided for @ownershipTransferConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will become the new owner.'**
+  String ownershipTransferConfirm(String name);
+
+  /// No description provided for @ownershipTransferAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer'**
+  String get ownershipTransferAction;
+
+  /// No description provided for @ownershipTransferred.
+  ///
+  /// In en, this message translates to:
+  /// **'Ownership transferred'**
+  String get ownershipTransferred;
+
+  /// No description provided for @adminRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from admins'**
+  String get adminRemove;
+
+  /// No description provided for @adminRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will no longer be an admin.'**
+  String adminRemoveConfirm(String name);
+
+  /// No description provided for @adminRemoveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get adminRemoveAction;
+
+  /// No description provided for @adminRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from admins'**
+  String get adminRemoved;
+
+  /// No description provided for @adminActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t apply the change'**
+  String get adminActionFailed;
+
+  /// No description provided for @channelInviteSendInMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Send in MAX'**
+  String get channelInviteSendInMax;
+
+  /// No description provided for @channelInviteShowQr.
+  ///
+  /// In en, this message translates to:
+  /// **'Show QR code'**
+  String get channelInviteShowQr;
+
+  /// No description provided for @channelInviteRevoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke link'**
+  String get channelInviteRevoke;
+
+  /// No description provided for @channelInviteRevokeConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'The current link will stop working. People will be able to join only with the new one.'**
+  String get channelInviteRevokeConfirm;
+
+  /// No description provided for @channelInviteRevokeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke'**
+  String get channelInviteRevokeAction;
+
+  /// No description provided for @channelInviteRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'New link created'**
+  String get channelInviteRevoked;
+
+  /// No description provided for @channelJoinRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Join requests'**
+  String get channelJoinRequests;
+
+  /// No description provided for @channelJoinRequestsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The channel can only be joined after an admin approves the request'**
+  String get channelJoinRequestsHint;
+
+  /// No description provided for @groupPickAdminTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a member'**
+  String get groupPickAdminTitle;
+
+  /// No description provided for @groupRightEditInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit chat'**
+  String get groupRightEditInfo;
+
+  /// No description provided for @groupRightDeleteMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete messages'**
+  String get groupRightDeleteMessages;
+
+  /// No description provided for @groupRightPinMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin messages'**
+  String get groupRightPinMessages;
+
+  /// No description provided for @groupRightManageMembers.
+  ///
+  /// In en, this message translates to:
+  /// **'Add and remove members'**
+  String get groupRightManageMembers;
+
+  /// No description provided for @groupRightEditLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Update chat link'**
+  String get groupRightEditLink;
+
+  /// No description provided for @groupSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Group settings'**
+  String get groupSettingsTitle;
+
+  /// No description provided for @groupSettingsName.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat name'**
+  String get groupSettingsName;
+
+  /// No description provided for @groupSettingsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat description'**
+  String get groupSettingsDescription;
+
+  /// No description provided for @groupSettingsSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes saved'**
+  String get groupSettingsSaved;
+
+  /// No description provided for @groupSettingsPhotoUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo updated'**
+  String get groupSettingsPhotoUpdated;
+
+  /// No description provided for @groupSettingsPhotoTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is too large (8 MB max)'**
+  String get groupSettingsPhotoTooLarge;
+
+  /// No description provided for @groupSettingsLeave.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave chat'**
+  String get groupSettingsLeave;
+
+  /// No description provided for @reactionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reactions'**
+  String get reactionsTitle;
+
+  /// No description provided for @reactionsSummaryAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get reactionsSummaryAll;
+
+  /// No description provided for @reactionsSummaryOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get reactionsSummaryOff;
+
+  /// No description provided for @reactionsSummaryCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{allowed} of {total}'**
+  String reactionsSummaryCount(int allowed, int total);
+
+  /// No description provided for @reactionsEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable reactions'**
+  String get reactionsEnable;
+
+  /// No description provided for @reactionsCountHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Reactions per message'**
+  String get reactionsCountHeader;
+
+  /// No description provided for @reactionsCountValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 reaction} other{{count} reactions}}'**
+  String reactionsCountValue(int count);
+
+  /// No description provided for @reactionsAllowedHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed reactions'**
+  String get reactionsAllowedHeader;
+
+  /// No description provided for @reactionsEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get reactionsEdit;
+
+  /// No description provided for @reactionsDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get reactionsDone;
+
+  /// No description provided for @reactionsReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset reaction settings'**
+  String get reactionsReset;
+
+  /// No description provided for @reactionsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load reaction settings'**
+  String get reactionsLoadFailed;
+
+  /// No description provided for @reactionsNoneAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep at least one reaction'**
+  String get reactionsNoneAllowed;
+
+  /// No description provided for @memberPermissionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Member permissions'**
+  String get memberPermissionsTitle;
+
+  /// No description provided for @memberPermissionEditInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Change the chat name, photo and description'**
+  String get memberPermissionEditInfo;
+
+  /// No description provided for @memberPermissionAddMembers.
+  ///
+  /// In en, this message translates to:
+  /// **'Add members'**
+  String get memberPermissionAddMembers;
+
+  /// No description provided for @memberPermissionPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin messages'**
+  String get memberPermissionPin;
+
+  /// No description provided for @memberPermissionInvite.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite via link'**
+  String get memberPermissionInvite;
+
+  /// No description provided for @memberPermissionCall.
+  ///
+  /// In en, this message translates to:
+  /// **'Call in the chat'**
+  String get memberPermissionCall;
+
+  /// No description provided for @ownerLeaveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re the owner'**
+  String get ownerLeaveTitle;
+
+  /// No description provided for @ownerLeaveChannelMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'To leave the channel, first transfer ownership to another follower.'**
+  String get ownerLeaveChannelMessage;
+
+  /// No description provided for @ownerLeaveGroupMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'To leave the group, first transfer ownership to another member.'**
+  String get ownerLeaveGroupMessage;
+
+  /// No description provided for @ownershipPickTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New owner'**
+  String get ownershipPickTitle;
+
+  /// No description provided for @ownershipPickEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No one to transfer ownership to'**
+  String get ownershipPickEmpty;
+
+  /// No description provided for @forwardOneTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward message'**
+  String get forwardOneTitle;
+
+  /// No description provided for @forwardBatchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Forward 1 message} other{Forward {count} messages}}'**
+  String forwardBatchTitle(int count);
+
+  /// No description provided for @forwardCommentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a comment...'**
+  String get forwardCommentHint;
+
+  /// No description provided for @forwardOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection'**
+  String get forwardOffline;
+
+  /// No description provided for @forwardFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t forward'**
+  String get forwardFailed;
+
+  /// No description provided for @forwardDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Forwarded to 1 chat} other{Forwarded to {count} chats}}'**
+  String forwardDelivered(int count);
+
+  /// No description provided for @forwardDeliveredPartly.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarded to {delivered}, failed for {failed}'**
+  String forwardDeliveredPartly(int delivered, int failed);
+
+  /// No description provided for @reactionUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This reaction isn\'t allowed in this chat'**
+  String get reactionUnavailable;
+
+  /// No description provided for @membersSearchMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the rest'**
+  String get membersSearchMore;
+
+  /// No description provided for @groupRestrictionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restrictions'**
+  String get groupRestrictionsTitle;
+
+  /// No description provided for @groupRestrictionForward.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable forwarding'**
+  String get groupRestrictionForward;
+
+  /// No description provided for @groupRestrictionForwardHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages from this chat can\'t be forwarded'**
+  String get groupRestrictionForwardHint;
+
+  /// No description provided for @groupRestrictionCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable copying'**
+  String get groupRestrictionCopy;
+
+  /// No description provided for @groupRestrictionCopyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Message text can\'t be copied'**
+  String get groupRestrictionCopyHint;
+
+  /// No description provided for @groupRestrictionConfirmSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm before sending'**
+  String get groupRestrictionConfirmSend;
+
+  /// No description provided for @groupRestrictionConfirmSendHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Every message asks for confirmation before it is sent'**
+  String get groupRestrictionConfirmSendHint;
+
+  /// No description provided for @notificationsBadgeSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'App icon badge'**
+  String get notificationsBadgeSectionTitle;
+
+  /// No description provided for @notificationsBadgeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Show unread count'**
+  String get notificationsBadgeLabel;
+
+  /// No description provided for @notificationsBadgeMutedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Include muted chats'**
+  String get notificationsBadgeMutedLabel;
+
+  /// No description provided for @notificationsBadgeMessagesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Count messages'**
+  String get notificationsBadgeMessagesLabel;
+
+  /// No description provided for @notificationsBadgeMessagesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Off — count unread chats instead'**
+  String get notificationsBadgeMessagesSubtitle;
+
+  /// No description provided for @accountSwitchFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t switch account'**
+  String get accountSwitchFailed;
+
+  /// No description provided for @accountSessionLostTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again'**
+  String get accountSessionLostTitle;
+
+  /// No description provided for @accountSessionLostBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The session of “{name}” is no longer valid on this device.'**
+  String accountSessionLostBody(String name);
+
+  /// No description provided for @accountSessionLostSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get accountSessionLostSignIn;
+
+  /// No description provided for @accountSessionLostRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from device'**
+  String get accountSessionLostRemove;
+
+  /// No description provided for @accountSessionLostRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Account removed from this device'**
+  String get accountSessionLostRemoved;
+
+  /// No description provided for @contactsSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search contacts'**
+  String get contactsSearchHint;
+
+  /// No description provided for @contactsSearchEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing found'**
+  String get contactsSearchEmpty;
+
+  /// No description provided for @contactsNfcExchange.
+  ///
+  /// In en, this message translates to:
+  /// **'NFC exchange'**
+  String get contactsNfcExchange;
+
+  /// No description provided for @contactsFindUser.
+  ///
+  /// In en, this message translates to:
+  /// **'Add contact'**
+  String get contactsFindUser;
+
+  /// No description provided for @contactDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact deleted'**
+  String get contactDeleted;
+
+  /// No description provided for @contactDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t delete the contact'**
+  String get contactDeleteFailed;
+
+  /// No description provided for @contactLocalPhotoChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose photo'**
+  String get contactLocalPhotoChoose;
+
+  /// No description provided for @contactLocalPhotoReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore profile photo'**
+  String get contactLocalPhotoReset;
+
+  /// No description provided for @contactLocalPhotoSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo is visible only to you'**
+  String get contactLocalPhotoSaved;
+
+  /// No description provided for @contactLocalPhotoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t process the image'**
+  String get contactLocalPhotoFailed;
+
+  /// No description provided for @contactLocalPhotoTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Image is too large (max 8 MB)'**
+  String get contactLocalPhotoTooLarge;
 }
 
 class _AppLocalizationsDelegate

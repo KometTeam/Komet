@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, setEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
@@ -43,6 +43,7 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/profile_header_scroll.dart';
 import '../../widgets/profile_hero.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/local_avatar_builder.dart';
 import '../../../backend/modules/chats.dart';
 import '../calls/call_screen.dart';
 import '../contacts/open_contact_profile.dart';
@@ -57,6 +58,9 @@ import 'join_requests_screen.dart';
 import 'profile_action_sheets.dart';
 import '../../../core/config/app_fonts.dart';
 import 'chat_info/chat_members_controller.dart';
+import 'chat_admin/admin_section.dart';
+import 'chat_admin/chat_admin_state.dart';
+import 'chat_admin/ownership_transfer.dart';
 
 enum ChatInfoTab { media }
 
@@ -112,6 +116,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   bool _isBot = false;
 
   late final ChatMembersController _membersController;
+  ChatAdminState? _chatAdmin;
 
   int _mediaChatId = 0;
   String? _anchorMsgId;
@@ -206,6 +211,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     ChatMembersStore.instance
         .listenable(widget.chatId)
         .removeListener(_onMemberCountChanged);
+    _chatAdmin
+      ?..removeListener(_onChatAdminChanged)
+      ..dispose();
     _tabScrollController.dispose();
     _bodyScrollController?.dispose();
     _avatarPageController.dispose();
@@ -272,6 +280,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     _chatInfo = info;
 
     _mediaChatId = (info?.raw['id'] as int?) ?? widget.chatId;
+    _syncChatAdmin(info);
 
     if (_isGroupOrChannel) {
       _notMember = !await AppDatabase.isChatInList(_myId, _mediaChatId);
@@ -361,6 +370,40 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
   }
 
+  void _syncChatAdmin(ChatInfo? info) {
+    if (!_isGroupOrChannel || info == null) return;
+    final existing = _chatAdmin;
+    if (existing != null) {
+      existing.adopt(info);
+      return;
+    }
+    _chatAdmin = ChatAdminState(
+      chatId: _mediaChatId,
+      myId: _myId,
+      name: widget.name,
+      imageUrl: widget.imageUrl,
+      info: info,
+    )..addListener(_onChatAdminChanged);
+  }
+
+  void _onChatAdminChanged() {
+    final admin = _chatAdmin;
+    if (admin == null) return;
+    final previous = _chatInfo;
+    _loadedUpdate(() => _chatInfo = admin.info);
+    final leadersChanged =
+        previous == null ||
+        previous.owner != admin.info.owner ||
+        !setEquals(previous.adminIds, admin.info.adminIds);
+    if (widget.chatType == 'CHAT' && leadersChanged) {
+      unawaited(_membersController.reloadAll());
+    }
+  }
+
+  String get _chatName => _chatAdmin?.name ?? widget.name;
+
+  String get _chatImageUrl => _chatAdmin?.imageUrl ?? widget.imageUrl;
+
   Future<void> _loadBlockedState(int peerId) async {
     final blocked = await ContactsModule.isBlocked(api, peerId);
     if (!mounted || blocked == _blocked) return;
@@ -408,8 +451,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     showInviteLinkSheet(
       context,
       link: link,
-      title: widget.name,
-      avatarUrl: widget.imageUrl,
+      title: _chatName,
+      avatarUrl: _chatImageUrl,
     );
   }
 
@@ -429,7 +472,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   static const double _headerCollapsedBody = 232;
   static const double _headerVignette = 64;
 
-  bool get _headerHasPhoto => widget.imageUrl.isNotEmpty && !_peerDeleted;
+  bool get _headerHasPhoto => _chatImageUrl.isNotEmpty && !_peerDeleted;
 
   Widget _buildScrollBody(ColorScheme cs) {
     return LayoutBuilder(
@@ -755,29 +798,38 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         onLongPress: expanded
             ? null
             : (openStories == null ? null : openHistory),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            ProfileHeroAvatar(
-              tag: widget.heroTag,
-              size: _headerAvatarSize,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(radius),
-                child: _headerAvatarContent(cs),
+        child: LocalAvatarBuilder(
+          userId: _localAvatarUserId,
+          builder: (context, local) => Stack(
+            fit: StackFit.expand,
+            children: [
+              ProfileHeroAvatar(
+                tag: widget.heroTag,
+                size: _headerAvatarSize,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(radius),
+                  child: local == null
+                      ? _headerAvatarContent(cs)
+                      : Image(image: local, fit: BoxFit.cover),
+                ),
               ),
-            ),
-            Offstage(
-              offstage: t < 0.5 || _avatarPages.length < 2,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(radius),
-                child: _avatarPager(cs, t),
+              Offstage(
+                offstage: local != null || t < 0.5 || _avatarPages.length < 2,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(radius),
+                  child: _avatarPager(cs, t),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+
+  int get _localAvatarUserId => widget.chatType == 'DIALOG' && !_peerDeleted
+      ? (_otherId ?? widget.dialogPeerId ?? 0)
+      : 0;
 
   void _openAvatarHistory() {
     final pages = _avatarPages;
@@ -785,8 +837,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     AvatarHistoryScreen.open(
       context,
       contactId: _otherId ?? widget.dialogPeerId ?? 0,
-      name: widget.name,
-      currentAvatarUrl: widget.imageUrl,
+      name: _chatName,
+      currentAvatarUrl: _chatImageUrl,
       initialUrl: pages.isEmpty ? null : pages[at],
     );
   }
@@ -894,7 +946,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         color: cs.surfaceContainerHigh,
         child: Center(
           child: Text(
-            widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+            _chatName.isNotEmpty ? _chatName[0].toUpperCase() : '?',
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 32),
           ),
         ),
@@ -906,10 +958,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     if (_peerDeleted) {
       return _ghostAvatar(radius: _headerAvatarSize / 2, fontSize: 52);
     }
-    final url = _avatarPages.isNotEmpty ? _avatarPages.first : widget.imageUrl;
+    final url = _avatarPages.isNotEmpty ? _avatarPages.first : _chatImageUrl;
     if (url.isEmpty) {
       return KometAvatar(
-        name: widget.name,
+        name: _chatName,
         size: _headerAvatarSize,
         fontSize: 36,
         fadeIn: false,
@@ -976,6 +1028,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             _buildActions(cs),
             const SizedBox(height: 16),
             _buildPersistentInfo(cs),
+            if (_chatAdmin case final admin?
+                when AdminSection.visibleFor(admin))
+              AdminSection(state: admin, onLeave: _leaveChat),
             _buildTabBar(cs),
             const SizedBox(height: 12),
             _buildTabContent(cs),
@@ -1005,7 +1060,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   String get _customName {
     final c = _localContact;
     if (c != null) return _joinName(c.firstName, c.lastName ?? '');
-    return widget.name;
+    return _chatName;
   }
 
   Widget _buildMoreButton(ColorScheme cs, [Color? iconColor]) {
@@ -1116,7 +1171,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     final result = await showEditContactSheet(
       context,
       contactId: peerId,
-      avatarUrl: _contactData?.avatarUrl ?? local?.baseUrl ?? widget.imageUrl,
+      avatarUrl: _contactData?.avatarUrl ?? local?.baseUrl ?? _chatImageUrl,
       customFirst: local?.firstName ?? '',
       customLast: local?.lastName ?? '',
       onemeFirst: oneme?.firstName ?? '',
@@ -1401,8 +1456,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       context,
       (_) => ChatScreen(
         chatId: _mediaChatId,
-        name: widget.name,
-        imageUrl: widget.imageUrl,
+        name: _chatName,
+        imageUrl: _chatImageUrl,
         chatType: widget.chatType,
       ),
     );
@@ -1446,7 +1501,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     if (!mounted || !choice.confirmed) return;
 
     final navigator = Navigator.of(context);
-    final avatarUrl = widget.imageUrl.isNotEmpty ? widget.imageUrl : null;
+    final avatarUrl = _chatImageUrl.isNotEmpty ? _chatImageUrl : null;
     final active = CallController.instance.activeSession;
     if (active != null) {
       await navigator.push(
@@ -1480,6 +1535,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Future<void> _leaveChat() async {
+    final admin = _chatAdmin;
+    if (admin != null && admin.isOwner) {
+      if (!await transferBeforeLeaving(context, admin) || !mounted) return;
+    }
     final isChannel = widget.chatType == 'CHANNEL';
     final choice = await showBlurredConfirm(
       context,
@@ -1861,8 +1920,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             icon: Icon(Symbols.qr_code_2, color: cs.primary, size: 22),
             onPressed: () => showLinkQrSheet(
               context,
-              name: widget.name,
-              avatarUrl: widget.imageUrl,
+              name: _chatName,
+              avatarUrl: _chatImageUrl,
               title: l10n.chatQrTitle,
               hint: l10n.chatQrHint,
               unavailable: l10n.linkQrUnavailable,
@@ -2093,7 +2152,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       chatId: _mediaChatId,
       anchorMessageId: anchor,
       myId: _myId,
-      sourceName: widget.name,
+      sourceName: _chatName,
       kind: kind,
       emptyLabel: emptyLabel,
       emptyIcon: emptyIcon,
@@ -2112,8 +2171,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       context,
       (_) => ChatScreen(
         chatId: _mediaChatId,
-        name: widget.name,
-        imageUrl: widget.imageUrl,
+        name: _chatName,
+        imageUrl: _chatImageUrl,
         chatType: widget.chatType,
         initialMessageId: messageId,
         initialMessageTime: time,
@@ -2166,8 +2225,33 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _buildMembersTabContent(ColorScheme cs) {
-    final hasHidden = _membersController.members.length > _membersController.memberRenderLimit;
-    final shown = hasHidden ? _membersController.members.take(_membersController.memberRenderLimit) : _membersController.members;
+    final hasHidden =
+        _membersController.members.length >
+        _membersController.memberRenderLimit;
+    final shown = hasHidden
+        ? _membersController.members.take(_membersController.memberRenderLimit)
+        : _membersController.members;
+    final rows = <Widget>[
+      if (_chatAdmin?.canAddMembers ?? true)
+        _memberAction(
+          cs,
+          Symbols.person_add,
+          l10n.chatInfoAddMember,
+          _openAddMembers,
+        ),
+      if (_inviteLink != null)
+        _memberAction(
+          cs,
+          Symbols.link,
+          l10n.chatInfoInviteByLink,
+          () => _openInviteLink(_inviteLink!),
+        ),
+      ...shown.map((m) => _memberTile(cs, m)),
+      if (hasHidden ||
+          _membersController.membersLoading ||
+          !_membersController.membersEnd)
+        _membersFooter(cs),
+    ];
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
@@ -2175,25 +2259,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       ),
       child: Column(
         children: [
-          _memberAction(
-            cs,
-            Symbols.person_add,
-            l10n.chatInfoAddMember,
-            _openAddMembers,
-          ),
-          if (_inviteLink != null) ...[
-            _listDivider(cs),
-            _memberAction(
-              cs,
-              Symbols.link,
-              l10n.chatInfoInviteByLink,
-              () => _openInviteLink(_inviteLink!),
-            ),
-          ],
-          ...shown.expand((m) => [_listDivider(cs), _memberTile(cs, m)]),
-          if (hasHidden || _membersController.membersLoading || !_membersController.membersEnd) ...[
-            _listDivider(cs),
-            _membersFooter(cs),
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) _listDivider(cs),
+            rows[i],
           ],
         ],
       ),
@@ -2740,7 +2808,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     for (final url in photos.urls) {
       if (url.isNotEmpty && !urls.contains(url)) urls.add(url);
     }
-    final current = widget.imageUrl;
+    final current = _chatImageUrl;
     final extra = current.isNotEmpty && !urls.contains(current);
     if (extra) urls.insert(0, current);
     if (urls.isEmpty || listEquals(urls, _avatarPages)) return;
@@ -2792,7 +2860,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       ownerOverrides: {
         preview.owner.ownerId: StoryOwnerInfo(
           name: _customName,
-          avatarUrl: _contactData?.avatarUrl ?? widget.imageUrl,
+          avatarUrl: _contactData?.avatarUrl ?? _chatImageUrl,
         ),
       },
     );
@@ -2812,7 +2880,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     Widget pill() => Expanded(child: block(double.infinity, 62, r: 14));
 
     return [
-      Row(children: [pill(), const SizedBox(width: 8), pill(), const SizedBox(width: 8), pill()]),
+      Row(
+        children: [
+          pill(),
+          const SizedBox(width: 8),
+          pill(),
+          const SizedBox(width: 8),
+          pill(),
+        ],
+      ),
       const SizedBox(height: 16),
       block(double.infinity, 36, r: 20),
       const SizedBox(height: 12),

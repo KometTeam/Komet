@@ -162,7 +162,7 @@ class NotificationBridge {
     final chatId = _pendingChatId;
     if (chatId == 0) return;
 
-    final context = KometApp.navigatorKey.currentContext;
+    final context = KometApp.overlayContext;
     if (!_ready || context == null || api.state != SessionState.online) {
       if (_retriesLeft <= 0) {
         _pendingChatId = 0;

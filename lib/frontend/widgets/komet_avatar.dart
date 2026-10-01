@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/config/app_spectrum_background.dart';
+import 'local_avatar_builder.dart';
 import 'spectrum_tint.dart';
 
 /// Circular avatar: shows [imageUrl] when available, otherwise the first letter
@@ -14,6 +15,7 @@ class KometAvatar extends StatefulWidget {
   final Color? foregroundColor;
   final double? fontSize;
   final bool fadeIn;
+  final int? userId;
 
   const KometAvatar({
     super.key,
@@ -24,6 +26,7 @@ class KometAvatar extends StatefulWidget {
     this.foregroundColor,
     this.fontSize,
     this.fadeIn = true,
+    this.userId,
   });
 
   static const _fadeInDuration = Duration(milliseconds: 500);
@@ -94,26 +97,36 @@ class _KometAvatarState extends State<KometAvatar>
     );
     final url = widget.imageUrl;
     final cache = (widget.size * 3).round();
+    final remote = (url != null && url.isNotEmpty)
+        ? CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.cover,
+            memCacheWidth: cache,
+            memCacheHeight: cache,
+            fadeInDuration: widget.fadeIn
+                ? KometAvatar._fadeInDuration
+                : Duration.zero,
+            fadeOutDuration: widget.fadeIn
+                ? KometAvatar._fadeOutDuration
+                : Duration.zero,
+            errorWidget: (_, _, _) => placeholder,
+          )
+        : placeholder;
     return Container(
       width: widget.size,
       height: widget.size,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(shape: BoxShape.circle, color: bg),
-      child: (url != null && url.isNotEmpty)
-          ? CachedNetworkImage(
-              imageUrl: url,
-              fit: BoxFit.cover,
-              memCacheWidth: cache,
-              memCacheHeight: cache,
-              fadeInDuration: widget.fadeIn
-                  ? KometAvatar._fadeInDuration
-                  : Duration.zero,
-              fadeOutDuration: widget.fadeIn
-                  ? KometAvatar._fadeOutDuration
-                  : Duration.zero,
-              errorWidget: (_, _, _) => placeholder,
-            )
-          : placeholder,
+      child: LocalAvatarBuilder(
+        userId: widget.userId ?? 0,
+        builder: (context, local) => local == null
+            ? remote
+            : Image(
+                image: ResizeImage(local, width: cache, height: cache),
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => remote,
+              ),
+      ),
     );
   }
 }

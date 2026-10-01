@@ -156,12 +156,20 @@ bool _isVideoNote(Map attach) {
 // #***! системное событие, берём текст сервера иначе пишем сами
 String? _controlPreviewLabel(Map c) {
   final title = c['title']?.toString();
+  switch (c['event']?.toString()) {
+    case 'new':
+      return 'Чат создан';
+    case 'title':
+      return title == null || title.isEmpty
+          ? 'Название чата изменено'
+          : 'Название чата изменено на «$title»';
+    case 'icon':
+      return 'Фото чата обновлено';
+  }
   if (title != null && title.isNotEmpty) return title;
   final short = c['shortMessage']?.toString();
   if (short != null && short.isNotEmpty) return short;
   switch (c['event']?.toString()) {
-    case 'new':
-      return 'Чат создан';
     case 'add':
     case 'joinByLink':
       return 'Новый участник';
@@ -171,10 +179,6 @@ String? _controlPreviewLabel(Map c) {
       return 'Участник удалён';
     case 'pin':
       return 'Закреплённое сообщение';
-    case 'changeTitle':
-      return 'Название чата изменено';
-    case 'changeIcon':
-      return 'Фото чата обновлено';
     default:
       return 'Системное сообщение';
   }
@@ -305,7 +309,10 @@ String? _pinnedAttachPreviewLabel(dynamic attaches) {
     case 'CALL':
       return 'звонок';
     case 'CONTROL':
-      return _controlPreviewLabel(first)?.toLowerCase();
+      final label = _controlPreviewLabel(first);
+      return label == null || label.isEmpty
+          ? label
+          : label[0].toLowerCase() + label.substring(1);
     default:
       return 'вложение';
   }

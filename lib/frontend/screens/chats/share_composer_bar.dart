@@ -17,17 +17,49 @@ import '../../widgets/springy_tap.dart';
 class ShareComposerBar extends StatefulWidget {
   const ShareComposerBar({
     super.key,
-    required this.share,
+    required this.title,
+    required this.hintText,
     required this.controller,
     required this.recipientNames,
     required this.onSend,
+    this.thumbnail,
+    this.headerAction,
+    this.showHeader = true,
     this.sending = false,
   });
 
-  final PreparedShare share;
+  factory ShareComposerBar.forShare({
+    Key? key,
+    required PreparedShare share,
+    required RichMessageController controller,
+    required List<String> recipientNames,
+    required Future<void> Function(RichMessageContent content) onSend,
+    bool sending = false,
+  }) => ShareComposerBar(
+    key: key,
+    title: shareTitleFor(
+      photos: share.photos.length,
+      videos: share.videos.length,
+      documents: share.documents.length,
+      textOnly: share.isTextOnly,
+    ),
+    hintText: share.isTextOnly ? 'Сообщение' : 'Добавить подпись...',
+    showHeader: !share.isTextOnly,
+    thumbnail: ShareThumbStack(files: share.files),
+    controller: controller,
+    recipientNames: recipientNames,
+    onSend: onSend,
+    sending: sending,
+  );
+
+  final String title;
+  final String hintText;
+  final Widget? thumbnail;
+  final Widget? headerAction;
+  final bool showHeader;
   final RichMessageController controller;
   final List<String> recipientNames;
-  final Future<void> Function(String caption) onSend;
+  final Future<void> Function(RichMessageContent content) onSend;
   final bool sending;
 
   @override
@@ -36,6 +68,7 @@ class ShareComposerBar extends StatefulWidget {
 
 class _ShareComposerBarState extends State<ShareComposerBar> {
   static const double _emojiPanelHeight = 280;
+  static const double _controlHeight = _SendButton.size;
   static const Duration _panelDuration = Duration(milliseconds: 220);
 
   final FocusNode _focus = FocusNode();
@@ -76,17 +109,7 @@ class _ShareComposerBarState extends State<ShareComposerBar> {
 
   Future<void> _send() async {
     if (widget.sending) return;
-    await widget.onSend(_controller.buildContent().text.trim());
-  }
-
-  String get _title {
-    final share = widget.share;
-    return shareTitleFor(
-      photos: share.photos.length,
-      videos: share.videos.length,
-      documents: share.documents.length,
-      textOnly: share.isTextOnly,
-    );
+    await widget.onSend(_controller.buildTrimmedContent());
   }
 
   String get _subtitle => shareSubtitleFor(widget.recipientNames);
@@ -106,7 +129,7 @@ class _ShareComposerBarState extends State<ShareComposerBar> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (!widget.share.isTextOnly) _buildPreviewRow(cs),
+          if (widget.showHeader) _buildPreviewRow(cs),
           _buildInputRow(cs),
           AnimatedSize(
             duration: _panelDuration,
@@ -133,15 +156,17 @@ class _ShareComposerBarState extends State<ShareComposerBar> {
         children: [
           Icon(Symbols.forward, color: cs.primary, size: 22, weight: 500),
           const SizedBox(width: 12),
-          _ShareThumbStack(files: widget.share.files),
-          const SizedBox(width: 12),
+          if (widget.thumbnail case final thumbnail?) ...[
+            thumbnail,
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _title,
+                  widget.title,
                   style: TextStyle(
                     color: cs.primary,
                     fontSize: 15,
@@ -160,6 +185,7 @@ class _ShareComposerBarState extends State<ShareComposerBar> {
               ],
             ),
           ),
+          ?widget.headerAction,
         ],
       ),
     );
@@ -172,35 +198,45 @@ class _ShareComposerBarState extends State<ShareComposerBar> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          IconButton(
-            onPressed: _toggleEmoji,
-            icon: Icon(
-              Symbols.mood,
-              color: _emojiOpen ? cs.primary : cs.onSurfaceVariant,
-              size: 26,
-              fill: _emojiOpen ? 1 : 0,
+          SizedBox(
+            height: _controlHeight,
+            child: Center(
+              child: IconButton(
+                onPressed: _toggleEmoji,
+                icon: Icon(
+                  Symbols.mood,
+                  color: _emojiOpen ? cs.primary : cs.onSurfaceVariant,
+                  size: 26,
+                  fill: _emojiOpen ? 1 : 0,
+                ),
+              ),
             ),
           ),
           Expanded(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 120),
-              child: TextField(
-                controller: _controller,
-                focusNode: _focus,
-                minLines: 1,
-                maxLines: null,
-                textCapitalization: TextCapitalization.sentences,
-                keyboardType: TextInputType.multiline,
-                style: TextStyle(color: cs.onSurface, fontSize: 16),
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  hintText: widget.share.isTextOnly
-                      ? 'Сообщение'
-                      : 'Добавить подпись...',
-                  hintStyle: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 16,
+              constraints: const BoxConstraints(
+                minHeight: _controlHeight,
+                maxHeight: 120,
+              ),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                heightFactor: 1,
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focus,
+                  minLines: 1,
+                  maxLines: null,
+                  textCapitalization: TextCapitalization.sentences,
+                  keyboardType: TextInputType.multiline,
+                  style: TextStyle(color: cs.onSurface, fontSize: 16),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: widget.hintText,
+                    hintStyle: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               ),
@@ -218,8 +254,8 @@ class _ShareComposerBarState extends State<ShareComposerBar> {
   }
 }
 
-class _ShareThumbStack extends StatelessWidget {
-  const _ShareThumbStack({required this.files});
+class ShareThumbStack extends StatelessWidget {
+  const ShareThumbStack({super.key, required this.files});
 
   final List<PreparedShareFile> files;
 
@@ -281,6 +317,8 @@ class _ShareThumb extends StatelessWidget {
 }
 
 class _SendButton extends StatelessWidget {
+  static const double size = 52;
+
   const _SendButton({
     required this.count,
     required this.sending,
@@ -303,8 +341,8 @@ class _SendButton extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             Container(
-              width: 52,
-              height: 52,
+              width: size,
+              height: size,
               decoration: BoxDecoration(
                 color: enabled ? cs.primary : cs.surfaceContainerHighest,
                 shape: BoxShape.circle,

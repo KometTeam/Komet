@@ -634,15 +634,16 @@ class AccountModule {
 
   // #***! переключение аккаунта, реконнект с другим спуфом
   Future<ProfileData> switchAccount(int accountId) async {
-    MediaPlayback.instance.closeAudioFile();
     final profile = await AppDatabase.loadProfile(accountId);
-    if (profile == null) {
-      throw StateError('switchAccount: аккаунт $accountId не найден в базе');
+    final token = await TokenStorage.tryReadToken(accountId);
+    if (profile == null || token == null) {
+      logger.w(
+        'switchAccount: у аккаунта $accountId нет сохранённой сессии '
+        '(профиль: ${profile != null}, токен: ${token != null})',
+      );
+      throw AccountSessionLostException(accountId);
     }
-    final token = await TokenStorage.readToken(accountId);
-    if (token == null) {
-      throw StateError('switchAccount: нет токена для аккаунта $accountId');
-    }
+    MediaPlayback.instance.closeAudioFile();
 
     try {
       await _api.disconnect();
@@ -659,19 +660,12 @@ class AccountModule {
     chats.resetForAccountSwitch();
     await ContactsModule.primeCacheFromDb(accountId);
 
-    try {
-      await _api.connect(authenticated: true);
-    } catch (e) {
-      logger.e(
-        'switchAccount: ошибка соединения при переключении на $accountId: $e',
-      );
-      throw StateError('switchAccount: не удалось подключиться к серверу');
-    }
+    await _api.connect(authenticated: true);
     if (_api.state != SessionState.online) {
       logger.w(
-        'switchAccount: нет соединения с сервером после переключения на $accountId',
+        'switchAccount: $accountId переключён без связи, сессия поднимется '
+        'при переподключении',
       );
-      throw StateError('switchAccount: нет соединения с сервером');
     }
 
     logger.i('Активный аккаунт переключён на $accountId');
@@ -681,6 +675,9 @@ class AccountModule {
   Future<List<ProfileData>> listAccounts() async {
     return AppDatabase.loadAllProfiles();
   }
+
+  Future<bool> hasStoredSession(int accountId) async =>
+      await TokenStorage.tryReadToken(accountId) != null;
 
   // #***! удаляем локально, база токен спуф и заявка
   Future<void> removeAccount(int accountId) async {

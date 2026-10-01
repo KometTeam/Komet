@@ -25,9 +25,8 @@ class ChatBodyLayout extends StatelessWidget {
   final ChatChromeStyle effectiveChrome;
   final bool liquidChrome;
   final BackdropKey? pillBackdrop;
-  final int myId;
   final VoidCallback onJumpToPinnedMessage;
-  final VoidCallback onUnpinCurrentMessage;
+  final VoidCallback? onUnpinCurrentMessage;
   final VoidCallback? onJoinCall;
   final bool composerFrosted;
   final ValueNotifier<double> composerHeight;
@@ -56,7 +55,6 @@ class ChatBodyLayout extends StatelessWidget {
     required this.effectiveChrome,
     required this.liquidChrome,
     required this.pillBackdrop,
-    required this.myId,
     required this.onJumpToPinnedMessage,
     required this.onUnpinCurrentMessage,
     required this.onJoinCall,
@@ -89,7 +87,6 @@ class ChatBodyLayout extends StatelessWidget {
       liquidChrome: liquidChrome,
       backdropKey: pillBackdrop,
       onTap: onJumpToPinnedMessage,
-      myId: myId,
       onUnpinRequested: onUnpinCurrentMessage,
     );
   }
@@ -241,7 +238,6 @@ class ChatBodyLayout extends StatelessWidget {
                     liquidChrome: liquidChrome,
                     backdropKey: pillBackdrop,
                     onTap: onJumpToPinnedMessage,
-                    myId: myId,
                     onUnpinRequested: onUnpinCurrentMessage,
                   ),
                 ],

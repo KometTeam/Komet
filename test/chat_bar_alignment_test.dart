@@ -8,6 +8,7 @@ import 'package:komet/backend/modules/messages.dart';
 import 'package:komet/core/config/app_chat_chrome.dart';
 import 'package:komet/core/config/app_composer_background.dart';
 import 'package:komet/core/config/app_composer_style.dart';
+import 'package:komet/backend/modules/forward_sender.dart';
 import 'package:komet/frontend/screens/chats/chat/upload_status.dart';
 import 'package:komet/frontend/screens/chats/chat/view/chat_header.dart';
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
@@ -23,7 +24,7 @@ void main() {
   late VoiceRecordController voiceRec;
   late VideoNoteController note;
   late ValueNotifier<CachedMessage?> replyTo;
-  late ValueNotifier<List<CachedMessage>> forwards;
+  late ValueNotifier<ForwardRequest?> forwards;
   late ValueNotifier<bool> hasText;
   late ValueNotifier<UploadStatus> uploadStatus;
 
@@ -48,7 +49,7 @@ void main() {
       bottomInset: () => 0,
     );
     replyTo = ValueNotifier(null);
-    forwards = ValueNotifier(const []);
+    forwards = ValueNotifier(null);
     hasText = ValueNotifier(false);
     uploadStatus = ValueNotifier(const UploadStatus());
   });
@@ -79,7 +80,7 @@ void main() {
                 background: ComposerBackground.standard,
                 attachAnim: attachAnim,
                 replyTo: replyTo,
-                forwardMessages: forwards,
+                forward: forwards,
                 myId: 1,
                 hasText: hasText,
                 uploadStatus: uploadStatus,
@@ -95,6 +96,7 @@ void main() {
                 onSendHistory: (entry) async {},
                 onCancelReply: () {},
                 onCancelForward: () {},
+                onToggleForwardSender: () {},
                 formatElapsed: (ms) => '0:00',
                 contextMenuBuilder: (context, state) => const SizedBox.shrink(),
                 isMuted: false,

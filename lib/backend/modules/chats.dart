@@ -179,6 +179,8 @@ class CachedChat {
 
   bool get confirmBeforeSend => options.contains('CONFIRM_BEFORE_SEND');
 
+  bool get commentsEnabled => options.contains('COMMENTS');
+
   // #***! 0 звук есть, минус навсегда, иначе время до которого молчим
   bool get isMuted {
     if (dontDisturbUntil == ChatsModule.muteOff) return false;
@@ -510,6 +512,9 @@ class ChatsModule {
   final _messageEventsController = StreamController<MessageEvent>.broadcast();
   Stream<MessageEvent> get messageEvents => _messageEventsController.stream;
 
+  final _departedChatsController = StreamController<int>.broadcast();
+  Stream<int> get departedChats => _departedChatsController.stream;
+
   int? _paginatedAccountId;
 
   Future<void> _extendHistoryCoverage(
@@ -530,6 +535,21 @@ class ChatsModule {
     } catch (e) {
       logger.w('extendMessageRange error: $e');
     }
+  }
+
+  Future<void> storeSentMessages(
+    int accountId,
+    int chatId,
+    List<CachedMessage> messages,
+  ) async {
+    if (messages.isEmpty) return;
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    await AppDatabase.saveMessages([
+      for (final message in messages) message.toDbRow(),
+    ]);
+    if (rows.isEmpty) return;
+    final newest = messages.map((m) => m.time).reduce((a, b) => a > b ? a : b);
+    await _extendHistoryCoverage(accountId, chatId, rows.first, newest);
   }
 
   void emitMessageSent(int chatId, String tempId, CachedMessage message) {
@@ -709,18 +729,17 @@ class ChatsModule {
   final Map<int, int> _inListById = {};
   final Map<int, ValueNotifier<CachedChat>> _chatNotifiers = {};
   final Set<int> _loadedAccounts = {};
+  final Set<int> _readyAccounts = {};
 
   // #***! бампается только когда реально меняется порядок/состав списка
   final ValueNotifier<int> chatOrderRevision = ValueNotifier(0);
 
-  ValueListenable<CachedChat> chatListenable(int chatId) {
-    final existing = _chatNotifiers[chatId];
+  ValueListenable<CachedChat> chatListenable(CachedChat listed) {
+    final existing = _chatNotifiers[listed.id];
     if (existing != null) return existing;
-    final chat = _chatsById[chatId];
-    final notifier = ValueNotifier<CachedChat>(
-      chat ?? CachedChat.fromDbRow(const {}),
-    );
-    if (chat != null) _chatNotifiers[chatId] = notifier;
+    final chat = _chatsById[listed.id];
+    final notifier = ValueNotifier<CachedChat>(chat ?? listed);
+    if (chat != null) _chatNotifiers[listed.id] = notifier;
     return notifier;
   }
 
@@ -788,6 +807,8 @@ class ChatsModule {
     return list;
   }
 
+  bool get chatsLoaded => _readyAccounts.isNotEmpty;
+
   // #***! разовая подгрузка кэша чатов аккаунта из базы
   Future<void> ensureLoaded(int accountId) async {
     if (!_loadedAccounts.add(accountId)) return;
@@ -801,6 +822,8 @@ class ChatsModule {
       _inListById[chat.id] = row['in_list'] as int? ?? 1;
       _chatNotifiers[chat.id]?.value = chat;
     }
+    _readyAccounts.add(accountId);
+    _bump();
   }
 
   // #***! центральная точка обновления кэша, вызывается вместо голого _bump()
@@ -819,12 +842,19 @@ class ChatsModule {
     } else {
       _chatNotifiers[updated.id] = ValueNotifier(updated);
     }
-    final reorder =
-        old == null ||
-        old.favIndex != updated.favIndex ||
-        old.lastEventTime != updated.lastEventTime;
-    if (reorder) chatOrderRevision.value++;
+    if (old == null || reshapesChatList(old, updated)) {
+      chatOrderRevision.value++;
+    }
   }
+
+  @visibleForTesting
+  static bool reshapesChatList(CachedChat old, CachedChat updated) =>
+      old.favIndex != updated.favIndex ||
+      old.lastEventTime != updated.lastEventTime ||
+      (old.unreadCount > 0) != (updated.unreadCount > 0) ||
+      old.isMuted != updated.isMuted ||
+      old.owner != updated.owner ||
+      !setEquals(old.admins, updated.admins);
 
   void _removeChatFromMemory(int chatId) {
     final had = _chatsById.remove(chatId) != null;
@@ -1017,6 +1047,8 @@ class ChatsModule {
     }
     _chatNotifiers.clear();
     _loadedAccounts.clear();
+    _readyAccounts.clear();
+    _bump();
   }
 
   // #***! пуши строго по одному, иначе гонки при записи в базу
@@ -2296,6 +2328,7 @@ class ChatsModule {
         _bump();
         _removeChatFromMemory(chatId);
       }
+      _departedChatsController.add(chatId);
       return null;
     } on PacketError catch (e) {
       logger.w('deleteChat $chatId: ${e.message}');
@@ -2347,6 +2380,7 @@ class ChatsModule {
         _removeChatFromMemory(chatId);
         unawaited(_verifyLeftChat(api, accountId, chatId));
       }
+      _departedChatsController.add(chatId);
       return true;
     } catch (_) {
       return false;

@@ -190,6 +190,74 @@ void main() {
       expect(_matches(_chat(id: 2, type: 'CHAT', owner: 5), folder), isFalse);
     });
 
+    test('a folder of only show-only filters narrows all chats', () {
+      const folder = ChatFolder(
+        id: 'f9',
+        title: 'Новые',
+        filters: [FolderFilter.unread],
+      );
+
+      expect(
+        _matches(_chat(id: 1, type: 'DIALOG', unreadCount: 1), folder),
+        isTrue,
+      );
+      expect(
+        _matches(_chat(id: 2, type: 'CHAT', unreadCount: 4), folder),
+        isTrue,
+      );
+      expect(
+        _matches(_chat(id: 3, type: 'CHANNEL', unreadCount: 2), folder),
+        isTrue,
+      );
+      expect(_matches(_chat(id: 4, type: 'DIALOG'), folder), isFalse);
+    });
+
+    test('a role-only folder narrows all chats', () {
+      const folder = ChatFolder(
+        id: 'f14',
+        title: 'Мои',
+        filters: [FolderFilter.owner],
+      );
+
+      expect(_matches(_chat(id: 1, type: 'CHAT', owner: _me), folder), isTrue);
+      expect(
+        _matches(_chat(id: 2, type: 'CHANNEL', owner: _me), folder),
+        isTrue,
+      );
+      expect(_matches(_chat(id: 3, type: 'CHAT', owner: 5), folder), isFalse);
+    });
+
+    test('hand-picked chats keep a show-only folder to themselves', () {
+      const folder = ChatFolder(
+        id: 'f15',
+        title: 'Непрочитанные свои',
+        include: [10],
+        filters: [FolderFilter.unread],
+      );
+
+      expect(
+        _matches(_chat(id: 10, type: 'CHAT', unreadCount: 1), folder),
+        isTrue,
+      );
+      expect(
+        _matches(_chat(id: 11, type: 'CHAT', unreadCount: 1), folder),
+        isFalse,
+      );
+    });
+
+    test('unknown filters alone do not pull in every chat', () {
+      const folder = ChatFolder(
+        id: 'f16',
+        title: 'Помеченные',
+        filters: [FolderFilter.markedUnread],
+      );
+
+      expect(
+        _matches(_chat(id: 1, type: 'CHAT', unreadCount: 1), folder),
+        isFalse,
+      );
+    });
+
     test('channels folder ignores groups and dialogs', () {
       expect(_matches(_chat(id: 1, type: 'CHANNEL'), channelsFolder), isTrue);
       expect(_matches(_chat(id: 2, type: 'CHAT'), channelsFolder), isFalse);
@@ -260,6 +328,23 @@ void main() {
       ];
 
       expect(ids(chats, folder), [40, 41]);
+    });
+  });
+
+  group('reshapesChatList', () {
+    test('reacts to what moves a chat between folders', () {
+      final read = _chat(id: 1, type: 'CHAT');
+      final unread = _chat(id: 1, type: 'CHAT', unreadCount: 1);
+      final moreUnread = _chat(id: 1, type: 'CHAT', unreadCount: 5);
+      final muted = _chat(id: 1, type: 'CHAT', dontDisturbUntil: -1);
+      final owned = _chat(id: 1, type: 'CHAT', owner: _me);
+
+      expect(ChatsModule.reshapesChatList(read, unread), isTrue);
+      expect(ChatsModule.reshapesChatList(unread, read), isTrue);
+      expect(ChatsModule.reshapesChatList(read, muted), isTrue);
+      expect(ChatsModule.reshapesChatList(read, owned), isTrue);
+      expect(ChatsModule.reshapesChatList(unread, moreUnread), isFalse);
+      expect(ChatsModule.reshapesChatList(read, read), isFalse);
     });
   });
 

@@ -40,6 +40,7 @@ class ChatMediaSendController {
   final bool Function() encryptionEnabled;
   final Future<String?> Function(String text, {bool notify}) encryptOutgoing;
   final VoidCallback markHasScheduled;
+  final Future<bool> Function() confirmSend;
 
   ChatMediaSendController({
     required this.chatController,
@@ -52,6 +53,7 @@ class ChatMediaSendController {
     required this.isMounted,
     required this.encryptionEnabled,
     required this.encryptOutgoing,
+    required this.confirmSend,
     required this.markHasScheduled,
   });
 
@@ -158,6 +160,7 @@ class ChatMediaSendController {
     Future<Map<String, dynamic>?> Function() send,
   ) async {
     if (_myId == 0) return;
+    if (!await confirmSend() || !isMounted()) return;
     final tempId = chatController.nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
 
@@ -292,7 +295,7 @@ class ChatMediaSendController {
   }
 
   Future<void> sendVoice(File file, int durationMs, List<double> amps) async {
-    if (_myId == 0) {
+    if (_myId == 0 || !await confirmSend()) {
       try {
         await file.delete();
       } catch (_) {}
@@ -320,7 +323,7 @@ class ChatMediaSendController {
   }
 
   Future<void> sendVideoNote(File file, int durationMs) async {
-    if (_myId == 0) {
+    if (_myId == 0 || !await confirmSend()) {
       try {
         await file.delete();
       } catch (_) {}
@@ -343,6 +346,7 @@ class ChatMediaSendController {
   }
 
   Future<void> sendHistoryFile(FileHistoryEntry entry) async {
+    if (!await confirmSend() || !isMounted()) return;
     final tempId = addOptimisticMediaMessage(
       FileAttachment(
         fileId: entry.fileId,
@@ -369,9 +373,8 @@ class ChatMediaSendController {
   }
 
   Future<bool> sendFileById(int fileId) async {
-    final tempId = addOptimisticMediaMessage(
-      FileAttachment(fileId: fileId),
-    ).id;
+    if (!await confirmSend() || !isMounted()) return false;
+    final tempId = addOptimisticMediaMessage(FileAttachment(fileId: fileId)).id;
     try {
       final realId = await messagesModule.sendFileMessage(_chatId, fileId);
       final ok = realId != null;
@@ -401,6 +404,7 @@ class ChatMediaSendController {
     bool separate = false,
   }) async {
     if (_myId == 0) return;
+    if (!await confirmSend() || !isMounted()) return;
     if (encryptionEnabled()) return sendEncryptedPhotos(picked, caption);
     final videos = picked.where((ph) => ph.item.isVideo).toList();
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
@@ -575,6 +579,7 @@ class ChatMediaSendController {
     bool separate = false,
   }) async {
     if (_myId == 0) return;
+    if (!await confirmSend() || !isMounted()) return;
     final videos = picked.where((ph) => ph.item.isVideo).toList();
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
     if (photos.isEmpty && videos.isEmpty) return;
@@ -676,7 +681,7 @@ class ChatMediaSendController {
           e2eePhoto.ticket,
         );
         if (!isMounted()) return;
-        await uploadAsFile(
+        await _uploadAsFile(
           source: e2eePhoto.file,
           filename: 'photo_$stamp$kE2eePhotoExtension',
           size: await e2eePhoto.file.length(),
@@ -705,7 +710,7 @@ class ChatMediaSendController {
       }
 
       final encrypted = prepared.file!;
-      await uploadAsFile(
+      await _uploadAsFile(
         source: encrypted,
         filename: 'photo_$stamp$kEncryptedPhotoExtension',
         size: await encrypted.length(),
@@ -722,6 +727,28 @@ class ChatMediaSendController {
   }
 
   Future<void> uploadAsFile({
+    required File source,
+    required String filename,
+    required int size,
+    int? scheduledTime,
+    String? text,
+    Uint8List? sealedText,
+    int e2ee = CachedMessage.e2eeNone,
+  }) async {
+    if (_myId == 0) return;
+    if (!await confirmSend() || !isMounted()) return;
+    await _uploadAsFile(
+      source: source,
+      filename: filename,
+      size: size,
+      scheduledTime: scheduledTime,
+      text: text,
+      sealedText: sealedText,
+      e2ee: e2ee,
+    );
+  }
+
+  Future<void> _uploadAsFile({
     required File source,
     required String filename,
     required int size,

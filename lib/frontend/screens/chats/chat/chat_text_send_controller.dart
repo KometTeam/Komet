@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart' show BuildContext;
 
 import '../../../../backend/api.dart';
 import '../../../../backend/modules/chats.dart';
+import '../../../../backend/modules/message_copy.dart';
 import '../../../../backend/modules/messages.dart';
 import '../../../../core/config/app_commands.dart';
 import '../../../../core/crypto/message_decryption_cache.dart';
@@ -20,57 +21,9 @@ import '../../../../core/utils/logger.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../main.dart';
 import '../../../commands/commands.dart';
-import '../../../widgets/confirm_dialog.dart';
 import '../../../widgets/rich_message_controller.dart';
 import 'chat_controller.dart';
-
-List<Map<String, dynamic>> trimmedElements(
-  List<Map<String, dynamic>> raw,
-  String rawText,
-  String text,
-) {
-  if (raw.isEmpty) return const [];
-  final leading = rawText.length - rawText.trimLeft().length;
-  final result = <Map<String, dynamic>>[];
-  for (final element in raw) {
-    var from = (element['from'] as int) - leading;
-    var length = element['length'] as int;
-    if (from < 0) {
-      length += from;
-      from = 0;
-    }
-    if (from >= text.length || length <= 0) continue;
-    if (from + length > text.length) length = text.length - from;
-    if (length <= 0) continue;
-    result.add({...element, 'from': from, 'length': length});
-  }
-  return result;
-}
-
-// #***! запрос на пересылку — источник сообщений, ждёт цели/подтверждения
-class ForwardRequest {
-  final int sourceChatId;
-  final String sourceChatName;
-  final String sourceChatIconUrl;
-  final String sourceChatType;
-  final List<CachedMessage> messages;
-
-  ForwardRequest({
-    required this.sourceChatId,
-    required this.sourceChatName,
-    required this.sourceChatIconUrl,
-    required this.sourceChatType,
-    required List<CachedMessage> messages,
-  }) : messages = List.unmodifiable(messages);
-
-  ForwardRequest withMessages(List<CachedMessage> value) => ForwardRequest(
-    sourceChatId: sourceChatId,
-    sourceChatName: sourceChatName,
-    sourceChatIconUrl: sourceChatIconUrl,
-    sourceChatType: sourceChatType,
-    messages: value,
-  );
-}
+import '../../../../backend/modules/forward_sender.dart';
 
 // #***! текстовые сообщения + пересылка + reply-состояние; медиа-отправка
 // живёт отдельно в ChatMediaSendController — здесь то, что завязано на
@@ -81,7 +34,7 @@ class ChatTextSendController {
   final RichMessageController messageController;
   final ValueNotifier<bool> hasText;
   final ValueNotifier<CachedMessage?> replyTo;
-  final ValueNotifier<List<CachedMessage>> pendingForwards;
+  final ValueNotifier<ForwardRequest?> pendingForward;
   final bool commentsMode;
   final String? commentPostId;
   final VoidCallback bumpMessages;
@@ -95,13 +48,14 @@ class ChatTextSendController {
   final Future<String?> Function(String text, {bool notify}) encryptOutgoing;
   final Future<void> Function(SlashCommand command, String args) executeCommand;
   final void Function(CachedMessage) checkPrankTrigger;
+  final Future<bool> Function() confirmSend;
 
   ChatTextSendController({
     required this.chatController,
     required this.messageController,
     required this.hasText,
     required this.replyTo,
-    required this.pendingForwards,
+    required this.pendingForward,
     required this.commentsMode,
     required this.commentPostId,
     required this.bumpMessages,
@@ -115,6 +69,7 @@ class ChatTextSendController {
     required this.encryptOutgoing,
     required this.executeCommand,
     required this.checkPrankTrigger,
+    required this.confirmSend,
   });
 
   int get _myId => chatController.myId;
@@ -141,7 +96,6 @@ class ChatTextSendController {
 
   // #***! доступен _pickReplyChat (остаётся в chat_screen.dart, навигация)
   int? replySourceChatId;
-  ForwardRequest? forwardRequest;
   bool _forwardSending = false;
 
   void startReply(CachedMessage message) {
@@ -158,13 +112,23 @@ class ChatTextSendController {
 
   void setForwardRequest(ForwardRequest request) {
     cancelReply();
-    forwardRequest = request;
-    pendingForwards.value = request.messages;
+    pendingForward.value = request;
   }
 
   void cancelForward() {
-    forwardRequest = null;
-    pendingForwards.value = const [];
+    pendingForward.value = null;
+  }
+
+  void toggleForwardSender() {
+    final request = pendingForward.value;
+    if (request == null || _forwardSending) return;
+    if (!request.hideSender && !request.canHideSender) {
+      Haptics.error();
+      notify(AppLocalizations.of(contextOf())!.forwardHideSenderUnavailable);
+      return;
+    }
+    Haptics.selection();
+    pendingForward.value = request.withHideSender(!request.hideSender);
   }
 
   Future<void> _syncForwardOutgoing(
@@ -173,19 +137,12 @@ class ChatTextSendController {
   }) async {
     await chatController.persistOutgoing(message, removeId: removeId);
     try {
-      await chats.applyOutgoing(
-        _myId,
-        _chatId,
-        messageId: message.id,
-        time: message.time,
-        text: MessagesModule.forwardPreviewText(message),
-        status: message.status ?? 'sending',
-      );
+      await ForwardSender.recordInChatList(message);
     } catch (_) {}
   }
 
   Future<bool> sendForwardRequest() async {
-    var request = forwardRequest;
+    var request = pendingForward.value;
     if (request == null) return true;
     // #***! пересылка это серверная копия, текст подставляет сервер а не мы
     if (_encrypted) {
@@ -199,59 +156,67 @@ class ChatTextSendController {
     }
     Haptics.send();
     while (request != null && request.messages.isNotEmpty) {
-      if (!identical(forwardRequest, request)) return false;
+      if (!identical(pendingForward.value, request)) return false;
       final source = request.messages.first;
-      final optimistic = MessagesModule.buildForwardMessage(
-        myId: _myId,
-        targetChatId: _chatId,
-        sourceChatId: request.sourceChatId,
-        source: source,
-        tempId: chatController.nextTempId(),
-        time: DateTime.now().millisecondsSinceEpoch,
-        status: 'sending',
-        sourceChatName: request.sourceChatName,
-        sourceChatIconUrl: request.sourceChatIconUrl,
-        sourceChatType: request.sourceChatType,
-      );
-      chatController.addMessage(optimistic);
-      bumpMessages();
-      scrollToBottom();
-      await _syncForwardOutgoing(optimistic);
-      final sent = await _sendOneForward(optimistic, request.sourceChatId);
+      final sent = request.hideSender
+          ? await _sendOneCopy(source)
+          : await _sendOneForward(source, request);
       if (!sent || !isMounted()) return false;
-      if (!identical(forwardRequest, request)) return false;
+      if (!identical(pendingForward.value, request)) return false;
       final remaining = request.messages.skip(1).toList(growable: false);
-      if (remaining.isEmpty) {
-        cancelForward();
-        return true;
-      }
+      if (remaining.isEmpty) break;
       request = request.withMessages(remaining);
-      forwardRequest = request;
-      pendingForwards.value = request.messages;
+      pendingForward.value = request;
     }
     cancelForward();
     return true;
   }
 
-  Future<bool> _sendOneForward(
-    CachedMessage optimistic,
-    int sourceChatId,
-  ) async {
-    final link = optimistic.payload?['link'];
-    final rawWireId = link is Map ? link['messageId'] : null;
-    final wireId = rawWireId is int ? rawWireId : null;
-    if (wireId == null) return false;
-    try {
-      final realId = await messagesModule.forwardMessage(
+  Future<bool> _sendOneForward(CachedMessage source, ForwardRequest request) {
+    final optimistic = request.optimisticForward(
+      source,
+      myId: _myId,
+      targetChatId: _chatId,
+      tempId: chatController.nextTempId(),
+      status: 'sending',
+    );
+    return _deliverForwarded(
+      optimistic,
+      () => ForwardSender.sendForward(
+        _myId,
         _chatId,
-        sourceChatId,
-        wireId,
-      );
-      final sent = MessagesModule.reidentifyMessage(
-        optimistic,
-        realId.isNotEmpty ? realId : optimistic.id,
-        status: 'sent',
-      );
+        request,
+        source,
+        optimistic: optimistic,
+      ),
+    );
+  }
+
+  Future<bool> _sendOneCopy(CachedMessage source) async {
+    final copy = MessageCopy.of(source);
+    if (copy == null) return false;
+    final optimistic = copy.toOutgoing(
+      accountId: _myId,
+      chatId: _chatId,
+      tempId: chatController.nextTempId(),
+      time: DateTime.now().millisecondsSinceEpoch,
+    );
+    return _deliverForwarded(
+      optimistic,
+      () => ForwardSender.sendCopy(_myId, _chatId, source),
+    );
+  }
+
+  Future<bool> _deliverForwarded(
+    CachedMessage optimistic,
+    Future<CachedMessage> Function() send,
+  ) async {
+    chatController.addMessage(optimistic);
+    bumpMessages();
+    scrollToBottom();
+    await _syncForwardOutgoing(optimistic);
+    try {
+      final sent = await send();
       if (isMounted()) {
         final index = chatController.indexOfId(optimistic.id);
         if (index != -1) {
@@ -269,6 +234,7 @@ class ChatTextSendController {
       }
       try {
         await AppDatabase.deleteMessage(_myId, _chatId, optimistic.id);
+        await chats.reconcileLastMessage(_myId, _chatId);
       } catch (_) {}
       if (isMounted()) {
         Haptics.error();
@@ -279,23 +245,24 @@ class ChatTextSendController {
   }
 
   Future<void> sendMessage() async {
-    if (forwardRequest == null) {
+    if (pendingForward.value == null) {
       await sendTextMessage();
       return;
     }
     if (_forwardSending || _myId == 0) return;
     _forwardSending = true;
     try {
+      if (!await confirmSend() || !isMounted()) return;
       final forwarded = await sendForwardRequest();
       if (!forwarded || !isMounted()) return;
       if (messageController.text.trim().isEmpty) return;
-      await sendTextMessage();
+      await sendTextMessage(confirmed: true);
     } finally {
       _forwardSending = false;
     }
   }
 
-  Future<void> sendTextMessage() async {
+  Future<void> sendTextMessage({bool confirmed = false}) async {
     final content = messageController.buildContent();
     final rawText = content.text;
     final text = rawText.trim();
@@ -316,16 +283,7 @@ class ChatTextSendController {
       return;
     }
 
-    if (chatOf()?.confirmBeforeSend ?? false) {
-      final context = contextOf();
-      final l10n = AppLocalizations.of(context)!;
-      final confirmed = await showConfirmDialog(
-        context,
-        message: l10n.chatSendConfirmMessage,
-        confirmLabel: l10n.chatSendConfirmAction,
-      );
-      if (!confirmed || !isMounted()) return;
-    }
+    if (!confirmed && (!await confirmSend() || !isMounted())) return;
 
     final wireText = await encryptOutgoing(text);
     if (wireText == null || !isMounted()) return;

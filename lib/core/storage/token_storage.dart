@@ -70,6 +70,14 @@ class TokenStorage {
     return null;
   }
 
+  static Future<String?> tryReadToken(int accountId) async {
+    try {
+      return await readToken(accountId);
+    } on PlatformException {
+      return null;
+    }
+  }
+
   static Future<void> deleteToken(int accountId) async {
     final key = '$_tokenPrefix$accountId';
     await _secure.delete(key: key);

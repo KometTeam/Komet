@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -22,6 +23,9 @@ const int kMaxWallpaperBytes = 16 * 1024 * 1024;
 // главный изолят не должен держать полный кадр
 Future<Uint8List?> compressAvatarFile(String path) =>
     compute(_encodeAvatarFile, path);
+
+Future<Uint8List?> squareAvatarFile(String path) =>
+    compute(_encodeSquareAvatarFile, path);
 
 Future<Uint8List?> compressWallpaperFile(String path) =>
     compute(_encodeWallpaperFile, path);
@@ -59,6 +63,35 @@ img.Image? _decodeFitted(Uint8List input, int maxDimension) {
 
 Uint8List? _encodeAvatarFile(String path) =>
     _encodeAvatar(File(path).readAsBytesSync());
+
+const int _squareAvatarDimension = 512;
+
+Uint8List? _encodeSquareAvatarFile(String path) =>
+    encodeSquareAvatar(File(path).readAsBytesSync());
+
+@visibleForTesting
+Uint8List? encodeSquareAvatar(Uint8List input) {
+  final decoded = img.decodeImage(input);
+  if (decoded == null) return null;
+  final oriented = img.bakeOrientation(decoded);
+  final side = math.min(oriented.width, oriented.height);
+  final square = img.copyCrop(
+    oriented,
+    x: (oriented.width - side) ~/ 2,
+    y: (oriented.height - side) ~/ 2,
+    width: side,
+    height: side,
+  );
+  final fitted = side > _squareAvatarDimension
+      ? img.copyResize(
+          square,
+          width: _squareAvatarDimension,
+          height: _squareAvatarDimension,
+          interpolation: img.Interpolation.average,
+        )
+      : square;
+  return img.encodeJpg(fitted, quality: 88);
+}
 
 Uint8List? _encodeWallpaperFile(String path) {
   final image = _decodeFitted(

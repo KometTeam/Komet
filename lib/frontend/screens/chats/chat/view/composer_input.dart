@@ -11,12 +11,14 @@ import 'package:komet/core/config/app_colors.dart';
 import 'package:komet/core/config/app_composer_background.dart';
 import 'package:komet/core/config/app_composer_style.dart';
 import 'package:komet/core/config/app_frost.dart';
+import 'package:komet/backend/modules/forward_sender.dart';
 import 'package:komet/frontend/screens/chats/chat/upload_status.dart';
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/composer_morph_icon.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/liquid_glass.dart';
+import 'package:komet/frontend/widgets/lottie_slash_icon.dart';
 import 'package:komet/frontend/widgets/paste_media_scope.dart';
 import 'package:komet/frontend/widgets/reply_preview.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
@@ -32,7 +34,7 @@ class ComposerInputBar extends StatelessWidget {
     this.backdropKey,
     required this.attachAnim,
     required this.replyTo,
-    required this.forwardMessages,
+    required this.forward,
     required this.myId,
     required this.hasText,
     required this.uploadStatus,
@@ -48,6 +50,7 @@ class ComposerInputBar extends StatelessWidget {
     required this.onSendHistory,
     required this.onCancelReply,
     required this.onCancelForward,
+    required this.onToggleForwardSender,
     this.onPickReplyChat,
     required this.formatElapsed,
     required this.contextMenuBuilder,
@@ -75,7 +78,7 @@ class ComposerInputBar extends StatelessWidget {
   final BackdropKey? backdropKey;
   final Animation<double> attachAnim;
   final ValueListenable<CachedMessage?> replyTo;
-  final ValueListenable<List<CachedMessage>> forwardMessages;
+  final ValueListenable<ForwardRequest?> forward;
   final int myId;
   final ValueListenable<bool> hasText;
   final ValueListenable<UploadStatus> uploadStatus;
@@ -91,6 +94,7 @@ class ComposerInputBar extends StatelessWidget {
   final Future<void> Function(FileHistoryEntry entry) onSendHistory;
   final VoidCallback onCancelReply;
   final VoidCallback onCancelForward;
+  final VoidCallback onToggleForwardSender;
   final VoidCallback? onPickReplyChat;
   final String Function(int ms) formatElapsed;
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
@@ -113,16 +117,16 @@ class ComposerInputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<List<CachedMessage>>(
-      valueListenable: forwardMessages,
-      builder: (context, forwards, _) => _build(context, forwards),
+    return ValueListenableBuilder<ForwardRequest?>(
+      valueListenable: forward,
+      builder: (context, request, _) => _build(context, request),
     );
   }
 
-  Widget _build(BuildContext context, List<CachedMessage> forwards) {
+  Widget _build(BuildContext context, ForwardRequest? request) {
     final cs = Theme.of(context).colorScheme;
     final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
-    final hasForward = forwards.isNotEmpty;
+    final hasForward = request != null;
 
     final isChannel = chatType == "CHANNEL";
     final isGroup = chatType == "CHAT" || chatType == "GROUP";
@@ -212,7 +216,7 @@ class ComposerInputBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _messagePreview(cs, forwards),
+          _messagePreview(context, cs, request),
           Padding(
             padding: EdgeInsets.symmetric(
               horizontal: _barSideInset,
@@ -706,12 +710,23 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
-  Widget _messagePreview(ColorScheme cs, List<CachedMessage> forwards) {
-    if (forwards.isNotEmpty) return _forwardPreview(cs, forwards);
+  Widget _messagePreview(
+    BuildContext context,
+    ColorScheme cs,
+    ForwardRequest? request,
+  ) {
+    if (request != null) return _forwardPreview(context, cs, request);
     return _replyPreview(cs);
   }
 
-  Widget _forwardPreview(ColorScheme cs, List<CachedMessage> messages) {
+  Widget _forwardPreview(
+    BuildContext context,
+    ColorScheme cs,
+    ForwardRequest request,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    final messages = request.messages;
+    final hideSender = request.hideSender;
     final first = messages.first;
     final senderName = ContactCache.get(first.senderId);
     final info = ReplyInfo(
@@ -724,13 +739,22 @@ class ComposerInputBar extends StatelessWidget {
       text: first.text,
       attachments: first.attachments,
     );
-    final title = messages.length == 1
+    final title = hideSender
+        ? messages.length == 1
+              ? l10n.forwardWithoutSender
+              : l10n.forwardWithoutSenderCount(messages.length)
+        : messages.length == 1
         ? first.senderId == myId
               ? 'Пересылка от вас'
               : senderName == null
               ? 'Пересылка сообщения'
               : 'Пересылка от $senderName'
         : 'Пересылка: ${_forwardCount(messages.length)}';
+    final senderToggleColor = hideSender
+        ? cs.primary
+        : request.canHideSender
+        ? cs.onSurfaceVariant
+        : cs.onSurfaceVariant.withValues(alpha: 0.38);
     final row = Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
       child: Row(
@@ -758,6 +782,18 @@ class ComposerInputBar extends StatelessWidget {
                 if (preview.isNotEmpty) _previewLine(cs, visual, preview),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: hideSender
+                ? l10n.forwardShowSender
+                : l10n.forwardHideSender,
+            icon: LottieSlashIcon(
+              asset: 'assets/lottie/ic_person_on_to_off.json',
+              slashed: hideSender,
+              color: senderToggleColor,
+              size: 20,
+            ),
+            onPressed: onToggleForwardSender,
           ),
           IconButton(
             icon: const Icon(Symbols.close, size: 20),

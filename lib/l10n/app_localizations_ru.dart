@@ -3576,4 +3576,444 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get undoLeftChannel => 'Вы отписались от канала';
+
+  @override
+  String get forwardHideSender => 'Скрыть имя отправителя';
+
+  @override
+  String get forwardShowSender => 'Показать имя отправителя';
+
+  @override
+  String get forwardHideSenderUnavailable =>
+      'Опросы, звонки и служебные сообщения пересылаются только с именем отправителя';
+
+  @override
+  String get forwardWithoutSender => 'Пересылка без автора';
+
+  @override
+  String forwardWithoutSenderCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Пересылка без автора: $count сообщения',
+      many: 'Пересылка без автора: $count сообщений',
+      few: 'Пересылка без автора: $count сообщения',
+      one: 'Пересылка без автора: $count сообщение',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminsTitle => 'Администраторы';
+
+  @override
+  String get channelFollowersTitle => 'Подписчики';
+
+  @override
+  String get channelStatsTitle => 'Статистика канала';
+
+  @override
+  String get channelStatsUnavailable => 'Статистика канала пока недоступна';
+
+  @override
+  String get adminsAdd => 'Добавить администратора';
+
+  @override
+  String get channelPickAdminTitle => 'Выберите подписчика';
+
+  @override
+  String get adminsPickEmpty => 'Некого назначить';
+
+  @override
+  String get membersSearchHint => 'Найти по имени';
+
+  @override
+  String adminRoleYou(String role) {
+    return '$role (вы)';
+  }
+
+  @override
+  String get channelAddFollowers => 'Добавить подписчиков';
+
+  @override
+  String get channelFollowersEmpty => 'Подписчиков пока нет';
+
+  @override
+  String get membersLoadFailed => 'Не удалось загрузить список';
+
+  @override
+  String get adminAppointTitle => 'Назначить администратора';
+
+  @override
+  String get adminEditTitle => 'Права администратора';
+
+  @override
+  String get channelRightEditChannel => 'Изменять канал';
+
+  @override
+  String get adminRightEditInfoHint => 'Фото, название, описание';
+
+  @override
+  String get channelRightCreatePosts => 'Публиковать посты';
+
+  @override
+  String get channelRightEditPosts => 'Редактировать чужие посты';
+
+  @override
+  String get channelRightDeletePosts => 'Удалять чужие посты';
+
+  @override
+  String get channelRightPinPosts => 'Закреплять посты';
+
+  @override
+  String get channelRightManageFollowers => 'Добавлять и удалять подписчиков';
+
+  @override
+  String get channelRightViewStats => 'Смотреть статистику канала';
+
+  @override
+  String get adminRightManageAdmins => 'Назначать и снимать администраторов';
+
+  @override
+  String get adminRightManageAdminsHint =>
+      'Сможет снимать только тех администраторов, которых назначил сам';
+
+  @override
+  String get adminAppointAction => 'Назначить администратором';
+
+  @override
+  String get adminSave => 'Сохранить';
+
+  @override
+  String get adminAppointed => 'Администратор назначен';
+
+  @override
+  String get adminSaved => 'Права сохранены';
+
+  @override
+  String get ownershipTransfer => 'Передать права владельца';
+
+  @override
+  String ownershipTransferConfirm(String name) {
+    return '$name станет новым владельцем.';
+  }
+
+  @override
+  String get ownershipTransferAction => 'Передать';
+
+  @override
+  String get ownershipTransferred => 'Права владельца переданы';
+
+  @override
+  String get adminRemove => 'Снять с администраторов';
+
+  @override
+  String adminRemoveConfirm(String name) {
+    return '$name больше не будет администратором.';
+  }
+
+  @override
+  String get adminRemoveAction => 'Снять';
+
+  @override
+  String get adminRemoved => 'Снят с администраторов';
+
+  @override
+  String get adminActionFailed => 'Не удалось применить изменения';
+
+  @override
+  String get channelInviteSendInMax => 'Отправить в MAX';
+
+  @override
+  String get channelInviteShowQr => 'Показать QR-код';
+
+  @override
+  String get channelInviteRevoke => 'Перевыпустить ссылку';
+
+  @override
+  String get channelInviteRevokeConfirm =>
+      'Текущая ссылка перестанет работать, вступить можно будет только по новой.';
+
+  @override
+  String get channelInviteRevokeAction => 'Перевыпустить';
+
+  @override
+  String get channelInviteRevoked => 'Ссылка перевыпущена';
+
+  @override
+  String get channelJoinRequests => 'Заявки на вступление';
+
+  @override
+  String get channelJoinRequestsHint =>
+      'Вступить в канал можно будет только после одобрения заявки администратором';
+
+  @override
+  String get groupPickAdminTitle => 'Выберите участника';
+
+  @override
+  String get groupRightEditInfo => 'Изменять чат';
+
+  @override
+  String get groupRightDeleteMessages => 'Удалять сообщения';
+
+  @override
+  String get groupRightPinMessages => 'Закреплять сообщения';
+
+  @override
+  String get groupRightManageMembers => 'Добавлять и удалять участников';
+
+  @override
+  String get groupRightEditLink => 'Обновлять ссылку на чат';
+
+  @override
+  String get groupSettingsTitle => 'Настройки группы';
+
+  @override
+  String get groupSettingsName => 'Название чата';
+
+  @override
+  String get groupSettingsDescription => 'Описание чата';
+
+  @override
+  String get groupSettingsSaved => 'Изменения сохранены';
+
+  @override
+  String get groupSettingsPhotoUpdated => 'Фото обновлено';
+
+  @override
+  String get groupSettingsPhotoTooLarge =>
+      'Картинка слишком большая (макс 8 МБ)';
+
+  @override
+  String get groupSettingsLeave => 'Покинуть чат';
+
+  @override
+  String get reactionsTitle => 'Реакции';
+
+  @override
+  String get reactionsSummaryAll => 'Все';
+
+  @override
+  String get reactionsSummaryOff => 'Выключены';
+
+  @override
+  String reactionsSummaryCount(int allowed, int total) {
+    return '$allowed из $total';
+  }
+
+  @override
+  String get reactionsEnable => 'Включить реакции';
+
+  @override
+  String get reactionsCountHeader => 'Количество реакций к публикации';
+
+  @override
+  String reactionsCountValue(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count реакции',
+      many: '$count реакций',
+      few: '$count реакции',
+      one: '$count реакция',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get reactionsAllowedHeader => 'Разрешённые реакции';
+
+  @override
+  String get reactionsEdit => 'Изменить';
+
+  @override
+  String get reactionsDone => 'Готово';
+
+  @override
+  String get reactionsReset => 'Сбросить настройки реакций';
+
+  @override
+  String get reactionsLoadFailed => 'Не удалось загрузить настройки реакций';
+
+  @override
+  String get reactionsNoneAllowed => 'Оставьте хотя бы одну реакцию';
+
+  @override
+  String get memberPermissionsTitle => 'Разрешения участников';
+
+  @override
+  String get memberPermissionEditInfo =>
+      'Изменять название, фото и описание чата';
+
+  @override
+  String get memberPermissionAddMembers => 'Добавлять участников';
+
+  @override
+  String get memberPermissionPin => 'Закреплять сообщения';
+
+  @override
+  String get memberPermissionInvite => 'Приглашать по ссылке';
+
+  @override
+  String get memberPermissionCall => 'Звонить в чате';
+
+  @override
+  String get ownerLeaveTitle => 'Вы владелец';
+
+  @override
+  String get ownerLeaveChannelMessage =>
+      'Чтобы покинуть канал, сначала передайте права владельца другому подписчику.';
+
+  @override
+  String get ownerLeaveGroupMessage =>
+      'Чтобы покинуть группу, сначала передайте права владельца другому участнику.';
+
+  @override
+  String get ownershipPickTitle => 'Новый владелец';
+
+  @override
+  String get ownershipPickEmpty => 'Некому передать права';
+
+  @override
+  String get forwardOneTitle => 'Переслать сообщение';
+
+  @override
+  String forwardBatchTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Переслать $count сообщения',
+      many: 'Переслать $count сообщений',
+      few: 'Переслать $count сообщения',
+      one: 'Переслать $count сообщение',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardCommentHint => 'Добавить комментарий...';
+
+  @override
+  String get forwardOffline => 'Нет соединения';
+
+  @override
+  String get forwardFailed => 'Не удалось переслать';
+
+  @override
+  String forwardDelivered(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Переслано в $count чата',
+      many: 'Переслано в $count чатов',
+      few: 'Переслано в $count чата',
+      one: 'Переслано в $count чат',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String forwardDeliveredPartly(int delivered, int failed) {
+    return 'Переслано в $delivered, не удалось в $failed';
+  }
+
+  @override
+  String get reactionUnavailable => 'Эта реакция недоступна в чате';
+
+  @override
+  String get membersSearchMore => 'Искать среди остальных';
+
+  @override
+  String get groupRestrictionsTitle => 'Ограничения';
+
+  @override
+  String get groupRestrictionForward => 'Запретить пересылку';
+
+  @override
+  String get groupRestrictionForwardHint =>
+      'Сообщения из этого чата нельзя будет переслать';
+
+  @override
+  String get groupRestrictionCopy => 'Запретить копирование';
+
+  @override
+  String get groupRestrictionCopyHint =>
+      'Текст сообщений нельзя будет скопировать';
+
+  @override
+  String get groupRestrictionConfirmSend => 'Подтверждать отправку';
+
+  @override
+  String get groupRestrictionConfirmSendHint =>
+      'Перед отправкой каждого сообщения будет появляться подтверждение';
+
+  @override
+  String get notificationsBadgeSectionTitle => 'Счётчик на иконке';
+
+  @override
+  String get notificationsBadgeLabel => 'Показывать счётчик';
+
+  @override
+  String get notificationsBadgeMutedLabel => 'Учитывать чаты без звука';
+
+  @override
+  String get notificationsBadgeMessagesLabel => 'Считать сообщения';
+
+  @override
+  String get notificationsBadgeMessagesSubtitle =>
+      'Если выключено — считаются непрочитанные чаты';
+
+  @override
+  String get accountSwitchFailed => 'Не удалось переключить аккаунт';
+
+  @override
+  String get accountSessionLostTitle => 'Нужно войти заново';
+
+  @override
+  String accountSessionLostBody(String name) {
+    return 'Сессия аккаунта «$name» на этом устройстве больше не действует.';
+  }
+
+  @override
+  String get accountSessionLostSignIn => 'Войти';
+
+  @override
+  String get accountSessionLostRemove => 'Удалить с устройства';
+
+  @override
+  String get accountSessionLostRemoved => 'Аккаунт удалён с устройства';
+
+  @override
+  String get contactsSearchHint => 'Поиск по контактам';
+
+  @override
+  String get contactsSearchEmpty => 'Ничего не найдено';
+
+  @override
+  String get contactsNfcExchange => 'Обмен по NFC';
+
+  @override
+  String get contactsFindUser => 'Добавить контакт';
+
+  @override
+  String get contactDeleted => 'Контакт удалён';
+
+  @override
+  String get contactDeleteFailed => 'Не удалось удалить контакт';
+
+  @override
+  String get contactLocalPhotoChoose => 'Выбрать фото';
+
+  @override
+  String get contactLocalPhotoReset => 'Вернуть фото профиля';
+
+  @override
+  String get contactLocalPhotoSaved => 'Фото видно только вам';
+
+  @override
+  String get contactLocalPhotoFailed => 'Не удалось обработать изображение';
+
+  @override
+  String get contactLocalPhotoTooLarge =>
+      'Картинка слишком большая (макс. 8 МБ)';
 }

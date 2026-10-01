@@ -21,6 +21,8 @@ import '../../widgets/adaptive_shell.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import '../../../backend/api.dart';
+import '../../../backend/modules/account.dart';
+import '../../../core/utils/logger.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../main.dart';
 import '../../../core/config/app_frost.dart';
@@ -182,9 +184,20 @@ class _LoginScreenState extends State<LoginScreen> {
       await resetDigitalIdSession();
       try {
         await accountModule.switchAccount(returnId);
-      } catch (_) {
+      } on AccountSessionLostException {
         if (!mounted) return;
-        showCustomNotification(context, 'Не удалось переключить аккаунт');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.accountSessionLostTitle,
+        );
+        return;
+      } catch (e) {
+        logger.w('Возврат на аккаунт $returnId не удался: $e');
+        if (!mounted) return;
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.accountSwitchFailed,
+        );
         return;
       }
       if (!mounted) return;

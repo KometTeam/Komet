@@ -1,13 +1,22 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/frontend/screens/contacts/contact_sheet_common.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/komet_avatar.dart';
+import 'package:komet/frontend/widgets/small_spinner.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../core/security/app_lock.dart';
+import '../../../core/storage/local_contact_avatars.dart';
+import '../../../core/utils/image_utils.dart';
+import '../../widgets/chat_menu_overlay.dart';
 
 enum EditContactAction { updated, removed }
 
@@ -72,6 +81,7 @@ class _EditContactCardState extends State<_EditContactCard> {
 
   bool _saving = false;
   bool _deleting = false;
+  bool _photoBusy = false;
 
   @override
   void initState() {
@@ -87,7 +97,113 @@ class _EditContactCardState extends State<_EditContactCard> {
     super.dispose();
   }
 
-  bool get _busy => _saving || _deleting;
+  bool get _busy => _saving || _deleting || _photoBusy;
+
+  void _onPhotoTap(BuildContext anchorContext) {
+    if (_busy) return;
+    if (!LocalContactAvatars.instance.has(widget.contactId)) {
+      unawaited(_pickLocalPhoto());
+      return;
+    }
+    final box = anchorContext.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final l10n = AppLocalizations.of(context)!;
+    showChatMenu(
+      context: context,
+      anchorRect: box.localToGlobal(Offset.zero) & box.size,
+      items: [
+        ChatMenuItem(
+          icon: Symbols.add_photo_alternate,
+          label: l10n.contactLocalPhotoChoose,
+          onTap: () => unawaited(_pickLocalPhoto()),
+        ),
+        ChatMenuItem(
+          icon: Symbols.restart_alt,
+          label: l10n.contactLocalPhotoReset,
+          onTap: () =>
+              unawaited(LocalContactAvatars.instance.clear(widget.contactId)),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickLocalPhoto() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await AppLock.instance.external(
+      () => FilePicker.platform.pickFiles(type: FileType.image),
+    );
+    final path = picked?.files.firstOrNull?.path;
+    if (path == null || !mounted) return;
+    if (await File(path).length() > kMaxAvatarBytes) {
+      if (mounted) {
+        showCustomNotification(context, l10n.contactLocalPhotoTooLarge);
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _photoBusy = true);
+    final bytes = await squareAvatarFile(path);
+    if (bytes != null) {
+      await LocalContactAvatars.instance.set(widget.contactId, bytes);
+    }
+    if (!mounted) return;
+    setState(() => _photoBusy = false);
+    showCustomNotification(
+      context,
+      bytes == null
+          ? l10n.contactLocalPhotoFailed
+          : l10n.contactLocalPhotoSaved,
+    );
+  }
+
+  Widget _avatar(ColorScheme cs, String name) {
+    return SizedBox.square(
+      dimension: 88,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          KometAvatar(
+            name: name,
+            size: 88,
+            imageUrl: widget.avatarUrl.isEmpty ? null : widget.avatarUrl,
+            userId: widget.contactId,
+          ),
+          if (_photoBusy)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Colors.black38,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: SmallSpinner(size: 28, color: cs.onPrimary),
+                ),
+              ),
+            ),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Builder(
+              builder: (anchorContext) => Material(
+                color: cs.primary,
+                shape: CircleBorder(
+                  side: BorderSide(color: cs.surfaceContainerHigh, width: 3),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: _busy ? null : () => _onPhotoTap(anchorContext),
+                  child: Padding(
+                    padding: const EdgeInsets.all(7),
+                    child: Icon(Symbols.edit, size: 16, color: cs.onPrimary),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   bool get _dirty =>
       _firstCtrl.text.trim() != widget.customFirst.trim() ||
@@ -193,15 +309,7 @@ class _EditContactCardState extends State<_EditContactCard> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(
-                    child: KometAvatar(
-                      name: avatarName,
-                      size: 88,
-                      imageUrl: widget.avatarUrl.isEmpty
-                          ? null
-                          : widget.avatarUrl,
-                    ),
-                  ),
+                  Center(child: _avatar(cs, avatarName)),
                   const SizedBox(height: 20),
                   _inputRow(
                     cs,
