@@ -269,7 +269,7 @@ class VideoTranscoder {
       }
       chain.add('scale=${spec.outWidth}:${spec.outHeight}');
       if (lut != null) {
-        chain.add("lut3d=file='${lut.path.replaceAll("'", r"\'")}'");
+        chain.add('lut3d=file=${_escapeFilterValue(lut.path)}');
       }
       chain.add('format=yuv420p');
 
@@ -328,6 +328,17 @@ class VideoTranscoder {
       _desktopProcess = null;
       lut?.delete().then((_) {}, onError: (_) {});
     }
+  }
+
+  static String _escapeFilterValue(String value) {
+    final optionValue = value.replaceAllMapped(
+      RegExp(r"[\s\\':]"),
+      (match) => '\\${match[0]}',
+    );
+    return optionValue.replaceAllMapped(
+      RegExp(r"[\s\\'\[\],;]"),
+      (match) => '\\${match[0]}',
+    );
   }
 
   static Future<File> _writeCubeLut(List<double> m) async {

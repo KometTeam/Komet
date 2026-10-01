@@ -5,6 +5,7 @@ import 'package:komet_crypto/komet_crypto.dart' as kc;
 
 import '../storage/chat_encryption_store.dart';
 import '../utils/logger.dart';
+import 'chat_crypto_key_cache.dart';
 
 const int kMaxEncryptedMessageLength = 1000;
 
@@ -27,16 +28,12 @@ class ChatCryptoService {
 
   static final ChatCryptoService instance = ChatCryptoService._();
 
-  final Map<String, Uint8List> _keys = {};
-  final Map<String, Future<Uint8List?>> _pending = {};
+  late final ChatCryptoKeyCache _keyCache = ChatCryptoKeyCache(_deriveKey);
   Future<void>? _init;
   bool _unavailable = false;
 
-  String _cacheKey(int accountId, int chatId) => '$accountId/$chatId';
-
   void clearKeys() {
-    _keys.clear();
-    _pending.clear();
+    _keyCache.clear();
   }
 
   Future<bool> _ensureInitialized() async {
@@ -53,17 +50,10 @@ class ChatCryptoService {
   }
 
   Future<Uint8List?> _keyFor(int accountId, int chatId) {
-    final cacheKey = _cacheKey(accountId, chatId);
-    final cached = _keys[cacheKey];
-    if (cached != null) return Future.value(cached);
-    return _pending[cacheKey] ??= _deriveKey(accountId, chatId, cacheKey);
+    return _keyCache.keyFor(accountId, chatId);
   }
 
-  Future<Uint8List?> _deriveKey(
-    int accountId,
-    int chatId,
-    String cacheKey,
-  ) async {
+  Future<Uint8List?> _deriveKey(int accountId, int chatId) async {
     try {
       if (!await _ensureInitialized()) return null;
       final password = await ChatEncryptionStore.instance.readKey(
@@ -71,14 +61,10 @@ class ChatCryptoService {
         chatId,
       );
       if (password == null || password.isEmpty) return null;
-      final key = await kc.deriveKey(password: password);
-      _keys[cacheKey] = key;
-      return key;
+      return await kc.deriveKey(password: password);
     } catch (e) {
       logger.w('derive key for chat $chatId: $e');
       return null;
-    } finally {
-      _pending.remove(cacheKey);
     }
   }
 
@@ -130,10 +116,10 @@ class ChatCryptoService {
   ) => _imageOp(
     accountId,
     chatId,
-    () => kc.encryptImageFile(
+    (key) => kc.encryptImageFile(
       sourcePath: sourcePath,
       destPath: destPath,
-      key: _keys[_cacheKey(accountId, chatId)]!,
+      key: key,
     ),
   );
 
@@ -145,24 +131,24 @@ class ChatCryptoService {
   ) => _imageOp(
     accountId,
     chatId,
-    () => kc.decryptImageFile(
+    (key) => kc.decryptImageFile(
       sourcePath: sourcePath,
       destPath: destPath,
-      key: _keys[_cacheKey(accountId, chatId)]!,
+      key: key,
     ),
   );
 
   Future<CryptoFailure?> _imageOp(
     int accountId,
     int chatId,
-    Future<void> Function() run,
+    Future<void> Function(Uint8List key) run,
   ) async {
     final key = await _keyFor(accountId, chatId);
     if (key == null) {
       return _unavailable ? CryptoFailure.unavailable : CryptoFailure.noKey;
     }
     try {
-      await run();
+      await run(key);
       return null;
     } catch (e) {
       logger.w('image crypto for chat $chatId: $e');

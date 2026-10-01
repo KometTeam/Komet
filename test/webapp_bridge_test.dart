@@ -1,10 +1,27 @@
 import 'dart:convert';
+import 'dart:io';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komet/core/storage/app_database.dart';
+import 'package:komet/core/storage/app_instance.dart';
 import 'package:komet/frontend/screens/webapp/web_app_bridge.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class _SyntheticPathProvider extends PathProviderPlatform
+    with MockPlatformInterfaceMixin {
+  _SyntheticPathProvider(this.directory);
+
+  final String directory;
+
+  @override
+  Future<String?> getApplicationSupportPath() async => directory;
+}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late List<(String, Map<String, dynamic>, bool)> sent;
   late int closeCalls;
 
@@ -186,6 +203,221 @@ void main() {
     });
     expect(sent[1].$2['error'], {
       'code': 'client.nfc_emulate_nfc_tag.not_supported',
+    });
+  });
+
+  group('unsupported biometry', () {
+    const accountId = 900501;
+    const tokenKey = 'webapp_bio_900501_777';
+    const channel = MethodChannel(
+      'plugins.it_nomads.com/flutter_secure_storage',
+    );
+    const methods = {
+      'WebAppBiometryRequestAccess': 'biometry_request_access',
+      'WebAppBiometryRequestAuth': 'biometry_request_auth',
+      'WebAppBiometryUpdateToken': 'biometry_update_token',
+      'WebAppBiometryOpenSettings': 'biometry_open_settings',
+    };
+    late Map<String, String> secureValues;
+    late List<String> secureCalls;
+
+    setUpAll(() async {
+      final previousProvider = PathProviderPlatform.instance;
+      final directory = Directory.systemTemp.createTempSync(
+        'synthetic_biometry',
+      );
+      PathProviderPlatform.instance = _SyntheticPathProvider(directory.path);
+      File('${directory.path}/komet${AppInstance.suffix}.db').createSync();
+      addTearDown(() async {
+        await AppDatabase.close();
+        PathProviderPlatform.instance = previousProvider;
+        if (directory.existsSync()) directory.deleteSync(recursive: true);
+      });
+      await AppDatabase.init();
+      await AppDatabase.saveProfile(
+        ProfileData(
+          id: accountId,
+          firstName: 'Synthetic biometry owner',
+          phone: 100501,
+          country: 'ZZ',
+          accountStatus: 0,
+          updateTime: 1,
+        ),
+      );
+    });
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({
+        'active_account_id': '$accountId',
+      });
+      await AppDatabase.setWebAppBiometryAccess(
+        accountId,
+        777,
+        requested: true,
+        granted: true,
+      );
+      secureValues = {tokenKey: 'synthetic-legacy-token'};
+      secureCalls = [];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            secureCalls.add(call.method);
+            final arguments = call.arguments as Map;
+            final key = arguments['key'] as String;
+            switch (call.method) {
+              case 'read':
+                return secureValues[key];
+              case 'write':
+                secureValues[key] = arguments['value'] as String;
+                return null;
+              case 'delete':
+                secureValues.remove(key);
+                return null;
+              default:
+                throw StateError('Unexpected secure storage operation');
+            }
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+    });
+
+    for (final private in [false, true]) {
+      test(
+        'reports unavailable despite legacy grants on private=$private',
+        () async {
+          final bridge = buildBridge(privateChannel: private);
+
+          await bridge.handleEvent(
+            'WebAppBiometryGetInfo',
+            '{"requestId":"synthetic-info"}',
+            private,
+          );
+
+          expect(sent, hasLength(1));
+          expect(sent.single.$1, 'WebAppBiometryGetInfo');
+          expect(sent.single.$3, private);
+          expect(sent.single.$2, containsPair('available', false));
+          expect(sent.single.$2, containsPair('accessRequested', false));
+          expect(sent.single.$2, containsPair('accessGranted', false));
+          expect(sent.single.$2, containsPair('tokenSaved', false));
+          expect(sent.single.$2, containsPair('requestId', 'synthetic-info'));
+          expect(sent.single.$2, isNot(contains('token')));
+          expect(secureCalls, isEmpty);
+        },
+      );
+
+      for (final method in methods.entries) {
+        test(
+          'rejects ${method.key} on private=$private without token changes',
+          () async {
+            final bridge = buildBridge(privateChannel: private);
+
+            await bridge.handleEvent(
+              method.key,
+              '{"requestId":"synthetic-reject","token":"synthetic-replacement"}',
+              private,
+            );
+
+            expect(sent, hasLength(1));
+            expect(sent.single.$1, method.key);
+            expect(sent.single.$2, {
+              'requestId': 'synthetic-reject',
+              'error': {'code': 'client.${method.value}.not_supported'},
+            });
+            expect(sent.single.$3, private);
+            expect(secureCalls, isEmpty);
+            expect(secureValues, {tokenKey: 'synthetic-legacy-token'});
+            expect(await AppDatabase.getWebAppBiometryAccess(accountId, 777), (
+              true,
+              true,
+            ));
+          },
+        );
+      }
+    }
+
+    test(
+      'rejects empty token updates without deleting the legacy token',
+      () async {
+        final bridge = buildBridge();
+
+        await bridge.handleEvent(
+          'WebAppBiometryUpdateToken',
+          '{"requestId":"synthetic-empty","token":""}',
+          false,
+        );
+
+        expect(sent.single.$2['error'], {
+          'code': 'client.biometry_update_token.not_supported',
+        });
+        expect(secureValues, {tokenKey: 'synthetic-legacy-token'});
+        expect(secureCalls, isEmpty);
+      },
+    );
+
+    test(
+      'rejects authorization without creating a token or granting access',
+      () async {
+        secureValues.clear();
+        await AppDatabase.setWebAppBiometryAccess(
+          accountId,
+          777,
+          requested: false,
+          granted: false,
+        );
+        final bridge = buildBridge();
+
+        await bridge.handleEvent(
+          'WebAppBiometryRequestAuth',
+          '{"requestId":"synthetic-auth"}',
+          false,
+        );
+
+        expect(sent.single.$2['error'], {
+          'code': 'client.biometry_request_auth.not_supported',
+        });
+        expect(secureValues, isEmpty);
+        expect(secureCalls, isEmpty);
+        expect(await AppDatabase.getWebAppBiometryAccess(accountId, 777), (
+          false,
+          false,
+        ));
+      },
+    );
+
+    test(
+      'stays silent without a request ID and leaves storage untouched',
+      () async {
+        final bridge = buildBridge();
+
+        for (final method in methods.keys) {
+          await bridge.handleEvent(
+            method,
+            '{"token":"synthetic-replacement"}',
+            false,
+          );
+        }
+
+        expect(sent, isEmpty);
+        expect(secureCalls, isEmpty);
+        expect(secureValues, {tokenKey: 'synthetic-legacy-token'});
+      },
+    );
+
+    test('ignores biometric events when the private channel is off', () async {
+      final bridge = buildBridge();
+
+      for (final method in ['WebAppBiometryGetInfo', ...methods.keys]) {
+        await bridge.handleEvent(
+          method,
+          '{"requestId":"synthetic-private"}',
+          true,
+        );
+      }
+
+      expect(sent, isEmpty);
+      expect(secureCalls, isEmpty);
     });
   });
 }

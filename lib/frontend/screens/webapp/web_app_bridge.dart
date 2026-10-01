@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -329,17 +328,20 @@ class WebAppBridge {
         await _storageClear(method, requestId);
         return;
       case 'WebAppBiometryGetInfo':
-        await _biometryInfo(method, requestId);
+        _send(method, {
+          'requestId': ?requestId,
+          'available': false,
+          'accessRequested': false,
+          'accessGranted': false,
+          'tokenSaved': false,
+          'deviceId': api.deviceId ?? '',
+        }, private: private);
         return;
       case 'WebAppBiometryRequestAccess':
       case 'WebAppBiometryRequestAuth':
-        await _biometryAuth(method, requestId);
-        return;
       case 'WebAppBiometryUpdateToken':
-        await _biometryUpdateToken(method, requestId, data);
-        return;
       case 'WebAppBiometryOpenSettings':
-        _ok(method, requestId, 'opened');
+        _fail(method, requestId, 'not_supported', private: private);
         return;
       case 'WebAppHapticFeedbackImpact':
         await _impact(data['impactStyle']?.toString());
@@ -582,83 +584,6 @@ class WebAppBridge {
     _ok(method, requestId, 'cleared');
   }
 
-  Future<void> _biometryInfo(String method, String? requestId) async {
-    final accountId = await TokenStorage.getActiveAccountId();
-    final deviceId = api.deviceId ?? '';
-    if (accountId == null) {
-      _send(method, {
-        'requestId': ?requestId,
-        'available': false,
-        'deviceId': deviceId,
-      });
-      return;
-    }
-    final (requested, granted) = await WebAppStorage.biometryAccess(
-      accountId,
-      botId,
-    );
-    final token = await WebAppStorage.biometryToken(accountId, botId);
-    _send(method, {
-      'requestId': ?requestId,
-      'available': true,
-      'type': const ['unknown'],
-      'accessRequested': requested,
-      'accessGranted': granted,
-      'tokenSaved': token != null,
-      'deviceId': deviceId,
-    });
-  }
-
-  Future<void> _biometryAuth(String method, String? requestId) async {
-    final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId == null) {
-      _fail(method, requestId, 'access_denied');
-      return;
-    }
-    var token = await WebAppStorage.biometryToken(accountId, botId);
-    if (token == null) {
-      token = _randomToken();
-      await WebAppStorage.saveBiometryToken(accountId, botId, token);
-    }
-    await WebAppStorage.setBiometryAccess(
-      accountId,
-      botId,
-      requested: true,
-      granted: true,
-    );
-    _send(method, {
-      'requestId': ?requestId,
-      'token': token,
-      'status': 'authorized',
-      'granted': true,
-      'accessGranted': true,
-    });
-  }
-
-  Future<void> _biometryUpdateToken(
-    String method,
-    String? requestId,
-    Map<String, dynamic> data,
-  ) async {
-    final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId == null) {
-      _fail(method, requestId, 'access_denied');
-      return;
-    }
-    final token = data['token']?.toString();
-    if (token == null || token.isEmpty) {
-      await WebAppStorage.removeBiometryToken(accountId, botId);
-      _ok(method, requestId, 'removed');
-      return;
-    }
-    if (token.length > 1024) {
-      _fail(method, requestId, 'too_large');
-      return;
-    }
-    await WebAppStorage.saveBiometryToken(accountId, botId, token);
-    _ok(method, requestId, 'updated');
-  }
-
   Future<void> _impact(String? style) async {
     switch (style) {
       case 'heavy':
@@ -757,11 +682,5 @@ class WebAppBridge {
     } catch (_) {
       _fail(method, requestId, 'request_error', private: private);
     }
-  }
-
-  static String _randomToken() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 }

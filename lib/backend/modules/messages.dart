@@ -535,6 +535,9 @@ class CachedMessage {
     editHistory: editHistory ?? this.editHistory,
   );
 
+  CachedMessage withSendFailure(Object error) =>
+      copyWith(status: isPermanentSendFailure(error) ? 'error' : 'pending');
+
   static List<Map<String, dynamic>>? parseEditHistory(dynamic raw) {
     if (raw is! String || raw.isEmpty) return null;
     try {

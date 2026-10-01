@@ -4085,20 +4085,10 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
       final failed = isPermanentSendFailure(e);
-      final status = failed ? 'error' : 'pending';
       if (failed) logger.w('Отправка отклонена сервером: $e');
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1 && mounted) {
-        final queued = CachedMessage(
-          id: tempId,
-          accountId: _myId,
-          chatId: widget.chatId,
-          senderId: _myId,
-          text: text,
-          time: now,
-          status: status,
-          payload: composedPayload,
-        );
+        final queued = composed.withSendFailure(e);
         _messages[index] = queued;
         _bumpMessages();
         if (!_commentsMode) {
@@ -4109,8 +4099,8 @@ class _ChatScreenState extends State<ChatScreen>
               widget.chatId,
               messageId: tempId,
               time: now,
-              text: text,
-              status: status,
+              text: queued.text!,
+              status: queued.status!,
               elements: elements,
             ),
           );

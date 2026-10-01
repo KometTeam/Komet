@@ -16,6 +16,7 @@ class OutboxService {
   Api? _api;
   MessagesModule? _messages;
   bool _flushing = false;
+  bool _flushRequested = false;
 
   void init(Api api, MessagesModule messages) {
     if (_api != null) return;
@@ -28,7 +29,10 @@ class OutboxService {
   }
 
   Future<void> flush() async {
-    if (_flushing) return;
+    if (_flushing) {
+      _flushRequested = true;
+      return;
+    }
     final api = _api;
     final messages = _messages;
     if (api == null || messages == null) return;
@@ -36,12 +40,36 @@ class OutboxService {
 
     _flushing = true;
     try {
+      do {
+        _flushRequested = false;
+        await _flushSession(api, messages);
+      } while (_flushRequested && api.state == SessionState.online);
+    } finally {
+      _flushing = false;
+    }
+  }
+
+  bool _isCurrentSession(Api api, int epoch) =>
+      api.state == SessionState.online && api.sessionEpoch == epoch;
+
+  Future<bool> _ownsSession(Api api, int epoch, int accountId) async {
+    if (!_isCurrentSession(api, epoch)) return false;
+    final activeAccountId = await TokenStorage.getActiveAccountId();
+    return _isCurrentSession(api, epoch) && activeAccountId == accountId;
+  }
+
+  Future<void> _flushSession(Api api, MessagesModule messages) async {
+    final epoch = api.sessionEpoch;
+    try {
       final accountId = await TokenStorage.getActiveAccountId();
-      if (accountId == null) return;
+      if (accountId == null || !_isCurrentSession(api, epoch)) return;
 
       final rows = await AppDatabase.loadPendingMessages(accountId);
       for (final row in rows) {
-        if (api.state != SessionState.online) break;
+        if (!await _ownsSession(api, epoch, accountId) ||
+            !_isCurrentSession(api, epoch)) {
+          return;
+        }
         final pending = CachedMessage.fromDbRow(row);
         final text = pending.text;
         if (text == null || text.isEmpty) continue;
@@ -78,6 +106,10 @@ class OutboxService {
               pending.id,
             );
           }
+          if (!await _ownsSession(api, epoch, accountId) ||
+              !_isCurrentSession(api, epoch)) {
+            return;
+          }
           chats.emitMessageSent(pending.chatId, pending.id, sent);
           await chats.applyOutgoing(
             accountId,
@@ -89,6 +121,10 @@ class OutboxService {
             elements: elements.isEmpty ? null : elements,
           );
         } catch (e) {
+          if (!await _ownsSession(api, epoch, accountId) ||
+              !_isCurrentSession(api, epoch)) {
+            return;
+          }
           if (!isPermanentSendFailure(e)) {
             logger.w('Outbox: отправка ${pending.id} не удалась: $e');
             continue;
@@ -96,6 +132,10 @@ class OutboxService {
           logger.w('Outbox: ${pending.id} отклонено сервером: $e');
           final failed = pending.copyWith(status: 'error');
           await AppDatabase.saveMessages([failed.toDbRow()]);
+          if (!await _ownsSession(api, epoch, accountId) ||
+              !_isCurrentSession(api, epoch)) {
+            return;
+          }
           chats.emitMessageSent(pending.chatId, pending.id, failed);
           await chats.applyOutgoing(
             accountId,
@@ -110,8 +150,6 @@ class OutboxService {
       }
     } catch (e) {
       logger.e('Outbox flush: $e');
-    } finally {
-      _flushing = false;
     }
   }
 

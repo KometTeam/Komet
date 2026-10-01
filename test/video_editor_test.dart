@@ -183,7 +183,7 @@ void main() {
     late Directory tmp;
 
     setUp(() {
-      tmp = Directory.systemTemp.createTempSync('komet_video_test');
+      tmp = Directory.systemTemp.createTempSync("komet video's [test],;");
       PathProviderPlatform.instance = _FakePathProvider(tmp.path);
     });
 
