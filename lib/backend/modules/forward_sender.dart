@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math';
 
 import '../../core/cache/message_session_cache.dart';
+import '../../core/crypto/e2ee_service.dart';
+import '../../core/storage/chat_encryption_store.dart';
 import '../../core/utils/logger.dart';
 import '../../main.dart';
 import 'chats.dart';
@@ -92,13 +94,42 @@ class ForwardSender {
   static Stream<List<CachedMessage>> get delivered =>
       _deliveredController.stream;
 
+  static bool isBlocked(int accountId, int chatId) =>
+      ChatEncryptionStore.instance.isEnabled(accountId, chatId) ||
+      E2eeService.instance.isActive(accountId, chatId);
+
+  static Future<void Function()> _prepareDispatch(
+    int accountId,
+    int chatId,
+    MessagesModule sender,
+    int expectedSessionEpoch,
+  ) async {
+    await ChatEncryptionStore.instance.load();
+    await E2eeService.instance.ensureLoaded(accountId);
+    void check() {
+      if (!E2eeService.instance.isLoaded(accountId) ||
+          sender.sessionEpoch != expectedSessionEpoch) {
+        throw StateError('Сессия изменилась до пересылки');
+      }
+      if (isBlocked(accountId, chatId)) {
+        throw StateError('Пересылка в зашифрованный чат недоступна');
+      }
+    }
+
+    check();
+    return check;
+  }
+
   static Future<ForwardSendResult> send({
     required int accountId,
     required List<int> chatIds,
     required ForwardRequest request,
     ForwardCaption caption = const ForwardCaption(''),
     Map<int, int> resumeFrom = const {},
+    MessagesModule? sender,
   }) async {
+    final transport = sender ?? messagesModule;
+    final epoch = transport.sessionEpoch;
     final copies = request.hideSender
         ? [for (final source in request.messages) MessageCopy.of(source)]
         : null;
@@ -123,6 +154,8 @@ class ForwardSender {
           copies?.cast<MessageCopy>(),
           caption,
           resumeFrom[chatId] ?? 0,
+          transport,
+          epoch,
         );
         if (done == null) {
           delivered.add(chatId);
@@ -145,6 +178,8 @@ class ForwardSender {
     List<MessageCopy>? copies,
     ForwardCaption caption,
     int from,
+    MessagesModule sender,
+    int expectedSessionEpoch,
   ) async {
     final messages = request.messages;
     final steps = messages.length + (caption.isEmpty ? 0 : 1);
@@ -154,10 +189,29 @@ class ForwardSender {
       for (; step < steps; step++) {
         sent.add(
           step == messages.length
-              ? await _sendCaption(accountId, chatId, caption)
+              ? await _sendCaption(
+                  accountId,
+                  chatId,
+                  caption,
+                  sender,
+                  expectedSessionEpoch,
+                )
               : copies == null
-              ? await sendForward(accountId, chatId, request, messages[step])
-              : await _deliverCopy(accountId, chatId, copies[step]),
+              ? await sendForward(
+                  accountId,
+                  chatId,
+                  request,
+                  messages[step],
+                  sender: sender,
+                  expectedSessionEpoch: expectedSessionEpoch,
+                )
+              : await _deliverCopy(
+                  accountId,
+                  chatId,
+                  copies[step],
+                  sender,
+                  expectedSessionEpoch,
+                ),
         );
       }
       return null;
@@ -175,7 +229,16 @@ class ForwardSender {
     ForwardRequest request,
     CachedMessage source, {
     CachedMessage? optimistic,
+    MessagesModule? sender,
+    int? expectedSessionEpoch,
   }) async {
+    final transport = sender ?? messagesModule;
+    final beforeSend = await _prepareDispatch(
+      accountId,
+      chatId,
+      transport,
+      expectedSessionEpoch ?? transport.sessionEpoch,
+    );
     final local =
         optimistic ??
         request.optimisticForward(
@@ -185,10 +248,11 @@ class ForwardSender {
           tempId: '',
           status: 'sent',
         );
-    final realId = await messagesModule.forwardMessage(
+    final realId = await transport.forwardMessage(
       chatId,
       request.sourceChatId,
       int.parse(source.id),
+      beforeSend: beforeSend,
     );
     return MessagesModule.reidentifyMessage(
       local,
@@ -200,19 +264,40 @@ class ForwardSender {
   static Future<CachedMessage> sendCopy(
     int accountId,
     int chatId,
-    CachedMessage source,
-  ) {
+    CachedMessage source, {
+    MessagesModule? sender,
+    int? expectedSessionEpoch,
+  }) {
     final copy = MessageCopy.of(source);
     if (copy == null) throw StateError('message ${source.id} cannot be copied');
-    return _deliverCopy(accountId, chatId, copy);
+    final transport = sender ?? messagesModule;
+    return _deliverCopy(
+      accountId,
+      chatId,
+      copy,
+      transport,
+      expectedSessionEpoch ?? transport.sessionEpoch,
+    );
   }
 
   static Future<CachedMessage> _deliverCopy(
     int accountId,
     int chatId,
     MessageCopy copy,
+    MessagesModule sender,
+    int expectedSessionEpoch,
   ) async {
-    final sent = await messagesModule.sendMessageCopy(chatId, copy);
+    final beforeSend = await _prepareDispatch(
+      accountId,
+      chatId,
+      sender,
+      expectedSessionEpoch,
+    );
+    final sent = await sender.sendMessageCopy(
+      chatId,
+      copy,
+      beforeSend: beforeSend,
+    );
     return CachedMessage.fromPushPayload(accountId, chatId, sent);
   }
 
@@ -253,12 +338,21 @@ class ForwardSender {
     int accountId,
     int chatId,
     ForwardCaption caption,
+    MessagesModule sender,
+    int expectedSessionEpoch,
   ) async {
-    final id = await messagesModule.sendMessage(
+    final beforeSend = await _prepareDispatch(
+      accountId,
+      chatId,
+      sender,
+      expectedSessionEpoch,
+    );
+    final id = await sender.sendMessage(
       accountId,
       chatId,
       caption.text,
       elements: caption.elements,
+      beforeSend: beforeSend,
     );
     return CachedMessage(
       id: id,

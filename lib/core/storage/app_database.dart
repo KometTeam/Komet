@@ -1386,6 +1386,24 @@ class AppDatabase {
     });
   }
 
+  static Future<bool> updateSendingMessageStatus(
+    int accountId,
+    int chatId,
+    String messageId,
+    String status,
+  ) async {
+    final db = await _instance;
+    final changed = await db.update(
+      'messages',
+      {'status': status},
+      where:
+          'account_id = ? AND chat_id = ? AND id = ? '
+          "AND status = 'sending' AND deleted = 0",
+      whereArgs: [accountId, chatId, messageId],
+    );
+    return changed != 0;
+  }
+
   // #***! дальше выборки истории, с конца до сообщения между и вокруг
   static Future<List<Map<String, dynamic>>> loadMessages(
     int accountId,

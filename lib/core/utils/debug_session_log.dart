@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../protocol/opcode_map.dart';
@@ -453,7 +454,9 @@ class DebugSessionLog {
     final dir = _dir;
     if (dir != null) {
       for (final file in await _sessionFiles()) {
-        if (_currentFile != null && file.path == _currentFile!.path) continue;
+        if (_currentFile != null && p.equals(file.path, _currentFile!.path)) {
+          continue;
+        }
         try {
           final session = await _readSession(file);
           if (session != null && !session.startedAt.isBefore(cutoff)) {

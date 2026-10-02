@@ -68,9 +68,15 @@ class E2eeSessionInfo {
 }
 
 class E2eeService {
-  E2eeService._();
+  E2eeService({
+    Future<List<Map<String, dynamic>>> Function(int accountId) loadSessions =
+        AppDatabase.loadE2eeSessions,
+  }) : _loadSessions = loadSessions;
 
-  static final E2eeService instance = E2eeService._();
+  static final E2eeService instance = E2eeService();
+
+  final Future<List<Map<String, dynamic>>> Function(int accountId)
+  _loadSessions;
 
   static const int _exportMemoryKib = 65536;
   static const int _exportPasses = 3;
@@ -81,6 +87,7 @@ class E2eeService {
   final Map<String, Uint8List> _states = {};
   final Map<String, Future<void>> _chains = {};
   final Set<int> _loaded = {};
+  final Map<int, ({Object token, Future<void> future})> _loading = {};
   final Map<int, Uint8List> _identities = {};
   final Map<int, Uint8List> _localKeys = {};
   MessagesModule? _messages;
@@ -91,17 +98,38 @@ class E2eeService {
 
   String _key(int accountId, int chatId) => '$accountId/$chatId';
 
-  Future<void> ensureLoaded(int accountId) async {
-    if (accountId == 0 || !_loaded.add(accountId)) return;
+  bool isLoaded(int accountId) => _loaded.contains(accountId);
+
+  Future<void> ensureLoaded(int accountId) {
+    if (accountId == 0 || isLoaded(accountId)) return Future<void>.value();
+    final pending = _loading[accountId];
+    if (pending != null) return pending.future;
+    final token = Object();
+    final future = _loadAccount(accountId, token);
+    _loading[accountId] = (token: token, future: future);
+    return future;
+  }
+
+  Future<void> _loadAccount(int accountId, Object token) async {
     try {
-      final rows = await AppDatabase.loadE2eeSessions(accountId);
-      for (final row in rows) {
-        _info[_key(accountId, row['chat_id'] as int)] = _infoFromRow(row);
+      final rows = await Future.sync(() => _loadSessions(accountId));
+      if (!identical(_loading[accountId]?.token, token)) {
+        throw StateError('E2EE account load was invalidated');
       }
+      final loadedInfo = <String, E2eeSessionInfo>{};
+      for (final row in rows) {
+        loadedInfo[_key(accountId, row['chat_id'] as int)] = _infoFromRow(row);
+      }
+      _info.addAll(loadedInfo);
+      _loaded.add(accountId);
       revision.value++;
     } catch (e) {
-      _loaded.remove(accountId);
       logger.w('e2ee load: $e');
+      rethrow;
+    } finally {
+      if (identical(_loading[accountId]?.token, token)) {
+        _loading.remove(accountId);
+      }
     }
   }
 
@@ -679,13 +707,32 @@ class E2eeService {
     }
   }
 
+  CachedMessage _withStoredEncryption(
+    CachedMessage message,
+    Map<String, dynamic> row,
+  ) => message.copyWith(
+    sealedText: row['text_sealed'] is Uint8List
+        ? row['text_sealed'] as Uint8List
+        : null,
+    e2ee: row['e2ee'] as int,
+  );
+
   Future<CachedMessage> _decryptIncoming(
     CachedMessage message,
     String text,
-    Future<void> Function(CachedMessage message)? commit,
-  ) async {
+    Future<void> Function(CachedMessage message)? commit, {
+    bool preserveLegacyFailure = false,
+  }) async {
     final accountId = message.accountId;
     final chatId = message.chatId;
+    final stored = await AppDatabase.loadMessagesByIds(accountId, chatId, [
+      message.id,
+    ]);
+    if (stored.isNotEmpty &&
+        stored.first['text'] == message.text &&
+        (stored.first['e2ee'] as int? ?? 0) != CachedMessage.e2eeNone) {
+      return _withStoredEncryption(message, stored.first);
+    }
     final current = info(accountId, chatId);
     if (current == null || !current.hasSession) {
       return message;
@@ -710,6 +757,7 @@ class E2eeService {
       await _persist(accountId, chatId, current, state: result.state);
       return decrypted;
     } on KometCryptoException catch (e) {
+      if (preserveLegacyFailure) return message;
       switch (e.status) {
         case CryptoStatus.notEncrypted:
         case CryptoStatus.handshakeMessage:
@@ -742,18 +790,33 @@ class E2eeService {
     final result = <String, CachedMessage>{};
     for (final message in ordered) {
       final row = existing[message.id];
-      if (row != null && (row['e2ee'] as int? ?? 0) != CachedMessage.e2eeNone) {
-        result[message.id] = message.copyWith(
-          sealedText: row['text_sealed'] is Uint8List
-              ? row['text_sealed'] as Uint8List
-              : null,
-          e2ee: row['e2ee'] as int,
-        );
+      if (row != null &&
+          row['text'] == message.text &&
+          (row['e2ee'] as int? ?? 0) != CachedMessage.e2eeNone) {
+        result[message.id] = _withStoredEncryption(message, row);
         continue;
       }
       if (row != null && message.senderId != accountId) {
-        result[message.id] = message;
-        continue;
+        final text = message.text;
+        final textClass = text == null
+            ? TextClass.none
+            : KometCrypto.classifyText(text);
+        if (textClass != TextClass.session && textClass != TextClass.legacy) {
+          result[message.id] = message;
+          continue;
+        }
+        if (textClass == TextClass.legacy && message.senderId != 0) {
+          result[message.id] = await _serial(
+            _key(accountId, chatId),
+            () => _decryptIncoming(
+              message,
+              text!,
+              (decrypted) => AppDatabase.saveMessages([decrypted.toDbRow()]),
+              preserveLegacyFailure: true,
+            ),
+          );
+          continue;
+        }
       }
       result[message.id] = await inspect(
         message,
@@ -824,6 +887,7 @@ class E2eeService {
   }
 
   void forgetAccount(int accountId) {
+    _loading.remove(accountId);
     lock();
     _info.removeWhere((key, _) => key.startsWith('$accountId/'));
     _loaded.remove(accountId);
@@ -848,6 +912,8 @@ class E2eeService {
       }
     } catch (e) {
       logger.w('e2ee erase sessions: $e');
+    } finally {
+      forgetAccount(accountId);
     }
   }
 
