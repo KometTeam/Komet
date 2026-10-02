@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/config/build_profile.dart';
 import '../../core/plugins/plugin_host.dart';
 import '../../core/plugins/plugin_manifest.dart';
 import '../../core/plugins/plugin_models.dart';
@@ -104,7 +105,10 @@ class SlashCommand {
 
   Future<void> execute(PluginCommandContext context) {
     final plugin = pluginCommand;
-    if (plugin != null) return PluginRuntime.run(plugin, context);
+    if (plugin != null) {
+      if (!BuildProfile.plugins) return Future.value();
+      return PluginRuntime.run(plugin, context);
+    }
     return run?.call(context) ?? Future.value();
   }
 
@@ -140,6 +144,7 @@ class CommandRegistry {
   void initialize() {
     if (_initialized) return;
     _initialized = true;
+    if (!BuildProfile.plugins) return;
     PluginStore.instance.plugins.addListener(_rebuild);
     _rebuild();
   }

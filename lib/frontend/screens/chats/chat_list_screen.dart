@@ -29,6 +29,7 @@ import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/sliding_pill_nav.dart';
 import '../../widgets/springy_tap.dart';
+import '../../widgets/visible_page_tickers.dart';
 import '../../widgets/informer_banner_tile.dart';
 import '../../../backend/modules/forward_sender.dart';
 import '../../../backend/modules/share_sender.dart';
@@ -63,6 +64,7 @@ import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/build_profile.dart';
+import '../../../core/config/ios_release.dart';
 import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_spectrum_background.dart';
@@ -2655,6 +2657,28 @@ class _ChatListScreenState extends State<ChatListScreen>
               return lo + 4;
             }
 
+            final pageMotion = Listenable.merge([
+              _navPageAnimController,
+              _navDragDx,
+            ]);
+            double pagePosition() => _effectivePageNavRowT(
+              inactiveWidth: inactiveWidth,
+              bubbleLeftForIndex: bubbleLeftForPageT,
+            );
+            Widget page(int index, Widget body) => RepaintBoundary(
+              child: SizedBox(
+                width: pageW,
+                height: pageH,
+                child: VisiblePageTickers(
+                  index: index,
+                  enabled: IosRelease.isIOS,
+                  positionChanges: pageMotion,
+                  pagePosition: pagePosition,
+                  child: body,
+                ),
+              ),
+            );
+
             return Stack(
               children: [
                 if (AppSpectrumBackground.isEnabled)
@@ -2699,34 +2723,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              RepaintBoundary(
-                                child: SizedBox(
-                                  width: pageW,
-                                  height: pageH,
-                                  child: _getChatsBody(),
-                                ),
-                              ),
-                              RepaintBoundary(
-                                child: SizedBox(
-                                  width: pageW,
-                                  height: pageH,
-                                  child: const CallsTab(),
-                                ),
-                              ),
-                              RepaintBoundary(
-                                child: SizedBox(
-                                  width: pageW,
-                                  height: pageH,
-                                  child: const ContactsTab(),
-                                ),
-                              ),
-                              RepaintBoundary(
-                                child: SizedBox(
-                                  width: pageW,
-                                  height: pageH,
-                                  child: const SettingsTab(),
-                                ),
-                              ),
+                              page(0, _getChatsBody()),
+                              page(1, const CallsTab()),
+                              page(2, const ContactsTab()),
+                              page(3, const SettingsTab()),
                             ],
                           ),
                           builder: (context, child) {

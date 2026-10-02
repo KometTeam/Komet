@@ -112,6 +112,7 @@ import 'frontend/widgets/small_spinner.dart';
 import 'frontend/widgets/theme_reveal.dart';
 import 'frontend/widgets/floating_call_badge.dart';
 import 'frontend/widgets/floating_video_note.dart';
+import 'frontend/widgets/keyboard_dismissal.dart';
 
 final api = Api();
 final accountModule = AccountModule(api);
@@ -285,7 +286,7 @@ void main(List<String> args) async {
   E2eeService.instance.attach(messagesModule);
   await KometSettings.load();
   await AppLock.instance.load();
-  await PluginStore.instance.load();
+  if (BuildProfile.plugins) await PluginStore.instance.load();
   CommandRegistry.instance.initialize();
   if (KometSettings.ghostMode.value) SelfPresence.markOffline();
   await ContactCache.load();
@@ -1122,7 +1123,11 @@ class KometAppState extends State<KometApp>
               theme: _lightTheme,
               darkTheme: _darkTheme,
               navigatorKey: KometApp.navigatorKey,
-              navigatorObservers: [appRouteObserver, PerfRouteObserver()],
+              navigatorObservers: [
+                appRouteObserver,
+                PerfRouteObserver(),
+                KeyboardNavigatorObserver(),
+              ],
               builder: (context, child) {
                 return ValueListenableBuilder<double>(
                   valueListenable: fontScale,
@@ -1182,7 +1187,7 @@ class KometAppState extends State<KometApp>
                                   }
                                   return false;
                                 },
-                                child: sChild!,
+                                child: KeyboardDismissal(child: sChild!),
                               ),
                             ),
                             const Positioned.fill(

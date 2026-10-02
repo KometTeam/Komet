@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/config/build_profile.dart';
+import '../../core/config/ios_release.dart';
 import '../../core/utils/link_opener.dart';
 import '../screens/chats/chat_info_screen.dart';
 import '../screens/chats/chat_list_screen.dart';
@@ -131,6 +132,7 @@ Future<bool> openMaxRoute(
     case ':settings/blacklist':
       return _push(context, const SecurityScreen());
     case ':settings/messages':
+      if (!IosRelease.messageActionsStyleChoice) break;
       return _push(context, const MessageActionsScreen());
     case ':settings/dev':
     case ':settings/dev/logsviewer':

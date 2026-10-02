@@ -36,14 +36,15 @@ class KometSettingsScreen extends StatelessWidget {
             ),
             SettingsCard(
               children: [
-                SettingsNavTile(
-                  icon: Symbols.extension,
-                  label: 'Плагины',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PluginsScreen()),
+                if (BuildProfile.plugins)
+                  SettingsNavTile(
+                    icon: Symbols.extension,
+                    label: 'Плагины',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PluginsScreen()),
+                    ),
                   ),
-                ),
                 if (BuildProfile.hiddenContentViewers) ...[
                   ValueListenableBuilder<bool>(
                     valueListenable: KometSettings.viewDeleted,

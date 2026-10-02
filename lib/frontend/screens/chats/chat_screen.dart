@@ -772,7 +772,9 @@ class _ChatScreenState extends State<ChatScreen>
                 e.chatId == widget.chatId && e.postId == widget.commentPostId,
           )
           .listen(_onLiveComment);
-    } else if (widget.chatType == 'CHANNEL') {
+    } else {
+      // #***! тип из маршрута бывает запасным (CHAT/DIALOG), а канал
+      // #***! узнаём позже из chat; счётчики слушаем в любом чате
       _commentsInfoSub = commentsModule.infoStream.listen(_onCommentsInfo);
     }
     ChatActivityStore.instance
@@ -781,8 +783,10 @@ class _ChatScreenState extends State<ChatScreen>
     ChatMembersStore.instance
         .listenable(widget.chatId)
         .addListener(_recomputeHeaderStatus);
-    _connSub = api.stateStream.listen((_) {
-      if (mounted) _recomputeHeaderStatus();
+    _connSub = api.stateStream.listen((state) {
+      if (!mounted) return;
+      _recomputeHeaderStatus();
+      if (state == SessionState.online) _requestCommentCounts();
     });
     debugForceOffline.addListener(_recomputeHeaderStatus);
     PresenceFetch.revision.addListener(_onPresenceChanged);
@@ -1022,7 +1026,22 @@ class _ChatScreenState extends State<ChatScreen>
     _routeSettle.run(_kickoffHistory);
   }
 
-  List<CachedMessage>? _fastLocalDecoded;
+  Future<List<CachedMessage>>? _localHistoryLoad;
+
+  Future<List<CachedMessage>> _readLocalHistory() =>
+      _localHistoryLoad ??= _loadLocalHistoryOnce();
+
+  Future<List<CachedMessage>> _loadLocalHistoryOnce() async {
+    try {
+      return await _chatController.loadLocalHistory(
+        onApplyMerged: _applyMergedMessages,
+      );
+    } catch (_) {
+      _localHistoryLoad = null;
+      rethrow;
+    }
+  }
+
   bool _fastLocalStarted = false;
 
   // #***! читаем сообщения из локальной БД сразу, не дожидаясь конца
@@ -1036,9 +1055,11 @@ class _ChatScreenState extends State<ChatScreen>
       _myId = activeProfile?.id ?? 0;
     }
     if (!mounted) return;
-    _fastLocalDecoded = await _chatController.loadLocalHistory(
-      onApplyMerged: _applyMergedMessages,
-    );
+    try {
+      await _readLocalHistory();
+    } catch (error) {
+      logger.w('Local history preload failed: $error');
+    }
   }
 
   void _kickoffHistory() {
@@ -1729,11 +1750,7 @@ class _ChatScreenState extends State<ChatScreen>
       unawaited(_loadOtherPresence());
     }
     unawaited(_refreshScheduledCount());
-    final localDecoded =
-        _fastLocalDecoded ??
-        await _chatController.loadLocalHistory(
-          onApplyMerged: _applyMergedMessages,
-        );
+    final localDecoded = await _readLocalHistory();
     if (!mounted) return;
     await _chatController.loadRemainingHistory(
       localDecoded: localDecoded,
@@ -2037,17 +2054,28 @@ class _ChatScreenState extends State<ChatScreen>
       pending.add(m.id);
     }
     if (pending.isEmpty) return;
-    unawaited(
-      commentsModule.fetchInfo(
-        accountId: _myId,
-        chatId: widget.chatId,
-        postIds: pending,
-      ),
+    unawaited(_fetchCommentCounts(pending));
+  }
+
+  // #***! запрос не дошёл (нет сети, таймаут, реконнект) — снимаем отметку,
+  // #***! иначе посты так и останутся без счётчика до переоткрытия чата
+  Future<void> _fetchCommentCounts(List<String> postIds) async {
+    final info = await commentsModule.fetchInfo(
+      accountId: _myId,
+      chatId: widget.chatId,
+      postIds: postIds,
     );
+    if (!mounted) return;
+    if (info == null) {
+      _commentCountsRequested.removeAll(postIds);
+      return;
+    }
+    _onCommentsInfo(commentsModule.infoSnapshot);
   }
 
   void _onCommentsInfo(Map<String, CommentsInfo> info) {
     if (!mounted) return;
+    if (_commentsMode) return;
     var changed = false;
     for (final m in _messages) {
       final count = info[m.id]?.totalCount;
