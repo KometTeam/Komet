@@ -6,6 +6,7 @@ import 'package:komet_crypto/komet_crypto.dart';
 
 import '../storage/chat_encryption_store.dart';
 import '../utils/logger.dart';
+import 'chat_crypto_key_cache.dart';
 import 'noise_png.dart';
 
 const int kMaxEncryptedMessageLength = 1000;
@@ -59,35 +60,20 @@ class ChatCryptoService {
 
   static final ChatCryptoService instance = ChatCryptoService._();
 
-  // #***! ключи в памяти по аккаунт/чат, _pending схлопывает параллельный вывод
-  final Map<String, Uint8List> _keys = {};
-  final Map<String, Future<Uint8List?>> _pending = {};
-
-  String _cacheKey(int accountId, int chatId) => '$accountId/$chatId';
+  // #***! ключ выводится из парольной фразы и это дорого, отсюда кэш
+  late final ChatCryptoKeyCache _keyCache = ChatCryptoKeyCache(
+    _deriveKey,
+    wipe: KometCrypto.wipe,
+  );
 
   bool get _unavailable => !KometCrypto.isAvailable;
 
-  void clearKeys() {
-    for (final key in _keys.values) {
-      KometCrypto.wipe(key);
-    }
-    _keys.clear();
-    _pending.clear();
-  }
+  void clearKeys() => _keyCache.clear();
 
-  // #***! ключ выводится из парольной фразы и это дорого, отсюда кэш
-  Future<Uint8List?> _keyFor(int accountId, int chatId) {
-    final cacheKey = _cacheKey(accountId, chatId);
-    final cached = _keys[cacheKey];
-    if (cached != null) return Future.value(cached);
-    return _pending[cacheKey] ??= _deriveKey(accountId, chatId, cacheKey);
-  }
+  Future<Uint8List?> _keyFor(int accountId, int chatId) =>
+      _keyCache.keyFor(accountId, chatId);
 
-  Future<Uint8List?> _deriveKey(
-    int accountId,
-    int chatId,
-    String cacheKey,
-  ) async {
+  Future<Uint8List?> _deriveKey(int accountId, int chatId) async {
     try {
       if (_unavailable) return null;
       final password = await ChatEncryptionStore.instance.readKey(
@@ -95,14 +81,10 @@ class ChatCryptoService {
         chatId,
       );
       if (password == null || password.isEmpty) return null;
-      final key = await Isolate.run(() => KometCrypto.deriveKey(password));
-      _keys[cacheKey] = key;
-      return key;
+      return await Isolate.run(() => KometCrypto.deriveKey(password));
     } catch (e) {
       logger.w('derive key for chat $chatId: $e');
       return null;
-    } finally {
-      _pending.remove(cacheKey);
     }
   }
 

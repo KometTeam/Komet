@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -15,6 +14,7 @@ import '../../../main.dart' show api, messagesModule, webAppModule;
 import '../../widgets/confirm_dialog.dart';
 import '../chats/chat_list_screen.dart' show openForwardScreen;
 import '../profile/web_qr_scan_screen.dart';
+import 'web_app_biometry.dart';
 import '../../../core/security/app_lock.dart';
 
 abstract class WebAppEntryPoint {
@@ -158,7 +158,8 @@ class WebAppBridge {
     this.privateChannel = false,
     this.mobileIdVerifier,
     this.emitter,
-  });
+    WebAppBiometry? biometry,
+  }) : biometry = biometry ?? DeviceWebAppBiometry(contextResolver);
 
   final int botId;
   final String entryPoint;
@@ -168,6 +169,7 @@ class WebAppBridge {
   final bool privateChannel;
   final WebAppMobileIdVerifier? mobileIdVerifier;
   final WebAppEmitter? emitter;
+  final WebAppBiometry biometry;
 
   InAppWebViewController? _controller;
   DateTime? _lastGesture;
@@ -330,17 +332,19 @@ class WebAppBridge {
         await _storageClear(method, requestId);
         return;
       case 'WebAppBiometryGetInfo':
-        await _biometryInfo(method, requestId);
+        await _biometryInfo(method, requestId, private);
         return;
       case 'WebAppBiometryRequestAccess':
+        await _biometryRequestAccess(method, requestId, data, private);
+        return;
       case 'WebAppBiometryRequestAuth':
-        await _biometryAuth(method, requestId);
+        await _biometryAuth(method, requestId, data, private);
         return;
       case 'WebAppBiometryUpdateToken':
-        await _biometryUpdateToken(method, requestId, data);
+        await _biometryUpdateToken(method, requestId, data, private);
         return;
       case 'WebAppBiometryOpenSettings':
-        _ok(method, requestId, 'opened');
+        await _biometryOpenSettings(method, requestId, private);
         return;
       case 'WebAppHapticFeedbackImpact':
         await _impact(data['impactStyle']?.toString());
@@ -583,81 +587,193 @@ class WebAppBridge {
     _ok(method, requestId, 'cleared');
   }
 
-  Future<void> _biometryInfo(String method, String? requestId) async {
-    final accountId = await TokenStorage.getActiveAccountId();
-    final deviceId = api.deviceId ?? '';
+  static const int _biometryReasonLimit = 128;
+  static const int _biometryTokenLimit = 1024;
+
+  String? _biometryReason(Map<String, dynamic> data) {
+    final reason = data['reason']?.toString().trim();
+    if (reason == null || reason.isEmpty) return null;
+    return reason.length > _biometryReasonLimit
+        ? reason.substring(0, _biometryReasonLimit)
+        : reason;
+  }
+
+  Future<Map<String, dynamic>> _biometryState(int? accountId) async {
     if (accountId == null) {
-      _send(method, {
-        'requestId': ?requestId,
+      return const {
         'available': false,
-        'deviceId': deviceId,
-      });
-      return;
+        'type': ['unknown'],
+        'accessRequested': false,
+        'accessGranted': false,
+        'tokenSaved': false,
+        'deviceId': null,
+      };
     }
+    final types = await biometry.types();
     final (requested, granted) = await WebAppStorage.biometryAccess(
       accountId,
       botId,
     );
     final token = await WebAppStorage.biometryToken(accountId, botId);
-    _send(method, {
-      'requestId': ?requestId,
-      'available': true,
-      'type': const ['unknown'],
+    return {
+      'available': types.isNotEmpty,
+      'type': types.isEmpty ? const ['unknown'] : types,
       'accessRequested': requested,
       'accessGranted': granted,
       'tokenSaved': token != null,
-      'deviceId': deviceId,
-    });
+      'deviceId': granted ? api.deviceId : null,
+    };
   }
 
-  Future<void> _biometryAuth(String method, String? requestId) async {
+  Future<void> _biometryInfo(
+    String method,
+    String? requestId,
+    bool private,
+  ) async {
     final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId == null) {
-      _fail(method, requestId, 'access_denied');
-      return;
-    }
-    var token = await WebAppStorage.biometryToken(accountId, botId);
-    if (token == null) {
-      token = _randomToken();
-      await WebAppStorage.saveBiometryToken(accountId, botId, token);
-    }
-    await WebAppStorage.setBiometryAccess(
-      accountId,
-      botId,
-      requested: true,
-      granted: true,
-    );
     _send(method, {
       'requestId': ?requestId,
-      'token': token,
+      ...await _biometryState(accountId),
+    }, private: private);
+  }
+
+  Future<void> _biometryRequestAccess(
+    String method,
+    String? requestId,
+    Map<String, dynamic> data,
+    bool private,
+  ) async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) {
+      _fail(method, requestId, 'access_denied', private: private);
+      return;
+    }
+    if ((await biometry.types()).isEmpty) {
+      _fail(method, requestId, 'not_supported', private: private);
+      return;
+    }
+    final (requested, _) = await WebAppStorage.biometryAccess(accountId, botId);
+    if (!requested) {
+      final allowed = await biometry.confirmAccess(_biometryReason(data));
+      if (allowed == null) {
+        _fail(method, requestId, 'request_error', private: private);
+        return;
+      }
+      await WebAppStorage.setBiometryAccess(
+        accountId,
+        botId,
+        requested: true,
+        granted: allowed,
+      );
+    }
+    _send(method, {
+      'requestId': ?requestId,
+      ...await _biometryState(accountId),
+    }, private: private);
+  }
+
+  Future<void> _biometryAuth(
+    String method,
+    String? requestId,
+    Map<String, dynamic> data,
+    bool private,
+  ) async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) {
+      _fail(method, requestId, 'access_denied', private: private);
+      return;
+    }
+    if ((await biometry.types()).isEmpty) {
+      _fail(method, requestId, 'not_supported', private: private);
+      return;
+    }
+    final (_, granted) = await WebAppStorage.biometryAccess(accountId, botId);
+    if (!granted) {
+      _fail(method, requestId, 'permission_denied', private: private);
+      return;
+    }
+    final token = await WebAppStorage.biometryToken(accountId, botId);
+    if (token == null) {
+      _fail(method, requestId, 'not_found', private: private);
+      return;
+    }
+    if (!await biometry.authenticate(_biometryReason(data))) {
+      _fail(method, requestId, 'auth_failed', private: private);
+      return;
+    }
+    _send(method, {
+      'requestId': ?requestId,
       'status': 'authorized',
-      'granted': true,
-      'accessGranted': true,
-    });
+      'token': token,
+    }, private: private);
   }
 
   Future<void> _biometryUpdateToken(
     String method,
     String? requestId,
     Map<String, dynamic> data,
+    bool private,
   ) async {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) {
-      _fail(method, requestId, 'access_denied');
+      _fail(method, requestId, 'access_denied', private: private);
       return;
     }
     final token = data['token']?.toString();
     if (token == null || token.isEmpty) {
       await WebAppStorage.removeBiometryToken(accountId, botId);
-      _ok(method, requestId, 'removed');
+      _ok(method, requestId, 'removed', private: private);
       return;
     }
-    if (token.length > 1024) {
-      _fail(method, requestId, 'too_large');
+    if (token.length > _biometryTokenLimit) {
+      _fail(method, requestId, 'too_large', private: private);
+      return;
+    }
+    if ((await biometry.types()).isEmpty) {
+      _fail(method, requestId, 'not_supported', private: private);
+      return;
+    }
+    final (_, granted) = await WebAppStorage.biometryAccess(accountId, botId);
+    if (!granted) {
+      _fail(method, requestId, 'permission_denied', private: private);
+      return;
+    }
+    if (!await biometry.authenticate(_biometryReason(data))) {
+      _fail(method, requestId, 'auth_failed', private: private);
       return;
     }
     await WebAppStorage.saveBiometryToken(accountId, botId, token);
-    _ok(method, requestId, 'updated');
+    _ok(method, requestId, 'updated', private: private);
+  }
+
+  Future<void> _biometryOpenSettings(
+    String method,
+    String? requestId,
+    bool private,
+  ) async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) {
+      _fail(method, requestId, 'access_denied', private: private);
+      return;
+    }
+    if ((await biometry.types()).isEmpty) {
+      _fail(method, requestId, 'not_supported', private: private);
+      return;
+    }
+    final (_, granted) = await WebAppStorage.biometryAccess(accountId, botId);
+    final allowed = await biometry.confirmAccess(null);
+    if (allowed == null) {
+      _fail(method, requestId, 'request_error', private: private);
+      return;
+    }
+    await WebAppStorage.setBiometryAccess(
+      accountId,
+      botId,
+      requested: true,
+      granted: allowed,
+    );
+    _ok(method, requestId, 'opened', private: private);
+    if (allowed != granted) onClose();
   }
 
   Future<void> _impact(String? style) async {
@@ -758,11 +874,5 @@ class WebAppBridge {
     } catch (_) {
       _fail(method, requestId, 'request_error', private: private);
     }
-  }
-
-  static String _randomToken() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 }

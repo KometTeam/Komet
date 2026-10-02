@@ -586,6 +586,9 @@ class CachedMessage {
     e2ee: e2ee ?? this.e2ee,
   );
 
+  CachedMessage withSendFailure(Object error) =>
+      copyWith(status: isPermanentSendFailure(error) ? 'error' : 'pending');
+
   // #***! история правок это список прошлых версий текста
   static List<Map<String, dynamic>>? parseEditHistory(dynamic raw) {
     if (raw is! String || raw.isEmpty) return null;

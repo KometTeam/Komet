@@ -219,6 +219,15 @@ class AppLock {
     }
   }
 
+  Future<List<BiometricType>> biometricTypes() async {
+    if (!await biometricAvailable()) return const [];
+    try {
+      return await _auth.getAvailableBiometrics();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<bool> authenticateBiometric(String reason) async {
     if (!await biometricAvailable()) return false;
     try {

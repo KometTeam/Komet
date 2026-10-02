@@ -10,7 +10,6 @@ import '../../../../backend/modules/messages.dart';
 import '../../../../core/config/app_commands.dart';
 import '../../../../core/crypto/message_decryption_cache.dart';
 import '../../../../core/plugins/plugin_outgoing_text.dart';
-import '../../../../core/protocol/packet.dart';
 import '../../../../core/storage/app_database.dart';
 import '../../../../core/cache/message_session_cache.dart';
 import '../../../../core/storage/draft_store.dart';
@@ -450,23 +449,11 @@ class ChatTextSendController {
         }
         return;
       }
-      final failed = isPermanentSendFailure(e);
-      final status = failed ? 'error' : 'pending';
-      if (failed) logger.w('Отправка отклонена сервером: $e');
+      final queued = composed.withSendFailure(e);
+      final status = queued.status!;
+      if (status == 'error') logger.w('Отправка отклонена сервером: $e');
       final index = chatController.indexOfId(tempId);
       if (index != -1 && isMounted()) {
-        final queued = CachedMessage(
-          id: tempId,
-          accountId: _myId,
-          chatId: _chatId,
-          senderId: _myId,
-          text: wireText,
-          time: now,
-          status: status,
-          payload: composedPayload,
-          sealedText: sealedText,
-          e2ee: e2eeFlag,
-        );
         chatController.setMessageAt(index, queued);
         bumpMessages();
         if (!commentsMode) {
@@ -477,7 +464,7 @@ class ChatTextSendController {
               _chatId,
               messageId: tempId,
               time: now,
-              text: text,
+              text: wireText,
               status: status,
               elements: elements,
             ),
