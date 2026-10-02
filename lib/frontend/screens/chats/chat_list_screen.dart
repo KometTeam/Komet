@@ -394,17 +394,29 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  void _toggleRecipient(String chatId, String name) {
+  Future<void> _toggleRecipient(String chatId, String name) async {
     final myId = _profile?.id ?? 0;
     final chatIdValue = int.tryParse(chatId) ?? 0;
-    if (widget.forwardBatch != null &&
-        !_selectedChats.contains(chatId) &&
-        ChatEncryptionStore.instance.isEnabled(myId, chatIdValue)) {
-      showCustomNotification(
-        context,
-        AppLocalizations.of(context)!.e2eeForwardBlocked,
-      );
-      return;
+    if (widget.forwardBatch != null && !_selectedChats.contains(chatId)) {
+      try {
+        await E2eeService.instance.ensureLoaded(myId);
+      } catch (_) {
+        if (mounted) {
+          showCustomNotification(
+            context,
+            AppLocalizations.of(context)!.forwardFailed,
+          );
+        }
+        return;
+      }
+      if (!mounted || _profile?.id != myId) return;
+      if (ForwardSender.isBlocked(myId, chatIdValue)) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.e2eeForwardBlocked,
+        );
+        return;
+      }
     }
     Haptics.selection();
     setState(() {
@@ -554,9 +566,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final batch = widget.forwardBatch;
     final myId = _profile?.id ?? 0;
     if (batch == null || myId == 0 || _shareSending) return;
-    final targets = [
-      for (final raw in _selectedChats) ?int.tryParse(raw),
-    ];
+    final targets = [for (final raw in _selectedChats) ?int.tryParse(raw)];
     if (targets.isEmpty) return;
     final l10n = AppLocalizations.of(context)!;
     if (api.state != SessionState.online) {

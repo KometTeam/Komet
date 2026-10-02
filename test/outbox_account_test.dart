@@ -45,7 +45,9 @@ class _ControlledApi extends Api {
     int opcode,
     Map<dynamic, dynamic> payload, {
     bool silent = false,
+    void Function()? beforeSend,
   }) {
+    beforeSend?.call();
     final message = payload['message'] as Map;
     requests.add((epoch, message['text'] as String));
     final handler = responder;

@@ -717,8 +717,7 @@ class CachedMessage {
       {
         'text': text,
         'attaches': [
-          for (final attachment
-              in attachments ?? const <MessageAttachment>[])
+          for (final attachment in attachments ?? const <MessageAttachment>[])
             attachment.toMap(),
         ],
       };
@@ -773,6 +772,7 @@ class CachedMessage {
 
 // #***! все операции с сообщениями
 class MessagesModule {
+  int get sessionEpoch => _api.sessionEpoch;
   final Api _api;
 
   MessagesModule(this._api);
@@ -1004,6 +1004,7 @@ class MessagesModule {
     int? replyToMessageId,
     int? replySourceChatId,
     List<Map<String, dynamic>> elements = const [],
+    void Function()? beforeSend,
   }) async {
     final message = <String, dynamic>{
       'text': text,
@@ -1026,7 +1027,11 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    return _sendAndExtractMessageId(payload, 'Ошибка отправки');
+    return _sendAndExtractMessageId(
+      payload,
+      'Ошибка отправки',
+      beforeSend: beforeSend,
+    );
   }
 
   // #***! системное сообщение
@@ -1070,9 +1075,14 @@ class MessagesModule {
   // #***! разбор ответа отправки, достаём id от сервера
   Future<String> _sendAndExtractMessageId(
     Map<String, dynamic> payload,
-    String defaultError,
-  ) async {
-    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    String defaultError, {
+    void Function()? beforeSend,
+  }) async {
+    final response = await _api.sendRequest(
+      Opcode.msgSend,
+      payload,
+      beforeSend: beforeSend,
+    );
     if (!response.isOk) {
       _throwSendError(response.payload, defaultError);
     }
@@ -1134,6 +1144,7 @@ class MessagesModule {
     int sourceChatId,
     int messageId, {
     bool notify = true,
+    void Function()? beforeSend,
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -1153,13 +1164,18 @@ class MessagesModule {
       'notify': notify,
     };
 
-    return _sendAndExtractMessageId(payload, 'Ошибка пересылки');
+    return _sendAndExtractMessageId(
+      payload,
+      'Ошибка пересылки',
+      beforeSend: beforeSend,
+    );
   }
 
   Future<Map<String, dynamic>> sendMessageCopy(
     int chatId,
     MessageCopy copy, {
     bool notify = true,
+    void Function()? beforeSend,
   }) async {
     final response = await _api.sendRequest(Opcode.msgSend, {
       'chatId': chatId,
@@ -1170,7 +1186,7 @@ class MessagesModule {
         'attaches': copy.wireAttaches,
       },
       'notify': notify,
-    });
+    }, beforeSend: beforeSend);
     final sent = _sentMessageMap(response);
     if (sent == null) _throwSendError(response.payload, 'Ошибка пересылки');
     return sent;

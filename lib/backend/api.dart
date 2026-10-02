@@ -242,9 +242,13 @@ class Api {
         }
       }
       if (gen != _connectGen) return;
-      if (_loginGate.loginUnanswered) {
+      if (_loginGate.loginUnanswered || _loginGate.loginRejected) {
         await _handleConnectFailure(
-          StateError('сервер не ответил на вход'),
+          StateError(
+            _loginGate.loginRejected
+                ? 'сервер отклонил вход'
+                : 'сервер не ответил на вход',
+          ),
           phase: 'Авто-логин',
         );
         return;
@@ -338,7 +342,9 @@ class Api {
     int opcode,
     Map<dynamic, dynamic> payload, {
     bool silent = false,
+    void Function()? beforeSend,
   }) async {
+    final initialSession = _session;
     if (_session == null) {
       throw StateError('Нет соединения (${Opcode.name(opcode)})');
     }
@@ -349,7 +355,11 @@ class Api {
     if (session == null) {
       throw StateError('Нет соединения (${Opcode.name(opcode)})');
     }
+    if (beforeSend != null && !identical(session, initialSession)) {
+      throw StateError('Сессия изменилась до отправки');
+    }
     if (opcode == Opcode.login) _loginGate.noteLoginSent();
+    beforeSend?.call();
 
     final KolibriResponse resp = await session
         .requestMapFull(opcode, Map<String, dynamic>.from(payload))

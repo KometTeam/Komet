@@ -48,7 +48,9 @@ class _RecordingApi extends Api {
     int opcode,
     Map<dynamic, dynamic> payload, {
     bool silent = false,
+    void Function()? beforeSend,
   }) async {
+    beforeSend?.call();
     requests.add((opcode, payload, silent));
     return Packet(cmd: CmdType.ok, opcode: opcode, payload: reply());
   }

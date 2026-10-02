@@ -4,8 +4,10 @@ class LoginGate {
   Completer<void>? _gate;
   bool _loginSent = false;
   bool _loginAnswered = false;
+  bool _loginSucceeded = false;
 
   bool get loginUnanswered => _loginSent && !_loginAnswered;
+  bool get loginRejected => _loginSent && _loginAnswered && !_loginSucceeded;
 
   void close() {
     fail();
@@ -14,9 +16,11 @@ class LoginGate {
     _gate = gate;
     _loginSent = false;
     _loginAnswered = false;
+    _loginSucceeded = false;
   }
 
   void open() {
+    if (_loginSent && !_loginSucceeded) return;
     final gate = _gate;
     if (gate != null && !gate.isCompleted) gate.complete();
   }
@@ -28,10 +32,15 @@ class LoginGate {
     }
   }
 
-  void noteLoginSent() => _loginSent = true;
+  void noteLoginSent() {
+    _loginSent = true;
+    _loginAnswered = false;
+    _loginSucceeded = false;
+  }
 
   void noteLoginAnswer({required bool ok}) {
     _loginAnswered = true;
+    _loginSucceeded = ok;
     if (ok) open();
   }
 
