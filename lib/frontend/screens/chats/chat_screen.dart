@@ -25,6 +25,7 @@ import 'package:komet/frontend/screens/contacts/open_contact_profile.dart';
 import 'package:komet/frontend/screens/chats/chat_list_screen.dart';
 import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/frontend/widgets/hint_bubble.dart';
 import 'package:komet/frontend/widgets/undo_notification.dart';
 import 'package:komet/backend/modules/pending_message_deletions.dart';
 import 'package:komet/frontend/screens/chats/chat_removal_undo.dart';
@@ -350,8 +351,8 @@ class _ChatScreenState extends State<ChatScreen>
     final previous = notifier.value;
     if (!_reactionAllowed(previous, emoji)) {
       Haptics.error();
-      showCustomNotification(
-        context,
+      showHintBubble(
+        _messageKeys[message.id]?.currentContext ?? context,
         AppLocalizations.of(context)!.reactionUnavailable,
       );
       return;
@@ -382,7 +383,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (!result.ok) {
       notifier.value = previous;
       Haptics.error();
-      showCustomNotification(context, 'Не удалось обновить реакцию');
+      showHintBubble(
+        _messageKeys[message.id]?.currentContext ?? context,
+        'Не удалось обновить реакцию',
+      );
       return;
     }
     notifier.value = result.info;
@@ -1535,7 +1539,9 @@ class _ChatScreenState extends State<ChatScreen>
   bool get _everyoneCanPin =>
       !_isChannel && (chat?.options.contains('ALL_CAN_PIN_MESSAGE') ?? false);
 
-  bool get _canPin => _everyoneCanPin || _hasRight(AdminRight.pinMessages);
+  bool get _canPin =>
+      widget.chatType != 'DIALOG' &&
+      (_everyoneCanPin || _hasRight(AdminRight.pinMessages));
 
   bool get _commentsEnabled => chat?.commentsEnabled ?? false;
 
@@ -4023,8 +4029,12 @@ class _ChatScreenState extends State<ChatScreen>
     final arguments = _selectedCommandArguments();
     final missing = command.missingArgument(arguments);
     if (missing != null) {
-      showCustomNotification(context, 'Заполните поле ${missing.name}');
-      _commandArgumentFocusNodes[missing.name]?.requestFocus();
+      final field = _commandArgumentFocusNodes[missing.name];
+      showHintBubble(
+        field?.context ?? context,
+        'Заполните поле ${missing.name}',
+      );
+      field?.requestFocus();
       return;
     }
     final args = serializeCommandArguments(command.arguments, arguments);

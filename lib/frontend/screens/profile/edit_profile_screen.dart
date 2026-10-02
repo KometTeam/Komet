@@ -9,6 +9,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show accountModule, fileUploader, KometApp;
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/small_spinner.dart';
 import '../../../core/security/app_lock.dart';
@@ -22,6 +23,7 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _firstNameController = TextEditingController();
+  final _firstNameFieldKey = GlobalKey();
   final _lastNameController = TextEditingController();
   final _bioController = TextEditingController();
   bool _isLoading = true;
@@ -62,7 +64,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (_isSaving) return;
     final firstName = _firstNameController.text.trim();
     if (firstName.isEmpty) {
-      if (mounted) showCustomNotification(context, 'Имя не может быть пустым');
+      if (mounted) {
+        showHintBubble(
+          _firstNameFieldKey.currentContext ?? context,
+          'Имя не может быть пустым',
+        );
+      }
       return;
     }
     final lastName = _lastNameController.text.trim();
@@ -257,6 +264,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   _firstNameController,
                   cs,
                   enabled: !_isSaving,
+                  fieldKey: _firstNameFieldKey,
                 ),
                 const SizedBox(height: 12),
                 _buildTextField(
@@ -287,6 +295,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     bool enabled = true,
     int? minLines,
     int maxLines = 1,
+    Key? fieldKey,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -299,6 +308,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
         ),
         TextField(
+          key: fieldKey,
           controller: controller,
           enabled: enabled,
           minLines: minLines,

@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/utils/format.dart';
-import 'custom_notification.dart';
+import 'hint_bubble.dart';
 import 'sheet_helpers.dart';
 import '../../core/config/app_fonts.dart';
 import '../../core/config/app_shape.dart';
@@ -101,10 +101,10 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
     return 'Отправить $day в ${formatClock(s)}';
   }
 
-  void _confirm() {
+  void _confirm(BuildContext buttonContext) {
     final result = _selected;
     if (!result.isAfter(DateTime.now())) {
-      showCustomNotification(context, 'Время должно быть в будущем');
+      showHintBubble(buttonContext, 'Время должно быть в будущем');
       return;
     }
     Navigator.of(context).pop(result);
@@ -171,17 +171,19 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: AppShape.buttonBorder,
-                ),
-                onPressed: _confirm,
-                child: Text(
-                  _buttonLabel,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+              child: Builder(
+                builder: (buttonContext) => FilledButton(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: AppShape.buttonBorder,
+                  ),
+                  onPressed: () => _confirm(buttonContext),
+                  child: Text(
+                    _buttonLabel,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),

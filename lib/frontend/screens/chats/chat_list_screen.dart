@@ -21,6 +21,7 @@ import '../../widgets/decrypted_text.dart';
 import '../../widgets/encryption_lock_badge.dart';
 import '../../widgets/online_dot.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/undo_notification.dart';
 import 'chat_removal_undo.dart';
 import '../contacts/find_user_sheet.dart';
@@ -528,32 +529,36 @@ class _ChatListScreenState extends State<ChatListScreen>
       recipientNames: _shareRecipientNames,
       sending: _shareSending,
       onSend: _sendForward,
-      headerAction: IconButton(
-        tooltip: _forwardHideSender
-            ? l10n.forwardShowSender
-            : l10n.forwardHideSender,
-        icon: LottieSlashIcon(
-          asset: 'assets/lottie/ic_person_on_to_off.json',
-          slashed: _forwardHideSender,
-          color: _forwardHideSender
-              ? cs.primary
-              : batch.canHideSender
-              ? cs.onSurfaceVariant
-              : cs.onSurfaceVariant.withValues(alpha: 0.38),
-          size: 20,
+      headerAction: Builder(
+        builder: (buttonContext) => IconButton(
+          tooltip: _forwardHideSender
+              ? l10n.forwardShowSender
+              : l10n.forwardHideSender,
+          icon: LottieSlashIcon(
+            asset: 'assets/lottie/ic_person_on_to_off.json',
+            slashed: _forwardHideSender,
+            color: _forwardHideSender
+                ? cs.primary
+                : batch.canHideSender
+                ? cs.onSurfaceVariant
+                : cs.onSurfaceVariant.withValues(alpha: 0.38),
+            size: 20,
+          ),
+          onPressed: _shareSending
+              ? null
+              : () => _toggleForwardHideSender(buttonContext),
         ),
-        onPressed: _shareSending ? null : _toggleForwardHideSender,
       ),
     );
   }
 
-  void _toggleForwardHideSender() {
+  void _toggleForwardHideSender(BuildContext buttonContext) {
     final batch = widget.forwardBatch;
     if (batch == null) return;
     if (!_forwardHideSender && !batch.canHideSender) {
       Haptics.error();
-      showCustomNotification(
-        context,
+      showHintBubble(
+        buttonContext,
         AppLocalizations.of(context)!.forwardHideSenderUnavailable,
       );
       return;

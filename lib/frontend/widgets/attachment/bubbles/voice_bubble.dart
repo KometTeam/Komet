@@ -12,6 +12,7 @@ import '../../../../core/utils/format.dart';
 import '../../../../core/utils/logger.dart';
 import '../../custom_notification.dart';
 import '../../small_spinner.dart';
+import 'meta_marks.dart';
 
 class VoiceMessageBubble extends StatefulWidget {
   final int duration;
@@ -22,6 +23,7 @@ class VoiceMessageBubble extends StatefulWidget {
   final String? status;
   final ValueListenable<int>? otherReadTime;
   final int time;
+  final bool likelyForwarded;
   final ColorScheme cs;
   final String? waveData;
   final int chatId;
@@ -43,6 +45,7 @@ class VoiceMessageBubble extends StatefulWidget {
     this.status,
     this.otherReadTime,
     required this.time,
+    this.likelyForwarded = false,
     required this.cs,
     this.waveData,
     required this.chatId,
@@ -405,6 +408,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                 ),
               ),
               if (!_transcriptionVisible) ...[
+                if (widget.likelyForwarded)
+                  LikelyForwardedMark(
+                    color: widget.textColor.withValues(alpha: 0.6),
+                  ),
                 Text(
                   formatClock(
                     DateTime.fromMillisecondsSinceEpoch(widget.time),
@@ -434,6 +441,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (widget.likelyForwarded)
+                  LikelyForwardedMark(
+                    color: widget.textColor.withValues(alpha: 0.6),
+                  ),
                 Text(
                   formatClock(
                     DateTime.fromMillisecondsSinceEpoch(widget.time),

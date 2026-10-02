@@ -292,7 +292,7 @@ class AppDatabase {
     final opened = await openDatabase(
       target,
       // #***! каждый if oldVersion < N это шаг миграции, идут по порядку
-      version: 28,
+      version: 29,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -453,6 +453,9 @@ class AppDatabase {
         }
         if (oldVersion < 28) {
           await db.execute(_messageRangesSchema);
+        }
+        if (oldVersion < 29) {
+          await _addColumnIfMissing(db, 'messages', 'typing_ms', 'INTEGER');
         }
       },
     );
@@ -656,6 +659,7 @@ class AppDatabase {
       edit_history TEXT,
       text_sealed BLOB,
       e2ee       INTEGER NOT NULL DEFAULT 0,
+      typing_ms  INTEGER,
       PRIMARY KEY (id, account_id),
       FOREIGN KEY (chat_id, account_id) REFERENCES chats_cache (id, account_id) ON DELETE CASCADE
     )

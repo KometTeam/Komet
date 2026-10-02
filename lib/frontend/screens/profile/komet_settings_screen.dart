@@ -78,6 +78,30 @@ class KometSettingsScreen extends StatelessWidget {
                     onChanged: KometSettings.setFullTimestamp,
                   ),
                 ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.showForward,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.forward,
+                    label: 'Show Forward',
+                    subtitle:
+                        'Показывать метку на пересланных сообщениях, '
+                        'даже если на них не указан автор',
+                    value: value,
+                    onChanged: KometSettings.setShowForward,
+                  ),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.showTypingTime,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.timer,
+                    label: 'Show typing time',
+                    subtitle:
+                        'Пытается рассчитать примерное время, '
+                        'сколько печаталось сообщение',
+                    value: value,
+                    onChanged: KometSettings.setShowTypingTime,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),

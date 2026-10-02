@@ -9,6 +9,7 @@ import '../../core/utils/text_entities.dart';
 import '../../main.dart' show api;
 import 'chat_menu_overlay.dart';
 import 'custom_notification.dart';
+import 'hint_bubble.dart';
 import 'komet_avatar.dart';
 import 'max_link_handler.dart';
 import 'small_spinner.dart';
@@ -26,7 +27,7 @@ Future<void> copyTextEntity(
 ) async {
   await Clipboard.setData(ClipboardData(text: value));
   if (!context.mounted) return;
-  showCustomNotification(context, message);
+  showHintBubble(context, message);
 }
 
 void showPhoneEntityMenu(

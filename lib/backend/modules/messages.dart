@@ -511,6 +511,7 @@ class CachedMessage {
   // #***! открытый текст лежит запечатанным локальным ключом
   final Uint8List? sealedText;
   final int e2ee;
+  final int? typingMs;
 
   static const int e2eeNone = 0;
   static const int e2eeText = 1;
@@ -533,6 +534,7 @@ class CachedMessage {
     this.editHistory,
     this.sealedText,
     this.e2ee = e2eeNone,
+    this.typingMs,
   });
 
   ControlAttachment? get controlAttachment =>
@@ -569,6 +571,7 @@ class CachedMessage {
     Map<String, dynamic>? payload,
     Uint8List? sealedText,
     int? e2ee,
+    int? typingMs,
   }) => CachedMessage(
     id: id,
     accountId: accountId,
@@ -584,6 +587,7 @@ class CachedMessage {
     editHistory: editHistory ?? this.editHistory,
     sealedText: sealedText ?? this.sealedText,
     e2ee: e2ee ?? this.e2ee,
+    typingMs: typingMs ?? this.typingMs,
   );
 
   CachedMessage withSendFailure(Object error) =>
@@ -687,6 +691,7 @@ class CachedMessage {
           ? row['text_sealed'] as Uint8List
           : null,
       e2ee: row['e2ee'] is int ? row['e2ee'] as int : 0,
+      typingMs: row['typing_ms'] is int ? row['typing_ms'] as int : null,
     );
   }
 
@@ -749,6 +754,7 @@ class CachedMessage {
     'edit_history': editHistory != null ? jsonEncode(editHistory) : null,
     'text_sealed': sealedText,
     'e2ee': e2ee,
+    'typing_ms': typingMs,
   };
 
   // #***! сообщение из пуша, разбор тот же
@@ -829,7 +835,7 @@ class MessagesModule {
     }
 
     final merged = results.isNotEmpty
-        ? await _mergeEditHistory(accountId, chatId, results)
+        ? await _mergeLocalFields(accountId, chatId, results)
         : results;
     final toSave = await E2eeService.instance.inspectHistory(
       accountId,
@@ -909,7 +915,7 @@ class MessagesModule {
   }
 
   // #***! подмешиваем свою историю правок, сервер её не отдаёт
-  Future<List<CachedMessage>> _mergeEditHistory(
+  Future<List<CachedMessage>> _mergeLocalFields(
     int accountId,
     int chatId,
     List<CachedMessage> serverMessages,
@@ -941,7 +947,13 @@ class MessagesModule {
           oldText.isNotEmpty) {
         history = CachedMessage.appendEditHistory(history, oldText, now);
       }
-      out.add(history == null ? msg : msg.copyWith(editHistory: history));
+      final typingMs = existing['typing_ms'];
+      out.add(
+        msg.copyWith(
+          editHistory: history,
+          typingMs: typingMs is int ? typingMs : null,
+        ),
+      );
     }
     return out;
   }
@@ -1283,6 +1295,7 @@ class MessagesModule {
     isControl: message.isControl,
     deleted: message.deleted,
     editHistory: message.editHistory,
+    typingMs: message.typingMs,
   );
 
   static String forwardPreviewText(CachedMessage message) {

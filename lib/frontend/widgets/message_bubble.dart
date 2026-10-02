@@ -21,6 +21,7 @@ import '../../core/utils/text_format.dart';
 import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import 'custom_notification.dart';
+import 'hint_bubble.dart';
 import 'formatted_message_text.dart';
 import 'reply_preview.dart';
 import 'text_entity_actions.dart';
@@ -624,6 +625,8 @@ class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
 }
 
 class MessageBubble extends StatelessWidget {
+  static const int forwardBurstWindowMs = 250;
+
   static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.18);
   static const BorderRadius _reactionChipRadius = BorderRadius.all(
     Radius.circular(10),
@@ -758,6 +761,16 @@ class MessageBubble extends StatelessWidget {
       !isMe && chatType == "CHAT" && prevMessage?.senderId != message.senderId;
 
   bool get _stretchesTextRow => message.replyInfo != null || _showsSenderName;
+
+  bool get _likelyForwarded =>
+      !message.isControl &&
+      (_sentInOneBurstWith(prevMessage) || _sentInOneBurstWith(nextMessage));
+
+  bool _sentInOneBurstWith(CachedMessage? other) =>
+      other != null &&
+      !other.isControl &&
+      other.senderId == message.senderId &&
+      (other.time - message.time).abs() <= forwardBurstWindowMs;
 
   BubbleShape _computeShape() {
     if (message.isControl) return BubbleShape.singleMiddle;
@@ -1133,6 +1146,7 @@ class MessageBubble extends StatelessWidget {
       cs: cs,
       text: textColor,
       metaInFooter: metaInFooter,
+      likelyForwarded: _likelyForwarded,
       shape: shape,
       contentType: contentType,
       hasPhotoWithCaption: hasPhotoCap,
@@ -1392,11 +1406,14 @@ class MessageBubble extends StatelessWidget {
                     for (var i = 0; i < row.length; i++) ...[
                       if (i > 0) const SizedBox(width: 4),
                       Expanded(
-                        child: _buildInlineKeyboardButton(
-                          context,
-                          cs,
-                          keyboard,
-                          row[i],
+                        child: Builder(
+                          builder: (buttonContext) =>
+                              _buildInlineKeyboardButton(
+                                buttonContext,
+                                cs,
+                                keyboard,
+                                row[i],
+                              ),
                         ),
                       ),
                     ],
@@ -1496,7 +1513,7 @@ class MessageBubble extends StatelessWidget {
       default:
         final callbackId = keyboard.callbackId;
         if (callbackId == null || callbackId.isEmpty) {
-          showCustomNotification(context, 'Кнопка не поддерживается');
+          showHintBubble(context, 'Кнопка не поддерживается');
           return;
         }
         final answer = await messagesModule.sendButtonCallback(
@@ -1512,9 +1529,7 @@ class MessageBubble extends StatelessWidget {
           return;
         }
         final text = answer?['text']?.toString();
-        if (text != null && text.isNotEmpty) {
-          showCustomNotification(context, text);
-        }
+        if (text != null && text.isNotEmpty) showHintBubble(context, text);
     }
   }
 
@@ -1721,6 +1736,7 @@ class MessageBubble extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          ...ctx.metaMarks(Colors.white),
           Text(
             ctx.clockText,
             style: const TextStyle(
@@ -1936,6 +1952,7 @@ class MessageBubble extends StatelessWidget {
           Icon(Symbols.lock, size: 11, weight: 700, fill: 1, color: ctx.dim),
           const SizedBox(width: 3),
         ],
+        ...ctx.metaMarks(ctx.dim),
         Text(
           message.status == 'EDITED' ? '${ctx.clockText} ред.' : ctx.clockText,
           style: TextStyle(color: ctx.dim, fontSize: 10),
@@ -2365,6 +2382,7 @@ class MessageBubble extends StatelessWidget {
       status: overrideStatus ?? message.status,
       otherReadTime: otherReadTime,
       time: message.time,
+      likelyForwarded: ctx.likelyForwarded,
       cs: ctx.cs,
       waveData: audio?.waveform,
       chatId: message.chatId,

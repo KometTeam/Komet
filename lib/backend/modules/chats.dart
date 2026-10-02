@@ -13,6 +13,7 @@ import 'shared_content.dart';
 import '../../core/crypto/e2ee_service.dart';
 import '../../core/media/deleted_media_keeper.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/chat_activity_store.dart';
 import '../../core/storage/chat_members_store.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
@@ -1154,6 +1155,16 @@ class ChatsModule {
     await _notifyChatFromDb(accountId, chatId);
   }
 
+  int? _takeTypingTime(int chatId, Map msg) {
+    if (!KometSettings.showTypingTime.value) return null;
+    final status = msg['status'];
+    if (status == 'EDITED' || status == 'REMOVED') return null;
+    final senderId = msg['sender'];
+    final text = msg['text'];
+    if (senderId is! int || text is! String || text.isEmpty) return null;
+    return ChatActivityStore.instance.takeTypingTime(chatId, senderId);
+  }
+
   // #***! новое сообщение, комментарии отсеиваем у них свой модуль
   Future<void> _handleNotifMessage(Packet packet) async {
     final payload = packet.payload;
@@ -1171,6 +1182,8 @@ class ChatsModule {
         (linkPostId is String) ||
         (msg['postId'] is String);
     if (isCommentPush) return;
+
+    final typingMs = _takeTypingTime(chatId, msg);
 
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
@@ -1291,7 +1304,11 @@ class ChatsModule {
       );
     } else if (msgIdStr != null && existing == null) {
       final cached = await E2eeService.instance.inspect(
-        CachedMessage.fromPushPayload(accountId, chatId, msg),
+        CachedMessage.fromPushPayload(
+          accountId,
+          chatId,
+          msg,
+        ).copyWith(typingMs: typingMs),
         commit: (decrypted) => AppDatabase.saveMessages([decrypted.toDbRow()]),
       );
       await AppDatabase.saveMessages([cached.toDbRow()]);

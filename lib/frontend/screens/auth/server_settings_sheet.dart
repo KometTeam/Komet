@@ -5,6 +5,7 @@ import 'package:komet/l10n/app_localizations.dart';
 
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/labeled_settings_field.dart';
 import '../../widgets/sheet_helpers.dart';
 
@@ -16,6 +17,7 @@ class ServerSettingsSheet extends StatefulWidget {
 }
 
 class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
+  final _hostFieldKey = GlobalKey();
   final TextEditingController _hostController = TextEditingController(
     text: ServerConfig.defaultHost,
   );
@@ -45,7 +47,10 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
     final host = _hostController.text.trim();
     final port = int.tryParse(_portController.text.trim());
     if (host.isEmpty || !ServerConfig.isValidPort(port)) {
-      showCustomNotification(context, l10n.serverInvalidHostOrPort);
+      showHintBubble(
+        _hostFieldKey.currentContext ?? context,
+        l10n.serverInvalidHostOrPort,
+      );
       return;
     }
     await _reconnect(
@@ -117,6 +122,7 @@ class _ServerSettingsSheetState extends State<ServerSettingsSheet> {
               ),
               const SizedBox(height: 20),
               LabeledSettingsField(
+                key: _hostFieldKey,
                 controller: _hostController,
                 label: l10n.serverHostLabel,
                 hintText: ServerConfig.defaultHost,

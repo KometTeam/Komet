@@ -15,6 +15,7 @@ import '../../../core/config/komet_settings.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/logger.dart';
 import '../../../core/utils/update_checker.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
@@ -28,6 +29,7 @@ import '../../widgets/glossy_pill.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/profile_header_scroll.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
@@ -70,7 +72,8 @@ const int _settingsTabIndex = 3;
 const double _headerVignette = 64;
 const int _avatarHistoryPageSize = 50;
 
-class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
+class _SettingsTabState extends State<SettingsTab>
+    with ReloadOnReconnect, SpectrumSurface {
   ProfileData? _profile;
   List<String> _avatarUrls = const [];
   List<int?> _avatarIds = const [];
@@ -92,6 +95,12 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   int _versionSecretTapCount = 0;
   Timer? _versionSecretTapResetTimer;
   StreamSubscription? _profileUpdateSub;
+  bool _avatarsLoading = false;
+
+  @override
+  void reloadAfterReconnect() {
+    if (!_avatarsLoading) unawaited(_loadAvatars());
+  }
 
   @override
   void initState() {
@@ -247,13 +256,22 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   Future<void> _loadAvatars() async {
     final profile = _profile;
     if (profile == null || profile.id <= 0) return;
-    final photos =
-        ContactsModule.cachedPhotos(profile.id) ??
-        await ContactsModule.fetchPhotos(
-          api,
-          profile.id,
-          count: _avatarHistoryPageSize,
-        );
+    final ContactPhotos photos;
+    _avatarsLoading = true;
+    try {
+      photos =
+          ContactsModule.cachedPhotos(profile.id) ??
+          await ContactsModule.fetchPhotos(
+            api,
+            profile.id,
+            count: _avatarHistoryPageSize,
+          );
+    } catch (e) {
+      logger.w('Не удалось получить аватарки профиля: $e');
+      return;
+    } finally {
+      _avatarsLoading = false;
+    }
     if (!mounted) return;
     final ids = List<int?>.generate(photos.urls.length, (i) => photos.idAt(i));
     if (listEquals(_avatarUrls, photos.urls) && listEquals(_avatarIds, ids)) {

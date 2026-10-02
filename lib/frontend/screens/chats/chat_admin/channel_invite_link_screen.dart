@@ -6,6 +6,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../main.dart';
 import '../../../widgets/confirm_dialog.dart';
 import '../../../widgets/custom_notification.dart';
+import '../../../widgets/hint_bubble.dart';
 import '../../../widgets/komet_avatar.dart';
 import '../../../widgets/settings_card.dart';
 import '../../profile/profile_qr_sheet.dart';
@@ -28,10 +29,10 @@ class _ChannelInviteLinkScreenState extends State<ChannelInviteLinkScreen> {
 
   ChatAdminState get _state => widget.state;
 
-  Future<void> _copy(String link) async {
+  Future<void> _copy(BuildContext buttonContext, String link) async {
     final message = AppLocalizations.of(context)!.sharedLinkCopied;
     await Clipboard.setData(ClipboardData(text: link));
-    if (mounted) showCustomNotification(context, message);
+    if (buttonContext.mounted) showHintBubble(buttonContext, message);
   }
 
   Future<void> _sendInMax(String link) async {
@@ -191,10 +192,12 @@ class _ChannelInviteLinkScreenState extends State<ChannelInviteLinkScreen> {
               ],
             ),
           ),
-          IconButton(
-            tooltip: l10n.sharedCopyLink,
-            icon: Icon(Symbols.content_copy, color: cs.onSurfaceVariant),
-            onPressed: () => _copy(link),
+          Builder(
+            builder: (buttonContext) => IconButton(
+              tooltip: l10n.sharedCopyLink,
+              icon: Icon(Symbols.content_copy, color: cs.onSurfaceVariant),
+              onPressed: () => _copy(buttonContext, link),
+            ),
           ),
           if (canRevoke)
             PopupMenuButton<VoidCallback>(

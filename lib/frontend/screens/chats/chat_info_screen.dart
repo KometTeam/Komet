@@ -35,6 +35,7 @@ import '../../widgets/avatar_history_screen.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import 'chat_removal_undo.dart';
 import '../../widgets/formatted_message_text.dart';
 import '../../widgets/reload_on_reconnect.dart';
@@ -2787,11 +2788,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
   }
 
-  Future<void> _copyInfoValue(String value) async {
+  Future<void> _copyInfoValue(BuildContext rowContext, String value) async {
     await Clipboard.setData(ClipboardData(text: value));
-    if (!mounted) return;
+    if (!rowContext.mounted) return;
     Haptics.tap();
-    showCustomNotification(context, l10n.msgActionsCopied);
+    showHintBubble(rowContext, l10n.msgActionsCopied);
   }
 
   Widget _infoRow(
@@ -2806,25 +2807,31 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onLongPress: () => unawaited(_copyInfoValue(value)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 10),
-                  ),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+            child: Builder(
+              builder: (rowContext) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onLongPress: () =>
+                    unawaited(_copyInfoValue(rowContext, value)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 10,
+                      ),
                     ),
-                  ),
-                ],
+                    Text(
+                      value,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

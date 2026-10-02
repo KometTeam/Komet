@@ -144,6 +144,7 @@ class Api {
     _autoReconnect = true;
     // #***! номер поколения
     final gen = ++_connectGen;
+    _loginGate.close();
     _setSessionState(SessionState.connecting);
     logger.i('connect: старт (поколение $gen)');
     // #***! Сторож если конект залип на всякий
@@ -194,7 +195,6 @@ class Api {
         }
       }
 
-      _loginGate.close();
       _session = session;
       _wireLogSub?.cancel();
       _wireLogSub = wireLog.listen(_onWireLog);
@@ -345,7 +345,9 @@ class Api {
     void Function()? beforeSend,
   }) async {
     final initialSession = _session;
-    if (_session == null) {
+    final awaitsSession =
+        beforeSend == null && _sessionState == SessionState.connecting;
+    if (initialSession == null && !awaitsSession) {
       throw StateError('Нет соединения (${Opcode.name(opcode)})');
     }
     if (opcode != Opcode.login) {

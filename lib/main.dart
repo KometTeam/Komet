@@ -106,6 +106,7 @@ import 'frontend/debug/performance_monitor.dart';
 import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/widgets/adaptive_shell.dart';
 import 'frontend/widgets/custom_notification.dart';
+import 'frontend/widgets/hint_bubble.dart';
 import 'frontend/widgets/liquid_glass.dart';
 import 'frontend/widgets/mesh_gradient_background.dart';
 import 'frontend/widgets/small_spinner.dart';
@@ -198,6 +199,7 @@ void _installLogCapture() {
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  trackHintBubblePresses();
   debugPrint('KOMET-STARTUP: binding ready');
   debugPrint('KOMET-STARTUP: initKolibri...');
   await initKolibri();
@@ -999,6 +1001,7 @@ class KometAppState extends State<KometApp>
         colorScheme: light,
         pageTransitionsTheme: _appPageTransitions,
         progressIndicatorTheme: _expressiveProgressTheme,
+        tooltipTheme: HintBubbleStyle.tooltipTheme(light),
         extensions: [displayFont],
         textTheme: AppFonts.textTheme(
           _fontId,
@@ -1012,6 +1015,7 @@ class KometAppState extends State<KometApp>
         colorScheme: dark,
         pageTransitionsTheme: _appPageTransitions,
         progressIndicatorTheme: _expressiveProgressTheme,
+        tooltipTheme: HintBubbleStyle.tooltipTheme(dark),
         extensions: [displayFont],
         textTheme: AppFonts.textTheme(
           _fontId,

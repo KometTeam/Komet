@@ -12,6 +12,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/transport/traffic_monitor.dart';
 import '../../../core/utils/format.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
 import '../../../core/security/app_lock.dart';
@@ -428,7 +429,7 @@ class _TrafficRow extends StatelessWidget {
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: text));
               if (context.mounted) {
-                showCustomNotification(context, 'Payload скопирован');
+                showHintBubble(context, 'Payload скопирован');
               }
             },
           ),

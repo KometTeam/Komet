@@ -17,6 +17,7 @@ import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
@@ -1095,25 +1096,27 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
               const SizedBox(width: 8),
               _loading
                   ? SmallSpinner(size: 20, color: cs.primary)
-                  : IconButton(
-                      icon: Icon(
-                        isExpired ? Symbols.add_link : Symbols.content_copy,
-                        color: isExpired ? cs.error : cs.onSurfaceVariant,
-                        size: 20,
+                  : Builder(
+                      builder: (buttonContext) => IconButton(
+                        icon: Icon(
+                          isExpired ? Symbols.add_link : Symbols.content_copy,
+                          color: isExpired ? cs.error : cs.onSurfaceVariant,
+                          size: 20,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: isExpired
+                            ? _generateLink
+                            : () {
+                                Clipboard.setData(
+                                  ClipboardData(text: _link!.url),
+                                );
+                                showHintBubble(
+                                  buttonContext,
+                                  l10n.cloudStorageLinkCopied,
+                                );
+                              },
                       ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: isExpired
-                          ? _generateLink
-                          : () {
-                              Clipboard.setData(
-                                ClipboardData(text: _link!.url),
-                              );
-                              showCustomNotification(
-                                context,
-                                l10n.cloudStorageLinkCopied,
-                              );
-                            },
                     ),
             ],
           ),

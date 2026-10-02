@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/sheet_helpers.dart';
 
 class PollDraft {
@@ -73,14 +73,14 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
     setState(() => _answers.removeAt(index).dispose());
   }
 
-  void _submit() {
+  void _submit(BuildContext buttonContext) {
     final title = _question.text.trim();
     final answers = _answers
         .map((c) => c.text.trim())
         .where((t) => t.isNotEmpty)
         .toList();
     if (title.isEmpty || answers.length < 2) {
-      showCustomNotification(context, 'Введите вопрос и минимум 2 варианта');
+      showHintBubble(buttonContext, 'Введите вопрос и минимум 2 варианта');
       return;
     }
     Navigator.of(context).pop(
@@ -173,9 +173,11 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
               ),
             ),
           ),
-          TextButton(
-            onPressed: _canCreate ? _submit : null,
-            child: const Text('Создать'),
+          Builder(
+            builder: (buttonContext) => TextButton(
+              onPressed: _canCreate ? () => _submit(buttonContext) : null,
+              child: const Text('Создать'),
+            ),
           ),
         ],
       ),

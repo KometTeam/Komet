@@ -14,6 +14,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
@@ -1086,82 +1087,84 @@ class _SecurityScreenState extends State<SecurityScreen>
       children: [
         Material(
           color: Colors.transparent,
-          child: InkWell(
-            onTap: lockedBySafeMode
-                ? () => showCustomNotification(context, l10n.securityModeLocked)
-                : (onTap ?? () => showCustomNotification(context, label)),
-            borderRadius: isLast
-                ? const BorderRadius.vertical(
-                    bottom: Radius.circular(AppShape.card),
-                  )
-                : BorderRadius.zero,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: verticalPadding,
-              ),
-              child: Row(
-                children: [
-                  if (icon != null) ...[
-                    Icon(
-                      icon,
-                      color: accentColor ?? cs.onSurfaceVariant,
-                      size: 22,
-                      weight: 400,
-                    ),
-                    const SizedBox(width: 16),
-                  ],
-                  Expanded(
-                    child: subtitle != null
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                label,
-                                style: TextStyle(
-                                  color: accentColor ?? cs.onSurface,
-                                  fontSize: labelFontSize,
-                                  fontWeight: labelFontWeight,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                subtitle,
-                                style: TextStyle(
-                                  color: cs.onSurfaceVariant,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          )
-                        : Text(
-                            label,
-                            style: TextStyle(
-                              color: accentColor ?? cs.onSurface,
-                              fontSize: labelFontSize,
-                              fontWeight: labelFontWeight,
-                            ),
-                          ),
-                  ),
-                  if (trailingText != null)
-                    Text(
-                      trailingText,
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 14,
+          child: Builder(
+            builder: (rowContext) => InkWell(
+              onTap: lockedBySafeMode
+                  ? () => showHintBubble(rowContext, l10n.securityModeLocked)
+                  : (onTap ?? () => showCustomNotification(context, label)),
+              borderRadius: isLast
+                  ? const BorderRadius.vertical(
+                      bottom: Radius.circular(AppShape.card),
+                    )
+                  : BorderRadius.zero,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: verticalPadding,
+                ),
+                child: Row(
+                  children: [
+                    if (icon != null) ...[
+                      Icon(
+                        icon,
+                        color: accentColor ?? cs.onSurfaceVariant,
+                        size: 22,
+                        weight: 400,
                       ),
+                      const SizedBox(width: 16),
+                    ],
+                    Expanded(
+                      child: subtitle != null
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  label,
+                                  style: TextStyle(
+                                    color: accentColor ?? cs.onSurface,
+                                    fontSize: labelFontSize,
+                                    fontWeight: labelFontWeight,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  subtitle,
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Text(
+                              label,
+                              style: TextStyle(
+                                color: accentColor ?? cs.onSurface,
+                                fontSize: labelFontSize,
+                                fontWeight: labelFontWeight,
+                              ),
+                            ),
                     ),
-                  ?trailingWidget,
-                  if (showChevron) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      lockedBySafeMode ? Symbols.lock : Symbols.chevron_right,
-                      color: cs.outline,
-                      size: chevronSize,
-                      weight: 400,
-                    ),
+                    if (trailingText != null)
+                      Text(
+                        trailingText,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ?trailingWidget,
+                    if (showChevron) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        lockedBySafeMode ? Symbols.lock : Symbols.chevron_right,
+                        color: cs.outline,
+                        size: chevronSize,
+                        weight: 400,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

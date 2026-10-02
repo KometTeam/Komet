@@ -53,6 +53,7 @@ List<MessageInfoRow> buildMessageInfoRows(CachedMessage message) {
   add('reactionInfo', _reactionsSummary(payload['reactionInfo']));
   add('editHistory', message.editHistory?.length);
   add('e2ee', _e2eeNames[message.e2ee]);
+  add('typingMs', message.typingMs);
   if (message.deleted) add('deleted', true);
 
   for (final entry in payload.entries) {

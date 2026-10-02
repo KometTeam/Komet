@@ -73,6 +73,13 @@ String formatDurationClock(Duration d) {
   return '$m:$sec';
 }
 
+String formatApproxDuration(int ms) {
+  final tenths = (ms / 100).round();
+  if (tenths < 600) return '${tenths ~/ 10},${tenths % 10} с';
+  final hundredths = (ms / 600).round();
+  return '${hundredths ~/ 100},${pad2(hundredths % 100)} мин';
+}
+
 String formatFileStamp(DateTime t) =>
     '${t.year}${pad2(t.month)}${pad2(t.day)}_'
     '${pad2(t.hour)}${pad2(t.minute)}${pad2(t.second)}';

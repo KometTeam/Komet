@@ -134,6 +134,7 @@ from pub.dev — `core/protocol/packet.dart` only wraps the already-decoded payl
 
 - **No comments in code.** Write self-documenting code instead.
 - **Use `showCustomNotification(context, 'text')`** for all user-facing notifications — never use SnackBars.
+- **Feedback about one specific on-screen element goes through `showHintBubble(anchorContext, 'text')`** (`lib/frontend/widgets/hint_bubble.dart`) — an anchored bubble next to that element instead of the bottom notification. Pass the element's own context, not the screen's.
 - When a fix can be done quickly with a hack or properly with a rewrite, **choose the proper rewrite**.
 - Quality over quantity.
 - **Never leave real data in test files**, including existing message contents or real IDs captured from requests. Use synthetic fixtures instead.

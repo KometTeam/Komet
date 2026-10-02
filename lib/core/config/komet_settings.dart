@@ -8,6 +8,8 @@ class KometSettings {
   static const _kViewDeleted = 'komet_view_deleted';
   static const _kViewRedacted = 'komet_view_redacted';
   static const _kFullTimestamp = 'komet_full_timestamp';
+  static const _kShowForward = 'komet_show_forward';
+  static const _kShowTypingTime = 'komet_show_typing_time';
   static const _kGhostMode = 'komet_ghost_mode';
   static const _kAntiRead = 'komet_anti_read';
   static const _kSelfOnlineCheck = 'komet_self_online_check';
@@ -20,6 +22,8 @@ class KometSettings {
   static final ValueNotifier<bool> viewDeleted = ValueNotifier(false);
   static final ValueNotifier<bool> viewRedacted = ValueNotifier(false);
   static final ValueNotifier<bool> fullTimestamp = ValueNotifier(false);
+  static final ValueNotifier<bool> showForward = ValueNotifier(false);
+  static final ValueNotifier<bool> showTypingTime = ValueNotifier(false);
   static final ValueNotifier<bool> ghostMode = ValueNotifier(false);
   static final ValueNotifier<bool> antiRead = ValueNotifier(false);
   static final ValueNotifier<bool> selfOnlineCheck = ValueNotifier(true);
@@ -39,6 +43,8 @@ class KometSettings {
         BuildProfile.hiddenContentViewers &&
         (prefs.getBool(_kViewRedacted) ?? false);
     fullTimestamp.value = prefs.getBool(_kFullTimestamp) ?? false;
+    showForward.value = prefs.getBool(_kShowForward) ?? false;
+    showTypingTime.value = prefs.getBool(_kShowTypingTime) ?? false;
     ghostMode.value = prefs.getBool(_kGhostMode) ?? false;
     antiRead.value = prefs.getBool(_kAntiRead) ?? false;
     selfOnlineCheck.value = prefs.getBool(_kSelfOnlineCheck) ?? true;
@@ -65,6 +71,18 @@ class KometSettings {
     fullTimestamp.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kFullTimestamp, value);
+  }
+
+  static Future<void> setShowForward(bool value) async {
+    showForward.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowForward, value);
+  }
+
+  static Future<void> setShowTypingTime(bool value) async {
+    showTypingTime.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowTypingTime, value);
   }
 
   // #***! невидимка влияет на пинг, с interactive false сервер не считает нас онлайн

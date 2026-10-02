@@ -6,7 +6,7 @@ import '../../backend/api.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/device_identity.dart';
 import '../../main.dart';
-import '../widgets/custom_notification.dart';
+import '../widgets/hint_bubble.dart';
 import 'dev_menu_widgets.dart';
 import 'server_section.dart';
 
@@ -46,15 +46,17 @@ class _DebugInfoSectionState extends State<DebugInfoSection> {
     );
   }
 
-  void _copy(String caption, String value) {
+  void _copy(BuildContext rowContext, String caption, String value) {
     Clipboard.setData(ClipboardData(text: value));
-    showCustomNotification(context, 'Скопировано: $caption');
+    showHintBubble(rowContext, 'Скопировано: $caption');
   }
 
-  Widget _copyRow(String caption, String value) => DevRow(
-    caption: caption,
-    title: value,
-    onTap: () => _copy(caption, value),
+  Widget _copyRow(String caption, String value) => Builder(
+    builder: (rowContext) => DevRow(
+      caption: caption,
+      title: value,
+      onTap: () => _copy(rowContext, caption, value),
+    ),
   );
 
   @override

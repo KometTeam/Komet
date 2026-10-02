@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/primary_loading_button.dart';
@@ -26,6 +27,7 @@ class ChatEncryptionScreen extends StatefulWidget {
 
 class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
   final _keyController = TextEditingController();
+  final _keyFieldKey = GlobalKey();
   final ValueNotifier<bool> _saving = ValueNotifier(false);
 
   bool _loading = true;
@@ -64,7 +66,10 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
     }
     final key = _keyController.text.trim();
     if (_enabled && key.isEmpty) {
-      showCustomNotification(context, 'Введите ключ шифрования');
+      showHintBubble(
+        _keyFieldKey.currentContext ?? context,
+        'Введите ключ шифрования',
+      );
       return;
     }
     _saving.value = true;
@@ -145,6 +150,7 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
                         ),
                         const SizedBox(height: 12),
                         TextField(
+                          key: _keyFieldKey,
                           controller: _keyController,
                           obscureText: !_keyVisible,
                           enableSuggestions: false,

@@ -64,6 +64,7 @@ class StickerBubble extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          ...ctx.metaMarks(Colors.white),
           Text(
             ctx.clockText,
             style: const TextStyle(
