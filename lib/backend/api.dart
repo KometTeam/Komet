@@ -871,6 +871,16 @@ class Api {
     }
   }
 
+  Future<void> reconnectPreLogin({required bool web}) async {
+    _suppressReconnectLogin = true;
+    try {
+      await disconnect();
+      await connect(authenticated: false, web: web);
+    } finally {
+      _suppressReconnectLogin = false;
+    }
+  }
+
   // #***! колбэк автологина ставит аккаунт, api про токены не знает
   Future<void> Function()? _onReconnectCallback;
 

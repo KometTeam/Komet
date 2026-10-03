@@ -80,8 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _switchingSmsMode = true;
     });
     try {
-      await api.disconnect();
-      await api.connect(authenticated: false, web: value);
+      await api.reconnectPreLogin(web: value);
     } catch (e) {
       if (!mounted) return;
       showCustomNotification(
@@ -91,6 +90,15 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _switchingSmsMode = false);
     }
+  }
+
+  Future<void> _ensurePreLoginSession() async {
+    final fresh =
+        !accountModule.isLoggedIn &&
+        !api.isAuthenticatedHandshake &&
+        api.webHandshake == _alwaysSendSms;
+    if (fresh) return;
+    await api.reconnectPreLogin(web: _alwaysSendSms);
   }
 
   // #***! предупреждение перед эксперим. SMS-входом: true=Принять, false=Отмена,
@@ -637,6 +645,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
 
                           try {
+                            await _ensurePreLoginSession();
                             final result = await accountModule.requestCode(
                               fullPhone,
                             );
