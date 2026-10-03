@@ -96,6 +96,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Pin kolibri crates
+        uses: ./.github/actions/pin-kolibri-crates
+
       - name: Build iOS (no codesign)
         run: |
           flutter config --no-enable-swift-package-manager

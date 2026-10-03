@@ -45,6 +45,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Pin kolibri crates
+        uses: ./.github/actions/pin-kolibri-crates
+
       - name: Build iOS (no codesign)
         run: |
           flutter config --no-enable-swift-package-manager
@@ -152,6 +155,10 @@ jobs:
       - name: Get dependencies
         if: steps.signing.outputs.enabled == 'true'
         run: flutter pub get
+
+      - name: Pin kolibri crates
+        if: steps.signing.outputs.enabled == 'true'
+        uses: ./.github/actions/pin-kolibri-crates
 
       - name: Import certificate and provisioning profile
         if: steps.signing.outputs.enabled == 'true'

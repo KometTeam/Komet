@@ -217,6 +217,8 @@ jobs:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
       - name: Get dependencies
         run: flutter pub get
+      - name: Pin kolibri crates
+        uses: ./.github/actions/pin-kolibri-crates
       - name: Build iOS (no codesign)
         run: |
           flutter config --no-enable-swift-package-manager
