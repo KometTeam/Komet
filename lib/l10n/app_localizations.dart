@@ -3764,11 +3764,11 @@ abstract class AppLocalizations {
   /// **'Who can invite me to chats'**
   String get securityWhoCanInvite;
 
-  /// No description provided for @securityShowContact.
+  /// No description provided for @securityShowContent.
   ///
   /// In en, this message translates to:
-  /// **'Show contact'**
-  String get securityShowContact;
+  /// **'Show content'**
+  String get securityShowContent;
 
   /// No description provided for @securityContentSafe.
   ///

@@ -625,7 +625,7 @@
   "securityFindByPhone": "Найти меня по номеру",
   "securityWhoCanCall": "Кто может мне звонить",
   "securityWhoCanInvite": "Кто может приглашать в чаты",
-  "securityShowContact": "Показывать контакт",
+  "securityShowContent": "Показывать контент",
   "securityContentSafe": "Безопасный",
   "securityContentAll": "Весь",
   "securityShowOnlineStatus": "Видеть статус «в сети»",

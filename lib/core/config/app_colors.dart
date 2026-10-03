@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/seed_scheme.dart';
 
 // #***! доп цвета поверх ColorScheme
 extension AppColorTokens on ColorScheme {
@@ -23,10 +24,7 @@ class MediaAccent {
     final seed = Theme.of(context).colorScheme.primary;
     if (_seed != seed || _scheme == null) {
       _seed = seed;
-      _scheme = ColorScheme.fromSeed(
-        seedColor: seed,
-        brightness: Brightness.dark,
-      );
+      _scheme = schemeFromSeed(seed, Brightness.dark);
     }
     return _scheme!;
   }

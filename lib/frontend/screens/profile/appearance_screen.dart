@@ -21,6 +21,7 @@ import '../../../main.dart';
 import '../../widgets/liquid_glass.dart';
 import '../../widgets/settings_card.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../core/utils/seed_scheme.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({super.key});
@@ -602,10 +603,7 @@ class _PreviewSectionState extends State<_PreviewSection> {
     }
     _cachedColor = color;
     _cachedBrightness = brightness;
-    _cachedScheme = ColorScheme.fromSeed(
-      seedColor: color,
-      brightness: brightness,
-    );
+    _cachedScheme = schemeFromSeed(color, brightness);
     return _cachedScheme!;
   }
 
@@ -1005,4 +1003,3 @@ class _BubbleBehaviorCard extends StatelessWidget {
     );
   }
 }
-

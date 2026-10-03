@@ -28,6 +28,7 @@ import 'call_mic_sheet.dart';
 import 'call_participants_sheet.dart';
 import 'komet_hub.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../core/utils/seed_scheme.dart';
 
 class CallScreen extends StatefulWidget {
   final String name;
@@ -227,10 +228,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     final seed = Theme.of(context).colorScheme.primary;
     if (_seedKey != seed || _scheme == null) {
       _seedKey = seed;
-      _scheme = ColorScheme.fromSeed(
-        seedColor: seed,
-        brightness: Brightness.dark,
-      );
+      _scheme = schemeFromSeed(seed, Brightness.dark);
     }
     return _scheme!;
   }

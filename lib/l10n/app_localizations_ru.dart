@@ -1960,7 +1960,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get securityWhoCanInvite => 'Кто может приглашать в чаты';
 
   @override
-  String get securityShowContact => 'Показывать контакт';
+  String get securityShowContent => 'Показывать контент';
 
   @override
   String get securityContentSafe => 'Безопасный';
