@@ -239,7 +239,7 @@ they are 114 MB each, only Google Play consumes them, and they stay on GitHub.
 The in-app updater (`UpdateChecker`) reads that manifest and nothing else; GitHub
 Releases stay as a human-facing mirror. The bucket URL comes from the
 `S3_PUBLIC_BASE_URL` repo variable and is baked into builds as
-`--dart-define=KOMET_UPDATE_BASE_URL`; it defaults to `https://dl.komet.pw`
+`--dart-define=KOMET_UPDATE_BASE_URL`; it defaults to `https://cdn.komet.pw`
 (`lib/core/config/update_config.dart`), so local builds check for updates too.
 An empty URL makes the updater inert. `UpdateInstaller` verifies the downloaded
 APK against the `size` and `sha256` recorded in the manifest.

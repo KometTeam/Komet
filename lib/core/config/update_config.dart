@@ -4,7 +4,7 @@ import 'build_profile.dart';
 abstract final class UpdateConfig {
   static const String baseUrl = String.fromEnvironment(
     'KOMET_UPDATE_BASE_URL',
-    defaultValue: 'https://dl.komet.pw',
+    defaultValue: 'https://cdn.komet.pw',
   );
 
   // #***! пустой адрес значит обновления выключены, в App Store сборке их нет вовсе
