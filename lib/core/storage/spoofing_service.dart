@@ -203,7 +203,7 @@ class SpoofingService {
         final profile = SpoofProfile.fromJson(
           jsonDecode(raw) as Map<String, dynamic>,
         );
-        return _migrateProfile(prefs, scope, profile);
+        return await _migrateProfile(prefs, scope, profile);
       } catch (e) {
         logger.w('spoof profile read failed: $e');
       }
