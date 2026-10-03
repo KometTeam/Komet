@@ -201,6 +201,7 @@ class PhotoViewerScreen extends StatefulWidget {
 class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   static const int _prefetchThreshold = 3;
   static const int _maxCachedVideoPlayers = 5;
+  static const double _compactHeight = 480;
 
   late PageController _controller;
   late List<_ViewerMedia> _items;
@@ -925,9 +926,9 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final padding = MediaQuery.of(context).padding;
-    final hasMenu =
-        _isAvatars || _current.isVideo || !(widget.actions?.isEmpty ?? true);
+    final media = MediaQuery.of(context);
+    final padding = media.padding;
+    final compact = media.size.height < _compactHeight;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -955,59 +956,36 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                         if (_canStep(_leftStep))
                           Align(
                             alignment: Alignment.centerLeft,
-                            child: _arrow(
-                              Symbols.chevron_left,
-                              () => _step(_leftStep),
+                            child: Padding(
+                              padding: EdgeInsets.only(left: padding.left),
+                              child: _arrow(
+                                Symbols.chevron_left,
+                                () => _step(_leftStep),
+                              ),
                             ),
                           ),
                         if (_canStep(-_leftStep))
                           Align(
                             alignment: Alignment.centerRight,
-                            child: _arrow(
-                              Symbols.chevron_right,
-                              () => _step(-_leftStep),
+                            child: Padding(
+                              padding: EdgeInsets.only(right: padding.right),
+                              child: _arrow(
+                                Symbols.chevron_right,
+                                () => _step(-_leftStep),
+                              ),
                             ),
                           ),
                         Positioned(
-                          top: padding.top + 8,
-                          left: 8,
-                          right: 8,
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(
-                                  Symbols.close,
-                                  color: Colors.white,
-                                ),
-                                onPressed: () => Navigator.of(context).pop(),
-                              ),
-                              const Spacer(),
-                              if (_saving && _current.isVideo)
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 14),
-                                  child: SmallSpinner(
-                                    size: 20,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              if (hasMenu)
-                                Builder(
-                                  builder: (btnContext) => IconButton(
-                                    icon: const Icon(
-                                      Symbols.more_vert,
-                                      color: Colors.white,
-                                    ),
-                                    onPressed: () => _openMenu(btnContext),
-                                  ),
-                                ),
-                            ],
-                          ),
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: _buildTopBar(padding, compact: compact),
                         ),
                         Positioned(
                           left: 0,
                           right: 0,
                           bottom: 0,
-                          child: _buildBottomBar(padding.bottom),
+                          child: _buildBottomBar(padding, compact: compact),
                         ),
                       ],
                     ),
@@ -1100,13 +1078,72 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     );
   }
 
-  Widget _buildBottomBar(double bottomInset) {
+  Widget _buildTopBar(EdgeInsets padding, {required bool compact}) {
     final l10n = AppLocalizations.of(context)!;
-    final caption = _current.caption;
-    final videoSession = _current.isVideo ? _videoSessionFor(_current) : null;
+    final hasMenu =
+        _isAvatars || _current.isVideo || !(widget.actions?.isEmpty ?? true);
 
     return Container(
-      padding: EdgeInsets.fromLTRB(12, 12, 12, bottomInset + 10),
+      padding: EdgeInsets.fromLTRB(
+        padding.left + 8,
+        padding.top + 8,
+        padding.right + 8,
+        compact ? 12 : 0,
+      ),
+      decoration: compact
+          ? const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [Color(0x00000000), Color(0xB3000000)],
+              ),
+            )
+          : null,
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Symbols.close, color: Colors.white),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          if (compact) ...[
+            const SizedBox(width: 4),
+            Expanded(child: _buildInfo(l10n)),
+          ] else
+            const Spacer(),
+          if (_saving && _current.isVideo)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14),
+              child: SmallSpinner(size: 20, color: Colors.white),
+            ),
+          if (compact) ..._buildMediaActions(l10n),
+          if (hasMenu)
+            Builder(
+              builder: (btnContext) => IconButton(
+                icon: const Icon(Symbols.more_vert, color: Colors.white),
+                onPressed: () => _openMenu(btnContext),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(EdgeInsets padding, {required bool compact}) {
+    final l10n = AppLocalizations.of(context)!;
+    final caption = _current.caption;
+    final hasCaption = caption != null && caption.isNotEmpty;
+    final videoSession = _current.isVideo ? _videoSessionFor(_current) : null;
+    if (compact && videoSession == null && !hasCaption) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        padding.left + 12,
+        compact ? 8 : 12,
+        padding.right + 12,
+        padding.bottom + (compact ? 8 : 10),
+      ),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -1118,45 +1155,52 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (videoSession != null) ...[
-            _buildVideoAttachment(videoSession, caption),
-            const SizedBox(height: 12),
-          ] else if (caption != null && caption.isNotEmpty) ...[
-            _buildCaption(caption),
-            const SizedBox(height: 12),
+          if (videoSession != null)
+            _buildVideoAttachment(videoSession, caption, compact: compact)
+          else if (hasCaption)
+            _buildCaption(caption, compact: compact),
+          if (!compact) ...[
+            if (videoSession != null || hasCaption) const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(child: _buildInfo(l10n)),
+                ..._buildMediaActions(l10n),
+              ],
+            ),
           ],
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(child: _buildInfo(l10n)),
-              if (!_current.isVideo)
-                IconButton(
-                  icon: _saving
-                      ? const SmallSpinner(size: 20, color: Colors.white)
-                      : const Icon(Symbols.download, color: Colors.white),
-                  onPressed: _saving ? null : _saveToDevice,
-                  tooltip: l10n.sharedDownload,
-                ),
-              IconButton(
-                icon: const Icon(
-                  Symbols.rotate_90_degrees_ccw,
-                  color: Colors.white,
-                ),
-                onPressed: _rotate,
-                tooltip: l10n.photoViewerRotate,
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildCaption(String caption) {
-    return _ViewerGlassSurface(child: _buildCaptionContent(caption));
+  List<Widget> _buildMediaActions(AppLocalizations l10n) => [
+    if (!_current.isVideo)
+      IconButton(
+        icon: _saving
+            ? const SmallSpinner(size: 20, color: Colors.white)
+            : const Icon(Symbols.download, color: Colors.white),
+        onPressed: _saving ? null : _saveToDevice,
+        tooltip: l10n.sharedDownload,
+      ),
+    IconButton(
+      icon: const Icon(Symbols.rotate_90_degrees_ccw, color: Colors.white),
+      onPressed: _rotate,
+      tooltip: l10n.photoViewerRotate,
+    ),
+  ];
+
+  Widget _buildCaption(String caption, {required bool compact}) {
+    return _ViewerGlassSurface(
+      child: _buildCaptionContent(caption, compact: compact),
+    );
   }
 
-  Widget _buildVideoAttachment(_VideoPlaybackSession session, String? caption) {
+  Widget _buildVideoAttachment(
+    _VideoPlaybackSession session,
+    String? caption, {
+    required bool compact,
+  }) {
     return AnimatedBuilder(
       animation: session,
       builder: (context, _) => _ViewerGlassSurface(
@@ -1164,6 +1208,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _VideoControlPanel(
+              compact: compact,
               value: session.value,
               fallbackDuration: Duration(
                 milliseconds: session.attachment.duration ?? 0,
@@ -1186,7 +1231,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                 thickness: 0.5,
                 color: Colors.white.withValues(alpha: 0.12),
               ),
-              _buildCaptionContent(caption),
+              _buildCaptionContent(caption, compact: compact),
             ],
           ],
         ),
@@ -1194,11 +1239,11 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     );
   }
 
-  Widget _buildCaptionContent(String caption) {
+  Widget _buildCaptionContent(String caption, {required bool compact}) {
     return Container(
-      constraints: const BoxConstraints(maxHeight: 120),
+      constraints: BoxConstraints(maxHeight: compact ? 56 : 120),
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: 14, vertical: compact ? 8 : 10),
       child: SingleChildScrollView(
         child: Text(
           caption,
@@ -1707,6 +1752,7 @@ class _ViewerGlassSurface extends StatelessWidget {
 }
 
 class _VideoControlPanel extends StatelessWidget {
+  final bool compact;
   final VideoPlayerValue? value;
   final Duration fallbackDuration;
   final double? dragValue;
@@ -1722,6 +1768,7 @@ class _VideoControlPanel extends StatelessWidget {
   final ValueChanged<double> onSeekEnd;
 
   const _VideoControlPanel({
+    required this.compact,
     required this.value,
     required this.fallbackDuration,
     required this.dragValue,
@@ -1746,6 +1793,86 @@ class _VideoControlPanel extends StatelessWidget {
     final sliderValue = dragValue ?? positionMs.toDouble();
     final isPlaying = value?.isPlaying ?? false;
 
+    final volumeControl = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedSlashIcon(
+          icon: Symbols.volume_up,
+          slashedIcon: Symbols.volume_off,
+          slashed: volume == 0,
+          color: Colors.white,
+          size: 20,
+        ),
+        SizedBox(
+          width: 112,
+          child: _ViewerSlider(
+            value: volume,
+            max: 1,
+            onChanged: onVolumeChanged,
+          ),
+        ),
+      ],
+    );
+    final playToggle = IconButton(
+      key: const ValueKey('video-play-toggle'),
+      icon: Icon(
+        isPlaying ? Symbols.pause : Symbols.play_arrow,
+        color: Colors.white,
+        fill: 1,
+      ),
+      onPressed: onTogglePlay,
+    );
+    final settings = _VideoSettingsButton(
+      speed: speed,
+      quality: quality,
+      qualities: qualities,
+      onSpeedChanged: onSpeedChanged,
+      onQualityChanged: onQualityChanged,
+    );
+    final elapsed = SizedBox(
+      width: 42,
+      child: Text(
+        _formatViewerDuration(position),
+        style: const TextStyle(color: Colors.white, fontSize: 11),
+      ),
+    );
+    final seekBar = Expanded(
+      child: _ViewerSlider(
+        value: maxMs <= 0 ? 0 : sliderValue.clamp(0, maxMs).toDouble(),
+        max: maxMs <= 0 ? 1 : maxMs,
+        onChanged: maxMs <= 0 ? null : onSeekChanged,
+        onChangeEnd: maxMs <= 0 ? null : onSeekEnd,
+      ),
+    );
+    final total = SizedBox(
+      width: 42,
+      child: Text(
+        _formatViewerDuration(duration),
+        textAlign: TextAlign.end,
+        style: const TextStyle(color: Colors.white, fontSize: 11),
+      ),
+    );
+
+    if (compact) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              playToggle,
+              elapsed,
+              seekBar,
+              total,
+              const SizedBox(width: 8),
+              volumeControl,
+              settings,
+            ],
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
       child: Column(
@@ -1755,82 +1882,13 @@ class _VideoControlPanel extends StatelessWidget {
             height: 48,
             child: Stack(
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedSlashIcon(
-                        icon: Symbols.volume_up,
-                        slashedIcon: Symbols.volume_off,
-                        slashed: volume == 0,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      SizedBox(
-                        width: 112,
-                        child: _ViewerSlider(
-                          value: volume,
-                          max: 1,
-                          onChanged: onVolumeChanged,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Center(
-                  child: IconButton(
-                    key: const ValueKey('video-play-toggle'),
-                    icon: Icon(
-                      isPlaying ? Symbols.pause : Symbols.play_arrow,
-                      color: Colors.white,
-                      fill: 1,
-                    ),
-                    onPressed: onTogglePlay,
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _VideoSettingsButton(
-                    speed: speed,
-                    quality: quality,
-                    qualities: qualities,
-                    onSpeedChanged: onSpeedChanged,
-                    onQualityChanged: onQualityChanged,
-                  ),
-                ),
+                Align(alignment: Alignment.centerLeft, child: volumeControl),
+                Center(child: playToggle),
+                Align(alignment: Alignment.centerRight, child: settings),
               ],
             ),
           ),
-          Row(
-            children: [
-              SizedBox(
-                width: 42,
-                child: Text(
-                  _formatViewerDuration(position),
-                  style: const TextStyle(color: Colors.white, fontSize: 11),
-                ),
-              ),
-              Expanded(
-                child: _ViewerSlider(
-                  value: maxMs <= 0
-                      ? 0
-                      : sliderValue.clamp(0, maxMs).toDouble(),
-                  max: maxMs <= 0 ? 1 : maxMs,
-                  onChanged: maxMs <= 0 ? null : onSeekChanged,
-                  onChangeEnd: maxMs <= 0 ? null : onSeekEnd,
-                ),
-              ),
-              SizedBox(
-                width: 42,
-                child: Text(
-                  _formatViewerDuration(duration),
-                  textAlign: TextAlign.end,
-                  style: const TextStyle(color: Colors.white, fontSize: 11),
-                ),
-              ),
-            ],
-          ),
+          Row(children: [elapsed, seekBar, total]),
         ],
       ),
     );
