@@ -36,6 +36,9 @@ class SecurityScreen extends StatefulWidget {
 
 class _SecurityScreenState extends State<SecurityScreen>
     with SingleTickerProviderStateMixin, ReloadOnReconnect {
+  static const _contentLevelSafe = 'SAFE';
+  static const _contentLevelAll = 'ALL';
+
   bool _isLoading = true;
   bool _isSaving = false;
   bool _is2faEnabled = false;
@@ -72,15 +75,8 @@ class _SecurityScreenState extends State<SecurityScreen>
       final results = await Future.wait([
         accountModule.getPrivacyConfig(),
         accountModule.getBlockedContacts(),
-        AppDatabase.loadActiveProfile(),
       ]);
-      bool is2faEnabled;
-      try {
-        is2faEnabled = (await accountModule.get2faStatus()).enabled;
-      } catch (_) {
-        final profile = results[2] as ProfileData?;
-        is2faEnabled = profile?.profileOptions?.contains(2) ?? false;
-      }
+      final is2faEnabled = await _fetch2faEnabled();
       if (mounted) {
         setState(() {
           _privacyConfig = results[0] as PrivacyConfig;
@@ -98,6 +94,24 @@ class _SecurityScreenState extends State<SecurityScreen>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<bool> _fetch2faEnabled() async {
+    try {
+      return (await accountModule.get2faStatus()).enabled;
+    } catch (_) {
+      final profile = await AppDatabase.loadActiveProfile();
+      return profile?.profileOptions?.contains(2) ?? false;
+    }
+  }
+
+  Future<void> _openPasswordSettings() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const PasswordEntryScreen()),
+    );
+    final enabled = await _fetch2faEnabled();
+    if (mounted) setState(() => _is2faEnabled = enabled);
   }
 
   Future<void> _setSafeMode(bool value) async {
@@ -438,14 +452,7 @@ class _SecurityScreenState extends State<SecurityScreen>
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PasswordEntryScreen(),
-                ),
-              );
-            },
+            onTap: _openPasswordSettings,
             borderRadius: BorderRadius.zero,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
@@ -483,8 +490,10 @@ class _SecurityScreenState extends State<SecurityScreen>
                       ],
                     ),
                   ),
-                  _buildWarningBadge(cs),
-                  const SizedBox(width: 4),
+                  if (!_is2faEnabled) ...[
+                    _buildWarningBadge(cs),
+                    const SizedBox(width: 4),
+                  ],
                   Icon(
                     Symbols.chevron_right,
                     color: cs.outline,
@@ -580,30 +589,31 @@ class _SecurityScreenState extends State<SecurityScreen>
               onSelect: (value) => _updateSetting('SEARCH_BY_PHONE', value),
             ),
           ),
-          if (isSafeMode)
-            _settingsRow(
+          _settingsRow(
+            cs,
+            icon: Symbols.filter_alt,
+            label: l10n.securityShowContent,
+            trailingText: contentLevelAccess
+                ? l10n.securityContentSafe
+                : l10n.securityContentAll,
+            lockedBySafeMode: isSafeMode,
+            onTap: () => _showOptionSheet(
+              context,
               cs,
-              icon: Symbols.filter_alt,
-              label: l10n.securityShowContact,
-              trailingText: contentLevelAccess
-                  ? l10n.securityContentSafe
-                  : l10n.securityContentAll,
-              lockedBySafeMode: true,
-            )
-          else
-            _settingsRow(
-              cs,
-              icon: Symbols.filter_alt,
-              label: l10n.securityShowContact,
-              trailingWidget: Switch(
-                value: contentLevelAccess,
-                onChanged: (v) => _updateSetting('CONTENT_LEVEL_ACCESS', v),
+              title: l10n.securityShowContent,
+              currentValue: contentLevelAccess
+                  ? _contentLevelSafe
+                  : _contentLevelAll,
+              options: [
+                (_contentLevelSafe, l10n.securityContentSafe),
+                (_contentLevelAll, l10n.securityContentAll),
+              ],
+              onSelect: (value) => _updateSetting(
+                'CONTENT_LEVEL_ACCESS',
+                value == _contentLevelSafe,
               ),
-              showChevron: false,
-              verticalPadding: 14,
-              onTap: () =>
-                  _updateSetting('CONTENT_LEVEL_ACCESS', !contentLevelAccess),
             ),
+          ),
           _settingsRow(
             cs,
             icon: Symbols.visibility_off,
@@ -631,7 +641,8 @@ class _SecurityScreenState extends State<SecurityScreen>
                 ('CONTACTS', l10n.securityPrivacyContacts),
                 ('NOBODY', l10n.securityPrivacyNobody),
               ],
-              onSelect: (value) => _updateSetting('PHONE_NUMBER_PRIVACY', value),
+              onSelect: (value) =>
+                  _updateSetting('PHONE_NUMBER_PRIVACY', value),
             ),
           ),
         ],
@@ -648,10 +659,7 @@ class _SecurityScreenState extends State<SecurityScreen>
           child: InkWell(
             onTap: _isSaving ? null : () => _setSafeMode(!isSafeMode),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 17,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
               child: Row(
                 children: [
                   Icon(
@@ -837,18 +845,13 @@ class _SecurityScreenState extends State<SecurityScreen>
             label: l10n.securityReadReceipts,
             trailingWidget: Switch(
               value: showReadMark,
-              onChanged: (v) => _updateConfidentialSetting(
-                'SHOW_READ_MARK',
-                v,
-              ),
+              onChanged: (v) => _updateConfidentialSetting('SHOW_READ_MARK', v),
             ),
             showChevron: false,
             verticalPadding: 14,
             isLast: false,
-            onTap: () => _updateConfidentialSetting(
-              'SHOW_READ_MARK',
-              !showReadMark,
-            ),
+            onTap: () =>
+                _updateConfidentialSetting('SHOW_READ_MARK', !showReadMark),
           ),
           _settingsRow(
             cs,
@@ -861,10 +864,8 @@ class _SecurityScreenState extends State<SecurityScreen>
             showChevron: false,
             verticalPadding: 14,
             isLast: false,
-            onTap: () => _updateConfidentialSetting(
-              'ALT_KEYBOARD',
-              !altKeyboard,
-            ),
+            onTap: () =>
+                _updateConfidentialSetting('ALT_KEYBOARD', !altKeyboard),
           ),
           _settingsRow(
             cs,
@@ -877,10 +878,8 @@ class _SecurityScreenState extends State<SecurityScreen>
             showChevron: false,
             verticalPadding: 14,
             isLast: false,
-            onTap: () => _updateConfidentialSetting(
-              'UNSAFE_FILES',
-              !unsafeFiles,
-            ),
+            onTap: () =>
+                _updateConfidentialSetting('UNSAFE_FILES', !unsafeFiles),
           ),
           _settingsRow(
             cs,
@@ -888,10 +887,8 @@ class _SecurityScreenState extends State<SecurityScreen>
             label: l10n.securityAudioTranscription,
             trailingWidget: Switch(
               value: audioTranscription,
-              onChanged: (v) => _updateConfidentialSetting(
-                'AUDIO_TRANSCRIPTION_ENABLED',
-                v,
-              ),
+              onChanged: (v) =>
+                  _updateConfidentialSetting('AUDIO_TRANSCRIPTION_ENABLED', v),
             ),
             showChevron: false,
             verticalPadding: 14,

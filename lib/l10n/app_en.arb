@@ -797,7 +797,7 @@
   "securityFindByPhone": "Find me by phone number",
   "securityWhoCanCall": "Who can call me",
   "securityWhoCanInvite": "Who can invite me to chats",
-  "securityShowContact": "Show contact",
+  "securityShowContent": "Show content",
   "securityContentSafe": "Safe",
   "securityContentAll": "All",
   "securityShowOnlineStatus": "See online status",

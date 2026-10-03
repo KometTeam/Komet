@@ -60,6 +60,7 @@ import 'core/config/app_nav_pill_style.dart';
 import 'core/config/app_wallpaper_tint.dart';
 import 'core/storage/chat_wallpaper_store.dart';
 import 'core/utils/wallpaper_seed.dart';
+import 'core/utils/seed_scheme.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'core/config/app_digital_id_mode.dart';
@@ -974,14 +975,8 @@ class KometAppState extends State<KometApp>
       return (light: _seedCacheLight!, dark: _seedCacheDark!);
     }
     _seedCacheKey = seed;
-    _seedCacheLight = ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: Brightness.light,
-    );
-    _seedCacheDark = ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: Brightness.dark,
-    );
+    _seedCacheLight = schemeFromSeed(seed, Brightness.light);
+    _seedCacheDark = schemeFromSeed(seed, Brightness.dark);
     return (light: _seedCacheLight!, dark: _seedCacheDark!);
   }
 

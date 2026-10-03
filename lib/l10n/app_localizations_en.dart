@@ -1953,7 +1953,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get securityWhoCanInvite => 'Who can invite me to chats';
 
   @override
-  String get securityShowContact => 'Show contact';
+  String get securityShowContent => 'Show content';
 
   @override
   String get securityContentSafe => 'Safe';
