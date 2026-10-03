@@ -60,6 +60,7 @@ import 'profile_action_sheets.dart';
 import '../../../core/config/app_fonts.dart';
 import 'chat_info/chat_members_controller.dart';
 import 'chat_admin/admin_section.dart';
+import 'chat_admin/member_actions.dart';
 import 'chat_admin/chat_admin_state.dart';
 import 'chat_admin/ownership_transfer.dart';
 
@@ -1031,7 +1032,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             _buildPersistentInfo(cs),
             if (_chatAdmin case final admin?
                 when AdminSection.visibleFor(admin))
-              AdminSection(state: admin, onLeave: _leaveChat),
+              AdminSection(
+                state: admin,
+                onLeave: _leaveChat,
+                onClearHistory: _clearHistory,
+                onDelete: _deleteChannelForAll,
+              ),
             _buildTabBar(cs),
             const SizedBox(height: 12),
             _buildTabContent(cs),
@@ -1660,6 +1666,22 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         chatId: chatId,
         lastEventTime: lastEventTime,
         forAll: forAll,
+      ),
+    );
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  void _deleteChannelForAll() {
+    final lastEventTime = _lastEventTime;
+    removeChatsWithUndo(
+      context,
+      message: l10n.undoChatsDeleted(1),
+      chatIds: [_mediaChatId],
+      remove: (chatId) => chats.deleteChat(
+        api,
+        chatId: chatId,
+        lastEventTime: lastEventTime,
+        forAll: true,
       ),
     );
     Navigator.of(context).popUntil((route) => route.isFirst);
@@ -2463,10 +2485,30 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
                 roleLabel,
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
+            if (_chatAdmin case final admin?)
+              MemberActionsButton(
+                state: admin,
+                userId: member.id,
+                name: member.name,
+                avatarUrl: avatar,
+                isContact: member.isContact || member.blocked,
+                onDone: (action) => _afterMemberAction(member.id, action),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  void _afterMemberAction(int userId, MemberAction action) {
+    if (!mounted || action == MemberAction.appointAdmin) return;
+    if (action == MemberAction.addContact) {
+      _membersController.contactIds = {
+        ..._membersController.contactIds,
+        userId,
+      };
+    }
+    unawaited(_membersController.refreshMembers());
   }
 
   Widget _memberAvatar(

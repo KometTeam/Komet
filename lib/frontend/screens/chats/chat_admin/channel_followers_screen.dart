@@ -9,7 +9,8 @@ import '../../contacts/open_contact_profile.dart';
 import '../group_invite_sheets.dart';
 import 'chat_admin_state.dart';
 import 'chat_admin_widgets.dart';
-import 'channel_invite_link_screen.dart';
+import 'member_actions.dart';
+import 'channel_type_link_screen.dart';
 import 'members_pager.dart';
 import 'members_list.dart';
 
@@ -51,14 +52,17 @@ class _ChannelFollowersScreenState extends State<ChannelFollowersScreen> {
   }
 
   void _openInviteLink() {
-    pushSwipeable(context, (_) => ChannelInviteLinkScreen(state: _state));
+    pushSwipeable(context, (_) => ChannelTypeLinkScreen(state: _state));
   }
+
+  String _nameOf(ChatMemberEntry member) =>
+      member.name ?? ContactCache.get(member.id) ?? '${member.id}';
 
   void _openProfile(ChatMemberEntry member) {
     openContactDialogProfile(
       context,
       contactId: member.id,
-      name: member.name ?? ContactCache.get(member.id) ?? '${member.id}',
+      name: _nameOf(member),
       avatarUrl: member.avatarUrl,
     );
   }
@@ -121,6 +125,16 @@ class _ChannelFollowersScreenState extends State<ChannelFollowersScreen> {
           : me
           ? l10n.callParticipantYou
           : memberPresenceLabel(l10n, member),
+      trailing: MemberActionsButton(
+        state: _state,
+        userId: member.id,
+        name: member.name,
+        avatarUrl: member.avatarUrl,
+        isContact: member.isContact,
+        onDone: (action) {
+          if (action != MemberAction.appointAdmin) _members.reload();
+        },
+      ),
       onTap: me ? null : () => _openProfile(member),
     );
   }

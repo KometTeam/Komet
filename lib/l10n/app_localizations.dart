@@ -7303,6 +7303,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Image is too large (max 8 MB)'**
   String get contactLocalPhotoTooLarge;
+
+  /// No description provided for @channelTypeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Channel type and link'**
+  String get channelTypeTitle;
+
+  /// No description provided for @channelCreatedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Private channel created'**
+  String get channelCreatedTitle;
+
+  /// No description provided for @channelCreatedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'It is ready to be set up'**
+  String get channelCreatedSubtitle;
+
+  /// No description provided for @channelTypePrivate.
+  ///
+  /// In en, this message translates to:
+  /// **'Private'**
+  String get channelTypePrivate;
+
+  /// No description provided for @channelTypePrivateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The channel is available by link only'**
+  String get channelTypePrivateHint;
+
+  /// No description provided for @channelTypePublic.
+  ///
+  /// In en, this message translates to:
+  /// **'Public'**
+  String get channelTypePublic;
+
+  /// No description provided for @channelTypePublicHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The channel can be found in search'**
+  String get channelTypePublicHint;
+
+  /// No description provided for @channelTypePublicUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Public channels are not available yet'**
+  String get channelTypePublicUnavailable;
+
+  /// No description provided for @channelInviteLinkCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite link to your channel'**
+  String get channelInviteLinkCaption;
+
+  /// No description provided for @channelBusinessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Public for business'**
+  String get channelBusinessTitle;
+
+  /// No description provided for @channelBusinessHint.
+  ///
+  /// In en, this message translates to:
+  /// **'For legal entities, individual entrepreneurs, self-employed workers and government organizations'**
+  String get channelBusinessHint;
+
+  /// No description provided for @channelSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Channel settings'**
+  String get channelSettingsTitle;
+
+  /// No description provided for @channelSettingsName.
+  ///
+  /// In en, this message translates to:
+  /// **'Channel name'**
+  String get channelSettingsName;
+
+  /// No description provided for @channelSettingsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Channel description'**
+  String get channelSettingsDescription;
+
+  /// No description provided for @channelConfirmPosting.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm before posting'**
+  String get channelConfirmPosting;
+
+  /// No description provided for @channelConfirmPostingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'To double-check the post and avoid mistakes'**
+  String get channelConfirmPostingHint;
+
+  /// No description provided for @channelComments.
+  ///
+  /// In en, this message translates to:
+  /// **'Comments'**
+  String get channelComments;
+
+  /// No description provided for @channelCommentsEnableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Comments are a part of your channel'**
+  String get channelCommentsEnableTitle;
+
+  /// No description provided for @channelCommentsEnableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Make sure to monitor discussions and keep them civil: you can remove comments and restrict users'**
+  String get channelCommentsEnableMessage;
+
+  /// No description provided for @channelCommentsEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get channelCommentsEnable;
+
+  /// No description provided for @channelCommentsKeepOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t enable'**
+  String get channelCommentsKeepOff;
+
+  /// No description provided for @channelDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete channel'**
+  String get channelDelete;
+
+  /// No description provided for @channelDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the channel?'**
+  String get channelDeleteTitle;
+
+  /// No description provided for @channelDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'To prevent the channel from being deleted for all followers, you can transfer the rights to another owner'**
+  String get channelDeleteMessage;
+
+  /// No description provided for @channelDeleteTransfer.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer ownership and leave'**
+  String get channelDeleteTransfer;
+
+  /// No description provided for @followerRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get followerRemove;
+
+  /// No description provided for @followerRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove follower'**
+  String get followerRemoveTitle;
+
+  /// No description provided for @followerRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will no longer follow the channel.'**
+  String followerRemoveConfirm(String name);
+
+  /// No description provided for @followerRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Follower removed'**
+  String get followerRemoved;
+
+  /// No description provided for @channelReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Channel is ready'**
+  String get channelReadyTitle;
+
+  /// No description provided for @channelReadyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add posts and invite followers'**
+  String get channelReadyHint;
+
+  /// No description provided for @groupReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Group is ready'**
+  String get groupReadyTitle;
+
+  /// No description provided for @groupReadyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the first message and invite members'**
+  String get groupReadyHint;
+
+  /// No description provided for @botStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get botStart;
+
+  /// No description provided for @memberRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove member'**
+  String get memberRemoveTitle;
+
+  /// No description provided for @memberRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will be removed from the group.'**
+  String memberRemoveConfirm(String name);
+
+  /// No description provided for @memberRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Member removed'**
+  String get memberRemoved;
 }
 
 class _AppLocalizationsDelegate

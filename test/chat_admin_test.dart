@@ -312,8 +312,9 @@ void main() {
       expect(admin.canEditAdmin(_adminId), isFalse);
     });
 
-    test('channels have no group settings', () {
-      expect(state(_ownerId).hasSettings, isFalse);
+    test('only channel admins get the channel settings', () {
+      expect(state(_ownerId).hasSettings, isTrue);
+      expect(state(_followerId).hasSettings, isFalse);
     });
 
     test('a group admin with edit rights gets the settings', () {
@@ -428,6 +429,41 @@ void main() {
         'operation': 'remove',
       });
       expect(info.isAdmin(_adminId), isFalse);
+    });
+
+    test('removes a follower like the captured request', () async {
+      final api = _RecordingApi(() => {'chat': _chat()});
+
+      await ChatAdminModule(api).removeMember(_chatId, _followerId);
+
+      final (opcode, payload, _) = api.requests.single;
+      expect(opcode, Opcode.chatMembersUpdate);
+      expect(payload, {
+        'chatId': _chatId,
+        'userIds': [_followerId],
+        'operation': 'remove',
+        'cleanMsgPeriod': 0,
+      });
+    });
+
+    test('turns channel comments on through the options', () async {
+      final api = _RecordingApi(
+        () => {
+          'chat': _chat(options: {'COMMENTS': true}),
+        },
+      );
+
+      final info = await ChatAdminModule(
+        api,
+      ).setOptions(_chatId, {'COMMENTS': true});
+
+      final (opcode, payload, _) = api.requests.single;
+      expect(opcode, Opcode.chatUpdate);
+      expect(payload, {
+        'chatId': _chatId,
+        'options': {'COMMENTS': true},
+      });
+      expect(info.commentsEnabled, isTrue);
     });
 
     test('transfers ownership', () async {

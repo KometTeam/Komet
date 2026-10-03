@@ -14,29 +14,37 @@ import '../../../widgets/komet_avatar.dart';
 import '../../../widgets/settings_card.dart';
 import '../../../widgets/small_spinner.dart';
 import '../../../widgets/swipe_route.dart';
+import '../profile_action_sheets.dart';
+import 'channel_type_link_screen.dart';
 import 'chat_admin_state.dart';
 import 'chat_admin_widgets.dart';
 import 'member_permissions_screen.dart';
 import 'ownership_transfer.dart';
 import 'reaction_settings_screen.dart';
 
-class GroupSettingsScreen extends StatefulWidget {
+enum _ChannelDeletion { transferAndLeave, delete }
+
+class ChatSettingsScreen extends StatefulWidget {
   static const int descriptionLimit = 400;
 
   final ChatAdminState state;
   final VoidCallback onLeave;
+  final VoidCallback? onClearHistory;
+  final VoidCallback? onDelete;
 
-  const GroupSettingsScreen({
+  const ChatSettingsScreen({
     super.key,
     required this.state,
     required this.onLeave,
+    this.onClearHistory,
+    this.onDelete,
   });
 
   @override
-  State<GroupSettingsScreen> createState() => _GroupSettingsScreenState();
+  State<ChatSettingsScreen> createState() => _ChatSettingsScreenState();
 }
 
-class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
+class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
   late final TextEditingController _title = TextEditingController(
     text: _state.name,
   );
@@ -45,6 +53,7 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   );
   bool _saving = false;
   bool _photoBusy = false;
+  bool _optionBusy = false;
   ChatRestriction? _pendingRestriction;
 
   ChatAdminState get _state => widget.state;
@@ -134,6 +143,76 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
     widget.onLeave();
   }
 
+  void _closeThen(VoidCallback action) {
+    Navigator.of(context).pop();
+    action();
+  }
+
+  Future<void> _setComments(bool enabled) async {
+    if (_optionBusy) return;
+    if (enabled) {
+      final l10n = AppLocalizations.of(context)!;
+      final cs = Theme.of(context).colorScheme;
+      final confirmed = await showActionCard<bool>(
+        context,
+        leading: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Icon(Symbols.chat, fill: 1, color: cs.primary, size: 28),
+        ),
+        title: l10n.channelCommentsEnableTitle,
+        message: l10n.channelCommentsEnableMessage,
+        actions: [
+          CardAction(
+            l10n.channelCommentsEnable,
+            true,
+            tone: CardActionTone.primary,
+          ),
+          CardAction(l10n.channelCommentsKeepOff, false),
+        ],
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    setState(() => _optionBusy = true);
+    await runAdminAction(context, () => _state.setComments(enabled));
+    if (mounted) setState(() => _optionBusy = false);
+  }
+
+  Future<void> _deleteChannel() async {
+    final onDelete = widget.onDelete;
+    if (onDelete == null) return;
+    final l10n = AppLocalizations.of(context)!;
+    final choice = await showActionCard<_ChannelDeletion>(
+      context,
+      title: l10n.channelDeleteTitle,
+      message: l10n.channelDeleteMessage,
+      stacked: true,
+      actions: [
+        if (_state.hasOtherMembers)
+          CardAction(
+            l10n.channelDeleteTransfer,
+            _ChannelDeletion.transferAndLeave,
+          ),
+        CardAction(
+          l10n.channelDelete,
+          _ChannelDeletion.delete,
+          tone: CardActionTone.destructive,
+        ),
+      ],
+    );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case _ChannelDeletion.transferAndLeave:
+        if (await pickNewOwner(context, _state) && mounted) _leave();
+      case _ChannelDeletion.delete:
+        _closeThen(onDelete);
+    }
+  }
+
   String? _reactionsSummary(AppLocalizations l10n) {
     final settings = _state.reactions;
     if (settings == null) return null;
@@ -151,7 +230,9 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return AdminScaffold(
-      title: l10n.groupSettingsTitle,
+      title: _state.isChannel
+          ? l10n.channelSettingsTitle
+          : l10n.groupSettingsTitle,
       actions: [
         if (_saving)
           const Padding(
@@ -188,84 +269,206 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
       children: [
         Center(child: _avatar(cs)),
         const SizedBox(height: 20),
-        AdminSectionCaption(l10n.groupSettingsName),
+        AdminSectionCaption(
+          _state.isChannel ? l10n.channelSettingsName : l10n.groupSettingsName,
+        ),
         _field(cs, _title, enabled: editable),
         const SizedBox(height: 16),
-        AdminSectionCaption(l10n.groupSettingsDescription),
+        AdminSectionCaption(
+          _state.isChannel
+              ? l10n.channelSettingsDescription
+              : l10n.groupSettingsDescription,
+        ),
         _field(
           cs,
           _description,
           enabled: editable,
           minLines: 3,
-          maxLength: GroupSettingsScreen.descriptionLimit,
+          maxLength: ChatSettingsScreen.descriptionLimit,
         ),
         const SizedBox(height: 16),
-        if (_state.canManageChat) ...[
-          SettingsCard(
-            children: [
-              SettingsNavTile(
-                icon: Symbols.add_reaction,
-                label: l10n.reactionsTitle,
-                value: _reactionsSummary(l10n),
-                onTap: () => pushSwipeable(
-                  context,
-                  (_) => ReactionSettingsScreen(state: _state),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-        ],
+        if (_state.isChannel)
+          ..._channelSections(cs, l10n)
+        else
+          ..._groupSections(cs, l10n),
+      ],
+    );
+  }
+
+  List<Widget> _channelSections(ColorScheme cs, AppLocalizations l10n) {
+    final info = _state.info;
+    return [
+      if (_state.canManageChat) ...[
         SettingsCard(
           children: [
-            if (_state.isOwner)
-              AdminActionTile(
-                icon: Symbols.crown,
-                label: l10n.ownershipTransfer,
-                color: cs.onSurface,
-                onTap: () => pickNewOwner(context, _state),
+            SettingsToggleTile(
+              icon: Symbols.error,
+              label: l10n.channelConfirmPosting,
+              value: ChatRestriction.confirmBeforeSend.enabledIn(info),
+              enabled: _pendingRestriction == null,
+              onChanged: (enabled) => _toggleRestriction(
+                ChatRestriction.confirmBeforeSend,
+                enabled,
               ),
-            AdminActionTile(
-              icon: Symbols.logout,
-              label: l10n.groupSettingsLeave,
-              color: cs.error,
-              onTap: _leave,
             ),
           ],
         ),
-        if (_state.canManageChat) ...[
-          const SizedBox(height: 12),
-          SettingsCard(
-            children: [
-              SettingsNavTile(
-                icon: Symbols.verified_user,
-                label: l10n.memberPermissionsTitle,
-                onTap: () => pushSwipeable(
-                  context,
-                  (_) => MemberPermissionsScreen(state: _state),
-                ),
-              ),
-            ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 8, 4, 16),
+          child: Text(
+            l10n.channelConfirmPostingHint,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
-          const SizedBox(height: 20),
-          AdminSectionCaption(l10n.groupRestrictionsTitle),
-          SettingsCard(
-            children: [
-              for (final restriction in ChatRestriction.values)
-                SettingsToggleTile(
-                  icon: _restrictionIcon(restriction),
-                  label: _restrictionLabel(l10n, restriction),
-                  subtitle: _restrictionHint(l10n, restriction),
-                  value: restriction.enabledIn(_state.info),
-                  enabled: _pendingRestriction == null,
-                  onChanged: (enabled) =>
-                      _toggleRestriction(restriction, enabled),
-                ),
-            ],
+        ),
+      ],
+      if (_state.inviteLink != null || _state.canManageFollowers) ...[
+        SettingsCard(
+          children: [
+            SettingsNavTile(
+              icon: Symbols.campaign,
+              label: l10n.channelTypeTitle,
+              value: info.isPublic
+                  ? l10n.channelTypePublic
+                  : l10n.channelTypePrivate,
+              onTap: () => pushSwipeable(
+                context,
+                (_) => ChannelTypeLinkScreen(state: _state),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (_state.canManageChat) ...[
+        SettingsCard(
+          children: [
+            SettingsNavTile(
+              icon: Symbols.add_reaction,
+              label: l10n.reactionsTitle,
+              value: _reactionsSummary(l10n),
+              onTap: () => pushSwipeable(
+                context,
+                (_) => ReactionSettingsScreen(state: _state),
+              ),
+            ),
+            SettingsToggleTile(
+              icon: Symbols.chat,
+              label: l10n.channelComments,
+              value: info.commentsEnabled,
+              enabled: !_optionBusy,
+              onChanged: _setComments,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
+      SettingsCard(
+        children: [
+          if (_state.isOwner)
+            AdminActionTile(
+              icon: Symbols.crown,
+              label: l10n.ownershipTransfer,
+              color: cs.onSurface,
+              onTap: () => pickNewOwner(context, _state),
+            ),
+          if (widget.onClearHistory case final clear? when _state.isAdmin)
+            AdminActionTile(
+              icon: Symbols.delete_history,
+              label: l10n.chatInfoMenuClearHistory,
+              color: cs.onSurface,
+              onTap: () => _closeThen(clear),
+            ),
+          AdminActionTile(
+            icon: Symbols.logout,
+            label: l10n.chatInfoLeaveChannelTitle,
+            color: cs.error,
+            onTap: _leave,
           ),
         ],
+      ),
+      if (_state.isOwner && widget.onDelete != null) ...[
+        const SizedBox(height: 12),
+        SettingsCard(
+          children: [
+            AdminActionTile(
+              icon: Symbols.delete,
+              label: l10n.channelDelete,
+              color: cs.error,
+              onTap: _deleteChannel,
+            ),
+          ],
+        ),
       ],
-    );
+    ];
+  }
+
+  List<Widget> _groupSections(ColorScheme cs, AppLocalizations l10n) {
+    return [
+      if (_state.canManageChat) ...[
+        SettingsCard(
+          children: [
+            SettingsNavTile(
+              icon: Symbols.add_reaction,
+              label: l10n.reactionsTitle,
+              value: _reactionsSummary(l10n),
+              onTap: () => pushSwipeable(
+                context,
+                (_) => ReactionSettingsScreen(state: _state),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
+      SettingsCard(
+        children: [
+          if (_state.isOwner)
+            AdminActionTile(
+              icon: Symbols.crown,
+              label: l10n.ownershipTransfer,
+              color: cs.onSurface,
+              onTap: () => pickNewOwner(context, _state),
+            ),
+          AdminActionTile(
+            icon: Symbols.logout,
+            label: l10n.groupSettingsLeave,
+            color: cs.error,
+            onTap: _leave,
+          ),
+        ],
+      ),
+      if (_state.canManageChat) ...[
+        const SizedBox(height: 12),
+        SettingsCard(
+          children: [
+            SettingsNavTile(
+              icon: Symbols.verified_user,
+              label: l10n.memberPermissionsTitle,
+              onTap: () => pushSwipeable(
+                context,
+                (_) => MemberPermissionsScreen(state: _state),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        AdminSectionCaption(l10n.groupRestrictionsTitle),
+        SettingsCard(
+          children: [
+            for (final restriction in ChatRestriction.values)
+              SettingsToggleTile(
+                icon: _restrictionIcon(restriction),
+                label: _restrictionLabel(l10n, restriction),
+                subtitle: _restrictionHint(l10n, restriction),
+                value: restriction.enabledIn(_state.info),
+                enabled: _pendingRestriction == null,
+                onChanged: (enabled) =>
+                    _toggleRestriction(restriction, enabled),
+              ),
+          ],
+        ),
+      ],
+    ];
   }
 
   static IconData _restrictionIcon(ChatRestriction restriction) =>

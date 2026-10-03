@@ -76,6 +76,7 @@ class ChatInfo {
       (raw['pendingJoinRequestsCount'] as int?) ?? 0;
   String? get link => raw['link'] as String?;
   bool get joinRequests => option('JOIN_REQUEST');
+  bool get commentsEnabled => option('COMMENTS');
   String? get title => raw['title'] as String?;
   String? get iconUrl => raw['baseIconUrl'] as String?;
   AdminChatKind get adminKind =>

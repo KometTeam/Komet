@@ -4016,4 +4016,124 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get contactLocalPhotoTooLarge =>
       'Картинка слишком большая (макс. 8 МБ)';
+
+  @override
+  String get channelTypeTitle => 'Тип канала и ссылка';
+
+  @override
+  String get channelCreatedTitle => 'Приватный канал создан';
+
+  @override
+  String get channelCreatedSubtitle => 'Его уже можно настроить';
+
+  @override
+  String get channelTypePrivate => 'Приватный';
+
+  @override
+  String get channelTypePrivateHint => 'Канал доступен только по ссылке';
+
+  @override
+  String get channelTypePublic => 'Публичный';
+
+  @override
+  String get channelTypePublicHint => 'Канал можно найти в поиске';
+
+  @override
+  String get channelTypePublicUnavailable => 'Публичные каналы пока недоступны';
+
+  @override
+  String get channelInviteLinkCaption => 'Ссылка-приглашение в ваш канал';
+
+  @override
+  String get channelBusinessTitle => 'Публичный для бизнеса';
+
+  @override
+  String get channelBusinessHint =>
+      'Для юрлиц, ИП, самозанятых и госорганизаций';
+
+  @override
+  String get channelSettingsTitle => 'Настройки канала';
+
+  @override
+  String get channelSettingsName => 'Название канала';
+
+  @override
+  String get channelSettingsDescription => 'Описание канала';
+
+  @override
+  String get channelConfirmPosting => 'Подтверждать публикацию';
+
+  @override
+  String get channelConfirmPostingHint =>
+      'Чтобы перепроверить пост и избежать ошибок';
+
+  @override
+  String get channelComments => 'Комментарии';
+
+  @override
+  String get channelCommentsEnableTitle => 'Комментарии — часть вашего канала';
+
+  @override
+  String get channelCommentsEnableMessage =>
+      'Следите за обсуждениями и поддерживайте порядок: комментарии можно удалять, а пользователей — ограничивать';
+
+  @override
+  String get channelCommentsEnable => 'Включить';
+
+  @override
+  String get channelCommentsKeepOff => 'Не включать';
+
+  @override
+  String get channelDelete => 'Удалить канал';
+
+  @override
+  String get channelDeleteTitle => 'Удалить канал?';
+
+  @override
+  String get channelDeleteMessage =>
+      'Чтобы канал не удалился у всех подписчиков, можно передать права другому владельцу';
+
+  @override
+  String get channelDeleteTransfer => 'Передать права и выйти';
+
+  @override
+  String get followerRemove => 'Удалить';
+
+  @override
+  String get followerRemoveTitle => 'Удалить подписчика';
+
+  @override
+  String followerRemoveConfirm(String name) {
+    return '$name больше не будет подписан на канал.';
+  }
+
+  @override
+  String get followerRemoved => 'Подписчик удалён';
+
+  @override
+  String get channelReadyTitle => 'Канал готов';
+
+  @override
+  String get channelReadyHint => 'Публикуйте посты и приглашайте подписчиков';
+
+  @override
+  String get groupReadyTitle => 'Группа готова';
+
+  @override
+  String get groupReadyHint =>
+      'Напишите первое сообщение и пригласите участников';
+
+  @override
+  String get botStart => 'Начать';
+
+  @override
+  String get memberRemoveTitle => 'Удалить участника';
+
+  @override
+  String memberRemoveConfirm(String name) {
+    return '$name будет удалён из группы.';
+  }
+
+  @override
+  String get memberRemoved => 'Участник удалён';
 }

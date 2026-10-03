@@ -78,6 +78,7 @@ import 'chat/sticker_panel_controller.dart';
 import 'chat/chat_search_controller.dart';
 import 'chat/message_search_result.dart';
 import 'chat/typing_label.dart';
+import 'chat/view/chat_intro_cards.dart';
 import 'chat/upload_status.dart';
 import 'chat/mention_panel_controller.dart';
 import 'chat/chat_media_send_controller.dart';
@@ -90,6 +91,7 @@ import 'chat/view/scroll_down_button.dart';
 import 'chat/view/throttled_message_scrollbar.dart';
 import 'chat/view/chat_app_bar.dart';
 import 'chat/view/composer_area.dart';
+import 'chat/view/composer_input.dart' show BotStartPrompt;
 import 'chat/view/chat_body_layout.dart';
 import 'chat/view/shimmer_loading.dart';
 import '../../../core/config/app_visual_style.dart';
@@ -557,6 +559,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _peerKindKnown = false;
   bool _greetingMounted = false;
   bool _botStartRequested = false;
+  bool _botStartPressed = false;
   ChatWallpaper? _wallpaper;
 
   bool get _composerFrosted =>
@@ -1090,10 +1093,10 @@ class _ChatScreenState extends State<ChatScreen>
     await _sendBotStart(payload);
   }
 
-  Future<void> _sendBotStart(String startPayload) async {
+  Future<bool> _sendBotStart([String? startPayload]) async {
     if (_myId == 0) {
       final profile = await AppDatabase.loadActiveProfile();
-      if (!mounted) return;
+      if (!mounted) return false;
       _myId = profile?.id ?? 0;
     }
     try {
@@ -1101,17 +1104,35 @@ class _ChatScreenState extends State<ChatScreen>
         widget.chatId,
         startPayload,
       );
-      if (!mounted) return;
+      if (!mounted) return false;
       if (sent == null) {
         showCustomNotification(context, 'Не удалось запустить бота');
-        return;
+        return false;
       }
       await _chatController.persistOutgoing(
         CachedMessage.fromPushPayload(_myId, widget.chatId, sent),
       );
+      return true;
     } catch (_) {
       if (mounted) showCustomNotification(context, 'Не удалось запустить бота');
+      return false;
     }
+  }
+
+  bool get _botStartDue =>
+      _peerIsBot &&
+      _isPersonDialog &&
+      !_isLoading &&
+      !_botStartPressed &&
+      _messages.isEmpty;
+
+  Future<void> _startBot() async {
+    if (_botStartPressed) return;
+    _botStartPressed = true;
+    _bumpMessages();
+    if (await _sendBotStart() || !mounted) return;
+    _botStartPressed = false;
+    _bumpMessages();
   }
 
   void _onLoadingFinished() {
@@ -2821,6 +2842,13 @@ class _ChatScreenState extends State<ChatScreen>
       forwardDisabled: chat?.forwardDisabled ?? false,
       replyDisabled: !_canReply,
       composerFrosted: _composerFrosted,
+      botStart: _peerIsBot && _isPersonDialog
+          ? BotStartPrompt(
+              revision: _messagesRev,
+              due: () => _botStartDue,
+              onStart: _startBot,
+            )
+          : null,
     );
   }
 
@@ -4714,6 +4742,28 @@ class _ChatScreenState extends State<ChatScreen>
         accountId: _myId,
         visible: greetingDue,
         onSend: _mediaSend.sendSticker,
+      );
+    }
+    if (_isLoading) return const SizedBox.shrink();
+    if (empty && _isPersonDialog && _peerIsBot) {
+      return Center(
+        child: BotIntroCard(
+          botId: widget.chatId ^ _myId,
+          name: widget.name,
+          avatarUrl: widget.imageUrl,
+        ),
+      );
+    }
+    if (!_commentsMode && _isGroupChat && _messages.every((m) => m.isControl)) {
+      return IgnorePointer(
+        child: Align(
+          alignment: const Alignment(0, -0.3),
+          child: ChatReadyCard(
+            name: chat?.title ?? widget.name,
+            avatarUrl: widget.imageUrl,
+            isChannel: _isChannel,
+          ),
+        ),
       );
     }
     if (!empty) return const SizedBox.shrink();

@@ -3983,4 +3983,125 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get contactLocalPhotoTooLarge => 'Image is too large (max 8 MB)';
+
+  @override
+  String get channelTypeTitle => 'Channel type and link';
+
+  @override
+  String get channelCreatedTitle => 'Private channel created';
+
+  @override
+  String get channelCreatedSubtitle => 'It is ready to be set up';
+
+  @override
+  String get channelTypePrivate => 'Private';
+
+  @override
+  String get channelTypePrivateHint => 'The channel is available by link only';
+
+  @override
+  String get channelTypePublic => 'Public';
+
+  @override
+  String get channelTypePublicHint => 'The channel can be found in search';
+
+  @override
+  String get channelTypePublicUnavailable =>
+      'Public channels are not available yet';
+
+  @override
+  String get channelInviteLinkCaption => 'Invite link to your channel';
+
+  @override
+  String get channelBusinessTitle => 'Public for business';
+
+  @override
+  String get channelBusinessHint =>
+      'For legal entities, individual entrepreneurs, self-employed workers and government organizations';
+
+  @override
+  String get channelSettingsTitle => 'Channel settings';
+
+  @override
+  String get channelSettingsName => 'Channel name';
+
+  @override
+  String get channelSettingsDescription => 'Channel description';
+
+  @override
+  String get channelConfirmPosting => 'Confirm before posting';
+
+  @override
+  String get channelConfirmPostingHint =>
+      'To double-check the post and avoid mistakes';
+
+  @override
+  String get channelComments => 'Comments';
+
+  @override
+  String get channelCommentsEnableTitle =>
+      'Comments are a part of your channel';
+
+  @override
+  String get channelCommentsEnableMessage =>
+      'Make sure to monitor discussions and keep them civil: you can remove comments and restrict users';
+
+  @override
+  String get channelCommentsEnable => 'Enable';
+
+  @override
+  String get channelCommentsKeepOff => 'Don\'t enable';
+
+  @override
+  String get channelDelete => 'Delete channel';
+
+  @override
+  String get channelDeleteTitle => 'Delete the channel?';
+
+  @override
+  String get channelDeleteMessage =>
+      'To prevent the channel from being deleted for all followers, you can transfer the rights to another owner';
+
+  @override
+  String get channelDeleteTransfer => 'Transfer ownership and leave';
+
+  @override
+  String get followerRemove => 'Remove';
+
+  @override
+  String get followerRemoveTitle => 'Remove follower';
+
+  @override
+  String followerRemoveConfirm(String name) {
+    return '$name will no longer follow the channel.';
+  }
+
+  @override
+  String get followerRemoved => 'Follower removed';
+
+  @override
+  String get channelReadyTitle => 'Channel is ready';
+
+  @override
+  String get channelReadyHint => 'Add posts and invite followers';
+
+  @override
+  String get groupReadyTitle => 'Group is ready';
+
+  @override
+  String get groupReadyHint => 'Send the first message and invite members';
+
+  @override
+  String get botStart => 'Start';
+
+  @override
+  String get memberRemoveTitle => 'Remove member';
+
+  @override
+  String memberRemoveConfirm(String name) {
+    return '$name will be removed from the group.';
+  }
+
+  @override
+  String get memberRemoved => 'Member removed';
 }

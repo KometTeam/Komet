@@ -1065,9 +1065,9 @@ class MessagesModule {
   }
 
   Future<Map<String, dynamic>?> sendBotStart(
-    int chatId,
-    String startPayload,
-  ) async {
+    int chatId, [
+    String? startPayload,
+  ]) async {
     final response = await _api.sendRequest(Opcode.msgSend, {
       'chatId': chatId,
       'message': {
@@ -1076,7 +1076,7 @@ class MessagesModule {
           {
             '_type': 'CONTROL',
             'event': ControlAttachment.botStartedEvent,
-            'startPayload': startPayload,
+            'startPayload': ?startPayload,
           },
         ],
       },

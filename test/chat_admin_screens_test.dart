@@ -4,8 +4,9 @@ import 'package:komet/frontend/screens/chats/chat_admin/admin_section.dart';
 import 'package:komet/frontend/screens/chats/chat_admin/chat_admin_state.dart';
 import 'package:komet/frontend/screens/chats/chat_admin/admins_screen.dart';
 import 'package:komet/frontend/screens/chats/chat_admin/channel_followers_screen.dart';
-import 'package:komet/frontend/screens/chats/chat_admin/channel_invite_link_screen.dart';
-import 'package:komet/frontend/screens/chats/chat_admin/group_settings_screen.dart';
+import 'package:komet/frontend/screens/chats/chat_admin/channel_type_link_screen.dart';
+import 'package:komet/frontend/screens/chats/chat_admin/chat_settings_screen.dart';
+import 'package:komet/frontend/screens/chats/chat_admin/member_actions.dart';
 import 'package:komet/frontend/screens/chats/chat_admin/member_permissions_screen.dart';
 import 'package:komet/frontend/screens/chats/chat_admin/ownership_transfer.dart';
 import 'package:komet/frontend/widgets/settings_card.dart';
@@ -107,15 +108,15 @@ void main() {
   testWidgets('the invite link screen offers every link action', (
     tester,
   ) async {
-    await _pump(tester, ChannelInviteLinkScreen(state: _state(myId: _ownerId)));
+    await _pump(tester, ChannelTypeLinkScreen(state: _state(myId: _ownerId)));
 
     expect(find.text('example.test/join/synthetic'), findsOne);
     expect(find.text('Отправить в MAX'), findsOne);
     expect(find.text('Показать QR-код'), findsOne);
     expect(find.text('Заявки на вступление'), findsOne);
-    expect(find.byIcon(Symbols.more_vert), findsOne);
+    expect(find.byIcon(Symbols.more_horiz), findsOne);
 
-    await tester.tap(find.byIcon(Symbols.more_vert));
+    await tester.tap(find.byIcon(Symbols.more_horiz));
     await tester.pumpAndSettle();
     expect(find.text('Перевыпустить ссылку'), findsOne);
   });
@@ -125,14 +126,14 @@ void main() {
   ) async {
     await _pump(
       tester,
-      ChannelInviteLinkScreen(
+      ChannelTypeLinkScreen(
         state: _state(myId: _adminId, adminPermissions: 32),
       ),
     );
 
     expect(find.text('Отправить в MAX'), findsOne);
     expect(find.text('Заявки на вступление'), findsNothing);
-    expect(find.byIcon(Symbols.more_vert), findsNothing);
+    expect(find.byIcon(Symbols.more_horiz), findsNothing);
   });
 
   testWidgets('the followers screen offers adding and inviting', (
@@ -179,7 +180,7 @@ void main() {
   testWidgets('the owner sees every group setting', (tester) async {
     await _pump(
       tester,
-      GroupSettingsScreen(
+      ChatSettingsScreen(
         state: _state(myId: _ownerId, type: 'CHAT'),
         onLeave: () {},
       ),
@@ -198,7 +199,7 @@ void main() {
   testWidgets('saving waits for a real change', (tester) async {
     await _pump(
       tester,
-      GroupSettingsScreen(
+      ChatSettingsScreen(
         state: _state(myId: _ownerId, type: 'CHAT'),
         onLeave: () {},
       ),
@@ -223,7 +224,7 @@ void main() {
   ) async {
     await _pump(
       tester,
-      GroupSettingsScreen(
+      ChatSettingsScreen(
         state: _state(
           myId: 99,
           type: 'CHAT',
@@ -354,7 +355,7 @@ void main() {
   testWidgets('group restrictions show the server values', (tester) async {
     await _pump(
       tester,
-      GroupSettingsScreen(
+      ChatSettingsScreen(
         state: _state(
           myId: _ownerId,
           type: 'CHAT',
@@ -382,7 +383,7 @@ void main() {
   testWidgets('members do not see group restrictions', (tester) async {
     await _pump(
       tester,
-      GroupSettingsScreen(
+      ChatSettingsScreen(
         state: _state(
           myId: 99,
           type: 'CHAT',
@@ -394,5 +395,172 @@ void main() {
 
     expect(find.text('ОГРАНИЧЕНИЯ'), findsNothing);
     expect(find.text('Запретить пересылку'), findsNothing);
+  });
+
+  testWidgets('a new channel greets with its type and link', (tester) async {
+    await _pump(
+      tester,
+      ChannelTypeLinkScreen(state: _state(myId: _ownerId), justCreated: true),
+    );
+
+    expect(find.text('Приватный канал создан'), findsOne);
+    expect(find.text('Публичный для бизнеса'), findsOne);
+    expect(find.text('Ссылка-приглашение в ваш канал'), findsOne);
+    expect(find.text('Копировать ссылку'), findsOne);
+    expect(find.text('Заявки на вступление'), findsNothing);
+
+    await tester.tap(find.text('Публичный'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Публичные каналы пока недоступны'), findsOne);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('the channel owner sees every channel setting', (tester) async {
+    var deleted = false;
+    await _pump(
+      tester,
+      ChatSettingsScreen(
+        state: _state(myId: _ownerId),
+        onLeave: () {},
+        onClearHistory: () {},
+        onDelete: () => deleted = true,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Настройки канала'), findsOne);
+    expect(find.text('НАЗВАНИЕ КАНАЛА'), findsOne);
+    expect(find.text('Подтверждать публикацию'), findsOne);
+    expect(
+      find.widgetWithText(SettingsNavTile, 'Тип канала и ссылка'),
+      findsOne,
+    );
+    expect(find.widgetWithText(SettingsNavTile, 'Приватный'), findsOne);
+    expect(find.text('Комментарии'), findsOne);
+    expect(find.text('Передать права владельца'), findsOne);
+    expect(find.text('Очистить историю'), findsOne);
+    expect(find.text('Покинуть канал'), findsOne);
+    expect(find.text('Разрешения участников'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.text('Удалить канал'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(find.text('Удалить канал'));
+    await tester.pumpAndSettle();
+    expect(find.text('Удалить канал?'), findsOne);
+    expect(find.text('Передать права и выйти'), findsOne);
+
+    await tester.tap(find.text('Удалить канал').last);
+    await tester.pumpAndSettle();
+    expect(deleted, isTrue);
+  });
+
+  testWidgets('comments ask before they are switched on', (tester) async {
+    await _pump(
+      tester,
+      ChatSettingsScreen(
+        state: _state(myId: _ownerId),
+        onLeave: () {},
+      ),
+    );
+
+    await tester.tap(find.widgetWithText(SettingsToggleTile, 'Комментарии'));
+    await tester.pumpAndSettle();
+    expect(find.text('Комментарии — часть вашего канала'), findsOne);
+
+    await tester.tap(find.text('Не включать'));
+    await tester.pumpAndSettle();
+    expect(find.text('Комментарии — часть вашего канала'), findsNothing);
+    expect(
+      tester
+          .widget<SettingsToggleTile>(
+            find.widgetWithText(SettingsToggleTile, 'Комментарии'),
+          )
+          .value,
+      isFalse,
+    );
+  });
+
+  testWidgets('a channel admin opens settings from the info section', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      Scaffold(
+        body: AdminSection(
+          state: _state(myId: _ownerId),
+          onLeave: () {},
+        ),
+      ),
+    );
+
+    expect(find.widgetWithText(SettingsNavTile, 'Настройки канала'), findsOne);
+  });
+
+  test('member actions follow the admin rights', () {
+    final owner = _state(myId: _ownerId, type: 'CHAT');
+    expect(memberActionsFor(owner, userId: 44, isContact: false), [
+      MemberAction.addContact,
+      MemberAction.appointAdmin,
+      MemberAction.remove,
+    ]);
+    expect(memberActionsFor(owner, userId: 44, isContact: true), [
+      MemberAction.appointAdmin,
+      MemberAction.remove,
+    ]);
+    expect(memberActionsFor(owner, userId: _adminId, isContact: true), isEmpty);
+    expect(
+      memberActionsFor(owner, userId: _ownerId, isContact: false),
+      isEmpty,
+    );
+
+    final plainMember = _state(myId: 99, type: 'CHAT');
+    expect(memberActionsFor(plainMember, userId: 44, isContact: false), [
+      MemberAction.addContact,
+    ]);
+
+    final followerManager = _state(myId: _adminId, adminPermissions: 2 | 128);
+    expect(memberActionsFor(followerManager, userId: 44, isContact: true), [
+      MemberAction.remove,
+    ]);
+  });
+
+  testWidgets('a group member menu asks before removing', (tester) async {
+    await _pump(
+      tester,
+      Scaffold(
+        body: Center(
+          child: MemberActionsButton(
+            state: _state(myId: _ownerId, type: 'CHAT'),
+            userId: 44,
+            name: 'Synthetic member',
+            isContact: false,
+            onDone: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Symbols.more_horiz));
+    await tester.pumpAndSettle();
+    expect(find.text('Добавить в контакты'), findsOne);
+    expect(find.text('Назначить администратором'), findsOne);
+
+    await tester.tap(find.text('Удалить'));
+    await tester.pumpAndSettle();
+    expect(find.text('Удалить участника'), findsOne);
+    expect(find.text('Synthetic member будет удалён из группы.'), findsOne);
+
+    await tester.tap(find.text('Отмена'));
+    await tester.pumpAndSettle();
   });
 }

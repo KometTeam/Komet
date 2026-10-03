@@ -106,9 +106,11 @@ class ComposerArea extends StatelessWidget {
   final bool replyDisabled;
 
   final bool composerFrosted;
+  final BotStartPrompt? botStart;
 
   const ComposerArea({
     super.key,
+    this.botStart,
     required this.selectionAnim,
     required this.searchAnim,
     required this.attachAnim,
@@ -169,6 +171,21 @@ class ComposerArea extends StatelessWidget {
     this.replyDisabled = false,
     required this.composerFrosted,
   });
+
+  Widget _withBotStart(BuildContext context, Widget bar) {
+    final start = botStart;
+    if (start == null) return bar;
+    return ListenableBuilder(
+      listenable: start.revision,
+      builder: (context, _) => start.due()
+          ? ComposerPillBar(
+              label: AppLocalizations.of(context)!.botStart,
+              primary: true,
+              onTap: start.onStart,
+            )
+          : bar,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -245,60 +262,65 @@ class ComposerArea extends StatelessWidget {
               ),
               AnimatedBuilder(
                 animation: stickers.anim,
-                builder: (context, _) => ComposerInputBar(
-                  bottomSafe: stickers.anim.value == 0,
-                  chatType: commentsMode ? 'CHAT' : chatType,
-                  chrome: chrome,
-                  vignette: chromeVignette,
-                  style: AppComposerStyle.current.value,
-                  background: AppComposerBackground.current.value,
-                  backdropKey: pillBackdrop,
-                  attachAnim: attachAnim,
-                  replyTo: replyTo,
-                  forward: forward,
-                  myId: myId,
-                  hasText: hasText,
-                  uploadStatus: uploadStatus,
-                  messageController: messageController,
-                  messageFocusNode: messageFocusNode,
-                  voiceRec: voiceRec,
-                  note: note,
-                  onToggleStickerPanel: onToggleStickerPanel,
-                  onSendText: onSendMessage,
-                  onScheduleMessage: onScheduleMessage,
-                  onOpenAttach: onOpenAttach,
-                  onOpenAttachScheduled: onOpenAttachScheduled,
-                  onSendHistory: onSendHistory,
-                  onCancelReply: onCancelReply,
-                  onCancelForward: onCancelForward,
-                  onToggleForwardSender: onToggleForwardSender,
-                  onPickReplyChat: commentsMode || !crossChatReplySupported
-                      ? null
-                      : () => unawaited(onPickReplyChat()),
-                  formatElapsed: formatElapsed,
-                  contextMenuBuilder: (ctx, state) => formatContextMenu(
-                    messageController,
-                    ctx,
-                    state,
-                    pasteItem: pasteMenuItem(ctx, state),
+                builder: (context, _) => _withBotStart(
+                  context,
+                  ComposerInputBar(
+                    bottomSafe: stickers.anim.value == 0,
+                    chatType: commentsMode ? 'CHAT' : chatType,
+                    chrome: chrome,
+                    vignette: chromeVignette,
+                    style: AppComposerStyle.current.value,
+                    background: AppComposerBackground.current.value,
+                    backdropKey: pillBackdrop,
+                    attachAnim: attachAnim,
+                    replyTo: replyTo,
+                    forward: forward,
+                    myId: myId,
+                    hasText: hasText,
+                    uploadStatus: uploadStatus,
+                    messageController: messageController,
+                    messageFocusNode: messageFocusNode,
+                    voiceRec: voiceRec,
+                    note: note,
+                    onToggleStickerPanel: onToggleStickerPanel,
+                    onSendText: onSendMessage,
+                    onScheduleMessage: onScheduleMessage,
+                    onOpenAttach: onOpenAttach,
+                    onOpenAttachScheduled: onOpenAttachScheduled,
+                    onSendHistory: onSendHistory,
+                    onCancelReply: onCancelReply,
+                    onCancelForward: onCancelForward,
+                    onToggleForwardSender: onToggleForwardSender,
+                    onPickReplyChat: commentsMode || !crossChatReplySupported
+                        ? null
+                        : () => unawaited(onPickReplyChat()),
+                    formatElapsed: formatElapsed,
+                    contextMenuBuilder: (ctx, state) => formatContextMenu(
+                      messageController,
+                      ctx,
+                      state,
+                      pasteItem: pasteMenuItem(ctx, state),
+                    ),
+                    onPasteMedia: ClipboardMedia.supported
+                        ? onPasteMedia
+                        : null,
+                    onInsertContent: onInsertContent,
+                    isMuted: isMuted,
+                    onToggleMute: onToggleMute,
+                    channelSubscribed: channelSubscribed,
+                    canPostToChannel: canPostToChannel,
+                    channelSubscribing: channelSubscribing,
+                    onSubscribe: onSubscribe,
+                    showStickerButton: !commentsMode && selectedCommand == null,
+                    showAttachButton: !commentsMode && selectedCommand == null,
+                    forceSend: commentsMode || selectedCommand != null,
+                    readOnly: selectedCommand != null,
+                    hintText: selectedCommand != null
+                        ? AppLocalizations.of(context)!.composerHintCommandArgs
+                        : commentsMode
+                        ? AppLocalizations.of(context)!.composerHintComment
+                        : null,
                   ),
-                  onPasteMedia: ClipboardMedia.supported ? onPasteMedia : null,
-                  onInsertContent: onInsertContent,
-                  isMuted: isMuted,
-                  onToggleMute: onToggleMute,
-                  channelSubscribed: channelSubscribed,
-                  canPostToChannel: canPostToChannel,
-                  channelSubscribing: channelSubscribing,
-                  onSubscribe: onSubscribe,
-                  showStickerButton: !commentsMode && selectedCommand == null,
-                  showAttachButton: !commentsMode && selectedCommand == null,
-                  forceSend: commentsMode || selectedCommand != null,
-                  readOnly: selectedCommand != null,
-                  hintText: selectedCommand != null
-                      ? AppLocalizations.of(context)!.composerHintCommandArgs
-                      : commentsMode
-                      ? AppLocalizations.of(context)!.composerHintComment
-                      : null,
                 ),
               ),
               StickerPanelView(

@@ -8,13 +8,21 @@ import '../../../widgets/swipe_route.dart';
 import 'admins_screen.dart';
 import 'channel_followers_screen.dart';
 import 'chat_admin_state.dart';
-import 'group_settings_screen.dart';
+import 'chat_settings_screen.dart';
 
 class AdminSection extends StatelessWidget {
   final ChatAdminState state;
   final VoidCallback onLeave;
+  final VoidCallback? onClearHistory;
+  final VoidCallback? onDelete;
 
-  const AdminSection({super.key, required this.state, required this.onLeave});
+  const AdminSection({
+    super.key,
+    required this.state,
+    required this.onLeave,
+    this.onClearHistory,
+    this.onDelete,
+  });
 
   static bool visibleFor(ChatAdminState state) =>
       state.isAdmin || state.hasSettings;
@@ -28,6 +36,15 @@ class AdminSection extends StatelessWidget {
       value: '${state.adminIds.length}',
       onTap: () => pushSwipeable(context, (_) => AdminsScreen(state: state)),
     );
+    void openSettings() => pushSwipeable(
+      context,
+      (_) => ChatSettingsScreen(
+        state: state,
+        onLeave: onLeave,
+        onClearHistory: onClearHistory,
+        onDelete: onDelete,
+      ),
+    );
     if (!state.isChannel) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 16),
@@ -38,10 +55,7 @@ class AdminSection extends StatelessWidget {
               SettingsNavTile(
                 icon: Symbols.settings,
                 label: l10n.groupSettingsTitle,
-                onTap: () => pushSwipeable(
-                  context,
-                  (_) => GroupSettingsScreen(state: state, onLeave: onLeave),
-                ),
+                onTap: openSettings,
               ),
           ],
         ),
@@ -68,6 +82,12 @@ class AdminSection extends StatelessWidget {
         const SizedBox(height: 12),
         SettingsCard(
           children: [
+            if (state.hasSettings)
+              SettingsNavTile(
+                icon: Symbols.settings,
+                label: l10n.channelSettingsTitle,
+                onTap: openSettings,
+              ),
             Builder(
               builder: (tileContext) => SettingsNavTile(
                 icon: Symbols.monitoring,

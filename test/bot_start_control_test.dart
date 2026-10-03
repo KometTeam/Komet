@@ -127,6 +127,47 @@ void main() {
       expect(info.link, 'https://max.ru/id100000000001_bot');
     });
 
+    test('reads the start message and splits off its heading', () {
+      const heading = 'Синтетический бот для проверки';
+      const body = 'Нажимая Начать, вы принимаете правила';
+      final info = BotInfo.fromPayload(4006, {
+        'startMessage': {
+          'text': {
+            'text': '$heading$body',
+            'elements': [
+              {'type': 'HEADING', 'length': heading.length},
+              {
+                'type': 'LINK',
+                'from': heading.length + body.indexOf('правила'),
+                'length': 7,
+                'attributes': {'url': 'https://example.test/rules'},
+              },
+            ],
+          },
+        },
+      });
+
+      final sections = info.startMessage!.sections;
+      expect(sections.heading, heading);
+      expect(sections.body, body);
+      final link = sections.bodyRanges.single;
+      expect(link.url, 'https://example.test/rules');
+      expect(body.substring(link.start, link.end), 'правила');
+    });
+
+    test('a start message without a heading stays one paragraph', () {
+      final info = BotInfo.fromPayload(4007, {
+        'startMessage': {
+          'text': {'text': 'Просто приветствие'},
+        },
+      });
+
+      final sections = info.startMessage!.sections;
+      expect(sections.heading, isEmpty);
+      expect(sections.body, 'Просто приветствие');
+      expect(BotInfo.fromPayload(4008, const {}).startMessage, isNull);
+    });
+
     test('tolerates a payload without commands or contact', () {
       final info = BotInfo.fromPayload(4005, const {});
 

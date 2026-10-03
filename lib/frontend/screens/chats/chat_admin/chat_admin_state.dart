@@ -70,11 +70,16 @@ class ChatAdminState extends ChangeNotifier {
 
   bool get canManageChat => _info.can(myId, AdminRight.editInfo);
 
+  bool get canRemoveMembers => _info.can(
+    myId,
+    isChannel ? AdminRight.manageFollowers : AdminRight.manageMembers,
+  );
+
   bool get canEditInfo =>
       canManageChat ||
       (!isChannel && MemberPermission.editInfo.allowedIn(_info));
 
-  bool get hasSettings => !isChannel && (isAdmin || canEditInfo);
+  bool get hasSettings => isAdmin || canEditInfo;
 
   bool get canAddMembers => isChannel
       ? canManageFollowers
@@ -120,6 +125,17 @@ class ChatAdminState extends ChangeNotifier {
 
   Future<void> removeAdmin(int userId) async =>
       adopt(await chatAdminModule.removeAdmin(chatId, userId));
+
+  Future<void> removeMember(int userId) async {
+    final info = await chatAdminModule.removeMember(chatId, userId);
+    if (info.participantsCount == null) {
+      ChatMembersStore.instance.adjust(chatId, -1);
+    }
+    adopt(info);
+  }
+
+  Future<void> setComments(bool enabled) async =>
+      adopt(await chatAdminModule.setOptions(chatId, {'COMMENTS': enabled}));
 
   Future<void> transferOwnership(int userId) async =>
       adopt(await chatAdminModule.transferOwnership(chatId, userId));

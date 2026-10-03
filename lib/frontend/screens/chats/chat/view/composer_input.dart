@@ -99,8 +99,7 @@ class ComposerInputBar extends StatelessWidget {
   final String Function(int ms) formatElapsed;
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
   final Future<bool> Function()? onPasteMedia;
-  final Future<void> Function(KeyboardInsertedContent content)?
-  onInsertContent;
+  final Future<void> Function(KeyboardInsertedContent content)? onInsertContent;
   final bool isMuted;
   final VoidCallback onToggleMute;
   final bool channelSubscribed;
@@ -131,83 +130,20 @@ class ComposerInputBar extends StatelessWidget {
     final isChannel = chatType == "CHANNEL";
     final isGroup = chatType == "CHAT" || chatType == "GROUP";
     if ((isChannel || isGroup) && !hasForward && !channelSubscribed) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12.0,
-            vertical: 8.0,
-          ),
-          child: GlossyPill(
-            onTap: channelSubscribing ? null : onSubscribe,
-            color: cs.primary,
-            borderRadius: BorderRadius.circular(28),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            depth: 8,
-            borderSide: BorderSide(
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-              width: 0.5,
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              child: Center(
-                child: channelSubscribing
-                    ? SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.onPrimary,
-                        ),
-                      )
-                    : Text(
-                        isChannel ? 'Подписаться' : 'Вступить',
-                        style: TextStyle(
-                          color: cs.onPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-              ),
-            ),
-          ),
-        ),
+      return ComposerPillBar(
+        label: isChannel ? 'Подписаться' : 'Вступить',
+        primary: true,
+        busy: channelSubscribing,
+        onTap: onSubscribe,
       );
     }
 
     // Regular channel members can't post — show the mute toggle instead of
     // a composer. Groups always keep the real composer once joined.
     if (isChannel && !hasForward && !canPostToChannel) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-          child: GlossyPill(
-            onTap: onToggleMute,
-            color: Color.alphaBlend(
-              cs.surfaceContainerHighest.withValues(alpha: 0.92),
-              cs.surface,
-            ),
-            borderRadius: BorderRadius.circular(28),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            depth: 8,
-            borderSide: BorderSide(
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-              width: 0.5,
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              child: Center(
-                child: Text(
-                  isMuted ? 'Включить уведомления' : 'Отключить уведомления',
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+      return ComposerPillBar(
+        label: isMuted ? 'Включить уведомления' : 'Отключить уведомления',
+        onTap: onToggleMute,
       );
     }
 
@@ -1548,5 +1484,81 @@ IconData _iconForFilename(String? name) {
       return Symbols.code;
     default:
       return Symbols.description;
+  }
+}
+
+class BotStartPrompt {
+  final Listenable revision;
+  final bool Function() due;
+  final VoidCallback onStart;
+
+  const BotStartPrompt({
+    required this.revision,
+    required this.due,
+    required this.onStart,
+  });
+}
+
+class ComposerPillBar extends StatelessWidget {
+  final String label;
+  final bool primary;
+  final bool busy;
+  final VoidCallback? onTap;
+
+  const ComposerPillBar({
+    super.key,
+    required this.label,
+    this.primary = false,
+    this.busy = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final foreground = primary ? cs.onPrimary : cs.onSurface;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: GlossyPill(
+          onTap: busy ? null : onTap,
+          color: primary
+              ? cs.primary
+              : Color.alphaBlend(
+                  cs.surfaceContainerHighest.withValues(alpha: 0.92),
+                  cs.surface,
+                ),
+          borderRadius: BorderRadius.circular(28),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          depth: 8,
+          borderSide: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: 0.5),
+            width: 0.5,
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: Center(
+              child: busy
+                  ? SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: foreground,
+                      ),
+                    )
+                  : Text(
+                      label,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: 16,
+                        fontWeight: primary ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

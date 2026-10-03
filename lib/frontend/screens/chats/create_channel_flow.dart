@@ -5,11 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/chats.dart';
+import '../../../core/cache/info_cache.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
+import 'chat_admin/channel_type_link_screen.dart';
+import 'chat_admin/chat_admin_state.dart';
 import 'chat_screen.dart';
 import '../../../core/security/app_lock.dart';
 
@@ -98,15 +101,33 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
         }
       }
 
+      final info = await ChatInfoFetch.get(chat.id, forceRefresh: true);
       if (!mounted) return;
+      final name = chat.title ?? title;
+      final imageUrl = chat.iconUrl ?? '';
       navigator.pop();
       navigator.push(
         SwipeRoute(
           builder: (_) => ChatScreen(
             chatId: chat.id,
-            name: chat.title ?? title,
-            imageUrl: chat.iconUrl ?? '',
+            name: name,
+            imageUrl: imageUrl,
             chatType: chat.type,
+          ),
+        ),
+      );
+      if (info == null) return;
+      navigator.push(
+        SwipeRoute(
+          builder: (_) => ChannelTypeLinkScreen(
+            justCreated: true,
+            state: ChatAdminState(
+              chatId: chat.id,
+              myId: chat.accountId,
+              name: name,
+              imageUrl: imageUrl,
+              info: info,
+            ),
           ),
         ),
       );

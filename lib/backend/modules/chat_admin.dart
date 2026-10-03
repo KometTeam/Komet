@@ -45,6 +45,13 @@ class ChatAdminModule {
         'operation': 'remove',
       });
 
+  Future<ChatInfo> removeMember(int chatId, int userId) =>
+      _apply(chatId, Opcode.chatMembersUpdate, {
+        'userIds': [userId],
+        'operation': 'remove',
+        'cleanMsgPeriod': 0,
+      });
+
   Future<ChatInfo> transferOwnership(int chatId, int userId) =>
       _apply(chatId, Opcode.chatUpdate, {'changeOwnerId': userId});
 
