@@ -24,6 +24,7 @@ mixin SessionStaleRecovery<T extends StatefulWidget> on State<T> {
 
   void stopSessionRecovery() {
     _stateSub?.cancel();
+    _stateSub = null;
   }
 
   void _onSessionState(SessionState state) {
