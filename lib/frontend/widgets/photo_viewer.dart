@@ -26,12 +26,37 @@ import '../../l10n/app_localizations.dart';
 import '../../core/config/app_colors.dart';
 import '../../main.dart';
 import '../../models/attachment.dart';
+import '../screens/profile/avatar_carousel.dart';
 import 'attachment/photo_hero.dart';
 import 'animated_slash_icon.dart';
+import 'avatar_gallery.dart';
+import 'avatar_photo_actions.dart';
 import 'chat_menu_overlay.dart';
 import 'custom_notification.dart';
 import 'liquid_glass.dart';
 import 'small_spinner.dart';
+
+Future<void> openAvatarViewer(
+  BuildContext context,
+  AvatarGallery gallery, {
+  required PhotoHeroOrigin origin,
+  required ImageProvider image,
+  BorderRadius radius = BorderRadius.zero,
+}) async {
+  if (gallery.currentUrl.isEmpty) return;
+  final hero = PhotoHeroController(
+    origin: origin,
+    image: image,
+    radius: radius,
+  );
+  await Navigator.of(context).push(
+    PhotoHeroRoute<void>(
+      hero: hero,
+      builder: (_) =>
+          PhotoViewerScreen.avatars(avatars: AvatarFeed(gallery), hero: hero),
+    ),
+  );
+}
 
 class PhotoViewerActions {
   final void Function(String messageId, int time)? goToMessage;
@@ -60,6 +85,7 @@ class _ViewerMedia {
   final int senderId;
   final int time;
   final String? caption;
+  final int? avatarId;
 
   const _ViewerMedia({
     required this.id,
@@ -68,6 +94,7 @@ class _ViewerMedia {
     required this.senderId,
     required this.time,
     this.caption,
+    this.avatarId,
   });
 
   factory _ViewerMedia.fromFeed(SharedMediaItem item) => _ViewerMedia(
@@ -101,6 +128,7 @@ class PhotoViewerScreen extends StatefulWidget {
   final bool isFile;
   final String? sourceName;
   final String? Function()? videoUserAgentProvider;
+  final AvatarFeed? avatars;
 
   const PhotoViewerScreen({
     super.key,
@@ -115,7 +143,8 @@ class PhotoViewerScreen extends StatefulWidget {
     this.videoUserAgentProvider,
   }) : video = null,
        initialVideoSources = const {},
-       initialVideoQuality = null;
+       initialVideoQuality = null,
+       avatars = null;
 
   const PhotoViewerScreen.video({
     super.key,
@@ -131,7 +160,24 @@ class PhotoViewerScreen extends StatefulWidget {
        video = attachment,
        initialIndex = 0,
        hero = null,
-       isFile = false;
+       isFile = false,
+       avatars = null;
+
+  const PhotoViewerScreen.avatars({
+    super.key,
+    required AvatarFeed this.avatars,
+    this.hero,
+  }) : photos = const [],
+       video = null,
+       initialVideoSources = const {},
+       initialVideoQuality = null,
+       initialIndex = 0,
+       chatId = null,
+       message = null,
+       actions = null,
+       isFile = false,
+       sourceName = null,
+       videoUserAgentProvider = null;
 
   PhotoViewerScreen.single(String baseUrl, {super.key})
     : photos = [PhotoAttachment(baseUrl: baseUrl)],
@@ -145,7 +191,8 @@ class PhotoViewerScreen extends StatefulWidget {
       hero = null,
       isFile = false,
       sourceName = null,
-      videoUserAgentProvider = null;
+      videoUserAgentProvider = null,
+      avatars = null;
 
   @override
   State<PhotoViewerScreen> createState() => _PhotoViewerScreenState();
@@ -185,9 +232,12 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     _heroTransform.addListener(_syncHero);
     _heroTransform.addListener(_syncZoom);
     _items = _localItems();
-    _index = widget.video == null
-        ? (_items.length - 1 - widget.initialIndex).clamp(0, _items.length - 1)
-        : 0;
+    _index = switch (_avatarFeed) {
+      final avatars? => avatars.initialIndex.clamp(0, _items.length - 1),
+      null when widget.video == null =>
+        (_items.length - 1 - widget.initialIndex).clamp(0, _items.length - 1),
+      null => 0,
+    };
     _heroId = _items[_index].id;
     _initialMediaId = _heroId;
     _controller = PageController(initialPage: _index);
@@ -245,7 +295,32 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     super.dispose();
   }
 
+  AvatarFeed? get _avatarFeed => widget.avatars;
+
+  bool get _isAvatars => _avatarFeed != null;
+
+  int get _leftStep => _isAvatars ? -1 : 1;
+
+  bool _canStep(int delta) {
+    final next = _index + delta;
+    return next >= 0 && next < _items.length;
+  }
+
+  List<_ViewerMedia> _avatarItems(List<AvatarPhoto> photos) => [
+    for (final photo in photos)
+      _ViewerMedia(
+        id: 'avatar:${photo.id ?? photo.url}',
+        attachment: PhotoAttachment(baseUrl: photo.url),
+        messageId: '',
+        senderId: widget.avatars!.gallery.contactId,
+        time: 0,
+        avatarId: photo.id,
+      ),
+  ];
+
   List<_ViewerMedia> _localItems() {
+    final avatars = _avatarFeed;
+    if (avatars != null) return _avatarItems(avatars.photos);
     final message = widget.message;
     final video = widget.video;
     if (video != null) {
@@ -315,13 +390,20 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
 
   _ViewerMedia get _current => _items[_index];
 
-  bool get _feedPending =>
-      !_feedLoaded &&
-      !_feedFailed &&
-      widget.chatId != null &&
-      _feedKey(_items[_index].attachment, widget.message) != null;
+  bool get _feedPending {
+    if (_feedLoaded || _feedFailed) return false;
+    final avatars = _avatarFeed;
+    if (avatars != null) return avatars.gallery.hasHistory;
+    return widget.chatId != null &&
+        _feedKey(_items[_index].attachment, widget.message) != null;
+  }
 
   Future<void> _loadFeed() async {
+    final avatars = _avatarFeed;
+    if (avatars != null) {
+      if (avatars.gallery.hasHistory) await _syncAvatars(avatars.load);
+      return;
+    }
     final chatId = widget.chatId;
     final key = _feedKey(_items[_index].attachment, widget.message);
     if (chatId == null || key == null) return;
@@ -344,18 +426,47 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       return;
     }
 
-    _adoptFeed(items, at, feed);
+    _adoptFeed(items, at, total: feed.total, reachedEnd: feed.reachedEnd);
   }
 
-  void _adoptFeed(List<_ViewerMedia> items, int at, ChatMediaFeed feed) {
+  Future<void> _syncAvatars(Future<void> Function() fetch) async {
+    final avatars = _avatarFeed!;
+    try {
+      await fetch();
+    } catch (e) {
+      logger.w('avatar history ${avatars.gallery.contactId}: $e');
+      if (mounted && !_feedLoaded) setState(() => _feedFailed = true);
+      return;
+    }
+    if (!mounted) return;
+    final items = _avatarItems(avatars.photos);
+    if (items.isEmpty) return;
+    final currentUrl = _current.photo?.baseUrl;
+    var at = _current.id == _initialMediaId ? avatars.initialIndex : -1;
+    if (at < 0) at = items.indexWhere((i) => i.id == _current.id);
+    if (at < 0) at = items.indexWhere((i) => i.photo?.baseUrl == currentUrl);
+    _adoptFeed(
+      items,
+      at < 0 ? _index.clamp(0, items.length - 1) : at,
+      total: avatars.total,
+      reachedEnd: avatars.reachedEnd,
+    );
+  }
+
+  void _adoptFeed(
+    List<_ViewerMedia> items,
+    int at, {
+    required int total,
+    required bool reachedEnd,
+  }) {
     final movesPage = at != _index;
     final previous = _controller;
 
     setState(() {
       _items = items;
       _index = at;
-      _total = feed.total;
-      _reachedEnd = feed.reachedEnd;
+      _total = total;
+      _reachedEnd = reachedEnd;
       _feedLoaded = true;
       if (movesPage) {
         _pager++;
@@ -370,8 +481,19 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   Future<void> _loadMore() async {
+    if (_loadingMore || _reachedEnd || !_feedLoaded) return;
+    final avatars = _avatarFeed;
+    if (avatars != null) {
+      _loadingMore = true;
+      try {
+        await _syncAvatars(avatars.loadMore);
+      } finally {
+        _loadingMore = false;
+      }
+      return;
+    }
     final chatId = widget.chatId;
-    if (chatId == null || _loadingMore || _reachedEnd || !_feedLoaded) return;
+    if (chatId == null) return;
     _loadingMore = true;
     try {
       final feed = await sharedContentModule.loadMoreMedia(
@@ -389,7 +511,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         });
         return;
       }
-      _adoptFeed(items, at, feed);
+      _adoptFeed(items, at, total: feed.total, reachedEnd: feed.reachedEnd);
     } finally {
       _loadingMore = false;
     }
@@ -446,10 +568,9 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   void _step(int delta) {
-    final next = _index + delta;
-    if (next < 0 || next >= _items.length) return;
+    if (!_canStep(delta)) return;
     _controller.animateToPage(
-      next,
+      _index + delta,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
     );
@@ -504,7 +625,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       photoCacheName(photo, url);
 
   String _downloadSource(_ViewerMedia item) {
-    final sourceName = widget.sourceName?.trim();
+    final sourceName = (widget.avatars?.gallery.name ?? widget.sourceName)
+        ?.trim();
     if (sourceName != null && sourceName.isNotEmpty) return sourceName;
     return ContactCache.get(item.senderId) ?? '';
   }
@@ -723,7 +845,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
 
   void _openMenu(BuildContext anchorContext) {
     final actions = widget.actions;
-    if (actions == null && !_current.isVideo) return;
+    if (actions == null && !_current.isVideo && !_isAvatars) return;
     final box = anchorContext.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final l10n = AppLocalizations.of(context)!;
@@ -756,6 +878,14 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
             onTap: () =>
                 _popThen(() => actions!.delete!(item.messageId, item.senderId)),
           ),
+        if (_canDeleteAvatar(item))
+          ChatMenuItem(
+            icon: Symbols.delete,
+            label: l10n.msgActionsDelete,
+            destructive: true,
+            dividerAfter: true,
+            onTap: () => _deleteAvatar(item),
+          ),
         if (savesToGallery)
           ChatMenuItem(
             icon: Symbols.photo_library,
@@ -782,17 +912,31 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     action();
   }
 
+  bool _canDeleteAvatar(_ViewerMedia item) =>
+      item.avatarId != null && widget.avatars?.gallery.onDelete != null;
+
+  Future<void> _deleteAvatar(_ViewerMedia item) async {
+    final id = item.avatarId;
+    final onDelete = widget.avatars?.gallery.onDelete;
+    if (id == null || onDelete == null) return;
+    if (!await confirmAvatarDeletion(context) || !mounted) return;
+    _popThen(() => onDelete(id));
+  }
+
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.of(context).padding;
-    final hasMenu = _current.isVideo || !(widget.actions?.isEmpty ?? true);
+    final hasMenu =
+        _isAvatars || _current.isVideo || !(widget.actions?.isEmpty ?? true);
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: CallbackShortcuts(
         bindings: {
-          const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _step(1),
-          const SingleActivator(LogicalKeyboardKey.arrowRight): () => _step(-1),
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+              _step(_leftStep),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+              _step(-_leftStep),
         },
         child: Focus(
           autofocus: true,
@@ -808,17 +952,20 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                     curve: Curves.easeOut,
                     child: Stack(
                       children: [
-                        if (_index < _items.length - 1)
+                        if (_canStep(_leftStep))
                           Align(
                             alignment: Alignment.centerLeft,
-                            child: _arrow(Symbols.chevron_left, () => _step(1)),
+                            child: _arrow(
+                              Symbols.chevron_left,
+                              () => _step(_leftStep),
+                            ),
                           ),
-                        if (_index > 0)
+                        if (_canStep(-_leftStep))
                           Align(
                             alignment: Alignment.centerRight,
                             child: _arrow(
                               Symbols.chevron_right,
-                              () => _step(-1),
+                              () => _step(-_leftStep),
                             ),
                           ),
                         Positioned(
@@ -891,7 +1038,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         child: PageView.builder(
           key: ValueKey(_pager),
           controller: _controller,
-          reverse: true,
+          reverse: !_isAvatars,
           physics: _swipeEnabled ? null : const NeverScrollableScrollPhysics(),
           itemCount: _items.length,
           onPageChanged: _onPageChanged,
@@ -1066,6 +1213,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   Widget _buildInfo(AppLocalizations l10n) {
+    final avatars = _avatarFeed;
+    if (avatars != null) return _buildAvatarInfo(l10n, avatars);
     final item = _current;
     if (item.messageId.isEmpty) return const SizedBox.shrink();
     final total = _feedLoaded ? _total : _items.length;
@@ -1095,6 +1244,38 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(color: Colors.white70, fontSize: 13),
         ),
+      ],
+    );
+  }
+
+  Widget _buildAvatarInfo(AppLocalizations l10n, AvatarFeed avatars) {
+    final total = _feedLoaded ? _total : avatars.total;
+    final counted = _feedPending || total > 1;
+    final name = avatars.gallery.name;
+    const titleStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_feedPending)
+          const _CounterShimmer()
+        else if (counted)
+          Text(l10n.mediaViewerCounter(_index + 1, total), style: titleStyle),
+        if (name.isNotEmpty) ...[
+          if (counted) const SizedBox(height: 2),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: counted
+                ? const TextStyle(color: Colors.white70, fontSize: 13)
+                : titleStyle,
+          ),
+        ],
       ],
     );
   }

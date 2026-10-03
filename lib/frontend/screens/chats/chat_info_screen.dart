@@ -31,7 +31,9 @@ import '../../../models/contact_info.dart';
 import '../../../models/story.dart';
 import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/animated_text_swap.dart';
-import '../../widgets/avatar_history_screen.dart';
+import '../../widgets/attachment/photo_hero.dart';
+import '../../widgets/avatar_gallery.dart';
+import '../../widgets/photo_viewer.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
@@ -790,7 +792,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   Widget _headerAvatar(ColorScheme cs, double radius, double t) {
     final expanded = t > 0.5;
-    final openHistory = _headerHasPhoto ? _openAvatarHistory : null;
+    final openHistory = _headerHasPhoto
+        ? () => _openAvatarHistory(expanded: expanded, radius: radius)
+        : null;
     final openStories = _storyPreview == null ? null : _openStories;
 
     return KeyedSubtree(
@@ -833,17 +837,34 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       ? (_otherId ?? widget.dialogPeerId ?? 0)
       : 0;
 
-  void _openAvatarHistory() {
-    final pages = _avatarPages;
-    final at = pages.isEmpty ? 0 : _avatarIndex.clamp(0, pages.length - 1);
-    AvatarHistoryScreen.open(
+  void _openAvatarHistory({required bool expanded, required double radius}) {
+    final shown = _shownAvatarUrl(expanded);
+    openAvatarViewer(
       context,
-      contactId: _otherId ?? widget.dialogPeerId ?? 0,
-      name: _chatName,
-      currentAvatarUrl: _chatImageUrl,
-      initialUrl: pages.isEmpty ? null : pages[at],
+      AvatarGallery(
+        contactId: _otherId ?? widget.dialogPeerId ?? 0,
+        name: _chatName,
+        currentUrl: _chatImageUrl,
+        initialUrl: shown,
+      ),
+      origin: () => photoHeroRect(_avatarKey),
+      image: ResizeImage.resizeIfNeeded(
+        _avatarMemWidth,
+        null,
+        CachedNetworkImageProvider(shown),
+      ),
+      radius: BorderRadius.circular(radius),
     );
   }
+
+  String _shownAvatarUrl(bool expanded) {
+    final pages = _avatarPages;
+    if (pages.isEmpty) return _chatImageUrl;
+    if (!expanded || pages.length < 2) return pages.first;
+    return pages[_avatarIndex.clamp(0, pages.length - 1)];
+  }
+
+  int get _avatarMemWidth => _headerEverExpanded ? 720 : 288;
 
   Widget _avatarPager(ColorScheme cs, double t) {
     final pages = _avatarPages;
@@ -942,7 +963,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
-      memCacheWidth: _headerEverExpanded ? 720 : 288,
+      memCacheWidth: _avatarMemWidth,
       fadeInDuration: const Duration(milliseconds: 150),
       errorWidget: (_, _, _) => ColoredBox(
         color: cs.surfaceContainerHigh,
@@ -2851,8 +2872,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             child: Builder(
               builder: (rowContext) => GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onLongPress: () =>
-                    unawaited(_copyInfoValue(rowContext, value)),
+                onLongPress: () => unawaited(_copyInfoValue(rowContext, value)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

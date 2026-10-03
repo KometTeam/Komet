@@ -34,18 +34,24 @@ import 'package:komet/l10n/app_localizations.dart';
 import '../small_spinner.dart';
 import '../../../core/security/app_lock.dart';
 
-const int _navItemCount = 5;
-
-List<PillNavItem> _buildNavItems(AppLocalizations l10n) => [
+List<PillNavItem> _buildNavItems(
+  AppLocalizations l10n, {
+  required bool pickOnly,
+}) => [
   PillNavItem(icon: Symbols.image, label: l10n.attachSheetGallery),
   PillNavItem(icon: Symbols.description, label: l10n.scheduledAttachFile),
-  PillNavItem(icon: Symbols.location_on, label: l10n.scheduledAttachLocation),
-  PillNavItem(icon: Symbols.bar_chart, label: l10n.attachSheetPoll),
-  PillNavItem(icon: Symbols.person, label: l10n.attachSheetContact),
+  if (!pickOnly) ...[
+    PillNavItem(icon: Symbols.location_on, label: l10n.scheduledAttachLocation),
+    PillNavItem(icon: Symbols.bar_chart, label: l10n.attachSheetPoll),
+    PillNavItem(icon: Symbols.person, label: l10n.attachSheetContact),
+  ],
 ];
 
 typedef PickedPhotosCallback =
     void Function(List<PickedPhoto> photos, String caption);
+
+typedef PhotoPickCallback =
+    Future<void> Function(BuildContext sheetContext, GalleryItem item);
 
 class VideoNoteSend {
   final Duration limit;
@@ -64,6 +70,7 @@ Future<void> showAttachmentSheet(
   VoidCallback? onShareLocation,
   VoidCallback? onCreatePoll,
   ValueChanged<CachedContact>? onSendContact,
+  PhotoPickCallback? onPickPhoto,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -80,6 +87,7 @@ Future<void> showAttachmentSheet(
       onShareLocation: onShareLocation,
       onCreatePoll: onCreatePoll,
       onSendContact: onSendContact,
+      onPickPhoto: onPickPhoto,
     ),
   );
 }
@@ -93,6 +101,7 @@ class AttachmentSheet extends StatefulWidget {
   final VoidCallback? onShareLocation;
   final VoidCallback? onCreatePoll;
   final ValueChanged<CachedContact>? onSendContact;
+  final PhotoPickCallback? onPickPhoto;
 
   const AttachmentSheet({
     super.key,
@@ -104,6 +113,7 @@ class AttachmentSheet extends StatefulWidget {
     this.onShareLocation,
     this.onCreatePoll,
     this.onSendContact,
+    this.onPickPhoto,
   });
 
   @override
@@ -259,6 +269,25 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     });
   }
 
+  bool get _pickOnly => widget.onPickPhoto != null;
+
+  int get _pageCount => _pickOnly ? 2 : 5;
+
+  List<GalleryItem>? _visibleSource;
+  List<GalleryItem> _visibleCache = const [];
+
+  List<GalleryItem> get _visibleItems {
+    if (!_pickOnly) return _items;
+    if (!identical(_visibleSource, _items)) {
+      _visibleSource = _items;
+      _visibleCache = [
+        for (final item in _items)
+          if (!item.isVideo) item,
+      ];
+    }
+    return _visibleCache;
+  }
+
   void _toggleSelection(GalleryItem item) {
     final next = Set<String>.from(_selected.value);
     if (!next.remove(item.id)) next.add(item.id);
@@ -269,6 +298,11 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       _thumbKeys.putIfAbsent(id, () => GlobalKey<_ThumbnailState>());
 
   void _openPreview(GalleryItem item) {
+    final pick = widget.onPickPhoto;
+    if (pick != null) {
+      unawaited(pick(context, item));
+      return;
+    }
     final thumbKey = _thumbKey(item.id);
     final hero = PhotoHeroController(
       origin: () => photoHeroRect(thumbKey),
@@ -685,30 +719,36 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           cs,
           bottomReserve,
           icon: Symbols.description,
-          title: l10n.attachSheetSendFileTitle,
-          subtitle: l10n.attachSheetSendFileSubtitle,
+          title: _pickOnly
+              ? l10n.avatarPickerFilesTitle
+              : l10n.attachSheetSendFileTitle,
+          subtitle: _pickOnly
+              ? l10n.avatarPickerFilesSubtitle
+              : l10n.attachSheetSendFileSubtitle,
           buttonLabel: l10n.attachSheetChooseFileButton,
           onTap: widget.onPickFile,
         ),
-        _buildActionPage(
-          cs,
-          bottomReserve,
-          icon: Symbols.location_on,
-          title: l10n.attachSheetShareLocationTitle,
-          subtitle: l10n.attachSheetShareLocationSubtitle,
-          buttonLabel: l10n.attachSheetSendLocationButton,
-          onTap: widget.onShareLocation,
-        ),
-        _buildActionPage(
-          cs,
-          bottomReserve,
-          icon: Symbols.bar_chart,
-          title: l10n.attachSheetCreatePoll,
-          subtitle: l10n.attachSheetCreatePollSubtitle,
-          buttonLabel: l10n.attachSheetCreatePoll,
-          onTap: widget.onCreatePoll,
-        ),
-        _buildContactPage(cs, bottomReserve),
+        if (!_pickOnly) ...[
+          _buildActionPage(
+            cs,
+            bottomReserve,
+            icon: Symbols.location_on,
+            title: l10n.attachSheetShareLocationTitle,
+            subtitle: l10n.attachSheetShareLocationSubtitle,
+            buttonLabel: l10n.attachSheetSendLocationButton,
+            onTap: widget.onShareLocation,
+          ),
+          _buildActionPage(
+            cs,
+            bottomReserve,
+            icon: Symbols.bar_chart,
+            title: l10n.attachSheetCreatePoll,
+            subtitle: l10n.attachSheetCreatePollSubtitle,
+            buttonLabel: l10n.attachSheetCreatePoll,
+            onTap: widget.onCreatePoll,
+          ),
+          _buildContactPage(cs, bottomReserve),
+        ],
       ],
     );
   }
@@ -796,7 +836,12 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     if (loadError != null) {
       return _buildLoadError(scrollController, cs, bottomReserve, loadError);
     }
-    if (_items.isEmpty) {
+    final items = _visibleItems;
+    if (items.isEmpty && _hasMore) {
+      unawaited(_loadMore());
+      return Center(child: SmallSpinner(size: 36, color: cs.primary));
+    }
+    if (items.isEmpty) {
       return _buildMessage(
         scrollController,
         cs,
@@ -811,9 +856,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
         const hpad = 2.0;
         final cell = (constraints.maxWidth - hpad * 2 - spacing * 2) / 3;
         final headerHeight = cell * 2 + spacing;
-        final headerPhotos = _items.take(4).toList();
-        final gridPhotos = _items.length > 4
-            ? _items.sublist(4)
+        final headerPhotos = items.take(4).toList();
+        final gridPhotos = items.length > 4
+            ? items.sublist(4)
             : const <GalleryItem>[];
 
         return CustomScrollView(
@@ -857,6 +902,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                     key: ValueKey(item.id),
                     thumbKey: _thumbKey(item.id),
                     item: item,
+                    selectable: !_pickOnly,
                     selectedIds: _selected,
                     onOpen: () => _openPreview(item),
                     onToggle: () => _toggleSelection(item),
@@ -893,6 +939,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
         key: ValueKey(item.id),
         thumbKey: _thumbKey(item.id),
         item: item,
+        selectable: !_pickOnly,
         selectedIds: _selected,
         onOpen: () => _openPreview(item),
         onToggle: () => _toggleSelection(item),
@@ -1174,7 +1221,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     _navDragAccumDx += dx;
     final pageT = (_navDragBasePageT + _navDragAccumDx / inactiveWidth).clamp(
       0.0,
-      (_navItemCount - 1).toDouble(),
+      (_pageCount - 1).toDouble(),
     );
     _pageController.jumpTo(pageT * _pageController.position.viewportDimension);
   }
@@ -1182,7 +1229,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   void _onPillDragEnd() {
     if (!_navDragging) return;
     _navDragging = false;
-    final target = _currentPageT().round().clamp(0, _navItemCount - 1);
+    final target = _currentPageT().round().clamp(0, _pageCount - 1);
     _pageController.animateToPage(
       target,
       duration: _navAnim,
@@ -1217,7 +1264,10 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Widget _buildPillNav() {
-    final navItems = _buildNavItems(AppLocalizations.of(context)!);
+    final navItems = _buildNavItems(
+      AppLocalizations.of(context)!,
+      pickOnly: _pickOnly,
+    );
     return LayoutBuilder(
       key: const ValueKey('nav'),
       builder: (context, constraints) {
@@ -1560,6 +1610,7 @@ class _CameraTileState extends State<_CameraTile> with WidgetsBindingObserver {
 class _GalleryTile extends StatefulWidget {
   final GlobalKey<_ThumbnailState> thumbKey;
   final GalleryItem item;
+  final bool selectable;
   final ValueListenable<Set<String>> selectedIds;
   final VoidCallback onOpen;
   final VoidCallback onToggle;
@@ -1570,6 +1621,7 @@ class _GalleryTile extends StatefulWidget {
     super.key,
     required this.thumbKey,
     required this.item,
+    this.selectable = true,
     required this.selectedIds,
     required this.onOpen,
     required this.onToggle,
@@ -1646,27 +1698,28 @@ class _GalleryTileState extends State<_GalleryTile> {
                 ],
               ),
             ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: GestureDetector(
-              onTap: widget.onToggle,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.all(6),
-                child: ValueListenableBuilder<Set<String>>(
-                  valueListenable: widget.selectedIds,
-                  builder: (context, ids, _) {
-                    final index = ids.toList().indexOf(widget.item.id);
-                    return _SelectionCheck(
-                      number: index >= 0 ? index + 1 : null,
-                      cs: widget.cs,
-                    );
-                  },
+          if (widget.selectable)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: GestureDetector(
+                onTap: widget.onToggle,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: ValueListenableBuilder<Set<String>>(
+                    valueListenable: widget.selectedIds,
+                    builder: (context, ids, _) {
+                      final index = ids.toList().indexOf(widget.item.id);
+                      return _SelectionCheck(
+                        number: index >= 0 ? index + 1 : null,
+                        cs: widget.cs,
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );

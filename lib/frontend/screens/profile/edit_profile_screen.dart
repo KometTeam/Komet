@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/storage/app_database.dart';
@@ -9,10 +8,10 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show accountModule, fileUploader, KometApp;
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/attachment/avatar_editor.dart';
 import '../../widgets/hint_bubble.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/small_spinner.dart';
-import '../../../core/security/app_lock.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -104,10 +103,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _changeAvatar() async {
     if (_isSaving) return;
-    final result = await AppLock.instance.external(
-      () => FilePicker.platform.pickFiles(type: FileType.image),
-    );
-    final path = result?.files.firstOrNull?.path;
+    final path = (await pickAvatarImage(context))?.path;
     if (path == null) return;
     if (await File(path).length() > kMaxAvatarBytes) {
       if (mounted) {

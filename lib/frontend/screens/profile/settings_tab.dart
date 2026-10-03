@@ -22,7 +22,9 @@ import '../../../main.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../widgets/animated_slash_icon.dart';
 import 'media_devices_screen.dart';
-import '../../widgets/avatar_history_screen.dart';
+import '../../widgets/attachment/photo_hero.dart';
+import '../../widgets/avatar_gallery.dart';
+import '../../widgets/photo_viewer.dart';
 import '../../widgets/avatar_photo_actions.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
@@ -71,6 +73,7 @@ class SettingsTab extends StatefulWidget {
 const int _settingsTabIndex = 3;
 const double _headerVignette = 64;
 const int _avatarHistoryPageSize = 50;
+const int _avatarThumbSize = 264;
 
 class _SettingsTabState extends State<SettingsTab>
     with ReloadOnReconnect, SpectrumSurface {
@@ -81,6 +84,7 @@ class _SettingsTabState extends State<SettingsTab>
   int _avatarIndex = 0;
   bool _avatarForward = true;
   final GlobalKey _avatarMenuKey = GlobalKey();
+  final GlobalKey _avatarHeroKey = GlobalKey();
   bool _isPhoneVisible = false;
   ScrollController? _scrollController;
   double _headerDelta = 0;
@@ -332,22 +336,33 @@ class _SettingsTabState extends State<SettingsTab>
         : '${profile.firstName} $last';
   }
 
-  Future<void> _openAvatarViewer() async {
+  void _openAvatarViewer(double radius) {
     final profile = _profile;
     final current = _currentAvatar;
     if (profile == null || current == null) return;
-    final updated = await AvatarHistoryScreen.open(
+    openAvatarViewer(
       context,
-      contactId: profile.id,
-      name: _fullName,
-      currentAvatarUrl: profile.baseUrl,
-      initialUrl: current.url,
-      initialPhotoId: current.id,
-      mainPhotoId: profile.photoId,
-      allowDelete: true,
+      AvatarGallery(
+        contactId: profile.id,
+        name: _fullName,
+        currentUrl: profile.baseUrl ?? '',
+        mainPhotoId: profile.photoId,
+        initialUrl: current.url,
+        initialPhotoId: current.id,
+        onDelete: _removeAvatar,
+      ),
+      origin: () => photoHeroRect(_avatarHeroKey),
+      image: _avatarThumbnail(current.url),
+      radius: BorderRadius.circular(radius),
     );
-    if (updated != null && mounted) await _applyProfileAfterDeletion(updated);
   }
+
+  static ImageProvider _avatarThumbnail(String url) =>
+      ResizeImage.resizeIfNeeded(
+        _avatarThumbSize,
+        _avatarThumbSize,
+        CachedNetworkImageProvider(url),
+      );
 
   void _openAvatarMenu() {
     final rect = anchorRectOf(_avatarMenuKey);
@@ -364,7 +379,10 @@ class _SettingsTabState extends State<SettingsTab>
 
   Future<void> _deleteAvatar(int id) async {
     if (!await confirmAvatarDeletion(context)) return;
-    if (!mounted) return;
+    if (mounted) await _removeAvatar(id);
+  }
+
+  Future<void> _removeAvatar(int id) async {
     try {
       final profile = await accountModule.removeProfilePhoto(id);
       if (!mounted) return;
@@ -960,7 +978,8 @@ class _SettingsTabState extends State<SettingsTab>
               Positioned.fromRect(
                 rect: avatarRect,
                 child: GestureDetector(
-                  onTap: _openAvatarViewer,
+                  key: _avatarHeroKey,
+                  onTap: () => _openAvatarViewer(radius),
                   child: _buildMorphAvatar(cs, name, radius, pt),
                 ),
               ),
@@ -1272,8 +1291,8 @@ class _SettingsTabState extends State<SettingsTab>
                   CachedNetworkImage(
                     imageUrl: base,
                     fit: BoxFit.cover,
-                    memCacheWidth: 264,
-                    memCacheHeight: 264,
+                    memCacheWidth: _avatarThumbSize,
+                    memCacheHeight: _avatarThumbSize,
                     placeholder: (_, _) => letterFallback,
                     errorWidget: (_, _, _) => letterFallback,
                   ),

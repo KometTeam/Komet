@@ -1726,7 +1726,9 @@ class _ChatScreenState extends State<ChatScreen>
         current.admins.length == fresh.admins.length &&
         current.admins.containsAll(fresh.admins) &&
         current.activeCallData == fresh.activeCallData &&
-        current.publicLink == fresh.publicLink) {
+        current.publicLink == fresh.publicLink &&
+        current.title == fresh.title &&
+        current.iconUrl == fresh.iconUrl) {
       return;
     }
     if (current != null) _mergeReadMarks(fresh, current);
@@ -2146,8 +2148,8 @@ class _ChatScreenState extends State<ChatScreen>
           MaterialPageRoute(
             builder: (_) => ChatScreen(
               chatId: widget.chatId,
-              name: widget.name,
-              imageUrl: widget.imageUrl,
+              name: _chatName,
+              imageUrl: _chatImageUrl,
               chatType: 'CHANNEL',
               commentPostId: post.id,
               postMessage: _stripInlineKeyboard(post),
@@ -2764,8 +2766,8 @@ class _ChatScreenState extends State<ChatScreen>
     final ordered = [...forwardable]..sort((a, b) => a.time.compareTo(b.time));
     final request = ForwardRequest(
       sourceChatId: widget.chatId,
-      sourceChatName: widget.name,
-      sourceChatIconUrl: widget.imageUrl,
+      sourceChatName: _chatName,
+      sourceChatIconUrl: _chatImageUrl,
       sourceChatType: widget.chatType,
       messages: ordered,
     );
@@ -3271,7 +3273,23 @@ class _ChatScreenState extends State<ChatScreen>
         if (cached != null && cached.isNotEmpty) return cached;
       }
     }
-    return widget.imageUrl;
+    return _chatImageUrl;
+  }
+
+  String get _chatName {
+    final title = chat?.title;
+    if (widget.chatType == 'DIALOG' || title == null || title.isEmpty) {
+      return widget.name;
+    }
+    return title;
+  }
+
+  String get _chatImageUrl {
+    final icon = chat?.iconUrl;
+    if (widget.chatType == 'DIALOG' || icon == null || icon.isEmpty) {
+      return widget.imageUrl;
+    }
+    return icon;
   }
 
   String _headerName() {
@@ -3283,7 +3301,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (cached != null && cached.isNotEmpty) return cached;
       }
     }
-    return widget.name;
+    return _chatName;
   }
 
   bool get _hasMiniApp {
@@ -4210,7 +4228,7 @@ class _ChatScreenState extends State<ChatScreen>
             builder: (_) => ScheduledMessagesScreen(
               chatId: widget.chatId,
               accountId: _myId,
-              chatName: widget.name,
+              chatName: _chatName,
             ),
           ),
         )
@@ -4841,8 +4859,8 @@ class _ChatScreenState extends State<ChatScreen>
         child: Align(
           alignment: const Alignment(0, -0.3),
           child: ChatReadyCard(
-            name: chat?.title ?? widget.name,
-            avatarUrl: widget.imageUrl,
+            name: _chatName,
+            avatarUrl: _chatImageUrl,
             isChannel: _isChannel,
           ),
         ),
@@ -5012,10 +5030,10 @@ class _ChatScreenState extends State<ChatScreen>
                                 peerName: widget.name,
                                 peerAvatarUrl: widget.imageUrl,
                                 senderNameOverride: isCommentedPost
-                                    ? widget.name
+                                    ? _chatName
                                     : null,
                                 senderAvatarOverride: isCommentedPost
-                                    ? widget.imageUrl
+                                    ? _chatImageUrl
                                     : null,
                                 textSelection: _textSelection,
                                 textSelectionDrag: _textSelectionDrag,
@@ -5243,7 +5261,7 @@ class _ChatScreenState extends State<ChatScreen>
     FocusManager.instance.primaryFocus?.unfocus();
     await showAttachmentSheet(
       context,
-      title: widget.name,
+      title: _chatName,
       onSend: scheduledTime == null
           ? _mediaSend.sendPhotos
           : (picked, caption) =>

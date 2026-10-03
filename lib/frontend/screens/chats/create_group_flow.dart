@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -12,12 +11,12 @@ import '../../../core/utils/names.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/attachment/avatar_editor.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_route.dart';
 import 'chat_screen.dart';
-import '../../../core/security/app_lock.dart';
 
 Future<void> showCreateGroupFlow(BuildContext context) async {
   final cs = Theme.of(context).colorScheme;
@@ -101,13 +100,8 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
 
   Future<void> _pickAvatar() async {
     if (_creating) return;
-    final result = await AppLock.instance.external(
-      () => FilePicker.platform.pickFiles(type: FileType.image),
-    );
-    if (result == null || result.files.isEmpty) return;
-    final path = result.files.first.path;
-    if (path == null) return;
-    final file = File(path);
+    final file = await pickAvatarImage(context);
+    if (file == null) return;
     final size = await file.length();
     if (size > kMaxAvatarBytes) {
       if (!mounted) return;

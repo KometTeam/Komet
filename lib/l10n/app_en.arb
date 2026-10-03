@@ -2073,9 +2073,6 @@
   "customGradientTitle": "Custom theme",
   "customGradientAnimation": "Animation",
   "customGradientAnimationSubtitle": "Smoothly shifting colors",
-  "avatarHistoryDeleteFailed": "Couldn't delete the photo: {error}",
-  "@avatarHistoryDeleteFailed": {"placeholders": {"error": {"type": "String"}}},
-  "avatarHistoryEmpty": "No photos",
   "videoBubbleOpenFailed": "Couldn't open the video",
   "videoBubbleLoadFailed": "Couldn't get the video",
   "accountSwitcherNoName": "No name",
@@ -2448,5 +2445,9 @@
   "mediaSaveNoGalleryAccess": "no access to the gallery",
   "commandShrugDescription": "send a kaomoji",
   "scheduleTimePickerDayLabel": "{weekday}, {date}",
-  "@scheduleTimePickerDayLabel": {"placeholders": {"weekday": {"type": "String"}, "date": {"type": "String"}}}
+  "@scheduleTimePickerDayLabel": {"placeholders": {"weekday": {"type": "String"}, "date": {"type": "String"}}},
+  "avatarEditorSetPhoto": "Set photo",
+  "avatarEditorDraw": "Draw",
+  "avatarPickerFilesTitle": "Pick a photo from files",
+  "avatarPickerFilesSubtitle": "If the photo you need isn't in the gallery"
 }

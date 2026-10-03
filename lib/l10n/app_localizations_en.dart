@@ -5284,14 +5284,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customGradientAnimationSubtitle => 'Smoothly shifting colors';
 
   @override
-  String avatarHistoryDeleteFailed(String error) {
-    return 'Couldn\'t delete the photo: $error';
-  }
-
-  @override
-  String get avatarHistoryEmpty => 'No photos';
-
-  @override
   String get videoBubbleOpenFailed => 'Couldn\'t open the video';
 
   @override
@@ -6416,4 +6408,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String scheduleTimePickerDayLabel(String weekday, String date) {
     return '$weekday, $date';
   }
+
+  @override
+  String get avatarEditorSetPhoto => 'Set photo';
+
+  @override
+  String get avatarEditorDraw => 'Draw';
+
+  @override
+  String get avatarPickerFilesTitle => 'Pick a photo from files';
+
+  @override
+  String get avatarPickerFilesSubtitle =>
+      'If the photo you need isn\'t in the gallery';
 }

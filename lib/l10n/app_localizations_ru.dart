@@ -5327,14 +5327,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get customGradientAnimationSubtitle => 'Плавный перелив цветов';
 
   @override
-  String avatarHistoryDeleteFailed(String error) {
-    return 'Не удалось удалить фото: $error';
-  }
-
-  @override
-  String get avatarHistoryEmpty => 'Нет фотографий';
-
-  @override
   String get videoBubbleOpenFailed => 'Не удалось открыть видео';
 
   @override
@@ -6462,4 +6454,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String scheduleTimePickerDayLabel(String weekday, String date) {
     return '$weekday, $date.';
   }
+
+  @override
+  String get avatarEditorSetPhoto => 'Установить фото';
+
+  @override
+  String get avatarEditorDraw => 'Рисовать';
+
+  @override
+  String get avatarPickerFilesTitle => 'Выбрать фото из файлов';
+
+  @override
+  String get avatarPickerFilesSubtitle => 'Если нужного фото нет в галерее';
 }

@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:komet/backend/modules/contacts.dart';
 import 'package:komet/frontend/screens/contacts/contact_sheet_common.dart';
+import 'package:komet/frontend/widgets/attachment/avatar_editor.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/komet_avatar.dart';
 import 'package:komet/frontend/widgets/small_spinner.dart';
@@ -13,7 +13,6 @@ import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/config/app_shape.dart';
-import '../../../core/security/app_lock.dart';
 import '../../../core/storage/local_contact_avatars.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../widgets/chat_menu_overlay.dart';
@@ -129,10 +128,7 @@ class _EditContactCardState extends State<_EditContactCard> {
 
   Future<void> _pickLocalPhoto() async {
     final l10n = AppLocalizations.of(context)!;
-    final picked = await AppLock.instance.external(
-      () => FilePicker.platform.pickFiles(type: FileType.image),
-    );
-    final path = picked?.files.firstOrNull?.path;
+    final path = (await pickAvatarImage(context))?.path;
     if (path == null || !mounted) return;
     if (await File(path).length() > kMaxAvatarBytes) {
       if (mounted) {

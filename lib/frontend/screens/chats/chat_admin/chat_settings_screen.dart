@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -10,6 +9,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../main.dart';
 import '../../../../models/chat_restriction.dart';
 import '../../../widgets/custom_notification.dart';
+import '../../../widgets/attachment/avatar_editor.dart';
 import '../../../widgets/komet_avatar.dart';
 import '../../../widgets/settings_card.dart';
 import '../../../widgets/small_spinner.dart';
@@ -104,8 +104,7 @@ class _ChatSettingsScreenState extends State<ChatSettingsScreen> {
   Future<void> _changePhoto() async {
     if (_photoBusy || !_state.canEditInfo) return;
     final l10n = AppLocalizations.of(context)!;
-    final picked = await FilePicker.platform.pickFiles(type: FileType.image);
-    final path = picked?.files.firstOrNull?.path;
+    final path = (await pickAvatarImage(context))?.path;
     if (path == null || !mounted) return;
     if (await File(path).length() > kMaxAvatarBytes) {
       if (mounted) {

@@ -1691,8 +1691,6 @@
   "customGradientTitle": "Своя тема",
   "customGradientAnimation": "Анимация",
   "customGradientAnimationSubtitle": "Плавный перелив цветов",
-  "avatarHistoryDeleteFailed": "Не удалось удалить фото: {error}",
-  "avatarHistoryEmpty": "Нет фотографий",
   "videoBubbleOpenFailed": "Не удалось открыть видео",
   "videoBubbleLoadFailed": "Не удалось получить видео",
   "accountSwitcherNoName": "Без имени",
@@ -2005,5 +2003,9 @@
   "mediaSaveFileNotFound": "файл не найден",
   "mediaSaveNoGalleryAccess": "нет доступа к галерее",
   "commandShrugDescription": "отправить каомодзи",
-  "scheduleTimePickerDayLabel": "{weekday}, {date}."
+  "scheduleTimePickerDayLabel": "{weekday}, {date}.",
+  "avatarEditorSetPhoto": "Установить фото",
+  "avatarEditorDraw": "Рисовать",
+  "avatarPickerFilesTitle": "Выбрать фото из файлов",
+  "avatarPickerFilesSubtitle": "Если нужного фото нет в галерее"
 }

@@ -112,7 +112,7 @@ Future<bool> confirmAvatarDeletion(BuildContext context) async {
   return confirmed == true;
 }
 
-// #***! одно меню на шапку настроек и на полноэкранный просмотр
+// #***! меню аватарки в шапке настроек
 void showAvatarMenu({
   required BuildContext context,
   required Rect anchorRect,

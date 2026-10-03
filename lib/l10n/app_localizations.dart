@@ -9506,18 +9506,6 @@ abstract class AppLocalizations {
   /// **'Smoothly shifting colors'**
   String get customGradientAnimationSubtitle;
 
-  /// No description provided for @avatarHistoryDeleteFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Couldn\'t delete the photo: {error}'**
-  String avatarHistoryDeleteFailed(String error);
-
-  /// No description provided for @avatarHistoryEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No photos'**
-  String get avatarHistoryEmpty;
-
   /// No description provided for @videoBubbleOpenFailed.
   ///
   /// In en, this message translates to:
@@ -11395,6 +11383,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{weekday}, {date}'**
   String scheduleTimePickerDayLabel(String weekday, String date);
+
+  /// No description provided for @avatarEditorSetPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Set photo'**
+  String get avatarEditorSetPhoto;
+
+  /// No description provided for @avatarEditorDraw.
+  ///
+  /// In en, this message translates to:
+  /// **'Draw'**
+  String get avatarEditorDraw;
+
+  /// No description provided for @avatarPickerFilesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a photo from files'**
+  String get avatarPickerFilesTitle;
+
+  /// No description provided for @avatarPickerFilesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'If the photo you need isn\'t in the gallery'**
+  String get avatarPickerFilesSubtitle;
 }
 
 class _AppLocalizationsDelegate
