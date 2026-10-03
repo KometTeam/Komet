@@ -10,6 +10,7 @@ import '../../../core/utils/haptics.dart';
 import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/media_saver.dart';
 import '../../../core/utils/share_origin.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show api, messagesModule, webAppModule;
 import '../../widgets/confirm_dialog.dart';
 import '../chats/chat_list_screen.dart' show openForwardScreen;
@@ -397,12 +398,13 @@ class WebAppBridge {
       _fail(method, requestId, 'request_error');
       return;
     }
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showConfirmDialog(
       context,
-      title: 'Передать номер телефона?',
-      message: 'Мини-приложение получит ваш номер телефона.',
-      confirmLabel: 'Поделиться',
-      cancelLabel: 'Отклонить',
+      title: l10n.webAppPhoneRequestTitle,
+      message: l10n.webAppPhoneRequestMessage,
+      confirmLabel: l10n.webAppPhoneRequestShare,
+      cancelLabel: l10n.joinRequestsDecline,
     );
     if (!confirmed) {
       _fail(method, requestId, 'user_refused_provide_phone_number');

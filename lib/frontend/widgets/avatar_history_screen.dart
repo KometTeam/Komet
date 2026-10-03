@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../backend/modules/contacts.dart';
 import '../../core/storage/app_database.dart';
+import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import 'avatar_photo_actions.dart';
 import 'custom_notification.dart';
@@ -264,7 +265,10 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
-      showCustomNotification(context, 'Не удалось удалить фото: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.avatarHistoryDeleteFailed('$e'),
+      );
     }
   }
 
@@ -351,13 +355,14 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
   }
 
   Widget _buildCounter() {
+    final l10n = AppLocalizations.of(context)!;
     final hasName = widget.name != null && widget.name!.isNotEmpty;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (_pages.length > 1)
           Text(
-            '${_index + 1} из $_total',
+            l10n.mediaViewerCounter(_index + 1, _total),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
@@ -391,9 +396,9 @@ class _AvatarHistoryScreenState extends State<AvatarHistoryScreen> {
       return Center(
         child: _loading
             ? const SmallSpinner(size: 36, color: Colors.white)
-            : const Text(
-                'Нет фотографий',
-                style: TextStyle(color: Colors.white54, fontSize: 15),
+            : Text(
+                AppLocalizations.of(context)!.avatarHistoryEmpty,
+                style: const TextStyle(color: Colors.white54, fontSize: 15),
               ),
       );
     }

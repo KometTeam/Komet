@@ -3502,6 +3502,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get undoAction => 'Undo';
 
   @override
+  String get undoContinue => 'Continue';
+
+  @override
   String get undoMessageUnpinned => 'You unpinned the message';
 
   @override
@@ -4104,4 +4107,2313 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get memberRemoved => 'Member removed';
+
+  @override
+  String get chatScreenReactionUpdateFailed => 'Couldn\'t update the reaction';
+
+  @override
+  String get chatScreenBotStartFailed => 'Couldn\'t start the bot';
+
+  @override
+  String get chatScreenMessageNotLoaded => 'The message isn\'t loaded';
+
+  @override
+  String get chatScreenMarkUnreadFailed => 'Couldn\'t mark as unread';
+
+  @override
+  String get chatScreenMessagePinned => 'Message pinned';
+
+  @override
+  String get chatScreenNothingToForward => 'Nothing to forward';
+
+  @override
+  String get chatScreenDeleteMessagesFailed => 'Couldn\'t delete the messages';
+
+  @override
+  String get chatScreenDeleteMessageTitle => 'Delete message';
+
+  @override
+  String get chatScreenDeleteMessageConfirm =>
+      'Are you sure you want to delete this message?';
+
+  @override
+  String chatScreenDeleteAlsoFor(String name) {
+    return 'Also delete for $name';
+  }
+
+  @override
+  String get chatScreenMenuMute => 'Disable notifications';
+
+  @override
+  String get chatScreenMenuChangeWallpaper => 'Change wallpaper';
+
+  @override
+  String get chatScreenMenuEncryption => 'Message encryption';
+
+  @override
+  String get chatScreenChatLinkUnavailable => 'Couldn\'t get the chat link';
+
+  @override
+  String get chatScreenSubscribeFailed => 'Couldn\'t subscribe';
+
+  @override
+  String get chatScreenJoinFailed => 'Couldn\'t join';
+
+  @override
+  String get chatScreenWallpaperSaveFailed => 'Couldn\'t save the wallpaper';
+
+  @override
+  String get chatScreenCallsDialogsOnly =>
+      'Calls are only available in private chats';
+
+  @override
+  String chatScreenMembersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count members',
+      one: '1 member',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatScreenSubscribersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count subscribers',
+      one: '1 subscriber',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatScreenFormatHeading => 'Heading';
+
+  @override
+  String get chatScreenFormatBold => 'Bold';
+
+  @override
+  String get chatScreenFormatItalic => 'Italic';
+
+  @override
+  String get chatScreenFormatUnderline => 'Underline';
+
+  @override
+  String get chatScreenFormatStrikethrough => 'Strikethrough';
+
+  @override
+  String get chatScreenFormatMonospace => 'Monospace';
+
+  @override
+  String get chatScreenFormatQuote => 'Quote';
+
+  @override
+  String get chatScreenFormatMention => 'Mention';
+
+  @override
+  String get chatScreenMessageTooLong =>
+      'The message is too long. Split it into several';
+
+  @override
+  String get chatScreenEncryptionKeyMissing => 'No encryption key is set';
+
+  @override
+  String get chatScreenPluginFilesEncryptUnsupported =>
+      'Plugin files can\'t be encrypted yet';
+
+  @override
+  String chatScreenCommandMissingArgument(String name, String usage) {
+    return 'Missing argument $name. Format: $usage';
+  }
+
+  @override
+  String chatScreenPluginError(String error) {
+    return 'Plugin error: $error';
+  }
+
+  @override
+  String chatScreenCommandFillField(String name) {
+    return 'Fill in the $name field';
+  }
+
+  @override
+  String chatScreenScheduledFor(String when) {
+    return 'Scheduled for $when';
+  }
+
+  @override
+  String get chatScreenScheduleFailed => 'Couldn\'t schedule the message';
+
+  @override
+  String get chatScreenMessageNotSentYet => 'The message hasn\'t been sent yet';
+
+  @override
+  String get chatScreenChannelUnavailable => 'Channel unavailable';
+
+  @override
+  String get chatScreenChannelFallback => 'Channel';
+
+  @override
+  String get chatScreenNoEncryptFiles => 'Files can\'t be encrypted yet';
+
+  @override
+  String get chatScreenNoEncryptLocation => 'Location can\'t be encrypted yet';
+
+  @override
+  String get chatScreenNoEncryptPolls => 'Polls can\'t be encrypted yet';
+
+  @override
+  String get chatScreenNoEncryptContacts => 'Contacts can\'t be encrypted yet';
+
+  @override
+  String get stickerPackSheetRemoved => 'Sticker pack removed';
+
+  @override
+  String get stickerPackSheetAdded => 'Sticker pack added';
+
+  @override
+  String get stickerPackSheetActionFailed => 'Couldn\'t complete the action';
+
+  @override
+  String get stickerPackSheetLinkUnavailable => 'Link unavailable';
+
+  @override
+  String stickerPackSheetForwardedTo(String chat) {
+    return 'Forwarded to “$chat”';
+  }
+
+  @override
+  String get stickerPackSheetUnavailable => 'Sticker pack unavailable';
+
+  @override
+  String stickerPackSheetStickerCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count stickers',
+      one: '1 sticker',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stickerPackSheetRemove => 'Remove';
+
+  @override
+  String get performanceScreenTitle => 'Performance';
+
+  @override
+  String get performanceScreenLowWarning =>
+      'App performance may drop. Are you sure?';
+
+  @override
+  String get performanceScreenHighWarning =>
+      'This is unlikely to give any noticeable FPS boost, but it may use more memory. Are you sure?';
+
+  @override
+  String get performanceScreenCacheTitle => 'Message cache';
+
+  @override
+  String get performanceScreenCacheSubtitle =>
+      'How many pixels of messages to keep built outside the visible area.';
+
+  @override
+  String performanceScreenCurrentExtent(int value) {
+    return 'Current cacheExtent: $value';
+  }
+
+  @override
+  String get performanceScreenLessUsage => 'Lower usage';
+
+  @override
+  String get performanceScreenMoreFps => 'Higher FPS';
+
+  @override
+  String get chatWallpaperSheetImageTooLarge =>
+      'The image is too large (max 16 MB)';
+
+  @override
+  String get chatWallpaperSheetTitle => 'Wallpaper';
+
+  @override
+  String get chatWallpaperSheetSampleIncoming =>
+      'How about a new wallpaper for this chat?';
+
+  @override
+  String get chatWallpaperSheetSampleOutgoing => 'Looks great 🔥';
+
+  @override
+  String get chatWallpaperSheetNone => 'No wallpaper';
+
+  @override
+  String get chatWallpaperSheetYourPhoto => 'Your photo';
+
+  @override
+  String get chatWallpaperSheetFromGallery => 'From gallery';
+
+  @override
+  String get maxLinkNavChatNotFound => 'Chat not found';
+
+  @override
+  String get maxLinkNavProfileFallback => 'Profile';
+
+  @override
+  String get maxLinkNavPlatformUnsupported =>
+      'This isn\'t available on your platform';
+
+  @override
+  String get maxLinkNavAppFallback => 'App';
+
+  @override
+  String get maxLinkNavNothingToSend => 'Nothing to send';
+
+  @override
+  String get maxLinkNavFolderNotFound => 'Folder not found';
+
+  @override
+  String get maxLinkNavSignInFirst => 'Sign in to an account first';
+
+  @override
+  String get pollCreateValidationHint =>
+      'Enter a question and at least 2 options';
+
+  @override
+  String get pollCreateAnswersTitle => 'Answer options';
+
+  @override
+  String get pollCreateMultipleAnswers => 'Multiple answers';
+
+  @override
+  String get pollCreateAnonymous => 'Anonymous voting';
+
+  @override
+  String get pollCreateTitle => 'New poll';
+
+  @override
+  String get pollCreateSubmit => 'Create';
+
+  @override
+  String get pollCreateQuestionHint => 'Ask a question';
+
+  @override
+  String pollCreateOptionHint(int number) {
+    return 'Option $number';
+  }
+
+  @override
+  String get pollCreateAddOption => 'Add option';
+
+  @override
+  String get webQrLoginTitle => 'QR sign-in';
+
+  @override
+  String get webQrLoginMessage =>
+      'Are you sure you want to sign in to your account on the web or in the MAX desktop app?';
+
+  @override
+  String get webQrLoginConfirmed => 'Sign-in confirmed';
+
+  @override
+  String webQrLoginFailed(String error) {
+    return 'Couldn\'t confirm sign-in: $error';
+  }
+
+  @override
+  String get messageActionsScreenTitle => 'Action menu';
+
+  @override
+  String get messageActionsScreenRadialDescription =>
+      'An arc of buttons around the tap point';
+
+  @override
+  String get messageActionsScreenList => 'List';
+
+  @override
+  String get messageActionsScreenListDescription =>
+      'A vertical menu next to the message';
+
+  @override
+  String get messageActionsScreenStyle => 'Style';
+
+  @override
+  String get messageActionsScreenStyleSubtitle =>
+      'How the menu appears when you long-press a message';
+
+  @override
+  String get videoNoteBubbleTranscriptionFailed => 'Couldn\'t transcribe';
+
+  @override
+  String get webAppScreenCloseConfirm => 'Close the mini app?';
+
+  @override
+  String get voiceRecordUnsupported =>
+      'Voice messages aren\'t available on this platform';
+
+  @override
+  String get voiceRecordNoMicAccess => 'No access to the microphone';
+
+  @override
+  String get voiceRecordStartFailed => 'Couldn\'t start recording';
+
+  @override
+  String get voiceRecordEncodeFailed => 'Couldn\'t encode the recording';
+
+  @override
+  String get spoofScreenFullWarningTitle => 'There may be consequences.';
+
+  @override
+  String get spoofScreenFullWarningSubtitle =>
+      'Only change this if you know what you\'re doing.';
+
+  @override
+  String callScreenShareFailed(String error) {
+    return 'Screen sharing didn\'t start: $error';
+  }
+
+  @override
+  String get themeSettingsCustomizeAction => 'Customize';
+
+  @override
+  String get chatListNavChats => 'Chats';
+
+  @override
+  String get chatListNavCalls => 'Calls';
+
+  @override
+  String get chatListNavContacts => 'Contacts';
+
+  @override
+  String get chatListShareSendFailed => 'Couldn\'t send';
+
+  @override
+  String chatListMuteFailedCount(int count, String error) {
+    return 'Couldn\'t change $count chats: $error';
+  }
+
+  @override
+  String get chatListDeleteStatusChanged =>
+      'The chats\' status has changed, please try again';
+
+  @override
+  String chatListDeleteChatWith(String name) {
+    return 'Delete chat with $name?';
+  }
+
+  @override
+  String chatListDeleteChatsCount(int count) {
+    return 'Delete $count chats?';
+  }
+
+  @override
+  String get chatListDeleteIrreversible =>
+      'The conversation can\'t be restored';
+
+  @override
+  String chatListDeleteOwnedChat(String name) {
+    return 'Do you want to delete the chat “$name”?';
+  }
+
+  @override
+  String chatListDeleteGroupsForAll(int count) {
+    return 'Delete $count groups for everyone?';
+  }
+
+  @override
+  String get chatListDeleteOwnedChatBody =>
+      'Transfer ownership so the other members can keep talking';
+
+  @override
+  String get chatListDeleteCannotUndo => 'This action can\'t be undone';
+
+  @override
+  String get chatListDeleteChatForAll => 'Delete chat for everyone';
+
+  @override
+  String get chatListDeleteForAll => 'Delete for everyone';
+
+  @override
+  String get chatListYourStory => 'Your story';
+
+  @override
+  String get chatListAllChatsFolder => 'All chats';
+
+  @override
+  String chatListRecipientsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count recipients',
+      one: '$count recipient',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatListSavedMessages => 'Saved Messages';
+
+  @override
+  String get chatListReadAll => 'Mark all as read';
+
+  @override
+  String get chatListForwardingHint => 'Forwarding...';
+
+  @override
+  String get chatListEmpty => 'Looks like it\'s empty here...';
+
+  @override
+  String get chatListOpenToLoad => 'open the chat to load it';
+
+  @override
+  String get chatListArchive => 'Archive';
+
+  @override
+  String get chatListNewStory => 'New story';
+
+  @override
+  String get chatListOpenVideoFailed => 'Couldn\'t open the video';
+
+  @override
+  String get chatListOpenPhotoFailed => 'Couldn\'t open the photo';
+
+  @override
+  String get chatListDraftPrefix => 'Draft: ';
+
+  @override
+  String get chatListPreviewWrongKey => 'wrong key';
+
+  @override
+  String get chatListPreviewUnavailable => 'unavailable on this device';
+
+  @override
+  String get chatListMessagePerson => 'Message someone';
+
+  @override
+  String get chatListCreateGroup => 'New group';
+
+  @override
+  String get chatListCreateChannel => 'New channel';
+
+  @override
+  String get chatListCreateContact => 'New contact';
+
+  @override
+  String get chatListCreateFolder => 'New folder';
+
+  @override
+  String get chatListMessageAction => 'Message';
+
+  @override
+  String get chatListNoUnreadChats => 'No unread chats';
+
+  @override
+  String get chatListAllMarkedRead => 'All chats marked as read';
+
+  @override
+  String get callsTabStatusMissed => 'Missed';
+
+  @override
+  String get callsTabStatusCanceled => 'Canceled';
+
+  @override
+  String get callsTabStatusOutgoing => 'Outgoing';
+
+  @override
+  String get callsTabStatusIncoming => 'Incoming';
+
+  @override
+  String get callsTabCallBack => 'Call back';
+
+  @override
+  String get callsTabPeerUnknown => 'Couldn\'t identify the other person';
+
+  @override
+  String get callsTabAlreadyInCall => 'A call is already in progress';
+
+  @override
+  String callsTabStartFailed(String error) {
+    return 'Couldn\'t start the call: $error';
+  }
+
+  @override
+  String get callsTabJoinTitle => 'Join a call';
+
+  @override
+  String get callsTabJoinDescription => 'Paste an invite link';
+
+  @override
+  String get callsTabNotACallLink => 'This isn\'t a call link';
+
+  @override
+  String get callsTabCreateCall => 'Create call';
+
+  @override
+  String get callsTabMissed => 'Missed';
+
+  @override
+  String get callsTabEmpty => 'No calls';
+
+  @override
+  String get chatEncryptionProfileNotLoaded => 'Profile hasn\'t loaded yet';
+
+  @override
+  String get chatEncryptionEnterKeyHint => 'Enter an encryption key';
+
+  @override
+  String get chatEncryptionEnabled => 'Encryption enabled';
+
+  @override
+  String get chatEncryptionDisabled => 'Encryption disabled';
+
+  @override
+  String get chatEncryptionTitle => 'Message encryption';
+
+  @override
+  String get chatEncryptionToggle => 'Encrypt messages';
+
+  @override
+  String get chatEncryptionToggleSubtitle =>
+      'Message text in this chat will be encrypted with the key below';
+
+  @override
+  String get chatEncryptionKeyLabel => 'Key';
+
+  @override
+  String get chatEncryptionKeyHint => 'Enter key';
+
+  @override
+  String get chatEncryptionKeyNote =>
+      'The key is stored only on this device. The other person must enter the same key, otherwise they won\'t be able to read the messages. This is the password mode for groups: no forward secrecy, anyone who knows the password can read the whole history.';
+
+  @override
+  String get storyViewerDeleteTitle => 'Delete story?';
+
+  @override
+  String get storyViewerDeleteMessage =>
+      'The story will disappear for everyone who can view it.';
+
+  @override
+  String get storyViewerDeleteFailed => 'Couldn\'t delete the story';
+
+  @override
+  String storyViewerDeleteFailedWithReason(String reason) {
+    return 'Couldn\'t delete the story: $reason';
+  }
+
+  @override
+  String get storyViewerEmpty => 'No stories';
+
+  @override
+  String get storyViewerJustNow => 'just now';
+
+  @override
+  String storyViewerMinutesAgo(int count) {
+    return '$count min';
+  }
+
+  @override
+  String storyViewerHoursAgo(int count) {
+    return '$count h';
+  }
+
+  @override
+  String storyViewerDaysAgo(int count) {
+    return '$count d';
+  }
+
+  @override
+  String get webviewPermissionCamera => 'camera';
+
+  @override
+  String get webviewPermissionMicrophone => 'microphone';
+
+  @override
+  String get webviewPermissionCameraAndMicrophone => 'camera and microphone';
+
+  @override
+  String get webviewPermissionGeolocation => 'location';
+
+  @override
+  String get webviewPermissionOther => 'additional access';
+
+  @override
+  String get webviewPermissionWebPage => 'Web page';
+
+  @override
+  String get webviewPermissionTitle => 'Access request';
+
+  @override
+  String webviewPermissionMessage(String host, String resources) {
+    return '$host is requesting access to: $resources.';
+  }
+
+  @override
+  String get webviewPermissionDeny => 'Deny';
+
+  @override
+  String get createChannelFailed => 'Couldn\'t create the channel';
+
+  @override
+  String get createChannelAvatarProcessFailed => 'Couldn\'t process the avatar';
+
+  @override
+  String get createChannelAvatarUploadFailed => 'Couldn\'t upload the avatar';
+
+  @override
+  String get createChannelDescription =>
+      'Only you post in a channel, members read. You can invite them after it\'s created.';
+
+  @override
+  String get createChannelCancel => 'Cancel';
+
+  @override
+  String get createChannelCreating => 'Creating...';
+
+  @override
+  String get createChannelCreate => 'Create';
+
+  @override
+  String get codeConfirmationConnectionDropped =>
+      'Connection lost, reconnecting…';
+
+  @override
+  String get codeConfirmationNoConnection => 'No connection to the server';
+
+  @override
+  String get codeConfirmationConnectionRestored => 'Connection restored';
+
+  @override
+  String codeConfirmationReconnectFailed(String error) {
+    return 'Couldn\'t restore the connection: $error';
+  }
+
+  @override
+  String codeConfirmationRefreshFailed(String error) {
+    return 'Couldn\'t refresh the code: $error';
+  }
+
+  @override
+  String get codeConfirmationNewCodeSent => 'We sent a new code';
+
+  @override
+  String get codeConfirmationSmsNoToken =>
+      'SMS sign-in: the server didn\'t return a token';
+
+  @override
+  String get codeConfirmationCodeExpired =>
+      'The code expired — we sent a new one';
+
+  @override
+  String get pollViewVoteFailed => 'Couldn\'t vote';
+
+  @override
+  String get pollViewLoading => 'Loading poll…';
+
+  @override
+  String get pollViewMultipleAnswers => 'Multiple answers';
+
+  @override
+  String get pollViewSingleAnswer => 'Single answer';
+
+  @override
+  String pollViewVotesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count votes',
+      one: '$count vote',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pollViewVote => 'Vote';
+
+  @override
+  String get customizationChatBackground => 'Chat background';
+
+  @override
+  String get customizationMessageActions => 'Actions menu';
+
+  @override
+  String get customizationAppIcon => 'App icon';
+
+  @override
+  String get customizationTitle => 'Customization';
+
+  @override
+  String get folderActionNewFolder => 'New folder';
+
+  @override
+  String folderActionDeleteConfirm(String title) {
+    return 'Delete the folder “$title”? The chats will stay where they are.';
+  }
+
+  @override
+  String get folderActionDeleteFailed => 'Couldn\'t delete the folder';
+
+  @override
+  String get webAppBiometryAccessNotice =>
+      'The mini app will be able to ask for fingerprint or face confirmation.';
+
+  @override
+  String get webAppBiometryAuthReason => 'Confirm the action in the mini app';
+
+  @override
+  String get webAppBiometryAccessTitle => 'Allow biometrics?';
+
+  @override
+  String get webAppPhoneRequestTitle => 'Share your phone number?';
+
+  @override
+  String get webAppPhoneRequestMessage =>
+      'The mini app will receive your phone number.';
+
+  @override
+  String get webAppPhoneRequestShare => 'Share';
+
+  @override
+  String get promptDialogConfirm => 'Confirm';
+
+  @override
+  String get emojiPanelLoadFailed => 'Couldn\'t load emoji';
+
+  @override
+  String get emojiPanelEmpty => 'No emoji';
+
+  @override
+  String get mediaPreviewEditorOpenFailed => 'Couldn\'t open the editor';
+
+  @override
+  String get fontSettingsSampleText =>
+      'The quick brown fox jumps over the lazy dog';
+
+  @override
+  String get callParticipantsNoServer => 'No connection to the call server';
+
+  @override
+  String callParticipantsActionFailed(String error) {
+    return 'Failed: $error';
+  }
+
+  @override
+  String get callParticipantsMuteMic => 'Mute microphone';
+
+  @override
+  String get callParticipantsRequestCamera => 'Request camera';
+
+  @override
+  String get callParticipantsRevokeAdmin => 'Remove admin';
+
+  @override
+  String get callParticipantsRevokeSpeaker => 'Remove from speakers';
+
+  @override
+  String get callParticipantsMakeSpeaker => 'Make speaker';
+
+  @override
+  String get callParticipantsPromote => 'Promote';
+
+  @override
+  String get callParticipantsDemote => 'Demote';
+
+  @override
+  String get callParticipantsRemoveFromCall => 'Remove from call';
+
+  @override
+  String get callParticipantsCallSettings => 'Call settings';
+
+  @override
+  String get callParticipantsFeatureAccess => 'Who can use features';
+
+  @override
+  String get callParticipantsInviteLink => 'Participant invite link';
+
+  @override
+  String get callParticipantsOptionAuthOnly => 'Signed-in users only';
+
+  @override
+  String get callParticipantsOptionWaitingHall => 'Waiting room';
+
+  @override
+  String get callParticipantsOptionRecurring => 'Recurring call';
+
+  @override
+  String get callParticipantsOptionFeedback => 'Feedback collection';
+
+  @override
+  String get callParticipantsOptionAudienceMode => 'Audience mode';
+
+  @override
+  String get callParticipantsSpeechTranscription => 'Speech transcription';
+
+  @override
+  String get callParticipantsOptionWaitForAdmin => 'Wait for an admin';
+
+  @override
+  String get callParticipantsOptionAdminIsHere => 'Admin is present';
+
+  @override
+  String get callParticipantsFeatureMovieShare => 'Watch together';
+
+  @override
+  String get callParticipantsCallRecording => 'Call recording';
+
+  @override
+  String get callParticipantsFeatureSpeaker => 'Be a speaker';
+
+  @override
+  String callParticipantsTitle(int count) {
+    return 'Participants · $count';
+  }
+
+  @override
+  String get callParticipantsMuteAll => 'Mute everyone';
+
+  @override
+  String get callParticipantsLowerAllHands => 'Lower all hands';
+
+  @override
+  String get callParticipantsLowerHand => 'Lower hand';
+
+  @override
+  String get callParticipantsRaiseHand => 'Raise hand';
+
+  @override
+  String get callParticipantsStopRecording => 'Stop recording';
+
+  @override
+  String get callParticipantsStartRecording => 'Start recording';
+
+  @override
+  String get callParticipantsRolePermissions => 'Role permissions';
+
+  @override
+  String get callParticipantsAddByLink => 'Add by link';
+
+  @override
+  String get callParticipantsCreator => 'Creator';
+
+  @override
+  String get callParticipantsAdmin => 'Admin';
+
+  @override
+  String get callParticipantsSpeaker => 'Speaker';
+
+  @override
+  String get callParticipantsHandRaised => 'Hand raised';
+
+  @override
+  String get chatMediaSendEnableLocation => 'Turn on location services';
+
+  @override
+  String get chatMediaSendNoLocationAccess => 'No access to location';
+
+  @override
+  String get chatMediaSendLocationFailed => 'Couldn\'t get your location';
+
+  @override
+  String get chatMediaSendScheduledEncryptedPhotos =>
+      'Scheduled photos aren\'t supported in encrypted chats yet';
+
+  @override
+  String get chatMediaSendVideoNotEncryptable =>
+      'Videos can\'t be encrypted yet';
+
+  @override
+  String get chatMediaSendPhotoEncryptFailed => 'Couldn\'t encrypt the photo';
+
+  @override
+  String get chatMediaSendNoEncryptionKey => 'Encryption key isn\'t set';
+
+  @override
+  String get chatMediaSendNoUploadUrl =>
+      'the server didn\'t provide an upload link';
+
+  @override
+  String get chatMediaSendUploadRejected => 'upload rejected';
+
+  @override
+  String get chatMediaSendServerRejected =>
+      'the server didn\'t accept the message';
+
+  @override
+  String chatMediaSendFileFailed(String detail) {
+    return 'File not sent: $detail';
+  }
+
+  @override
+  String chatMediaSendVideoNoteFailed(String detail) {
+    return 'Video message not sent: $detail';
+  }
+
+  @override
+  String chatMediaSendVoiceFailed(String detail) {
+    return 'Voice message not sent: $detail';
+  }
+
+  @override
+  String chatMediaSendPhotoFailed(String detail) {
+    return 'Photo not sent: $detail';
+  }
+
+  @override
+  String chatMediaSendVideoFailed(String detail) {
+    return 'Video not sent: $detail';
+  }
+
+  @override
+  String get chatMediaSendScheduled => 'Scheduled';
+
+  @override
+  String chatMediaSendScheduledAt(String date) {
+    return 'Scheduled for $date';
+  }
+
+  @override
+  String get chatMediaSendScheduleFailed => 'Couldn\'t schedule';
+
+  @override
+  String get messageListToday => 'Today';
+
+  @override
+  String get messageListYesterday => 'Yesterday';
+
+  @override
+  String messageListDateThisYear(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.MMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString';
+  }
+
+  @override
+  String messageListDateOtherYear(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString';
+  }
+
+  @override
+  String get messageListUnreadMessages => 'Unread messages';
+
+  @override
+  String get photoViewerSavedToGallery => 'Saved to gallery';
+
+  @override
+  String photoViewerSavedTo(String path) {
+    return 'Saved to $path';
+  }
+
+  @override
+  String get photoViewerSaveFileFailed => 'Couldn\'t save the file';
+
+  @override
+  String get photoViewerFileSaved => 'File saved';
+
+  @override
+  String get photoViewerErrorNoLink => 'no link';
+
+  @override
+  String get photoViewerErrorNoMedia => 'no media';
+
+  @override
+  String get photoViewerMediaLoadFailed => 'Couldn\'t load the media';
+
+  @override
+  String get avatarPhotoLoadFailed => 'Couldn\'t load the photo';
+
+  @override
+  String get avatarPhotoDeleteTitle => 'Delete photo?';
+
+  @override
+  String get avatarPhotoDeleteBody =>
+      'The photo will be removed from your profile and avatar history.';
+
+  @override
+  String loginScreenReconnectFailed(String error) {
+    return 'Couldn\'t reconnect: $error';
+  }
+
+  @override
+  String get loginScreenSmsWarningTitle =>
+      'IF YOUR ACCOUNT HAS NO 2FA, ALL SESSIONS WILL BE RESET';
+
+  @override
+  String get loginScreenSmsWarningBody =>
+      'This method is experimental, use it at your own risk.';
+
+  @override
+  String get loginScreenOfflineWait =>
+      'No connection to the server. Please wait until it connects.';
+
+  @override
+  String get loginScreenOfflineRetry =>
+      'No connection to the server. Please try again.';
+
+  @override
+  String get loginScreenConnecting =>
+      'Connecting to the server, just a moment…';
+
+  @override
+  String get loginScreenAlwaysSendSms => 'Always send SMS (EXPERIMENTAL)';
+
+  @override
+  String get editProfileNameEmpty => 'Name can\'t be empty';
+
+  @override
+  String get editProfileSaved => 'Profile saved';
+
+  @override
+  String get editProfileAvatarUploadFailed => 'Couldn\'t upload the avatar';
+
+  @override
+  String get editProfileAvatarUpdated => 'Avatar updated';
+
+  @override
+  String get editProfilePhotoDeleted => 'Photo deleted';
+
+  @override
+  String get findUserInvalidPhone => 'Enter a valid phone number';
+
+  @override
+  String get findUserPhoneNotFound => 'No contact with this number was found';
+
+  @override
+  String get findUserInvalidId => 'Enter a numeric ID';
+
+  @override
+  String get findUserIdNotFound => 'No contact with this ID was found';
+
+  @override
+  String get findUserPhoneTab => 'Phone';
+
+  @override
+  String get findUserPhoneHint => 'Enter a phone number';
+
+  @override
+  String get findUserIdHint => 'Enter a contact ID';
+
+  @override
+  String get loginSuccessGreetingWelcome => 'Welcome to Komet!';
+
+  @override
+  String get loginSuccessGreetingEmergencyExit =>
+      'An emergency exit at 30,000 feet. The illusion of safety.';
+
+  @override
+  String get loginSuccessGreetingFunnyThings =>
+      'Sometimes funny things can be a criminal offense';
+
+  @override
+  String get loginSuccessGreetingFarewell =>
+      'If you\'re reading this message, I\'m no longer alive.';
+
+  @override
+  String get loginSuccessGreetingGondor => 'Where was Gondor when...';
+
+  @override
+  String get loginSuccessGreetingEasterEgg => 'You found an Easter egg!';
+
+  @override
+  String get chatTextSendUnknownCommand => 'NO SUCH COMMAND🚨🚨🚨';
+
+  @override
+  String get chatTextSendSaveFailed => 'Couldn\'t save the message';
+
+  @override
+  String get voiceBubbleLoadFailed => 'Couldn\'t load the audio';
+
+  @override
+  String get voiceBubblePlaybackError => 'Playback error';
+
+  @override
+  String get voiceBubbleTranscribe => 'T';
+
+  @override
+  String get voiceBubbleTranscribing => 'transcribing...';
+
+  @override
+  String get voiceBubbleTranscriptionFailed => 'transcription failed';
+
+  @override
+  String chatInfoStoryCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count stories',
+      one: '$count story',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatInfoMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count members',
+      one: '$count member',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatInfoSubscriberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count subscribers',
+      one: '$count subscriber',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get customGradientTitle => 'Custom theme';
+
+  @override
+  String get customGradientAnimation => 'Animation';
+
+  @override
+  String get customGradientAnimationSubtitle => 'Smoothly shifting colors';
+
+  @override
+  String avatarHistoryDeleteFailed(String error) {
+    return 'Couldn\'t delete the photo: $error';
+  }
+
+  @override
+  String get avatarHistoryEmpty => 'No photos';
+
+  @override
+  String get videoBubbleOpenFailed => 'Couldn\'t open the video';
+
+  @override
+  String get videoBubbleLoadFailed => 'Couldn\'t get the video';
+
+  @override
+  String get accountSwitcherNoName => 'No name';
+
+  @override
+  String get accountSwitcherAddAccount => 'Add account';
+
+  @override
+  String infoScreenWeeksShort(int weeks) {
+    return '$weeks wk';
+  }
+
+  @override
+  String infoScreenDaysShort(int days) {
+    return '$days d';
+  }
+
+  @override
+  String get pluginsScreenPickKinetFile =>
+      'Choose a file with the .kinet extension';
+
+  @override
+  String get pluginsScreenReadFileFailed => 'Couldn\'t read the selected file';
+
+  @override
+  String pluginsScreenOpenFailed(String error) {
+    return 'Couldn\'t open .kinet: $error';
+  }
+
+  @override
+  String get pluginsScreenHttpsRequired => 'A valid HTTPS link is required';
+
+  @override
+  String pluginsScreenDownloadFailed(String error) {
+    return 'Couldn\'t download .kinet: $error';
+  }
+
+  @override
+  String pluginsScreenVersionAuthor(String version, String author) {
+    return 'Version $version · $author';
+  }
+
+  @override
+  String pluginsScreenSignatureVerified(String fingerprint) {
+    return 'Ed25519 signature verified\n$fingerprint';
+  }
+
+  @override
+  String get pluginsScreenNotSigned => 'The plugin isn\'t signed';
+
+  @override
+  String get pluginsScreenPermissionsTitle =>
+      'The plugin will be granted these permissions:';
+
+  @override
+  String get pluginsScreenAllowAndInstall => 'Allow and install';
+
+  @override
+  String pluginsScreenInstalled(String name) {
+    return '$name installed';
+  }
+
+  @override
+  String pluginsScreenInstallFailed(String error) {
+    return 'Couldn\'t install the plugin: $error';
+  }
+
+  @override
+  String get pluginsScreenNoUpdates => 'No updates available';
+
+  @override
+  String get pluginsScreenUpdateTitle => 'Update plugin?';
+
+  @override
+  String get pluginsScreenUpdated => 'Plugin updated';
+
+  @override
+  String pluginsScreenUpdateFailed(String error) {
+    return 'Couldn\'t update: $error';
+  }
+
+  @override
+  String get pluginsScreenUninstallTitle => 'Delete plugin?';
+
+  @override
+  String get pluginsScreenUninstalled => 'Plugin and its data deleted';
+
+  @override
+  String pluginsScreenUninstallFailed(String error) {
+    return 'Couldn\'t delete: $error';
+  }
+
+  @override
+  String get pluginsScreenTitle => 'Plugins';
+
+  @override
+  String get pluginsScreenInstallFile => 'Install .kinet';
+
+  @override
+  String get pluginsScreenInstallUrl => 'Install from URL';
+
+  @override
+  String get pluginsScreenBundled => 'Built-in Komet plugin';
+
+  @override
+  String pluginsScreenSigned(String fingerprint) {
+    return 'Signed · $fingerprint';
+  }
+
+  @override
+  String get pluginsScreenUnsigned => 'Not signed';
+
+  @override
+  String get pluginsScreenCheckUpdates => 'Check for updates';
+
+  @override
+  String get pluginsScreenDownload => 'Download';
+
+  @override
+  String get kometSettingsViewDeletedSubtitle => 'Show deleted messages';
+
+  @override
+  String get kometSettingsViewRedactedSubtitle =>
+      'Show the edit history of messages';
+
+  @override
+  String get kometSettingsFullTimestampSubtitle =>
+      'Show message times with seconds';
+
+  @override
+  String get kometSettingsShowForwardSubtitle =>
+      'Mark forwarded messages even when no author is shown on them';
+
+  @override
+  String get kometSettingsTypingTimeSubtitle =>
+      'Tries to estimate how long a message took to type';
+
+  @override
+  String get kometSettingsFoldersHeader => 'Folders';
+
+  @override
+  String get kometSettingsHideAllFolderSubtitle =>
+      'Hide the \"All\" folder when you have other folders. Chats are sorted only by your folders';
+
+  @override
+  String get kometSettingsShowHiddenChatsSubtitle =>
+      'Show hidden chats that usually don\'t appear in the list: from group calls, private channels and chats you\'ve left';
+
+  @override
+  String get kometSettingsArchiveOnPullSubtitle =>
+      'Hide the archive and show it when you pull the chat list down, after stories';
+
+  @override
+  String get kometSettingsGhostModeSubtitle => 'You don\'t appear online';
+
+  @override
+  String get kometSettingsAntiReadSubtitle =>
+      'Read messages without marking them as read';
+
+  @override
+  String get kometSettingsSelfOnlineCheckSubtitle =>
+      'Checks every ~10 seconds when you were last online. Useful for testing ghost mode';
+
+  @override
+  String get kometSettingsDebugHeader => 'Debugging';
+
+  @override
+  String get kometSettingsDebugLogsLabel => 'Record debug logs';
+
+  @override
+  String get kometSettingsDebugLogsSubtitle =>
+      'Writes protocol traffic to a file on the device — helps diagnose bugs in reports';
+
+  @override
+  String get sharedContentSavedToGallery => 'Saved to gallery';
+
+  @override
+  String get sharedContentFileSaved => 'File saved';
+
+  @override
+  String get sharedContentVideoLoadFailed => 'Couldn\'t load the video';
+
+  @override
+  String get sharedContentAudioLoadFailed => 'Couldn\'t load the audio';
+
+  @override
+  String get sharedContentPlaybackError => 'Playback error';
+
+  @override
+  String get messageBubbleButtonUnsupported => 'This button isn\'t supported';
+
+  @override
+  String get messageBubblePlatformUnavailable =>
+      'This isn\'t available on your platform';
+
+  @override
+  String messageBubbleEditedTime(String time) {
+    return 'edited $time';
+  }
+
+  @override
+  String get messageBubbleWrongKey => 'wrong key';
+
+  @override
+  String get messageBubbleUnavailableOnDevice => 'unavailable on this device';
+
+  @override
+  String get messageBubbleReplyDeleted => 'message deleted';
+
+  @override
+  String get searchScreenSavedMessages => 'Saved Messages';
+
+  @override
+  String get searchScreenStartTyping => 'Start typing to search';
+
+  @override
+  String get searchScreenByPhone => 'By phone number';
+
+  @override
+  String get searchScreenContacts => 'Contacts';
+
+  @override
+  String get searchScreenChats => 'Chats';
+
+  @override
+  String get searchScreenGlobalSearch => 'Global search';
+
+  @override
+  String get searchScreenUntitled => 'Untitled';
+
+  @override
+  String get fileBubbleCorrupted => 'File is corrupted';
+
+  @override
+  String get fileBubbleWrongKey => 'Wrong key';
+
+  @override
+  String get fileBubbleTapToOpen => 'Tap to open';
+
+  @override
+  String get fileBubbleDownloadFailed => 'Couldn\'t download the file';
+
+  @override
+  String get fileBubbleDecryptPhotoFailed => 'Couldn\'t decrypt the photo';
+
+  @override
+  String get fileBubbleUnknownFile => 'Couldn\'t identify the file';
+
+  @override
+  String get fileBubbleOpenFailedReason => 'couldn\'t open';
+
+  @override
+  String get fileBubbleDownloadFailedReason => 'couldn\'t download';
+
+  @override
+  String get storyComposerUploadUrlFailed => 'Couldn\'t get the upload address';
+
+  @override
+  String get storyComposerPhotoUploadFailed => 'Couldn\'t upload the photo';
+
+  @override
+  String get storyComposerVideoUploadFailed => 'Couldn\'t upload the video';
+
+  @override
+  String get storyComposerPublished => 'Story published';
+
+  @override
+  String get storyComposerPublish => 'Publish';
+
+  @override
+  String get storyComposerContacts => 'Contacts';
+
+  @override
+  String textEntityProfileNotFound(String nickname) {
+    return 'Profile @$nickname not found';
+  }
+
+  @override
+  String get textEntityCopyPhone => 'Copy phone number';
+
+  @override
+  String get textEntityPhoneCopied => 'Number copied';
+
+  @override
+  String get textEntityCall => 'Call';
+
+  @override
+  String get textEntityCopyCard => 'Copy card number';
+
+  @override
+  String get textEntityCardCopied => 'Card number copied';
+
+  @override
+  String get textEntityDialFailed => 'Couldn\'t open the phone app';
+
+  @override
+  String get textEntityNotOnMax => 'This person isn\'t on MAX yet';
+
+  @override
+  String get callLinkHandlerAlreadyInCall => 'A call is already in progress';
+
+  @override
+  String callLinkHandlerJoinPromptWithCount(String name, int count) {
+    return 'Join the call “$name”? In the call now: $count.';
+  }
+
+  @override
+  String callLinkHandlerJoinPrompt(String name) {
+    return 'Join the call “$name”?';
+  }
+
+  @override
+  String get callLinkHandlerJoinFailed => 'Couldn\'t join the call';
+
+  @override
+  String get appIconScreenUnsupported =>
+      'Changing the icon is only available on Android and iOS';
+
+  @override
+  String appIconScreenChanged(String name) {
+    return 'Icon changed to “$name”';
+  }
+
+  @override
+  String appIconScreenChangeFailed(String error) {
+    return 'Couldn\'t change the icon: $error';
+  }
+
+  @override
+  String get appIconScreenTitle => 'App icon';
+
+  @override
+  String get appIconScreenAppearance => 'Icon style';
+
+  @override
+  String get appIconScreenHint =>
+      'On Android the app will close so the launcher picks up the new icon. On iOS it changes instantly with a system dialog.';
+
+  @override
+  String get appIconScreenOnlyMobile => 'Only available on Android and iOS';
+
+  @override
+  String get password2faConnectionDropped => 'Connection lost…';
+
+  @override
+  String get password2faConnectionDroppedRelogin =>
+      'Connection lost — sign in again';
+
+  @override
+  String get password2faEnterPassword =>
+      'Enter your password to finish signing in';
+
+  @override
+  String get contactsTabFindContact => 'Find contact';
+
+  @override
+  String get contactsTabFind => 'Find';
+
+  @override
+  String get contactsTabLastSeenRecently => 'Last seen recently';
+
+  @override
+  String get contactsTabTitle => 'Contacts';
+
+  @override
+  String get contactsTabEmpty => 'No contacts';
+
+  @override
+  String securityScreenBlockedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count contacts',
+      one: '1 contact',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get attachmentPanelInvalidFileId => 'Invalid fileId';
+
+  @override
+  String get attachmentPanelPickFile => 'Choose from files';
+
+  @override
+  String get attachmentPanelSendById => 'Send by id';
+
+  @override
+  String selectionBarSelectedCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String get metaMarksLikelyForwarded =>
+      'This message was most likely forwarded';
+
+  @override
+  String metaMarksTypingTime(String duration) {
+    return 'This message took about ~$duration to type';
+  }
+
+  @override
+  String get searchViewHint => 'Search...';
+
+  @override
+  String get searchViewNoResults => 'Search returned nothing...';
+
+  @override
+  String get adaptiveShellSelectChat => 'Select a chat';
+
+  @override
+  String get settingsTabPhotoDeleted => 'Photo deleted';
+
+  @override
+  String settingsTabPhotoDeleteFailed(String error) {
+    return 'Couldn\'t delete the photo: $error';
+  }
+
+  @override
+  String settingsTabAppVersion(String version, String build) {
+    return 'Version $version ($build)';
+  }
+
+  @override
+  String get settingsTabCloudStorageSubtitle => 'Via MAX';
+
+  @override
+  String get settingsTabCloudStorageWhitelistTitle => 'Works under whitelists';
+
+  @override
+  String get settingsTabCloudStorageWhitelistBody =>
+      'You can send files even when your internet access is restricted.';
+
+  @override
+  String get settingsTabCloudStorageLimitsTitle =>
+      'Files up to 4 GB, no limit on count.';
+
+  @override
+  String get settingsTabCloudStorageLimitsBody =>
+      'You can store a massive amount of data.';
+
+  @override
+  String get settingsTabCloudStoragePrivacyTitle =>
+      'File privacy is not guaranteed';
+
+  @override
+  String get settingsTabCloudStoragePrivacyBody =>
+      'Cloud storage works through your account on the MAX server, so the right people can still look at it.';
+
+  @override
+  String get settingsTabLogoutConfirmTitle => 'Log out of your account?';
+
+  @override
+  String get settingsTabLogoutConfirmBody =>
+      'Account data will be removed from this device.';
+
+  @override
+  String get settingsTabLogoutConfirm => 'Log out';
+
+  @override
+  String settingsTabLogoutFailed(String error) {
+    return 'Couldn\'t log out: $error';
+  }
+
+  @override
+  String get settingsTabSferumSignIn => 'Sign in to Sferum';
+
+  @override
+  String get settingsTabSferumTitle => 'Sferum';
+
+  @override
+  String get settingsTabCloudStorageBeta => 'Cloud storage [BETA]';
+
+  @override
+  String get settingsTabDevelopers => 'For developers';
+
+  @override
+  String get settingsTabLogout => 'Log out';
+
+  @override
+  String get settingsTabOnline => 'online';
+
+  @override
+  String settingsTabLastSeen(String time) {
+    return 'Last seen $time';
+  }
+
+  @override
+  String get settingsTabOffline => 'offline';
+
+  @override
+  String get folderEditTypeContacts => 'Contacts';
+
+  @override
+  String get folderEditTypeNonContacts => 'Non-contacts';
+
+  @override
+  String get folderEditTypeChannels => 'Channels';
+
+  @override
+  String get folderEditTypeBots => 'Bots';
+
+  @override
+  String get folderEditSavedMessages => 'Saved Messages';
+
+  @override
+  String get folderEditNoActiveAccount => 'No active account';
+
+  @override
+  String get folderEditSaveFailed => 'Couldn\'t save the folder';
+
+  @override
+  String folderEditDeleteConfirm(String title) {
+    return 'Delete the folder “$title”? The chats will stay where they are.';
+  }
+
+  @override
+  String get folderEditDeleteFailed => 'Couldn\'t delete the folder';
+
+  @override
+  String get folderEditNewTitle => 'New folder';
+
+  @override
+  String get folderEditEditTitle => 'Edit folder';
+
+  @override
+  String get folderEditNameHint => 'Folder name';
+
+  @override
+  String get folderEditChatTypesSection => 'CHAT TYPES';
+
+  @override
+  String get folderEditChatsSection => 'CHATS AND CHANNELS';
+
+  @override
+  String get folderEditSavedMessagesSubtitle => 'Messages to yourself';
+
+  @override
+  String get folderEditShowOnlySection => 'SHOW ONLY';
+
+  @override
+  String get folderEditNotMutedChats => 'Chats with notifications on';
+
+  @override
+  String get folderEditUnreadChats => 'Unread chats';
+
+  @override
+  String get folderEditClearSelection => 'Clear selection';
+
+  @override
+  String get folderEditDeleteFolder => 'Delete folder';
+
+  @override
+  String get folderEditCreate => 'Create folder';
+
+  @override
+  String get composerInputMuteNotifications => 'Mute notifications';
+
+  @override
+  String get composerInputForwardFromYou => 'Forwarding your message';
+
+  @override
+  String get composerInputForwardMessage => 'Forwarding a message';
+
+  @override
+  String composerInputForwardFrom(String name) {
+    return 'Forwarding from $name';
+  }
+
+  @override
+  String composerInputForwardCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Forwarding: $count messages',
+      one: 'Forwarding: 1 message',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String composerInputReplyTo(String name) {
+    return 'Reply to $name';
+  }
+
+  @override
+  String get composerInputSwipeToCancel => '‹ Swipe left to cancel';
+
+  @override
+  String get composerInputSwipeToCancelHint => '‹ swipe left to cancel';
+
+  @override
+  String get composerInputHistoryEmpty => 'history is empty...';
+
+  @override
+  String get createGroupFailed => 'Couldn\'t create the group';
+
+  @override
+  String get createGroupAvatarProcessFailed => 'Couldn\'t process the avatar';
+
+  @override
+  String get createGroupAvatarUploadFailed => 'Couldn\'t upload the avatar';
+
+  @override
+  String get createGroupSelectParticipants => 'Select participants';
+
+  @override
+  String get createGroupCancel => 'Cancel';
+
+  @override
+  String get createGroupNext => 'Next';
+
+  @override
+  String get createGroupTitle => 'Create group';
+
+  @override
+  String get createGroupNameHint => 'Group name';
+
+  @override
+  String get createGroupCreating => 'Creating...';
+
+  @override
+  String get createGroupCreate => 'Create';
+
+  @override
+  String controlBubbleQuotedTitle(String title) {
+    return '“$title”';
+  }
+
+  @override
+  String get controlBubbleCreatedByMe => ' created the chat';
+
+  @override
+  String get controlBubbleCreatedByOther => ' created the chat';
+
+  @override
+  String get controlBubbleAddedByMe => ' added ';
+
+  @override
+  String get controlBubbleAddedByOther => ' added ';
+
+  @override
+  String get controlBubbleLeftByMe => ' left the chat';
+
+  @override
+  String get controlBubbleLeftByOther => ' left the chat';
+
+  @override
+  String get controlBubbleJoinedByMe => ' joined the chat';
+
+  @override
+  String get controlBubbleJoinedByOther => ' joined the chat';
+
+  @override
+  String get controlBubblePinnedByMe => ' pinned a message';
+
+  @override
+  String get controlBubblePinnedByOther => ' pinned a message';
+
+  @override
+  String get controlBubbleRenamedByMe => ' changed the chat name';
+
+  @override
+  String get controlBubbleRenamedByOther => ' changed the chat name';
+
+  @override
+  String controlBubbleRenamedTo(String title) {
+    return ' to $title';
+  }
+
+  @override
+  String get controlBubblePhotoChangedByMe => ' changed the chat photo';
+
+  @override
+  String get controlBubblePhotoChangedByOther => ' changed the chat photo';
+
+  @override
+  String get controlBubbleBotStarted => 'Bot started';
+
+  @override
+  String get maxLinkNoPublicLink => 'This profile has no public link';
+
+  @override
+  String get maxLinkShareFailed => 'Couldn\'t share the link';
+
+  @override
+  String get maxLinkOpenProfileFailed => 'Couldn\'t open the profile';
+
+  @override
+  String get maxLinkOpenChatFailed => 'Couldn\'t open the chat';
+
+  @override
+  String get maxLinkJoinThisChatConfirm => 'Join this chat?';
+
+  @override
+  String maxLinkJoinChatConfirm(String title) {
+    return 'Join “$title”?';
+  }
+
+  @override
+  String get maxLinkProfileFallback => 'Profile';
+
+  @override
+  String get videoNoteCameraUnavailable => 'Camera unavailable';
+
+  @override
+  String get videoNoteNeedCameraAndMic =>
+      'Video messages need access to the camera and microphone';
+
+  @override
+  String get videoNoteNoMicAccess => 'No access to the microphone';
+
+  @override
+  String get videoNoteNoCameraAccess => 'No access to the camera';
+
+  @override
+  String get videoNoteCameraNotReady => 'The camera isn\'t ready yet';
+
+  @override
+  String get videoNoteStartFailed =>
+      'Couldn\'t start recording the video message';
+
+  @override
+  String get videoNoteSaveFailed => 'Couldn\'t save the video message';
+
+  @override
+  String get scheduleTimePickerTitle => 'Send later';
+
+  @override
+  String get scheduleTimePickerToday => 'Today';
+
+  @override
+  String get scheduleTimePickerTomorrow => 'Tomorrow';
+
+  @override
+  String get scheduleTimePickerTodayLower => 'today';
+
+  @override
+  String get scheduleTimePickerTomorrowLower => 'tomorrow';
+
+  @override
+  String scheduleTimePickerSendAt(String day, String time) {
+    return 'Send $day at $time';
+  }
+
+  @override
+  String get scheduleTimePickerPastTime => 'The time must be in the future';
+
+  @override
+  String get chatBackgroundSaveFailed => 'Couldn\'t save the wallpaper';
+
+  @override
+  String get chatBackgroundTitle => 'Chat background';
+
+  @override
+  String get chatBackgroundDescription =>
+      'This wallpaper applies to every chat that doesn\'t have its own background.';
+
+  @override
+  String get chatBackgroundTintTitle => 'Match the interface to the wallpaper';
+
+  @override
+  String get chatBackgroundTintSubtitle =>
+      'The app\'s accent color will be taken from the background';
+
+  @override
+  String get chatBackgroundPick => 'Choose wallpaper';
+
+  @override
+  String get chatBackgroundSampleIncoming => 'One background for all chats';
+
+  @override
+  String get chatBackgroundSampleOutgoing => 'Beautiful ✨';
+
+  @override
+  String get chatWallpaperPreviewTitle => 'Wallpaper';
+
+  @override
+  String get chatWallpaperPreviewBlur => 'Blur';
+
+  @override
+  String get chatWallpaperPreviewMotion => 'Motion';
+
+  @override
+  String get chatWallpaperPreviewDimming => 'Dimming';
+
+  @override
+  String get chatWallpaperPreviewSampleIncoming =>
+      'How about new wallpaper for this chat?';
+
+  @override
+  String get chatWallpaperPreviewSampleOutgoing => 'Great idea.';
+
+  @override
+  String get stickerPanelLoadFailed => 'Couldn\'t load stickers';
+
+  @override
+  String get stickerPanelEmpty => 'No stickers';
+
+  @override
+  String get stickerPanelEmojiTab => 'Emoji';
+
+  @override
+  String get stickerPanelStickersTab => 'Stickers';
+
+  @override
+  String get callBubbleGroupVideo => 'Group video call';
+
+  @override
+  String get callBubbleCanceledVideo => 'Canceled video call';
+
+  @override
+  String get callBubbleMissedVideo => 'Missed video call';
+
+  @override
+  String get callBubbleOutgoingVideo => 'Outgoing video call';
+
+  @override
+  String get callBubbleIncomingVideo => 'Incoming video call';
+
+  @override
+  String get callBubbleCanceled => 'Canceled call';
+
+  @override
+  String get callBubbleMissed => 'Missed call';
+
+  @override
+  String get callBubbleOutgoing => 'Outgoing call';
+
+  @override
+  String maxRouteUnsupported(String route) {
+    return 'Link not supported: $route';
+  }
+
+  @override
+  String maxRouteIncomplete(String route) {
+    return 'Incomplete link: $route';
+  }
+
+  @override
+  String get cloudStorageScreenExpired => 'expired';
+
+  @override
+  String cloudStorageScreenExpiresInDays(int days) {
+    return '$days d';
+  }
+
+  @override
+  String cloudStorageScreenExpiresInHours(int hours, int minutes) {
+    return '$hours h $minutes min';
+  }
+
+  @override
+  String cloudStorageScreenExpiresInMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get webQrScanTitle => 'QR for web and desktop';
+
+  @override
+  String get webQrScanCameraUnavailable => 'Camera unavailable';
+
+  @override
+  String get webQrScanHint =>
+      'Point the camera at the QR code on your computer screen';
+
+  @override
+  String get messageRowEditTitle => 'Edit message';
+
+  @override
+  String get locationBubbleOpenInMaps => 'Open in maps';
+
+  @override
+  String get commandArgumentsCancel => 'Cancel command';
+
+  @override
+  String commandArgumentsOptional(String name) {
+    return '$name · optional';
+  }
+
+  @override
+  String get storyRingYourStory => 'Your story';
+
+  @override
+  String formatBytesB(String value) {
+    return '$value B';
+  }
+
+  @override
+  String formatBytesKb(String value) {
+    return '$value KB';
+  }
+
+  @override
+  String formatBytesMb(String value) {
+    return '$value MB';
+  }
+
+  @override
+  String formatBytesGb(String value) {
+    return '$value GB';
+  }
+
+  @override
+  String formatApproxSeconds(String whole, String fraction) {
+    return '$whole.$fraction s';
+  }
+
+  @override
+  String formatApproxMinutes(String whole, String fraction) {
+    return '$whole.$fraction min';
+  }
+
+  @override
+  String get lastSeenJustNow => 'Last seen just now';
+
+  @override
+  String lastSeenMinutesAgo(int minutes) {
+    return 'Last seen $minutes min ago';
+  }
+
+  @override
+  String lastSeenHoursAgo(int hours) {
+    return 'Last seen $hours h ago';
+  }
+
+  @override
+  String lastSeenDaysAgo(int days) {
+    return 'Last seen $days d ago';
+  }
+
+  @override
+  String get genderMale => 'Male';
+
+  @override
+  String get genderFemale => 'Female';
+
+  @override
+  String get connectionStatusConnecting => 'Connecting...';
+
+  @override
+  String get connectionStatusWaitingForNetwork => 'Waiting for network...';
+
+  @override
+  String get chatActivityTyping => 'Typing...';
+
+  @override
+  String get chatActivityChoosingSticker => 'Choosing a sticker...';
+
+  @override
+  String chatActivityTypingOne(String name) {
+    return '$name is typing...';
+  }
+
+  @override
+  String chatActivityTypingTwo(String first, String second) {
+    return '$first and $second are typing...';
+  }
+
+  @override
+  String chatActivityTypingMany(String name, int count) {
+    return '$name and $count more are typing...';
+  }
+
+  @override
+  String chatActivityStickerOne(String name) {
+    return '$name is choosing a sticker...';
+  }
+
+  @override
+  String chatActivityStickerTwo(String first, String second) {
+    return '$first and $second are choosing stickers...';
+  }
+
+  @override
+  String chatActivityStickerMany(String name, int count) {
+    return '$name and $count more are choosing stickers...';
+  }
+
+  @override
+  String get shareTitleMessage => 'Send message';
+
+  @override
+  String get shareTitlePhoto => 'Send photo';
+
+  @override
+  String shareTitlePhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send $count photos',
+      one: 'Send $count photo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareTitleVideos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send $count videos',
+      one: 'Send $count video',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareTitleFiles(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Send $count files',
+      one: 'Send $count file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareSubtitleToChats(String names) {
+    return 'To $names';
+  }
+
+  @override
+  String shareSubtitleChatCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'To $count chats',
+      one: 'To $count chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pluginPermissionChatWrite => 'Send messages';
+
+  @override
+  String get pluginPermissionChatEdit => 'Edit sent messages';
+
+  @override
+  String get pluginPermissionUiNotify => 'Show notifications';
+
+  @override
+  String get pluginPermissionContactRead => 'Read the chat partner\'s data';
+
+  @override
+  String get pluginPermissionReplyRead =>
+      'Read the message the command replies to';
+
+  @override
+  String get pluginPermissionNetwork => 'Internet access';
+
+  @override
+  String get pluginPermissionPhotoWrite => 'Send photos';
+
+  @override
+  String get pluginPermissionFileWrite => 'Send files';
+
+  @override
+  String get pluginPermissionStorage => 'Plugin local storage';
+
+  @override
+  String pluginUpdateNewPermissions(String permissions) {
+    return 'The update requests new permissions: $permissions';
+  }
+
+  @override
+  String get transcriptionNotRecognized => 'Couldn\'t recognize the voice';
+
+  @override
+  String get chatWallpaperThemeOcean => 'Ocean';
+
+  @override
+  String get chatWallpaperThemeSunset => 'Sunset';
+
+  @override
+  String get chatWallpaperThemeLavender => 'Lavender';
+
+  @override
+  String get chatWallpaperThemeMint => 'Mint';
+
+  @override
+  String get chatWallpaperThemeGraphite => 'Graphite';
+
+  @override
+  String get chatWallpaperThemeSky => 'Sky';
+
+  @override
+  String get chatWallpaperThemePeach => 'Peach';
+
+  @override
+  String get chatWallpaperThemeForest => 'Forest';
+
+  @override
+  String get chatWallpaperThemeGrape => 'Grape';
+
+  @override
+  String get chatWallpaperThemeNight => 'Night';
+
+  @override
+  String get chatWallpaperThemeRose => 'Rose';
+
+  @override
+  String get chatWallpaperThemeAmber => 'Amber';
+
+  @override
+  String get mediaSaveFileNotFound => 'file not found';
+
+  @override
+  String get mediaSaveNoGalleryAccess => 'no access to the gallery';
+
+  @override
+  String get commandShrugDescription => 'send a kaomoji';
+
+  @override
+  String scheduleTimePickerDayLabel(String weekday, String date) {
+    return '$weekday, $date';
+  }
 }

@@ -90,10 +90,11 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
   }
 
   Future<void> _openFindUser() async {
+    final l10n = AppLocalizations.of(context)!;
     final found = await showFindUserSheet(
       context,
-      title: 'Найти контакт',
-      actionLabel: 'Найти',
+      title: l10n.contactsTabFindContact,
+      actionLabel: l10n.contactsTabFind,
     );
     if (found == null || !mounted) return;
     Navigator.of(context).push(
@@ -223,7 +224,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
     final labels = _labelsOf(contact);
     final nameToDisplay = labels.title;
     final subtitle = contact.updateTime > 0
-        ? 'Был(а) недавно'
+        ? AppLocalizations.of(context)!.contactsTabLastSeenRecently
         : labels.subtitle;
     final deleting = _deleting.contains(contact.id);
 
@@ -366,7 +367,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Контакты',
+                l10n.contactsTabTitle,
                 style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 24,
@@ -427,7 +428,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
                     ? Center(
                         child: Text(
                           _contacts.isEmpty
-                              ? 'Нет контактов'
+                              ? l10n.contactsTabEmpty
                               : l10n.contactsSearchEmpty,
                           style: TextStyle(
                             color: cs.onSurfaceVariant,

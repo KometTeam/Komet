@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../core/config/komet_settings.dart';
 import '../../../../core/utils/format.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../hint_bubble.dart';
 
 class MetaHintMark extends StatelessWidget {
@@ -45,7 +46,7 @@ class LikelyForwardedMark extends StatelessWidget {
   Widget build(BuildContext context) => MetaHintMark(
     enabled: KometSettings.showForward,
     icon: Symbols.forward,
-    hint: 'Сообщения скорее всего пересланы',
+    hint: AppLocalizations.of(context)!.metaMarksLikelyForwarded,
     color: color,
   );
 }
@@ -61,10 +62,13 @@ class TypingTimeMark extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => MetaHintMark(
-    enabled: KometSettings.showTypingTime,
-    icon: Symbols.timer,
-    hint: 'Сообщение печаталось примерно ~${formatApproxDuration(typingMs)}',
-    color: color,
-  );
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return MetaHintMark(
+      enabled: KometSettings.showTypingTime,
+      icon: Symbols.timer,
+      hint: l10n.metaMarksTypingTime(formatApproxDuration(l10n, typingMs)),
+      color: color,
+    );
+  }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../../../core/security/app_lock.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/confirm_dialog.dart';
 
 // #***! биометрия для мини-приложений: что есть на устройстве, согласие
@@ -18,10 +19,6 @@ class DeviceWebAppBiometry implements WebAppBiometry {
   const DeviceWebAppBiometry(this.contextResolver);
 
   final BuildContext? Function() contextResolver;
-
-  static const String _accessNotice =
-      'Мини-приложение сможет запрашивать подтверждение отпечатком или лицом.';
-  static const String _authReason = 'Подтвердите действие в мини-приложении';
 
   @override
   Future<List<String>> types() async {
@@ -41,17 +38,28 @@ class DeviceWebAppBiometry implements WebAppBiometry {
   Future<bool?> confirmAccess(String? reason) async {
     final context = contextResolver();
     if (context == null) return null;
+    final l10n = AppLocalizations.of(context)!;
+    final notice = l10n.webAppBiometryAccessNotice;
     return showConfirmDialog(
       context,
-      title: 'Разрешить биометрию?',
-      message: reason == null ? _accessNotice : '$_accessNotice\n\n$reason',
-      confirmLabel: 'Разрешить',
-      cancelLabel: 'Отклонить',
+      title: l10n.webAppBiometryAccessTitle,
+      message: reason == null ? notice : '$notice\n\n$reason',
+      confirmLabel: l10n.attachSheetAllow,
+      cancelLabel: l10n.joinRequestsDecline,
     );
   }
 
   @override
-  Future<bool> authenticate(String? reason) => AppLock.instance.external(
-    () => AppLock.instance.authenticateBiometric(reason ?? _authReason),
-  );
+  Future<bool> authenticate(String? reason) {
+    final context = contextResolver();
+    final prompt =
+        reason ??
+        (context == null
+            ? null
+            : AppLocalizations.of(context)!.webAppBiometryAuthReason);
+    if (prompt == null) return Future.value(false);
+    return AppLock.instance.external(
+      () => AppLock.instance.authenticateBiometric(prompt),
+    );
+  }
 }

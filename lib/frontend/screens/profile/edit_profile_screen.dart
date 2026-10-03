@@ -67,7 +67,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         showHintBubble(
           _firstNameFieldKey.currentContext ?? context,
-          'Имя не может быть пустым',
+          AppLocalizations.of(context)!.editProfileNameEmpty,
         );
       }
       return;
@@ -86,12 +86,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       KometApp.stateOf(context)?.notifyProfileUpdate();
       if (mounted) {
-        showCustomNotification(context, 'Профиль сохранён');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.editProfileSaved,
+        );
         setState(() => _isSaving = false);
       }
     } catch (e) {
       if (!mounted) return;
-      showCustomNotification(context, 'Ошибка: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.devicesGenericError('$e'),
+      );
       setState(() => _isSaving = false);
     }
   }
@@ -105,7 +111,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (path == null) return;
     if (await File(path).length() > kMaxAvatarBytes) {
       if (mounted) {
-        showCustomNotification(context, 'Картинка слишком большая (макс 8 МБ)');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.groupSettingsPhotoTooLarge,
+        );
       }
       return;
     }
@@ -115,7 +124,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final processed = await compressAvatarFile(path);
       if (processed == null) {
         if (!mounted) return;
-        showCustomNotification(context, 'Не удалось обработать изображение');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.contactLocalPhotoFailed,
+        );
         setState(() => _isSaving = false);
         return;
       }
@@ -127,7 +139,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
       if (token == null) {
         if (!mounted) return;
-        showCustomNotification(context, 'Не удалось загрузить аватарку');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.editProfileAvatarUploadFailed,
+        );
         setState(() => _isSaving = false);
         return;
       }
@@ -139,10 +154,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _isSaving = false;
       });
       KometApp.stateOf(context)?.notifyProfileUpdate();
-      showCustomNotification(context, 'Аватарка обновлена');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.editProfileAvatarUpdated,
+      );
     } catch (e) {
       if (!mounted) return;
-      showCustomNotification(context, 'Ошибка: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.devicesGenericError('$e'),
+      );
       setState(() => _isSaving = false);
     }
   }
@@ -157,12 +178,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       KometApp.stateOf(context)?.notifyProfileUpdate();
       if (mounted) {
-        showCustomNotification(context, 'Фото удалено');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.editProfilePhotoDeleted,
+        );
         setState(() => _isSaving = false);
       }
     } catch (e) {
       if (!mounted) return;
-      showCustomNotification(context, 'Ошибка: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.devicesGenericError('$e'),
+      );
       setState(() => _isSaving = false);
     }
   }

@@ -1032,7 +1032,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '$count ${_getBlockedCountText(count)}',
+                        l10n.securityScreenBlockedCount(count),
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 13,
@@ -1054,14 +1054,6 @@ class _SecurityScreenState extends State<SecurityScreen>
         ),
       ),
     );
-  }
-
-  String _getBlockedCountText(int count) {
-    if (count == 0) return 'контактов';
-    final mod = count % 10;
-    if (mod == 1 && count != 11) return 'контакт';
-    if (mod >= 2 && mod <= 4 && (count < 10 || count > 20)) return 'контакта';
-    return 'контактов';
   }
 
   Widget _settingsRow(

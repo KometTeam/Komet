@@ -11,6 +11,7 @@ import '../../../core/config/app_colors.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/transport/traffic_monitor.dart';
 import '../../../core/utils/format.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/hint_bubble.dart';
 import '../../../core/config/app_fonts.dart';
@@ -344,7 +345,7 @@ class _TrafficRow extends StatelessWidget {
                     if (e.byteSize != null) ...[
                       const SizedBox(width: 8),
                       Text(
-                        formatBytes(e.byteSize!),
+                        formatBytes(AppLocalizations.of(context)!, e.byteSize!),
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 11,

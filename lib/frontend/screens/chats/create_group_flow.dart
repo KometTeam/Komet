@@ -9,6 +9,7 @@ import '../../../backend/modules/contacts.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/image_utils.dart';
 import '../../../core/utils/names.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
@@ -110,7 +111,10 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
     final size = await file.length();
     if (size > kMaxAvatarBytes) {
       if (!mounted) return;
-      showCustomNotification(context, 'Картинка слишком большая (макс 8 МБ)');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.groupSettingsPhotoTooLarge,
+      );
       return;
     }
     if (!mounted) return;
@@ -120,6 +124,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
   Future<void> _create() async {
     final title = _title.text.trim();
     if (title.isEmpty || _creating) return;
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _creating = true);
     final navigator = Navigator.of(context, rootNavigator: true);
     try {
@@ -130,7 +135,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
       );
       if (!mounted) return;
       if (chat == null) {
-        showCustomNotification(context, 'Не удалось создать группу');
+        showCustomNotification(context, l10n.createGroupFailed);
         setState(() => _creating = false);
         return;
       }
@@ -141,7 +146,10 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
           final bytes = await compressAvatarFile(_avatar!.path);
           if (bytes == null) {
             if (mounted) {
-              showCustomNotification(context, 'Не удалось обработать аватарку');
+              showCustomNotification(
+                context,
+                l10n.createGroupAvatarProcessFailed,
+              );
             }
           } else {
             final token = await fileUploader.uploadImage(
@@ -152,7 +160,10 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
             if (token != null) {
               await chats.setChatPhoto(api, chatId: chat.id, photoToken: token);
             } else if (mounted) {
-              showCustomNotification(context, 'Не удалось загрузить аватарку');
+              showCustomNotification(
+                context,
+                l10n.createGroupAvatarUploadFailed,
+              );
             }
           }
         }
@@ -172,13 +183,15 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
       );
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Ошибка: $e');
+        showCustomNotification(context, l10n.devicesGenericError('$e'));
         setState(() => _creating = false);
       }
     }
   }
 
-  String _statusText(CachedContact c) => c.isBot ? 'Бот' : 'Был(-а) недавно';
+  String _statusText(AppLocalizations l10n, CachedContact c) => c.isBot
+      ? l10n.contactProfileBot
+      : l10n.contactProfileRecentlyActive;
 
   @override
   Widget build(BuildContext context) {
@@ -223,6 +236,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
 
   Widget _buildPickerStep() {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final query = _search.text.trim().toLowerCase();
     final filtered = query.isEmpty
         ? _all
@@ -244,7 +258,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
             children: [
               Expanded(
                 child: Text(
-                  'Выберите участников',
+                  l10n.createGroupSelectParticipants,
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 18,
@@ -283,7 +297,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
             onChanged: (_) => setState(() {}),
             style: TextStyle(color: cs.onSurface, fontSize: 14),
             decoration: InputDecoration(
-              hintText: 'Найти по имени',
+              hintText: l10n.membersSearchHint,
               hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
               prefixIcon: Icon(
                 Symbols.search,
@@ -341,7 +355,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    _statusText(c),
+                                    _statusText(l10n, c),
                                     style: TextStyle(
                                       color: cs.onSurfaceVariant.withValues(
                                         alpha: 0.8,
@@ -381,7 +395,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
             children: [
               Expanded(
                 child: SheetButton(
-                  label: 'Отменить',
+                  label: l10n.createGroupCancel,
                   filled: false,
                   onTap: () => Navigator.pop(context),
                 ),
@@ -389,7 +403,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
               const SizedBox(width: 12),
               Expanded(
                 child: SheetButton(
-                  label: 'Далее',
+                  label: l10n.createGroupNext,
                   filled: true,
                   onTap: () => setState(() => _step = _Step.groupDetails),
                 ),
@@ -403,6 +417,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
 
   Widget _buildDetailsStep() {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final canCreate = _title.text.trim().isNotEmpty && !_creating;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -419,7 +434,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
               ),
               Expanded(
                 child: Text(
-                  'Создать группу',
+                  l10n.createGroupTitle,
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 18,
@@ -465,7 +480,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
                   enabled: !_creating,
                   style: TextStyle(color: cs.onSurface, fontSize: 16),
                   decoration: InputDecoration(
-                    hintText: 'Название группы',
+                    hintText: l10n.createGroupNameHint,
                     hintStyle: TextStyle(
                       color: cs.onSurfaceVariant,
                       fontSize: 16,
@@ -484,7 +499,7 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
             children: [
               Expanded(
                 child: SheetButton(
-                  label: 'Отменить',
+                  label: l10n.createGroupCancel,
                   filled: false,
                   onTap: _creating ? null : () => Navigator.pop(context),
                 ),
@@ -492,7 +507,9 @@ class _CreateGroupFlowState extends State<_CreateGroupFlow> {
               const SizedBox(width: 12),
               Expanded(
                 child: SheetButton(
-                  label: _creating ? 'Создаю...' : 'Создать',
+                  label: _creating
+                      ? l10n.createGroupCreating
+                      : l10n.createGroupCreate,
                   filled: true,
                   onTap: canCreate ? _create : null,
                 ),

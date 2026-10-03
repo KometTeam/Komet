@@ -28,6 +28,7 @@ import '../contacts/find_user_sheet.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/toast_placement.dart';
 import '../../widgets/sliding_pill_nav.dart';
 import '../../widgets/springy_tap.dart';
 import '../../widgets/visible_page_tickers.dart';
@@ -248,13 +249,13 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   int _currentNavIndex = 0;
 
-  static const List<PillNavItem> _chatsNavItems = [
-    PillNavItem(icon: Symbols.chat_bubble, label: 'Чаты'),
-    PillNavItem(icon: Symbols.call, label: 'Звонки'),
-    PillNavItem(icon: Symbols.person_pin, label: 'Контакты'),
+  List<PillNavItem> _chatsNavItems(AppLocalizations l10n) => [
+    PillNavItem(icon: Symbols.chat_bubble, label: l10n.chatListNavChats),
+    PillNavItem(icon: Symbols.call, label: l10n.chatListNavCalls),
+    PillNavItem(icon: Symbols.person_pin, label: l10n.chatListNavContacts),
     PillNavItem(
       icon: Symbols.settings,
-      label: 'Настройки',
+      label: l10n.attachSheetSettings,
       longPressable: true,
       animationAsset: AppAnimations.settings,
     ),
@@ -431,7 +432,8 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   List<String> get _shareRecipientNames => [
-    for (final id in _selectedChats) _selectedChatNames[id] ?? 'Чат',
+    for (final id in _selectedChats)
+      _selectedChatNames[id] ?? AppLocalizations.of(context)!.hubChatTileTitle,
   ];
 
   Future<void> _sendShare(RichMessageContent content) async {
@@ -468,7 +470,10 @@ class _ChatListScreenState extends State<ChatListScreen>
 
     if (result == null) {
       Haptics.error();
-      showCustomNotification(context, 'Не удалось отправить');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatListShareSendFailed,
+      );
       return;
     }
 
@@ -476,13 +481,17 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (targets.length == 1) {
       final chatId = targets.first;
       final chat = _chats.where((c) => c.id == chatId).firstOrNull;
+      final name =
+          _selectedChatNames[chatId.toString()] ??
+          chat?.title ??
+          AppLocalizations.of(context)!.hubChatTileTitle;
       navigator.pop();
       unawaited(
         pushSwipeable(
           navigator.context,
           (_) => ChatScreen(
             chatId: chatId,
-            name: _selectedChatNames[chatId.toString()] ?? chat?.title ?? 'Чат',
+            name: name,
             imageUrl: chat?.iconUrl ?? '',
             chatType: chat?.type ?? 'DIALOG',
           ),
@@ -499,6 +508,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (prepared == null || controller == null) return const SizedBox.shrink();
     if (_selectedChats.isEmpty) return const SizedBox.shrink();
     return ShareComposerBar.forShare(
+      l10n: AppLocalizations.of(context)!,
       share: prepared,
       controller: controller,
       recipientNames: _shareRecipientNames,
@@ -684,7 +694,9 @@ class _ChatListScreenState extends State<ChatListScreen>
         context,
         errors.length == 1
             ? errors.first
-            : 'Не удалось изменить ${errors.length} чат(ов): ${errors.first}',
+            : AppLocalizations.of(
+                context,
+              )!.chatListMuteFailedCount(errors.length, errors.first),
       );
     }
     _clearSelection();
@@ -740,7 +752,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (cats.contains(_DeleteKind.blocked) || cats.length > 1) {
       showCustomNotification(
         context,
-        'Статус чатов изменился, попробуйте ещё раз',
+        AppLocalizations.of(context)!.chatListDeleteStatusChanged,
       );
       return;
     }
@@ -777,6 +789,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     _DeleteKind kind,
   ) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final count = selected.length;
     final single = count == 1 ? selected.first : null;
 
@@ -786,18 +799,22 @@ class _ChatListScreenState extends State<ChatListScreen>
     switch (kind) {
       case _DeleteKind.personalLike:
         title = single != null
-            ? 'Удалить чат с ${single.title ?? ''}?'
-            : 'Удалить $count чатов?';
-        body = 'Восстановить переписку не получится';
-        primaryLabel = count == 1 ? 'Удалить чат' : 'Удалить';
+            ? l10n.chatListDeleteChatWith(single.title ?? '')
+            : l10n.chatListDeleteChatsCount(count);
+        body = l10n.chatListDeleteIrreversible;
+        primaryLabel = count == 1
+            ? l10n.chatInfoDeleteChatTitle
+            : l10n.chatInfoDeleteChatConfirm;
       case _DeleteKind.ownerGroup:
         title = single != null
-            ? 'Хотите удалить чат «${single.title ?? ''}»?'
-            : 'Удалить $count групп у всех?';
+            ? l10n.chatListDeleteOwnedChat(single.title ?? '')
+            : l10n.chatListDeleteGroupsForAll(count);
         body = single != null
-            ? 'Передайте права владельца, чтобы остальные участники могли продолжить общение'
-            : 'Действие нельзя отменить';
-        primaryLabel = count == 1 ? 'Удалить чат у всех' : 'Удалить у всех';
+            ? l10n.chatListDeleteOwnedChatBody
+            : l10n.chatListDeleteCannotUndo;
+        primaryLabel = count == 1
+            ? l10n.chatListDeleteChatForAll
+            : l10n.chatListDeleteForAll;
       case _DeleteKind.blocked:
         return Future.value(null);
     }
@@ -843,7 +860,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               setSheetState(() => forAll = v ?? false),
                         ),
                         Text(
-                          'Для всех',
+                          l10n.chatInfoClearHistoryForAll,
                           style: TextStyle(color: cs.onSurface, fontSize: 15),
                         ),
                       ],
@@ -860,7 +877,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                       borderRadius: BorderRadius.circular(22),
                     ),
                     child: Text(
-                      'Передать права и выйти',
+                      l10n.channelDeleteTransfer,
                       style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.4),
                         fontSize: 14,
@@ -1083,7 +1100,9 @@ class _ChatListScreenState extends State<ChatListScreen>
         .map((s) => s!.trim())
         .join(' ');
     return StoryOwnerInfo(
-      name: name.isEmpty ? 'Вы' : name,
+      name: name.isEmpty
+          ? AppLocalizations.of(context)!.callParticipantYou
+          : name,
       avatarUrl: p.baseUrl,
     );
   }
@@ -1093,7 +1112,10 @@ class _ChatListScreenState extends State<ChatListScreen>
     final self = _selfOwnerInfo();
     if (me == null || self == null) return const {};
     return {
-      me: StoryOwnerInfo(name: 'Ваша история', avatarUrl: self.avatarUrl),
+      me: StoryOwnerInfo(
+        name: AppLocalizations.of(context)!.chatListYourStory,
+        avatarUrl: self.avatarUrl,
+      ),
     };
   }
 
@@ -1218,11 +1240,6 @@ class _ChatListScreenState extends State<ChatListScreen>
       final foldersKnown = await foldersKnownFuture;
       final contactIds = (await contactsFuture).map((c) => c.id).toSet();
 
-      const allChatsFolder = ChatFolder(
-        id: FoldersModule.allChatsFolderId,
-        title: 'Все чаты',
-      );
-
       if (widget.archiveMode) {
         folders = const [];
       } else {
@@ -1233,7 +1250,12 @@ class _ChatListScreenState extends State<ChatListScreen>
           folders = folders
               .where((f) => !FoldersModule.isAllChatsFolder(f))
               .toList();
-        } else if (!folders.any((f) => FoldersModule.isAllChatsFolder(f))) {
+        } else if (mounted &&
+            !folders.any((f) => FoldersModule.isAllChatsFolder(f))) {
+          final allChatsFolder = ChatFolder(
+            id: FoldersModule.allChatsFolderId,
+            title: AppLocalizations.of(context)!.chatListAllChatsFolder,
+          );
           folders = [allChatsFolder, ...folders];
         }
       }
@@ -2040,13 +2062,21 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         child: Text(
                                           _picksRecipients &&
                                                   _selectedChats.isNotEmpty
-                                              ? '${_selectedChats.length} '
-                                                    '${pluralRu(_selectedChats.length, 'получатель', 'получателя', 'получателей')}'
+                                              ? AppLocalizations.of(
+                                                  context,
+                                                )!.chatListRecipientsCount(
+                                                  _selectedChats.length,
+                                                )
                                               : connectionStatusLabel(
+                                                      AppLocalizations.of(
+                                                        context,
+                                                      )!,
                                                       _sessionState,
                                                     ) ??
                                                     (_profile?.firstName ??
-                                                        'Чат'),
+                                                        AppLocalizations.of(
+                                                          context,
+                                                        )!.hubChatTileTitle),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -2100,12 +2130,16 @@ class _ChatListScreenState extends State<ChatListScreen>
                                       itemBuilder: (context) => [
                                         _buildPopupMenuItem(
                                           1,
-                                          'Избранное',
+                                          AppLocalizations.of(
+                                            context,
+                                          )!.chatListSavedMessages,
                                           Symbols.bookmark,
                                         ),
                                         _buildPopupMenuItem(
                                           2,
-                                          'Прочитать всё',
+                                          AppLocalizations.of(
+                                            context,
+                                          )!.chatListReadAll,
                                           Symbols.done_all,
                                         ),
                                       ],
@@ -2150,8 +2184,12 @@ class _ChatListScreenState extends State<ChatListScreen>
                                       const SizedBox(width: 10),
                                       Text(
                                         widget.forwardMode
-                                            ? 'Пересылка...'
-                                            : 'Поиск',
+                                            ? AppLocalizations.of(
+                                                context,
+                                              )!.chatListForwardingHint
+                                            : AppLocalizations.of(
+                                                context,
+                                              )!.chatInfoMembersSearchHint,
                                         style: TextStyle(
                                           color: cs.outline,
                                           fontSize: 15,
@@ -2284,7 +2322,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             SliverFillRemaining(
               child: Center(
                 child: Text(
-                  'Кажется, тут пусто...',
+                  AppLocalizations.of(context)!.chatListEmpty,
                   style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.6),
                     fontSize: 16,
@@ -2340,13 +2378,16 @@ class _ChatListScreenState extends State<ChatListScreen>
 
                         final isPlaceholder = chat.isLastMsgDeleted;
                         final previewText = isPlaceholder
-                            ? 'зайдите в чат для подгрузки'
+                            ? AppLocalizations.of(context)!.chatListOpenToLoad
                             : (chat.lastMsgTextOneLine ?? '');
                         return _animateChatTile(
                           chat.id.toString(),
                           _buildChatItem(
                             chat.id.toString(),
-                            name ?? "Пользователь",
+                            name ??
+                                AppLocalizations.of(
+                                  context,
+                                )!.msgActionsReadByUnknownUser,
                             previewText,
                             _formatTime(chat.lastMsgTime),
                             avatar ?? "",
@@ -2397,7 +2438,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ? "$sender: "
                             : "";
                         final body = isPlaceholder
-                            ? 'зайдите в чат для подгрузки'
+                            ? AppLocalizations.of(context)!.chatListOpenToLoad
                             : isSavedWelcome
                             ? AppLocalizations.of(
                                 context,
@@ -2408,7 +2449,14 @@ class _ChatListScreenState extends State<ChatListScreen>
                           chat.id.toString(),
                           _buildChatItem(
                             chat.id.toString(),
-                            chat.id == 0 ? "Избранное" : chat.title ?? "Чат",
+                            chat.id == 0
+                                ? AppLocalizations.of(
+                                    context,
+                                  )!.chatListSavedMessages
+                                : chat.title ??
+                                      AppLocalizations.of(
+                                        context,
+                                      )!.hubChatTileTitle,
                             body,
                             _formatTime(chat.lastMsgTime),
                             (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
@@ -2606,20 +2654,22 @@ class _ChatListScreenState extends State<ChatListScreen>
                             4) /
                         inactiveWidth
                   : _currentNavIndex.toDouble();
-              return SlidingPillNav(
-                items: _chatsNavItems,
-                position: position,
-                animationDuration: _navDragging
-                    ? Duration.zero
-                    : const Duration(milliseconds: 350),
-                geometry: geometry,
-                iconSize: 20,
-                labelGap: 4,
-                backdropKey: _frostBackdrop,
-                onTap: _onNavTabSelected,
-                onItemLongPress: (index, pos) {
-                  if (index == 3) _openAccountSwitcher(pos);
-                },
+              return ToastObstruction(
+                child: SlidingPillNav(
+                  items: _chatsNavItems(AppLocalizations.of(context)!),
+                  position: position,
+                  animationDuration: _navDragging
+                      ? Duration.zero
+                      : const Duration(milliseconds: 350),
+                  geometry: geometry,
+                  iconSize: 20,
+                  labelGap: 4,
+                  backdropKey: _frostBackdrop,
+                  onTap: _onNavTabSelected,
+                  onItemLongPress: (index, pos) {
+                    if (index == 3) _openAccountSwitcher(pos);
+                  },
+                ),
               );
             },
           ),
@@ -2812,47 +2862,49 @@ class _ChatListScreenState extends State<ChatListScreen>
                           Positioned(
                             right: 20,
                             bottom: bottomInset + 90,
-                            child: ValueListenableBuilder<VisualStyle>(
-                              valueListenable: AppVisualStyle.current,
-                              builder: (context, style, child) =>
-                                  ValueListenableBuilder<NavPillStyle>(
-                                    valueListenable: AppNavPillStyle.current,
-                                    builder: (context, navStyle, child) {
-                                      final liquid =
-                                          style.glossyChrome &&
-                                          NavPillMaterial.isLiquid(navStyle);
-                                      final frost =
-                                          style.glossyChrome &&
-                                          NavPillMaterial.isFrost(navStyle);
-                                      return GlossyPill(
-                                        onTap: _toggleFab,
-                                        color: frost || liquid
-                                            ? AppFrost.glassTint(cs)
-                                            : cs.primaryContainer,
-                                        blurSigma: frost
-                                            ? AppFrost.sigma
-                                            : null,
-                                        liquid: liquid,
-                                        backdropKey: _frostBackdrop,
-                                        borderRadius: BorderRadius.circular(28),
-                                        elevated: true,
-                                        depth: 12,
-                                        child: child!,
-                                      );
-                                    },
-                                    child: child,
-                                  ),
-                              child: SizedBox(
-                                width: 56,
-                                height: 56,
-                                child: Center(
-                                  child: Transform.rotate(
-                                    angle: val * (pi / 4),
-                                    child: Icon(
-                                      Symbols.add,
-                                      color: cs.onPrimaryContainer,
-                                      size: 28,
-                                      weight: 400,
+                            child: ToastObstruction(
+                              child: ValueListenableBuilder<VisualStyle>(
+                                valueListenable: AppVisualStyle.current,
+                                builder: (context, style, child) =>
+                                    ValueListenableBuilder<NavPillStyle>(
+                                      valueListenable: AppNavPillStyle.current,
+                                      builder: (context, navStyle, child) {
+                                        final liquid =
+                                            style.glossyChrome &&
+                                            NavPillMaterial.isLiquid(navStyle);
+                                        final frost =
+                                            style.glossyChrome &&
+                                            NavPillMaterial.isFrost(navStyle);
+                                        return GlossyPill(
+                                          onTap: _toggleFab,
+                                          color: frost || liquid
+                                              ? AppFrost.glassTint(cs)
+                                              : cs.primaryContainer,
+                                          blurSigma: frost
+                                              ? AppFrost.sigma
+                                              : null,
+                                          liquid: liquid,
+                                          backdropKey: _frostBackdrop,
+                                          borderRadius: BorderRadius.circular(28),
+                                          elevated: true,
+                                          depth: 12,
+                                          child: child!,
+                                        );
+                                      },
+                                      child: child,
+                                    ),
+                                child: SizedBox(
+                                  width: 56,
+                                  height: 56,
+                                  child: Center(
+                                    child: Transform.rotate(
+                                      angle: val * (pi / 4),
+                                      child: Icon(
+                                        Symbols.add,
+                                        color: cs.onPrimaryContainer,
+                                        size: 28,
+                                        weight: 400,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -2906,7 +2958,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             ),
             const SizedBox(width: 4),
             Text(
-              'Архив',
+              AppLocalizations.of(context)!.chatListArchive,
               style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 20,
@@ -3002,7 +3054,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Архив',
+                AppLocalizations.of(context)!.chatListArchive,
                 style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 16,
@@ -3143,7 +3195,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             selfInfo: selfInfo == null
                 ? null
                 : StoryOwnerInfo(
-                    name: 'Ваша история',
+                    name: AppLocalizations.of(context)!.chatListYourStory,
                     avatarUrl: selfInfo.avatarUrl,
                   ),
             onOpen: (center) => _openStories(myIndex < 0 ? 0 : myIndex, center),
@@ -3162,7 +3214,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   Future<void> _composeStory() async {
     await showAttachmentSheet(
       context,
-      title: 'Новая история',
+      title: AppLocalizations.of(context)!.chatListNewStory,
       onSend: (photos, caption) async {
         if (photos.isEmpty) return;
         final picked = photos.first;
@@ -3175,7 +3227,9 @@ class _ChatListScreenState extends State<ChatListScreen>
           if (mounted) {
             showCustomNotification(
               context,
-              isVideo ? 'Не удалось открыть видео' : 'Не удалось открыть фото',
+              isVideo
+                  ? AppLocalizations.of(context)!.chatListOpenVideoFailed
+                  : AppLocalizations.of(context)!.chatListOpenPhotoFailed,
             );
           }
           return;
@@ -3344,7 +3398,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         TextSpan(
           children: [
             TextSpan(
-              text: 'Черновик: ',
+              text: AppLocalizations.of(context)!.chatListDraftPrefix,
               style: TextStyle(color: cs.error),
             ),
             TextSpan(
@@ -3548,7 +3602,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               ),
               MessageDecryptionState.wrongKey => _buildPreviewLine(
                 cs,
-                'неверный ключ',
+                AppLocalizations.of(context)!.chatListPreviewWrongKey,
                 const [],
                 draft,
                 true,
@@ -3556,7 +3610,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               ),
               MessageDecryptionState.unavailable => _buildPreviewLine(
                 cs,
-                'недоступно на этом устройстве',
+                AppLocalizations.of(context)!.chatListPreviewUnavailable,
                 const [],
                 draft,
                 true,
@@ -4010,13 +4064,14 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _buildFabMenu() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         _buildFabMenuItem(
           Symbols.edit_square,
-          'Написать человеку',
+          l10n.chatListMessagePerson,
           onTap: () {
             _toggleFab();
             unawaited(_messagePerson());
@@ -4025,7 +4080,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         const SizedBox(height: 4),
         _buildFabMenuItem(
           Symbols.group_add,
-          'Создать группу',
+          l10n.chatListCreateGroup,
           onTap: () {
             _toggleFab();
             showCreateGroupFlow(context);
@@ -4034,7 +4089,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         const SizedBox(height: 4),
         _buildFabMenuItem(
           Symbols.campaign,
-          'Создать канал',
+          l10n.chatListCreateChannel,
           onTap: () {
             _toggleFab();
             showCreateChannelFlow(context);
@@ -4043,7 +4098,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         const SizedBox(height: 4),
         _buildFabMenuItem(
           Symbols.person_add,
-          'Создать контакт',
+          l10n.chatListCreateContact,
           onTap: () {
             _toggleFab();
             showAddContactSheet(context);
@@ -4052,7 +4107,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         const SizedBox(height: 4),
         _buildFabMenuItem(
           Symbols.create_new_folder,
-          'Создать папку',
+          l10n.chatListCreateFolder,
           onTap: () {
             _toggleFab();
             showFolderEditSheet(context);
@@ -4065,8 +4120,8 @@ class _ChatListScreenState extends State<ChatListScreen>
   Future<void> _messagePerson() async {
     final found = await showFindUserSheet(
       context,
-      title: 'Написать человеку',
-      actionLabel: 'Написать',
+      title: AppLocalizations.of(context)!.chatListMessagePerson,
+      actionLabel: AppLocalizations.of(context)!.chatListMessageAction,
     );
     if (found == null || !mounted) return;
     _openChatFromList(
@@ -4148,7 +4203,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       chatId: chatId,
       name:
           chat?.title ??
-          (record.sourceName.trim().isEmpty ? 'Чат' : record.sourceName.trim()),
+          (record.sourceName.trim().isEmpty
+              ? AppLocalizations.of(context)!.hubChatTileTitle
+              : record.sourceName.trim()),
       imageUrl: chat?.iconUrl ?? '',
       chatType: chat?.type ?? 'CHAT',
       initialMessageId: messageId,
@@ -4182,11 +4239,12 @@ class _ChatListScreenState extends State<ChatListScreen>
         break;
       }
     }
+    final name = AppLocalizations.of(context)!.chatListSavedMessages;
     pushSwipeable(
       context,
       (_) => ChatScreen(
         chatId: 0,
-        name: 'Избранное',
+        name: name,
         imageUrl: self?.iconUrl ?? '',
         chatType: self?.type ?? 'DIALOG',
       ),
@@ -4206,7 +4264,12 @@ class _ChatListScreenState extends State<ChatListScreen>
         .where((c) => !CloudStorageModule.isCloudStorageGroup(c))
         .toList();
     if (targets.isEmpty) {
-      if (mounted) showCustomNotification(context, 'Непрочитанных чатов нет');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.chatListNoUnreadChats,
+        );
+      }
       return;
     }
     for (final c in targets) {
@@ -4219,7 +4282,10 @@ class _ChatListScreenState extends State<ChatListScreen>
       );
     }
     if (mounted) {
-      showCustomNotification(context, 'Все чаты отмечены прочитанными');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatListAllMarkedRead,
+      );
     }
   }
 

@@ -19,6 +19,7 @@ import '../../../../core/media/gallery_source.dart';
 import '../../../../core/media/video_transcoder.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../main.dart';
 import '../../../../models/attachment.dart';
 import '../../../../models/sticker.dart';
@@ -59,6 +60,9 @@ class ChatMediaSendController {
 
   int get _myId => chatController.myId;
   int get _chatId => chatController.chatId;
+
+  AppLocalizations get _l10n =>
+      AppLocalizations.of(KometApp.navigatorKey.currentContext!)!;
 
   bool get _e2eeActive => E2eeService.instance.isActive(_myId, _chatId);
 
@@ -188,7 +192,7 @@ class ChatMediaSendController {
       if (serverMsg == null) {
         if (mounted) {
           updateFileMessageStatus(tempId, 'error');
-          notify('Ошибка отправки');
+          notify(_l10n.cloudStorageSendError);
         } else {
           _previewInChatList(
             tempMessage.copyWith(status: 'error'),
@@ -208,7 +212,7 @@ class ChatMediaSendController {
     } catch (e) {
       if (!isMounted()) return;
       updateFileMessageStatus(tempId, 'error');
-      notify('Ошибка: $e');
+      notify(_l10n.devicesGenericError('$e'));
     }
   }
 
@@ -243,7 +247,7 @@ class ChatMediaSendController {
   Future<Position?> _resolveCurrentPosition() async {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        if (isMounted()) notify('Включите геолокацию');
+        if (isMounted()) notify(_l10n.chatMediaSendEnableLocation);
         return null;
       }
       var permission = await Geolocator.checkPermission();
@@ -252,7 +256,7 @@ class ChatMediaSendController {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        if (isMounted()) notify('Нет доступа к геолокации');
+        if (isMounted()) notify(_l10n.chatMediaSendNoLocationAccess);
         return null;
       }
       return await Geolocator.getCurrentPosition(
@@ -261,7 +265,7 @@ class ChatMediaSendController {
         ),
       );
     } catch (e) {
-      if (isMounted()) notify('Не удалось получить геопозицию');
+      if (isMounted()) notify(_l10n.chatMediaSendLocationFailed);
       return null;
     }
   }
@@ -387,12 +391,12 @@ class ChatMediaSendController {
         showAttachmentPanel.value = false;
       } else {
         updateFileMessageStatus(tempId, 'error');
-        notify('Ошибка отправки');
+        notify(_l10n.cloudStorageSendError);
       }
       return ok;
     } catch (e) {
       updateFileMessageStatus(tempId, 'error');
-      if (isMounted()) notify('Ошибка: $e');
+      if (isMounted()) notify(_l10n.devicesGenericError('$e'));
       return false;
     }
   }
@@ -531,7 +535,7 @@ class ChatMediaSendController {
     CachedMessage? placeholder;
 
     if (scheduledTime != null) {
-      notify('Загрузка…');
+      notify(_l10n.fontSettingsLoading);
     } else {
       placeholder = CachedMessage(
         id: tempId,
@@ -620,11 +624,11 @@ class ChatMediaSendController {
     if (jobs.isEmpty || !isMounted()) return;
 
     if (encryptionEnabled()) {
-      notify('Отложенные фото в зашифрованном чате пока не поддерживаются');
+      notify(_l10n.chatMediaSendScheduledEncryptedPhotos);
       return;
     }
 
-    notify('Загрузка…');
+    notify(_l10n.fontSettingsLoading);
     unawaited(
       UploadService.instance.sendPhotos(
         accountId: _myId,
@@ -643,7 +647,7 @@ class ChatMediaSendController {
   ) async {
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
     if (photos.length != picked.length && isMounted()) {
-      notify('Видео пока нельзя зашифровать');
+      notify(_l10n.chatMediaSendVideoNotEncryptable);
     }
     if (photos.isEmpty) return;
 
@@ -671,7 +675,7 @@ class ChatMediaSendController {
         if (e2eePhoto == null || wire == null) {
           uploadStatus.value = const UploadStatus();
           if (isMounted()) {
-            notify('Не удалось зашифровать фото');
+            notify(_l10n.chatMediaSendPhotoEncryptFailed);
           }
           return;
         }
@@ -703,8 +707,8 @@ class ChatMediaSendController {
         uploadStatus.value = const UploadStatus();
         notify(
           prepared.failure == CryptoFailure.noKey
-              ? 'Не задан ключ шифрования'
-              : 'Не удалось зашифровать фото',
+              ? _l10n.chatMediaSendNoEncryptionKey
+              : _l10n.chatMediaSendPhotoEncryptFailed,
         );
         return;
       }
@@ -850,18 +854,19 @@ class ChatMediaSendController {
   }
 
   String _uploadFailureText(UploadKind kind, String reason) {
+    final l10n = _l10n;
     final detail = switch (reason) {
-      'no_upload_url' => 'сервер не выдал ссылку',
-      'upload_failed' => 'загрузка отклонена',
-      'send_failed' => 'сервер не принял сообщение',
+      'no_upload_url' => l10n.chatMediaSendNoUploadUrl,
+      'upload_failed' => l10n.chatMediaSendUploadRejected,
+      'send_failed' => l10n.chatMediaSendServerRejected,
       _ => reason,
     };
     return switch (kind) {
-      UploadKind.file => 'Файл не отправлен: $detail',
-      UploadKind.videoNote => 'Кружок не отправлен: $detail',
-      UploadKind.voice => 'Голосовое не отправлено: $detail',
-      UploadKind.photo => 'Фото не отправлено: $detail',
-      UploadKind.video => 'Видео не отправлено: $detail',
+      UploadKind.file => l10n.chatMediaSendFileFailed(detail),
+      UploadKind.videoNote => l10n.chatMediaSendVideoNoteFailed(detail),
+      UploadKind.voice => l10n.chatMediaSendVoiceFailed(detail),
+      UploadKind.photo => l10n.chatMediaSendPhotoFailed(detail),
+      UploadKind.video => l10n.chatMediaSendVideoFailed(detail),
     };
   }
 
@@ -875,9 +880,13 @@ class ChatMediaSendController {
         final at = event.scheduledTime;
         notify(
           at == null
-              ? 'Запланировано'
-              : 'Запланировано на '
-                    '${formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(at))}',
+              ? _l10n.chatMediaSendScheduled
+              : _l10n.chatMediaSendScheduledAt(
+                  formatDateTimeWords(
+                    _l10n,
+                    DateTime.fromMillisecondsSinceEpoch(at),
+                  ),
+                ),
         );
         return;
       }
@@ -891,7 +900,7 @@ class ChatMediaSendController {
     } else if (event is UploadJobFailed) {
       if (event.scheduled) {
         Haptics.error();
-        notify('Не удалось запланировать');
+        notify(_l10n.chatMediaSendScheduleFailed);
         return;
       }
       failPhotoMessage(event.tempId);

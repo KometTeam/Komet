@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../l10n/app_localizations.dart';
 import '../../../../widgets/small_spinner.dart';
 
 // #***! плашка с датой между группами сообщений
@@ -13,33 +14,17 @@ class DateSeparatorLabel extends StatelessWidget {
     this.floating = false,
   });
 
-  static String _formatDateLabel(DateTime date) {
+  static String _formatDateLabel(AppLocalizations l10n, DateTime date) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
     final d = DateTime(date.year, date.month, date.day);
 
-    if (d == today) return 'Сегодня';
-    if (d == yesterday) return 'Вчера';
+    if (d == today) return l10n.messageListToday;
+    if (d == yesterday) return l10n.messageListYesterday;
 
-    const months = [
-      'января',
-      'февраля',
-      'марта',
-      'апреля',
-      'мая',
-      'июня',
-      'июля',
-      'августа',
-      'сентября',
-      'октября',
-      'ноября',
-      'декабря',
-    ];
-    if (date.year == now.year) {
-      return '${date.day} ${months[date.month - 1]}';
-    }
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
+    if (date.year == now.year) return l10n.messageListDateThisYear(date);
+    return l10n.messageListDateOtherYear(date);
   }
 
   @override
@@ -55,7 +40,7 @@ class DateSeparatorLabel extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
-            _formatDateLabel(date),
+            _formatDateLabel(AppLocalizations.of(context)!, date),
             style: TextStyle(
               color: cs.onSurfaceVariant,
               fontSize: 12,
@@ -92,7 +77,7 @@ class UnreadSeparatorBar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Text(
-              'Непрочитанные сообщения',
+              AppLocalizations.of(context)!.messageListUnreadMessages,
               style: TextStyle(
                 color: accent,
                 fontSize: 12,

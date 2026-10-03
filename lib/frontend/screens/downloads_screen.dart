@@ -124,11 +124,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           : SaveMediaKind.image,
     );
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     showCustomNotification(
       context,
       result.ok
-          ? 'Сохранено в галерею'
-          : 'Не удалось сохранить: ${result.error ?? ''}',
+          ? l10n.photoViewerSavedToGallery
+          : l10n.notificationsSaveFailed(result.errorText(l10n)),
     );
   }
 
@@ -141,9 +142,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       dialogTitle: AppLocalizations.of(context)!.photoViewerSaveAs,
     );
     if (!mounted || result.cancelled) return;
+    final l10n = AppLocalizations.of(context)!;
     showCustomNotification(
       context,
-      result.saved ? 'Файл сохранён' : 'Не удалось сохранить файл',
+      result.saved ? l10n.photoViewerFileSaved : l10n.photoViewerSaveFileFailed,
     );
   }
 
@@ -386,7 +388,7 @@ class _DownloadTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    '${formatBytes(record.size)} · $source',
+                    '${formatBytes(l10n, record.size)} · $source',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),

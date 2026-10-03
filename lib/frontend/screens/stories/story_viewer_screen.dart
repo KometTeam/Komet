@@ -22,6 +22,7 @@ import '../../widgets/small_spinner.dart';
 import 'story_owner_info.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../l10n/app_localizations.dart';
 
 const Duration _photoDuration = Duration(seconds: 5);
 
@@ -397,7 +398,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         return SafeArea(
           child: ListTile(
             leading: Icon(Symbols.delete, color: cs.error),
-            title: Text('Удалить', style: TextStyle(color: cs.error)),
+            title: Text(
+              AppLocalizations.of(sheetContext)!.msgActionsDelete,
+              style: TextStyle(color: cs.error),
+            ),
             onTap: () => Navigator.of(sheetContext).pop(true),
           ),
         );
@@ -407,12 +411,13 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   }
 
   Future<bool> _confirmDelete() async {
+    final l10n = AppLocalizations.of(context)!;
     final choice = await showBlurredConfirm(
       context,
-      title: 'Удалить историю?',
-      message: 'История пропадёт у всех, кто может её посмотреть.',
-      confirmLabel: 'Удалить',
-      cancelLabel: 'Отмена',
+      title: l10n.storyViewerDeleteTitle,
+      message: l10n.storyViewerDeleteMessage,
+      confirmLabel: l10n.msgActionsDelete,
+      cancelLabel: l10n.chatInfoActionCancel,
       destructive: true,
     );
     return choice.confirmed;
@@ -427,11 +432,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       if (!mounted) return;
       setState(() => _deleting = false);
       final reason = e is PacketError ? e.message : null;
+      final l10n = AppLocalizations.of(context)!;
       showCustomNotification(
         context,
         reason == null || reason.isEmpty
-            ? 'Не удалось удалить историю'
-            : 'Не удалось удалить историю: $reason',
+            ? l10n.storyViewerDeleteFailed
+            : l10n.storyViewerDeleteFailedWithReason(reason),
       );
       return;
     }
@@ -552,11 +558,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                   )
                 : (loading
                       ? const SizedBox.expand(key: ValueKey('loading'))
-                      : const Center(
-                          key: ValueKey('empty'),
+                      : Center(
+                          key: const ValueKey('empty'),
                           child: Text(
-                            'Историй нет',
-                            style: TextStyle(
+                            AppLocalizations.of(context)!.storyViewerEmpty,
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 16,
                             ),
@@ -654,7 +660,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                   ),
                   if (story != null && story.time > 0)
                     Text(
-                      _timeAgo(story.time),
+                      _timeAgo(AppLocalizations.of(context)!, story.time),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.8),
                         fontSize: 12,
@@ -835,13 +841,13 @@ class _TopScrim extends StatelessWidget {
   }
 }
 
-String _timeAgo(int epochTime) {
+String _timeAgo(AppLocalizations l10n, int epochTime) {
   final ms = epochTime < 1000000000000 ? epochTime * 1000 : epochTime;
   final diff = (DateTime.now().millisecondsSinceEpoch - ms) ~/ 1000;
-  if (diff < 60) return 'только что';
-  if (diff < 3600) return '${diff ~/ 60} мин';
-  if (diff < 86400) return '${diff ~/ 3600} ч';
-  return '${diff ~/ 86400} дн';
+  if (diff < 60) return l10n.storyViewerJustNow;
+  if (diff < 3600) return l10n.storyViewerMinutesAgo(diff ~/ 60);
+  if (diff < 86400) return l10n.storyViewerHoursAgo(diff ~/ 3600);
+  return l10n.storyViewerDaysAgo(diff ~/ 86400);
 }
 
 // #***! превью декодируется один раз на историю: вертикальный свайп гонит

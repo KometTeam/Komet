@@ -18,8 +18,8 @@ import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../core/utils/media_cache.dart';
-import '../../../../backend/modules/messages.dart'
-    show TranscriptionCache, TranscriptionResult;
+import '../../../../l10n/app_localizations.dart';
+import '../../../../backend/modules/messages.dart' show TranscriptionCache;
 import '../../../../models/attachment.dart';
 import '../../small_spinner.dart';
 import '../../upload_progress_ring.dart';
@@ -460,7 +460,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   void _adoptCachedTranscription() {
     final cached = TranscriptionCache.get(_sourceMessageId);
     if (cached == null || cached.status != 1) return;
-    _transcriptionText = cached.text ?? TranscriptionResult.emptyText;
+    _transcriptionText = cached.text ?? '';
     _transcriptionVisible = TranscriptionCache.isExpanded(_sourceMessageId);
   }
 
@@ -478,6 +478,13 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     TranscriptionCache.setExpanded(_sourceMessageId, true);
   }
 
+  String _transcriptionLabel(AppLocalizations l10n) =>
+      switch (_transcriptionText) {
+        null => '',
+        '' => l10n.transcriptionNotRecognized,
+        final text => text,
+      };
+
   Future<void> _requestTranscription() async {
     final videoId = _videoId;
     if (videoId == null || _transcriptionLoading) return;
@@ -491,9 +498,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     }
     final cached = TranscriptionCache.get(_sourceMessageId);
     if (cached != null && cached.status == 1) {
-      setState(
-        () => _showTranscription(cached.text ?? TranscriptionResult.emptyText),
-      );
+      setState(() => _showTranscription(cached.text ?? ''));
       return;
     }
 
@@ -509,14 +514,13 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
       setState(() {
         _transcriptionLoading = false;
         if (result.status == 1) {
-          final text = result.text;
-          _showTranscription(
-            text == null || text.isEmpty ? TranscriptionResult.emptyText : text,
-          );
+          _showTranscription(result.text ?? '');
         } else if (result.status == 0) {
           _transcriptionLoading = true;
         } else {
-          _showTranscription('Не удалось распознать');
+          _showTranscription(
+            AppLocalizations.of(context)!.videoNoteBubbleTranscriptionFailed,
+          );
         }
       });
     } catch (e) {
@@ -524,7 +528,9 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
       if (!mounted) return;
       setState(() {
         _transcriptionLoading = false;
-        _showTranscription('Не удалось распознать');
+        _showTranscription(
+          AppLocalizations.of(context)!.videoNoteBubbleTranscriptionFailed,
+        );
       });
     }
   }
@@ -687,7 +693,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
       child: SingleChildScrollView(
         physics: const ClampingScrollPhysics(),
         child: Text(
-          _transcriptionText ?? '',
+          _transcriptionLabel(AppLocalizations.of(context)!),
           style: TextStyle(
             color: widget.textColor.withValues(alpha: 0.8),
             fontSize: 13,

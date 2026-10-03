@@ -387,7 +387,7 @@ class _ChatScreenState extends State<ChatScreen>
       Haptics.error();
       showHintBubble(
         _messageKeys[message.id]?.currentContext ?? context,
-        'Не удалось обновить реакцию',
+        AppLocalizations.of(context)!.chatScreenReactionUpdateFailed,
       );
       return;
     }
@@ -745,7 +745,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (mounted) showCustomNotification(context, msg);
       },
       isMounted: () => mounted,
-      contextOf: () => context,
+      l10nOf: () => AppLocalizations.of(context)!,
       chatOf: () => chat,
       encryptOutgoing: _encryptOutgoing,
       executeCommand: _executeCommand,
@@ -835,6 +835,7 @@ class _ChatScreenState extends State<ChatScreen>
       isMounted: () => mounted,
       notifyState: setState,
       showNotification: (message) => showCustomNotification(context, message),
+      localizations: () => AppLocalizations.of(context)!,
       initialMessageIdOf: () => widget.initialMessageId,
       initialMessageTimeOf: () => widget.initialMessageTime,
       onNavigated: _maybeLoadMoreHistory,
@@ -1106,7 +1107,10 @@ class _ChatScreenState extends State<ChatScreen>
       );
       if (!mounted) return false;
       if (sent == null) {
-        showCustomNotification(context, 'Не удалось запустить бота');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.chatScreenBotStartFailed,
+        );
         return false;
       }
       await _chatController.persistOutgoing(
@@ -1114,7 +1118,12 @@ class _ChatScreenState extends State<ChatScreen>
       );
       return true;
     } catch (_) {
-      if (mounted) showCustomNotification(context, 'Не удалось запустить бота');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.chatScreenBotStartFailed,
+        );
+      }
       return false;
     }
   }
@@ -1277,7 +1286,10 @@ class _ChatScreenState extends State<ChatScreen>
   void _forwardMessageById(String messageId) {
     final message = _chatController.byId(messageId);
     if (message == null) {
-      showCustomNotification(context, 'Сообщение не загружено');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatScreenMessageNotLoaded,
+      );
       return;
     }
     unawaited(_forwardMessages([message]));
@@ -1406,7 +1418,10 @@ class _ChatScreenState extends State<ChatScreen>
     );
     if (!mounted) return;
     if (unread == null) {
-      showCustomNotification(context, 'Не удалось пометить непрочитанным');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatScreenMarkUnreadFailed,
+      );
       return;
     }
     _leaveChat();
@@ -1594,7 +1609,10 @@ class _ChatScreenState extends State<ChatScreen>
       showCustomNotification(context, error);
       return;
     }
-    showCustomNotification(context, 'Сообщение закреплено');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.chatScreenMessagePinned,
+    );
   }
 
   void _unpinCurrentMessage() {
@@ -2673,7 +2691,10 @@ class _ChatScreenState extends State<ChatScreen>
         .join('\n\n');
     Clipboard.setData(ClipboardData(text: text));
     Haptics.tap();
-    showCustomNotification(context, 'Скопировано');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.msgActionsCopied,
+    );
     _clearSelection();
   }
 
@@ -2726,7 +2747,10 @@ class _ChatScreenState extends State<ChatScreen>
         .where((message) => int.tryParse(message.id) != null)
         .toList();
     if (forwardable.isEmpty) {
-      showCustomNotification(context, 'Нечего пересылать');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatScreenNothingToForward,
+      );
       return;
     }
     if (_encryptionEnabled) {
@@ -2932,7 +2956,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     if (!ok) {
       Haptics.error();
-      showCustomNotification(context, 'Не удалось изменить сообщение');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.scheduledEditFailed,
+      );
       return;
     }
 
@@ -3003,6 +3030,9 @@ class _ChatScreenState extends State<ChatScreen>
     final accountId = _myId;
     final ids = messages.map((m) => m.id).toList();
     final overlay = Overlay.of(context, rootOverlay: true);
+    final deleteFailedText = AppLocalizations.of(
+      context,
+    )!.chatScreenDeleteMessagesFailed;
     final pending = PendingMessageDeletions.instance..hold(chatId, messages);
     ids.forEach(_startDeleteAnimation);
     void restore() {
@@ -3027,10 +3057,7 @@ class _ChatScreenState extends State<ChatScreen>
           restore();
           Haptics.error();
           if (overlay.mounted) {
-            showCustomNotificationOnOverlay(
-              overlay,
-              'Не удалось удалить сообщения',
-            );
+            showCustomNotificationOnOverlay(overlay, deleteFailedText);
           }
           return;
         }
@@ -3070,6 +3097,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<bool?> _showDeleteMessageDialog(bool canForEveryone) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     var alsoForEveryone = canForEveryone;
     return showDialog<bool>(
       context: context,
@@ -3079,13 +3107,13 @@ class _ChatScreenState extends State<ChatScreen>
             return AlertDialog(
               backgroundColor: cs.surfaceContainerHigh,
               shape: AppShape.dialogBorder,
-              title: const Text('Удалить сообщение'),
+              title: Text(l10n.chatScreenDeleteMessageTitle),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Вы точно хотите удалить это сообщение?',
+                    l10n.chatScreenDeleteMessageConfirm,
                     style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
                   ),
                   if (canForEveryone) ...[
@@ -3105,7 +3133,7 @@ class _ChatScreenState extends State<ChatScreen>
                           ),
                           Expanded(
                             child: Text(
-                              'Также удалить для ${widget.name}',
+                              l10n.chatScreenDeleteAlsoFor(widget.name),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -3123,12 +3151,15 @@ class _ChatScreenState extends State<ChatScreen>
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Отмена'),
+                  child: Text(l10n.chatInfoActionCancel),
                 ),
                 TextButton(
                   onPressed: () =>
                       Navigator.pop(ctx, canForEveryone && alsoForEveryone),
-                  child: Text('Удалить', style: TextStyle(color: cs.error)),
+                  child: Text(
+                    l10n.msgActionsDelete,
+                    style: TextStyle(color: cs.error),
+                  ),
                 ),
               ],
             );
@@ -3278,6 +3309,7 @@ class _ChatScreenState extends State<ChatScreen>
     final box = btnContext.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final anchorRect = box.localToGlobal(Offset.zero) & box.size;
+    final l10n = AppLocalizations.of(context)!;
     showChatMenu(
       context: context,
       anchorRect: anchorRect,
@@ -3285,7 +3317,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (_hasMiniApp)
           ChatMenuItem(
             icon: Symbols.apps,
-            label: AppLocalizations.of(context)!.miniAppOpen,
+            label: l10n.miniAppOpen,
             dividerAfter: true,
             onTap: () => unawaited(_openMiniApp()),
           ),
@@ -3294,30 +3326,34 @@ class _ChatScreenState extends State<ChatScreen>
               ? Symbols.volume_off
               : Symbols.volume_up,
           label: (chat?.isMuted ?? false)
-              ? 'Включить уведомления'
-              : 'Отключить уведомления',
+              ? l10n.notificationsFkmEnableLabel
+              : l10n.chatScreenMenuMute,
           dividerAfter: true,
           onTap: _toggleChatMute,
         ),
-        ChatMenuItem(icon: Symbols.search, label: 'Поиск', onTap: _openSearch),
+        ChatMenuItem(
+          icon: Symbols.search,
+          label: l10n.chatInfoMembersSearchHint,
+          onTap: _openSearch,
+        ),
         ChatMenuItem(
           icon: Symbols.wallpaper,
-          label: 'Изменить обои',
+          label: l10n.chatScreenMenuChangeWallpaper,
           onTap: _openWallpaperSheet,
         ),
         ChatMenuItem(
           icon: Symbols.mop,
-          label: 'Очистить историю',
+          label: l10n.chatInfoMenuClearHistory,
           onTap: _clearHistory,
         ),
         ChatMenuItem(
           icon: _encryptionEnabled ? Symbols.lock : Symbols.lock_open,
-          label: 'Шифрование сообщений',
+          label: l10n.chatScreenMenuEncryption,
           onTap: _openEncryptionSettings,
         ),
         ChatMenuItem(
           icon: Symbols.delete,
-          label: 'Удалить чат',
+          label: l10n.chatInfoMenuDeleteChat,
           onTap: _deleteChat,
         ),
       ],
@@ -3326,6 +3362,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _subscribeChannel() async {
     if (_subscribing) return;
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _subscribing = true);
     try {
       var link = _channelLink;
@@ -3334,7 +3371,7 @@ class _ChatScreenState extends State<ChatScreen>
         link = info?['link'] as String?;
       }
       if (link == null || link.isEmpty) {
-        throw const PacketError('Не удалось получить ссылку чата');
+        throw PacketError(l10n.chatScreenChatLinkUnavailable);
       }
       final result = await chats.joinChannel(api, link, _myId);
       if (!mounted) return;
@@ -3351,8 +3388,8 @@ class _ChatScreenState extends State<ChatScreen>
       showCustomNotification(
         context,
         widget.chatType == 'CHANNEL'
-            ? 'Вы подписались на канал'
-            : 'Вы вступили в группу',
+            ? l10n.chatInfoSubscribed
+            : l10n.chatInfoJoinedGroup,
       );
     } catch (e) {
       if (!mounted) return;
@@ -3362,8 +3399,8 @@ class _ChatScreenState extends State<ChatScreen>
         e is PacketError
             ? e.message
             : (widget.chatType == 'CHANNEL'
-                  ? 'Не удалось подписаться'
-                  : 'Не удалось вступить'),
+                  ? l10n.chatScreenSubscribeFailed
+                  : l10n.chatScreenJoinFailed),
       );
     }
   }
@@ -3386,7 +3423,9 @@ class _ChatScreenState extends State<ChatScreen>
     setState(() => chat = current.copyWith(dontDisturbUntil: target));
     showCustomNotification(
       context,
-      muted ? 'Уведомления включены' : 'Уведомления отключены',
+      muted
+          ? AppLocalizations.of(context)!.chatInfoNotificationsOn
+          : AppLocalizations.of(context)!.chatInfoNotificationsOff,
     );
   }
 
@@ -3516,7 +3555,10 @@ class _ChatScreenState extends State<ChatScreen>
     );
     if (!mounted) return;
     if (wp == null) {
-      showCustomNotification(context, 'Не удалось сохранить обои');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatScreenWallpaperSaveFailed,
+      );
       return;
     }
     _applyEffectiveWallpaper();
@@ -3531,16 +3573,15 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _clearHistory() async {
     final current = chat;
     final canClearForAll = _canActForAll;
+    final l10n = AppLocalizations.of(context)!;
     final choice = await showBlurredConfirm(
       context,
-      title: 'Очистить историю',
-      message:
-          'Все сообщения в этом чате будут удалены без возможности '
-          'восстановления.',
-      confirmLabel: 'Очистить',
-      cancelLabel: 'Отмена',
+      title: l10n.chatInfoClearHistoryTitle,
+      message: l10n.chatInfoClearHistoryMessage,
+      confirmLabel: l10n.chatInfoClearHistoryConfirm,
+      cancelLabel: l10n.chatInfoActionCancel,
       destructive: true,
-      checkboxLabel: canClearForAll ? 'Для всех' : null,
+      checkboxLabel: canClearForAll ? l10n.chatInfoClearHistoryForAll : null,
     );
     if (!mounted || !choice.confirmed) return;
     final err = await chats.clearHistory(
@@ -3565,14 +3606,15 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _deleteChat() async {
     final canDeleteForAll = _canActForAll;
+    final l10n = AppLocalizations.of(context)!;
     final choice = await showBlurredConfirm(
       context,
-      title: 'Удалить чат',
-      message: 'Чат будет удалён вместе со всей перепиской.',
-      confirmLabel: 'Удалить',
-      cancelLabel: 'Отмена',
+      title: l10n.chatInfoDeleteChatTitle,
+      message: l10n.chatInfoDeleteChatMessage,
+      confirmLabel: l10n.chatInfoDeleteChatConfirm,
+      cancelLabel: l10n.chatInfoActionCancel,
       destructive: true,
-      checkboxLabel: canDeleteForAll ? 'Для всех' : null,
+      checkboxLabel: canDeleteForAll ? l10n.chatInfoClearHistoryForAll : null,
     );
     if (!mounted || !choice.confirmed) return;
     final lastEventTime = chat?.lastEventTime ?? 0;
@@ -3593,7 +3635,10 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _startCall() async {
     if (widget.chatType != 'DIALOG' || _peerIsBot) {
-      showCustomNotification(context, 'Звонки доступны только в диалогах');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatScreenCallsDialogsOnly,
+      );
       return;
     }
     // Звонок уже идёт (возможно, свёрнут) — просто открываем его экран снова.
@@ -3629,7 +3674,10 @@ class _ChatScreenState extends State<ChatScreen>
       _onCallScreenClosed();
     } catch (_) {
       if (!mounted) return;
-      showCustomNotification(context, 'Не удалось начать звонок');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatInfoCallFailed,
+      );
     }
   }
 
@@ -3694,24 +3742,25 @@ class _ChatScreenState extends State<ChatScreen>
       widget.chatType == 'CHAT' || widget.chatType == 'CHANNEL';
 
   String _headerStatus() {
-    final conn = connectionStatusLabel(api.state);
+    final l10n = AppLocalizations.of(context)!;
+    final conn = connectionStatusLabel(l10n, api.state);
     if (conn != null) return conn;
     final activity = ChatActivityStore.instance.snapshot(widget.chatId);
     if (activity != null) {
-      return chatActivityLabel(activity, withNames: _isGroupChat);
+      return chatActivityLabel(l10n, activity, withNames: _isGroupChat);
     }
     if (widget.chatType == 'CHAT') {
-      final count = _memberCount;
-      return '$count участников';
+      return l10n.chatScreenMembersCount(_memberCount);
     }
     if (widget.chatType == 'CHANNEL') {
-      final count = _memberCount;
-      return '$count подписчиков';
+      return l10n.chatScreenSubscribersCount(_memberCount);
     }
-    if (_otherStatus == 1) return 'В сети';
-    if (_otherStatus == 2 || _otherStatus == 3) return 'Был(-а) недавно';
+    if (_otherStatus == 1) return l10n.contactProfileOnline;
+    if (_otherStatus == 2 || _otherStatus == 3) {
+      return l10n.contactProfileRecentlyActive;
+    }
     final s = _otherSeenTime;
-    if (s != null && s > 0) return formatLastSeen(s);
+    if (s != null && s > 0) return formatLastSeen(l10n, s);
     return '';
   }
 
@@ -3756,28 +3805,28 @@ class _ChatScreenState extends State<ChatScreen>
     _syncOtherReadTime();
   }
 
-  static String _formatLabel(TextFormat format) {
+  static String _formatLabel(AppLocalizations l10n, TextFormat format) {
     switch (format) {
       case TextFormat.heading:
-        return 'Заголовок';
+        return l10n.chatScreenFormatHeading;
       case TextFormat.strong:
-        return 'Жирный';
+        return l10n.chatScreenFormatBold;
       case TextFormat.emphasized:
-        return 'Курсив';
+        return l10n.chatScreenFormatItalic;
       case TextFormat.underline:
-        return 'Подчёркнутый';
+        return l10n.chatScreenFormatUnderline;
       case TextFormat.strikethrough:
-        return 'Зачёркнутый';
+        return l10n.chatScreenFormatStrikethrough;
       case TextFormat.monospaced:
-        return 'Моноширинный';
+        return l10n.chatScreenFormatMonospace;
       case TextFormat.quote:
-        return 'Цитата';
+        return l10n.chatScreenFormatQuote;
       case TextFormat.link:
-        return 'Ссылка';
+        return l10n.contactProfileInfoLink;
       case TextFormat.animoji:
         return 'Animoji';
       case TextFormat.userMention:
-        return 'Упоминание';
+        return l10n.chatScreenFormatMention;
     }
   }
 
@@ -3790,11 +3839,12 @@ class _ChatScreenState extends State<ChatScreen>
     final selection = controller.selection;
     final buttonItems = <ContextMenuButtonItem>[];
     if (selection.isValid && !selection.isCollapsed) {
+      final l10n = AppLocalizations.of(context)!;
       for (final format in composerFormats) {
         final active = controller.isFormatActive(format);
         buttonItems.add(
           ContextMenuButtonItem(
-            label: '${active ? '✓ ' : ''}${_formatLabel(format)}',
+            label: '${active ? '✓ ' : ''}${_formatLabel(l10n, format)}',
             onPressed: () {
               controller.toggleFormat(format);
               editableState.hideToolbar();
@@ -3868,7 +3918,10 @@ class _ChatScreenState extends State<ChatScreen>
     final messageIdNum = int.tryParse(message.id);
     if (messageIdNum == null) {
       if (mounted) {
-        showCustomNotification(context, 'Не удалось отправить жалобу');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.chatInfoComplaintFailed,
+        );
       }
       return false;
     }
@@ -3882,7 +3935,9 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return ok;
     showCustomNotification(
       context,
-      ok ? 'Жалоба отправлена' : 'Не удалось отправить жалобу',
+      ok
+          ? AppLocalizations.of(context)!.chatInfoComplaintSent
+          : AppLocalizations.of(context)!.chatInfoComplaintFailed,
     );
     return ok;
   }
@@ -3923,7 +3978,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (mounted && notify) {
           showCustomNotification(
             context,
-            'Слишком длинное сообщение. Разделите на несколько',
+            AppLocalizations.of(context)!.chatScreenMessageTooLong,
           );
         }
         return null;
@@ -3934,8 +3989,8 @@ class _ChatScreenState extends State<ChatScreen>
       showCustomNotification(
         context,
         result.failure == CryptoFailure.noKey
-            ? 'Не задан ключ шифрования'
-            : 'Не удалось зашифровать сообщение',
+            ? AppLocalizations.of(context)!.chatScreenEncryptionKeyMissing
+            : AppLocalizations.of(context)!.e2eeEncryptFailed,
       );
     }
     return null;
@@ -4004,7 +4059,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _sendPluginFile(Uint8List bytes, String filename) async {
     if (_encryptionEnabled) {
-      throw StateError('Файлы плагинов пока нельзя зашифровать');
+      throw StateError(
+        AppLocalizations.of(context)!.chatScreenPluginFilesEncryptUnsupported,
+      );
     }
     final file = await _pluginTempFile(bytes, filename);
     try {
@@ -4038,7 +4095,9 @@ class _ChatScreenState extends State<ChatScreen>
       if (missing != null) {
         showCustomNotification(
           context,
-          'Не указан аргумент ${missing.name}. Формат: ${command.usage}',
+          AppLocalizations.of(
+            context,
+          )!.chatScreenCommandMissingArgument(missing.name, command.usage),
         );
         return;
       }
@@ -4048,7 +4107,10 @@ class _ChatScreenState extends State<ChatScreen>
       _textSend.replySourceChatId = null;
     } catch (error) {
       if (!mounted) return;
-      showCustomNotification(context, 'Ошибка плагина: $error');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatScreenPluginError('$error'),
+      );
     }
   }
 
@@ -4060,7 +4122,7 @@ class _ChatScreenState extends State<ChatScreen>
       final field = _commandArgumentFocusNodes[missing.name];
       showHintBubble(
         field?.context ?? context,
-        'Заполните поле ${missing.name}',
+        AppLocalizations.of(context)!.chatScreenCommandFillField(missing.name),
       );
       field?.requestFocus();
       return;
@@ -4077,7 +4139,10 @@ class _ChatScreenState extends State<ChatScreen>
       _closeSelectedCommand();
     } catch (error) {
       if (!mounted) return;
-      showCustomNotification(context, 'Ошибка плагина: $error');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatScreenPluginError('$error'),
+      );
     } finally {
       if (mounted) setState(() => _commandExecuting = false);
     }
@@ -4121,14 +4186,18 @@ class _ChatScreenState extends State<ChatScreen>
       _messageController.clear();
       Haptics.send();
       _markHasScheduled();
+      final l10n = AppLocalizations.of(context)!;
       showCustomNotification(
         context,
-        'Запланировано на ${formatDateTimeWords(when)}',
+        l10n.chatScreenScheduledFor(formatDateTimeWords(l10n, when)),
       );
     } catch (_) {
       if (!mounted) return;
       Haptics.error();
-      showCustomNotification(context, 'Не удалось запланировать сообщение');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatScreenScheduleFailed,
+      );
     }
   }
 
@@ -4238,7 +4307,10 @@ class _ChatScreenState extends State<ChatScreen>
     final reply = _replyTo.value;
     if (reply == null) return;
     if (reply.id.startsWith('temp_')) {
-      showCustomNotification(context, 'Сообщение ещё не отправлено');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatScreenMessageNotSentYet,
+      );
       return;
     }
 
@@ -4306,7 +4378,10 @@ class _ChatScreenState extends State<ChatScreen>
   ) async {
     final sourceChatId = forwarded.originalChatId;
     if (sourceChatId == null) {
-      showCustomNotification(context, 'Канал недоступен');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatScreenChannelUnavailable,
+      );
       return;
     }
     final sourceMessageId = forwarded.originalMessageId;
@@ -4331,11 +4406,14 @@ class _ChatScreenState extends State<ChatScreen>
     final cached = await chats.getChat(_myId, sourceChatId);
     if (!mounted) return;
     final channel = cached.isEmpty ? null : cached.first;
+    final fallbackName = AppLocalizations.of(
+      context,
+    )!.chatScreenChannelFallback;
     pushSwipeable(
       context,
       (_) => ChatScreen(
         chatId: sourceChatId,
-        name: channel?.title ?? forwarded.originalSenderName ?? 'Канал',
+        name: channel?.title ?? forwarded.originalSenderName ?? fallbackName,
         imageUrl: channel?.iconUrl ?? forwarded.originalSenderAvatar ?? '',
         chatType: channel?.type ?? 'CHANNEL',
         initialMessageId: sourceMessageId,
@@ -4347,7 +4425,10 @@ class _ChatScreenState extends State<ChatScreen>
   void _openStickerPack(StickerAttachment sticker) {
     final stickerId = int.tryParse(sticker.stickerId ?? '');
     if (stickerId == null) {
-      showCustomNotification(context, 'Стикерпак недоступен');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.stickerPackSheetUnavailable,
+      );
       return;
     }
     showStickerPackSheet(
@@ -4396,11 +4477,12 @@ class _ChatScreenState extends State<ChatScreen>
 
 
   String _searchSenderName(int senderId) {
-    if (senderId == _myId) return 'Вы';
+    final l10n = AppLocalizations.of(context)!;
+    if (senderId == _myId) return l10n.playbackPillYou;
     final cached = ContactCache.get(senderId);
     if (cached != null && cached.isNotEmpty) return cached;
     if (widget.chatType == 'DIALOG') return widget.name;
-    return 'Пользователь';
+    return l10n.msgActionsReadByUnknownUser;
   }
 
   String? _searchSenderAvatar(int senderId) {
@@ -5182,18 +5264,18 @@ class _ChatScreenState extends State<ChatScreen>
               separate: true,
             ),
       onPickFile: _encryptionEnabled
-          ? () => _refuseUnencrypted('Файлы')
+          ? () => _refuseUnencrypted((l) => l.chatScreenNoEncryptFiles)
           : (scheduledTime == null
                 ? _pickAndUploadFile
                 : () => _pickAndUploadFile(scheduledTime: scheduledTime)),
       onShareLocation: _encryptionEnabled
-          ? () => _refuseUnencrypted('Геолокацию')
+          ? () => _refuseUnencrypted((l) => l.chatScreenNoEncryptLocation)
           : _mediaSend.shareLocation,
       onCreatePoll: _encryptionEnabled
-          ? () => _refuseUnencrypted('Опросы')
+          ? () => _refuseUnencrypted((l) => l.chatScreenNoEncryptPolls)
           : _createPoll,
       onSendContact: _encryptionEnabled
-          ? (_) => _refuseUnencrypted('Контакты')
+          ? (_) => _refuseUnencrypted((l) => l.chatScreenNoEncryptContacts)
           : _mediaSend.sendContact,
     );
     if (!mounted || !hadKeyboard) return;
@@ -5236,10 +5318,10 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  void _refuseUnencrypted(String what) {
+  void _refuseUnencrypted(String Function(AppLocalizations l10n) message) {
     if (!mounted) return;
     _showAttachmentPanel.value = false;
-    showCustomNotification(context, '$what пока нельзя зашифровать');
+    showCustomNotification(context, message(AppLocalizations.of(context)!));
   }
 
   ContextMenuButtonItem? _pasteMenuItem(
@@ -5311,7 +5393,7 @@ class _ChatScreenState extends State<ChatScreen>
     final media = items.where((it) => it.isMedia).toList();
     final documents = items.where((it) => !it.isMedia).toList();
     if (_encryptionEnabled && documents.isNotEmpty) {
-      _refuseUnencrypted('Файлы');
+      _refuseUnencrypted((l) => l.chatScreenNoEncryptFiles);
       if (media.isEmpty) return;
       documents.clear();
     }

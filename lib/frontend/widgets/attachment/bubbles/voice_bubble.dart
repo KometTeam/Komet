@@ -10,6 +10,7 @@ import '../../../../core/media/media_playback.dart';
 import '../../../../core/media/voice_audio_controller.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/logger.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../custom_notification.dart';
 import '../../small_spinner.dart';
 import 'meta_marks.dart';
@@ -102,7 +103,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   void _adoptCachedTranscription() {
     final cached = TranscriptionCache.get(_sourceMessageId);
     if (cached == null || cached.status != 1) return;
-    _transcriptionText = cached.text ?? TranscriptionResult.emptyText;
+    _transcriptionText = cached.text ?? '';
     _transcriptionVisible = TranscriptionCache.isExpanded(_sourceMessageId);
   }
 
@@ -119,6 +120,13 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     _transcriptionVisible = true;
     TranscriptionCache.setExpanded(_sourceMessageId, true);
   }
+
+  String _transcriptionLabel(AppLocalizations l10n) =>
+      switch (_transcriptionText) {
+        null => '',
+        '' => l10n.transcriptionNotRecognized,
+        final text => text,
+      };
 
   String get _cacheName => '${widget.audioId ?? _sourceMessageId}.ogg';
 
@@ -154,9 +162,15 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       case VoiceAudioFailure.none:
         return;
       case VoiceAudioFailure.download:
-        showCustomNotification(context, 'Не удалось загрузить аудио');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.voiceBubbleLoadFailed,
+        );
       case VoiceAudioFailure.playback:
-        showCustomNotification(context, 'Ошибка воспроизведения');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.voiceBubblePlaybackError,
+        );
     }
   }
 
@@ -364,7 +378,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                             color: widget.textColor.withValues(alpha: 0.6),
                           )
                         : Text(
-                            'Т',
+                            AppLocalizations.of(context)!.voiceBubbleTranscribe,
                             style: TextStyle(
                               color: widget.textColor.withValues(alpha: 0.6),
                               fontSize: 13,
@@ -395,7 +409,9 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                           child: SingleChildScrollView(
                             physics: const ClampingScrollPhysics(),
                             child: Text(
-                              _transcriptionText ?? '',
+                              _transcriptionLabel(
+                                AppLocalizations.of(context)!,
+                              ),
                               style: TextStyle(
                                 color: widget.textColor.withValues(alpha: 0.8),
                                 fontSize: 12,
@@ -488,9 +504,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
 
     if (TranscriptionCache.has(_sourceMessageId)) {
       final cached = TranscriptionCache.get(_sourceMessageId)!;
-      setState(
-        () => _showTranscription(cached.text ?? TranscriptionResult.emptyText),
-      );
+      setState(() => _showTranscription(cached.text ?? ''));
       return;
     }
 
@@ -508,24 +522,22 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       TranscriptionCache.put(_sourceMessageId, result);
 
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       setState(() {
         _transcriptionLoading = false;
         if (result.status == 1) {
-          _showTranscription(
-            (result.text == null || result.text!.isEmpty)
-                ? TranscriptionResult.emptyText
-                : result.text!,
-          );
+          _showTranscription(result.text ?? '');
         } else if (result.status == 0) {
-          _showTranscription('транскрибация...');
+          _showTranscription(l10n.voiceBubbleTranscribing);
         }
       });
     } catch (e) {
       logger.w('VoiceBubble._requestTranscription: $e');
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       setState(() {
         _transcriptionLoading = false;
-        _showTranscription('ошибка транскрибации');
+        _showTranscription(l10n.voiceBubbleTranscriptionFailed);
       });
     }
   }

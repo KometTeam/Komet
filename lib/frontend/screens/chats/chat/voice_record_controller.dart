@@ -11,6 +11,7 @@ import '../../../../core/config/app_microphone.dart';
 import '../../../../core/media/opus_ogg_encoder.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/screen_wake.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../widgets/custom_notification.dart';
 
 class VoiceRecordController {
@@ -102,18 +103,11 @@ class VoiceRecordController {
         ext = 'ogg';
         _transcode = false;
       } else {
-        if (isMounted()) {
-          showCustomNotification(
-            contextOf(),
-            'Голосовые сообщения недоступны на этой платформе',
-          );
-        }
+        _notify((l10n) => l10n.voiceRecordUnsupported);
         return;
       }
       if (!await rec.hasPermission()) {
-        if (isMounted()) {
-          showCustomNotification(contextOf(), 'Нет доступа к микрофону');
-        }
+        _notify((l10n) => l10n.voiceRecordNoMicAccess);
         return;
       }
       final dir = await getTemporaryDirectory();
@@ -166,9 +160,7 @@ class VoiceRecordController {
     } catch (_) {
       _isRecording.value = false;
       unawaited(ScreenWake.instance.release(this));
-      if (isMounted()) {
-        showCustomNotification(contextOf(), 'Не удалось начать запись');
-      }
+      _notify((l10n) => l10n.voiceRecordStartFailed);
     }
   }
 
@@ -246,14 +238,18 @@ class VoiceRecordController {
     if (_transcode) {
       final ogg = await _transcodeWavToOgg(file);
       if (ogg == null) {
-        if (isMounted()) {
-          showCustomNotification(contextOf(), 'Не удалось закодировать запись');
-        }
+        _notify((l10n) => l10n.voiceRecordEncodeFailed);
         return;
       }
       file = ogg;
     }
     await onRecorded(file, elapsed, amps);
+  }
+
+  void _notify(String Function(AppLocalizations l10n) message) {
+    if (!isMounted()) return;
+    final context = contextOf();
+    showCustomNotification(context, message(AppLocalizations.of(context)!));
   }
 
   Future<File?> _transcodeWavToOgg(File wav) async {

@@ -12,6 +12,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../widgets/glossy_pill.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../../../core/config/app_camera.dart';
 import '../../../../core/config/app_video_note_quality.dart';
 import '../../../../core/media/native_video_note_recorder.dart';
@@ -107,7 +108,7 @@ class VideoNoteController {
     final access = await _rec.requestAccess();
     if (!access.granted) {
       _videoNoteMode.value = false;
-      _notify(_accessMessage(access));
+      _notify((l10n) => _accessMessage(l10n, access));
       return;
     }
     try {
@@ -121,7 +122,7 @@ class VideoNoteController {
       );
       if (!ok) {
         _videoNoteMode.value = false;
-        _notify('Камера недоступна');
+        _notify((l10n) => l10n.videoNoteCameraUnavailable);
         return;
       }
       if (!isMounted() || !_videoNoteMode.value) {
@@ -135,28 +136,34 @@ class VideoNoteController {
       logger.w('initNoteCamera: $e');
       await _disposeCamera();
       _videoNoteMode.value = false;
-      _notify(_failureMessage(e, 'Камера недоступна'));
+      _notify(
+        (l10n) => _failureMessage(l10n, e, l10n.videoNoteCameraUnavailable),
+      );
     }
   }
 
-  void _notify(String message) {
-    if (isMounted()) showCustomNotification(contextOf(), message);
+  void _notify(String Function(AppLocalizations l10n) message) {
+    if (!isMounted()) return;
+    final context = contextOf();
+    showCustomNotification(context, message(AppLocalizations.of(context)!));
   }
 
-  String _accessMessage(VideoNoteAccess access) {
+  String _accessMessage(AppLocalizations l10n, VideoNoteAccess access) {
     if (!access.camera && !access.microphone) {
-      return 'Для кружков нужен доступ к камере и микрофону';
+      return l10n.videoNoteNeedCameraAndMic;
     }
-    return access.camera ? 'Нет доступа к микрофону' : 'Нет доступа к камере';
+    return access.camera
+        ? l10n.videoNoteNoMicAccess
+        : l10n.videoNoteNoCameraAccess;
   }
 
-  String _failureMessage(Object error, String fallback) {
+  String _failureMessage(AppLocalizations l10n, Object error, String fallback) {
     if (error is! PlatformException) return fallback;
     return switch (error.code) {
-      'NO_CAMERA_PERMISSION' => 'Нет доступа к камере',
-      'NO_MIC_PERMISSION' => 'Нет доступа к микрофону',
-      'NO_CAMERA' => 'Камера недоступна',
-      'NOT_READY' => 'Камера ещё не готова',
+      'NO_CAMERA_PERMISSION' => l10n.videoNoteNoCameraAccess,
+      'NO_MIC_PERMISSION' => l10n.videoNoteNoMicAccess,
+      'NO_CAMERA' => l10n.videoNoteCameraUnavailable,
+      'NOT_READY' => l10n.videoNoteCameraNotReady,
       _ => fallback,
     };
   }
@@ -204,7 +211,7 @@ class VideoNoteController {
     } catch (e) {
       logger.w('startNoteRecording: $e');
       _isRecording.value = false;
-      _notify(_failureMessage(e, 'Не удалось начать запись кружка'));
+      _notify((l10n) => _failureMessage(l10n, e, l10n.videoNoteStartFailed));
     }
   }
 
@@ -303,7 +310,7 @@ class VideoNoteController {
           await File(path).delete();
         } catch (_) {}
       } else if (!shouldCancel) {
-        _notify('Не удалось сохранить кружок');
+        _notify((l10n) => l10n.videoNoteSaveFailed);
       }
       return;
     }

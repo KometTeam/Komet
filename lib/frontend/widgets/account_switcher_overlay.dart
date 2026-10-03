@@ -385,7 +385,9 @@ class _AccountRow extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      fullName.isNotEmpty ? fullName : 'Без имени',
+                      fullName.isNotEmpty
+                          ? fullName
+                          : AppLocalizations.of(context)!.accountSwitcherNoName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -461,7 +463,7 @@ class _AddAccountRow extends StatelessWidget {
               ),
               const SizedBox(width: 14),
               Text(
-                'Добавить аккаунт',
+                AppLocalizations.of(context)!.accountSwitcherAddAccount,
                 style: TextStyle(
                   color: fg,
                   fontSize: 15,

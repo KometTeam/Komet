@@ -9,6 +9,7 @@ import '../../backend/modules/chats.dart';
 import '../../core/config/build_profile.dart';
 import '../../core/config/debug_test.dart';
 import '../../core/utils/update_checker.dart';
+import '../../l10n/app_localizations.dart';
 import '../screens/chats/chat_list_screen.dart';
 import '../screens/chats/chat_screen.dart';
 import 'auth_limits_sheet.dart';
@@ -265,7 +266,7 @@ class _EmptyChatPane extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              'Выберите чат',
+              AppLocalizations.of(context)!.adaptiveShellSelectChat,
               style: TextStyle(
                 color: colorScheme.onSurfaceVariant,
                 fontSize: 15,

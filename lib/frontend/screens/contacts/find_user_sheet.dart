@@ -80,7 +80,9 @@ class _FindUserSheetState extends State<_FindUserSheet> {
   Future<void> _submitPhone() async {
     final query = _phoneCandidate(_controller.text.trim());
     if (query == null) {
-      setState(() => _error = 'Введите корректный номер телефона');
+      setState(
+        () => _error = AppLocalizations.of(context)!.findUserInvalidPhone,
+      );
       return;
     }
     setState(() {
@@ -93,7 +95,7 @@ class _FindUserSheetState extends State<_FindUserSheet> {
       if (result == null) {
         setState(() {
           _loading = false;
-          _error = 'Контакт с таким номером не найден';
+          _error = AppLocalizations.of(context)!.findUserPhoneNotFound;
         });
         return;
       }
@@ -106,7 +108,7 @@ class _FindUserSheetState extends State<_FindUserSheet> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Ошибка: $e';
+          _error = AppLocalizations.of(context)!.devicesGenericError('$e');
         });
       }
     }
@@ -116,7 +118,7 @@ class _FindUserSheetState extends State<_FindUserSheet> {
     final raw = _controller.text.trim();
     final id = int.tryParse(raw);
     if (id == null) {
-      setState(() => _error = 'Введите числовой ID');
+      setState(() => _error = AppLocalizations.of(context)!.findUserInvalidId);
       return;
     }
     setState(() {
@@ -132,7 +134,7 @@ class _FindUserSheetState extends State<_FindUserSheet> {
         if (mounted) {
           setState(() {
             _loading = false;
-            _error = 'Контакт с таким ID не найден';
+            _error = AppLocalizations.of(context)!.findUserIdNotFound;
           });
         }
         return;
@@ -156,7 +158,7 @@ class _FindUserSheetState extends State<_FindUserSheet> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Ошибка: $e';
+          _error = AppLocalizations.of(context)!.devicesGenericError('$e');
         });
       }
     }
@@ -186,6 +188,7 @@ class _FindUserSheetState extends State<_FindUserSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final viewInsets = MediaQuery.of(context).viewInsets;
     return Padding(
       padding: EdgeInsets.only(bottom: viewInsets.bottom),
@@ -216,13 +219,13 @@ class _FindUserSheetState extends State<_FindUserSheet> {
               ),
               const SizedBox(height: 12),
               SegmentedButton<_FindMode>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: _FindMode.phone,
-                    label: Text('Номер'),
-                    icon: Icon(Symbols.call, size: 18),
+                    label: Text(l10n.findUserPhoneTab),
+                    icon: const Icon(Symbols.call, size: 18),
                   ),
-                  ButtonSegment(
+                  const ButtonSegment(
                     value: _FindMode.id,
                     label: Text('ID'),
                     icon: Icon(Symbols.tag, size: 18),
@@ -248,8 +251,8 @@ class _FindUserSheetState extends State<_FindUserSheet> {
                 style: TextStyle(color: cs.onSurface, fontSize: 16),
                 decoration: InputDecoration(
                   hintText: _mode == _FindMode.phone
-                      ? 'Введите номер телефона'
-                      : 'Введите ID контакта',
+                      ? l10n.findUserPhoneHint
+                      : l10n.findUserIdHint,
                   hintStyle: TextStyle(
                     color: cs.onSurfaceVariant,
                     fontSize: 16,

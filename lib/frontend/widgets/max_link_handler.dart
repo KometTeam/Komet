@@ -9,6 +9,7 @@ import '../../core/links/max_link.dart';
 import '../../core/links/profile_link.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/share_origin.dart';
+import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../screens/chats/chat_screen.dart';
 import '../screens/contacts/open_contact_profile.dart';
@@ -97,7 +98,7 @@ Future<bool> _openWebAppLink(BuildContext context, MaxWebAppLink link) async {
   if (botId == null) {
     final message = resolved is ResolvedLinkError
         ? resolved.message
-        : 'Не удалось открыть приложение';
+        : AppLocalizations.of(context)!.miniAppFailed;
     showCustomNotification(context, message);
     return true;
   }
@@ -125,14 +126,20 @@ Future<bool> _shareOwnLink(BuildContext context) async {
   if (!context.mounted) return true;
 
   if (link == null) {
-    showCustomNotification(context, 'У профиля нет публичной ссылки');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.maxLinkNoPublicLink,
+    );
     return true;
   }
   try {
     await AppLock.instance.external(() => Share.share(link, sharePositionOrigin: shareOriginOf(context)));
   } catch (_) {
     if (context.mounted) {
-      showCustomNotification(context, 'Не удалось поделиться ссылкой');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.maxLinkShareFailed,
+      );
     }
   }
   return true;
@@ -145,7 +152,10 @@ Future<void> _openContact(
 ) async {
   final id = contact['id'];
   if (id is! int) {
-    showCustomNotification(context, 'Не удалось открыть профиль');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.maxLinkOpenProfileFailed,
+    );
     return;
   }
 
@@ -160,7 +170,7 @@ Future<void> _openContact(
     openContactDialogProfile(
       context,
       contactId: id,
-      name: _contactName(contact),
+      name: _contactName(context, contact),
       avatarUrl: contact['baseUrl'] as String?,
     ),
   );
@@ -183,7 +193,7 @@ Future<bool> _startBotDialog(
   _openChatAndStartBot(
     context,
     chatId: chatId,
-    name: _contactName(contact),
+    name: _contactName(context, contact),
     imageUrl: (contact['baseUrl'] as String?) ?? '',
     chatType: 'DIALOG',
     startPayload: startPayload,
@@ -220,7 +230,10 @@ Future<void> _openResolvedChat(
   final chat = resolved.chat;
   final id = chat['id'];
   if (id is! int) {
-    showCustomNotification(context, 'Не удалось открыть чат');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.maxLinkOpenChatFailed,
+    );
     return;
   }
 
@@ -238,12 +251,14 @@ Future<void> _openResolvedChat(
   if (link.kind == MaxContentKind.invite &&
       access == 'PRIVATE' &&
       !isMember) {
-    final label = title.isEmpty ? 'этот чат' : '«$title»';
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showConfirmDialog(
       context,
-      title: 'Вступить',
-      message: 'Вступить в $label?',
-      confirmLabel: 'Вступить',
+      title: l10n.chatInfoActionJoin,
+      message: title.isEmpty
+          ? l10n.maxLinkJoinThisChatConfirm
+          : l10n.maxLinkJoinChatConfirm(title),
+      confirmLabel: l10n.chatInfoActionJoin,
     );
     if (!confirmed || !context.mounted) return;
 
@@ -302,7 +317,7 @@ Future<void> _openResolvedChat(
   return (id: messageId.toString(), time: messageIdToTime(messageId));
 }
 
-String _contactName(Map<dynamic, dynamic> contact) {
+String _contactName(BuildContext context, Map<dynamic, dynamic> contact) {
   final names = contact['names'];
   if (names is List && names.isNotEmpty && names.first is Map) {
     final entry = names.first as Map;
@@ -313,5 +328,5 @@ String _contactName(Map<dynamic, dynamic> contact) {
     final joined = '$first $last'.trim();
     if (joined.isNotEmpty) return joined;
   }
-  return 'Профиль';
+  return AppLocalizations.of(context)!.maxLinkProfileFallback;
 }

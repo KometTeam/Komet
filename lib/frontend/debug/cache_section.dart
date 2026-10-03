@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/utils/format.dart';
+import '../../l10n/app_localizations.dart';
 import '../widgets/small_spinner.dart';
 import 'dev_menu_widgets.dart';
 
@@ -24,6 +25,7 @@ class DebugCacheSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return DevGroup(
       children: [
         DevRow(
@@ -35,7 +37,7 @@ class DebugCacheSection extends StatelessWidget {
         DevRow(
           caption: clearingCache
               ? 'Очистка…'
-              : 'Занято: ${formatBytes(cacheSize)}',
+              : 'Занято: ${formatBytes(l10n, cacheSize)}',
           title: 'Очистить кэш медиа',
           onTap: clearingCache ? null : onClearCache,
           trailing: clearingCache

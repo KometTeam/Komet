@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import 'toast_placement.dart';
 
 const Duration _defaultUndoWindow = Duration(seconds: 5);
 const Duration _appearDuration = Duration(milliseconds: 220);
@@ -19,6 +20,7 @@ PendingUndo showUndoNotification(
     Overlay.of(context, rootOverlay: true),
     message: message,
     undoLabel: AppLocalizations.of(context)!.undoAction,
+    continueLabel: AppLocalizations.of(context)!.undoContinue,
     duration: duration,
     onCommit: onCommit,
     onUndo: onUndo,
@@ -29,6 +31,7 @@ class PendingUndo {
   PendingUndo._({
     required this.message,
     required this.undoLabel,
+    required this.continueLabel,
     required this.duration,
     required this.onCommit,
     required this.onUndo,
@@ -40,6 +43,7 @@ class PendingUndo {
 
   final String message;
   final String undoLabel;
+  final String continueLabel;
   final Duration duration;
   final FutureOr<void> Function() onCommit;
   final VoidCallback onUndo;
@@ -52,6 +56,7 @@ class PendingUndo {
     OverlayState overlay, {
     required String message,
     required String undoLabel,
+    required String continueLabel,
     required Duration duration,
     required FutureOr<void> Function() onCommit,
     required VoidCallback onUndo,
@@ -60,6 +65,7 @@ class PendingUndo {
     final pending = PendingUndo._(
       message: message,
       undoLabel: undoLabel,
+      continueLabel: continueLabel,
       duration: duration,
       onCommit: onCommit,
       onUndo: onUndo,
@@ -73,9 +79,11 @@ class PendingUndo {
     key: _toastKey,
     message: message,
     undoLabel: undoLabel,
+    continueLabel: continueLabel,
     duration: duration,
     onExpired: commit,
     onUndo: undo,
+    onContinue: commit,
     onSwiped: () => commit(animate: false),
   );
 
@@ -115,17 +123,21 @@ class PendingUndo {
 class _UndoToast extends StatefulWidget {
   final String message;
   final String undoLabel;
+  final String continueLabel;
   final Duration duration;
   final VoidCallback onExpired;
   final VoidCallback onUndo;
+  final VoidCallback onContinue;
   final VoidCallback onSwiped;
 
   const _UndoToast({
     required this.message,
     required this.undoLabel,
+    required this.continueLabel,
     required this.duration,
     required this.onExpired,
     required this.onUndo,
+    required this.onContinue,
     required this.onSwiped,
     super.key,
   });
@@ -174,15 +186,23 @@ class _UndoToastState extends State<_UndoToast> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  static const double _ringSize = 28;
+  static const double _ringGap = 14;
+  static const double _messageMinWidth = 96;
+  static const EdgeInsets _buttonPadding = EdgeInsets.symmetric(
+    horizontal: 12,
+    vertical: 14,
+  );
+  static const TextStyle _buttonText = TextStyle(fontSize: 15);
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final media = MediaQuery.of(context);
-    final bottom = media.viewInsets.bottom + media.viewPadding.bottom + 72;
-    return Positioned(
+    return ToastBottomPositioned(
       left: 12,
       right: 12,
-      bottom: bottom,
+      minBottom: 72,
+      bandHeight: 96,
       child: Align(
         alignment: Alignment.bottomCenter,
         child: ConstrainedBox(
@@ -204,45 +224,9 @@ class _UndoToastState extends State<_UndoToast> with TickerProviderStateMixin {
                   borderRadius: BorderRadius.circular(18),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
-                    child: Row(
-                      children: [
-                        _CountdownRing(
-                          progress: _countdown,
-                          duration: widget.duration,
-                          color: cs.onSurface,
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Text(
-                            widget.message,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        TextButton(
-                          onPressed: widget.onUndo,
-                          style: TextButton.styleFrom(
-                            foregroundColor: cs.onSurface,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 14,
-                            ),
-                          ),
-                          child: Text(
-                            widget.undoLabel,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: LayoutBuilder(
+                      builder: (context, constraints) =>
+                          _content(context, cs, constraints.maxWidth),
                     ),
                   ),
                 ),
@@ -251,6 +235,109 @@ class _UndoToastState extends State<_UndoToast> with TickerProviderStateMixin {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _content(BuildContext context, ColorScheme cs, double width) {
+    final message = Text(
+      widget.message,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: cs.onSurface,
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+    final lead = Row(
+      children: [
+        _CountdownRing(
+          progress: _countdown,
+          duration: widget.duration,
+          color: cs.onSurface,
+        ),
+        const SizedBox(width: _ringGap),
+        Expanded(child: message),
+      ],
+    );
+    final continueButton = _button(
+      cs,
+      widget.continueLabel,
+      widget.onContinue,
+      FontWeight.w500,
+    );
+    final undoButton = _button(
+      cs,
+      widget.undoLabel,
+      widget.onUndo,
+      FontWeight.w700,
+    );
+    if (width >= _oneLineWidth(context)) {
+      return Row(
+        children: [
+          Expanded(child: lead),
+          const SizedBox(width: 4),
+          continueButton,
+          undoButton,
+        ],
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(padding: const EdgeInsets.only(top: 8, right: 10), child: lead),
+        OverflowBar(
+          alignment: MainAxisAlignment.end,
+          overflowAlignment: OverflowBarAlignment.end,
+          children: [continueButton, undoButton],
+        ),
+      ],
+    );
+  }
+
+  double _oneLineWidth(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final base = DefaultTextStyle.of(context).style;
+    double measure(String text, FontWeight weight) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: base.merge(_buttonText.copyWith(fontWeight: weight)),
+        ),
+        textDirection: Directionality.of(context),
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return width;
+    }
+
+    return _ringSize +
+        _ringGap +
+        _messageMinWidth +
+        4 +
+        measure(widget.continueLabel, FontWeight.w500) +
+        measure(widget.undoLabel, FontWeight.w700) +
+        _buttonPadding.horizontal * 2;
+  }
+
+  Widget _button(
+    ColorScheme cs,
+    String label,
+    VoidCallback onPressed,
+    FontWeight weight,
+  ) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: cs.onSurface,
+        padding: _buttonPadding,
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(label, style: _buttonText.copyWith(fontWeight: weight)),
     );
   }
 }

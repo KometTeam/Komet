@@ -1509,7 +1509,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final l10n = AppLocalizations.of(context)!;
     final ms = time is int ? time : int.tryParse(time?.toString() ?? '');
     final dateStr = ms != null
-        ? formatDateTimeWords(DateTime.fromMillisecondsSinceEpoch(ms))
+        ? formatDateTimeWords(l10n, DateTime.fromMillisecondsSinceEpoch(ms))
         : '';
     final label = current
         ? (dateStr.isEmpty

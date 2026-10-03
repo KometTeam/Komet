@@ -193,7 +193,7 @@ class _DevicesScreenState extends State<DevicesScreen>
     return '$city, $country';
   }
 
-  String _formatTime(int timestamp) {
+  String _formatTime(AppLocalizations l10n, int timestamp) {
     if (timestamp == 0) return '';
     final now = DateTime.now();
     final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
@@ -204,9 +204,7 @@ class _DevicesScreenState extends State<DevicesScreen>
       return formatClock(date);
     }
 
-    if (now.year == date.year) {
-      return '${date.day} ${kRuMonthsShort[date.month - 1]}';
-    }
+    if (now.year == date.year) return formatDayMonth(l10n, date);
 
     return formatDateNumeric(date);
   }
@@ -348,7 +346,9 @@ class _DevicesScreenState extends State<DevicesScreen>
                   platform: session.info,
                   location: session.location,
                   status: session.current ? l10n.devicesOnlineStatus : null,
-                  time: session.current ? null : _formatTime(session.time),
+                  time: session.current
+                      ? null
+                      : _formatTime(l10n, session.time),
                   isOnline: session.current,
                 ),
               ),

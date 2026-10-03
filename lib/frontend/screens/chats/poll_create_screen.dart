@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/hint_bubble.dart';
 import '../../widgets/sheet_helpers.dart';
 
@@ -80,7 +81,10 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
         .where((t) => t.isNotEmpty)
         .toList();
     if (title.isEmpty || answers.length < 2) {
-      showHintBubble(buttonContext, 'Введите вопрос и минимум 2 варианта');
+      showHintBubble(
+        buttonContext,
+        AppLocalizations.of(context)!.pollCreateValidationHint,
+      );
       return;
     }
     Navigator.of(context).pop(
@@ -97,6 +101,7 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final l10n = AppLocalizations.of(context)!;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -118,7 +123,7 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
                     _buildQuestionField(cs),
                     const SizedBox(height: 20),
                     Text(
-                      'Варианты ответа',
+                      l10n.pollCreateAnswersTitle,
                       style: TextStyle(
                         color: cs.onSurfaceVariant,
                         fontSize: 13,
@@ -133,13 +138,13 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
                     const SizedBox(height: 16),
                     _buildToggle(
                       cs,
-                      label: 'Несколько вариантов ответа',
+                      label: l10n.pollCreateMultipleAnswers,
                       value: _multiple,
                       onChanged: (v) => setState(() => _multiple = v),
                     ),
                     _buildToggle(
                       cs,
-                      label: 'Анонимное голосование',
+                      label: l10n.pollCreateAnonymous,
                       value: _anonymous,
                       onChanged: (v) => setState(() => _anonymous = v),
                     ),
@@ -154,6 +159,7 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
   }
 
   Widget _buildHeader(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
       child: Row(
@@ -164,7 +170,7 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
           ),
           Expanded(
             child: Text(
-              'Новый опрос',
+              l10n.pollCreateTitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: cs.onSurface,
@@ -176,7 +182,7 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
           Builder(
             builder: (buttonContext) => TextButton(
               onPressed: _canCreate ? () => _submit(buttonContext) : null,
-              child: const Text('Создать'),
+              child: Text(l10n.pollCreateSubmit),
             ),
           ),
         ],
@@ -193,7 +199,7 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
       maxLines: null,
       onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
-        hintText: 'Задайте вопрос',
+        hintText: AppLocalizations.of(context)!.pollCreateQuestionHint,
         hintStyle: TextStyle(color: cs.onSurfaceVariant),
         filled: true,
         fillColor: cs.surfaceContainerHighest,
@@ -219,7 +225,9 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
               maxLength: 100,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: 'Вариант ${index + 1}',
+                hintText: AppLocalizations.of(
+                  context,
+                )!.pollCreateOptionHint(index + 1),
                 hintStyle: TextStyle(color: cs.onSurfaceVariant),
                 filled: true,
                 fillColor: cs.surfaceContainerHighest,
@@ -248,7 +256,7 @@ class _PollCreateSheetState extends State<_PollCreateSheet> {
       child: TextButton.icon(
         onPressed: _addAnswer,
         icon: const Icon(Symbols.add, size: 20),
-        label: const Text('Добавить вариант'),
+        label: Text(AppLocalizations.of(context)!.pollCreateAddOption),
       ),
     );
   }

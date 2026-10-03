@@ -11,6 +11,7 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/prompt_dialog.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../l10n/app_localizations.dart';
 
 class CallParticipantView {
   final String name;
@@ -71,6 +72,8 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
     super.dispose();
   }
 
+  AppLocalizations get _l10n => AppLocalizations.of(context)!;
+
   CallParticipant? get _self {
     for (final p in widget.session.participants) {
       if (p.isSelf) return p;
@@ -81,14 +84,19 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
   Future<bool> _run(Future<void> Function(CallAdmin admin) action) async {
     final admin = widget.session.admin;
     if (admin == null) {
-      showCustomNotification(context, 'Нет связи с сервером звонка');
+      showCustomNotification(context, _l10n.callParticipantsNoServer);
       return false;
     }
     try {
       await action(admin);
       return true;
     } catch (e) {
-      if (mounted) showCustomNotification(context, 'Не удалось: $e');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          _l10n.callParticipantsActionFailed('$e'),
+        );
+      }
       return false;
     }
   }
@@ -97,6 +105,7 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
 
   void _participantActions(CallParticipant p) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = _l10n;
     final view = widget.resolve(p);
     final isAdmin = p.isAdmin;
     final isSpeaker = p.isSpeaker;
@@ -126,25 +135,34 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Text(
-                  p.roles.isEmpty ? 'Участник' : p.roles.join(' · '),
+                  p.roles.isEmpty
+                      ? l10n.callParticipantFallback
+                      : p.roles.join(' · '),
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
               ),
-              _action(cs, Symbols.mic_off, 'Выключить микрофон', () {
+              _action(cs, Symbols.mic_off, l10n.callParticipantsMuteMic, () {
                 Navigator.pop(sheetContext);
                 _run((a) => a.muteMicrophone(_ref(p)));
               }),
-              _action(cs, Symbols.videocam_off, 'Запросить камеру', () {
-                Navigator.pop(sheetContext);
-                _run(
-                  (a) =>
-                      a.requestMedia({CallMedia.video}, participant: _ref(p)),
-                );
-              }),
+              _action(
+                cs,
+                Symbols.videocam_off,
+                l10n.callParticipantsRequestCamera,
+                () {
+                  Navigator.pop(sheetContext);
+                  _run(
+                    (a) =>
+                        a.requestMedia({CallMedia.video}, participant: _ref(p)),
+                  );
+                },
+              ),
               _action(
                 cs,
                 isAdmin ? Symbols.remove_moderator : Symbols.shield_person,
-                isAdmin ? 'Снять администратора' : 'Назначить администратором',
+                isAdmin
+                    ? l10n.callParticipantsRevokeAdmin
+                    : l10n.adminAppointAction,
                 () {
                   Navigator.pop(sheetContext);
                   _run(
@@ -157,7 +175,9 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
               _action(
                 cs,
                 isSpeaker ? Symbols.voice_over_off : Symbols.record_voice_over,
-                isSpeaker ? 'Убрать из спикеров' : 'Сделать спикером',
+                isSpeaker
+                    ? l10n.callParticipantsRevokeSpeaker
+                    : l10n.callParticipantsMakeSpeaker,
                 () {
                   Navigator.pop(sheetContext);
                   _run(
@@ -167,26 +187,42 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
                   );
                 },
               ),
-              _action(cs, Symbols.arrow_upward, 'Повысить (promote)', () {
-                Navigator.pop(sheetContext);
-                _run((a) => a.setPromoted(_ref(p), true));
-              }),
-              _action(cs, Symbols.arrow_downward, 'Понизить (demote)', () {
-                Navigator.pop(sheetContext);
-                _run((a) => a.setPromoted(_ref(p), false));
-              }),
-              _action(cs, Symbols.push_pin, 'Закрепить', () {
+              _action(
+                cs,
+                Symbols.arrow_upward,
+                l10n.callParticipantsPromote,
+                () {
+                  Navigator.pop(sheetContext);
+                  _run((a) => a.setPromoted(_ref(p), true));
+                },
+              ),
+              _action(
+                cs,
+                Symbols.arrow_downward,
+                l10n.callParticipantsDemote,
+                () {
+                  Navigator.pop(sheetContext);
+                  _run((a) => a.setPromoted(_ref(p), false));
+                },
+              ),
+              _action(cs, Symbols.push_pin, l10n.msgActionsPin, () {
                 Navigator.pop(sheetContext);
                 _run((a) => a.setPinned(_ref(p), true));
               }),
-              _action(cs, Symbols.keep_off, 'Открепить', () {
+              _action(cs, Symbols.keep_off, l10n.msgActionsUnpin, () {
                 Navigator.pop(sheetContext);
                 _run((a) => a.setPinned(_ref(p), false));
               }),
-              _action(cs, Symbols.person_remove, 'Удалить из звонка', () {
-                Navigator.pop(sheetContext);
-                _run((a) => a.removeParticipant(_ref(p)));
-              }, destructive: true),
+              _action(
+                cs,
+                Symbols.person_remove,
+                l10n.callParticipantsRemoveFromCall,
+                () {
+                  Navigator.pop(sheetContext);
+                  _run((a) => a.removeParticipant(_ref(p)));
+                },
+                destructive: true,
+              ),
               const SizedBox(height: 8),
             ],
           ),
@@ -212,7 +248,7 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _sheetTitle(cs, 'Настройки звонка'),
+                  _sheetTitle(cs, _l10n.callParticipantsCallSettings),
                   for (final option in CallOption.values)
                     SwitchListTile(
                       value: _options[option] ?? false,
@@ -262,7 +298,7 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _sheetTitle(cs, 'Кому доступны функции'),
+                  _sheetTitle(cs, _l10n.callParticipantsFeatureAccess),
                   for (final feature in CallFeature.values)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
@@ -321,34 +357,35 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
   }
 
   Future<void> _addByLink() async {
+    final l10n = _l10n;
     final link = await showTextInputDialog(
       context,
-      title: 'Добавить участника',
-      description: 'Ссылка-приглашение участника',
-      confirmLabel: 'Добавить',
+      title: l10n.chatInfoAddMember,
+      description: l10n.callParticipantsInviteLink,
+      confirmLabel: l10n.chatInfoAddMembersAction,
     );
     if (link == null || link.trim().isEmpty || !mounted) return;
     await _run((a) => a.addParticipantByLink(link.trim()));
   }
 
   String _optionLabel(CallOption option) => switch (option) {
-    CallOption.requireAuthToJoin => 'Только авторизованные',
-    CallOption.waitingHall => 'Зал ожидания',
-    CallOption.recurring => 'Повторяющийся звонок',
-    CallOption.feedback => 'Сбор отзывов',
-    CallOption.audienceMode => 'Режим зрителей',
-    CallOption.asr => 'Расшифровка речи',
-    CallOption.waitForAdmin => 'Ждать администратора',
-    CallOption.adminIsHere => 'Администратор на месте',
+    CallOption.requireAuthToJoin => _l10n.callParticipantsOptionAuthOnly,
+    CallOption.waitingHall => _l10n.callParticipantsOptionWaitingHall,
+    CallOption.recurring => _l10n.callParticipantsOptionRecurring,
+    CallOption.feedback => _l10n.callParticipantsOptionFeedback,
+    CallOption.audienceMode => _l10n.callParticipantsOptionAudienceMode,
+    CallOption.asr => _l10n.callParticipantsSpeechTranscription,
+    CallOption.waitForAdmin => _l10n.callParticipantsOptionWaitForAdmin,
+    CallOption.adminIsHere => _l10n.callParticipantsOptionAdminIsHere,
   };
 
   String _featureLabel(CallFeature feature) => switch (feature) {
-    CallFeature.addParticipant => 'Добавлять участников',
-    CallFeature.admin => 'Права администратора',
-    CallFeature.asr => 'Расшифровка речи',
-    CallFeature.movieShare => 'Совместный просмотр',
-    CallFeature.record => 'Запись звонка',
-    CallFeature.speaker => 'Быть спикером',
+    CallFeature.addParticipant => _l10n.memberPermissionAddMembers,
+    CallFeature.admin => _l10n.adminEditTitle,
+    CallFeature.asr => _l10n.callParticipantsSpeechTranscription,
+    CallFeature.movieShare => _l10n.callParticipantsFeatureMovieShare,
+    CallFeature.record => _l10n.callParticipantsCallRecording,
+    CallFeature.speaker => _l10n.callParticipantsFeatureSpeaker,
   };
 
   Widget _sheetTitle(ColorScheme cs, String text) => Padding(
@@ -382,6 +419,7 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final participants = widget.session.participants;
     final self = _self;
     final handRaised = self?.handRaised ?? false;
@@ -391,23 +429,30 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _sheetTitle(cs, 'Участники · ${participants.length}'),
+          _sheetTitle(cs, l10n.callParticipantsTitle(participants.length)),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                _chip(cs, Symbols.mic_off, 'Заглушить всех', () {
+                _chip(cs, Symbols.mic_off, l10n.callParticipantsMuteAll, () {
                   _run((a) => a.muteEveryone());
-                }),
-                _chip(cs, Symbols.do_not_touch, 'Опустить руки', () {
-                  _run((a) => a.lowerAllHands());
                 }),
                 _chip(
                   cs,
+                  Symbols.do_not_touch,
+                  l10n.callParticipantsLowerAllHands,
+                  () {
+                    _run((a) => a.lowerAllHands());
+                  },
+                ),
+                _chip(
+                  cs,
                   handRaised ? Symbols.back_hand : Symbols.front_hand,
-                  handRaised ? 'Опустить руку' : 'Поднять руку',
+                  handRaised
+                      ? l10n.callParticipantsLowerHand
+                      : l10n.callParticipantsRaiseHand,
                   () => _run((a) => a.setHandRaised(!handRaised)),
                   active: handRaised,
                 ),
@@ -416,22 +461,36 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
                   _recording
                       ? Symbols.stop_circle
                       : Symbols.radio_button_checked,
-                  _recording ? 'Остановить запись' : 'Начать запись',
+                  _recording
+                      ? l10n.callParticipantsStopRecording
+                      : l10n.callParticipantsStartRecording,
                   () async {
                     final next = !_recording;
                     setState(() => _recording = next);
                     final ok = await _run(
                       (a) => next
-                          ? a.startRecord(name: 'Запись звонка')
+                          ? a.startRecord(
+                              name: l10n.callParticipantsCallRecording,
+                            )
                           : a.stopRecord(),
                     );
                     if (!ok && mounted) setState(() => _recording = !next);
                   },
                   active: _recording,
                 ),
-                _chip(cs, Symbols.tune, 'Настройки', _showOptions),
-                _chip(cs, Symbols.shield_person, 'Права ролей', _showFeatures),
-                _chip(cs, Symbols.person_add, 'Добавить по ссылке', _addByLink),
+                _chip(cs, Symbols.tune, l10n.videoViewerSettings, _showOptions),
+                _chip(
+                  cs,
+                  Symbols.shield_person,
+                  l10n.callParticipantsRolePermissions,
+                  _showFeatures,
+                ),
+                _chip(
+                  cs,
+                  Symbols.person_add,
+                  l10n.callParticipantsAddByLink,
+                  _addByLink,
+                ),
               ],
             ),
           ),
@@ -471,11 +530,15 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
   }
 
   Widget _tile(ColorScheme cs, CallParticipant p) {
+    final l10n = _l10n;
     final view = widget.resolve(p);
     final subtitle = <String>[
-      if (p.isCreator) 'Создатель' else if (p.isAdmin) 'Администратор',
-      if (p.isSpeaker) 'Спикер',
-      if (p.handRaised) 'Поднял руку',
+      if (p.isCreator)
+        l10n.callParticipantsCreator
+      else if (p.isAdmin)
+        l10n.callParticipantsAdmin,
+      if (p.isSpeaker) l10n.callParticipantsSpeaker,
+      if (p.handRaised) l10n.callParticipantsHandRaised,
     ];
 
     return ListTile(

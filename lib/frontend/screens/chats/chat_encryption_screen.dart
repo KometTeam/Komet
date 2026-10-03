@@ -10,6 +10,7 @@ import '../../widgets/primary_loading_button.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/small_spinner.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../l10n/app_localizations.dart';
 
 class ChatEncryptionScreen extends StatefulWidget {
   final int accountId;
@@ -60,15 +61,16 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context)!;
     if (widget.accountId == 0) {
-      showCustomNotification(context, 'Профиль ещё не загружен');
+      showCustomNotification(context, l10n.chatEncryptionProfileNotLoaded);
       return;
     }
     final key = _keyController.text.trim();
     if (_enabled && key.isEmpty) {
       showHintBubble(
         _keyFieldKey.currentContext ?? context,
-        'Введите ключ шифрования',
+        l10n.chatEncryptionEnterKeyHint,
       );
       return;
     }
@@ -84,7 +86,7 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
     _saving.value = false;
     showCustomNotification(
       context,
-      _enabled ? 'Шифрование включено' : 'Шифрование отключено',
+      _enabled ? l10n.chatEncryptionEnabled : l10n.chatEncryptionDisabled,
     );
     Navigator.pop(context, true);
   }
@@ -92,6 +94,7 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -102,7 +105,7 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Шифрование сообщений',
+          l10n.chatEncryptionTitle,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 20,
@@ -122,10 +125,8 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
                     children: [
                       SettingsToggleTile(
                         icon: _enabled ? Symbols.lock : Symbols.lock_open,
-                        label: 'Шифровать сообщения',
-                        subtitle:
-                            'Текст сообщений в этом чате будет зашифрован '
-                            'ключом ниже',
+                        label: l10n.chatEncryptionToggle,
+                        subtitle: l10n.chatEncryptionToggleSubtitle,
                         value: _enabled,
                         onChanged: (v) => setState(() => _enabled = v),
                       ),
@@ -141,7 +142,7 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Ключ',
+                          l10n.chatEncryptionKeyLabel,
                           style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 16,
@@ -156,7 +157,7 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
                           enableSuggestions: false,
                           autocorrect: false,
                           decoration: InputDecoration(
-                            hintText: 'Введите ключ',
+                            hintText: l10n.chatEncryptionKeyHint,
                             filled: true,
                             fillColor: cs.surfaceContainerHighest,
                             border: OutlineInputBorder(
@@ -177,11 +178,7 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Ключ хранится только на этом устройстве. '
-                          'Собеседник должен ввести такой же ключ, иначе он '
-                          'не прочитает сообщения. Это парольный режим для '
-                          'групп: без forward secrecy, любой, кто знает '
-                          'пароль, читает всю историю.',
+                          l10n.chatEncryptionKeyNote,
                           style: TextStyle(
                             color: cs.onSurfaceVariant,
                             fontSize: 13,
@@ -197,7 +194,7 @@ class _ChatEncryptionScreenState extends State<ChatEncryptionScreen> {
                     child: PrimaryLoadingButton(
                       loading: _saving,
                       onPressed: _save,
-                      child: const Text('Сохранить'),
+                      child: Text(l10n.editProfileSave),
                     ),
                   ),
                 ],

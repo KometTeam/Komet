@@ -5,6 +5,7 @@ import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_icon.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/settings_radio_tile.dart';
 import '../../widgets/settings_card.dart';
@@ -24,11 +25,9 @@ class _AppIconScreenState extends State<AppIconScreen> {
   }
 
   Future<void> _select(AppIcon icon) async {
+    final l10n = AppLocalizations.of(context)!;
     if (!AppIconConfig.isSupported) {
-      showCustomNotification(
-        context,
-        'Смена иконки доступна только на Android и iOS',
-      );
+      showCustomNotification(context, l10n.appIconScreenUnsupported);
       return;
     }
     if (AppIconConfig.current.value == icon) return;
@@ -36,21 +35,22 @@ class _AppIconScreenState extends State<AppIconScreen> {
     try {
       await AppIconConfig.apply(icon);
       if (!mounted) return;
-      showCustomNotification(context, 'Иконка изменена на «${icon.title}»');
+      showCustomNotification(context, l10n.appIconScreenChanged(icon.title));
     } catch (e) {
       if (!mounted) return;
       final reason = e is PlatformException ? (e.message ?? e.code) : '$e';
-      showCustomNotification(context, 'Не удалось сменить иконку: $reason');
+      showCustomNotification(context, l10n.appIconScreenChangeFailed(reason));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: ConnectionTitleBar(
-        titleText: 'Иконка приложения',
+        titleText: l10n.appIconScreenTitle,
         backgroundColor: cs.surface,
       ),
       body: SafeArea(
@@ -65,7 +65,7 @@ class _AppIconScreenState extends State<AppIconScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Внешний вид иконки',
+                    l10n.appIconScreenAppearance,
                     style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
@@ -75,8 +75,8 @@ class _AppIconScreenState extends State<AppIconScreen> {
                   const SizedBox(height: 4),
                   Text(
                     AppIconConfig.isSupported
-                        ? 'На Android приложение закроется — лаунчер подхватит новую иконку. На iOS — мгновенно с системным диалогом.'
-                        : 'Доступно только на Android и iOS',
+                        ? l10n.appIconScreenHint
+                        : l10n.appIconScreenOnlyMobile,
                     style: TextStyle(
                       color: cs.onSurfaceVariant,
                       fontSize: 13,

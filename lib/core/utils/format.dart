@@ -1,7 +1,9 @@
 library;
 
+import '../../l10n/app_localizations.dart';
+
 // #***! русские месяцы, intl ради трёх букв тянуть не хочется
-const List<String> kRuMonthsShort = [
+const List<String> _ruMonthsShort = [
   'янв',
   'фев',
   'мар',
@@ -16,24 +18,51 @@ const List<String> kRuMonthsShort = [
   'дек',
 ];
 
+const List<String> _enMonthsShort = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+const List<String> _ruWeekdaysShort = [
+  'пн',
+  'вт',
+  'ср',
+  'чт',
+  'пт',
+  'сб',
+  'вс',
+];
+
+const List<String> _enWeekdaysShort = [
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+  'Sun',
+];
+
+bool _isRussian(AppLocalizations l10n) => l10n.localeName == 'ru';
+
+String _formatMonthShort(AppLocalizations l10n, int month) =>
+    (_isRussian(l10n) ? _ruMonthsShort : _enMonthsShort)[month - 1];
+
+String formatWeekdayShort(AppLocalizations l10n, int weekday) =>
+    (_isRussian(l10n) ? _ruWeekdaysShort : _enWeekdaysShort)[weekday - 1];
+
 // #***! ведущий ноль
 String pad2(int n) => n.toString().padLeft(2, '0');
-
-// #***! русское склонение, 1 файл 2 файла 5 файлов
-String pluralRu(int n, String one, String few, String many) {
-  final mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return many;
-  switch (n % 10) {
-    case 1:
-      return one;
-    case 2:
-    case 3:
-    case 4:
-      return few;
-    default:
-      return many;
-  }
-}
 
 // #***! таймер голосового с десятыми
 String formatVoiceElapsed(int ms) {
@@ -47,13 +76,15 @@ String formatVoiceElapsed(int ms) {
 final RegExp _phoneNonDigits = RegExp(r'[^0-9]');
 
 // #***! размер по человечески
-String formatBytes(int bytes) {
-  if (bytes < 1024) return '$bytes Б';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} КБ';
-  if (bytes < 1024 * 1024 * 1024) {
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} МБ';
+String formatBytes(AppLocalizations l10n, int bytes) {
+  if (bytes < 1024) return l10n.formatBytesB('$bytes');
+  if (bytes < 1024 * 1024) {
+    return l10n.formatBytesKb((bytes / 1024).toStringAsFixed(1));
   }
-  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} ГБ';
+  if (bytes < 1024 * 1024 * 1024) {
+    return l10n.formatBytesMb((bytes / (1024 * 1024)).toStringAsFixed(1));
+  }
+  return l10n.formatBytesGb((bytes / (1024 * 1024 * 1024)).toStringAsFixed(1));
 }
 
 // #***! дальше время и даты в разных видах
@@ -73,11 +104,16 @@ String formatDurationClock(Duration d) {
   return '$m:$sec';
 }
 
-String formatApproxDuration(int ms) {
+String formatApproxDuration(AppLocalizations l10n, int ms) {
   final tenths = (ms / 100).round();
-  if (tenths < 600) return '${tenths ~/ 10},${tenths % 10} с';
+  if (tenths < 600) {
+    return l10n.formatApproxSeconds('${tenths ~/ 10}', '${tenths % 10}');
+  }
   final hundredths = (ms / 600).round();
-  return '${hundredths ~/ 100},${pad2(hundredths % 100)} мин';
+  return l10n.formatApproxMinutes(
+    '${hundredths ~/ 100}',
+    pad2(hundredths % 100),
+  );
 }
 
 String formatFileStamp(DateTime t) =>
@@ -88,8 +124,11 @@ String formatClock(DateTime dt, {bool withSeconds = false}) => withSeconds
     ? '${pad2(dt.hour)}:${pad2(dt.minute)}:${pad2(dt.second)}'
     : '${pad2(dt.hour)}:${pad2(dt.minute)}';
 
-String formatDateWords(DateTime dt) =>
-    '${dt.day} ${kRuMonthsShort[dt.month - 1]} ${dt.year}';
+String formatDayMonth(AppLocalizations l10n, DateTime dt) =>
+    '${dt.day} ${_formatMonthShort(l10n, dt.month)}';
+
+String formatDateWords(AppLocalizations l10n, DateTime dt) =>
+    '${formatDayMonth(l10n, dt)} ${dt.year}';
 
 String formatDateNumeric(DateTime dt) =>
     '${pad2(dt.day)}.${pad2(dt.month)}.${dt.year}';
@@ -97,18 +136,18 @@ String formatDateNumeric(DateTime dt) =>
 String formatDateTimeNumeric(DateTime dt) =>
     '${formatDateNumeric(dt)} ${formatClock(dt)}';
 
-String formatDateTimeWords(DateTime dt) =>
-    '${formatDateWords(dt)}, ${formatClock(dt)}';
+String formatDateTimeWords(AppLocalizations l10n, DateTime dt) =>
+    '${formatDateWords(l10n, dt)}, ${formatClock(dt)}';
 
 // #***! был недавно и подобное для шапки чата
-String formatLastSeen(int secondsSinceEpoch) {
+String formatLastSeen(AppLocalizations l10n, int secondsSinceEpoch) {
   final dt = DateTime.fromMillisecondsSinceEpoch(secondsSinceEpoch * 1000);
   final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 2) return 'Был(-а) только что';
-  if (diff.inMinutes < 60) return 'Был(-а) ${diff.inMinutes} мин назад';
-  if (diff.inHours < 24) return 'Был(-а) ${diff.inHours} ч назад';
-  if (diff.inDays < 7) return 'Был(-а) ${diff.inDays} дн назад';
-  return 'Был(-а) ${formatDateWords(dt)}';
+  if (diff.inMinutes < 2) return l10n.lastSeenJustNow;
+  if (diff.inMinutes < 60) return l10n.lastSeenMinutesAgo(diff.inMinutes);
+  if (diff.inHours < 24) return l10n.lastSeenHoursAgo(diff.inHours);
+  if (diff.inDays < 7) return l10n.lastSeenDaysAgo(diff.inDays);
+  return l10n.settingsTabLastSeen(formatDateWords(l10n, dt));
 }
 
 // #***! телефон разбираем красиво только для российских
@@ -128,9 +167,9 @@ String? formatPhone(dynamic raw) {
   return '+$digits';
 }
 
-String? formatGender(dynamic raw) {
+String? formatGender(AppLocalizations l10n, dynamic raw) {
   if (raw is! int) return null;
-  if (raw == 1) return 'Мужской';
-  if (raw == 2) return 'Женский';
+  if (raw == 1) return l10n.genderMale;
+  if (raw == 2) return l10n.genderFemale;
   return null;
 }

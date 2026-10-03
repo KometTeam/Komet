@@ -81,12 +81,13 @@ class _SpoofScreenState extends State<SpoofScreen> {
   }
 
   Future<bool> _confirmFullSpoofing() {
+    final l10n = AppLocalizations.of(context)!;
     return showInfoActionSheet(
       context,
       headerIcon: Symbols.warning,
-      title: 'Могут быть последствия.',
-      subtitle: 'Меняй, только если знаешь что делаешь.',
-      confirmLabel: 'ОК',
+      title: l10n.spoofScreenFullWarningTitle,
+      subtitle: l10n.spoofScreenFullWarningSubtitle,
+      confirmLabel: l10n.photoEditorOk,
       confirmDelay: const Duration(seconds: 3),
     );
   }

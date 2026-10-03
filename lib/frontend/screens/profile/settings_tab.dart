@@ -369,9 +369,19 @@ class _SettingsTabState extends State<SettingsTab>
       final profile = await accountModule.removeProfilePhoto(id);
       if (!mounted) return;
       await _applyProfileAfterDeletion(profile);
-      if (mounted) showCustomNotification(context, 'Фото удалено');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.settingsTabPhotoDeleted,
+        );
+      }
     } catch (e) {
-      if (mounted) showCustomNotification(context, 'Не удалось удалить фото: $e');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.settingsTabPhotoDeleteFailed('$e'),
+        );
+      }
     }
   }
 
@@ -393,8 +403,12 @@ class _SettingsTabState extends State<SettingsTab>
   Future<void> _loadAppVersion() async {
     final info = await PackageInfo.fromPlatform();
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
-      _appVersionLabel = 'Версия ${info.version} (${info.buildNumber})';
+      _appVersionLabel = l10n.settingsTabAppVersion(
+        info.version,
+        info.buildNumber,
+      );
     });
   }
 
@@ -427,32 +441,31 @@ class _SettingsTabState extends State<SettingsTab>
 
   Future<void> _openCloudStorage(BuildContext context) async {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final ok = await showInfoActionSheet(
       context,
       headerIcon: Symbols.cloud,
-      title: 'Облачное хранилище',
-      subtitle: 'Через МАХ',
+      title: l10n.cloudStorageTitle,
+      subtitle: l10n.settingsTabCloudStorageSubtitle,
       items: [
-        const InfoActionSheetItem(
+        InfoActionSheetItem(
           icon: Symbols.cloud_done,
-          title: 'Работает при белых списках',
-          body: 'Вы сможете передать файл даже при ограниченном интернете.',
+          title: l10n.settingsTabCloudStorageWhitelistTitle,
+          body: l10n.settingsTabCloudStorageWhitelistBody,
         ),
-        const InfoActionSheetItem(
+        InfoActionSheetItem(
           icon: Symbols.inventory_2,
-          title: 'Файлы до 4ГБ, безлимитное количество.',
-          body: 'Можете хранить массивный обьем информации.',
+          title: l10n.settingsTabCloudStorageLimitsTitle,
+          body: l10n.settingsTabCloudStorageLimitsBody,
         ),
         InfoActionSheetItem(
           icon: Symbols.gpp_maybe,
-          title: 'Не обеспечивается конфединциальность файлов',
-          body:
-              'Облачное хранилище работает через ваш аккаунт на сервере МАХ, '
-              'нужные люди всё равно могут его посмотреть.',
+          title: l10n.settingsTabCloudStoragePrivacyTitle,
+          body: l10n.settingsTabCloudStoragePrivacyBody,
           titleColor: cs.error,
         ),
       ],
-      confirmLabel: 'ОК',
+      confirmLabel: l10n.photoEditorOk,
       confirmDelay: const Duration(seconds: 3),
       seenKey: 'cloud_storage_intro_seen',
     );
@@ -465,6 +478,7 @@ class _SettingsTabState extends State<SettingsTab>
 
   Future<void> _confirmLogout() async {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
@@ -478,7 +492,7 @@ class _SettingsTabState extends State<SettingsTab>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Выйти из аккаунта?',
+                  l10n.settingsTabLogoutConfirmTitle,
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 18,
@@ -487,7 +501,7 @@ class _SettingsTabState extends State<SettingsTab>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Данные аккаунта будут удалены с этого устройства.',
+                  l10n.settingsTabLogoutConfirmBody,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
                 const SizedBox(height: 20),
@@ -499,12 +513,12 @@ class _SettingsTabState extends State<SettingsTab>
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: AppShape.buttonBorder,
                   ),
-                  child: const Text('Выйти'),
+                  child: Text(l10n.settingsTabLogoutConfirm),
                 ),
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Отмена'),
+                  child: Text(l10n.chatInfoActionCancel),
                 ),
               ],
             ),
@@ -521,7 +535,12 @@ class _SettingsTabState extends State<SettingsTab>
     try {
       await accountModule.logout();
     } catch (e) {
-      if (mounted) showCustomNotification(context, 'Не удалось выйти: $e');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.settingsTabLogoutFailed('$e'),
+        );
+      }
       return;
     }
     await resetDigitalIdSession();
@@ -606,7 +625,7 @@ class _SettingsTabState extends State<SettingsTab>
                             if (BuildProfile.digitalId)
                               _SettingsItem(
                                 icon: Symbols.badge,
-                                label: 'Цифровой ID',
+                                label: l10n.digitalIdTitle,
                                 onTap: () {
                                   Navigator.push(
                                     context,
@@ -622,13 +641,13 @@ class _SettingsTabState extends State<SettingsTab>
                               ),
                             _SettingsItem(
                               icon: Symbols.language,
-                              label: 'Войти в Сферум',
+                              label: l10n.settingsTabSferumSignIn,
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => WebAppScreen(
-                                      title: 'Сферум',
+                                      title: l10n.settingsTabSferumTitle,
                                       entryPoint: WebAppEntryPoint.settings,
                                       loader: () => webAppModule.fetchSferum(),
                                     ),
@@ -669,7 +688,7 @@ class _SettingsTabState extends State<SettingsTab>
                       items: [
                         _SettingsItem(
                           icon: Symbols.notifications_active,
-                          label: 'Уведомления',
+                          label: l10n.notificationsTitle,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -682,7 +701,7 @@ class _SettingsTabState extends State<SettingsTab>
                         ),
                         _SettingsItem(
                           icon: Symbols.videocam,
-                          label: 'Камера и микрофон',
+                          label: l10n.mediaDevicesTitle,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -695,12 +714,12 @@ class _SettingsTabState extends State<SettingsTab>
                         ),
                         _SettingsItem(
                           icon: Symbols.cloud,
-                          label: 'Облачное хранилище [BETA]',
+                          label: l10n.settingsTabCloudStorageBeta,
                           onTap: () => _openCloudStorage(context),
                         ),
                         _SettingsItem(
                           icon: Symbols.vpn_lock,
-                          label: 'Прокси',
+                          label: l10n.proxySettingsTitle,
                           onTap: () {
                             final cs = Theme.of(context).colorScheme;
                             showModalBottomSheet<void>(
@@ -732,7 +751,7 @@ class _SettingsTabState extends State<SettingsTab>
                           ),
                         _SettingsItem(
                           icon: Symbols.lock,
-                          label: 'Безопасность',
+                          label: l10n.securityTitle,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -747,7 +766,7 @@ class _SettingsTabState extends State<SettingsTab>
                         ),
                         _SettingsItem(
                           icon: Symbols.devices,
-                          label: 'Устройства',
+                          label: l10n.devicesTitle,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -795,7 +814,7 @@ class _SettingsTabState extends State<SettingsTab>
                                 items: [
                                   _SettingsItem(
                                     icon: Symbols.construction,
-                                    label: 'Для разработчиков',
+                                    label: l10n.settingsTabDevelopers,
                                     onTap: () {
                                       Navigator.push(
                                         context,
@@ -851,7 +870,7 @@ class _SettingsTabState extends State<SettingsTab>
                         ),
                         _SettingsItem(
                           icon: Symbols.logout,
-                          label: 'Выйти из аккаунта',
+                          label: l10n.settingsTabLogout,
                           tintColor: cs.error,
                           onTap: _confirmLogout,
                         ),
@@ -1383,7 +1402,7 @@ class _SettingsTabState extends State<SettingsTab>
     );
   }
 
-  String _formatSelfSeen(int seconds) {
+  String _formatSelfSeen(AppLocalizations l10n, int seconds) {
     final dt = DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
     final now = DateTime.now();
     final time = formatClock(dt);
@@ -1391,8 +1410,8 @@ class _SettingsTabState extends State<SettingsTab>
         dt.year == now.year && dt.month == now.month && dt.day == now.day;
     if (isToday) return time;
     final datePart = dt.year == now.year
-        ? '${dt.day} ${kRuMonthsShort[dt.month - 1]}'
-        : '${dt.day} ${kRuMonthsShort[dt.month - 1]} ${dt.year}';
+        ? formatDayMonth(l10n, dt)
+        : formatDateWords(l10n, dt);
     return '$datePart, $time';
   }
 
@@ -1408,11 +1427,14 @@ class _SettingsTabState extends State<SettingsTab>
             builder: (context, online, _) => ValueListenableBuilder<int?>(
               valueListenable: SelfPresence.lastSeenSeconds,
               builder: (context, seen, _) {
+                final l10n = AppLocalizations.of(context)!;
                 final label = online
-                    ? 'онлайн'
+                    ? l10n.settingsTabOnline
                     : (seen != null
-                          ? 'Был(-а) ${_formatSelfSeen(seen)}'
-                          : 'офлайн');
+                          ? l10n.settingsTabLastSeen(
+                              _formatSelfSeen(l10n, seen),
+                            )
+                          : l10n.settingsTabOffline);
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,

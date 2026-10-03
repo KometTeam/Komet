@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../backend/modules/messages.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import '../../photo_viewer.dart';
 
@@ -55,7 +56,9 @@ class _ControlBubbleState extends State<ControlBubble> {
     () => TapGestureRecognizer()..onTap = () => widget.onUserTap?.call(userId),
   );
 
-  String _nameOf(int userId) => ContactCache.get(userId) ?? 'Пользователь';
+  String _nameOf(int userId) =>
+      ContactCache.get(userId) ??
+      AppLocalizations.of(context)!.msgActionsReadByUnknownUser;
 
   int? _mentionedUser(ControlAttachment control) {
     final direct = control.userId;
@@ -66,29 +69,35 @@ class _ControlBubbleState extends State<ControlBubble> {
   }
 
   _ControlText _resolveText(ControlAttachment control) {
+    final l10n = AppLocalizations.of(context)!;
     final senderId = widget.message.senderId;
     final mine = senderId == widget.message.accountId;
     final sender = mine
-        ? const _ControlSegment('Вы', bold: true)
+        ? _ControlSegment(l10n.callParticipantYou, bold: true)
         : _ControlSegment(_nameOf(senderId), userId: senderId, bold: true);
     final senderTap = mine ? null : senderId;
     _ControlSegment action(String byMe, String byOther) =>
         _ControlSegment(mine ? byMe : byOther);
     final title = control.title?.trim();
-    final quotedTitle = title == null || title.isEmpty ? null : '«$title»';
+    final quotedTitle = title == null || title.isEmpty
+        ? null
+        : l10n.controlBubbleQuotedTitle(title);
 
     switch (control.event) {
       case 'new':
         return _ControlText([
           sender,
-          action(' создали чат', ' создал(а) чат'),
+          action(
+            l10n.controlBubbleCreatedByMe,
+            l10n.controlBubbleCreatedByOther,
+          ),
           if (quotedTitle != null) _ControlSegment(' $quotedTitle'),
         ], senderTap);
       case 'add':
         final ids = control.userIds ?? const <int>[];
         final segments = <_ControlSegment>[
           sender,
-          action(' добавили ', ' добавил(а) '),
+          action(l10n.controlBubbleAddedByMe, l10n.controlBubbleAddedByOther),
         ];
         for (var i = 0; i < ids.length; i++) {
           if (i > 0) segments.add(const _ControlSegment(', '));
@@ -100,33 +109,40 @@ class _ControlBubbleState extends State<ControlBubble> {
       case 'leave':
         return _ControlText([
           sender,
-          action(' покинули чат', ' покинул(а) чат'),
+          action(l10n.controlBubbleLeftByMe, l10n.controlBubbleLeftByOther),
         ], senderTap);
       case 'joinByLink':
         return _ControlText([
           sender,
-          action(' присоединились к чату', ' присоединился(-ась) к чату'),
+          action(l10n.controlBubbleJoinedByMe, l10n.controlBubbleJoinedByOther),
         ], senderTap);
       case 'pin':
         return _ControlText([
           sender,
-          action(' закрепили сообщение', ' закрепил(а) сообщение'),
+          action(l10n.controlBubblePinnedByMe, l10n.controlBubblePinnedByOther),
         ], senderTap);
       case 'title':
         return _ControlText([
           sender,
-          action(' изменили название чата', ' изменил(а) название чата'),
-          if (quotedTitle != null) _ControlSegment(' на $quotedTitle'),
+          action(
+            l10n.controlBubbleRenamedByMe,
+            l10n.controlBubbleRenamedByOther,
+          ),
+          if (quotedTitle != null)
+            _ControlSegment(l10n.controlBubbleRenamedTo(quotedTitle)),
         ], senderTap);
       case 'icon':
         return _ControlText([
           sender,
-          action(' изменили фото чата', ' изменил(а) фото чата'),
+          action(
+            l10n.controlBubblePhotoChangedByMe,
+            l10n.controlBubblePhotoChangedByOther,
+          ),
         ], senderTap);
       case ControlAttachment.botStartedEvent:
         final payload = widget.message.botStartPayload;
         return _ControlText([
-          const _ControlSegment('Бот запущен'),
+          _ControlSegment(l10n.controlBubbleBotStarted),
           if (payload != null) _ControlSegment(': $payload'),
         ], null);
       default:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/calls/call_controller.dart';
 import '../../core/calls/call_link.dart';
+import '../../l10n/app_localizations.dart';
 import '../screens/calls/call_screen.dart';
 import 'confirm_dialog.dart';
 import 'custom_notification.dart';
@@ -10,9 +11,10 @@ Future<bool> tryHandleCallLink(BuildContext context, String url) async {
   final token = CallLink.token(url);
   if (token == null) return false;
 
+  final l10n = AppLocalizations.of(context)!;
   final controller = CallController.instance;
   if (controller.isBusy) {
-    showCustomNotification(context, 'Звонок уже идёт');
+    showCustomNotification(context, l10n.callLinkHandlerAlreadyInCall);
     return true;
   }
 
@@ -21,17 +23,17 @@ Future<bool> tryHandleCallLink(BuildContext context, String url) async {
 
   final name = (preview?.callName?.isNotEmpty ?? false)
       ? preview!.callName!
-      : 'Звонок';
+      : l10n.contactProfileActionCall;
   final count = preview?.participantsCount ?? 0;
   final message = count > 0
-      ? 'Присоединиться к звонку «$name»? Сейчас в звонке: $count.'
-      : 'Присоединиться к звонку «$name»?';
+      ? l10n.callLinkHandlerJoinPromptWithCount(name, count)
+      : l10n.callLinkHandlerJoinPrompt(name);
 
   final confirmed = await showConfirmDialog(
     context,
-    title: 'Звонок',
+    title: l10n.contactProfileActionCall,
     message: message,
-    confirmLabel: 'Присоединиться',
+    confirmLabel: l10n.chatCallJoin,
   );
   if (!confirmed || !context.mounted) return true;
 
@@ -50,6 +52,7 @@ Future<void> joinGroupCall(
   required String name,
   bool isVideo = false,
 }) async {
+  final l10n = AppLocalizations.of(context)!;
   final controller = CallController.instance;
   final navigator = Navigator.of(context);
   if (controller.isBusy) {
@@ -63,7 +66,7 @@ Future<void> joinGroupCall(
         ),
       );
     } else {
-      showCustomNotification(context, 'Звонок уже идёт');
+      showCustomNotification(context, l10n.callLinkHandlerAlreadyInCall);
     }
     return;
   }
@@ -77,7 +80,7 @@ Future<void> joinGroupCall(
     );
   } catch (_) {
     if (context.mounted) {
-      showCustomNotification(context, 'Не удалось присоединиться к звонку');
+      showCustomNotification(context, l10n.callLinkHandlerJoinFailed);
     }
   }
 }

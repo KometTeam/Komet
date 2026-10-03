@@ -8,6 +8,7 @@ import '../../../core/protocol/packet.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/media_cache.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../debug/cache_section.dart';
 import '../../debug/feature_toggles_section.dart';
@@ -79,7 +80,10 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
       _clearingCache = false;
       _cacheSize = 0;
     });
-    showCustomNotification(context, 'Кэш очищен (${formatBytes(freed)})');
+    showCustomNotification(
+      context,
+      'Кэш очищен (${formatBytes(AppLocalizations.of(context)!, freed)})',
+    );
   }
 
   void _pickCacheLimit() {
@@ -129,8 +133,9 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
     );
   }
 
-  String _limitLabel(int bytes) =>
-      bytes <= 0 ? 'Без лимита' : formatBytes(bytes);
+  String _limitLabel(int bytes) => bytes <= 0
+      ? 'Без лимита'
+      : formatBytes(AppLocalizations.of(context)!, bytes);
 
   @override
   void dispose() {

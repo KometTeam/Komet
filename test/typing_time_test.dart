@@ -149,14 +149,15 @@ void main() {
   });
 
   test('секунды набора округляются до десятых, минуты — до сотых', () {
-    expect(formatApproxDuration(240), '0,2 с');
-    expect(formatApproxDuration(7000), '7,0 с');
-    expect(formatApproxDuration(7460), '7,5 с');
-    expect(formatApproxDuration(59940), '59,9 с');
-    expect(formatApproxDuration(59960), '1,00 мин');
-    expect(formatApproxDuration(150000), '2,50 мин');
-    expect(formatApproxDuration(208200), '3,47 мин');
-    expect(formatApproxDuration(843000), '14,05 мин');
+    final ru = lookupAppLocalizations(const Locale('ru'));
+    expect(formatApproxDuration(ru, 240), '0,2 с');
+    expect(formatApproxDuration(ru, 7000), '7,0 с');
+    expect(formatApproxDuration(ru, 7460), '7,5 с');
+    expect(formatApproxDuration(ru, 59940), '59,9 с');
+    expect(formatApproxDuration(ru, 59960), '1,00 мин');
+    expect(formatApproxDuration(ru, 150000), '2,50 мин');
+    expect(formatApproxDuration(ru, 208200), '3,47 мин');
+    expect(formatApproxDuration(ru, 843000), '14,05 мин');
   });
 
   test('время набора переживает сохранение сообщения в базу', () async {

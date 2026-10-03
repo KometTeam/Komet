@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/utils/haptics.dart';
+import '../../l10n/app_localizations.dart';
 import 'adaptive_shell.dart';
 
 Future<ImageProvider?> precacheLoginAvatar(
@@ -20,6 +21,15 @@ Future<ImageProvider?> precacheLoginAvatar(
   }
 }
 
+enum _Greeting {
+  welcome,
+  emergencyExit,
+  funnyThings,
+  farewell,
+  gondor,
+  easterEgg,
+}
+
 class LoginSuccessScreen extends StatefulWidget {
   final ImageProvider? avatar;
   final bool preview;
@@ -34,16 +44,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
     with SingleTickerProviderStateMixin {
   static const Duration _duration = Duration(milliseconds: 1900);
 
-  static const List<String> _greetings = [
-    'Добро пожаловать в Komet!',
-    'Аварийный выход на высоте 30 тысяч футов. Иллюзия безопасности.',
-    'Иногда забавные вещи могут быть уголовно наказуемы',
-    'Если вы видите это сообщение, значит меня уже нет в живых.',
-    'Где был Гондор когда...',
-    'Вы нашли пасхалку!'
-  ];
-
-  late final String _greeting;
+  late final _Greeting _greeting;
   late final AnimationController _controller;
   late final Animation<double> _circleScale;
   late final Animation<double> _ringSweep;
@@ -62,7 +63,8 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   @override
   void initState() {
     super.initState();
-    _greeting = _greetings[math.Random().nextInt(_greetings.length)];
+    _greeting =
+        _Greeting.values[math.Random().nextInt(_Greeting.values.length)];
     _controller = AnimationController(vsync: this, duration: _duration);
 
     _circleScale = CurvedAnimation(
@@ -299,7 +301,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
       child: Transform.translate(
         offset: Offset(0, 18 * (1 - _titleOffset.value)),
         child: Text(
-          'Готово!',
+          AppLocalizations.of(context)!.spoofDialogReloginTitle,
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 26,
@@ -311,6 +313,15 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
     );
   }
 
+  String _greetingText(AppLocalizations l10n) => switch (_greeting) {
+    _Greeting.welcome => l10n.loginSuccessGreetingWelcome,
+    _Greeting.emergencyExit => l10n.loginSuccessGreetingEmergencyExit,
+    _Greeting.funnyThings => l10n.loginSuccessGreetingFunnyThings,
+    _Greeting.farewell => l10n.loginSuccessGreetingFarewell,
+    _Greeting.gondor => l10n.loginSuccessGreetingGondor,
+    _Greeting.easterEgg => l10n.loginSuccessGreetingEasterEgg,
+  };
+
   Widget _buildSubtitle(ColorScheme cs) {
     return Opacity(
       opacity: _subtitleOpacity.value,
@@ -319,7 +330,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40),
           child: Text(
-            _greeting,
+            _greetingText(AppLocalizations.of(context)!),
             textAlign: TextAlign.center,
             style: TextStyle(
               color: cs.onSurfaceVariant,

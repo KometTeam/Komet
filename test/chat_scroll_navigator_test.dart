@@ -7,6 +7,7 @@ import 'package:komet/frontend/screens/chats/chat/chat_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/chat_scroll_navigator.dart';
 import 'package:komet/frontend/screens/chats/chat/read_marker_gate.dart';
 import 'package:komet/frontend/screens/chats/chat/view/anchored_message_list.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
 const double _viewport = 500;
 
@@ -71,6 +72,7 @@ class _Harness {
         controller.bump();
       },
       showNotification: notifications.add,
+      localizations: () => lookupAppLocalizations(const Locale('ru')),
       initialMessageIdOf: () => null,
       initialMessageTimeOf: () => null,
       onNavigated: () {},

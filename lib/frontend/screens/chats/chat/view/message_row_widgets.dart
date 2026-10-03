@@ -889,6 +889,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -901,7 +902,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Изменить сообщение',
+            l10n.messageRowEditTitle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 18,
@@ -920,7 +921,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
             contextMenuBuilder: (ctx, state) =>
                 widget.contextMenuBuilder(_controller, ctx, state),
             decoration: InputDecoration(
-              hintText: 'Текст сообщения',
+              hintText: l10n.scheduledMessageTextHint,
               filled: true,
               fillColor: cs.surfaceContainerHighest,
               border: OutlineInputBorder(
@@ -933,7 +934,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
           FilledButton(
             onPressed: () =>
                 Navigator.of(context).pop(_controller.buildContent()),
-            child: const Text('Сохранить'),
+            child: Text(l10n.editProfileSave),
           ),
         ],
       ),

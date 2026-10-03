@@ -9,6 +9,7 @@ import 'package:komet/frontend/screens/chats/chat/mention_panel_controller.dart'
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/message_search_result.dart';
 import 'package:komet/frontend/widgets/chat_wallpaper_view.dart';
+import 'package:komet/frontend/widgets/toast_placement.dart';
 
 import 'chat_call_banner.dart';
 import 'command_panel_view.dart';
@@ -121,9 +122,11 @@ class ChatBodyLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final composer = MeasureSize(
-      onHeight: (value) => composerHeight.value = value,
-      child: Builder(builder: composerAreaBuilder),
+    final composer = ToastObstruction(
+      child: MeasureSize(
+        onHeight: (value) => composerHeight.value = value,
+        child: Builder(builder: composerAreaBuilder),
+      ),
     );
 
     if (!underlap) {

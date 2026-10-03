@@ -4,23 +4,19 @@ const int kPluginApiVersion = 1;
 const String kPluginPackageExtension = '.kinet';
 
 enum PluginPermission {
-  chatWrite('chat.write', 'Отправка сообщений'),
-  chatEdit('chat.edit', 'Редактирование отправленных сообщений'),
-  uiNotify('ui.notify', 'Показ уведомлений'),
-  contactRead('contact.read', 'Чтение данных собеседника'),
-  replyRead(
-    'message.readReply',
-    'Чтение сообщения, на которое отвечает команда',
-  ),
-  network('network', 'Доступ к интернету'),
-  photoWrite('chat.photo', 'Отправка фотографий'),
-  fileWrite('chat.file', 'Отправка файлов'),
-  storage('storage', 'Локальное хранилище плагина');
+  chatWrite('chat.write'),
+  chatEdit('chat.edit'),
+  uiNotify('ui.notify'),
+  contactRead('contact.read'),
+  replyRead('message.readReply'),
+  network('network'),
+  photoWrite('chat.photo'),
+  fileWrite('chat.file'),
+  storage('storage');
 
-  const PluginPermission(this.id, this.label);
+  const PluginPermission(this.id);
 
   final String id;
-  final String label;
 
   static PluginPermission? fromId(String id) {
     for (final permission in values) {

@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
+import '../../l10n/app_localizations.dart';
 import 'plugin_installer.dart';
 import 'plugin_models.dart';
+import 'plugin_permission_label.dart';
 import 'plugin_store.dart';
 
 class PluginUpdater {
@@ -65,7 +67,10 @@ class PluginUpdater {
     }
   }
 
-  Future<PluginDescriptor> apply(PluginUpdateInfo update) async {
+  Future<PluginDescriptor> apply(
+    PluginUpdateInfo update,
+    AppLocalizations l10n,
+  ) async {
     final preview = await _installer.download(update.packageUrl);
     if (preview.manifest.id != update.plugin.manifest.id ||
         preview.manifest.version != update.version) {
@@ -83,7 +88,9 @@ class PluginUpdater {
     );
     if (missing.isNotEmpty) {
       throw FormatException(
-        'Обновление запрашивает новые разрешения: ${missing.map((item) => item.label).join(', ')}',
+        l10n.pluginUpdateNewPermissions(
+          missing.map((item) => item.label(l10n)).join(', '),
+        ),
       );
     }
     return _store.install(

@@ -20,6 +20,7 @@ import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_format.dart';
 import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
+import '../../l10n/app_localizations.dart';
 import 'custom_notification.dart';
 import 'hint_bubble.dart';
 import 'formatted_message_text.dart';
@@ -1298,7 +1299,7 @@ class MessageBubble extends StatelessWidget {
           ? _StackMatchTopWidth(
               growForBottom: true,
               top: Padding(padding: padding, child: innerContent),
-              bottom: _buildCommentsFooter(cs),
+              bottom: _buildCommentsFooter(context, cs),
             )
           : innerContent,
     );
@@ -1342,8 +1343,9 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildCommentsFooter(ColorScheme cs) {
-    final label = commentsLabel ?? 'Комментарии';
+  Widget _buildCommentsFooter(BuildContext context, ColorScheme cs) {
+    final label =
+        commentsLabel ?? AppLocalizations.of(context)!.commentsTitle;
     final accent = isMe ? cs.onPrimaryContainer : cs.primary;
     return Material(
       color: Colors.transparent,
@@ -1508,12 +1510,19 @@ class MessageBubble extends StatelessWidget {
       case 'CLIPBOARD':
         final payload = button.payload;
         if (payload == null || payload.isEmpty) return;
-        await copyTextEntity(context, payload, 'Скопировано');
+        await copyTextEntity(
+          context,
+          payload,
+          AppLocalizations.of(context)!.msgActionsCopied,
+        );
         return;
       default:
         final callbackId = keyboard.callbackId;
         if (callbackId == null || callbackId.isEmpty) {
-          showHintBubble(context, 'Кнопка не поддерживается');
+          showHintBubble(
+            context,
+            AppLocalizations.of(context)!.messageBubbleButtonUnsupported,
+          );
           return;
         }
         final answer = await messagesModule.sendButtonCallback(
@@ -1538,7 +1547,10 @@ class MessageBubble extends StatelessWidget {
     InlineKeyboardButton button,
   ) async {
     if (!webViewSupported) {
-      showCustomNotification(context, 'На вашей платформе это недоступно');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.messageBubblePlatformUnavailable,
+      );
       return;
     }
 
@@ -1555,7 +1567,10 @@ class MessageBubble extends StatelessWidget {
     final botId = button.contactId;
 
     if (botId == null) {
-      showCustomNotification(context, 'Не удалось открыть приложение');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.miniAppFailed,
+      );
       return;
     }
 
@@ -1943,6 +1958,7 @@ class MessageBubble extends StatelessWidget {
     );
     final ranges = message.formatRanges;
     final decryptedText = decryption?.plaintext;
+    final l10n = AppLocalizations.of(ctx.context)!;
 
     final metaRow = Row(
       mainAxisSize: MainAxisSize.min,
@@ -1954,7 +1970,9 @@ class MessageBubble extends StatelessWidget {
         ],
         ...ctx.metaMarks(ctx.dim),
         Text(
-          message.status == 'EDITED' ? '${ctx.clockText} ред.' : ctx.clockText,
+          message.status == 'EDITED'
+              ? l10n.messageBubbleEditedTime(ctx.clockText)
+              : ctx.clockText,
           style: TextStyle(color: ctx.dim, fontSize: 10),
         ),
         if (isMe) ...[const SizedBox(width: 4), ctx.statusIcon()],
@@ -1968,8 +1986,8 @@ class MessageBubble extends StatelessWidget {
       textWidget = _wrapSelectable(
         Text(
           decryption?.state == MessageDecryptionState.wrongKey
-              ? 'неверный ключ'
-              : 'недоступно на этом устройстве',
+              ? l10n.messageBubbleWrongKey
+              : l10n.messageBubbleUnavailableOnDevice,
           style: textStyle.copyWith(
             color: ctx.cs.error,
             fontStyle: FontStyle.italic,
@@ -2021,10 +2039,11 @@ class MessageBubble extends StatelessWidget {
     ReplyInfo reply,
     double maxBubbleWidth,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final accent = _senderColor(reply.senderId);
     final name = reply.senderId == myId
-        ? 'Вы'
-        : (ContactCache.get(reply.senderId) ?? 'Сообщение');
+        ? l10n.callParticipantYou
+        : (ContactCache.get(reply.senderId) ?? l10n.composerHintMessage);
     final rawPreview = reply.previewText();
     final quotedId = reply.messageId;
 
@@ -2037,7 +2056,7 @@ class MessageBubble extends StatelessWidget {
           border: Border(left: BorderSide(color: accent, width: 3)),
         ),
         child: Text(
-          'сообщение удалено',
+          l10n.messageBubbleReplyDeleted,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -2074,7 +2093,14 @@ class MessageBubble extends StatelessWidget {
         ),
       );
     } else if (rawPreview.isNotEmpty) {
-      body = _replyQuoteText(cs, textColor, preview.icon, rawPreview, quotedId);
+      body = _replyQuoteText(
+        l10n,
+        cs,
+        textColor,
+        preview.icon,
+        rawPreview,
+        quotedId,
+      );
     } else {
       body = null;
     }
@@ -2118,6 +2144,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _replyQuoteText(
+    AppLocalizations l10n,
     ColorScheme cs,
     Color textColor,
     IconData? icon,
@@ -2144,9 +2171,9 @@ class MessageBubble extends StatelessWidget {
             Flexible(
               child: Text(
                 decryption?.state == MessageDecryptionState.unavailable
-                    ? 'недоступно на этом устройстве'
+                    ? l10n.messageBubbleUnavailableOnDevice
                     : wrongKey
-                    ? 'неверный ключ'
+                    ? l10n.messageBubbleWrongKey
                     : (decryption?.plaintext ?? rawPreview),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

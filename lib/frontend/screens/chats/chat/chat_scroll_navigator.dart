@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import 'chat_controller.dart';
 import 'read_marker_gate.dart';
 import 'view/anchored_message_list.dart';
@@ -29,6 +30,7 @@ class ChatScrollNavigator {
     required this.isMounted,
     required this.notifyState,
     required this.showNotification,
+    required this.localizations,
     required this.initialMessageIdOf,
     required this.initialMessageTimeOf,
     required this.onNavigated,
@@ -55,6 +57,7 @@ class ChatScrollNavigator {
   final bool Function() isMounted;
   final void Function(VoidCallback fn) notifyState;
   final void Function(String message) showNotification;
+  final AppLocalizations Function() localizations;
   final String? Function() initialMessageIdOf;
   final int? Function() initialMessageTimeOf;
   final VoidCallback onNavigated;
@@ -190,7 +193,7 @@ class ChatScrollNavigator {
         await loadMessageWindow(id, time, () => _current(token));
         if (!_current(token)) return;
         if (!chatController.containsId(id)) {
-          showNotification('Сообщение не загружено');
+          showNotification(localizations().chatScreenMessageNotLoaded);
           return;
         }
       }

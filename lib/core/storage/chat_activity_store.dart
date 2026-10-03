@@ -6,13 +6,6 @@ import 'package:flutter/foundation.dart';
 // #***! что делает собеседник, печатает или выбирает стикер
 enum ChatActivity { typing, sticker }
 
-extension ChatActivityLabel on ChatActivity {
-  String get label => switch (this) {
-    ChatActivity.typing => 'Печатает...',
-    ChatActivity.sticker => 'Выбирает стикер...',
-  };
-}
-
 // #***! тип строкой, всё кроме STICKER считаем печатью
 ChatActivity chatActivityFromType(dynamic type) =>
     type == 'STICKER' ? ChatActivity.sticker : ChatActivity.typing;
@@ -23,8 +16,6 @@ class ChatActivitySnapshot {
 
   final ChatActivity activity;
   final List<int> userIds;
-
-  String get label => activity.label;
 
   // #***! сравниваем по значению иначе шапка перерисовывается на каждый пуш
   @override

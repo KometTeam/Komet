@@ -1001,8 +1001,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              '${unread.length} '
-              '${pluralRu(unread.length, 'история', 'истории', 'историй')}',
+              l10n.chatInfoStoryCount(unread.length),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -1307,15 +1306,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           return l10n.contactProfileRecentlyActive;
         }
         if (_seenTime != null && _seenTime! > 0) {
-          return formatLastSeen(_seenTime!);
+          return formatLastSeen(l10n, _seenTime!);
         }
         return '';
       case 'CHAT':
         final total = _memberCount ?? _membersController.members.length;
-        return '$total ${pluralRu(total, 'участник', 'участника', 'участников')}';
+        return l10n.chatInfoMemberCount(total);
       case 'CHANNEL':
         final count = _memberCount ?? 0;
-        return '$count ${pluralRu(count, 'подписчик', 'подписчика', 'подписчиков')}';
+        return l10n.chatInfoSubscriberCount(count);
       default:
         return '';
     }
@@ -2421,7 +2420,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     } else if (member.presenceStatus == 2 || member.presenceStatus == 3) {
       sublabel = l10n.contactProfileRecentlyActive;
     } else if (member.seenTime != null && member.seenTime! > 0) {
-      sublabel = formatLastSeen(member.seenTime!);
+      sublabel = formatLastSeen(l10n, member.seenTime!);
     } else {
       sublabel = l10n.contactProfileRecentlyActive;
     }
@@ -2780,7 +2779,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
     final gender = c.raw['gender'];
     if (gender is int) {
-      final g = formatGender(gender);
+      final g = formatGender(l10n, gender);
       if (g != null) rows.add((label: l10n.contactProfileInfoGender, value: g));
     }
     final phone = c.raw['phone'];

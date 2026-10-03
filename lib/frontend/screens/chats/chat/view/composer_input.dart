@@ -130,8 +130,11 @@ class ComposerInputBar extends StatelessWidget {
     final isChannel = chatType == "CHANNEL";
     final isGroup = chatType == "CHAT" || chatType == "GROUP";
     if ((isChannel || isGroup) && !hasForward && !channelSubscribed) {
+      final l10n = AppLocalizations.of(context)!;
       return ComposerPillBar(
-        label: isChannel ? 'Подписаться' : 'Вступить',
+        label: isChannel
+            ? l10n.chatInfoActionSubscribe
+            : l10n.chatInfoActionJoin,
         primary: true,
         busy: channelSubscribing,
         onTap: onSubscribe,
@@ -141,8 +144,11 @@ class ComposerInputBar extends StatelessWidget {
     // Regular channel members can't post — show the mute toggle instead of
     // a composer. Groups always keep the real composer once joined.
     if (isChannel && !hasForward && !canPostToChannel) {
+      final l10n = AppLocalizations.of(context)!;
       return ComposerPillBar(
-        label: isMuted ? 'Включить уведомления' : 'Отключить уведомления',
+        label: isMuted
+            ? l10n.notificationsFkmEnableLabel
+            : l10n.composerInputMuteNotifications,
         onTap: onToggleMute,
       );
     }
@@ -681,11 +687,11 @@ class ComposerInputBar extends StatelessWidget {
               : l10n.forwardWithoutSenderCount(messages.length)
         : messages.length == 1
         ? first.senderId == myId
-              ? 'Пересылка от вас'
+              ? l10n.composerInputForwardFromYou
               : senderName == null
-              ? 'Пересылка сообщения'
-              : 'Пересылка от $senderName'
-        : 'Пересылка: ${_forwardCount(messages.length)}';
+              ? l10n.composerInputForwardMessage
+              : l10n.composerInputForwardFrom(senderName)
+        : l10n.composerInputForwardCount(messages.length);
     final senderToggleColor = hideSender
         ? cs.primary
         : request.canHideSender
@@ -742,24 +748,15 @@ class ComposerInputBar extends StatelessWidget {
     return _previewSurface(cs, row);
   }
 
-  String _forwardCount(int count) {
-    final last = count % 10;
-    final lastTwo = count % 100;
-    if (last == 1 && lastTwo != 11) return '$count сообщение';
-    if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) {
-      return '$count сообщения';
-    }
-    return '$count сообщений';
-  }
-
   Widget _replyPreview(ColorScheme cs) {
     return ValueListenableBuilder<CachedMessage?>(
       valueListenable: replyTo,
       builder: (context, reply, _) {
         if (reply == null) return const SizedBox.shrink();
+        final l10n = AppLocalizations.of(context)!;
         final name = reply.senderId == myId
-            ? 'Вы'
-            : (ContactCache.get(reply.senderId) ?? 'Сообщение');
+            ? l10n.callParticipantYou
+            : (ContactCache.get(reply.senderId) ?? l10n.composerHintMessage);
         final info = ReplyInfo(
           senderId: reply.senderId,
           text: reply.text,
@@ -785,7 +782,7 @@ class ComposerInputBar extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Ответ $name',
+                      l10n.composerInputReplyTo(name),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -1004,12 +1001,13 @@ class ComposerInputBar extends StatelessWidget {
             child: ValueListenableBuilder<double>(
               valueListenable: video ? note.cancelDrag : voiceRec.cancelDrag,
               builder: (context, drag, _) {
+                final l10n = AppLocalizations.of(context)!;
                 if (video) {
                   return Opacity(
                     opacity: (0.55 + drag * 0.45).clamp(0.0, 1.0),
                     child: Center(
                       child: Text(
-                        '‹ Влево — отмена',
+                        l10n.composerInputSwipeToCancel,
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 14,
@@ -1031,7 +1029,7 @@ class ComposerInputBar extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Отмена',
+                          l10n.chatInfoActionCancel,
                           style: TextStyle(
                             color: cs.onSurfaceVariant,
                             fontSize: 14,
@@ -1074,7 +1072,9 @@ class ComposerInputBar extends StatelessWidget {
                 : video
                 ? const SizedBox.shrink()
                 : Text(
-                    '‹ влево — отмена',
+                    AppLocalizations.of(
+                      context,
+                    )!.composerInputSwipeToCancelHint,
                     style: TextStyle(color: cs.mutedText, fontSize: 11),
                   ),
           ),
@@ -1206,7 +1206,7 @@ class _HistoryStrip extends StatelessWidget {
                 return Opacity(
                   opacity: v,
                   child: Text(
-                    'история пуста...',
+                    AppLocalizations.of(context)!.composerInputHistoryEmpty,
                     style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                   ),
                 );

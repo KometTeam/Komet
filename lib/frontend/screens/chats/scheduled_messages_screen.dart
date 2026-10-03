@@ -160,7 +160,7 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen>
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          formatDateTimeWords(when),
+                          formatDateTimeWords(l10n, when),
                           style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 15,
@@ -382,7 +382,10 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen>
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        formatDateTimeWords(fireAt),
+                        formatDateTimeWords(
+                          AppLocalizations.of(context)!,
+                          fireAt,
+                        ),
                         style: TextStyle(
                           color: cs.primary,
                           fontSize: 12,

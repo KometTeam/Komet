@@ -4,19 +4,23 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../backend/modules/chats.dart';
 import '../../../../backend/modules/messages.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import 'bubble_context.dart';
 
-String _forwardedSourceName(ForwardedMessageAttachment forwarded) {
+String _forwardedSourceName(
+  ForwardedMessageAttachment forwarded,
+  AppLocalizations l10n,
+) {
   final resolved =
       forwarded.originalSenderName ??
       ContactCache.get(forwarded.originalSenderId);
   if (resolved != null && resolved.isNotEmpty) return resolved;
-  if (forwarded.isChannel) return 'Канал';
+  if (forwarded.isChannel) return l10n.chatScreenChannelFallback;
   if (forwarded.originalSenderId != 0) {
     return forwarded.originalSenderId.toString();
   }
-  return 'Сообщение';
+  return l10n.composerHintMessage;
 }
 
 String? _forwardedSourceAvatar(ForwardedMessageAttachment forwarded) =>
@@ -64,7 +68,10 @@ class ForwardedHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final headerColor = ctx.dim;
-    final displaySender = _forwardedSourceName(forwarded);
+    final displaySender = _forwardedSourceName(
+      forwarded,
+      AppLocalizations.of(context)!,
+    );
     final content = Padding(
       padding: padding,
       child: Row(

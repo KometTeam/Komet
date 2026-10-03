@@ -15,6 +15,7 @@ import 'chat_admin/channel_type_link_screen.dart';
 import 'chat_admin/chat_admin_state.dart';
 import 'chat_screen.dart';
 import '../../../core/security/app_lock.dart';
+import '../../../l10n/app_localizations.dart';
 
 Future<void> showCreateChannelFlow(BuildContext context) async {
   final cs = Theme.of(context).colorScheme;
@@ -57,7 +58,10 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
     final size = await file.length();
     if (size > kMaxAvatarBytes) {
       if (!mounted) return;
-      showCustomNotification(context, 'Картинка слишком большая (макс 8 МБ)');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.groupSettingsPhotoTooLarge,
+      );
       return;
     }
     if (!mounted) return;
@@ -73,7 +77,10 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
       final chat = await chats.createChannel(api, title: title);
       if (!mounted) return;
       if (chat == null) {
-        showCustomNotification(context, 'Не удалось создать канал');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.createChannelFailed,
+        );
         setState(() => _creating = false);
         return;
       }
@@ -84,7 +91,10 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
           final bytes = await compressAvatarFile(_avatar!.path);
           if (bytes == null) {
             if (mounted) {
-              showCustomNotification(context, 'Не удалось обработать аватарку');
+              showCustomNotification(
+                context,
+                AppLocalizations.of(context)!.createChannelAvatarProcessFailed,
+              );
             }
           } else {
             final token = await fileUploader.uploadImage(
@@ -95,7 +105,10 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
             if (token != null) {
               await chats.setChatPhoto(api, chatId: chat.id, photoToken: token);
             } else if (mounted) {
-              showCustomNotification(context, 'Не удалось загрузить аватарку');
+              showCustomNotification(
+                context,
+                AppLocalizations.of(context)!.createChannelAvatarUploadFailed,
+              );
             }
           }
         }
@@ -133,7 +146,10 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
       );
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Ошибка: $e');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.devicesGenericError('$e'),
+        );
         setState(() => _creating = false);
       }
     }
@@ -144,6 +160,7 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
     final cs = Theme.of(context).colorScheme;
     final viewInsets = MediaQuery.of(context).viewInsets;
     final canCreate = _title.text.trim().isNotEmpty && !_creating;
+    final l10n = AppLocalizations.of(context)!;
 
     return Padding(
       padding: EdgeInsets.only(bottom: viewInsets.bottom),
@@ -157,7 +174,7 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Создать канал',
+                      l10n.chatListCreateChannel,
                       style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 18,
@@ -204,7 +221,7 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
                       autofocus: true,
                       style: TextStyle(color: cs.onSurface, fontSize: 16),
                       decoration: InputDecoration(
-                        hintText: 'Название канала',
+                        hintText: l10n.channelSettingsName,
                         hintStyle: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 16,
@@ -220,7 +237,7 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
-                'В канале публикуете только вы, участники читают. Пригласить их можно после создания.',
+                l10n.createChannelDescription,
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
             ),
@@ -230,7 +247,7 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
                 children: [
                   Expanded(
                     child: _PillButton(
-                      label: 'Отменить',
+                      label: l10n.createChannelCancel,
                       filled: false,
                       onTap: _creating ? null : () => Navigator.pop(context),
                       cs: cs,
@@ -239,7 +256,9 @@ class _CreateChannelFlowState extends State<_CreateChannelFlow> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _PillButton(
-                      label: _creating ? 'Создаю...' : 'Создать',
+                      label: _creating
+                          ? l10n.createChannelCreating
+                          : l10n.createChannelCreate,
                       filled: true,
                       onTap: canCreate ? _create : null,
                       cs: cs,

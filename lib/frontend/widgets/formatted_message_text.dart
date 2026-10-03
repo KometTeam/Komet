@@ -214,7 +214,11 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
           return _track(
             TapGestureRecognizer()
               ..onTap = () => unawaited(
-                copyTextEntity(context, entity.value, 'Номер скопирован'),
+                copyTextEntity(
+                  context,
+                  entity.value,
+                  AppLocalizations.of(context)!.textEntityPhoneCopied,
+                ),
               ),
           );
         }
@@ -231,7 +235,11 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
           return _track(
             TapGestureRecognizer()
               ..onTap = () => unawaited(
-                copyTextEntity(context, entity.value, 'Номер карты скопирован'),
+                copyTextEntity(
+                  context,
+                  entity.value,
+                  AppLocalizations.of(context)!.textEntityCardCopied,
+                ),
               ),
           );
         }

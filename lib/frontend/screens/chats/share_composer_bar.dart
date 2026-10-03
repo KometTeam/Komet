@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/share_sender.dart';
 import '../../../core/media/share_thumbnail.dart';
 import '../../../core/share/share_labels.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../models/animoji.dart';
 import '../../../models/shared_payload.dart';
@@ -18,18 +19,20 @@ class ShareComposerBar extends StatefulWidget {
   const ShareComposerBar({
     super.key,
     required this.title,
-    required this.hintText,
+    this.hintText,
     required this.controller,
     required this.recipientNames,
     required this.onSend,
     this.thumbnail,
     this.headerAction,
     this.showHeader = true,
+    this.textOnly = false,
     this.sending = false,
   });
 
   factory ShareComposerBar.forShare({
     Key? key,
+    required AppLocalizations l10n,
     required PreparedShare share,
     required RichMessageController controller,
     required List<String> recipientNames,
@@ -38,13 +41,14 @@ class ShareComposerBar extends StatefulWidget {
   }) => ShareComposerBar(
     key: key,
     title: shareTitleFor(
+      l10n,
       photos: share.photos.length,
       videos: share.videos.length,
       documents: share.documents.length,
       textOnly: share.isTextOnly,
     ),
-    hintText: share.isTextOnly ? 'Сообщение' : 'Добавить подпись...',
     showHeader: !share.isTextOnly,
+    textOnly: share.isTextOnly,
     thumbnail: ShareThumbStack(files: share.files),
     controller: controller,
     recipientNames: recipientNames,
@@ -53,10 +57,11 @@ class ShareComposerBar extends StatefulWidget {
   );
 
   final String title;
-  final String hintText;
+  final String? hintText;
   final Widget? thumbnail;
   final Widget? headerAction;
   final bool showHeader;
+  final bool textOnly;
   final RichMessageController controller;
   final List<String> recipientNames;
   final Future<void> Function(RichMessageContent content) onSend;
@@ -112,7 +117,8 @@ class _ShareComposerBarState extends State<ShareComposerBar> {
     await widget.onSend(_controller.buildTrimmedContent());
   }
 
-  String get _subtitle => shareSubtitleFor(widget.recipientNames);
+  String _subtitle(AppLocalizations l10n) =>
+      shareSubtitleFor(l10n, widget.recipientNames);
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +183,7 @@ class _ShareComposerBarState extends State<ShareComposerBar> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _subtitle,
+                  _subtitle(AppLocalizations.of(context)!),
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -192,6 +198,12 @@ class _ShareComposerBarState extends State<ShareComposerBar> {
   }
 
   Widget _buildInputRow(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
+    final hintText =
+        widget.hintText ??
+        (widget.textOnly
+            ? l10n.composerHintMessage
+            : l10n.attachSheetAddCaptionHint);
     final count = widget.recipientNames.length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 12, 8),
@@ -232,7 +244,7 @@ class _ShareComposerBarState extends State<ShareComposerBar> {
                   decoration: InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
-                    hintText: widget.hintText,
+                    hintText: hintText,
                     hintStyle: TextStyle(
                       color: cs.onSurfaceVariant,
                       fontSize: 16,

@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/frontend/widgets/animated_text_swap.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
+import 'package:komet/frontend/widgets/toast_placement.dart';
 import '../../../../../core/config/ios_release.dart';
 
 class ScrollDownButton extends StatelessWidget {
@@ -43,7 +44,9 @@ class ScrollDownButton extends StatelessWidget {
             ? (_materialIconSlot - _scrollDownSize) / 2
             : 16,
         bottom: (composerUnderlap ? height : 0) + 12,
-        child: TextFieldTapRegion(enabled: IosRelease.isIOS, child: child!),
+        child: ToastObstruction(
+          child: TextFieldTapRegion(enabled: IosRelease.isIOS, child: child!),
+        ),
       ),
       child: AnimatedBuilder(
         animation: scrollDownCurved,

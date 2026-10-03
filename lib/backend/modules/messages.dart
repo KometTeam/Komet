@@ -141,8 +141,6 @@ class ContactCache {
 
 // #***! результат расшифровки голосового
 class TranscriptionResult {
-  static const String emptyText = 'Не распознали голос';
-
   final int status;
   final String? text;
   final String? messageId;
@@ -240,9 +238,7 @@ class TranscriptionPushHandler {
       messageId,
       TranscriptionResult(
         status: 1,
-        text: (rawText == null || rawText.isEmpty)
-            ? TranscriptionResult.emptyText
-            : rawText,
+        text: rawText ?? '',
         messageId: messageId,
         chatId: source['chatId'] as int?,
         mediaId: source['mediaId'] as int?,
@@ -1518,7 +1514,9 @@ class MessagesModule {
         : null;
     try {
       await _persistReaction(chatId, messageId, info);
-    } catch (_) {}
+    } catch (e) {
+      logger.w('Реакция на $messageId не сохранилась: $e');
+    }
     return (ok: true, info: info);
   }
 
@@ -1627,14 +1625,10 @@ class MessagesModule {
 
     final transcriptionStatus = data['transcriptionStatus'] as int? ?? -1;
     if (transcriptionStatus == 1) {
-      final text = data['transcription'] as String? ?? '';
-      if (text.isEmpty) {
-        return TranscriptionResult(
-          status: 1,
-          text: TranscriptionResult.emptyText,
-        );
-      }
-      return TranscriptionResult(status: 1, text: text);
+      return TranscriptionResult(
+        status: 1,
+        text: data['transcription'] as String? ?? '',
+      );
     }
 
     return TranscriptionResult(status: transcriptionStatus);

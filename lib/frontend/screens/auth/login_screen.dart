@@ -84,7 +84,10 @@ class _LoginScreenState extends State<LoginScreen> {
       await api.connect(authenticated: false, web: value);
     } catch (e) {
       if (!mounted) return;
-      showCustomNotification(context, 'Не удалось переподключиться: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.loginScreenReconnectFailed('$e'),
+      );
     } finally {
       if (mounted) setState(() => _switchingSmsMode = false);
     }
@@ -102,6 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
       pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
       transitionBuilder: (context, anim1, anim2, child) {
         final cs = Theme.of(context).colorScheme;
+        final l10n = AppLocalizations.of(context)!;
         final curve = Curves.easeOutQuart.transform(anim1.value);
         return Opacity(
           opacity: anim1.value,
@@ -120,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'ЕСЛИ НА ВАШЕМ АККАУНТЕ НЕТ 2FA ВСЕ СЕССИИ БУДУТ СБРОШЕНЫ',
+                      l10n.loginScreenSmsWarningTitle,
                       style: TextStyle(
                         color: cs.error,
                         fontSize: 15,
@@ -130,8 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Способ экспериментальный, его использование на ваш '
-                      'страх и риск.',
+                      l10n.loginScreenSmsWarningBody,
                       style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 14,
@@ -148,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
                         child: Text(
-                          'Отмена',
+                          l10n.chatInfoActionCancel,
                           style: TextStyle(
                             color: cs.onSurfaceVariant,
                             fontSize: 15,
@@ -159,7 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextButton(
                         onPressed: () => Navigator.pop(context, true),
                         child: Text(
-                          'Принять',
+                          l10n.e2eeAccept,
                           style: TextStyle(
                             color: cs.primary,
                             fontSize: 15,
@@ -603,9 +606,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               '${_selectedCountry.phoneCode}${_phoneController.text}';
 
                           if (!_isOnline) {
-                            _showPhoneError(
-                              'Нет соединения с сервером. Подождите подключения.',
-                            );
+                            _showPhoneError(l10n.loginScreenOfflineWait);
                             return;
                           }
 
@@ -656,7 +657,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (!screenContext.mounted) return;
                             _showPhoneError(
                               isSessionStateError(e)
-                                  ? 'Нет соединения с сервером. Попробуйте ещё раз.'
+                                  ? l10n.loginScreenOfflineRetry
                                   : e.toString(),
                             );
                           }
@@ -690,7 +691,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _notifyConnecting() {
-    showCustomNotification(context, 'Подключаемся к серверу, секунду…');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.loginScreenConnecting,
+    );
   }
 
   void _showServerSettingsSheet(BuildContext context) {
@@ -1083,7 +1087,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      'Всегда слать СМС (ЭКСПЕРИМЕНТАЛЬНО)',
+                                      l10n.loginScreenAlwaysSendSms,
                                       style: TextStyle(
                                         color: cs.onSurface,
                                         fontSize: 14,

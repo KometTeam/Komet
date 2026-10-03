@@ -214,15 +214,18 @@ Widget _moreButton(ColorScheme cs, VoidCallback onTap, {bool overlay = false}) {
 
 void _notifySave(BuildContext context, MediaSaveResult result) {
   if (!context.mounted) return;
+  final l10n = AppLocalizations.of(context)!;
   if (result.ok) {
     showCustomNotification(
       context,
-      result.toGallery ? 'Сохранено в галерею' : 'Файл сохранён',
+      result.toGallery
+          ? l10n.sharedContentSavedToGallery
+          : l10n.sharedContentFileSaved,
     );
   } else {
     showCustomNotification(
       context,
-      'Не удалось сохранить: ${result.error ?? ''}',
+      l10n.notificationsSaveFailed(result.errorText(l10n)),
     );
   }
 }
@@ -805,7 +808,10 @@ class _MediaTile extends StatelessWidget {
       );
       if (!context.mounted) return;
       if (sources.isEmpty) {
-        showCustomNotification(context, 'Не удалось загрузить видео');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.sharedContentVideoLoadFailed,
+        );
         return;
       }
       pushSwipeable(
@@ -890,6 +896,7 @@ class _FileRow extends StatelessWidget {
         : '';
     final displayName = dot > 0 ? fullName.substring(0, dot) : fullName;
     final size = att.size ?? 0;
+    final sizeLabel = formatBytes(AppLocalizations.of(context)!, size);
     final cacheName = '${att.fileId}_$fullName';
 
     return InkWell(
@@ -917,9 +924,7 @@ class _FileRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    ext.isEmpty
-                        ? formatBytes(size)
-                        : '$ext • ${formatBytes(size)}',
+                    ext.isEmpty ? sizeLabel : '$ext • $sizeLabel',
                     style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                   ),
                 ],
@@ -1022,7 +1027,10 @@ class _FileRow extends StatelessWidget {
       return;
     }
     if (!result.ok) {
-      showCustomNotification(context, 'Не удалось открыть файл');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.downloadsOpenFailed,
+      );
     }
   }
 }
@@ -1199,9 +1207,15 @@ class _ProfileVoiceTileState extends State<_ProfileVoiceTile> {
       case VoiceAudioFailure.none:
         return;
       case VoiceAudioFailure.download:
-        showCustomNotification(context, 'Не удалось загрузить аудио');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.sharedContentAudioLoadFailed,
+        );
       case VoiceAudioFailure.playback:
-        showCustomNotification(context, 'Ошибка воспроизведения');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.sharedContentPlaybackError,
+        );
     }
   }
 
@@ -1210,7 +1224,8 @@ class _ProfileVoiceTileState extends State<_ProfileVoiceTile> {
     final cs = Theme.of(context).colorScheme;
     final date = DateTime.fromMillisecondsSinceEpoch(widget.item.time);
     final subtitle =
-        '${formatSecondsMmSs(_durationSec)} • ${formatDateTimeWords(date)}';
+        '${formatSecondsMmSs(_durationSec)} • '
+        '${formatDateTimeWords(AppLocalizations.of(context)!, date)}';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),

@@ -262,7 +262,7 @@ String memberPresenceLabel(AppLocalizations l10n, ChatMemberEntry member) {
       member.presenceStatus != 3 &&
       seen != null &&
       seen > 0) {
-    return formatLastSeen(seen);
+    return formatLastSeen(l10n, seen);
   }
   return l10n.contactProfileRecentlyActive;
 }

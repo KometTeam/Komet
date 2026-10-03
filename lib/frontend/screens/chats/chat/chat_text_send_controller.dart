@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart' show BuildContext;
 
 import '../../../../backend/api.dart';
 import '../../../../backend/modules/chats.dart';
@@ -46,7 +45,7 @@ class ChatTextSendController {
   final void Function(String?) setLastSentId;
   final void Function(String) notify;
   final bool Function() isMounted;
-  final BuildContext Function() contextOf;
+  final AppLocalizations Function() l10nOf;
   final CachedChat? Function() chatOf;
   final Future<String?> Function(String text, {bool notify}) encryptOutgoing;
   final Future<void> Function(SlashCommand command, String args) executeCommand;
@@ -70,7 +69,7 @@ class ChatTextSendController {
     required this.setLastSentId,
     required this.notify,
     required this.isMounted,
-    required this.contextOf,
+    required this.l10nOf,
     required this.chatOf,
     required this.encryptOutgoing,
     required this.executeCommand,
@@ -132,7 +131,7 @@ class ChatTextSendController {
     if (request == null || _forwardSending) return;
     if (!request.hideSender && !request.canHideSender) {
       Haptics.error();
-      notify(AppLocalizations.of(contextOf())!.forwardHideSenderUnavailable);
+      notify(l10nOf().forwardHideSenderUnavailable);
       return;
     }
     Haptics.selection();
@@ -152,10 +151,14 @@ class ChatTextSendController {
         );
       }
       await AppDatabase.saveMessages([message.toDbRow()]);
-    } catch (_) {}
+    } catch (e) {
+      logger.w('Пересылаемое ${message.id} не сохранилось: $e');
+    }
     try {
       await ForwardSender.recordInChatList(message);
-    } catch (_) {}
+    } catch (e) {
+      logger.w('Пересылаемое ${message.id} не попало в список чатов: $e');
+    }
   }
 
   Future<bool> sendForwardRequest() async {
@@ -164,11 +167,11 @@ class ChatTextSendController {
     // #***! пересылка это серверная копия, текст подставляет сервер а не мы
     if (_encrypted) {
       cancelForward();
-      notify(AppLocalizations.of(contextOf())!.e2eeForwardBlocked);
+      notify(l10nOf().e2eeForwardBlocked);
       return false;
     }
     if (_api.state != SessionState.online) {
-      notify('Нет соединения');
+      notify(l10nOf().forwardOffline);
       return false;
     }
     final accountId = _myId;
@@ -290,10 +293,12 @@ class ChatTextSendController {
           optimistic.accountId,
           optimistic.chatId,
         );
-      } catch (_) {}
+      } catch (e) {
+        logger.w('Несостоявшаяся пересылка ${optimistic.id} не убрана: $e');
+      }
       if (canUpdateChat()) {
         Haptics.error();
-        notify('Не удалось переслать');
+        notify(l10nOf().forwardFailed);
       }
       return false;
     }
@@ -334,7 +339,7 @@ class ChatTextSendController {
       if (command == null) {
         messageController.clear();
         hasText.value = false;
-        notify('ТАКОЙ КОМАНДЫ НЕТУ🚨🚨🚨');
+        notify(l10nOf().chatTextSendUnknownCommand);
         return;
       }
       final args = commandArgs(text);
@@ -528,7 +533,7 @@ class ChatTextSendController {
             );
             bumpMessages();
           }
-          notify('Не удалось сохранить сообщение');
+          notify(l10nOf().chatTextSendSaveFailed);
         }
         return;
       }

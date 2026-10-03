@@ -63,7 +63,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
 
   @override
   String get connectionDroppedMessage =>
-      'Соединение прервалось, восстанавливаем…';
+      AppLocalizations.of(context)!.codeConfirmationConnectionDropped;
 
   @override
   void initState() {
@@ -117,7 +117,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     try {
       if (!await _waitForOnline()) {
         if (mounted) {
-          showCustomNotification(context, 'Нет соединения с сервером');
+          showCustomNotification(
+            context,
+            AppLocalizations.of(context)!.codeConfirmationNoConnection,
+          );
         }
         return;
       }
@@ -126,12 +129,15 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         sessionEpoch = api.sessionEpoch;
         dropNotified = false;
       });
-      showCustomNotification(context, 'Соединение восстановлено');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.codeConfirmationConnectionRestored,
+      );
     } catch (e) {
       if (mounted) {
         showCustomNotification(
           context,
-          'Не удалось восстановить соединение: $e',
+          AppLocalizations.of(context)!.codeConfirmationReconnectFailed('$e'),
         );
       }
     } finally {
@@ -156,7 +162,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     try {
       if (!await _waitForOnline()) {
         if (mounted) {
-          showCustomNotification(context, 'Нет соединения с сервером');
+          showCustomNotification(
+            context,
+            AppLocalizations.of(context)!.codeConfirmationNoConnection,
+          );
         }
         return;
       }
@@ -176,7 +185,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
       showCustomNotification(context, notice);
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Не удалось обновить код: $e');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.codeConfirmationRefreshFailed('$e'),
+        );
       }
     } finally {
       if (mounted) setState(() => recovering = false);
@@ -255,7 +267,12 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
 
   void _resendCode() {
     if (_timerSeconds > 0 || recovering || _verifying) return;
-    unawaited(_requestFreshCode('Выслали новый код', resend: true));
+    unawaited(
+      _requestFreshCode(
+        AppLocalizations.of(context)!.codeConfirmationNewCodeSent,
+        resend: true,
+      ),
+    );
   }
 
   Future<void> _completeLogin(String? avatarUrl) async {
@@ -374,7 +391,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         final token = result.loginToken;
         final accId = result.accountId;
         if (token == null || accId == null) {
-          _showError('SMS-вход: сервер не вернул токен');
+          _showError(AppLocalizations.of(context)!.codeConfirmationSmsNoToken);
           return;
         }
         stopSessionRecovery();
@@ -396,7 +413,9 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
       if (verified) {
         _showError(e.toString());
       } else if (isAuthSessionLostError(e)) {
-        await _requestFreshCode('Код устарел — выслали новый');
+        await _requestFreshCode(
+          AppLocalizations.of(context)!.codeConfirmationCodeExpired,
+        );
       } else if (isSessionStateError(e) || sessionStale) {
         await recoverStaleSession();
       } else {

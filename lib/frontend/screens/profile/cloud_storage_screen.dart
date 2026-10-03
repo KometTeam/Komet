@@ -1009,21 +1009,21 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
     }
   }
 
-  static String _formatSize(int? bytes) {
+  static String _formatSize(AppLocalizations l10n, int? bytes) {
     if (bytes == null) return '—';
-    return formatBytes(bytes);
+    return formatBytes(l10n, bytes);
   }
 
-  static String _formatExpiry(int expiresMs) {
+  static String _formatExpiry(AppLocalizations l10n, int expiresMs) {
     final remaining = DateTime.fromMillisecondsSinceEpoch(
       expiresMs,
     ).difference(DateTime.now());
-    if (remaining.isNegative) return 'истекла';
+    if (remaining.isNegative) return l10n.cloudStorageScreenExpired;
     final h = remaining.inHours;
     final m = remaining.inMinutes % 60;
-    if (h >= 24) return 'через ${remaining.inDays} д';
-    if (h > 0) return 'через $h ч $m мин';
-    return 'через $m мин';
+    if (h >= 24) return l10n.cloudStorageScreenExpiresInDays(remaining.inDays);
+    if (h > 0) return l10n.cloudStorageScreenExpiresInHours(h, m);
+    return l10n.cloudStorageScreenExpiresInMinutes(m);
   }
 
   @override
@@ -1070,7 +1070,7 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
           const SizedBox(height: 6),
           _InfoRow(
             label: l10n.cloudStorageSizeLabel,
-            value: _formatSize(f.size),
+            value: _formatSize(l10n, f.size),
           ),
           const SizedBox(height: 20),
           Container(height: 0.5, color: cs.outlineVariant),
@@ -1085,7 +1085,7 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
                       )
                     : Text(
                         l10n.cloudStorageLinkExpiresIn(
-                          _formatExpiry(_link!.expires),
+                          _formatExpiry(l10n, _link!.expires),
                         ),
                         style: TextStyle(
                           color: cs.onSurfaceVariant,

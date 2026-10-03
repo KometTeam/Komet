@@ -260,7 +260,7 @@ class _PreviewCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Съешь ещё этих мягких булок',
+              AppLocalizations.of(context)!.fontSettingsSampleText,
               style: AppFonts.sample(fontId, fontSize: 22).copyWith(
                 color: cs.onSurface,
                 fontWeight: FontWeight.w600,

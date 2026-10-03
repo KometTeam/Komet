@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/config/app_fonts.dart';
 import '../../core/config/app_shape.dart';
+import '../../l10n/app_localizations.dart';
 
 Future<String?> showTextInputDialog(
   BuildContext context, {
@@ -8,12 +9,15 @@ Future<String?> showTextInputDialog(
   String? description,
   String? hint,
   String? initialValue,
-  String confirmLabel = 'Подтвердить',
-  String cancelLabel = 'Отмена',
+  String? confirmLabel,
+  String? cancelLabel,
   bool obscureText = false,
   int maxLines = 1,
   TextInputType? keyboardType,
 }) async {
+  final l10n = AppLocalizations.of(context)!;
+  final confirmText = confirmLabel ?? l10n.promptDialogConfirm;
+  final cancelText = cancelLabel ?? l10n.chatInfoActionCancel;
   final tec = TextEditingController(text: initialValue);
   try {
     return await showDialog<String>(
@@ -67,7 +71,7 @@ Future<String?> showTextInputDialog(
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: Text(
-                cancelLabel,
+                cancelText,
                 style: TextStyle(color: cs.onSurfaceVariant),
               ),
             ),
@@ -76,7 +80,7 @@ Future<String?> showTextInputDialog(
                 final t = tec.text.trim();
                 Navigator.pop(dialogContext, t.isEmpty ? null : t);
               },
-              child: Text(confirmLabel),
+              child: Text(confirmText),
             ),
           ],
         );

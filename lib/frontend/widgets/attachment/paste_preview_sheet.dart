@@ -240,7 +240,7 @@ class _AttachmentTile extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                formatBytes(item.size),
+                formatBytes(AppLocalizations.of(context)!, item.size),
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
             ],

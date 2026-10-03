@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/api.dart';
 import 'package:komet/backend/modules/chats.dart';
@@ -15,6 +16,7 @@ import 'package:komet/core/utils/haptics.dart';
 import 'package:komet/frontend/screens/chats/chat/chat_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/chat_text_send_controller.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
+import 'package:komet/l10n/app_localizations.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -95,7 +97,7 @@ class _Harness {
     },
     notify: notifications.add,
     isMounted: () => mounted,
-    contextOf: () => throw StateError('No UI context needed'),
+    l10nOf: () => lookupAppLocalizations(const Locale('ru')),
     chatOf: () => null,
     encryptOutgoing: (text, {notify = true}) async => 'Synthetic ciphertext',
     executeCommand: (_, _) async {},

@@ -8,6 +8,7 @@ import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/frontend/widgets/attachment/photo_editor.dart';
 import 'package:komet/frontend/widgets/attachment/photo_hero.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
 import 'editor_common.dart';
 import 'preview_chrome.dart';
@@ -186,7 +187,10 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
     final dims = await imageFileDimensions(file);
     if (!mounted) return;
     if (dims == null) {
-      showCustomNotification(context, 'Не удалось открыть редактор');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.mediaPreviewEditorOpenFailed,
+      );
       return;
     }
     await _pushEditor<File>(
@@ -319,11 +323,13 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
               maxLines: 5,
               style: const TextStyle(color: Colors.white, fontSize: 15),
               cursorColor: Colors.white,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isCollapsed: true,
                 border: InputBorder.none,
-                hintText: 'Добавить подпись...',
-                hintStyle: TextStyle(color: Colors.white54, fontSize: 15),
+                hintText: AppLocalizations.of(
+                  context,
+                )!.attachSheetAddCaptionHint,
+                hintStyle: const TextStyle(color: Colors.white54, fontSize: 15),
               ),
             ),
           ),

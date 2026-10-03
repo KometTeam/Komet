@@ -122,7 +122,9 @@ class ChatController extends ChangeNotifier {
         await AppDatabase.deleteMessage(myId, chatId, removeId);
       }
       await AppDatabase.saveMessages([msg.toDbRow()]);
-    } catch (_) {}
+    } catch (e) {
+      logger.w('Исходящее ${msg.id} не сохранилось: $e');
+    }
   }
 
   int prependOlder(List<CachedMessage> olderDesc) {

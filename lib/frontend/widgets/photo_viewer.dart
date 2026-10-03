@@ -580,15 +580,18 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       if (mounted) setState(() => _saving = false);
     }
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     if (result.ok) {
       showCustomNotification(
         context,
-        result.toGallery ? 'Сохранено в галерею' : 'Файл сохранён',
+        result.toGallery
+            ? l10n.photoViewerSavedToGallery
+            : l10n.photoViewerFileSaved,
       );
     } else {
       showCustomNotification(
         context,
-        'Не удалось сохранить: ${result.error ?? ''}',
+        l10n.notificationsSaveFailed(result.errorText(l10n)),
       );
     }
   }
@@ -607,7 +610,10 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       }
       final url = photo.baseUrl ?? '';
       if (url.isEmpty) {
-        return const MediaSaveResult(ok: false, error: 'нет ссылки');
+        return const MediaSaveResult(
+          ok: false,
+          failure: MediaSaveFailure.noLink,
+        );
       }
       final cacheName = _cacheNameFor(photo, url);
       return saveMediaFile(
@@ -620,7 +626,10 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     }
     final video = item.video;
     if (video == null) {
-      return const MediaSaveResult(ok: false, error: 'нет медиа');
+      return MediaSaveResult(
+        ok: false,
+        error: AppLocalizations.of(context)!.photoViewerErrorNoMedia,
+      );
     }
     final cacheName = _videoCacheName(item, video);
     return saveMediaFile(
@@ -669,7 +678,10 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
 
       if (!mounted) return;
       if (file == null) {
-        showCustomNotification(context, 'Не удалось загрузить медиа');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.photoViewerMediaLoadFailed,
+        );
         return;
       }
       final result = await saveFileAs(
@@ -679,7 +691,10 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       );
       if (!mounted || result.cancelled) return;
       if (!result.saved) {
-        showCustomNotification(context, 'Не удалось сохранить файл');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.photoViewerSaveFileFailed,
+        );
         return;
       }
       if (download != null) {
@@ -687,9 +702,19 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
           await DownloadHistory.record(download, file);
         } catch (_) {}
       }
-      if (mounted) showCustomNotification(context, 'Файл сохранён');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.photoViewerFileSaved,
+        );
+      }
     } catch (_) {
-      if (mounted) showCustomNotification(context, 'Не удалось сохранить файл');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.photoViewerSaveFileFailed,
+        );
+      }
     } finally {
       await image?.discard();
       if (mounted) setState(() => _saving = false);
@@ -1088,7 +1113,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         sentAt.day == now.day;
     return isToday
         ? l10n.photoViewerSentToday(sender, time)
-        : l10n.photoViewerSentOn(sender, formatDateWords(sentAt), time);
+        : l10n.photoViewerSentOn(sender, formatDateWords(l10n, sentAt), time);
   }
 
   Widget _buildImage(PhotoAttachment photo) {

@@ -6,8 +6,10 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/plugins/plugin_installer.dart';
 import '../../../core/plugins/plugin_models.dart';
+import '../../../core/plugins/plugin_permission_label.dart';
 import '../../../core/plugins/plugin_store.dart';
 import '../../../core/plugins/plugin_updater.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/settings_card.dart';
 import '../../../core/security/app_lock.dart';
@@ -30,21 +32,25 @@ class _PluginsScreenState extends State<PluginsScreen> {
     );
     final picked = result?.files.single;
     if (picked == null || !mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     try {
       if (!picked.name.toLowerCase().endsWith('.kinet')) {
-        throw const FormatException('Выберите файл с расширением .kinet');
+        throw FormatException(l10n.pluginsScreenPickKinetFile);
       }
       final path = picked.path;
       final bytes =
           picked.bytes ??
           (path == null ? null : await File(path).readAsBytes());
       if (bytes == null || bytes.isEmpty) {
-        throw const FormatException('Не удалось прочитать выбранный файл');
+        throw FormatException(l10n.pluginsScreenReadFileFailed);
       }
       await _confirmAndInstall(await _installer.preview(bytes));
     } catch (error) {
       if (mounted) {
-        showCustomNotification(context, 'Не удалось открыть .kinet: $error');
+        showCustomNotification(
+          context,
+          l10n.pluginsScreenOpenFailed(error.toString()),
+        );
       }
     }
   }
@@ -57,7 +63,10 @@ class _PluginsScreenState extends State<PluginsScreen> {
     if (value == null || value.isEmpty || !mounted) return;
     final uri = Uri.tryParse(value);
     if (uri == null || uri.scheme != 'https') {
-      showCustomNotification(context, 'Нужна корректная HTTPS-ссылка');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.pluginsScreenHttpsRequired,
+      );
       return;
     }
     _setBusy('install-url', true);
@@ -67,7 +76,12 @@ class _PluginsScreenState extends State<PluginsScreen> {
       await _confirmAndInstall(preview, sourceUrl: uri);
     } catch (error) {
       if (mounted) {
-        showCustomNotification(context, 'Не удалось загрузить .kinet: $error');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(
+            context,
+          )!.pluginsScreenDownloadFailed(error.toString()),
+        );
       }
     } finally {
       _setBusy('install-url', false);
@@ -78,6 +92,7 @@ class _PluginsScreenState extends State<PluginsScreen> {
     PluginPackagePreview preview, {
     Uri? sourceUrl,
   }) async {
+    final l10n = AppLocalizations.of(context)!;
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -88,7 +103,10 @@ class _PluginsScreenState extends State<PluginsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Версия ${preview.manifest.version} · ${preview.manifest.author}',
+                l10n.pluginsScreenVersionAuthor(
+                  preview.manifest.version,
+                  preview.manifest.author,
+                ),
               ),
               if (preview.manifest.description.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -108,20 +126,22 @@ class _PluginsScreenState extends State<PluginsScreen> {
                   Expanded(
                     child: Text(
                       preview.signatureStatus == PluginSignatureStatus.verified
-                          ? 'Подпись Ed25519 проверена\n${preview.signerFingerprint}'
-                          : 'Плагин не подписан',
+                          ? l10n.pluginsScreenSignatureVerified(
+                              '${preview.signerFingerprint}',
+                            )
+                          : l10n.pluginsScreenNotSigned,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Плагин получит разрешения:',
-                style: TextStyle(fontWeight: FontWeight.w600),
+              Text(
+                l10n.pluginsScreenPermissionsTitle,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               if (preview.manifest.permissions.isEmpty)
-                const Text('Нет')
+                Text(l10n.appearanceChatChromeNone)
               else
                 for (final permission in preview.manifest.permissions)
                   Padding(
@@ -131,7 +151,7 @@ class _PluginsScreenState extends State<PluginsScreen> {
                       children: [
                         const Icon(Symbols.check, size: 18),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(permission.label)),
+                        Expanded(child: Text(permission.label(l10n))),
                       ],
                     ),
                   ),
@@ -141,11 +161,11 @@ class _PluginsScreenState extends State<PluginsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Отмена'),
+            child: Text(l10n.chatInfoActionCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Разрешить и установить'),
+            child: Text(l10n.pluginsScreenAllowAndInstall),
           ),
         ],
       ),
@@ -158,49 +178,61 @@ class _PluginsScreenState extends State<PluginsScreen> {
         sourceUrl: sourceUrl,
       );
       if (mounted) {
-        showCustomNotification(context, '${preview.manifest.name} установлен');
+        showCustomNotification(
+          context,
+          l10n.pluginsScreenInstalled(preview.manifest.name),
+        );
       }
     } catch (error) {
       if (mounted) {
-        showCustomNotification(context, 'Не удалось установить плагин: $error');
+        showCustomNotification(
+          context,
+          l10n.pluginsScreenInstallFailed(error.toString()),
+        );
       }
     }
   }
 
   Future<void> _checkUpdate(PluginDescriptor plugin) async {
+    final l10n = AppLocalizations.of(context)!;
     _setBusy(plugin.manifest.id, true);
     try {
       final update = await _updater.check(plugin);
       if (!mounted) return;
       if (update == null) {
-        showCustomNotification(context, 'Обновлений нет');
+        showCustomNotification(context, l10n.pluginsScreenNoUpdates);
         return;
       }
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Обновить плагин?'),
+          title: Text(l10n.pluginsScreenUpdateTitle),
           content: Text(
             '${plugin.manifest.name}: ${plugin.manifest.version} → ${update.version}',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Отмена'),
+              child: Text(l10n.chatInfoActionCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Обновить'),
+              child: Text(l10n.updateAction),
             ),
           ],
         ),
       );
       if (confirmed != true) return;
-      await _updater.apply(update);
-      if (mounted) showCustomNotification(context, 'Плагин обновлён');
+      await _updater.apply(update, l10n);
+      if (mounted) {
+        showCustomNotification(context, l10n.pluginsScreenUpdated);
+      }
     } catch (error) {
       if (mounted) {
-        showCustomNotification(context, 'Не удалось обновить: $error');
+        showCustomNotification(
+          context,
+          l10n.pluginsScreenUpdateFailed(error.toString()),
+        );
       }
     } finally {
       _setBusy(plugin.manifest.id, false);
@@ -208,19 +240,20 @@ class _PluginsScreenState extends State<PluginsScreen> {
   }
 
   Future<void> _uninstall(PluginDescriptor plugin) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Удалить плагин?'),
+        title: Text(l10n.pluginsScreenUninstallTitle),
         content: Text(plugin.manifest.name),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Отмена'),
+            child: Text(l10n.chatInfoActionCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Удалить'),
+            child: Text(l10n.msgActionsDelete),
           ),
         ],
       ),
@@ -230,11 +263,14 @@ class _PluginsScreenState extends State<PluginsScreen> {
     try {
       await PluginStore.instance.uninstall(plugin.manifest.id);
       if (mounted) {
-        showCustomNotification(context, 'Плагин и его данные удалены');
+        showCustomNotification(context, l10n.pluginsScreenUninstalled);
       }
     } catch (error) {
       if (mounted) {
-        showCustomNotification(context, 'Не удалось удалить: $error');
+        showCustomNotification(
+          context,
+          l10n.pluginsScreenUninstallFailed(error.toString()),
+        );
       }
     } finally {
       _setBusy(plugin.manifest.id, false);
@@ -249,18 +285,25 @@ class _PluginsScreenState extends State<PluginsScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
-        title: const Text('Плагины'),
+        title: Text(l10n.pluginsScreenTitle),
         backgroundColor: cs.surface,
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) =>
                 value == 'file' ? _installFile() : _installUrl(),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'file', child: Text('Установить .kinet')),
-              PopupMenuItem(value: 'url', child: Text('Установить по URL')),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'file',
+                child: Text(l10n.pluginsScreenInstallFile),
+              ),
+              PopupMenuItem(
+                value: 'url',
+                child: Text(l10n.pluginsScreenInstallUrl),
+              ),
             ],
           ),
         ],
@@ -282,9 +325,9 @@ class _PluginsScreenState extends State<PluginsScreen> {
                     subtitle: Text(
                       '${plugin.manifest.version} · ${plugin.manifest.commands.map((item) => item.name).join(', ')}\n'
                       '${switch (plugin.signatureStatus) {
-                        PluginSignatureStatus.bundled => 'Встроенный плагин Komet',
-                        PluginSignatureStatus.verified => 'Подписан · ${plugin.signerFingerprint}',
-                        PluginSignatureStatus.unsigned => 'Не подписан',
+                        PluginSignatureStatus.bundled => l10n.pluginsScreenBundled,
+                        PluginSignatureStatus.verified => l10n.pluginsScreenSigned('${plugin.signerFingerprint}'),
+                        PluginSignatureStatus.unsigned => l10n.pluginsScreenUnsigned,
                       }}',
                     ),
                     trailing: Switch(
@@ -303,7 +346,7 @@ class _PluginsScreenState extends State<PluginsScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Symbols.update),
-                      title: const Text('Проверить обновления'),
+                      title: Text(l10n.pluginsScreenCheckUpdates),
                       onTap: _busy.contains(plugin.manifest.id)
                           ? null
                           : () => _checkUpdate(plugin),
@@ -311,7 +354,10 @@ class _PluginsScreenState extends State<PluginsScreen> {
                   if (plugin.origin == PluginOrigin.installed)
                     ListTile(
                       leading: Icon(Symbols.delete, color: cs.error),
-                      title: Text('Удалить', style: TextStyle(color: cs.error)),
+                      title: Text(
+                        l10n.msgActionsDelete,
+                        style: TextStyle(color: cs.error),
+                      ),
                       onTap: () => _uninstall(plugin),
                     ),
                 ],
@@ -348,8 +394,9 @@ class _PluginUrlDialogState extends State<PluginUrlDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: const Text('Установить по URL'),
+      title: Text(l10n.pluginsScreenInstallUrl),
       content: TextField(
         controller: _controller,
         autofocus: true,
@@ -362,9 +409,12 @@ class _PluginUrlDialogState extends State<PluginUrlDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
+          child: Text(l10n.chatInfoActionCancel),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Загрузить')),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(l10n.pluginsScreenDownload),
+        ),
       ],
     );
   }

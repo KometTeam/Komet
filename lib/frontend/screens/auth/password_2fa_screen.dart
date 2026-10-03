@@ -35,7 +35,8 @@ class _Password2FAScreenState extends State<Password2FAScreen>
   bool _isLoading = false;
 
   @override
-  String get connectionDroppedMessage => 'Соединение прервалось…';
+  String get connectionDroppedMessage =>
+      AppLocalizations.of(context)!.password2faConnectionDropped;
 
   @override
   void initState() {
@@ -54,7 +55,10 @@ class _Password2FAScreenState extends State<Password2FAScreen>
   void recoverStaleSession() {
     if (recovering || !mounted) return;
     recovering = true;
-    showCustomNotification(context, 'Соединение прервалось — войдите заново');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.password2faConnectionDroppedRelogin,
+    );
     Navigator.of(context).pop();
   }
 
@@ -140,6 +144,7 @@ class _Password2FAScreenState extends State<Password2FAScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -158,7 +163,7 @@ class _Password2FAScreenState extends State<Password2FAScreen>
             children: [
               const SizedBox(height: 16),
               Text(
-                'Двухфакторная аутентификация',
+                l10n.passwordEntry2faSubtitle,
                 style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 22,
@@ -167,7 +172,7 @@ class _Password2FAScreenState extends State<Password2FAScreen>
               ),
               const SizedBox(height: 12),
               Text(
-                'Введите пароль для завершения входа',
+                l10n.password2faEnterPassword,
                 style: TextStyle(
                   color: cs.outline,
                   fontSize: 15,
@@ -178,7 +183,7 @@ class _Password2FAScreenState extends State<Password2FAScreen>
               if (widget.hint != null) ...[
                 const SizedBox(height: 8),
                 Text(
-                  'Подсказка: ${widget.hint}',
+                  l10n.passwordEntryHintPrefix(widget.hint ?? ''),
                   style: TextStyle(
                     color: cs.tertiary,
                     fontSize: 14,
@@ -193,7 +198,7 @@ class _Password2FAScreenState extends State<Password2FAScreen>
                 autofocus: true,
                 enabled: !_isLoading,
                 decoration: InputDecoration(
-                  hintText: 'Пароль',
+                  hintText: l10n.passwordEntryGenericPasswordHint,
                   filled: true,
                   fillColor: cs.surfaceContainerHigh,
                   border: OutlineInputBorder(
