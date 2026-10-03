@@ -33,11 +33,12 @@ class StickerBubble extends StatelessWidget {
             memCacheWidth: 300,
           ),
         ),
-        Positioned(
-          bottom: BubbleContext.compactTimePadding,
-          right: BubbleContext.compactTimePadding,
-          child: _buildStickerMeta(),
-        ),
+        if (!ctx.metaInFooter)
+          Positioned(
+            bottom: BubbleContext.compactTimePadding,
+            right: BubbleContext.compactTimePadding,
+            child: _buildStickerMeta(),
+          ),
       ],
     );
 
@@ -63,6 +64,7 @@ class StickerBubble extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          ...ctx.metaMarks(Colors.white),
           Text(
             ctx.clockText,
             style: const TextStyle(

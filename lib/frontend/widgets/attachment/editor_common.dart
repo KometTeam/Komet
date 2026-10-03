@@ -185,10 +185,14 @@ class CropView {
   );
 }
 
+enum CropPreset { free, avatar }
+
 class CropWorkspace extends StatefulWidget {
   final Size imageSize;
   final Widget Function(BuildContext context, Matrix4 matrix) imageBuilder;
   final CropState? initialState;
+  final CropPreset preset;
+  final Future<void> Function(CropState state)? onDraw;
   final Future<Object?> Function(
     CropState state,
     Size viewport,
@@ -203,6 +207,8 @@ class CropWorkspace extends StatefulWidget {
     required this.imageBuilder,
     required this.onApply,
     this.initialState,
+    this.preset = CropPreset.free,
+    this.onDraw,
   });
 
   @override
@@ -266,6 +272,15 @@ class _CropWorkspaceState extends State<CropWorkspace>
     straightenDeg: _straightenDeg,
   );
 
+  bool get _avatar => widget.preset == CropPreset.avatar;
+
+  Rect _initialCrop(Size vp) {
+    final fitted = _geometry.fittedRect(vp);
+    if (!_avatar) return fitted;
+    final side = math.min(fitted.width, fitted.height);
+    return Rect.fromCenter(center: fitted.center, width: side, height: side);
+  }
+
   CropView get _liveView {
     final from = _viewFrom;
     final to = _viewTo;
@@ -297,7 +312,7 @@ class _CropWorkspaceState extends State<CropWorkspace>
         initial.cropNorm.bottom * vp.height,
       );
     } else {
-      _crop = _geometry.fittedRect(vp);
+      _crop = _initialCrop(vp);
     }
     _view = CropView.fit(_crop!, vp);
     _viewFrom = null;
@@ -315,7 +330,7 @@ class _CropWorkspaceState extends State<CropWorkspace>
       _quarterTurns = 0;
       _flipH = false;
       _straightenDeg = 0;
-      _crop = _geometry.fittedRect(_viewport);
+      _crop = _initialCrop(_viewport);
     });
     _refit();
   }
@@ -324,7 +339,7 @@ class _CropWorkspaceState extends State<CropWorkspace>
     setState(() {
       _quarterTurns = (_quarterTurns + 1) % 4;
       _straightenDeg = 0;
-      _crop = _geometry.fittedRect(_viewport);
+      _crop = _initialCrop(_viewport);
     });
     _refit();
   }
@@ -334,7 +349,7 @@ class _CropWorkspaceState extends State<CropWorkspace>
   bool get _isFullCrop {
     final c = _crop;
     if (c == null) return true;
-    final f = _geometry.fittedRect(_viewport);
+    final f = _initialCrop(_viewport);
     return (c.left - f.left).abs() < 1 &&
         (c.top - f.top).abs() < 1 &&
         (c.right - f.right).abs() < 1 &&
@@ -365,7 +380,8 @@ class _CropWorkspaceState extends State<CropWorkspace>
     final initial = widget.initialState;
     final identity =
         _quarterTurns == 0 && !_flipH && _straightenDeg == 0 && _isFullCrop;
-    final changed = initial != null ? !state.sameAs(initial) : !identity;
+    final changed =
+        _avatar || (initial != null ? !state.sameAs(initial) : !identity);
     setState(() => _busy = true);
     final result = await widget.onApply(state, vp, changed, identity);
     if (!mounted) return;
@@ -390,8 +406,12 @@ class _CropWorkspaceState extends State<CropWorkspace>
             Column(
               children: [
                 Expanded(child: _buildViewport()),
-                _buildTools(),
-                _buildActions(),
+                if (_avatar)
+                  _buildAvatarBar()
+                else ...[
+                  _buildTools(),
+                  _buildActions(),
+                ],
               ],
             ),
             if (_busy) const BusyOverlay(),
@@ -429,7 +449,10 @@ class _CropWorkspaceState extends State<CropWorkspace>
                         children: [
                           widget.imageBuilder(context, matrix),
                           CustomPaint(
-                            painter: CropChromePainter(view.rect(crop, vp)),
+                            painter: CropChromePainter(
+                              view.rect(crop, vp),
+                              circle: _avatar,
+                            ),
                           ),
                         ],
                       ),
@@ -456,21 +479,16 @@ class _CropWorkspaceState extends State<CropWorkspace>
   void _onPanStart(Offset pos, Size vp) {
     final crop = _crop;
     if (crop == null) return;
-    _handle = hitCropHandle(pos, _liveView.rect(crop, vp));
+    final handle = hitCropHandle(pos, _liveView.rect(crop, vp));
+    _handle = _avatar && handle >= 4 && handle <= 7 ? 8 : handle;
   }
 
   void _onPanUpdate(Offset delta, Size vp) {
     final crop = _crop;
     if (crop == null || _handle < 0) return;
     final view = _liveView;
-    _setCrop(
-      moveCropHandle(
-        crop,
-        _handle,
-        delta / view.scale,
-        _geometry.fittedRect(vp),
-      ),
-    );
+    final move = _avatar ? moveSquareCropHandle : moveCropHandle;
+    _setCrop(move(crop, _handle, delta / view.scale, _geometry.fittedRect(vp)));
   }
 
   void _onPanEnd() {
@@ -518,6 +536,86 @@ class _CropWorkspaceState extends State<CropWorkspace>
     );
   }
 
+  Future<void> _draw() async {
+    final onDraw = widget.onDraw;
+    final crop = _crop;
+    if (onDraw == null || crop == null || _viewport == Size.zero) return;
+    await onDraw(_currentState(_viewport, crop));
+  }
+
+  Widget _buildAvatarBar() {
+    final l10n = AppLocalizations.of(context)!;
+    final accent = MediaAccent.of(context);
+    const textPadding = EdgeInsets.symmetric(horizontal: 12);
+    const compact = VisualDensity.compact;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(
+              color: kEditorPanel,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextButton(
+                  style: TextButton.styleFrom(padding: textPadding),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    l10n.chatInfoActionCancel,
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                  ),
+                ),
+                IconButton(
+                  visualDensity: compact,
+                  onPressed: _flip,
+                  tooltip: l10n.photoEditorFlipTooltip,
+                  icon: Icon(
+                    Symbols.flip,
+                    color: _flipH ? accent : Colors.white,
+                  ),
+                ),
+                IconButton(
+                  visualDensity: compact,
+                  onPressed: _rotate90,
+                  tooltip: l10n.photoEditorRotateTooltip,
+                  icon: const Icon(
+                    Symbols.rotate_90_degrees_ccw,
+                    color: Colors.white,
+                  ),
+                ),
+                if (widget.onDraw != null)
+                  IconButton(
+                    visualDensity: compact,
+                    onPressed: _busy ? null : _draw,
+                    tooltip: l10n.avatarEditorDraw,
+                    icon: const Icon(Symbols.brush, color: Colors.white),
+                  ),
+                TextButton(
+                  style: TextButton.styleFrom(padding: textPadding),
+                  onPressed: _busy ? null : _done,
+                  child: Text(
+                    l10n.avatarEditorSetPhoto,
+                    style: TextStyle(
+                      color: _busy ? Colors.white38 : accent,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildActions() {
     final l10n = AppLocalizations.of(context)!;
     return Container(
@@ -559,14 +657,17 @@ class _CropWorkspaceState extends State<CropWorkspace>
 
 class CropChromePainter extends CustomPainter {
   final Rect crop;
+  final bool circle;
 
-  CropChromePainter(this.crop);
-
-  @override
-  void paint(Canvas canvas, Size size) => paintCropChrome(canvas, size, crop);
+  CropChromePainter(this.crop, {this.circle = false});
 
   @override
-  bool shouldRepaint(covariant CropChromePainter old) => old.crop != crop;
+  void paint(Canvas canvas, Size size) =>
+      paintCropChrome(canvas, size, crop, circle: circle);
+
+  @override
+  bool shouldRepaint(covariant CropChromePainter old) =>
+      old.crop != crop || old.circle != circle;
 }
 
 class MatrixImagePainter extends CustomPainter {
@@ -617,31 +718,48 @@ class CropPainter extends CustomPainter {
       old.matrix != matrix || old.crop != crop || old.image != image;
 }
 
-void paintCropChrome(Canvas canvas, Size size, Rect crop) {
-  canvas.drawPath(
-    Path.combine(
-      PathOperation.difference,
-      Path()..addRect(Offset.zero & size),
-      Path()..addRect(crop),
-    ),
-    Paint()..color = Colors.black.withValues(alpha: 0.55),
-  );
-
-  final grid = Paint()
-    ..color = Colors.white.withValues(alpha: 0.4)
-    ..strokeWidth = 0.7;
-  for (var i = 1; i < 3; i++) {
-    final x = crop.left + crop.width * i / 3;
-    final y = crop.top + crop.height * i / 3;
-    canvas.drawLine(Offset(x, crop.top), Offset(x, crop.bottom), grid);
-    canvas.drawLine(Offset(crop.left, y), Offset(crop.right, y), grid);
+void paintCropChrome(
+  Canvas canvas,
+  Size size,
+  Rect crop, {
+  bool circle = false,
+}) {
+  final bounds = Offset.zero & size;
+  canvas
+    ..saveLayer(bounds, Paint())
+    ..drawRect(bounds, Paint()..color = Colors.black.withValues(alpha: 0.55));
+  if (circle) {
+    const ring = 1.2;
+    canvas
+      ..drawOval(
+        crop.inflate(ring / 2),
+        Paint()
+          ..blendMode = BlendMode.src
+          ..color = Colors.white.withValues(alpha: 0.85),
+      )
+      ..drawOval(crop.deflate(ring / 2), Paint()..blendMode = BlendMode.clear);
+  } else {
+    canvas.drawRect(crop, Paint()..blendMode = BlendMode.clear);
   }
+  canvas.restore();
 
-  final border = Paint()
-    ..color = Colors.white.withValues(alpha: 0.7)
-    ..strokeWidth = 1
-    ..style = PaintingStyle.stroke;
-  canvas.drawRect(crop, border);
+  if (!circle) {
+    final grid = Paint()
+      ..color = Colors.white.withValues(alpha: 0.4)
+      ..strokeWidth = 0.7;
+    for (var i = 1; i < 3; i++) {
+      final x = crop.left + crop.width * i / 3;
+      final y = crop.top + crop.height * i / 3;
+      canvas.drawLine(Offset(x, crop.top), Offset(x, crop.bottom), grid);
+      canvas.drawLine(Offset(crop.left, y), Offset(crop.right, y), grid);
+    }
+
+    final border = Paint()
+      ..color = Colors.white.withValues(alpha: 0.7)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    canvas.drawRect(crop, border);
+  }
 
   final bracket = Paint()
     ..color = Colors.white
@@ -733,6 +851,65 @@ Rect moveCropHandle(Rect c, int handle, Offset delta, Rect bounds) {
   r = r.clamp(math.min(bounds.right, l + minSize), bounds.right);
   bo = bo.clamp(math.min(bounds.bottom, t + minSize), bounds.bottom);
   return Rect.fromLTRB(l, t, r, bo);
+}
+
+Rect moveSquareCropHandle(Rect c, int handle, Offset delta, Rect bounds) {
+  if (handle < 0 || handle > 3) {
+    return moveCropHandle(c, 8, delta, bounds);
+  }
+  const minSize = 64.0;
+  final (Offset anchor, double grow, double maxSide) = switch (handle) {
+    0 => (
+      c.bottomRight,
+      -(delta.dx + delta.dy) / 2,
+      math.min(c.right - bounds.left, c.bottom - bounds.top),
+    ),
+    1 => (
+      c.bottomLeft,
+      (delta.dx - delta.dy) / 2,
+      math.min(bounds.right - c.left, c.bottom - bounds.top),
+    ),
+    2 => (
+      c.topLeft,
+      (delta.dx + delta.dy) / 2,
+      math.min(bounds.right - c.left, bounds.bottom - c.top),
+    ),
+    _ => (
+      c.topRight,
+      (delta.dy - delta.dx) / 2,
+      math.min(c.right - bounds.left, bounds.bottom - c.top),
+    ),
+  };
+  final side = (c.width + grow).clamp(
+    math.min(minSize, maxSide),
+    math.max(minSize, maxSide),
+  );
+  return switch (handle) {
+    0 => Rect.fromLTRB(
+      anchor.dx - side,
+      anchor.dy - side,
+      anchor.dx,
+      anchor.dy,
+    ),
+    1 => Rect.fromLTRB(
+      anchor.dx,
+      anchor.dy - side,
+      anchor.dx + side,
+      anchor.dy,
+    ),
+    2 => Rect.fromLTRB(
+      anchor.dx,
+      anchor.dy,
+      anchor.dx + side,
+      anchor.dy + side,
+    ),
+    _ => Rect.fromLTRB(
+      anchor.dx - side,
+      anchor.dy,
+      anchor.dx,
+      anchor.dy + side,
+    ),
+  };
 }
 
 class StraightenRuler extends StatelessWidget {

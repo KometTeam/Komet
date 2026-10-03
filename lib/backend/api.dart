@@ -11,11 +11,13 @@ import '../core/config/countries.dart';
 import '../core/config/device_profile.dart';
 import '../core/config/komet_settings.dart';
 import '../core/config/proxy_config.dart';
+import '../core/config/web_client_profile.dart';
 import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
 import '../core/storage/device_identity.dart';
 import '../core/storage/spoofing_service.dart';
 import '../core/transport/dispatcher.dart';
+import '../core/transport/session_factory.dart';
 import '../core/transport/tls_config.dart';
 import '../core/transport/traffic_monitor.dart';
 import '../core/transport/vpn_bypass.dart';
@@ -53,11 +55,13 @@ class Api {
   String? _deviceId;
   String? _callsDevice;
   String? _callsOsVersion;
+  String _architecture = SpoofingService.defaultArchitecture;
 
   int? get callsSeed => _callsSeed;
   String? get deviceId => _deviceId;
   String? get callsDevice => _callsDevice;
   String? get callsOsVersion => _callsOsVersion;
+  String get architecture => _architecture;
 
   /// Сырой доступ к сессии для медиа загрузок
   KolibriSession? get session => _session;
@@ -91,6 +95,24 @@ class Api {
   bool? _lastInteractive;
   final LoginGate _loginGate = LoginGate();
 
+  // #***! режим рукопожатия: true — входим в аккаунт (есть токен, боевая версия),
+  // false — pre-login без токена (прошлая версия). Значение переживает
+  // автореконнекты, чтобы версия сокета не менялась сама собой.
+  bool _willAuthenticate = false;
+  // #***! на время реконнекта под логин глушим автологин-колбэк, иначе войдём дважды
+  bool _suppressReconnectLogin = false;
+  // #***! представляемся веб-клиентом: сессия та же, сокетовая, но хэндшейк
+  // уходит браузерный. Веб всегда шлёт код по SMS. Только до логина —
+  // вход по токену всегда идёт обычным рукопожатием.
+  bool _webHandshake = false;
+
+  /// `true`, когда текущий (или готовящийся) сокет представляется серверу боевой
+  /// версией и предназначен для входа по токену; `false` — pre-login без токена.
+  bool get isAuthenticatedHandshake => _willAuthenticate;
+
+  /// `true`, когда рукопожатие уходит как у веб-клиента (deviceType `WEB`).
+  bool get webHandshake => _webHandshake;
+
   // #***! тайминги
   static const Duration _connectWatchdogTimeout = Duration(seconds: 75);
   static const Duration _shouldArmTimeout = Duration(seconds: 5);
@@ -104,8 +126,17 @@ class Api {
   // Публичное API
 
   // #***!сокет, хэндшейк, пинг, автологин
-  /// Подключается к серверу и хендшейк шлет
-  Future<void> connect() async {
+  /// Подключается к серверу и хендшейк шлет.
+  ///
+  /// [authenticated] задаёт версию рукопожатия: `true` — вход по токену (боевая
+  /// версия), `false` — pre-login без токена (прошлая версия). `null` сохраняет
+  /// прошлый режим (используется автореконнектом и переподключением из настроек).
+  ///
+  /// [web] переключает рукопожатие на браузерное (deviceType `WEB`) — так сервер
+  /// шлёт код по SMS. Работает только до логина; `null` сохраняет прошлый режим.
+  Future<void> connect({bool? authenticated, bool? web}) async {
+    if (authenticated != null) _willAuthenticate = authenticated;
+    if (web != null) _webHandshake = web;
     if (_sessionState != SessionState.disconnected) {
       logger.i('connect пропущен: состояние ${_sessionState.name}');
       return;
@@ -113,6 +144,7 @@ class Api {
     _autoReconnect = true;
     // #***! номер поколения
     final gen = ++_connectGen;
+    _loginGate.close();
     _setSessionState(SessionState.connecting);
     logger.i('connect: старт (поколение $gen)');
     // #***! Сторож если конект залип на всякий
@@ -145,7 +177,7 @@ class Api {
       }
       if (gen != _connectGen) return;
 
-      setTrustMincifryCa(enabled: endpoint.trustMincifryCa);
+      TlsConfig.setMincifryTrust(endpoint.trustMincifryCa);
 
       final (session, wireLog) = await _buildSessionOptions(endpoint);
       built = session;
@@ -163,7 +195,6 @@ class Api {
         }
       }
 
-      _loginGate.close();
       _session = session;
       _wireLogSub?.cancel();
       _wireLogSub = wireLog.listen(_onWireLog);
@@ -202,8 +233,8 @@ class Api {
       _cancelConnectWatchdog();
       _startLiveness();
       logger.i('Сессия онлайн, хэндшейк ок');
-      // #***! автологин токеном
-      if (_onReconnectCallback != null) {
+      // #***! автологин токеном (подавлен во время reconnectForLogin)
+      if (_onReconnectCallback != null && !_suppressReconnectLogin) {
         try {
           await _onReconnectCallback!();
         } catch (e) {
@@ -211,9 +242,13 @@ class Api {
         }
       }
       if (gen != _connectGen) return;
-      if (_loginGate.loginUnanswered) {
+      if (_loginGate.loginUnanswered || _loginGate.loginRejected) {
         await _handleConnectFailure(
-          StateError('сервер не ответил на вход'),
+          StateError(
+            _loginGate.loginRejected
+                ? 'сервер отклонил вход'
+                : 'сервер не ответил на вход',
+          ),
           phase: 'Авто-логин',
         );
         return;
@@ -307,8 +342,12 @@ class Api {
     int opcode,
     Map<dynamic, dynamic> payload, {
     bool silent = false,
+    void Function()? beforeSend,
   }) async {
-    if (_session == null) {
+    final initialSession = _session;
+    final awaitsSession =
+        beforeSend == null && _sessionState == SessionState.connecting;
+    if (initialSession == null && !awaitsSession) {
       throw StateError('Нет соединения (${Opcode.name(opcode)})');
     }
     if (opcode != Opcode.login) {
@@ -318,7 +357,11 @@ class Api {
     if (session == null) {
       throw StateError('Нет соединения (${Opcode.name(opcode)})');
     }
+    if (beforeSend != null && !identical(session, initialSession)) {
+      throw StateError('Сессия изменилась до отправки');
+    }
     if (opcode == Opcode.login) _loginGate.noteLoginSent();
+    beforeSend?.call();
 
     final KolibriResponse resp = await session
         .requestMapFull(opcode, Map<String, dynamic>.from(payload))
@@ -488,6 +531,34 @@ class Api {
       if (sClientSession is int) clientSessionId = sClientSession;
     }
 
+    // #***! до логина (сокет без токена) прикидываемся прошлой версией целиком,
+    // перекрывая и дефолт, и спуф-профиль; при входе с токеном версию не трогаем
+    if (!_willAuthenticate) {
+      appVersion = SpoofingService.preLoginAppVersion;
+      buildNumber = SpoofingService.preLoginBuildNumber;
+    }
+
+    // #***! веб-режим поверх всего: браузер вместо телефона. Устройство
+    // (deviceId, таймзону, локаль) оставляем своё — токен потом уйдёт с тем же
+    // deviceId по обычному рукопожатию, иначе сервер не свяжет код и вход.
+    String? headerUserAgent;
+    bool? isPwa;
+    if (_webHandshake) {
+      const web = WebClientProfile.defaultProfile;
+      deviceType = WebClientProfile.deviceType;
+      pushDeviceType = WebClientProfile.pushDeviceType;
+      appVersion = web.appVersion;
+      deviceName = web.deviceName;
+      osVersion = web.osVersion;
+      screen = web.screen;
+      headerUserAgent = web.headerUserAgent;
+      isPwa = WebClientProfile.isPwa;
+      architecture = WebClientProfile.arch;
+      buildNumber = WebClientProfile.buildNumber;
+      instanceId = WebClientProfile.instanceId;
+      clientSessionId = WebClientProfile.clientSessionId;
+    }
+
     // #***! звонкам нужен формат производитель/модель и номер SDK
     _callsDevice = _resolveCallsDevice(
       spoofed: spoofed != null,
@@ -515,35 +586,44 @@ class Api {
       'buildNumber': buildNumber,
       'deviceName': deviceName,
       'deviceLocale': deviceLocale,
+      'headerUserAgent': ?headerUserAgent,
+      'isPwa': ?isPwa,
     };
     _deviceId = deviceId;
+    _architecture = architecture;
 
     final insecureTls = await TlsConfig.isInsecureAllowed();
     final proxy = await _buildProxyUrl();
 
-    // #***! тут реально открывается сокет в расте
-    return openSessionWithWireLog(
-      host: endpoint.host,
-      port: endpoint.port,
-      deviceId: deviceId,
-      instanceId: instanceId,
-      appVersion: appVersion,
-      buildNumber: buildNumber,
-      deviceType: deviceType,
-      osVersion: osVersion,
-      timezone: timezone,
-      screen: screen,
-      pushDeviceType: pushDeviceType,
-      arch: architecture,
-      locale: locale,
-      deviceName: deviceName,
-      deviceLocale: deviceLocale,
-      clientSessionId: clientSessionId,
-      pingIntervalSecs: ServerConfig.pingInterval.inSeconds,
-      pingInteractive: !KometSettings.ghostMode.value,
-      autoReconnect: false,
-      insecureTls: insecureTls,
-      proxy: proxy,
+    // #***! тут реально открывается сокет в расте. Ядро само опускает arch при
+    // пустой строке, buildNumber и clientSessionId при нуле, mt_instanceid при
+    // пустом — ровно этих полей и нет в веб-хэндшейке.
+    return openSessionFromOptions(
+      SessionOptions(
+        host: endpoint.host,
+        port: endpoint.port,
+        deviceId: deviceId,
+        instanceId: instanceId,
+        appVersion: appVersion,
+        buildNumber: buildNumber,
+        deviceType: deviceType,
+        osVersion: osVersion,
+        timezone: timezone,
+        screen: screen,
+        pushDeviceType: pushDeviceType,
+        arch: architecture,
+        locale: locale,
+        deviceName: deviceName,
+        deviceLocale: deviceLocale,
+        clientSessionId: clientSessionId,
+        pingIntervalSecs: BigInt.from(ServerConfig.pingInterval.inSeconds),
+        pingInteractive: !KometSettings.ghostMode.value,
+        autoReconnect: false,
+        insecureTls: insecureTls,
+        proxy: proxy,
+        isPwa: isPwa,
+        headerUserAgent: headerUserAgent,
+      ),
     );
   }
 
@@ -762,6 +842,33 @@ class Api {
 
   Future<void> reconnectAndLogin() async {
     await connect();
+  }
+
+  Future<bool> reconnectToEndpoint({
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    await disconnect();
+    unawaited(connect());
+    final settled = await stateStream
+        .firstWhere(
+          (s) => s == SessionState.online || s == SessionState.disconnected,
+        )
+        .timeout(timeout, onTimeout: () => SessionState.disconnected);
+    return settled == SessionState.online;
+  }
+
+  // #***! pre-login сокет представляется прошлой версией; чтобы отправить токен,
+  // переподнимаем соединение боевой версией. Автологин-колбэк на это время
+  // подавляем — токен пошлёт вызвавший login(), а не колбэк, иначе войдём дважды.
+  Future<void> reconnectForLogin() async {
+    _suppressReconnectLogin = true;
+    try {
+      await disconnect();
+      // #***! токен всегда уходит обычным рукопожатием, веб-режим только для кода
+      await connect(authenticated: true, web: false);
+    } finally {
+      _suppressReconnectLogin = false;
+    }
   }
 
   // #***! колбэк автологина ставит аккаунт, api про токены не знает

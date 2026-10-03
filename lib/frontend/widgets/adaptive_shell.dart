@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../backend/modules/chats.dart';
 import '../../core/config/build_profile.dart';
 import '../../core/config/debug_test.dart';
 import '../../core/utils/update_checker.dart';
+import '../../l10n/app_localizations.dart';
 import '../screens/chats/chat_list_screen.dart';
 import '../screens/chats/chat_screen.dart';
 import 'auth_limits_sheet.dart';
@@ -50,12 +52,25 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
 
   double _listWidth = _defaultListWidth;
   DesktopChatSelection? _selected;
+  StreamSubscription<int>? _departedChatsSub;
 
   @override
   void initState() {
     super.initState();
     _loadListWidth();
+    _departedChatsSub = chats.departedChats.listen(_onChatDeparted);
     WidgetsBinding.instance.addPostFrameCallback((_) => _runStartupPrompts());
+  }
+
+  @override
+  void dispose() {
+    _departedChatsSub?.cancel();
+    super.dispose();
+  }
+
+  void _onChatDeparted(int chatId) {
+    if (!mounted || _selected?.chatId != chatId) return;
+    _closeChat();
   }
 
   Future<void> _runStartupPrompts() async {
@@ -251,7 +266,7 @@ class _EmptyChatPane extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              'Выберите чат',
+              AppLocalizations.of(context)!.adaptiveShellSelectChat,
               style: TextStyle(
                 color: colorScheme.onSurfaceVariant,
                 fontSize: 15,

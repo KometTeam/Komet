@@ -656,6 +656,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get msgActionsEditHistory => 'История изменений';
 
   @override
+  String get msgActionsInfo => 'Info';
+
+  @override
   String get msgActionsReadBy => 'Кем прочитано';
 
   @override
@@ -1512,7 +1515,7 @@ class AppLocalizationsRu extends AppLocalizations {
       other: '$count участника',
       many: '$count участников',
       few: '$count участника',
-      one: '1 участник',
+      one: '$count участник',
     );
     return '$_temp0';
   }
@@ -1548,6 +1551,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get photoViewerSaveAs => 'Сохранить как…';
+
+  @override
+  String get photoViewerSaveToGallery => 'Сохранить в галерею';
 
   @override
   String get photoViewerViewAll => 'Все фото чата';
@@ -2547,6 +2553,18 @@ class AppLocalizationsRu extends AppLocalizations {
   String get fontSettingsAddFontConfirm => 'Добавить';
 
   @override
+  String get fontSettingsPickFile => 'Выбрать файл';
+
+  @override
+  String get fontSettingsPickFileHint => 'Шрифт в формате .ttf, .otf или .ttc';
+
+  @override
+  String get fontSettingsNotAFont => 'Это не файл шрифта';
+
+  @override
+  String get fontSettingsCancel => 'Отмена';
+
+  @override
   String get fontSettingsTitle => 'Шрифты';
 
   @override
@@ -2801,6 +2819,30 @@ class AppLocalizationsRu extends AppLocalizations {
   String get blacklistEmpty => 'Никто не заблокирован';
 
   @override
+  String get joinRequestsTitle => 'Заявки на вступление';
+
+  @override
+  String get joinRequestsEmpty => 'Нет заявок';
+
+  @override
+  String get joinRequestsApprove => 'Принять';
+
+  @override
+  String get joinRequestsDecline => 'Отклонить';
+
+  @override
+  String get joinRequestsApproved => 'Заявка принята';
+
+  @override
+  String get joinRequestsDeclined => 'Заявка отклонена';
+
+  @override
+  String get joinRequestsActionFailed => 'Не удалось, попробуйте ещё раз';
+
+  @override
+  String get joinRequestsLoadError => 'Не удалось загрузить заявки';
+
+  @override
   String get blacklistLoadError => 'Не удалось загрузить чёрный список';
 
   @override
@@ -2967,7 +3009,7 @@ class AppLocalizationsRu extends AppLocalizations {
       other: 'Отправить $count файла',
       many: 'Отправить $count файлов',
       few: 'Отправить $count файла',
-      one: 'Отправить 1 файл',
+      one: 'Отправить $count файл',
     );
     return '$_temp0';
   }
@@ -3305,4 +3347,3123 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get fileNoAppToOpen =>
       'Нет приложения, чтобы открыть этот файл. Выберите, куда его отправить.';
+
+  @override
+  String get lockTitle => 'Введите код-пароль';
+
+  @override
+  String get lockBiometricReason => 'Разблокируйте Komet';
+
+  @override
+  String lockBlocked(String time) {
+    return 'Слишком много попыток. Повторите через $time';
+  }
+
+  @override
+  String lockAttemptsLeft(int count) {
+    return 'Неверный код-пароль. Осталось попыток: $count';
+  }
+
+  @override
+  String get lockNow => 'Заблокировать Komet';
+
+  @override
+  String get passcodeTitle => 'Код-пароль';
+
+  @override
+  String get passcodeCreate => 'Придумайте код-пароль';
+
+  @override
+  String get passcodeRepeat => 'Повторите код-пароль';
+
+  @override
+  String get passcodeMismatch => 'Коды не совпали, попробуйте ещё раз';
+
+  @override
+  String get passcodeDigitsHint => 'Четыре цифры';
+
+  @override
+  String get passcodeEnable => 'Включить код-пароль';
+
+  @override
+  String get passcodeEnabled => 'Код-пароль включён';
+
+  @override
+  String get passcodeChanged => 'Код-пароль изменён';
+
+  @override
+  String get passcodeChange => 'Сменить код-пароль';
+
+  @override
+  String get passcodeBiometric => 'Разблокировка по биометрии';
+
+  @override
+  String get passcodeBiometricHint => 'Отпечаток или лицо вместо кода';
+
+  @override
+  String get passcodeAutoLock => 'Автоблокировка';
+
+  @override
+  String get passcodeAutoLockHint =>
+      'Блокировать Komet, если им не пользоваться';
+
+  @override
+  String get passcodeAutoLockOff => 'Выключена';
+
+  @override
+  String passcodeAutoLockAfter(int minutes) {
+    return 'Через $minutes мин';
+  }
+
+  @override
+  String get passcodeDisable => 'Выключить код-пароль';
+
+  @override
+  String get passcodeDisableTitle => 'Выключить код-пароль?';
+
+  @override
+  String get passcodeDisableMessage =>
+      'Komet будет открываться без кода-пароля.';
+
+  @override
+  String get passcodeDisableAction => 'Выключить';
+
+  @override
+  String get passcodeCancel => 'Отмена';
+
+  @override
+  String get passcodeDisabled => 'Код-пароль выключен';
+
+  @override
+  String get passcodeOnDescription =>
+      'Komet спрашивает код при каждом входе. Замок в шапке списка чатов закрывает его сразу.';
+
+  @override
+  String get passcodeOffDescription =>
+      'Защитите переписку: Komet будет спрашивать код при каждом входе.';
+
+  @override
+  String get passcodeForgotHint =>
+      'Если забудете код, придётся очистить данные Komet или переустановить его и войти заново. После пяти неверных попыток ввод блокируется на пять минут.';
+
+  @override
+  String get mediaDevicesTitle => 'Камера и микрофон';
+
+  @override
+  String get mediaDevicesMicrophone => 'Микрофон';
+
+  @override
+  String get mediaDevicesMicrophoneHint => 'Для звонков и голосовых сообщений';
+
+  @override
+  String get mediaDevicesCamera => 'Камера';
+
+  @override
+  String get mediaDevicesCameraHint => 'Для звонков и, по желанию, для кружков';
+
+  @override
+  String get mediaDevicesSystemMicrophone => 'Системный микрофон';
+
+  @override
+  String get mediaDevicesSystemCamera => 'Системная камера';
+
+  @override
+  String mediaDevicesCameraFallback(int number) {
+    return 'Камера $number';
+  }
+
+  @override
+  String get mediaDevicesFront => 'Фронтальная';
+
+  @override
+  String get mediaDevicesBack => 'Тыловая';
+
+  @override
+  String get mediaDevicesVideoNotes => 'Кружки';
+
+  @override
+  String get mediaDevicesVideoNoteCustom => 'Своя камера';
+
+  @override
+  String get mediaDevicesVideoNoteCustomHint =>
+      'Снимать кружки камерой, выбранной выше';
+
+  @override
+  String get mediaDevicesVideoNoteCustomMissing =>
+      'Выберите камеру выше, пока снимает системная';
+
+  @override
+  String get mediaDevicesVideoNoteRear => 'Начинать с тыловой камеры';
+
+  @override
+  String get mediaDevicesVideoNoteRearHint =>
+      'Иначе кружок открывается с фронтальной';
+
+  @override
+  String get chatPreviewMarkRead => 'Пометить прочитанным';
+
+  @override
+  String get chatPreviewOpen => 'Открыть';
+
+  @override
+  String get attachSheetSendAsVideoNote => 'Отправить как кружок';
+
+  @override
+  String attachSheetVideoNoteTooLong(int seconds) {
+    return 'Кружок не может быть длиннее $seconds с';
+  }
+
+  @override
+  String get undoAction => 'Отменить';
+
+  @override
+  String get undoContinue => 'Продолжить';
+
+  @override
+  String get undoMessageUnpinned => 'Вы открепили сообщение';
+
+  @override
+  String undoMessagesDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count сообщения удалены',
+      many: '$count сообщений удалено',
+      few: '$count сообщения удалены',
+      one: 'Сообщение удалено',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String undoChatsDeleted(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count чата удалены',
+      many: '$count чатов удалено',
+      few: '$count чата удалены',
+      one: 'Чат удалён',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String undoChatsArchived(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count чата в архиве',
+      many: '$count чатов в архиве',
+      few: '$count чата в архиве',
+      one: 'Чат в архиве',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String undoChatsUnarchived(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count чата возвращены из архива',
+      many: '$count чатов возвращено из архива',
+      few: '$count чата возвращены из архива',
+      one: 'Чат возвращён из архива',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get undoLeftGroup => 'Вы вышли из группы';
+
+  @override
+  String get undoLeftChannel => 'Вы отписались от канала';
+
+  @override
+  String get forwardHideSender => 'Скрыть имя отправителя';
+
+  @override
+  String get forwardShowSender => 'Показать имя отправителя';
+
+  @override
+  String get forwardHideSenderUnavailable =>
+      'Опросы, звонки и служебные сообщения пересылаются только с именем отправителя';
+
+  @override
+  String get forwardWithoutSender => 'Пересылка без автора';
+
+  @override
+  String forwardWithoutSenderCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Пересылка без автора: $count сообщения',
+      many: 'Пересылка без автора: $count сообщений',
+      few: 'Пересылка без автора: $count сообщения',
+      one: 'Пересылка без автора: $count сообщение',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get adminsTitle => 'Администраторы';
+
+  @override
+  String get channelFollowersTitle => 'Подписчики';
+
+  @override
+  String get channelStatsTitle => 'Статистика канала';
+
+  @override
+  String get channelStatsUnavailable => 'Статистика канала пока недоступна';
+
+  @override
+  String get adminsAdd => 'Добавить администратора';
+
+  @override
+  String get channelPickAdminTitle => 'Выберите подписчика';
+
+  @override
+  String get adminsPickEmpty => 'Некого назначить';
+
+  @override
+  String get membersSearchHint => 'Найти по имени';
+
+  @override
+  String adminRoleYou(String role) {
+    return '$role (вы)';
+  }
+
+  @override
+  String get channelAddFollowers => 'Добавить подписчиков';
+
+  @override
+  String get channelFollowersEmpty => 'Подписчиков пока нет';
+
+  @override
+  String get membersLoadFailed => 'Не удалось загрузить список';
+
+  @override
+  String get adminAppointTitle => 'Назначить администратора';
+
+  @override
+  String get adminEditTitle => 'Права администратора';
+
+  @override
+  String get channelRightEditChannel => 'Изменять канал';
+
+  @override
+  String get adminRightEditInfoHint => 'Фото, название, описание';
+
+  @override
+  String get channelRightCreatePosts => 'Публиковать посты';
+
+  @override
+  String get channelRightEditPosts => 'Редактировать чужие посты';
+
+  @override
+  String get channelRightDeletePosts => 'Удалять чужие посты';
+
+  @override
+  String get channelRightPinPosts => 'Закреплять посты';
+
+  @override
+  String get channelRightManageFollowers => 'Добавлять и удалять подписчиков';
+
+  @override
+  String get channelRightViewStats => 'Смотреть статистику канала';
+
+  @override
+  String get adminRightManageAdmins => 'Назначать и снимать администраторов';
+
+  @override
+  String get adminRightManageAdminsHint =>
+      'Сможет снимать только тех администраторов, которых назначил сам';
+
+  @override
+  String get adminAppointAction => 'Назначить администратором';
+
+  @override
+  String get adminSave => 'Сохранить';
+
+  @override
+  String get adminAppointed => 'Администратор назначен';
+
+  @override
+  String get adminSaved => 'Права сохранены';
+
+  @override
+  String get ownershipTransfer => 'Передать права владельца';
+
+  @override
+  String ownershipTransferConfirm(String name) {
+    return '$name станет новым владельцем.';
+  }
+
+  @override
+  String get ownershipTransferAction => 'Передать';
+
+  @override
+  String get ownershipTransferred => 'Права владельца переданы';
+
+  @override
+  String get adminRemove => 'Снять с администраторов';
+
+  @override
+  String adminRemoveConfirm(String name) {
+    return '$name больше не будет администратором.';
+  }
+
+  @override
+  String get adminRemoveAction => 'Снять';
+
+  @override
+  String get adminRemoved => 'Снят с администраторов';
+
+  @override
+  String get adminActionFailed => 'Не удалось применить изменения';
+
+  @override
+  String get channelInviteSendInMax => 'Отправить в MAX';
+
+  @override
+  String get channelInviteShowQr => 'Показать QR-код';
+
+  @override
+  String get channelInviteRevoke => 'Перевыпустить ссылку';
+
+  @override
+  String get channelInviteRevokeConfirm =>
+      'Текущая ссылка перестанет работать, вступить можно будет только по новой.';
+
+  @override
+  String get channelInviteRevokeAction => 'Перевыпустить';
+
+  @override
+  String get channelInviteRevoked => 'Ссылка перевыпущена';
+
+  @override
+  String get channelJoinRequests => 'Заявки на вступление';
+
+  @override
+  String get channelJoinRequestsHint =>
+      'Вступить в канал можно будет только после одобрения заявки администратором';
+
+  @override
+  String get groupPickAdminTitle => 'Выберите участника';
+
+  @override
+  String get groupRightEditInfo => 'Изменять чат';
+
+  @override
+  String get groupRightDeleteMessages => 'Удалять сообщения';
+
+  @override
+  String get groupRightPinMessages => 'Закреплять сообщения';
+
+  @override
+  String get groupRightManageMembers => 'Добавлять и удалять участников';
+
+  @override
+  String get groupRightEditLink => 'Обновлять ссылку на чат';
+
+  @override
+  String get groupSettingsTitle => 'Настройки группы';
+
+  @override
+  String get groupSettingsName => 'Название чата';
+
+  @override
+  String get groupSettingsDescription => 'Описание чата';
+
+  @override
+  String get groupSettingsSaved => 'Изменения сохранены';
+
+  @override
+  String get groupSettingsPhotoUpdated => 'Фото обновлено';
+
+  @override
+  String get groupSettingsPhotoTooLarge =>
+      'Картинка слишком большая (макс 8 МБ)';
+
+  @override
+  String get groupSettingsLeave => 'Покинуть чат';
+
+  @override
+  String get reactionsTitle => 'Реакции';
+
+  @override
+  String get reactionsSummaryAll => 'Все';
+
+  @override
+  String get reactionsSummaryOff => 'Выключены';
+
+  @override
+  String reactionsSummaryCount(int allowed, int total) {
+    return '$allowed из $total';
+  }
+
+  @override
+  String get reactionsEnable => 'Включить реакции';
+
+  @override
+  String get reactionsCountHeader => 'Количество реакций к публикации';
+
+  @override
+  String reactionsCountValue(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count реакции',
+      many: '$count реакций',
+      few: '$count реакции',
+      one: '$count реакция',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get reactionsAllowedHeader => 'Разрешённые реакции';
+
+  @override
+  String get reactionsEdit => 'Изменить';
+
+  @override
+  String get reactionsDone => 'Готово';
+
+  @override
+  String get reactionsReset => 'Сбросить настройки реакций';
+
+  @override
+  String get reactionsLoadFailed => 'Не удалось загрузить настройки реакций';
+
+  @override
+  String get reactionsNoneAllowed => 'Оставьте хотя бы одну реакцию';
+
+  @override
+  String get memberPermissionsTitle => 'Разрешения участников';
+
+  @override
+  String get memberPermissionEditInfo =>
+      'Изменять название, фото и описание чата';
+
+  @override
+  String get memberPermissionAddMembers => 'Добавлять участников';
+
+  @override
+  String get memberPermissionPin => 'Закреплять сообщения';
+
+  @override
+  String get memberPermissionInvite => 'Приглашать по ссылке';
+
+  @override
+  String get memberPermissionCall => 'Звонить в чате';
+
+  @override
+  String get ownerLeaveTitle => 'Вы владелец';
+
+  @override
+  String get ownerLeaveChannelMessage =>
+      'Чтобы покинуть канал, сначала передайте права владельца другому подписчику.';
+
+  @override
+  String get ownerLeaveGroupMessage =>
+      'Чтобы покинуть группу, сначала передайте права владельца другому участнику.';
+
+  @override
+  String get ownershipPickTitle => 'Новый владелец';
+
+  @override
+  String get ownershipPickEmpty => 'Некому передать права';
+
+  @override
+  String get forwardOneTitle => 'Переслать сообщение';
+
+  @override
+  String forwardBatchTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Переслать $count сообщения',
+      many: 'Переслать $count сообщений',
+      few: 'Переслать $count сообщения',
+      one: 'Переслать $count сообщение',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get forwardCommentHint => 'Добавить комментарий...';
+
+  @override
+  String get forwardOffline => 'Нет соединения';
+
+  @override
+  String get forwardFailed => 'Не удалось переслать';
+
+  @override
+  String forwardDelivered(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Переслано в $count чата',
+      many: 'Переслано в $count чатов',
+      few: 'Переслано в $count чата',
+      one: 'Переслано в $count чат',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String forwardDeliveredPartly(int delivered, int failed) {
+    return 'Переслано в $delivered, не удалось в $failed';
+  }
+
+  @override
+  String get reactionUnavailable => 'Эта реакция недоступна в чате';
+
+  @override
+  String get membersSearchMore => 'Искать среди остальных';
+
+  @override
+  String get groupRestrictionsTitle => 'Ограничения';
+
+  @override
+  String get groupRestrictionForward => 'Запретить пересылку';
+
+  @override
+  String get groupRestrictionForwardHint =>
+      'Сообщения из этого чата нельзя будет переслать';
+
+  @override
+  String get groupRestrictionCopy => 'Запретить копирование';
+
+  @override
+  String get groupRestrictionCopyHint =>
+      'Текст сообщений нельзя будет скопировать';
+
+  @override
+  String get groupRestrictionConfirmSend => 'Подтверждать отправку';
+
+  @override
+  String get groupRestrictionConfirmSendHint =>
+      'Перед отправкой каждого сообщения будет появляться подтверждение';
+
+  @override
+  String get notificationsBadgeSectionTitle => 'Счётчик на иконке';
+
+  @override
+  String get notificationsBadgeLabel => 'Показывать счётчик';
+
+  @override
+  String get notificationsBadgeMutedLabel => 'Учитывать чаты без звука';
+
+  @override
+  String get notificationsBadgeMessagesLabel => 'Считать сообщения';
+
+  @override
+  String get notificationsBadgeMessagesSubtitle =>
+      'Если выключено — считаются непрочитанные чаты';
+
+  @override
+  String get accountSwitchFailed => 'Не удалось переключить аккаунт';
+
+  @override
+  String get accountSessionLostTitle => 'Нужно войти заново';
+
+  @override
+  String accountSessionLostBody(String name) {
+    return 'Сессия аккаунта «$name» на этом устройстве больше не действует.';
+  }
+
+  @override
+  String get accountSessionLostSignIn => 'Войти';
+
+  @override
+  String get accountSessionLostRemove => 'Удалить с устройства';
+
+  @override
+  String get accountSessionLostRemoved => 'Аккаунт удалён с устройства';
+
+  @override
+  String get contactsSearchHint => 'Поиск по контактам';
+
+  @override
+  String get contactsSearchEmpty => 'Ничего не найдено';
+
+  @override
+  String get contactsNfcExchange => 'Обмен по NFC';
+
+  @override
+  String get contactsFindUser => 'Добавить контакт';
+
+  @override
+  String get contactDeleted => 'Контакт удалён';
+
+  @override
+  String get contactDeleteFailed => 'Не удалось удалить контакт';
+
+  @override
+  String get contactLocalPhotoChoose => 'Выбрать фото';
+
+  @override
+  String get contactLocalPhotoReset => 'Вернуть фото профиля';
+
+  @override
+  String get contactLocalPhotoSaved => 'Фото видно только вам';
+
+  @override
+  String get contactLocalPhotoFailed => 'Не удалось обработать изображение';
+
+  @override
+  String get contactLocalPhotoTooLarge =>
+      'Картинка слишком большая (макс. 8 МБ)';
+
+  @override
+  String get channelTypeTitle => 'Тип канала и ссылка';
+
+  @override
+  String get channelCreatedTitle => 'Приватный канал создан';
+
+  @override
+  String get channelCreatedSubtitle => 'Его уже можно настроить';
+
+  @override
+  String get channelTypePrivate => 'Приватный';
+
+  @override
+  String get channelTypePrivateHint => 'Канал доступен только по ссылке';
+
+  @override
+  String get channelTypePublic => 'Публичный';
+
+  @override
+  String get channelTypePublicHint => 'Канал можно найти в поиске';
+
+  @override
+  String get channelTypePublicUnavailable => 'Публичные каналы пока недоступны';
+
+  @override
+  String get channelInviteLinkCaption => 'Ссылка-приглашение в ваш канал';
+
+  @override
+  String get channelBusinessTitle => 'Публичный для бизнеса';
+
+  @override
+  String get channelBusinessHint =>
+      'Для юрлиц, ИП, самозанятых и госорганизаций';
+
+  @override
+  String get channelSettingsTitle => 'Настройки канала';
+
+  @override
+  String get channelSettingsName => 'Название канала';
+
+  @override
+  String get channelSettingsDescription => 'Описание канала';
+
+  @override
+  String get channelConfirmPosting => 'Подтверждать публикацию';
+
+  @override
+  String get channelConfirmPostingHint =>
+      'Чтобы перепроверить пост и избежать ошибок';
+
+  @override
+  String get channelComments => 'Комментарии';
+
+  @override
+  String get channelCommentsEnableTitle => 'Комментарии — часть вашего канала';
+
+  @override
+  String get channelCommentsEnableMessage =>
+      'Следите за обсуждениями и поддерживайте порядок: комментарии можно удалять, а пользователей — ограничивать';
+
+  @override
+  String get channelCommentsEnable => 'Включить';
+
+  @override
+  String get channelCommentsKeepOff => 'Не включать';
+
+  @override
+  String get channelDelete => 'Удалить канал';
+
+  @override
+  String get channelDeleteTitle => 'Удалить канал?';
+
+  @override
+  String get channelDeleteMessage =>
+      'Чтобы канал не удалился у всех подписчиков, можно передать права другому владельцу';
+
+  @override
+  String get channelDeleteTransfer => 'Передать права и выйти';
+
+  @override
+  String get followerRemove => 'Удалить';
+
+  @override
+  String get followerRemoveTitle => 'Удалить подписчика';
+
+  @override
+  String followerRemoveConfirm(String name) {
+    return '$name больше не будет подписан на канал.';
+  }
+
+  @override
+  String get followerRemoved => 'Подписчик удалён';
+
+  @override
+  String get channelReadyTitle => 'Канал готов';
+
+  @override
+  String get channelReadyHint => 'Публикуйте посты и приглашайте подписчиков';
+
+  @override
+  String get groupReadyTitle => 'Группа готова';
+
+  @override
+  String get groupReadyHint =>
+      'Напишите первое сообщение и пригласите участников';
+
+  @override
+  String get botStart => 'Начать';
+
+  @override
+  String get memberRemoveTitle => 'Удалить участника';
+
+  @override
+  String memberRemoveConfirm(String name) {
+    return '$name будет удалён из группы.';
+  }
+
+  @override
+  String get memberRemoved => 'Участник удалён';
+
+  @override
+  String get chatScreenReactionUpdateFailed => 'Не удалось обновить реакцию';
+
+  @override
+  String get chatScreenBotStartFailed => 'Не удалось запустить бота';
+
+  @override
+  String get chatScreenMessageNotLoaded => 'Сообщение не загружено';
+
+  @override
+  String get chatScreenMarkUnreadFailed => 'Не удалось пометить непрочитанным';
+
+  @override
+  String get chatScreenMessagePinned => 'Сообщение закреплено';
+
+  @override
+  String get chatScreenNothingToForward => 'Нечего пересылать';
+
+  @override
+  String get chatScreenDeleteMessagesFailed => 'Не удалось удалить сообщения';
+
+  @override
+  String get chatScreenDeleteMessageTitle => 'Удалить сообщение';
+
+  @override
+  String get chatScreenDeleteMessageConfirm =>
+      'Вы точно хотите удалить это сообщение?';
+
+  @override
+  String chatScreenDeleteAlsoFor(String name) {
+    return 'Также удалить для $name';
+  }
+
+  @override
+  String get chatScreenMenuMute => 'Отключить уведомления';
+
+  @override
+  String get chatScreenMenuChangeWallpaper => 'Изменить обои';
+
+  @override
+  String get chatScreenMenuEncryption => 'Шифрование сообщений';
+
+  @override
+  String get chatScreenChatLinkUnavailable => 'Не удалось получить ссылку чата';
+
+  @override
+  String get chatScreenSubscribeFailed => 'Не удалось подписаться';
+
+  @override
+  String get chatScreenJoinFailed => 'Не удалось вступить';
+
+  @override
+  String get chatScreenWallpaperSaveFailed => 'Не удалось сохранить обои';
+
+  @override
+  String get chatScreenCallsDialogsOnly => 'Звонки доступны только в диалогах';
+
+  @override
+  String chatScreenMembersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count участника',
+      many: '$count участников',
+      few: '$count участника',
+      one: '$count участник',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatScreenSubscribersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count подписчика',
+      many: '$count подписчиков',
+      few: '$count подписчика',
+      one: '$count подписчик',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatScreenFormatHeading => 'Заголовок';
+
+  @override
+  String get chatScreenFormatBold => 'Жирный';
+
+  @override
+  String get chatScreenFormatItalic => 'Курсив';
+
+  @override
+  String get chatScreenFormatUnderline => 'Подчёркнутый';
+
+  @override
+  String get chatScreenFormatStrikethrough => 'Зачёркнутый';
+
+  @override
+  String get chatScreenFormatMonospace => 'Моноширинный';
+
+  @override
+  String get chatScreenFormatQuote => 'Цитата';
+
+  @override
+  String get chatScreenFormatMention => 'Упоминание';
+
+  @override
+  String get chatScreenMessageTooLong =>
+      'Слишком длинное сообщение. Разделите на несколько';
+
+  @override
+  String get chatScreenEncryptionKeyMissing => 'Не задан ключ шифрования';
+
+  @override
+  String get chatScreenPluginFilesEncryptUnsupported =>
+      'Файлы плагинов пока нельзя зашифровать';
+
+  @override
+  String chatScreenCommandMissingArgument(String name, String usage) {
+    return 'Не указан аргумент $name. Формат: $usage';
+  }
+
+  @override
+  String chatScreenPluginError(String error) {
+    return 'Ошибка плагина: $error';
+  }
+
+  @override
+  String chatScreenCommandFillField(String name) {
+    return 'Заполните поле $name';
+  }
+
+  @override
+  String chatScreenScheduledFor(String when) {
+    return 'Запланировано на $when';
+  }
+
+  @override
+  String get chatScreenScheduleFailed => 'Не удалось запланировать сообщение';
+
+  @override
+  String get chatScreenMessageNotSentYet => 'Сообщение ещё не отправлено';
+
+  @override
+  String get chatScreenChannelUnavailable => 'Канал недоступен';
+
+  @override
+  String get chatScreenChannelFallback => 'Канал';
+
+  @override
+  String get chatScreenNoEncryptFiles => 'Файлы пока нельзя зашифровать';
+
+  @override
+  String get chatScreenNoEncryptLocation =>
+      'Геолокацию пока нельзя зашифровать';
+
+  @override
+  String get chatScreenNoEncryptPolls => 'Опросы пока нельзя зашифровать';
+
+  @override
+  String get chatScreenNoEncryptContacts => 'Контакты пока нельзя зашифровать';
+
+  @override
+  String get stickerPackSheetRemoved => 'Стикерпак удалён';
+
+  @override
+  String get stickerPackSheetAdded => 'Стикерпак добавлен';
+
+  @override
+  String get stickerPackSheetActionFailed => 'Не удалось выполнить действие';
+
+  @override
+  String get stickerPackSheetLinkUnavailable => 'Ссылка недоступна';
+
+  @override
+  String stickerPackSheetForwardedTo(String chat) {
+    return 'Переслано в «$chat»';
+  }
+
+  @override
+  String get stickerPackSheetUnavailable => 'Стикерпак недоступен';
+
+  @override
+  String stickerPackSheetStickerCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count стикера',
+      many: '$count стикеров',
+      few: '$count стикера',
+      one: '$count стикер',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stickerPackSheetRemove => 'Убрать';
+
+  @override
+  String get performanceScreenTitle => 'Производительность';
+
+  @override
+  String get performanceScreenLowWarning =>
+      'Производительность приложения может снизиться, вы уверены?';
+
+  @override
+  String get performanceScreenHighWarning =>
+      'Это врядли даст хотя-бы немного заметный прирост к FPS, но может потреблять больше памяти. Вы уверены?';
+
+  @override
+  String get performanceScreenCacheTitle => 'Кеш сообщений';
+
+  @override
+  String get performanceScreenCacheSubtitle =>
+      'Сколько пикселей сообщений держать построенными за пределами видимой области.';
+
+  @override
+  String performanceScreenCurrentExtent(int value) {
+    return 'Текущий cacheExtent: $value';
+  }
+
+  @override
+  String get performanceScreenLessUsage => 'Меньше потребление';
+
+  @override
+  String get performanceScreenMoreFps => 'Больше FPS';
+
+  @override
+  String get chatWallpaperSheetImageTooLarge =>
+      'Картинка слишком большая (макс 16 МБ)';
+
+  @override
+  String get chatWallpaperSheetTitle => 'Обои';
+
+  @override
+  String get chatWallpaperSheetSampleIncoming =>
+      'Как насчёт новых обоев для этого чата?';
+
+  @override
+  String get chatWallpaperSheetSampleOutgoing => 'Выглядит отлично 🔥';
+
+  @override
+  String get chatWallpaperSheetNone => 'Без обоев';
+
+  @override
+  String get chatWallpaperSheetYourPhoto => 'Ваше фото';
+
+  @override
+  String get chatWallpaperSheetFromGallery => 'Из галереи';
+
+  @override
+  String get maxLinkNavChatNotFound => 'Чат не найден';
+
+  @override
+  String get maxLinkNavProfileFallback => 'Профиль';
+
+  @override
+  String get maxLinkNavPlatformUnsupported =>
+      'На вашей платформе это недоступно';
+
+  @override
+  String get maxLinkNavAppFallback => 'Приложение';
+
+  @override
+  String get maxLinkNavNothingToSend => 'Нечего отправлять';
+
+  @override
+  String get maxLinkNavFolderNotFound => 'Папка не найдена';
+
+  @override
+  String get maxLinkNavSignInFirst => 'Сначала войдите в аккаунт';
+
+  @override
+  String get pollCreateValidationHint => 'Введите вопрос и минимум 2 варианта';
+
+  @override
+  String get pollCreateAnswersTitle => 'Варианты ответа';
+
+  @override
+  String get pollCreateMultipleAnswers => 'Несколько вариантов ответа';
+
+  @override
+  String get pollCreateAnonymous => 'Анонимное голосование';
+
+  @override
+  String get pollCreateTitle => 'Новый опрос';
+
+  @override
+  String get pollCreateSubmit => 'Создать';
+
+  @override
+  String get pollCreateQuestionHint => 'Задайте вопрос';
+
+  @override
+  String pollCreateOptionHint(int number) {
+    return 'Вариант $number';
+  }
+
+  @override
+  String get pollCreateAddOption => 'Добавить вариант';
+
+  @override
+  String get webQrLoginTitle => 'Вход по QR';
+
+  @override
+  String get webQrLoginMessage =>
+      'Вы точно хотите войти в аккаунт через веб или приложение MAX на компьютере?';
+
+  @override
+  String get webQrLoginConfirmed => 'Вход подтверждён';
+
+  @override
+  String webQrLoginFailed(String error) {
+    return 'Не удалось подтвердить вход: $error';
+  }
+
+  @override
+  String get messageActionsScreenTitle => 'Меню действий';
+
+  @override
+  String get messageActionsScreenRadialDescription =>
+      'Дуга кнопок вокруг точки нажатия';
+
+  @override
+  String get messageActionsScreenList => 'Список';
+
+  @override
+  String get messageActionsScreenListDescription =>
+      'Вертикальное меню рядом с сообщением';
+
+  @override
+  String get messageActionsScreenStyle => 'Стиль';
+
+  @override
+  String get messageActionsScreenStyleSubtitle =>
+      'Как показывается меню при долгом нажатии на сообщение';
+
+  @override
+  String get videoNoteBubbleTranscriptionFailed => 'Не удалось распознать';
+
+  @override
+  String get webAppScreenCloseConfirm => 'Закрыть мини-приложение?';
+
+  @override
+  String get voiceRecordUnsupported =>
+      'Голосовые сообщения недоступны на этой платформе';
+
+  @override
+  String get voiceRecordNoMicAccess => 'Нет доступа к микрофону';
+
+  @override
+  String get voiceRecordStartFailed => 'Не удалось начать запись';
+
+  @override
+  String get voiceRecordEncodeFailed => 'Не удалось закодировать запись';
+
+  @override
+  String get spoofScreenFullWarningTitle => 'Могут быть последствия.';
+
+  @override
+  String get spoofScreenFullWarningSubtitle =>
+      'Меняй, только если знаешь что делаешь.';
+
+  @override
+  String callScreenShareFailed(String error) {
+    return 'Трансляция не запустилась: $error';
+  }
+
+  @override
+  String get themeSettingsCustomizeAction => 'Настроить';
+
+  @override
+  String get chatListNavChats => 'Чаты';
+
+  @override
+  String get chatListNavCalls => 'Звонки';
+
+  @override
+  String get chatListNavContacts => 'Контакты';
+
+  @override
+  String get chatListShareSendFailed => 'Не удалось отправить';
+
+  @override
+  String chatListMuteFailedCount(int count, String error) {
+    return 'Не удалось изменить $count чат(ов): $error';
+  }
+
+  @override
+  String get chatListDeleteStatusChanged =>
+      'Статус чатов изменился, попробуйте ещё раз';
+
+  @override
+  String chatListDeleteChatWith(String name) {
+    return 'Удалить чат с $name?';
+  }
+
+  @override
+  String chatListDeleteChatsCount(int count) {
+    return 'Удалить $count чатов?';
+  }
+
+  @override
+  String get chatListDeleteIrreversible =>
+      'Восстановить переписку не получится';
+
+  @override
+  String chatListDeleteOwnedChat(String name) {
+    return 'Хотите удалить чат «$name»?';
+  }
+
+  @override
+  String chatListDeleteGroupsForAll(int count) {
+    return 'Удалить $count групп у всех?';
+  }
+
+  @override
+  String get chatListDeleteOwnedChatBody =>
+      'Передайте права владельца, чтобы остальные участники могли продолжить общение';
+
+  @override
+  String get chatListDeleteCannotUndo => 'Действие нельзя отменить';
+
+  @override
+  String get chatListDeleteChatForAll => 'Удалить чат у всех';
+
+  @override
+  String get chatListDeleteForAll => 'Удалить у всех';
+
+  @override
+  String get chatListYourStory => 'Ваша история';
+
+  @override
+  String get chatListAllChatsFolder => 'Все чаты';
+
+  @override
+  String chatListRecipientsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count получателя',
+      many: '$count получателей',
+      few: '$count получателя',
+      one: '$count получатель',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatListSavedMessages => 'Избранное';
+
+  @override
+  String get chatListReadAll => 'Прочитать всё';
+
+  @override
+  String get chatListForwardingHint => 'Пересылка...';
+
+  @override
+  String get chatListEmpty => 'Кажется, тут пусто...';
+
+  @override
+  String get chatListOpenToLoad => 'зайдите в чат для подгрузки';
+
+  @override
+  String get chatListArchive => 'Архив';
+
+  @override
+  String get chatListNewStory => 'Новая история';
+
+  @override
+  String get chatListOpenVideoFailed => 'Не удалось открыть видео';
+
+  @override
+  String get chatListOpenPhotoFailed => 'Не удалось открыть фото';
+
+  @override
+  String get chatListDraftPrefix => 'Черновик: ';
+
+  @override
+  String get chatListPreviewWrongKey => 'неверный ключ';
+
+  @override
+  String get chatListPreviewUnavailable => 'недоступно на этом устройстве';
+
+  @override
+  String get chatListMessagePerson => 'Написать человеку';
+
+  @override
+  String get chatListCreateGroup => 'Создать группу';
+
+  @override
+  String get chatListCreateChannel => 'Создать канал';
+
+  @override
+  String get chatListCreateContact => 'Создать контакт';
+
+  @override
+  String get chatListCreateFolder => 'Создать папку';
+
+  @override
+  String get chatListMessageAction => 'Написать';
+
+  @override
+  String get chatListNoUnreadChats => 'Непрочитанных чатов нет';
+
+  @override
+  String get chatListAllMarkedRead => 'Все чаты отмечены прочитанными';
+
+  @override
+  String get callsTabStatusMissed => 'Пропущенный';
+
+  @override
+  String get callsTabStatusCanceled => 'Отменённый';
+
+  @override
+  String get callsTabStatusOutgoing => 'Исходящий';
+
+  @override
+  String get callsTabStatusIncoming => 'Входящий';
+
+  @override
+  String get callsTabCallBack => 'Перезвонить';
+
+  @override
+  String get callsTabPeerUnknown => 'Не удалось определить собеседника';
+
+  @override
+  String get callsTabAlreadyInCall => 'Звонок уже идёт';
+
+  @override
+  String callsTabStartFailed(String error) {
+    return 'Не удалось начать звонок: $error';
+  }
+
+  @override
+  String get callsTabJoinTitle => 'Присоединиться к звонку';
+
+  @override
+  String get callsTabJoinDescription => 'Вставьте ссылку-приглашение';
+
+  @override
+  String get callsTabNotACallLink => 'Это не ссылка на звонок';
+
+  @override
+  String get callsTabCreateCall => 'Создать звонок';
+
+  @override
+  String get callsTabMissed => 'Пропущенные';
+
+  @override
+  String get callsTabEmpty => 'Нет звонков';
+
+  @override
+  String get chatEncryptionProfileNotLoaded => 'Профиль ещё не загружен';
+
+  @override
+  String get chatEncryptionEnterKeyHint => 'Введите ключ шифрования';
+
+  @override
+  String get chatEncryptionEnabled => 'Шифрование включено';
+
+  @override
+  String get chatEncryptionDisabled => 'Шифрование отключено';
+
+  @override
+  String get chatEncryptionTitle => 'Шифрование сообщений';
+
+  @override
+  String get chatEncryptionToggle => 'Шифровать сообщения';
+
+  @override
+  String get chatEncryptionToggleSubtitle =>
+      'Текст сообщений в этом чате будет зашифрован ключом ниже';
+
+  @override
+  String get chatEncryptionKeyLabel => 'Ключ';
+
+  @override
+  String get chatEncryptionKeyHint => 'Введите ключ';
+
+  @override
+  String get chatEncryptionKeyNote =>
+      'Ключ хранится только на этом устройстве. Собеседник должен ввести такой же ключ, иначе он не прочитает сообщения. Это парольный режим для групп: без forward secrecy, любой, кто знает пароль, читает всю историю.';
+
+  @override
+  String get storyViewerDeleteTitle => 'Удалить историю?';
+
+  @override
+  String get storyViewerDeleteMessage =>
+      'История пропадёт у всех, кто может её посмотреть.';
+
+  @override
+  String get storyViewerDeleteFailed => 'Не удалось удалить историю';
+
+  @override
+  String storyViewerDeleteFailedWithReason(String reason) {
+    return 'Не удалось удалить историю: $reason';
+  }
+
+  @override
+  String get storyViewerEmpty => 'Историй нет';
+
+  @override
+  String get storyViewerJustNow => 'только что';
+
+  @override
+  String storyViewerMinutesAgo(int count) {
+    return '$count мин';
+  }
+
+  @override
+  String storyViewerHoursAgo(int count) {
+    return '$count ч';
+  }
+
+  @override
+  String storyViewerDaysAgo(int count) {
+    return '$count дн';
+  }
+
+  @override
+  String get webviewPermissionCamera => 'камера';
+
+  @override
+  String get webviewPermissionMicrophone => 'микрофон';
+
+  @override
+  String get webviewPermissionCameraAndMicrophone => 'камера и микрофон';
+
+  @override
+  String get webviewPermissionGeolocation => 'геолокация';
+
+  @override
+  String get webviewPermissionOther => 'дополнительный доступ';
+
+  @override
+  String get webviewPermissionWebPage => 'Веб-страница';
+
+  @override
+  String get webviewPermissionTitle => 'Запрос доступа';
+
+  @override
+  String webviewPermissionMessage(String host, String resources) {
+    return '$host запрашивает доступ к: $resources.';
+  }
+
+  @override
+  String get webviewPermissionDeny => 'Запретить';
+
+  @override
+  String get createChannelFailed => 'Не удалось создать канал';
+
+  @override
+  String get createChannelAvatarProcessFailed =>
+      'Не удалось обработать аватарку';
+
+  @override
+  String get createChannelAvatarUploadFailed => 'Не удалось загрузить аватарку';
+
+  @override
+  String get createChannelDescription =>
+      'В канале публикуете только вы, участники читают. Пригласить их можно после создания.';
+
+  @override
+  String get createChannelCancel => 'Отменить';
+
+  @override
+  String get createChannelCreating => 'Создаю...';
+
+  @override
+  String get createChannelCreate => 'Создать';
+
+  @override
+  String get codeConfirmationConnectionDropped =>
+      'Соединение прервалось, восстанавливаем…';
+
+  @override
+  String get codeConfirmationNoConnection => 'Нет соединения с сервером';
+
+  @override
+  String get codeConfirmationConnectionRestored => 'Соединение восстановлено';
+
+  @override
+  String codeConfirmationReconnectFailed(String error) {
+    return 'Не удалось восстановить соединение: $error';
+  }
+
+  @override
+  String codeConfirmationRefreshFailed(String error) {
+    return 'Не удалось обновить код: $error';
+  }
+
+  @override
+  String get codeConfirmationNewCodeSent => 'Выслали новый код';
+
+  @override
+  String get codeConfirmationSmsNoToken => 'SMS-вход: сервер не вернул токен';
+
+  @override
+  String get codeConfirmationCodeExpired => 'Код устарел — выслали новый';
+
+  @override
+  String get pollViewVoteFailed => 'Не удалось проголосовать';
+
+  @override
+  String get pollViewLoading => 'Загрузка опроса…';
+
+  @override
+  String get pollViewMultipleAnswers => 'Несколько вариантов ответа';
+
+  @override
+  String get pollViewSingleAnswer => 'Один вариант ответа';
+
+  @override
+  String pollViewVotesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count голоса',
+      many: '$count голосов',
+      few: '$count голоса',
+      one: '$count голос',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pollViewVote => 'Проголосовать';
+
+  @override
+  String get customizationChatBackground => 'Фон чатов';
+
+  @override
+  String get customizationMessageActions => 'Меню действий';
+
+  @override
+  String get customizationAppIcon => 'Иконка приложения';
+
+  @override
+  String get customizationTitle => 'Кастомизация';
+
+  @override
+  String get folderActionNewFolder => 'Новая папка';
+
+  @override
+  String folderActionDeleteConfirm(String title) {
+    return 'Удалить папку «$title»? Чаты останутся на месте.';
+  }
+
+  @override
+  String get folderActionDeleteFailed => 'Не удалось удалить папку';
+
+  @override
+  String get webAppBiometryAccessNotice =>
+      'Мини-приложение сможет запрашивать подтверждение отпечатком или лицом.';
+
+  @override
+  String get webAppBiometryAuthReason =>
+      'Подтвердите действие в мини-приложении';
+
+  @override
+  String get webAppBiometryAccessTitle => 'Разрешить биометрию?';
+
+  @override
+  String get webAppPhoneRequestTitle => 'Передать номер телефона?';
+
+  @override
+  String get webAppPhoneRequestMessage =>
+      'Мини-приложение получит ваш номер телефона.';
+
+  @override
+  String get webAppPhoneRequestShare => 'Поделиться';
+
+  @override
+  String get promptDialogConfirm => 'Подтвердить';
+
+  @override
+  String get emojiPanelLoadFailed => 'Не удалось загрузить эмодзи';
+
+  @override
+  String get emojiPanelEmpty => 'Нет эмодзи';
+
+  @override
+  String get mediaPreviewEditorOpenFailed => 'Не удалось открыть редактор';
+
+  @override
+  String get fontSettingsSampleText => 'Съешь ещё этих мягких булок';
+
+  @override
+  String get callParticipantsNoServer => 'Нет связи с сервером звонка';
+
+  @override
+  String callParticipantsActionFailed(String error) {
+    return 'Не удалось: $error';
+  }
+
+  @override
+  String get callParticipantsMuteMic => 'Выключить микрофон';
+
+  @override
+  String get callParticipantsRequestCamera => 'Запросить камеру';
+
+  @override
+  String get callParticipantsRevokeAdmin => 'Снять администратора';
+
+  @override
+  String get callParticipantsRevokeSpeaker => 'Убрать из спикеров';
+
+  @override
+  String get callParticipantsMakeSpeaker => 'Сделать спикером';
+
+  @override
+  String get callParticipantsPromote => 'Повысить (promote)';
+
+  @override
+  String get callParticipantsDemote => 'Понизить (demote)';
+
+  @override
+  String get callParticipantsRemoveFromCall => 'Удалить из звонка';
+
+  @override
+  String get callParticipantsCallSettings => 'Настройки звонка';
+
+  @override
+  String get callParticipantsFeatureAccess => 'Кому доступны функции';
+
+  @override
+  String get callParticipantsInviteLink => 'Ссылка-приглашение участника';
+
+  @override
+  String get callParticipantsOptionAuthOnly => 'Только авторизованные';
+
+  @override
+  String get callParticipantsOptionWaitingHall => 'Зал ожидания';
+
+  @override
+  String get callParticipantsOptionRecurring => 'Повторяющийся звонок';
+
+  @override
+  String get callParticipantsOptionFeedback => 'Сбор отзывов';
+
+  @override
+  String get callParticipantsOptionAudienceMode => 'Режим зрителей';
+
+  @override
+  String get callParticipantsSpeechTranscription => 'Расшифровка речи';
+
+  @override
+  String get callParticipantsOptionWaitForAdmin => 'Ждать администратора';
+
+  @override
+  String get callParticipantsOptionAdminIsHere => 'Администратор на месте';
+
+  @override
+  String get callParticipantsFeatureMovieShare => 'Совместный просмотр';
+
+  @override
+  String get callParticipantsCallRecording => 'Запись звонка';
+
+  @override
+  String get callParticipantsFeatureSpeaker => 'Быть спикером';
+
+  @override
+  String callParticipantsTitle(int count) {
+    return 'Участники · $count';
+  }
+
+  @override
+  String get callParticipantsMuteAll => 'Заглушить всех';
+
+  @override
+  String get callParticipantsLowerAllHands => 'Опустить руки';
+
+  @override
+  String get callParticipantsLowerHand => 'Опустить руку';
+
+  @override
+  String get callParticipantsRaiseHand => 'Поднять руку';
+
+  @override
+  String get callParticipantsStopRecording => 'Остановить запись';
+
+  @override
+  String get callParticipantsStartRecording => 'Начать запись';
+
+  @override
+  String get callParticipantsRolePermissions => 'Права ролей';
+
+  @override
+  String get callParticipantsAddByLink => 'Добавить по ссылке';
+
+  @override
+  String get callParticipantsCreator => 'Создатель';
+
+  @override
+  String get callParticipantsAdmin => 'Администратор';
+
+  @override
+  String get callParticipantsSpeaker => 'Спикер';
+
+  @override
+  String get callParticipantsHandRaised => 'Поднял руку';
+
+  @override
+  String get chatMediaSendEnableLocation => 'Включите геолокацию';
+
+  @override
+  String get chatMediaSendNoLocationAccess => 'Нет доступа к геолокации';
+
+  @override
+  String get chatMediaSendLocationFailed => 'Не удалось получить геопозицию';
+
+  @override
+  String get chatMediaSendScheduledEncryptedPhotos =>
+      'Отложенные фото в зашифрованном чате пока не поддерживаются';
+
+  @override
+  String get chatMediaSendVideoNotEncryptable =>
+      'Видео пока нельзя зашифровать';
+
+  @override
+  String get chatMediaSendPhotoEncryptFailed => 'Не удалось зашифровать фото';
+
+  @override
+  String get chatMediaSendNoEncryptionKey => 'Не задан ключ шифрования';
+
+  @override
+  String get chatMediaSendNoUploadUrl => 'сервер не выдал ссылку';
+
+  @override
+  String get chatMediaSendUploadRejected => 'загрузка отклонена';
+
+  @override
+  String get chatMediaSendServerRejected => 'сервер не принял сообщение';
+
+  @override
+  String chatMediaSendFileFailed(String detail) {
+    return 'Файл не отправлен: $detail';
+  }
+
+  @override
+  String chatMediaSendVideoNoteFailed(String detail) {
+    return 'Кружок не отправлен: $detail';
+  }
+
+  @override
+  String chatMediaSendVoiceFailed(String detail) {
+    return 'Голосовое не отправлено: $detail';
+  }
+
+  @override
+  String chatMediaSendPhotoFailed(String detail) {
+    return 'Фото не отправлено: $detail';
+  }
+
+  @override
+  String chatMediaSendVideoFailed(String detail) {
+    return 'Видео не отправлено: $detail';
+  }
+
+  @override
+  String get chatMediaSendScheduled => 'Запланировано';
+
+  @override
+  String chatMediaSendScheduledAt(String date) {
+    return 'Запланировано на $date';
+  }
+
+  @override
+  String get chatMediaSendScheduleFailed => 'Не удалось запланировать';
+
+  @override
+  String get messageListToday => 'Сегодня';
+
+  @override
+  String get messageListYesterday => 'Вчера';
+
+  @override
+  String messageListDateThisYear(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.MMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString';
+  }
+
+  @override
+  String messageListDateOtherYear(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString';
+  }
+
+  @override
+  String get messageListUnreadMessages => 'Непрочитанные сообщения';
+
+  @override
+  String get photoViewerSavedToGallery => 'Сохранено в галерею';
+
+  @override
+  String photoViewerSavedTo(String path) {
+    return 'Сохранено: $path';
+  }
+
+  @override
+  String get photoViewerSaveFileFailed => 'Не удалось сохранить файл';
+
+  @override
+  String get photoViewerFileSaved => 'Файл сохранён';
+
+  @override
+  String get photoViewerErrorNoLink => 'нет ссылки';
+
+  @override
+  String get photoViewerErrorNoMedia => 'нет медиа';
+
+  @override
+  String get photoViewerMediaLoadFailed => 'Не удалось загрузить медиа';
+
+  @override
+  String get avatarPhotoLoadFailed => 'Не удалось загрузить фото';
+
+  @override
+  String get avatarPhotoDeleteTitle => 'Удалить фото?';
+
+  @override
+  String get avatarPhotoDeleteBody =>
+      'Фотография пропадёт из профиля и из истории аватарок.';
+
+  @override
+  String loginScreenReconnectFailed(String error) {
+    return 'Не удалось переподключиться: $error';
+  }
+
+  @override
+  String get loginScreenSmsWarningTitle =>
+      'ЕСЛИ НА ВАШЕМ АККАУНТЕ НЕТ 2FA ВСЕ СЕССИИ БУДУТ СБРОШЕНЫ';
+
+  @override
+  String get loginScreenSmsWarningBody =>
+      'Способ экспериментальный, его использование на ваш страх и риск.';
+
+  @override
+  String get loginScreenOfflineWait =>
+      'Нет соединения с сервером. Подождите подключения.';
+
+  @override
+  String get loginScreenOfflineRetry =>
+      'Нет соединения с сервером. Попробуйте ещё раз.';
+
+  @override
+  String get loginScreenConnecting => 'Подключаемся к серверу, секунду…';
+
+  @override
+  String get loginScreenAlwaysSendSms => 'Всегда слать СМС (ЭКСПЕРИМЕНТАЛЬНО)';
+
+  @override
+  String get editProfileNameEmpty => 'Имя не может быть пустым';
+
+  @override
+  String get editProfileSaved => 'Профиль сохранён';
+
+  @override
+  String get editProfileAvatarUploadFailed => 'Не удалось загрузить аватарку';
+
+  @override
+  String get editProfileAvatarUpdated => 'Аватарка обновлена';
+
+  @override
+  String get editProfilePhotoDeleted => 'Фото удалено';
+
+  @override
+  String get findUserInvalidPhone => 'Введите корректный номер телефона';
+
+  @override
+  String get findUserPhoneNotFound => 'Контакт с таким номером не найден';
+
+  @override
+  String get findUserInvalidId => 'Введите числовой ID';
+
+  @override
+  String get findUserIdNotFound => 'Контакт с таким ID не найден';
+
+  @override
+  String get findUserPhoneTab => 'Номер';
+
+  @override
+  String get findUserPhoneHint => 'Введите номер телефона';
+
+  @override
+  String get findUserIdHint => 'Введите ID контакта';
+
+  @override
+  String get loginSuccessGreetingWelcome => 'Добро пожаловать в Komet!';
+
+  @override
+  String get loginSuccessGreetingEmergencyExit =>
+      'Аварийный выход на высоте 30 тысяч футов. Иллюзия безопасности.';
+
+  @override
+  String get loginSuccessGreetingFunnyThings =>
+      'Иногда забавные вещи могут быть уголовно наказуемы';
+
+  @override
+  String get loginSuccessGreetingFarewell =>
+      'Если вы видите это сообщение, значит меня уже нет в живых.';
+
+  @override
+  String get loginSuccessGreetingGondor => 'Где был Гондор когда...';
+
+  @override
+  String get loginSuccessGreetingEasterEgg => 'Вы нашли пасхалку!';
+
+  @override
+  String get chatTextSendUnknownCommand => 'ТАКОЙ КОМАНДЫ НЕТУ🚨🚨🚨';
+
+  @override
+  String get chatTextSendSaveFailed => 'Не удалось сохранить сообщение';
+
+  @override
+  String get voiceBubbleLoadFailed => 'Не удалось загрузить аудио';
+
+  @override
+  String get voiceBubblePlaybackError => 'Ошибка воспроизведения';
+
+  @override
+  String get voiceBubbleTranscribe => 'Т';
+
+  @override
+  String get voiceBubbleTranscribing => 'транскрибация...';
+
+  @override
+  String get voiceBubbleTranscriptionFailed => 'ошибка транскрибации';
+
+  @override
+  String chatInfoStoryCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count истории',
+      many: '$count историй',
+      few: '$count истории',
+      one: '$count история',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatInfoMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count участника',
+      many: '$count участников',
+      few: '$count участника',
+      one: '$count участник',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatInfoSubscriberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count подписчика',
+      many: '$count подписчиков',
+      few: '$count подписчика',
+      one: '$count подписчик',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get customGradientTitle => 'Своя тема';
+
+  @override
+  String get customGradientAnimation => 'Анимация';
+
+  @override
+  String get customGradientAnimationSubtitle => 'Плавный перелив цветов';
+
+  @override
+  String get videoBubbleOpenFailed => 'Не удалось открыть видео';
+
+  @override
+  String get videoBubbleLoadFailed => 'Не удалось получить видео';
+
+  @override
+  String get accountSwitcherNoName => 'Без имени';
+
+  @override
+  String get accountSwitcherAddAccount => 'Добавить аккаунт';
+
+  @override
+  String infoScreenWeeksShort(int weeks) {
+    return '$weeks нед';
+  }
+
+  @override
+  String infoScreenDaysShort(int days) {
+    return '$days дн';
+  }
+
+  @override
+  String get pluginsScreenPickKinetFile => 'Выберите файл с расширением .kinet';
+
+  @override
+  String get pluginsScreenReadFileFailed =>
+      'Не удалось прочитать выбранный файл';
+
+  @override
+  String pluginsScreenOpenFailed(String error) {
+    return 'Не удалось открыть .kinet: $error';
+  }
+
+  @override
+  String get pluginsScreenHttpsRequired => 'Нужна корректная HTTPS-ссылка';
+
+  @override
+  String pluginsScreenDownloadFailed(String error) {
+    return 'Не удалось загрузить .kinet: $error';
+  }
+
+  @override
+  String pluginsScreenVersionAuthor(String version, String author) {
+    return 'Версия $version · $author';
+  }
+
+  @override
+  String pluginsScreenSignatureVerified(String fingerprint) {
+    return 'Подпись Ed25519 проверена\n$fingerprint';
+  }
+
+  @override
+  String get pluginsScreenNotSigned => 'Плагин не подписан';
+
+  @override
+  String get pluginsScreenPermissionsTitle => 'Плагин получит разрешения:';
+
+  @override
+  String get pluginsScreenAllowAndInstall => 'Разрешить и установить';
+
+  @override
+  String pluginsScreenInstalled(String name) {
+    return '$name установлен';
+  }
+
+  @override
+  String pluginsScreenInstallFailed(String error) {
+    return 'Не удалось установить плагин: $error';
+  }
+
+  @override
+  String get pluginsScreenNoUpdates => 'Обновлений нет';
+
+  @override
+  String get pluginsScreenUpdateTitle => 'Обновить плагин?';
+
+  @override
+  String get pluginsScreenUpdated => 'Плагин обновлён';
+
+  @override
+  String pluginsScreenUpdateFailed(String error) {
+    return 'Не удалось обновить: $error';
+  }
+
+  @override
+  String get pluginsScreenUninstallTitle => 'Удалить плагин?';
+
+  @override
+  String get pluginsScreenUninstalled => 'Плагин и его данные удалены';
+
+  @override
+  String pluginsScreenUninstallFailed(String error) {
+    return 'Не удалось удалить: $error';
+  }
+
+  @override
+  String get pluginsScreenTitle => 'Плагины';
+
+  @override
+  String get pluginsScreenInstallFile => 'Установить .kinet';
+
+  @override
+  String get pluginsScreenInstallUrl => 'Установить по URL';
+
+  @override
+  String get pluginsScreenBundled => 'Встроенный плагин Komet';
+
+  @override
+  String pluginsScreenSigned(String fingerprint) {
+    return 'Подписан · $fingerprint';
+  }
+
+  @override
+  String get pluginsScreenUnsigned => 'Не подписан';
+
+  @override
+  String get pluginsScreenCheckUpdates => 'Проверить обновления';
+
+  @override
+  String get pluginsScreenDownload => 'Загрузить';
+
+  @override
+  String get kometSettingsViewDeletedSubtitle =>
+      'Показывать удалённые сообщения';
+
+  @override
+  String get kometSettingsViewRedactedSubtitle =>
+      'Показывать историю у редактированных сообщений';
+
+  @override
+  String get kometSettingsFullTimestampSubtitle =>
+      'Показывать время в секундах у сообщений';
+
+  @override
+  String get kometSettingsShowForwardSubtitle =>
+      'Показывать метку на пересланных сообщениях, даже если на них не указан автор';
+
+  @override
+  String get kometSettingsTypingTimeSubtitle =>
+      'Пытается рассчитать примерное время, сколько печаталось сообщение';
+
+  @override
+  String get kometSettingsFoldersHeader => 'Папки';
+
+  @override
+  String get kometSettingsHideAllFolderSubtitle =>
+      'Скрыть папку «Все», когда есть другие папки. Чаты сортируются только по вашим папкам';
+
+  @override
+  String get kometSettingsShowHiddenChatsSubtitle =>
+      'Показывать скрытые чаты, которые обычно не отображаются в списке: от групповых звонков, закрытые каналы и покинутые чаты';
+
+  @override
+  String get kometSettingsArchiveOnPullSubtitle =>
+      'Прятать архив и показывать его, если потянуть список чатов вниз, после историй';
+
+  @override
+  String get kometSettingsGhostModeSubtitle => 'Вас не видно в сети';
+
+  @override
+  String get kometSettingsAntiReadSubtitle => 'Нечиталка сообщений';
+
+  @override
+  String get kometSettingsSelfOnlineCheckSubtitle =>
+      'Каждые ~10 секунд сверяет, когда вы были онлайн. Полезно для проверки ghost mode';
+
+  @override
+  String get kometSettingsDebugHeader => 'Отладка';
+
+  @override
+  String get kometSettingsDebugLogsLabel => 'Запись отладочных логов';
+
+  @override
+  String get kometSettingsDebugLogsSubtitle =>
+      'Пишет трафик протокола в файл на устройстве — помогает диагностировать баги при репортах';
+
+  @override
+  String get sharedContentSavedToGallery => 'Сохранено в галерею';
+
+  @override
+  String get sharedContentFileSaved => 'Файл сохранён';
+
+  @override
+  String get sharedContentVideoLoadFailed => 'Не удалось загрузить видео';
+
+  @override
+  String get sharedContentAudioLoadFailed => 'Не удалось загрузить аудио';
+
+  @override
+  String get sharedContentPlaybackError => 'Ошибка воспроизведения';
+
+  @override
+  String get messageBubbleButtonUnsupported => 'Кнопка не поддерживается';
+
+  @override
+  String get messageBubblePlatformUnavailable =>
+      'На вашей платформе это недоступно';
+
+  @override
+  String messageBubbleEditedTime(String time) {
+    return '$time ред.';
+  }
+
+  @override
+  String get messageBubbleWrongKey => 'неверный ключ';
+
+  @override
+  String get messageBubbleUnavailableOnDevice =>
+      'недоступно на этом устройстве';
+
+  @override
+  String get messageBubbleReplyDeleted => 'сообщение удалено';
+
+  @override
+  String get searchScreenSavedMessages => 'Избранное';
+
+  @override
+  String get searchScreenStartTyping => 'Начните вводить запрос';
+
+  @override
+  String get searchScreenByPhone => 'По номеру';
+
+  @override
+  String get searchScreenContacts => 'Контакты';
+
+  @override
+  String get searchScreenChats => 'Чаты';
+
+  @override
+  String get searchScreenGlobalSearch => 'Глобальный поиск';
+
+  @override
+  String get searchScreenUntitled => 'Без названия';
+
+  @override
+  String get fileBubbleCorrupted => 'Файл повреждён';
+
+  @override
+  String get fileBubbleWrongKey => 'Неверный ключ';
+
+  @override
+  String get fileBubbleTapToOpen => 'Нажмите, чтобы открыть';
+
+  @override
+  String get fileBubbleDownloadFailed => 'Не удалось загрузить файл';
+
+  @override
+  String get fileBubbleDecryptPhotoFailed => 'Не удалось расшифровать фото';
+
+  @override
+  String get fileBubbleUnknownFile => 'Не удалось определить файл';
+
+  @override
+  String get fileBubbleOpenFailedReason => 'не удалось открыть';
+
+  @override
+  String get fileBubbleDownloadFailedReason => 'не удалось загрузить';
+
+  @override
+  String get storyComposerUploadUrlFailed =>
+      'Не удалось получить адрес загрузки';
+
+  @override
+  String get storyComposerPhotoUploadFailed => 'Не удалось загрузить фото';
+
+  @override
+  String get storyComposerVideoUploadFailed => 'Не удалось загрузить видео';
+
+  @override
+  String get storyComposerPublished => 'История опубликована';
+
+  @override
+  String get storyComposerPublish => 'Опубликовать';
+
+  @override
+  String get storyComposerContacts => 'Контакты';
+
+  @override
+  String textEntityProfileNotFound(String nickname) {
+    return 'Профиль @$nickname не найден';
+  }
+
+  @override
+  String get textEntityCopyPhone => 'Скопировать номер телефона';
+
+  @override
+  String get textEntityPhoneCopied => 'Номер скопирован';
+
+  @override
+  String get textEntityCall => 'Позвонить';
+
+  @override
+  String get textEntityCopyCard => 'Скопировать номер карты';
+
+  @override
+  String get textEntityCardCopied => 'Номер карты скопирован';
+
+  @override
+  String get textEntityDialFailed => 'Не удалось открыть приложение звонков';
+
+  @override
+  String get textEntityNotOnMax => 'Человека ещё нет в MAX';
+
+  @override
+  String get callLinkHandlerAlreadyInCall => 'Звонок уже идёт';
+
+  @override
+  String callLinkHandlerJoinPromptWithCount(String name, int count) {
+    return 'Присоединиться к звонку «$name»? Сейчас в звонке: $count.';
+  }
+
+  @override
+  String callLinkHandlerJoinPrompt(String name) {
+    return 'Присоединиться к звонку «$name»?';
+  }
+
+  @override
+  String get callLinkHandlerJoinFailed => 'Не удалось присоединиться к звонку';
+
+  @override
+  String get appIconScreenUnsupported =>
+      'Смена иконки доступна только на Android и iOS';
+
+  @override
+  String appIconScreenChanged(String name) {
+    return 'Иконка изменена на «$name»';
+  }
+
+  @override
+  String appIconScreenChangeFailed(String error) {
+    return 'Не удалось сменить иконку: $error';
+  }
+
+  @override
+  String get appIconScreenTitle => 'Иконка приложения';
+
+  @override
+  String get appIconScreenAppearance => 'Внешний вид иконки';
+
+  @override
+  String get appIconScreenHint =>
+      'На Android приложение закроется — лаунчер подхватит новую иконку. На iOS — мгновенно с системным диалогом.';
+
+  @override
+  String get appIconScreenOnlyMobile => 'Доступно только на Android и iOS';
+
+  @override
+  String get password2faConnectionDropped => 'Соединение прервалось…';
+
+  @override
+  String get password2faConnectionDroppedRelogin =>
+      'Соединение прервалось — войдите заново';
+
+  @override
+  String get password2faEnterPassword => 'Введите пароль для завершения входа';
+
+  @override
+  String get contactsTabFindContact => 'Найти контакт';
+
+  @override
+  String get contactsTabFind => 'Найти';
+
+  @override
+  String get contactsTabLastSeenRecently => 'Был(а) недавно';
+
+  @override
+  String get contactsTabTitle => 'Контакты';
+
+  @override
+  String get contactsTabEmpty => 'Нет контактов';
+
+  @override
+  String securityScreenBlockedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count контакта',
+      many: '$count контактов',
+      few: '$count контакта',
+      one: '$count контакт',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get attachmentPanelInvalidFileId => 'Неверный fileId';
+
+  @override
+  String get attachmentPanelPickFile => 'Выбрать из файла';
+
+  @override
+  String get attachmentPanelSendById => 'Отправить по id';
+
+  @override
+  String selectionBarSelectedCount(int count) {
+    return 'Выбрано $count';
+  }
+
+  @override
+  String get metaMarksLikelyForwarded => 'Сообщения скорее всего пересланы';
+
+  @override
+  String metaMarksTypingTime(String duration) {
+    return 'Сообщение печаталось примерно ~$duration';
+  }
+
+  @override
+  String get searchViewHint => 'Поиск...';
+
+  @override
+  String get searchViewNoResults => 'Поиск ничего не вернул...';
+
+  @override
+  String get adaptiveShellSelectChat => 'Выберите чат';
+
+  @override
+  String get settingsTabPhotoDeleted => 'Фото удалено';
+
+  @override
+  String settingsTabPhotoDeleteFailed(String error) {
+    return 'Не удалось удалить фото: $error';
+  }
+
+  @override
+  String settingsTabAppVersion(String version, String build) {
+    return 'Версия $version ($build)';
+  }
+
+  @override
+  String get settingsTabCloudStorageSubtitle => 'Через МАХ';
+
+  @override
+  String get settingsTabCloudStorageWhitelistTitle =>
+      'Работает при белых списках';
+
+  @override
+  String get settingsTabCloudStorageWhitelistBody =>
+      'Вы сможете передать файл даже при ограниченном интернете.';
+
+  @override
+  String get settingsTabCloudStorageLimitsTitle =>
+      'Файлы до 4ГБ, безлимитное количество.';
+
+  @override
+  String get settingsTabCloudStorageLimitsBody =>
+      'Можете хранить массивный обьем информации.';
+
+  @override
+  String get settingsTabCloudStoragePrivacyTitle =>
+      'Не обеспечивается конфединциальность файлов';
+
+  @override
+  String get settingsTabCloudStoragePrivacyBody =>
+      'Облачное хранилище работает через ваш аккаунт на сервере МАХ, нужные люди всё равно могут его посмотреть.';
+
+  @override
+  String get settingsTabLogoutConfirmTitle => 'Выйти из аккаунта?';
+
+  @override
+  String get settingsTabLogoutConfirmBody =>
+      'Данные аккаунта будут удалены с этого устройства.';
+
+  @override
+  String get settingsTabLogoutConfirm => 'Выйти';
+
+  @override
+  String settingsTabLogoutFailed(String error) {
+    return 'Не удалось выйти: $error';
+  }
+
+  @override
+  String get settingsTabSferumSignIn => 'Войти в Сферум';
+
+  @override
+  String get settingsTabSferumTitle => 'Сферум';
+
+  @override
+  String get settingsTabCloudStorageBeta => 'Облачное хранилище [BETA]';
+
+  @override
+  String get settingsTabDevelopers => 'Для разработчиков';
+
+  @override
+  String get settingsTabLogout => 'Выйти из аккаунта';
+
+  @override
+  String get settingsTabOnline => 'онлайн';
+
+  @override
+  String settingsTabLastSeen(String time) {
+    return 'Был(-а) $time';
+  }
+
+  @override
+  String get settingsTabOffline => 'офлайн';
+
+  @override
+  String get folderEditTypeContacts => 'Контакты';
+
+  @override
+  String get folderEditTypeNonContacts => 'Не в контактах';
+
+  @override
+  String get folderEditTypeChannels => 'Каналы';
+
+  @override
+  String get folderEditTypeBots => 'Боты';
+
+  @override
+  String get folderEditSavedMessages => 'Избранное';
+
+  @override
+  String get folderEditNoActiveAccount => 'Нет активного аккаунта';
+
+  @override
+  String get folderEditSaveFailed => 'Не удалось сохранить папку';
+
+  @override
+  String folderEditDeleteConfirm(String title) {
+    return 'Удалить папку «$title»? Чаты останутся на месте.';
+  }
+
+  @override
+  String get folderEditDeleteFailed => 'Не удалось удалить папку';
+
+  @override
+  String get folderEditNewTitle => 'Новая папка';
+
+  @override
+  String get folderEditEditTitle => 'Изменение папки';
+
+  @override
+  String get folderEditNameHint => 'Название папки';
+
+  @override
+  String get folderEditChatTypesSection => 'ТИПЫ ЧАТОВ';
+
+  @override
+  String get folderEditChatsSection => 'ЧАТЫ И КАНАЛЫ';
+
+  @override
+  String get folderEditSavedMessagesSubtitle => 'Сообщения себе';
+
+  @override
+  String get folderEditShowOnlySection => 'ПОКАЗЫВАТЬ ТОЛЬКО';
+
+  @override
+  String get folderEditNotMutedChats => 'Чаты с уведомлениями';
+
+  @override
+  String get folderEditUnreadChats => 'Непрочитанные чаты';
+
+  @override
+  String get folderEditClearSelection => 'Очистить выбор';
+
+  @override
+  String get folderEditDeleteFolder => 'Удалить папку';
+
+  @override
+  String get folderEditCreate => 'Создать папку';
+
+  @override
+  String get composerInputMuteNotifications => 'Отключить уведомления';
+
+  @override
+  String get composerInputForwardFromYou => 'Пересылка от вас';
+
+  @override
+  String get composerInputForwardMessage => 'Пересылка сообщения';
+
+  @override
+  String composerInputForwardFrom(String name) {
+    return 'Пересылка от $name';
+  }
+
+  @override
+  String composerInputForwardCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Пересылка: $count сообщения',
+      many: 'Пересылка: $count сообщений',
+      few: 'Пересылка: $count сообщения',
+      one: 'Пересылка: $count сообщение',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String composerInputReplyTo(String name) {
+    return 'Ответ $name';
+  }
+
+  @override
+  String get composerInputSwipeToCancel => '‹ Влево — отмена';
+
+  @override
+  String get composerInputSwipeToCancelHint => '‹ влево — отмена';
+
+  @override
+  String get composerInputHistoryEmpty => 'история пуста...';
+
+  @override
+  String get createGroupFailed => 'Не удалось создать группу';
+
+  @override
+  String get createGroupAvatarProcessFailed => 'Не удалось обработать аватарку';
+
+  @override
+  String get createGroupAvatarUploadFailed => 'Не удалось загрузить аватарку';
+
+  @override
+  String get createGroupSelectParticipants => 'Выберите участников';
+
+  @override
+  String get createGroupCancel => 'Отменить';
+
+  @override
+  String get createGroupNext => 'Далее';
+
+  @override
+  String get createGroupTitle => 'Создать группу';
+
+  @override
+  String get createGroupNameHint => 'Название группы';
+
+  @override
+  String get createGroupCreating => 'Создаю...';
+
+  @override
+  String get createGroupCreate => 'Создать';
+
+  @override
+  String controlBubbleQuotedTitle(String title) {
+    return '«$title»';
+  }
+
+  @override
+  String get controlBubbleCreatedByMe => ' создали чат';
+
+  @override
+  String get controlBubbleCreatedByOther => ' создал(а) чат';
+
+  @override
+  String get controlBubbleAddedByMe => ' добавили ';
+
+  @override
+  String get controlBubbleAddedByOther => ' добавил(а) ';
+
+  @override
+  String get controlBubbleLeftByMe => ' покинули чат';
+
+  @override
+  String get controlBubbleLeftByOther => ' покинул(а) чат';
+
+  @override
+  String get controlBubbleJoinedByMe => ' присоединились к чату';
+
+  @override
+  String get controlBubbleJoinedByOther => ' присоединился(-ась) к чату';
+
+  @override
+  String get controlBubblePinnedByMe => ' закрепили сообщение';
+
+  @override
+  String get controlBubblePinnedByOther => ' закрепил(а) сообщение';
+
+  @override
+  String get controlBubbleRenamedByMe => ' изменили название чата';
+
+  @override
+  String get controlBubbleRenamedByOther => ' изменил(а) название чата';
+
+  @override
+  String controlBubbleRenamedTo(String title) {
+    return ' на $title';
+  }
+
+  @override
+  String get controlBubblePhotoChangedByMe => ' изменили фото чата';
+
+  @override
+  String get controlBubblePhotoChangedByOther => ' изменил(а) фото чата';
+
+  @override
+  String get controlBubbleBotStarted => 'Бот запущен';
+
+  @override
+  String get maxLinkNoPublicLink => 'У профиля нет публичной ссылки';
+
+  @override
+  String get maxLinkShareFailed => 'Не удалось поделиться ссылкой';
+
+  @override
+  String get maxLinkOpenProfileFailed => 'Не удалось открыть профиль';
+
+  @override
+  String get maxLinkOpenChatFailed => 'Не удалось открыть чат';
+
+  @override
+  String get maxLinkJoinThisChatConfirm => 'Вступить в этот чат?';
+
+  @override
+  String maxLinkJoinChatConfirm(String title) {
+    return 'Вступить в «$title»?';
+  }
+
+  @override
+  String get maxLinkProfileFallback => 'Профиль';
+
+  @override
+  String get videoNoteCameraUnavailable => 'Камера недоступна';
+
+  @override
+  String get videoNoteNeedCameraAndMic =>
+      'Для кружков нужен доступ к камере и микрофону';
+
+  @override
+  String get videoNoteNoMicAccess => 'Нет доступа к микрофону';
+
+  @override
+  String get videoNoteNoCameraAccess => 'Нет доступа к камере';
+
+  @override
+  String get videoNoteCameraNotReady => 'Камера ещё не готова';
+
+  @override
+  String get videoNoteStartFailed => 'Не удалось начать запись кружка';
+
+  @override
+  String get videoNoteSaveFailed => 'Не удалось сохранить кружок';
+
+  @override
+  String get scheduleTimePickerTitle => 'Отправить позже';
+
+  @override
+  String get scheduleTimePickerToday => 'Сегодня';
+
+  @override
+  String get scheduleTimePickerTomorrow => 'Завтра';
+
+  @override
+  String get scheduleTimePickerTodayLower => 'сегодня';
+
+  @override
+  String get scheduleTimePickerTomorrowLower => 'завтра';
+
+  @override
+  String scheduleTimePickerSendAt(String day, String time) {
+    return 'Отправить $day в $time';
+  }
+
+  @override
+  String get scheduleTimePickerPastTime => 'Время должно быть в будущем';
+
+  @override
+  String get chatBackgroundSaveFailed => 'Не удалось сохранить обои';
+
+  @override
+  String get chatBackgroundTitle => 'Фон чатов';
+
+  @override
+  String get chatBackgroundDescription =>
+      'Эти обои применяются ко всем чатам, где не выбран свой фон.';
+
+  @override
+  String get chatBackgroundTintTitle => 'Подстраивать интерфейс под обои';
+
+  @override
+  String get chatBackgroundTintSubtitle =>
+      'Акцентный цвет приложения возьмётся из фона';
+
+  @override
+  String get chatBackgroundPick => 'Выбрать обои';
+
+  @override
+  String get chatBackgroundSampleIncoming => 'Единый фон для всех чатов';
+
+  @override
+  String get chatBackgroundSampleOutgoing => 'Красиво ✨';
+
+  @override
+  String get chatWallpaperPreviewTitle => 'Обои';
+
+  @override
+  String get chatWallpaperPreviewBlur => 'Размытие';
+
+  @override
+  String get chatWallpaperPreviewMotion => 'Движение';
+
+  @override
+  String get chatWallpaperPreviewDimming => 'Затемнение';
+
+  @override
+  String get chatWallpaperPreviewSampleIncoming =>
+      'Как насчёт новых обоев для этого чата?';
+
+  @override
+  String get chatWallpaperPreviewSampleOutgoing => 'Отличная идея.';
+
+  @override
+  String get stickerPanelLoadFailed => 'Не удалось загрузить стикеры';
+
+  @override
+  String get stickerPanelEmpty => 'Нет стикеров';
+
+  @override
+  String get stickerPanelEmojiTab => 'Эмодзи';
+
+  @override
+  String get stickerPanelStickersTab => 'Стикеры';
+
+  @override
+  String get callBubbleGroupVideo => 'Групповой видеозвонок';
+
+  @override
+  String get callBubbleCanceledVideo => 'Отменённый видеозвонок';
+
+  @override
+  String get callBubbleMissedVideo => 'Пропущенный видеозвонок';
+
+  @override
+  String get callBubbleOutgoingVideo => 'Исходящий видеозвонок';
+
+  @override
+  String get callBubbleIncomingVideo => 'Входящий видеозвонок';
+
+  @override
+  String get callBubbleCanceled => 'Отменённый звонок';
+
+  @override
+  String get callBubbleMissed => 'Пропущенный звонок';
+
+  @override
+  String get callBubbleOutgoing => 'Исходящий звонок';
+
+  @override
+  String maxRouteUnsupported(String route) {
+    return 'Ссылка не поддерживается: $route';
+  }
+
+  @override
+  String maxRouteIncomplete(String route) {
+    return 'Неполная ссылка: $route';
+  }
+
+  @override
+  String get cloudStorageScreenExpired => 'истекла';
+
+  @override
+  String cloudStorageScreenExpiresInDays(int days) {
+    return 'через $days д';
+  }
+
+  @override
+  String cloudStorageScreenExpiresInHours(int hours, int minutes) {
+    return 'через $hours ч $minutes мин';
+  }
+
+  @override
+  String cloudStorageScreenExpiresInMinutes(int minutes) {
+    return 'через $minutes мин';
+  }
+
+  @override
+  String get webQrScanTitle => 'QR для веба и ПК';
+
+  @override
+  String get webQrScanCameraUnavailable => 'Камера недоступна';
+
+  @override
+  String get webQrScanHint => 'Наведите камеру на QR-код на экране компьютера';
+
+  @override
+  String get messageRowEditTitle => 'Изменить сообщение';
+
+  @override
+  String get locationBubbleOpenInMaps => 'Открыть на карте';
+
+  @override
+  String get commandArgumentsCancel => 'Отменить команду';
+
+  @override
+  String commandArgumentsOptional(String name) {
+    return '$name · необязательно';
+  }
+
+  @override
+  String get storyRingYourStory => 'Ваша история';
+
+  @override
+  String formatBytesB(String value) {
+    return '$value Б';
+  }
+
+  @override
+  String formatBytesKb(String value) {
+    return '$value КБ';
+  }
+
+  @override
+  String formatBytesMb(String value) {
+    return '$value МБ';
+  }
+
+  @override
+  String formatBytesGb(String value) {
+    return '$value ГБ';
+  }
+
+  @override
+  String formatApproxSeconds(String whole, String fraction) {
+    return '$whole,$fraction с';
+  }
+
+  @override
+  String formatApproxMinutes(String whole, String fraction) {
+    return '$whole,$fraction мин';
+  }
+
+  @override
+  String get lastSeenJustNow => 'Был(-а) только что';
+
+  @override
+  String lastSeenMinutesAgo(int minutes) {
+    return 'Был(-а) $minutes мин назад';
+  }
+
+  @override
+  String lastSeenHoursAgo(int hours) {
+    return 'Был(-а) $hours ч назад';
+  }
+
+  @override
+  String lastSeenDaysAgo(int days) {
+    return 'Был(-а) $days дн назад';
+  }
+
+  @override
+  String get genderMale => 'Мужской';
+
+  @override
+  String get genderFemale => 'Женский';
+
+  @override
+  String get connectionStatusConnecting => 'Соединение...';
+
+  @override
+  String get connectionStatusWaitingForNetwork => 'Ожидание сети...';
+
+  @override
+  String get chatActivityTyping => 'Печатает...';
+
+  @override
+  String get chatActivityChoosingSticker => 'Выбирает стикер...';
+
+  @override
+  String chatActivityTypingOne(String name) {
+    return '$name печатает...';
+  }
+
+  @override
+  String chatActivityTypingTwo(String first, String second) {
+    return '$first и $second печатают...';
+  }
+
+  @override
+  String chatActivityTypingMany(String name, int count) {
+    return '$name и ещё $count печатают...';
+  }
+
+  @override
+  String chatActivityStickerOne(String name) {
+    return '$name выбирает стикер...';
+  }
+
+  @override
+  String chatActivityStickerTwo(String first, String second) {
+    return '$first и $second выбирают стикеры...';
+  }
+
+  @override
+  String chatActivityStickerMany(String name, int count) {
+    return '$name и ещё $count выбирают стикеры...';
+  }
+
+  @override
+  String get shareTitleMessage => 'Отправить сообщение';
+
+  @override
+  String get shareTitlePhoto => 'Отправить фотографию';
+
+  @override
+  String shareTitlePhotos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Отправить $count фотографии',
+      many: 'Отправить $count фотографий',
+      few: 'Отправить $count фотографии',
+      one: 'Отправить $count фотографию',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareTitleVideos(int count) {
+    return 'Отправить $count видео';
+  }
+
+  @override
+  String shareTitleFiles(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Отправить $count файла',
+      many: 'Отправить $count файлов',
+      few: 'Отправить $count файла',
+      one: 'Отправить $count файл',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareSubtitleToChats(String names) {
+    return 'В чат $names';
+  }
+
+  @override
+  String shareSubtitleChatCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'В $count чата',
+      many: 'В $count чатов',
+      few: 'В $count чата',
+      one: 'В $count чат',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pluginPermissionChatWrite => 'Отправка сообщений';
+
+  @override
+  String get pluginPermissionChatEdit =>
+      'Редактирование отправленных сообщений';
+
+  @override
+  String get pluginPermissionUiNotify => 'Показ уведомлений';
+
+  @override
+  String get pluginPermissionContactRead => 'Чтение данных собеседника';
+
+  @override
+  String get pluginPermissionReplyRead =>
+      'Чтение сообщения, на которое отвечает команда';
+
+  @override
+  String get pluginPermissionNetwork => 'Доступ к интернету';
+
+  @override
+  String get pluginPermissionPhotoWrite => 'Отправка фотографий';
+
+  @override
+  String get pluginPermissionFileWrite => 'Отправка файлов';
+
+  @override
+  String get pluginPermissionStorage => 'Локальное хранилище плагина';
+
+  @override
+  String pluginUpdateNewPermissions(String permissions) {
+    return 'Обновление запрашивает новые разрешения: $permissions';
+  }
+
+  @override
+  String get transcriptionNotRecognized => 'Не распознали голос';
+
+  @override
+  String get chatWallpaperThemeOcean => 'Океан';
+
+  @override
+  String get chatWallpaperThemeSunset => 'Закат';
+
+  @override
+  String get chatWallpaperThemeLavender => 'Лаванда';
+
+  @override
+  String get chatWallpaperThemeMint => 'Мята';
+
+  @override
+  String get chatWallpaperThemeGraphite => 'Графит';
+
+  @override
+  String get chatWallpaperThemeSky => 'Небо';
+
+  @override
+  String get chatWallpaperThemePeach => 'Персик';
+
+  @override
+  String get chatWallpaperThemeForest => 'Лес';
+
+  @override
+  String get chatWallpaperThemeGrape => 'Виноград';
+
+  @override
+  String get chatWallpaperThemeNight => 'Ночь';
+
+  @override
+  String get chatWallpaperThemeRose => 'Роза';
+
+  @override
+  String get chatWallpaperThemeAmber => 'Янтарь';
+
+  @override
+  String get mediaSaveFileNotFound => 'файл не найден';
+
+  @override
+  String get mediaSaveNoGalleryAccess => 'нет доступа к галерее';
+
+  @override
+  String get commandShrugDescription => 'отправить каомодзи';
+
+  @override
+  String scheduleTimePickerDayLabel(String weekday, String date) {
+    return '$weekday, $date.';
+  }
+
+  @override
+  String get avatarEditorSetPhoto => 'Установить фото';
+
+  @override
+  String get avatarEditorDraw => 'Рисовать';
+
+  @override
+  String get avatarPickerFilesTitle => 'Выбрать фото из файлов';
+
+  @override
+  String get avatarPickerFilesSubtitle => 'Если нужного фото нет в галерее';
 }

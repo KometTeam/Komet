@@ -17,10 +17,12 @@ import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../core/security/app_lock.dart';
 
 enum _EnvState { loading, notConfigured, ready }
 
@@ -290,7 +292,9 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     final accountId = _accountId;
     if (chatId == null || accountId == null) return;
 
-    final result = await FilePicker.platform.pickFiles();
+    final result = await AppLock.instance.external(
+      () => FilePicker.platform.pickFiles(),
+    );
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.first;
     if (picked.path == null) return;
@@ -1005,21 +1009,21 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
     }
   }
 
-  static String _formatSize(int? bytes) {
+  static String _formatSize(AppLocalizations l10n, int? bytes) {
     if (bytes == null) return '—';
-    return formatBytes(bytes);
+    return formatBytes(l10n, bytes);
   }
 
-  static String _formatExpiry(int expiresMs) {
+  static String _formatExpiry(AppLocalizations l10n, int expiresMs) {
     final remaining = DateTime.fromMillisecondsSinceEpoch(
       expiresMs,
     ).difference(DateTime.now());
-    if (remaining.isNegative) return 'истекла';
+    if (remaining.isNegative) return l10n.cloudStorageScreenExpired;
     final h = remaining.inHours;
     final m = remaining.inMinutes % 60;
-    if (h >= 24) return 'через ${remaining.inDays} д';
-    if (h > 0) return 'через $h ч $m мин';
-    return 'через $m мин';
+    if (h >= 24) return l10n.cloudStorageScreenExpiresInDays(remaining.inDays);
+    if (h > 0) return l10n.cloudStorageScreenExpiresInHours(h, m);
+    return l10n.cloudStorageScreenExpiresInMinutes(m);
   }
 
   @override
@@ -1066,7 +1070,7 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
           const SizedBox(height: 6),
           _InfoRow(
             label: l10n.cloudStorageSizeLabel,
-            value: _formatSize(f.size),
+            value: _formatSize(l10n, f.size),
           ),
           const SizedBox(height: 20),
           Container(height: 0.5, color: cs.outlineVariant),
@@ -1081,7 +1085,7 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
                       )
                     : Text(
                         l10n.cloudStorageLinkExpiresIn(
-                          _formatExpiry(_link!.expires),
+                          _formatExpiry(l10n, _link!.expires),
                         ),
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
@@ -1092,25 +1096,27 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
               const SizedBox(width: 8),
               _loading
                   ? SmallSpinner(size: 20, color: cs.primary)
-                  : IconButton(
-                      icon: Icon(
-                        isExpired ? Symbols.add_link : Symbols.content_copy,
-                        color: isExpired ? cs.error : cs.onSurfaceVariant,
-                        size: 20,
+                  : Builder(
+                      builder: (buttonContext) => IconButton(
+                        icon: Icon(
+                          isExpired ? Symbols.add_link : Symbols.content_copy,
+                          color: isExpired ? cs.error : cs.onSurfaceVariant,
+                          size: 20,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: isExpired
+                            ? _generateLink
+                            : () {
+                                Clipboard.setData(
+                                  ClipboardData(text: _link!.url),
+                                );
+                                showHintBubble(
+                                  buttonContext,
+                                  l10n.cloudStorageLinkCopied,
+                                );
+                              },
                       ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: isExpired
-                          ? _generateLink
-                          : () {
-                              Clipboard.setData(
-                                ClipboardData(text: _link!.url),
-                              );
-                              showCustomNotification(
-                                context,
-                                l10n.cloudStorageLinkCopied,
-                              );
-                            },
                     ),
             ],
           ),

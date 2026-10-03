@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'toast_placement.dart';
+
 const Duration _defaultNotificationDuration = Duration(milliseconds: 2600);
+const double _bottomGap = 72;
+
+OverlayEntry? _activeNotification;
 
 void showCustomNotification(
   BuildContext context,
@@ -20,13 +25,22 @@ void showCustomNotificationOnOverlay(
   Duration? duration,
 }) {
   final total = duration ?? _defaultNotificationDuration;
+  _removeNotification(_activeNotification);
   final entry = OverlayEntry(
     builder: (context) => CustomNotification(message: message, duration: total),
   );
+  _activeNotification = entry;
   overlay.insert(entry);
-  Future.delayed(total, () {
-    if (entry.mounted) entry.remove();
-  });
+  Future.delayed(total, () => _removeNotification(entry));
+}
+
+void _removeNotification(OverlayEntry? entry) {
+  if (entry == null) return;
+  if (identical(_activeNotification, entry)) _activeNotification = null;
+  if (!entry.mounted) return;
+  entry
+    ..remove()
+    ..dispose();
 }
 
 class CustomNotification extends StatefulWidget {
@@ -75,27 +89,35 @@ class _CustomNotificationState extends State<CustomNotification>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Positioned(
-      bottom: 60,
-      left: 0,
-      right: 0,
-      child: Material(
-        color: Colors.transparent,
-        child: Center(
-          child: FadeTransition(
-            opacity: _opacity,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(50),
-              ),
-              child: Text(
-                widget.message,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+    return ToastBottomPositioned(
+      left: 12,
+      right: 12,
+      minBottom: _bottomGap,
+      bandHeight: 48,
+      minWidth: 160,
+      child: IgnorePointer(
+        child: Material(
+          color: Colors.transparent,
+          child: Center(
+            child: FadeTransition(
+              opacity: _opacity,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: Text(
+                  widget.message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),

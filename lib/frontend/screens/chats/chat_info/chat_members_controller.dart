@@ -72,6 +72,7 @@ class ChatMembersController {
   final Set<int> seenMemberIds = {};
   Set<int> contactIds = {};
   int _memberMarker = 0;
+  int _generation = 0;
   bool membersLoading = false;
   bool membersEnd = false;
   static const int memberRenderChunk = 24;
@@ -107,11 +108,12 @@ class ChatMembersController {
     ];
     if (leaderIds.isEmpty) return;
 
+    final generation = _generation;
     final contactsFuture = ContactInfoFetch.getMany(leaderIds);
     final presenceFuture = PresenceFetch.getMany(leaderIds);
     final contacts = await contactsFuture;
     final presence = await presenceFuture;
-    if (!isMounted()) return;
+    if (!isMounted() || generation != _generation) return;
 
     for (final id in leaderIds) {
       if (!seenMemberIds.add(id)) continue;
@@ -167,12 +169,13 @@ class ChatMembersController {
 
   Future<void> fetchMembersPage({bool initial = false}) async {
     if (membersLoading || membersEnd) return;
+    final generation = _generation;
     membersLoading = true;
     if (!initial) rebuild();
 
     final page = await chats.getChatMembers(api, chatId, marker: _memberMarker);
+    if (!isMounted() || generation != _generation) return;
     membersLoading = false;
-    if (!isMounted()) return;
 
     if (page == null) {
       if (!initial) rebuild();
@@ -228,6 +231,25 @@ class ChatMembersController {
       if (controller.position.maxScrollExtent > 0) return;
       revealMoreMembers();
     });
+  }
+
+  Future<void> reloadAll() async {
+    _generation++;
+    owners.clear();
+    admins.clear();
+    contactMembers.clear();
+    otherMembers.clear();
+    seenMemberIds.clear();
+    _memberMarker = 0;
+    membersEnd = false;
+    membersLoading = false;
+    memberRenderLimit = memberRenderChunk;
+    rebuildMembers();
+    final generation = _generation;
+    await loadLeaders();
+    if (!isMounted() || generation != _generation) return;
+    await fetchMembersPage(initial: true);
+    rebuild();
   }
 
   Future<void> refreshMembers() async {

@@ -12,6 +12,7 @@ class ComplaintReason {
 
 // #***! жалобы на юзеров и сообщения
 class ComplaintsModule {
+  static const int channelTypeId = 2;
   static const int userTypeId = 6;
 
   // #***! справочник в рамках сессии не меняется, держим в памяти
@@ -73,6 +74,32 @@ class ComplaintsModule {
     return const [];
   }
 
+  /// COMPLAIN payload. `parentId` is sent only when given (the chat of a
+  /// reported message); a whole channel goes without it.
+  static Map<String, dynamic> complaintPayload({
+    required int reasonId,
+    required int typeId,
+    required List<int> ids,
+    int? parentId,
+  }) => {
+    'reasonId': reasonId,
+    'typeId': typeId,
+    'ids': ids,
+    'parentId': ?parentId,
+  };
+
+  // #***! жалоба на канал целиком: typeId 2, в ids id чата, без parentId
+  static Future<bool> sendChannelComplaint(
+    Api api, {
+    required int chatId,
+    required int reasonId,
+  }) => sendComplaint(
+    api,
+    reasonId: reasonId,
+    typeId: channelTypeId,
+    ids: [chatId],
+  );
+
   // #***! silent, текст ошибки покажем сами в диалоге
   static Future<bool> sendComplaint(
     Api api, {
@@ -83,12 +110,16 @@ class ComplaintsModule {
   }) async {
     final Packet response;
     try {
-      response = await api.sendRequest(Opcode.complain, {
-        'reasonId': reasonId,
-        'typeId': typeId,
-        'ids': ids,
-        'parentId': ?parentId,
-      }, silent: true);
+      response = await api.sendRequest(
+        Opcode.complain,
+        complaintPayload(
+          reasonId: reasonId,
+          typeId: typeId,
+          ids: ids,
+          parentId: parentId,
+        ),
+        silent: true,
+      );
     } catch (_) {
       return false;
     }

@@ -6,6 +6,7 @@ import 'package:komet/main.dart';
 import '../../../../core/media/preview_image.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
 import '../../upload_progress_ring.dart';
@@ -221,7 +222,10 @@ Future<void> openVideoPlayer(BubbleContext ctx, VideoAttachment video) async {
   final videoId = video.videoId;
   final token = video.videoToken;
   if (videoId == null || token == null) {
-    showCustomNotification(context, 'Не удалось открыть видео');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.videoBubbleOpenFailed,
+    );
     return;
   }
   Haptics.tap();
@@ -234,7 +238,10 @@ Future<void> openVideoPlayer(BubbleContext ctx, VideoAttachment video) async {
   );
   if (!context.mounted) return;
   if (sources.isEmpty) {
-    showCustomNotification(context, 'Не удалось получить видео');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.videoBubbleLoadFailed,
+    );
     return;
   }
 

@@ -8,6 +8,7 @@ import '../../../backend/modules/webapp.dart';
 import '../../../core/storage/spoofing_service.dart';
 import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/logger.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show api;
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
@@ -137,11 +138,12 @@ class _WebAppScreenState extends State<WebAppScreen> {
   Future<void> _closeByUser() async {
     final bridge = _bridge;
     if (bridge != null && bridge.needsCloseConfirmation) {
+      final l10n = AppLocalizations.of(context)!;
       final confirmed = await showConfirmDialog(
         context,
         title: widget.title,
-        message: 'Закрыть мини-приложение?',
-        confirmLabel: 'Закрыть',
+        message: l10n.webAppScreenCloseConfirm,
+        confirmLabel: l10n.videoViewerClose,
       );
       if (!confirmed || !mounted) return;
     }
@@ -160,11 +162,12 @@ class _WebAppScreenState extends State<WebAppScreen> {
       return false;
     }
     if (bridge != null && bridge.needsCloseConfirmation && mounted) {
+      final l10n = AppLocalizations.of(context)!;
       return showConfirmDialog(
         context,
         title: widget.title,
-        message: 'Закрыть мини-приложение?',
-        confirmLabel: 'Закрыть',
+        message: l10n.webAppScreenCloseConfirm,
+        confirmLabel: l10n.videoViewerClose,
       );
     }
     return true;

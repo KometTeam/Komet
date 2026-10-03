@@ -10,6 +10,7 @@ import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
 import '../../main.dart' show fileUploader, messagesModule;
 import '../../models/attachment.dart';
+import 'chats.dart' show chats;
 import 'file_uploader.dart';
 import 'messages.dart';
 import 'upload_notification_service.dart';
@@ -562,6 +563,7 @@ class UploadService {
       if (!job.scheduled) {
         _replaceInSessionCache(job.accountId, job.chatId, job.id, null);
         _remember(job.id, null);
+        _syncChatPreview(job.placeholder, 'error');
       }
       _events.add(
         UploadJobFailed(
@@ -603,6 +605,7 @@ class UploadService {
     }
     _replaceInSessionCache(job.accountId, job.chatId, job.id, message);
     _remember(job.id, message);
+    _syncChatPreview(message, 'sent', replacesTime: job.placeholder?.time);
     _events.add(
       UploadJobDone(
         chatId: job.chatId,
@@ -612,6 +615,23 @@ class UploadService {
         message: message,
         fileId: job.resultFileId,
         fileToken: job.resultFileToken,
+      ),
+    );
+  }
+
+  // #***! строку в списке чатов двигаем отсюда, а не с экрана чата: его
+  // могли закрыть сразу после выбора файла, а загрузка живёт дальше
+  void _syncChatPreview(
+    CachedMessage? message,
+    String status, {
+    int? replacesTime,
+  }) {
+    if (message == null) return;
+    unawaited(
+      chats.applyOutgoingMessage(
+        message,
+        status: status,
+        replacesTime: replacesTime,
       ),
     );
   }
@@ -707,17 +727,11 @@ class UploadService {
     String tempId,
     CachedMessage? real,
   ) {
-    final cached = MessageSessionCache.get(accountId, chatId);
-    if (cached == null) return;
-    final list = List<CachedMessage>.of(cached.messages);
-    final idx = list.indexWhere((m) => m.id == tempId);
-    if (idx == -1) return;
-    list[idx] = real ?? list[idx].copyWith(status: 'error');
-    MessageSessionCache.save(
+    MessageSessionCache.replace(
       accountId,
       chatId,
-      list,
-      reachedStart: cached.reachedStart,
+      tempId,
+      (current) => real ?? current.copyWith(status: 'error'),
     );
   }
 }

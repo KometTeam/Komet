@@ -9,14 +9,20 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../core/protocol/packet.dart';
+import '../../../core/storage/app_database.dart';
 import '../../../core/utils/haptics.dart';
-import '../../../main.dart' show storiesModule;
+import '../../../core/media/video_request_headers.dart';
+import '../../../main.dart' show api, storiesModule;
 import '../../../models/story.dart';
+import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
+import '../chats/profile_action_sheets.dart';
 import '../../widgets/small_spinner.dart';
 import 'story_owner_info.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../l10n/app_localizations.dart';
 
 const Duration _photoDuration = Duration(seconds: 5);
 
@@ -133,6 +139,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   VideoPlayerController? _video;
 
+  int _myId = 0;
+  bool _deleting = false;
+
   StoryPreview get _owner => widget.previews[_ownerIndex];
 
   List<Story> get _ownerStories => _stories[_owner.owner.ownerId] ?? const [];
@@ -154,7 +163,20 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         if (s == AnimationStatus.completed) _advance();
       });
     _loadOwner(_ownerIndex, autostart: true);
+    unawaited(_loadMyId());
   }
+
+  Future<void> _loadMyId() async {
+    final profile = await AppDatabase.loadActiveProfile();
+    if (!mounted || profile == null) return;
+    setState(() => _myId = profile.id);
+  }
+
+  bool _isOwnStory(Story? story) =>
+      story != null &&
+      _myId != 0 &&
+      story.owner.isUser &&
+      story.owner.ownerId == _myId;
 
   @override
   void dispose() {
@@ -224,7 +246,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   }
 
   Future<void> _startVideo(String url) async {
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final uri = Uri.parse(url);
+    final controller = VideoPlayerController.networkUrl(
+      uri,
+      httpHeaders: videoRequestHeaders(
+        uri,
+        sessionUserAgent: api.session?.userAgent(),
+      ),
+    );
     _video = controller;
     try {
       await controller.initialize();
@@ -343,6 +372,91 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     _setPaused(false);
   }
 
+  // #***! меню своей истории, пока открыто — история на паузе
+  Future<void> _openStoryMenu() async {
+    final story = _currentStory;
+    if (story == null || _deleting) return;
+    final wasPaused = _paused;
+    _setPaused(true);
+    final delete = await _pickDelete();
+    if (!mounted) return;
+    final confirmed = delete && await _confirmDelete();
+    if (!mounted) return;
+    if (confirmed) {
+      await _deleteStory(story);
+      if (!mounted) return;
+    }
+    if (!wasPaused && _currentStory != null) _setPaused(false);
+  }
+
+  Future<bool> _pickDelete() async {
+    final picked = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final cs = Theme.of(sheetContext).colorScheme;
+        return SafeArea(
+          child: ListTile(
+            leading: Icon(Symbols.delete, color: cs.error),
+            title: Text(
+              AppLocalizations.of(sheetContext)!.msgActionsDelete,
+              style: TextStyle(color: cs.error),
+            ),
+            onTap: () => Navigator.of(sheetContext).pop(true),
+          ),
+        );
+      },
+    );
+    return picked ?? false;
+  }
+
+  Future<bool> _confirmDelete() async {
+    final l10n = AppLocalizations.of(context)!;
+    final choice = await showBlurredConfirm(
+      context,
+      title: l10n.storyViewerDeleteTitle,
+      message: l10n.storyViewerDeleteMessage,
+      confirmLabel: l10n.msgActionsDelete,
+      cancelLabel: l10n.chatInfoActionCancel,
+      destructive: true,
+    );
+    return choice.confirmed;
+  }
+
+  // #***! после удаления идём к следующей истории, последнюю — закрываем
+  Future<void> _deleteStory(Story story) async {
+    setState(() => _deleting = true);
+    try {
+      await storiesModule.deleteStories(story.owner, [story.id]);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      final reason = e is PacketError ? e.message : null;
+      final l10n = AppLocalizations.of(context)!;
+      showCustomNotification(
+        context,
+        reason == null || reason.isEmpty
+            ? l10n.storyViewerDeleteFailed
+            : l10n.storyViewerDeleteFailedWithReason(reason),
+      );
+      return;
+    }
+    if (!mounted) return;
+    final ownerId = story.owner.ownerId;
+    final left = _ownerStories.where((s) => s.id != story.id).toList();
+    setState(() {
+      _deleting = false;
+      _stories[ownerId] = left;
+    });
+    if (left.isEmpty) {
+      _disposeVideo();
+      _photoProgress.stop();
+      _nextOwner();
+      return;
+    }
+    _startStory(_storyIndex.clamp(0, left.length - 1));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -444,11 +558,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                   )
                 : (loading
                       ? const SizedBox.expand(key: ValueKey('loading'))
-                      : const Center(
-                          key: ValueKey('empty'),
+                      : Center(
+                          key: const ValueKey('empty'),
                           child: Text(
-                            'Историй нет',
-                            style: TextStyle(
+                            AppLocalizations.of(context)!.storyViewerEmpty,
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 16,
                             ),
@@ -546,7 +660,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                   ),
                   if (story != null && story.time > 0)
                     Text(
-                      _timeAgo(story.time),
+                      _timeAgo(AppLocalizations.of(context)!, story.time),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.8),
                         fontSize: 12,
@@ -558,6 +672,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 ],
               ),
             ),
+            if (_isOwnStory(story))
+              _RoundIconButton(
+                key: const ValueKey('story-more'),
+                icon: Symbols.more_horiz,
+                onTap: _openStoryMenu,
+              ),
             _RoundIconButton(
               icon: Symbols.close,
               onTap: () => Navigator.of(context).maybePop(),
@@ -674,7 +794,7 @@ class _RoundIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _RoundIconButton({required this.icon, required this.onTap});
+  const _RoundIconButton({super.key, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -721,21 +841,33 @@ class _TopScrim extends StatelessWidget {
   }
 }
 
-String _timeAgo(int epochTime) {
+String _timeAgo(AppLocalizations l10n, int epochTime) {
   final ms = epochTime < 1000000000000 ? epochTime * 1000 : epochTime;
   final diff = (DateTime.now().millisecondsSinceEpoch - ms) ~/ 1000;
-  if (diff < 60) return 'только что';
-  if (diff < 3600) return '${diff ~/ 60} мин';
-  if (diff < 86400) return '${diff ~/ 3600} ч';
-  return '${diff ~/ 86400} дн';
+  if (diff < 60) return l10n.storyViewerJustNow;
+  if (diff < 3600) return l10n.storyViewerMinutesAgo(diff ~/ 60);
+  if (diff < 86400) return l10n.storyViewerHoursAgo(diff ~/ 3600);
+  return l10n.storyViewerDaysAgo(diff ~/ 86400);
 }
 
-ImageProvider? _previewProvider(String? previewData) {
+// #***! превью декодируется один раз на историю: вертикальный свайп гонит
+// setState каждый кадр, а новый MemoryImage заставлял бы заново раскодировать
+// картинку и пересобирать размытый фон
+final Expando<ImageProvider> _storyPreviews = Expando('storyPreview');
+
+ImageProvider? _previewProvider(StoryMedia media) {
+  final cached = _storyPreviews[media];
+  if (cached != null) return cached;
+  final previewData = media.previewData;
   if (previewData == null) return null;
   final comma = previewData.indexOf(',');
   if (comma < 0) return null;
   try {
-    return MemoryImage(base64Decode(previewData.substring(comma + 1)));
+    final provider = MemoryImage(
+      base64Decode(previewData.substring(comma + 1)),
+    );
+    _storyPreviews[media] = provider;
+    return provider;
   } catch (_) {
     return null;
   }
@@ -749,7 +881,7 @@ class _StoryMediaView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final preview = _previewProvider(media.previewData);
+    final preview = _previewProvider(media);
     final Widget blurBg = preview != null
         ? Positioned.fill(
             child: ImageFiltered(

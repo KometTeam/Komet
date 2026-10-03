@@ -37,6 +37,38 @@ Future<ConfirmChoice> showBlurredConfirm(
   return result ?? ConfirmChoice.cancelled;
 }
 
+enum CardActionTone { primary, neutral, destructive }
+
+class CardAction<T> {
+  final String label;
+  final T value;
+  final CardActionTone tone;
+
+  const CardAction(
+    this.label,
+    this.value, {
+    this.tone = CardActionTone.neutral,
+  });
+}
+
+Future<T?> showActionCard<T>(
+  BuildContext context, {
+  Widget? leading,
+  required String title,
+  required String message,
+  required List<CardAction<T>> actions,
+  bool stacked = false,
+}) => showBlurredCard<T>(
+  context,
+  (_) => _ActionCard<T>(
+    leading: leading,
+    title: title,
+    message: message,
+    actions: actions,
+    stacked: stacked,
+  ),
+);
+
 Future<void> showComplaintCard(
   BuildContext context, {
   required String title,
@@ -205,6 +237,104 @@ class _ConfirmCardState extends State<_ConfirmCard> {
         ],
       ),
     );
+  }
+}
+
+class _ActionCard<T> extends StatelessWidget {
+  final Widget? leading;
+  final String title;
+  final String message;
+  final List<CardAction<T>> actions;
+  final bool stacked;
+
+  const _ActionCard({
+    required this.leading,
+    required this.title,
+    required this.message,
+    required this.actions,
+    required this.stacked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final lead = leading;
+    final centered = lead != null;
+    final align = centered ? TextAlign.center : TextAlign.start;
+    final buttons = [for (final action in actions) _button(context, action)];
+    return _CardShell(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: centered
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
+        children: [
+          if (lead != null) ...[lead, const SizedBox(height: 14)],
+          Text(
+            title,
+            textAlign: align,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              fontFamily: displayFontOf(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: align,
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontSize: 14,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 18),
+          if (stacked)
+            for (final (index, button) in buttons.indexed) ...[
+              if (index > 0) const SizedBox(height: 8),
+              SizedBox(width: double.infinity, child: button),
+            ]
+          else
+            Row(
+              children: [
+                for (final (index, button) in buttons.indexed) ...[
+                  if (index > 0) const SizedBox(width: 10),
+                  Expanded(child: button),
+                ],
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _button(BuildContext context, CardAction<T> action) {
+    final cs = Theme.of(context).colorScheme;
+    void pick() => Navigator.of(context).pop(action.value);
+    const size = Size.fromHeight(48);
+    return switch (action.tone) {
+      CardActionTone.primary => FilledButton(
+        style: FilledButton.styleFrom(minimumSize: size),
+        onPressed: pick,
+        child: Text(action.label),
+      ),
+      CardActionTone.neutral => FilledButton.tonal(
+        style: FilledButton.styleFrom(minimumSize: size),
+        onPressed: pick,
+        child: Text(action.label),
+      ),
+      CardActionTone.destructive => FilledButton(
+        style: FilledButton.styleFrom(
+          minimumSize: size,
+          backgroundColor: cs.error,
+          foregroundColor: cs.onError,
+        ),
+        onPressed: pick,
+        child: Text(action.label),
+      ),
+    };
   }
 }
 

@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -13,26 +11,26 @@ import 'custom_notification.dart';
 import 'sheet_helpers.dart';
 
 // #***! на телефоне аватарка едет в галерею, на десктопе в выбранную папку
-bool get _savesToGallery =>
-    defaultTargetPlatform == TargetPlatform.android ||
-    defaultTargetPlatform == TargetPlatform.iOS;
-
-String avatarSaveLabel(BuildContext context) => _savesToGallery
-    ? 'Сохранить в галерею'
-    : (AppLocalizations.of(context)?.photoViewerSaveAs ?? 'Сохранить как…');
+String avatarSaveLabel(BuildContext context) {
+  final l10n = AppLocalizations.of(context)!;
+  return savesToGallery
+      ? l10n.photoViewerSaveToGallery
+      : l10n.photoViewerSaveAs;
+}
 
 Future<void> saveAvatarPhoto(BuildContext context, String url) async {
   if (url.isEmpty) return;
-  if (_savesToGallery) {
+  if (savesToGallery) {
     final result = await saveImageFromUrl(url);
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     showCustomNotification(
       context,
       result.ok
           ? (result.toGallery
-                ? 'Сохранено в галерею'
-                : 'Сохранено: ${result.location}')
-          : 'Не удалось сохранить: ${result.error}',
+                ? l10n.photoViewerSavedToGallery
+                : l10n.photoViewerSavedTo('${result.location}'))
+          : l10n.notificationsSaveFailed(result.errorText(l10n)),
     );
     return;
   }
@@ -42,7 +40,10 @@ Future<void> saveAvatarPhoto(BuildContext context, String url) async {
   final file = await MediaCache.getOrDownload(cacheName, url);
   if (!context.mounted) return;
   if (file == null) {
-    showCustomNotification(context, 'Не удалось загрузить фото');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.avatarPhotoLoadFailed,
+    );
     return;
   }
   final result = await saveFileAs(
@@ -51,14 +52,18 @@ Future<void> saveAvatarPhoto(BuildContext context, String url) async {
     dialogTitle: dialogTitle,
   );
   if (!context.mounted || result.cancelled) return;
+  final l10n = AppLocalizations.of(context)!;
   showCustomNotification(
     context,
-    result.saved ? 'Сохранено: ${result.path}' : 'Не удалось сохранить файл',
+    result.saved
+        ? l10n.photoViewerSavedTo('${result.path}')
+        : l10n.photoViewerSaveFileFailed,
   );
 }
 
 Future<bool> confirmAvatarDeletion(BuildContext context) async {
   final cs = Theme.of(context).colorScheme;
+  final l10n = AppLocalizations.of(context)!;
   final confirmed = await showModalBottomSheet<bool>(
     context: context,
     backgroundColor: cs.surfaceContainerHigh,
@@ -71,7 +76,7 @@ Future<bool> confirmAvatarDeletion(BuildContext context) async {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Удалить фото?',
+              l10n.avatarPhotoDeleteTitle,
               style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 18,
@@ -80,7 +85,7 @@ Future<bool> confirmAvatarDeletion(BuildContext context) async {
             ),
             const SizedBox(height: 8),
             Text(
-              'Фотография пропадёт из профиля и из истории аватарок.',
+              l10n.avatarPhotoDeleteBody,
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 20),
@@ -92,12 +97,12 @@ Future<bool> confirmAvatarDeletion(BuildContext context) async {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: AppShape.buttonBorder,
               ),
-              child: const Text('Удалить'),
+              child: Text(l10n.msgActionsDelete),
             ),
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена'),
+              child: Text(l10n.chatInfoActionCancel),
             ),
           ],
         ),
@@ -107,7 +112,7 @@ Future<bool> confirmAvatarDeletion(BuildContext context) async {
   return confirmed == true;
 }
 
-// #***! одно меню на шапку настроек и на полноэкранный просмотр
+// #***! меню аватарки в шапке настроек
 void showAvatarMenu({
   required BuildContext context,
   required Rect anchorRect,
@@ -126,7 +131,7 @@ void showAvatarMenu({
       if (onDelete != null)
         ChatMenuItem(
           icon: Symbols.delete,
-          label: 'Удалить',
+          label: AppLocalizations.of(context)!.msgActionsDelete,
           destructive: true,
           onTap: onDelete,
         ),

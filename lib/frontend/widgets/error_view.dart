@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../l10n/app_localizations.dart';
+
 class ErrorView extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
-  final String retryLabel;
+  final String? retryLabel;
 
   const ErrorView({
     super.key,
     required this.message,
     required this.onRetry,
-    this.retryLabel = 'Повторить',
+    this.retryLabel,
   });
 
   @override
@@ -30,7 +32,12 @@ class ErrorView extends StatelessWidget {
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
             ),
             const SizedBox(height: 24),
-            FilledButton(onPressed: onRetry, child: Text(retryLabel)),
+            FilledButton(
+              onPressed: onRetry,
+              child: Text(
+                retryLabel ?? AppLocalizations.of(context)!.videoViewerRetry,
+              ),
+            ),
           ],
         ),
       ),

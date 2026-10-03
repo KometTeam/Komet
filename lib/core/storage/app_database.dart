@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:komet/core/storage/app_instance.dart';
+import 'package:komet/core/storage/message_ranges.dart';
 import 'package:komet/core/utils/logger.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
@@ -291,7 +292,7 @@ class AppDatabase {
     final opened = await openDatabase(
       target,
       // #***! каждый if oldVersion < N это шаг миграции, идут по порядку
-      version: 27,
+      version: 29,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -450,6 +451,12 @@ class AppDatabase {
         if (oldVersion < 27) {
           await _addColumnIfMissing(db, 'profile', 'description', 'TEXT');
         }
+        if (oldVersion < 28) {
+          await db.execute(_messageRangesSchema);
+        }
+        if (oldVersion < 29) {
+          await _addColumnIfMissing(db, 'messages', 'typing_ms', 'INTEGER');
+        }
       },
     );
     await _dropLegacyExposedDb();
@@ -483,6 +490,7 @@ class AppDatabase {
     await db.execute(_webAppStorageSchema);
     await db.execute(_webAppBiometrySchema);
     await db.execute(_e2eeSessionsSchema);
+    await db.execute(_messageRangesSchema);
     await _createIndexes(db);
     await _createChatParticipantsIndex(db);
   }
@@ -651,7 +659,19 @@ class AppDatabase {
       edit_history TEXT,
       text_sealed BLOB,
       e2ee       INTEGER NOT NULL DEFAULT 0,
+      typing_ms  INTEGER,
       PRIMARY KEY (id, account_id),
+      FOREIGN KEY (chat_id, account_id) REFERENCES chats_cache (id, account_id) ON DELETE CASCADE
+    )
+  ''';
+
+  static const _messageRangesSchema = '''
+    CREATE TABLE IF NOT EXISTS message_ranges (
+      account_id INTEGER NOT NULL,
+      chat_id    INTEGER NOT NULL,
+      start_time INTEGER NOT NULL,
+      end_time   INTEGER NOT NULL,
+      PRIMARY KEY (account_id, chat_id, start_time),
       FOREIGN KEY (chat_id, account_id) REFERENCES chats_cache (id, account_id) ON DELETE CASCADE
     )
   ''';
@@ -1370,6 +1390,24 @@ class AppDatabase {
     });
   }
 
+  static Future<bool> updateSendingMessageStatus(
+    int accountId,
+    int chatId,
+    String messageId,
+    String status,
+  ) async {
+    final db = await _instance;
+    final changed = await db.update(
+      'messages',
+      {'status': status},
+      where:
+          'account_id = ? AND chat_id = ? AND id = ? '
+          "AND status = 'sending' AND deleted = 0",
+      whereArgs: [accountId, chatId, messageId],
+    );
+    return changed != 0;
+  }
+
   // #***! дальше выборки истории, с конца до сообщения между и вокруг
   static Future<List<Map<String, dynamic>>> loadMessages(
     int accountId,
@@ -1499,10 +1537,85 @@ class AppDatabase {
 
   static Future<void> clearMessages(int accountId, int chatId) async {
     final db = await _instance;
-    await db.delete(
-      'messages',
+    await db.transaction((txn) async {
+      await txn.delete(
+        'messages',
+        where: 'account_id = ? AND chat_id = ?',
+        whereArgs: [accountId, chatId],
+      );
+      await txn.delete(
+        'message_ranges',
+        where: 'account_id = ? AND chat_id = ?',
+        whereArgs: [accountId, chatId],
+      );
+    });
+  }
+
+  static Future<MessageRanges> loadMessageRanges(
+    int accountId,
+    int chatId,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'message_ranges',
+      columns: ['start_time', 'end_time'],
       where: 'account_id = ? AND chat_id = ?',
       whereArgs: [accountId, chatId],
+    );
+    return MessageRanges([
+      for (final row in rows)
+        MessageRange(row['start_time'] as int, row['end_time'] as int),
+    ]);
+  }
+
+  static Future<void> addMessageRange(
+    int accountId,
+    int chatId,
+    MessageRange range,
+  ) async {
+    final db = await _instance;
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'message_ranges',
+        columns: ['start_time', 'end_time'],
+        where: 'account_id = ? AND chat_id = ?',
+        whereArgs: [accountId, chatId],
+      );
+      final merged = MessageRanges.merge([
+        for (final row in rows)
+          MessageRange(row['start_time'] as int, row['end_time'] as int),
+      ], range);
+      await txn.delete(
+        'message_ranges',
+        where: 'account_id = ? AND chat_id = ?',
+        whereArgs: [accountId, chatId],
+      );
+      final batch = txn.batch();
+      for (final r in merged) {
+        batch.insert('message_ranges', {
+          'account_id': accountId,
+          'chat_id': chatId,
+          'start_time': r.start,
+          'end_time': r.end,
+        });
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
+  static Future<void> extendMessageRange(
+    int accountId,
+    int chatId, {
+    required int previousLastTime,
+    required int time,
+  }) async {
+    if (time < previousLastTime) return;
+    final db = await _instance;
+    await db.rawUpdate(
+      'UPDATE message_ranges SET end_time = ? '
+      'WHERE account_id = ? AND chat_id = ? '
+      'AND start_time <= ? AND end_time >= ? AND end_time < ?',
+      [time, accountId, chatId, previousLastTime, previousLastTime, time],
     );
   }
 

@@ -1,10 +1,14 @@
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/core/share/share_labels.dart';
+import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/models/shared_payload.dart';
 
 late Directory _dir;
+
+final AppLocalizations _ru = lookupAppLocalizations(const Locale('ru'));
 
 String _makeFile(String name, {int bytes = 8}) {
   final file = File('${_dir.path}${Platform.pathSeparator}$name')
@@ -95,52 +99,56 @@ void main() {
   group('shareTitleFor', () {
     test('photos use Russian plural forms', () {
       expect(
-        shareTitleFor(photos: 1, videos: 0, documents: 0),
+        shareTitleFor(_ru, photos: 1, videos: 0, documents: 0),
         'Отправить фотографию',
       );
       expect(
-        shareTitleFor(photos: 3, videos: 0, documents: 0),
+        shareTitleFor(_ru, photos: 3, videos: 0, documents: 0),
         'Отправить 3 фотографии',
       );
       expect(
-        shareTitleFor(photos: 5, videos: 0, documents: 0),
+        shareTitleFor(_ru, photos: 5, videos: 0, documents: 0),
         'Отправить 5 фотографий',
       );
       expect(
-        shareTitleFor(photos: 11, videos: 0, documents: 0),
+        shareTitleFor(_ru, photos: 11, videos: 0, documents: 0),
         'Отправить 11 фотографий',
+      );
+      expect(
+        shareTitleFor(_ru, photos: 21, videos: 0, documents: 0),
+        'Отправить 21 фотографию',
       );
     });
 
     test('videos stay uninflected', () {
       expect(
-        shareTitleFor(photos: 0, videos: 1, documents: 0),
+        shareTitleFor(_ru, photos: 0, videos: 1, documents: 0),
         'Отправить видео',
       );
       expect(
-        shareTitleFor(photos: 0, videos: 2, documents: 0),
+        shareTitleFor(_ru, photos: 0, videos: 2, documents: 0),
         'Отправить 2 видео',
       );
     });
 
     test('documents and mixed sets fall back to file wording', () {
       expect(
-        shareTitleFor(photos: 0, videos: 0, documents: 1),
+        shareTitleFor(_ru, photos: 0, videos: 0, documents: 1),
         'Отправить файл',
       );
       expect(
-        shareTitleFor(photos: 0, videos: 0, documents: 4),
+        shareTitleFor(_ru, photos: 0, videos: 0, documents: 4),
         'Отправить 4 файла',
       );
       expect(
-        shareTitleFor(photos: 1, videos: 1, documents: 0),
+        shareTitleFor(_ru, photos: 1, videos: 1, documents: 0),
         'Отправить 2 файла',
       );
     });
 
     test('a text share has no media wording', () {
       expect(
-        shareTitleFor(photos: 0, videos: 0, documents: 0, textOnly: true),
+        shareTitleFor(_ru, photos: 0, videos: 0, documents: 0, textOnly: true),
         'Отправить сообщение',
       );
     });
@@ -148,17 +156,20 @@ void main() {
 
   group('shareSubtitleFor', () {
     test('names are listed up to two recipients', () {
-      expect(shareSubtitleFor(const ['ЛУКА']), 'В чат ЛУКА');
-      expect(shareSubtitleFor(const ['ЛУКА', 'Zarub']), 'В чат ЛУКА, Zarub');
+      expect(shareSubtitleFor(_ru, const ['ЛУКА']), 'В чат ЛУКА');
+      expect(
+        shareSubtitleFor(_ru, const ['ЛУКА', 'Zarub']),
+        'В чат ЛУКА, Zarub',
+      );
     });
 
     test('three or more recipients collapse to a count', () {
-      expect(shareSubtitleFor(const ['a', 'b', 'c']), 'В 3 чата');
-      expect(shareSubtitleFor(List.filled(5, 'x')), 'В 5 чатов');
+      expect(shareSubtitleFor(_ru, const ['a', 'b', 'c']), 'В 3 чата');
+      expect(shareSubtitleFor(_ru, List.filled(5, 'x')), 'В 5 чатов');
     });
 
     test('an empty selection asks for one', () {
-      expect(shareSubtitleFor(const []), 'Выберите чат');
+      expect(shareSubtitleFor(_ru, const []), 'Выберите чат');
     });
   });
 }

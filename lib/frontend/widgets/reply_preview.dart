@@ -84,6 +84,7 @@ class ReplyPreview {
         imageUrl: url,
         width: size.width,
         height: size.height,
+        memCacheWidth: (size.width * 3).round(),
         fit: BoxFit.cover,
         fadeInDuration: Duration.zero,
         placeholderFadeInDuration: Duration.zero,

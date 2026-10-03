@@ -10,8 +10,10 @@ import '../../../../core/media/media_playback.dart';
 import '../../../../core/media/voice_audio_controller.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/logger.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../custom_notification.dart';
 import '../../small_spinner.dart';
+import 'meta_marks.dart';
 
 class VoiceMessageBubble extends StatefulWidget {
   final int duration;
@@ -22,6 +24,7 @@ class VoiceMessageBubble extends StatefulWidget {
   final String? status;
   final ValueListenable<int>? otherReadTime;
   final int time;
+  final bool likelyForwarded;
   final ColorScheme cs;
   final String? waveData;
   final int chatId;
@@ -43,6 +46,7 @@ class VoiceMessageBubble extends StatefulWidget {
     this.status,
     this.otherReadTime,
     required this.time,
+    this.likelyForwarded = false,
     required this.cs,
     this.waveData,
     required this.chatId,
@@ -99,7 +103,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   void _adoptCachedTranscription() {
     final cached = TranscriptionCache.get(_sourceMessageId);
     if (cached == null || cached.status != 1) return;
-    _transcriptionText = cached.text ?? 'не удалось распознать текст';
+    _transcriptionText = cached.text ?? '';
     _transcriptionVisible = TranscriptionCache.isExpanded(_sourceMessageId);
   }
 
@@ -116,6 +120,13 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     _transcriptionVisible = true;
     TranscriptionCache.setExpanded(_sourceMessageId, true);
   }
+
+  String _transcriptionLabel(AppLocalizations l10n) =>
+      switch (_transcriptionText) {
+        null => '',
+        '' => l10n.transcriptionNotRecognized,
+        final text => text,
+      };
 
   String get _cacheName => '${widget.audioId ?? _sourceMessageId}.ogg';
 
@@ -151,9 +162,15 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       case VoiceAudioFailure.none:
         return;
       case VoiceAudioFailure.download:
-        showCustomNotification(context, 'Не удалось загрузить аудио');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.voiceBubbleLoadFailed,
+        );
       case VoiceAudioFailure.playback:
-        showCustomNotification(context, 'Ошибка воспроизведения');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.voiceBubblePlaybackError,
+        );
     }
   }
 
@@ -361,7 +378,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                             color: widget.textColor.withValues(alpha: 0.6),
                           )
                         : Text(
-                            'Т',
+                            AppLocalizations.of(context)!.voiceBubbleTranscribe,
                             style: TextStyle(
                               color: widget.textColor.withValues(alpha: 0.6),
                               fontSize: 13,
@@ -392,7 +409,9 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                           child: SingleChildScrollView(
                             physics: const ClampingScrollPhysics(),
                             child: Text(
-                              _transcriptionText ?? '',
+                              _transcriptionLabel(
+                                AppLocalizations.of(context)!,
+                              ),
                               style: TextStyle(
                                 color: widget.textColor.withValues(alpha: 0.8),
                                 fontSize: 12,
@@ -405,6 +424,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                 ),
               ),
               if (!_transcriptionVisible) ...[
+                if (widget.likelyForwarded)
+                  LikelyForwardedMark(
+                    color: widget.textColor.withValues(alpha: 0.6),
+                  ),
                 Text(
                   formatClock(
                     DateTime.fromMillisecondsSinceEpoch(widget.time),
@@ -434,6 +457,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (widget.likelyForwarded)
+                  LikelyForwardedMark(
+                    color: widget.textColor.withValues(alpha: 0.6),
+                  ),
                 Text(
                   formatClock(
                     DateTime.fromMillisecondsSinceEpoch(widget.time),
@@ -477,9 +504,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
 
     if (TranscriptionCache.has(_sourceMessageId)) {
       final cached = TranscriptionCache.get(_sourceMessageId)!;
-      setState(
-        () => _showTranscription(cached.text ?? 'не удалось распознать текст'),
-      );
+      setState(() => _showTranscription(cached.text ?? ''));
       return;
     }
 
@@ -497,24 +522,22 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       TranscriptionCache.put(_sourceMessageId, result);
 
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       setState(() {
         _transcriptionLoading = false;
         if (result.status == 1) {
-          _showTranscription(
-            (result.text == null || result.text!.isEmpty)
-                ? 'не удалось распознать текст'
-                : result.text!,
-          );
+          _showTranscription(result.text ?? '');
         } else if (result.status == 0) {
-          _showTranscription('транскрибация...');
+          _showTranscription(l10n.voiceBubbleTranscribing);
         }
       });
     } catch (e) {
       logger.w('VoiceBubble._requestTranscription: $e');
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       setState(() {
         _transcriptionLoading = false;
-        _showTranscription('ошибка транскрибации');
+        _showTranscription(l10n.voiceBubbleTranscriptionFailed);
       });
     }
   }

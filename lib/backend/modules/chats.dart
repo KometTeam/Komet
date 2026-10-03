@@ -11,7 +11,9 @@ import '../../core/cache/info_cache.dart';
 import '../../core/cache/message_session_cache.dart';
 import 'shared_content.dart';
 import '../../core/crypto/e2ee_service.dart';
+import '../../core/media/deleted_media_keeper.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/chat_activity_store.dart';
 import '../../core/storage/chat_members_store.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
@@ -177,6 +179,8 @@ class CachedChat {
   bool get copyDisabled => options.contains('MESSAGE_COPY_NOT_ALLOWED');
 
   bool get confirmBeforeSend => options.contains('CONFIRM_BEFORE_SEND');
+
+  bool get commentsEnabled => options.contains('COMMENTS');
 
   // #***! 0 звук есть, минус навсегда, иначе время до которого молчим
   bool get isMuted {
@@ -481,6 +485,17 @@ class MessageSentEvent extends MessageEvent {
   const MessageSentEvent(super.chatId, this.tempId, this.message);
 }
 
+// #***! битмаска прав админа канала, складывается через |
+abstract class ChatPermission {
+  static const int addRemoveMember = 2;
+  static const int addAdmin = 4;
+  static const int changeChatInfo = 8;
+  static const int pinMessage = 16;
+  static const int postMessage = 256;
+  static const int editMessage = 512;
+  static const int deleteMessage = 1024;
+}
+
 // #***! главный модуль чатов, кэш пуши и все операции
 class ChatsModule {
   // #***! 0 звук есть, -1 выключен навсегда
@@ -498,7 +513,45 @@ class ChatsModule {
   final _messageEventsController = StreamController<MessageEvent>.broadcast();
   Stream<MessageEvent> get messageEvents => _messageEventsController.stream;
 
+  final _departedChatsController = StreamController<int>.broadcast();
+  Stream<int> get departedChats => _departedChatsController.stream;
+
   int? _paginatedAccountId;
+
+  Future<void> _extendHistoryCoverage(
+    int accountId,
+    int chatId,
+    Map<String, dynamic> chatRowBefore,
+    int time,
+  ) async {
+    final previousLast = CachedChat.fromDbRow(chatRowBefore).lastMsgTime;
+    if (previousLast == null || previousLast <= 0) return;
+    try {
+      await AppDatabase.extendMessageRange(
+        accountId,
+        chatId,
+        previousLastTime: previousLast,
+        time: time,
+      );
+    } catch (e) {
+      logger.w('extendMessageRange error: $e');
+    }
+  }
+
+  Future<void> storeSentMessages(
+    int accountId,
+    int chatId,
+    List<CachedMessage> messages,
+  ) async {
+    if (messages.isEmpty) return;
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    await AppDatabase.saveMessages([
+      for (final message in messages) message.toDbRow(),
+    ]);
+    if (rows.isEmpty) return;
+    final newest = messages.map((m) => m.time).reduce((a, b) => a > b ? a : b);
+    await _extendHistoryCoverage(accountId, chatId, rows.first, newest);
+  }
 
   void emitMessageSent(int chatId, String tempId, CachedMessage message) {
     _messageEventsController.add(MessageSentEvent(chatId, tempId, message));
@@ -617,12 +670,19 @@ class ChatsModule {
     required String status,
     List<Map<String, dynamic>>? elements,
     String? preview,
+    int? replacesTime,
   }) async {
     if (status == 'sent') await _listPreviewChat(accountId, chatId);
     final thisId = int.tryParse(messageId);
     await _updateChat(accountId, chatId, (chat) {
       final existingTime = chat.lastMsgTime ?? 0;
-      if (time < existingTime && chat.lastMsgId != thisId) return null;
+      final confirmsPreview =
+          replacesTime != null &&
+          chat.lastMsgId == null &&
+          chat.lastMsgTime == replacesTime;
+      if (time < existingTime && chat.lastMsgId != thisId && !confirmsPreview) {
+        return null;
+      }
       return chat.copyWith(
         lastMsgId: thisId,
         lastMsgText: text,
@@ -638,6 +698,29 @@ class ChatsModule {
     });
   }
 
+  // #***! своё медиа в строку чата на всех стадиях: часики пока грузится,
+  // галочка когда сервер принял, крестик если не ушло
+  Future<void> applyOutgoingMessage(
+    CachedMessage message, {
+    required String status,
+    int? replacesTime,
+  }) {
+    final payload = {
+      ...message.previewPayload,
+      if (message.e2ee != CachedMessage.e2eeNone) 'text': null,
+    };
+    return applyOutgoing(
+      message.accountId,
+      message.chatId,
+      messageId: message.id,
+      time: message.time,
+      text: messagePreviewText(payload) ?? '',
+      preview: messagePreviewMedia(payload),
+      status: status,
+      replacesTime: replacesTime,
+    );
+  }
+
   // #***! chatsChanged на любое изменение, список чатов подписан
   final ValueNotifier<int> chatsChanged = ValueNotifier(0);
   void _bump() => chatsChanged.value = chatsChanged.value + 1;
@@ -647,18 +730,17 @@ class ChatsModule {
   final Map<int, int> _inListById = {};
   final Map<int, ValueNotifier<CachedChat>> _chatNotifiers = {};
   final Set<int> _loadedAccounts = {};
+  final Set<int> _readyAccounts = {};
 
   // #***! бампается только когда реально меняется порядок/состав списка
   final ValueNotifier<int> chatOrderRevision = ValueNotifier(0);
 
-  ValueListenable<CachedChat> chatListenable(int chatId) {
-    final existing = _chatNotifiers[chatId];
+  ValueListenable<CachedChat> chatListenable(CachedChat listed) {
+    final existing = _chatNotifiers[listed.id];
     if (existing != null) return existing;
-    final chat = _chatsById[chatId];
-    final notifier = ValueNotifier<CachedChat>(
-      chat ?? CachedChat.fromDbRow(const {}),
-    );
-    if (chat != null) _chatNotifiers[chatId] = notifier;
+    final chat = _chatsById[listed.id];
+    final notifier = ValueNotifier<CachedChat>(chat ?? listed);
+    if (chat != null) _chatNotifiers[listed.id] = notifier;
     return notifier;
   }
 
@@ -696,15 +778,37 @@ class ChatsModule {
     return true;
   }
 
+  final Set<int> _awaitingRemoval = {};
+
+  void holdForRemoval(Iterable<int> chatIds) {
+    final before = _awaitingRemoval.length;
+    _awaitingRemoval.addAll(chatIds);
+    if (_awaitingRemoval.length != before) _announceRemovalChange();
+  }
+
+  void releaseRemoval(Iterable<int> chatIds) {
+    final before = _awaitingRemoval.length;
+    _awaitingRemoval.removeAll(chatIds);
+    if (_awaitingRemoval.length != before) _announceRemovalChange();
+  }
+
+  void _announceRemovalChange() {
+    chatOrderRevision.value++;
+    _bump();
+  }
+
   // #***! снимок текущего кэша, без похода в базу
   List<CachedChat> chatsSnapshot({bool includeHidden = false}) {
     final list = _chatsById.entries
+        .where((e) => !_awaitingRemoval.contains(e.key))
         .where((e) => includeHidden || _inListById[e.key] == 1)
         .map((e) => e.value)
         .toList();
     list.sort((a, b) => b.lastEventTime.compareTo(a.lastEventTime));
     return list;
   }
+
+  bool get chatsLoaded => _readyAccounts.isNotEmpty;
 
   // #***! разовая подгрузка кэша чатов аккаунта из базы
   Future<void> ensureLoaded(int accountId) async {
@@ -719,6 +823,8 @@ class ChatsModule {
       _inListById[chat.id] = row['in_list'] as int? ?? 1;
       _chatNotifiers[chat.id]?.value = chat;
     }
+    _readyAccounts.add(accountId);
+    _bump();
   }
 
   // #***! центральная точка обновления кэша, вызывается вместо голого _bump()
@@ -737,12 +843,19 @@ class ChatsModule {
     } else {
       _chatNotifiers[updated.id] = ValueNotifier(updated);
     }
-    final reorder =
-        old == null ||
-        old.favIndex != updated.favIndex ||
-        old.lastEventTime != updated.lastEventTime;
-    if (reorder) chatOrderRevision.value++;
+    if (old == null || reshapesChatList(old, updated)) {
+      chatOrderRevision.value++;
+    }
   }
+
+  @visibleForTesting
+  static bool reshapesChatList(CachedChat old, CachedChat updated) =>
+      old.favIndex != updated.favIndex ||
+      old.lastEventTime != updated.lastEventTime ||
+      (old.unreadCount > 0) != (updated.unreadCount > 0) ||
+      old.isMuted != updated.isMuted ||
+      old.owner != updated.owner ||
+      !setEquals(old.admins, updated.admins);
 
   void _removeChatFromMemory(int chatId) {
     final had = _chatsById.remove(chatId) != null;
@@ -935,6 +1048,8 @@ class ChatsModule {
     }
     _chatNotifiers.clear();
     _loadedAccounts.clear();
+    _readyAccounts.clear();
+    _bump();
   }
 
   // #***! пуши строго по одному, иначе гонки при записи в базу
@@ -1024,6 +1139,7 @@ class ChatsModule {
       if (messageIds.isNotEmpty) {
         if (keepDeleted) {
           await AppDatabase.markMessagesDeleted(accountId, chatId, messageIds);
+          unawaited(keepDeletedMedia(accountId, chatId, messageIds));
         } else {
           await AppDatabase.deleteMessages(accountId, chatId, messageIds);
         }
@@ -1037,6 +1153,16 @@ class ChatsModule {
       }
     }
     await _notifyChatFromDb(accountId, chatId);
+  }
+
+  int? _takeTypingTime(int chatId, Map msg) {
+    if (!KometSettings.showTypingTime.value) return null;
+    final status = msg['status'];
+    if (status == 'EDITED' || status == 'REMOVED') return null;
+    final senderId = msg['sender'];
+    final text = msg['text'];
+    if (senderId is! int || text is! String || text.isEmpty) return null;
+    return ChatActivityStore.instance.takeTypingTime(chatId, senderId);
   }
 
   // #***! новое сообщение, комментарии отсеиваем у них свой модуль
@@ -1056,6 +1182,8 @@ class ChatsModule {
         (linkPostId is String) ||
         (msg['postId'] is String);
     if (isCommentPush) return;
+
+    final typingMs = _takeTypingTime(chatId, msg);
 
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null) return;
@@ -1096,6 +1224,7 @@ class ChatsModule {
       final keepDeleted = KometSettings.viewDeleted.value;
       if (keepDeleted) {
         await AppDatabase.markMessageDeleted(accountId, chatId, msgIdStr);
+        unawaited(keepDeletedMedia(accountId, chatId, [msgIdStr]));
       } else {
         await AppDatabase.deleteMessage(accountId, chatId, msgIdStr);
       }
@@ -1127,76 +1256,65 @@ class ChatsModule {
       return;
     }
 
-    CachedMessage? emittedMessage;
-    if (status == 'EDITED' && msgIdStr != null) {
-      final existing = await AppDatabase.loadMessage(
-        accountId,
-        chatId,
-        msgIdStr,
-      );
-      if (existing != null) {
-        final mergedPayload =
-            _decodePayload(existing['payload']) ??
-            Map<String, dynamic>.from(msg);
-        for (final entry in msg.entries) {
-          if (entry.key == 'reactionInfo') continue;
-          mergedPayload[entry.key.toString()] = entry.value;
-        }
-        final newRow = Map<String, dynamic>.from(existing);
-        if (KometSettings.viewRedacted.value) {
-          final oldText = existing['text']?.toString();
-          if ((oldText ?? '') != (msgText ?? '') &&
-              oldText != null &&
-              oldText.isNotEmpty) {
-            final history = CachedMessage.appendEditHistory(
-              CachedMessage.parseEditHistory(existing['edit_history']),
-              oldText,
-              DateTime.now().millisecondsSinceEpoch,
-            );
-            newRow['edit_history'] = jsonEncode(history);
-          }
-        }
-        final wasEncrypted =
-            (existing['e2ee'] as int? ?? CachedMessage.e2eeNone) !=
-            CachedMessage.e2eeNone;
-        newRow['text'] = msgText;
-        newRow['status'] = status;
-        newRow['payload'] = jsonEncode(mergedPayload);
-        newRow['text_sealed'] = null;
-        newRow['e2ee'] = CachedMessage.e2eeNone;
-        final inspected = await E2eeService.instance.inspect(
-          CachedMessage.fromDbRow(newRow),
-        );
-        // #***! правка без расшифровки не от собеседника, применять нельзя
-        if (wasEncrypted && inspected.e2ee != CachedMessage.e2eeText) {
-          logger.w('notifMessage: отклонена правка $msgIdStr без расшифровки');
-          return;
-        }
-        newRow['text_sealed'] = inspected.sealedText;
-        newRow['e2ee'] = inspected.e2ee;
-        await AppDatabase.saveMessages([newRow]);
-        emittedMessage = CachedMessage.fromDbRow(newRow);
-        _messageEventsController.add(
-          MessageEditedEvent(chatId, emittedMessage),
-        );
+    final existing = msgIdStr == null
+        ? null
+        : await AppDatabase.loadMessage(accountId, chatId, msgIdStr);
+    if (status == 'EDITED' && existing != null) {
+      final mergedPayload =
+          _decodePayload(existing['payload']) ?? Map<String, dynamic>.from(msg);
+      for (final entry in msg.entries) {
+        if (entry.key == 'reactionInfo') continue;
+        mergedPayload[entry.key.toString()] = entry.value;
       }
-    } else if (msgIdStr != null) {
-      final existing = await AppDatabase.loadMessage(
-        accountId,
-        chatId,
-        msgIdStr,
-      );
-      if (existing == null) {
-        final cached = await E2eeService.instance.inspect(
-          CachedMessage.fromPushPayload(accountId, chatId, msg),
-          commit: (decrypted) =>
-              AppDatabase.saveMessages([decrypted.toDbRow()]),
-        );
-        await AppDatabase.saveMessages([cached.toDbRow()]);
-        emittedMessage = cached;
-        _applyMembershipControl(accountId, chatId, cached);
-        _messageEventsController.add(MessageAddedEvent(chatId, cached));
+      final newRow = Map<String, dynamic>.from(existing);
+      if (KometSettings.viewRedacted.value) {
+        final oldText = existing['text']?.toString();
+        if ((oldText ?? '') != (msgText ?? '') &&
+            oldText != null &&
+            oldText.isNotEmpty) {
+          final history = CachedMessage.appendEditHistory(
+            CachedMessage.parseEditHistory(existing['edit_history']),
+            oldText,
+            DateTime.now().millisecondsSinceEpoch,
+          );
+          newRow['edit_history'] = jsonEncode(history);
+        }
       }
+      final wasEncrypted =
+          (existing['e2ee'] as int? ?? CachedMessage.e2eeNone) !=
+          CachedMessage.e2eeNone;
+      newRow['text'] = msgText;
+      newRow['status'] = status;
+      newRow['payload'] = jsonEncode(mergedPayload);
+      newRow['text_sealed'] = null;
+      newRow['e2ee'] = CachedMessage.e2eeNone;
+      final inspected = await E2eeService.instance.inspect(
+        CachedMessage.fromDbRow(newRow),
+      );
+      // #***! правка без расшифровки не от собеседника, применять нельзя
+      if (wasEncrypted && inspected.e2ee != CachedMessage.e2eeText) {
+        logger.w('notifMessage: отклонена правка $msgIdStr без расшифровки');
+        return;
+      }
+      newRow['text_sealed'] = inspected.sealedText;
+      newRow['e2ee'] = inspected.e2ee;
+      await AppDatabase.saveMessages([newRow]);
+      _messageEventsController.add(
+        MessageEditedEvent(chatId, CachedMessage.fromDbRow(newRow)),
+      );
+    } else if (msgIdStr != null && existing == null) {
+      final cached = await E2eeService.instance.inspect(
+        CachedMessage.fromPushPayload(
+          accountId,
+          chatId,
+          msg,
+        ).copyWith(typingMs: typingMs),
+        commit: (decrypted) => AppDatabase.saveMessages([decrypted.toDbRow()]),
+      );
+      await AppDatabase.saveMessages([cached.toDbRow()]);
+      await _extendHistoryCoverage(accountId, chatId, rows.first, cached.time);
+      _applyMembershipControl(accountId, chatId, cached);
+      _messageEventsController.add(MessageAddedEvent(chatId, cached));
     }
 
     final cached = CachedChat.fromDbRow(rows.first);
@@ -1395,6 +1513,7 @@ class ChatsModule {
 
     if (newlyDeleted.isNotEmpty) {
       await AppDatabase.markMessagesDeleted(accountId, chatId, newlyDeleted);
+      unawaited(keepDeletedMedia(accountId, chatId, newlyDeleted));
     }
     return newlyDeleted;
   }
@@ -2226,6 +2345,7 @@ class ChatsModule {
         _bump();
         _removeChatFromMemory(chatId);
       }
+      _departedChatsController.add(chatId);
       return null;
     } on PacketError catch (e) {
       logger.w('deleteChat $chatId: ${e.message}');
@@ -2277,6 +2397,7 @@ class ChatsModule {
         _removeChatFromMemory(chatId);
         unawaited(_verifyLeftChat(api, accountId, chatId));
       }
+      _departedChatsController.add(chatId);
       return true;
     } catch (_) {
       return false;
@@ -2363,60 +2484,7 @@ class ChatsModule {
       if (!packet.isOk) return null;
       final payload = packet.payload;
       if (payload is! Map) return null;
-
-      final entries = <ChatMemberEntry>[];
-      final presenceById = <int, Map<String, dynamic>>{};
-      final rawMembers = payload['members'];
-      if (rawMembers is List) {
-        for (final m in rawMembers.whereType<Map>()) {
-          final contact = m['contact'];
-          if (contact is! Map) continue;
-          final id = contact['id'];
-          if (id is! int) continue;
-
-          final info = ContactInfo.fromMap(Map<String, dynamic>.from(contact));
-          final name = info.displayName;
-          if (name != null && name.isNotEmpty) ContactCache.put(id, name);
-          final avatar = info.avatarUrl;
-          if (avatar != null && avatar.isNotEmpty) {
-            ContactCache.putAvatar(id, avatar);
-          }
-          final phone = contact['phone'];
-          if (phone is int && phone > 0) ContactCache.putPhone(id, phone);
-          ContactInfoFetch.putContact(id, contact.cast<dynamic, dynamic>());
-
-          final presence = m['presence'];
-          var status = 0;
-          int? seen;
-          if (presence is Map) {
-            final p = Map<String, dynamic>.from(presence);
-            presenceById[id] = p;
-            status = (p['status'] as int?) ?? 0;
-            final s = p['seen'];
-            seen = s is int ? s : null;
-          }
-
-          entries.add(
-            ChatMemberEntry(
-              id: id,
-              name: name,
-              fullName: info.fullName,
-              avatarUrl: avatar,
-              seenTime: seen,
-              presenceStatus: status,
-              blocked: info.isDeleted,
-              isContact: info.isSavedContact,
-            ),
-          );
-        }
-      }
-      if (presenceById.isNotEmpty) PresenceFetch.primeAll(presenceById);
-
-      final next = payload['marker'];
-      return ChatMembersPage(
-        members: entries,
-        marker: next is int ? next : marker,
-      );
+      return _parseMembersPage(payload, marker);
     } on PacketError catch (e) {
       logger.w('getChatMembers $chatId: ${e.message}');
       return null;
@@ -2424,6 +2492,163 @@ class ChatsModule {
       logger.w('getChatMembers $chatId: $e');
       return null;
     }
+  }
+
+  // #***! разбор страницы участников, общий для members и join-request
+  ChatMembersPage _parseMembersPage(Map payload, int fallbackMarker) {
+    final entries = <ChatMemberEntry>[];
+    final presenceById = <int, Map<String, dynamic>>{};
+    final rawMembers = payload['members'];
+    if (rawMembers is List) {
+      for (final m in rawMembers.whereType<Map>()) {
+        final contact = m['contact'];
+        if (contact is! Map) continue;
+        final id = contact['id'];
+        if (id is! int) continue;
+
+        final info = ContactInfo.fromMap(Map<String, dynamic>.from(contact));
+        final name = info.displayName;
+        if (name != null && name.isNotEmpty) ContactCache.put(id, name);
+        final avatar = info.avatarUrl;
+        if (avatar != null && avatar.isNotEmpty) {
+          ContactCache.putAvatar(id, avatar);
+        }
+        final phone = contact['phone'];
+        if (phone is int && phone > 0) ContactCache.putPhone(id, phone);
+        ContactInfoFetch.putContact(id, contact.cast<dynamic, dynamic>());
+
+        final presence = m['presence'];
+        var status = 0;
+        int? seen;
+        if (presence is Map) {
+          final p = Map<String, dynamic>.from(presence);
+          presenceById[id] = p;
+          status = (p['status'] as int?) ?? 0;
+          final s = p['seen'];
+          seen = s is int ? s : null;
+        }
+
+        entries.add(
+          ChatMemberEntry(
+            id: id,
+            name: name,
+            fullName: info.fullName,
+            avatarUrl: avatar,
+            seenTime: seen,
+            presenceStatus: status,
+            blocked: info.isDeleted,
+            isContact: info.isSavedContact,
+          ),
+        );
+      }
+    }
+    if (presenceById.isNotEmpty) PresenceFetch.primeAll(presenceById);
+
+    final next = payload['marker'];
+    return ChatMembersPage(
+      members: entries,
+      marker: next is int ? next : fallbackMarker,
+    );
+  }
+
+  // #***! входящие заявки на вступление (закрытые группы и каналы)
+  Future<ChatMembersPage?> getJoinRequests(
+    Api api,
+    int chatId, {
+    int count = 100,
+  }) async {
+    try {
+      final packet = await api.sendRequest(Opcode.chatMembers, {
+        'type': 'JOIN_REQUEST',
+        'chatId': chatId,
+        'count': count,
+      });
+      if (!packet.isOk) return null;
+      final payload = packet.payload;
+      if (payload is! Map) return null;
+      return _parseMembersPage(payload, 0);
+    } on PacketError catch (e) {
+      logger.w('getJoinRequests $chatId: ${e.message}');
+      return null;
+    } catch (e) {
+      logger.w('getJoinRequests $chatId: $e');
+      return null;
+    }
+  }
+
+  // #***! одобрить заявки, showHistory открывает историю до вступления
+  Future<bool> approveJoinRequests(
+    Api api, {
+    required int chatId,
+    required List<int> userIds,
+    bool showHistory = true,
+  }) async {
+    if (userIds.isEmpty) return false;
+    try {
+      final ok = await api.sendRequestOk(Opcode.chatMembersUpdate, {
+        'chatId': chatId,
+        'userIds': userIds,
+        'type': 'JOIN_REQUEST',
+        'showHistory': showHistory,
+        'operation': 'add',
+      });
+      if (ok) _refreshChatInfo(chatId);
+      return ok;
+    } catch (e) {
+      logger.w('approveJoinRequests $chatId: $e');
+      return false;
+    }
+  }
+
+  // #***! отклонить заявки
+  Future<bool> declineJoinRequests(
+    Api api, {
+    required int chatId,
+    required List<int> userIds,
+  }) async {
+    if (userIds.isEmpty) return false;
+    try {
+      return await api.sendRequestOk(Opcode.chatMembersUpdate, {
+        'chatId': chatId,
+        'userIds': userIds,
+        'type': 'JOIN_REQUEST',
+        'operation': 'remove',
+      });
+    } catch (e) {
+      logger.w('declineJoinRequests $chatId: $e');
+      return false;
+    }
+  }
+
+  // #***! назначить админом с набором прав из ChatPermission (битмаска)
+  Future<bool> addAdmin(
+    Api api, {
+    required int chatId,
+    required int userId,
+    required int permissions,
+  }) async {
+    try {
+      final ok = await api.sendRequestOk(Opcode.chatMembersUpdate, {
+        'chatId': chatId,
+        'userIds': [userId],
+        'type': 'ADMIN',
+        'operation': 'add',
+        'permissions': permissions,
+      });
+      if (ok) _refreshChatInfo(chatId);
+      return ok;
+    } catch (e) {
+      logger.w('addAdmin $chatId: $e');
+      return false;
+    }
+  }
+
+  // #***! инфо об организации / бизнес-профиле.
+  // opcode сверен (ORG_INFO=256), но форма payload НЕ подтверждена: её нет
+  // ни в pymax, ни в открытых строках dex. chatId — предположение, проверить
+  // дампом трафика перед завязкой UI на это.
+  Future<Map<dynamic, dynamic>?> fetchOrgInfo(Api api, int chatId) async {
+    return api.sendRequestMap(Opcode.orgInfo, {'chatId': chatId});
   }
 
   // #***! принудительно обновить конкретные чаты

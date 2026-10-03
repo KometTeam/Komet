@@ -301,6 +301,15 @@ class WrongDeviceTokenException implements Exception {
   String toString() => 'WrongDeviceTokenException';
 }
 
+class AccountSessionLostException implements Exception {
+  final int accountId;
+
+  const AccountSessionLostException(this.accountId);
+
+  @override
+  String toString() => 'AccountSessionLostException($accountId)';
+}
+
 class WrongPasswordException implements Exception {
   const WrongPasswordException();
   @override

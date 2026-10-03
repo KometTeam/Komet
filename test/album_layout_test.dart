@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/modules/shared_content.dart';
 import 'package:komet/frontend/widgets/attachment/bubbles/album_layout.dart';
@@ -14,25 +16,83 @@ SharedMediaItem _item(String messageId, int time, int photoId) =>
 
 void main() {
   group('AlbumLayout.rows', () {
-    test('nine square photos form a 3×3 collage', () {
-      expect(AlbumLayout.rows(List.filled(9, 1.0)), [3, 3, 3]);
+    test('ten square photos grow from pairs to triples', () {
+      expect(AlbumLayout.rows(List.filled(10, 1.0)), [2, 2, 3, 3]);
     });
 
-    test('four photos form two rows of two', () {
-      expect(AlbumLayout.rows(List.filled(4, 1.0)), [2, 2]);
-    });
-
-    test('landscape photos go two per row', () {
-      expect(AlbumLayout.rows(List.filled(6, 1.6)), [2, 2, 2]);
-    });
-
-    test('every row holds two or three tiles and covers the album', () {
-      const mixed = [1.6, 0.6, 1.0, 0.75, 1.6, 0.6, 1.0, 1.6, 0.75, 1.0];
-      for (var count = 4; count <= mixed.length; count++) {
-        final rows = AlbumLayout.rows(mixed.sublist(0, count));
+    test('rows never hold more than four tiles', () {
+      for (var count = 2; count <= AlbumLayout.maxTiles; count++) {
+        final rows = AlbumLayout.rows(List.filled(count, 0.7), narrow: true);
         expect(rows.fold<int>(0, (sum, row) => sum + row), count);
-        expect(rows.every((row) => row == 2 || row == 3), isTrue);
+        expect(rows.every((row) => row >= 1 && row <= 4), isTrue);
       }
+    });
+  });
+
+  group('AlbumLayout.layout', () {
+    const mixed = [1.78, 0.56, 1.0, 0.75, 1.33, 3.2, 0.5, 1.6, 0.8, 1.0];
+
+    Rect bounds(List<Rect> tiles) =>
+        tiles.reduce((a, b) => a.expandToInclude(b));
+
+    double area(Rect rect) => rect.width * rect.height;
+
+    test('tiles cover the album without overlapping', () {
+      for (var count = 2; count <= mixed.length; count++) {
+        for (final ratios in [
+          mixed.sublist(0, count),
+          mixed.reversed.take(count).toList(),
+          List.filled(count, 0.6),
+          List.filled(count, 1.9),
+        ]) {
+          final grid = AlbumLayout.layout(ratios);
+          expect(grid.tiles, hasLength(count));
+          expect(grid.aspectRatio, greaterThan(0));
+
+          final box = bounds(grid.tiles);
+          expect(box.left, closeTo(0, 1e-9));
+          expect(box.top, closeTo(0, 1e-9));
+          expect(box.right, closeTo(1, 1e-9));
+          expect(box.bottom, closeTo(1, 1e-9));
+
+          final covered = grid.tiles.fold<double>(0, (sum, t) => sum + area(t));
+          expect(covered, closeTo(1, 1e-6), reason: '$ratios');
+
+          for (var i = 0; i < count; i++) {
+            expect(grid.tiles[i].width, greaterThan(0));
+            expect(grid.tiles[i].height, greaterThan(0));
+            for (var j = i + 1; j < count; j++) {
+              final overlap = grid.tiles[i].intersect(grid.tiles[j]);
+              final overlaps = overlap.width > 1e-9 && overlap.height > 1e-9;
+              expect(overlaps, isFalse, reason: '$ratios: $i and $j');
+            }
+          }
+        }
+      }
+    });
+
+    test('a tall photo among three spans the full height on the left', () {
+      final grid = AlbumLayout.layout([0.6, 1.0, 1.0]);
+      expect(grid.tiles[0].left, 0);
+      expect(grid.tiles[0].top, 0);
+      expect(grid.tiles[0].bottom, closeTo(1, 1e-9));
+      expect(grid.tiles[1].left, grid.tiles[0].right);
+      expect(grid.tiles[2].left, grid.tiles[0].right);
+      expect(grid.tiles[2].top, grid.tiles[1].bottom);
+    });
+
+    test('a wide first photo of four sits above a row of three', () {
+      final grid = AlbumLayout.layout([1.6, 1.0, 1.0, 1.0]);
+      expect(grid.tiles[0].width, closeTo(1, 1e-9));
+      for (final tile in grid.tiles.skip(1)) {
+        expect(tile.top, grid.tiles[0].bottom);
+      }
+    });
+
+    test('unknown sizes fall back to squares', () {
+      final grid = AlbumLayout.layout([0, double.nan, 1]);
+      expect(grid.tiles, hasLength(3));
+      expect(grid.aspectRatio.isFinite, isTrue);
     });
   });
 

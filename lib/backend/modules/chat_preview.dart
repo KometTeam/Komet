@@ -156,12 +156,20 @@ bool _isVideoNote(Map attach) {
 // #***! системное событие, берём текст сервера иначе пишем сами
 String? _controlPreviewLabel(Map c) {
   final title = c['title']?.toString();
+  switch (c['event']?.toString()) {
+    case 'new':
+      return 'Чат создан';
+    case 'title':
+      return title == null || title.isEmpty
+          ? 'Название чата изменено'
+          : 'Название чата изменено на «$title»';
+    case 'icon':
+      return 'Фото чата обновлено';
+  }
   if (title != null && title.isNotEmpty) return title;
   final short = c['shortMessage']?.toString();
   if (short != null && short.isNotEmpty) return short;
   switch (c['event']?.toString()) {
-    case 'new':
-      return 'Чат создан';
     case 'add':
     case 'joinByLink':
       return 'Новый участник';
@@ -171,10 +179,6 @@ String? _controlPreviewLabel(Map c) {
       return 'Участник удалён';
     case 'pin':
       return 'Закреплённое сообщение';
-    case 'changeTitle':
-      return 'Название чата изменено';
-    case 'changeIcon':
-      return 'Фото чата обновлено';
     default:
       return 'Системное сообщение';
   }
@@ -242,7 +246,8 @@ List<ChatPreviewThumb> _previewThumbs(dynamic attaches) {
   return thumbs;
 }
 
-// #***! берём base64 превьюшку если не гигантская, иначе url
+// #***! берём base64 превьюшку если не гигантская, иначе url, а у своего
+// ещё не улетевшего фото нет ни того ни другого — только файл на диске
 String? _thumbSource(Map attach, bool isVideo) {
   final data = decodeAttachPreview(attach['previewData']);
   if (data != null && data.length <= _maxThumbLength) return data;
@@ -250,7 +255,9 @@ String? _thumbSource(Map attach, bool isVideo) {
       ? _nonEmpty(attach['thumbnail'])
       : _nonEmpty(attach['baseUrl']);
   if (url != null && url.startsWith('http')) return url;
-  return null;
+  if (isVideo) return null;
+  final local = _nonEmpty(attach['localPath']);
+  return local == null ? null : Uri.file(local).toString();
 }
 
 // #***! подписи покороче для закреплённого
@@ -302,7 +309,10 @@ String? _pinnedAttachPreviewLabel(dynamic attaches) {
     case 'CALL':
       return 'звонок';
     case 'CONTROL':
-      return _controlPreviewLabel(first)?.toLowerCase();
+      final label = _controlPreviewLabel(first);
+      return label == null || label.isEmpty
+          ? label
+          : label[0].toLowerCase() + label.substring(1);
     default:
       return 'вложение';
   }

@@ -106,7 +106,7 @@ Future<void> _handleReply(String payloadJson, String text) async {
     final token = await TokenStorage.readToken(account);
     if (token != null && token.isNotEmpty) {
       api = Api()..spoofScope = '$account';
-      await api.connect();
+      await api.connect(authenticated: true);
       if (api.state != SessionState.online) {
         await api.stateStream
             .firstWhere((s) => s == SessionState.online)

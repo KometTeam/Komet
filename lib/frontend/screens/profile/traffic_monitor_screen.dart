@@ -11,9 +11,12 @@ import '../../../core/config/app_colors.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/transport/traffic_monitor.dart';
 import '../../../core/utils/format.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../core/security/app_lock.dart';
 
 class TrafficMonitorScreen extends StatefulWidget {
   const TrafficMonitorScreen({super.key});
@@ -68,12 +71,14 @@ class _TrafficMonitorScreenState extends State<TrafficMonitorScreen> {
       final stamp = formatFileStamp(DateTime.now());
       final file = File('${dir.path}/komet_traffic_$stamp.json');
       await file.writeAsString(json);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/json')],
-        subject: 'Komet traffic capture',
-        sharePositionOrigin: box == null
-            ? null
-            : box.localToGlobal(Offset.zero) & box.size,
+      await AppLock.instance.external(
+        () => Share.shareXFiles(
+          [XFile(file.path, mimeType: 'application/json')],
+          subject: 'Komet traffic capture',
+          sharePositionOrigin: box == null
+              ? null
+              : box.localToGlobal(Offset.zero) & box.size,
+        ),
       );
     } catch (e) {
       if (mounted) {
@@ -340,7 +345,7 @@ class _TrafficRow extends StatelessWidget {
                     if (e.byteSize != null) ...[
                       const SizedBox(width: 8),
                       Text(
-                        formatBytes(e.byteSize!),
+                        formatBytes(AppLocalizations.of(context)!, e.byteSize!),
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 11,
@@ -425,7 +430,7 @@ class _TrafficRow extends StatelessWidget {
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: text));
               if (context.mounted) {
-                showCustomNotification(context, 'Payload скопирован');
+                showHintBubble(context, 'Payload скопирован');
               }
             },
           ),

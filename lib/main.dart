@@ -8,7 +8,6 @@ import 'package:kolibri/kolibri.dart' show initKolibri;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:video_player_media_kit/video_player_media_kit.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:m3e_collection/m3e_collection.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -23,14 +22,18 @@ import 'core/cache/self_presence.dart';
 import 'core/storage/app_instance.dart';
 import 'core/storage/draft_store.dart';
 import 'core/storage/archived_chats_store.dart';
+import 'core/storage/local_contact_avatars.dart';
 import 'core/crypto/e2ee_service.dart';
 import 'core/storage/chat_encryption_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_amoled.dart';
+import 'core/config/app_badge.dart';
 import 'core/config/app_show_extra_info.dart';
 import 'core/config/app_spectrum_background.dart';
 import 'core/config/app_bubble_behavior.dart';
+import 'core/config/app_camera.dart';
 import 'core/config/komet_settings.dart';
+import 'core/security/app_lock.dart';
 import 'core/config/call_no_mute.dart';
 import 'core/config/debug_test.dart';
 import 'core/config/app_bubble_shape.dart';
@@ -61,6 +64,7 @@ import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'core/config/app_digital_id_mode.dart';
 import 'backend/modules/account.dart';
+import 'backend/modules/chat_admin.dart';
 import 'backend/modules/chats.dart';
 import 'backend/modules/comments.dart';
 import 'backend/modules/contacts.dart';
@@ -79,9 +83,12 @@ import 'backend/modules/digital_id.dart';
 import 'core/calls/call_bridge.dart';
 import 'core/calls/call_controller.dart';
 import 'core/media/audio_playback_controller.dart';
+import 'core/media/media_kit_video_platform.dart';
 import 'core/links/deep_link_service.dart';
 import 'frontend/screens/calls/call_screen.dart';
+import 'frontend/screens/lock/app_lock_layer.dart';
 import 'core/push/fkm_controller.dart';
+import 'core/push/launcher_badge.dart';
 import 'core/push/notification_bridge.dart';
 import 'core/share/share_intent_bridge.dart';
 import 'core/push/push_service.dart';
@@ -99,16 +106,19 @@ import 'frontend/debug/performance_monitor.dart';
 import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/widgets/adaptive_shell.dart';
 import 'frontend/widgets/custom_notification.dart';
+import 'frontend/widgets/hint_bubble.dart';
 import 'frontend/widgets/liquid_glass.dart';
 import 'frontend/widgets/mesh_gradient_background.dart';
 import 'frontend/widgets/small_spinner.dart';
 import 'frontend/widgets/theme_reveal.dart';
 import 'frontend/widgets/floating_call_badge.dart';
 import 'frontend/widgets/floating_video_note.dart';
+import 'frontend/widgets/keyboard_dismissal.dart';
 
 final api = Api();
 final accountModule = AccountModule(api);
 final messagesModule = MessagesModule(api);
+final chatAdminModule = ChatAdminModule(api);
 final commentsModule = CommentsModule(api);
 final sharedContentModule = SharedContentModule(api);
 final pollsModule = PollsModule(api);
@@ -189,20 +199,23 @@ void _installLogCapture() {
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  trackHintBubblePresses();
+  debugPrint('KOMET-STARTUP: binding ready');
+  debugPrint('KOMET-STARTUP: initKolibri...');
   await initKolibri();
+  debugPrint('KOMET-STARTUP: initKolibri done');
   DebugTest.parse(args);
   CallNoMute.parse(args);
   _installLogCapture();
-  VideoPlayerMediaKit.ensureInitialized(
-    windows: true,
-    linux: true,
-    macOS: true,
-  );
+  MediaKitVideoPlatform.registerOnDesktop();
   if (AppInstance.isNamed) {
     SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
   }
+  debugPrint('KOMET-STARTUP: applyMincifryTrust...');
   await TlsConfig.applyMincifryTrust();
+  debugPrint('KOMET-STARTUP: AppDatabase.init...');
   await AppDatabase.init();
+  debugPrint('KOMET-STARTUP: AppDatabase.init done');
   final activeAccountId = await TokenStorage.getActiveAccountId();
   if (activeAccountId != null) {
     await ContactsModule.primeCacheFromDb(activeAccountId);
@@ -240,6 +253,8 @@ void main(List<String> args) async {
   final messageActionsFuture = AppMessageActionsStyle.load();
   final swipeBackFuture = AppSwipeBackDesktop.load();
   final microphoneFuture = AppMicrophone.load();
+  final cameraFuture = AppCamera.load();
+  final videoNoteCameraFuture = AppVideoNoteCamera.load();
   final pranksFuture = AppPranks.load();
   final storiesFuture = AppStories.load();
   final commandsFuture = AppCommands.load();
@@ -252,9 +267,11 @@ void main(List<String> args) async {
   final digitalIdNativeFuture = AppDigitalIdNative.load();
   final showExtraInfoFuture = AppShowExtraInfo.load();
   final spectrumBackgroundFuture = AppSpectrumBackground.load();
+  final badgeFuture = AppBadge.load();
   final trafficCaptureFuture = TrafficMonitor.instance.load();
   final debugLogFuture = DebugSessionLog.instance.init();
 
+  debugPrint('KOMET-STARTUP: awaiting settings/prefs...');
   await packageInfoFuture;
 
   final initialLocale = await localeFuture;
@@ -265,10 +282,13 @@ void main(List<String> args) async {
   await FileHistoryCache.load(prefs);
   await DraftStore.instance.load();
   await ArchivedChatsStore.instance.load();
+  await LocalContactAvatars.instance.load();
+  await badgeFuture;
   await ChatEncryptionStore.instance.load();
   E2eeService.instance.attach(messagesModule);
   await KometSettings.load();
-  await PluginStore.instance.load();
+  await AppLock.instance.load();
+  if (BuildProfile.plugins) await PluginStore.instance.load();
   CommandRegistry.instance.initialize();
   if (KometSettings.ghostMode.value) SelfPresence.markOffline();
   await ContactCache.load();
@@ -309,6 +329,8 @@ void main(List<String> args) async {
     messageActionsFuture,
     swipeBackFuture,
     microphoneFuture,
+    cameraFuture,
+    videoNoteCameraFuture,
     pranksFuture,
     storiesFuture,
     commandsFuture,
@@ -322,9 +344,11 @@ void main(List<String> args) async {
     showExtraInfoFuture,
     spectrumBackgroundFuture,
   ]);
+  debugPrint('KOMET-STARTUP: DeviceContactsService.loadFromStartup...');
   await DeviceContactsService.loadFromStartup();
   await trafficCaptureFuture;
   await debugLogFuture;
+  debugPrint('KOMET-STARTUP: runApp');
   runApp(
     KometApp(
       initialLocale: initialLocale,
@@ -358,6 +382,9 @@ class KometApp extends StatefulWidget {
   final double initialFontScale;
   final Color? initialAccentSeed;
   static final navigatorKey = GlobalKey<NavigatorState>();
+
+  static BuildContext? get overlayContext =>
+      navigatorKey.currentState?.overlay?.context;
 
   static KometAppState? stateOf(BuildContext context) {
     return context.findAncestorStateOfType<KometAppState>();
@@ -420,6 +447,7 @@ class KometAppState extends State<KometApp>
     _fontId = widget.initialFontId;
 
     WidgetsBinding.instance.addObserver(this);
+    HardwareKeyboard.instance.addHandler(_noteKeyInteraction);
     AudioPlaybackController.error.addListener(_onAudioPlaybackError);
     AppThemeModeConfig.current.addListener(_onThemeModeChanged);
     AppAmoled.current.addListener(_onAmoledChanged);
@@ -469,6 +497,7 @@ class KometAppState extends State<KometApp>
     CallController.instance.appResumed = true;
     CallBridge.instance.init();
     NotificationBridge.instance.init();
+    unawaited(LauncherBadge.instance.init());
     ShareIntentBridge.instance.init();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       CallBridge.instance.checkInitialCall();
@@ -621,6 +650,7 @@ class KometAppState extends State<KometApp>
       _onWallpaperTintChanged,
     );
     WidgetsBinding.instance.removeObserver(this);
+    HardwareKeyboard.instance.removeHandler(_noteKeyInteraction);
     AudioPlaybackController.error.removeListener(_onAudioPlaybackError);
     _profileUpdateController.close();
     fpsOverlayEnabled.dispose();
@@ -645,8 +675,17 @@ class KometAppState extends State<KometApp>
     showCustomNotificationOnOverlay(overlay, text);
   }
 
+  bool _noteKeyInteraction(KeyEvent event) {
+    AppLock.instance.noteInteraction();
+    return false;
+  }
+
+  @override
+  Future<bool> didPopRoute() async => AppLock.instance.locked.value;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    AppLock.instance.onLifecycle(state);
     final background =
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
@@ -962,6 +1001,7 @@ class KometAppState extends State<KometApp>
         colorScheme: light,
         pageTransitionsTheme: _appPageTransitions,
         progressIndicatorTheme: _expressiveProgressTheme,
+        tooltipTheme: HintBubbleStyle.tooltipTheme(light),
         extensions: [displayFont],
         textTheme: AppFonts.textTheme(
           _fontId,
@@ -975,6 +1015,7 @@ class KometAppState extends State<KometApp>
         colorScheme: dark,
         pageTransitionsTheme: _appPageTransitions,
         progressIndicatorTheme: _expressiveProgressTheme,
+        tooltipTheme: HintBubbleStyle.tooltipTheme(dark),
         extensions: [displayFont],
         textTheme: AppFonts.textTheme(
           _fontId,
@@ -1086,7 +1127,11 @@ class KometAppState extends State<KometApp>
               theme: _lightTheme,
               darkTheme: _darkTheme,
               navigatorKey: KometApp.navigatorKey,
-              navigatorObservers: [appRouteObserver, PerfRouteObserver()],
+              navigatorObservers: [
+                appRouteObserver,
+                PerfRouteObserver(),
+                KeyboardNavigatorObserver(),
+              ],
               builder: (context, child) {
                 return ValueListenableBuilder<double>(
                   valueListenable: fontScale,
@@ -1117,6 +1162,11 @@ class KometAppState extends State<KometApp>
                           value: overlayStyle.copyWith(
                             statusBarColor: Colors.transparent,
                           ),
+                          child: Listener(
+                          behavior: HitTestBehavior.translucent,
+                          onPointerDown: (_) =>
+                              AppLock.instance.noteInteraction(),
+                          child: AppLockLayer(
                           child: Stack(
                           fit: StackFit.expand,
                           clipBehavior: Clip.none,
@@ -1141,7 +1191,7 @@ class KometAppState extends State<KometApp>
                                   }
                                   return false;
                                 },
-                                child: sChild!,
+                                child: KeyboardDismissal(child: sChild!),
                               ),
                             ),
                             const Positioned.fill(
@@ -1152,6 +1202,8 @@ class KometAppState extends State<KometApp>
                             ),
                             if (fpsOn) const FpsOverlayLayer(),
                           ],
+                          ),
+                          ),
                           ),
                         );
                       },
@@ -1194,13 +1246,16 @@ class _StartupScreenState extends State<_StartupScreen> {
       return;
     }
 
-    unawaited(api.connect());
-
     int? accountId = await TokenStorage.getActiveAccountId();
 
-    if (accountId == null || await TokenStorage.readToken(accountId) == null) {
+    if (accountId == null ||
+        await TokenStorage.tryReadToken(accountId) == null) {
       accountId = await _recoverActiveAccount();
     }
+
+    // #***! есть аккаунт с токеном — сокет боевой версии под автологин,
+    // иначе pre-login (прошлая версия) до входа по телефону
+    unawaited(api.connect(authenticated: accountId != null));
 
     if (!mounted) return;
 
@@ -1219,7 +1274,7 @@ class _StartupScreenState extends State<_StartupScreen> {
   Future<int?> _recoverActiveAccount() async {
     final profiles = await AppDatabase.loadAllProfiles();
     for (final profile in profiles) {
-      if (await TokenStorage.readToken(profile.id) != null) {
+      if (await TokenStorage.tryReadToken(profile.id) != null) {
         await TokenStorage.setActiveAccount(profile.id);
         await AppDatabase.setActiveAccount(profile.id);
         await ContactsModule.primeCacheFromDb(profile.id);

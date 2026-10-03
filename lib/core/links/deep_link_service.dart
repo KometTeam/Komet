@@ -108,7 +108,7 @@ class DeepLinkService {
 
   // #***! открываем когда есть контекст и живая сессия
   void _flushPending() {
-    final context = KometApp.navigatorKey.currentContext;
+    final context = KometApp.overlayContext;
 
     if (_pendingLogExport) {
       if (context == null) {

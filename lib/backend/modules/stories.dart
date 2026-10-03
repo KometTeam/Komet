@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -495,6 +496,69 @@ class StoriesModule {
       unawaited(_persistPreviews());
       unawaited(_persistPeers());
     }
+  }
+
+  // #***! удаление своих историй: storyIds списком, как шлёт веб
+  static Map<String, dynamic> deletePayload(List<int> storyIds) => {
+    'storyIds': storyIds,
+  };
+
+  /// Deletes the user's own stories and drops them from the cache.
+  /// Throws [PacketError]/[TimeoutException] so the UI can show the reason.
+  Future<void> deleteStories(StoryOwner owner, List<int> storyIds) async {
+    if (storyIds.isEmpty) return;
+    if (_api.state != SessionState.online) {
+      throw const PacketError('Нет соединения с сервером');
+    }
+    final packet = await _api.sendRequest(
+      Opcode.storiesDelete,
+      deletePayload(storyIds),
+    );
+    throwIfPacketError(packet);
+    removeStoriesLocally(owner.ownerId, storyIds);
+  }
+
+  // #***! убираем истории из кэша, кольцо пересчитываем, пустое выкидываем
+  void removeStoriesLocally(int ownerId, List<int> storyIds) {
+    final ids = storyIds.toSet();
+    final stories = _peerStories[ownerId];
+    var removed = ids.length;
+    if (stories != null) {
+      final before = stories.length;
+      final left = stories.where((s) => !ids.contains(s.id)).toList();
+      removed = before - left.length;
+      if (left.isEmpty) {
+        _peerStories.remove(ownerId);
+      } else {
+        _peerStories[ownerId] = left;
+      }
+    }
+    StoryPreview? shrink(StoryPreview? preview) {
+      if (preview == null) return null;
+      final total = math.max(0, preview.totalCount - removed);
+      return preview.copyWith(
+        totalCount: total,
+        readCount: math.min(preview.readCount, total),
+      );
+    }
+
+    final feed = shrink(_previews[ownerId]);
+    if (feed != null) _applyPreview(feed);
+    final peer = shrink(_peerPreviews[ownerId]);
+    if (peer != null) {
+      if (peer.isEmpty) {
+        _peerPreviews.remove(ownerId);
+      } else {
+        _peerPreviews[ownerId] = peer;
+      }
+    }
+    final lastViewed = _lastViewed[ownerId];
+    if (lastViewed != null && ids.contains(lastViewed)) {
+      clearLastViewed(ownerId);
+    }
+    _bump();
+    unawaited(_persistPreviews());
+    unawaited(_persistPeers());
   }
 
   // #***! сброс при смене аккаунта

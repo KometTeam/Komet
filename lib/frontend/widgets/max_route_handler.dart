@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/config/build_profile.dart';
+import '../../core/config/ios_release.dart';
 import '../../core/utils/link_opener.dart';
+import '../../l10n/app_localizations.dart';
 import '../screens/chats/chat_info_screen.dart';
 import '../screens/chats/chat_list_screen.dart';
 import '../screens/chats/scheduled_messages_screen.dart';
@@ -131,6 +133,7 @@ Future<bool> openMaxRoute(
     case ':settings/blacklist':
       return _push(context, const SecurityScreen());
     case ':settings/messages':
+      if (!IosRelease.messageActionsStyleChoice) break;
       return _push(context, const MessageActionsScreen());
     case ':settings/dev':
     case ':settings/dev/logsviewer':
@@ -148,7 +151,10 @@ Future<bool> openMaxRoute(
   }
 
   if (context.mounted) {
-    showCustomNotification(context, 'Ссылка не поддерживается: $route');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.maxRouteUnsupported(route),
+    );
   }
   return true;
 }
@@ -168,7 +174,9 @@ Future<bool> openChatInfoById(
     context,
     ChatInfoScreen(
       chatId: chatId,
-      name: (title != null && title.isNotEmpty) ? title : 'Чат',
+      name: (title != null && title.isNotEmpty)
+          ? title
+          : AppLocalizations.of(context)!.hubChatTileTitle,
       imageUrl: chat?.iconUrl ?? '',
       chatType: chat?.type ?? 'CHAT',
       initialTab: initialTab,
@@ -188,7 +196,9 @@ Future<bool> openScheduledMessages(BuildContext context, int chatId) async {
     ScheduledMessagesScreen(
       chatId: chatId,
       accountId: myId,
-      chatName: (title != null && title.isNotEmpty) ? title : 'Чат',
+      chatName: (title != null && title.isNotEmpty)
+          ? title
+          : AppLocalizations.of(context)!.hubChatTileTitle,
     ),
   );
 }
@@ -199,7 +209,10 @@ Future<bool> _push(BuildContext context, Widget screen) async {
 }
 
 bool _badLink(BuildContext context, String route) {
-  showCustomNotification(context, 'Неполная ссылка: $route');
+  showCustomNotification(
+    context,
+    AppLocalizations.of(context)!.maxRouteIncomplete(route),
+  );
   return true;
 }
 

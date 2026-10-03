@@ -6,6 +6,7 @@ import 'package:komet/backend/modules/calls.dart';
 import 'package:komet/frontend/screens/chats/chat_list_screen.dart';
 import 'package:komet/frontend/screens/contacts/contact_sheet_common.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/frontend/widgets/hint_bubble.dart';
 import 'package:komet/frontend/widgets/small_spinner.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/main.dart' show messagesModule;
@@ -35,11 +36,11 @@ class _CreatedCallCard extends StatefulWidget {
 class _CreatedCallCardState extends State<_CreatedCallCard> {
   bool _sending = false;
 
-  Future<void> _copy() async {
+  Future<void> _copy(BuildContext rowContext) async {
     final message = AppLocalizations.of(context)!.sharedLinkCopied;
     await Clipboard.setData(ClipboardData(text: widget.call.url));
-    if (!mounted) return;
-    showCustomNotification(context, message);
+    if (!rowContext.mounted) return;
+    showHintBubble(rowContext, message);
   }
 
   Future<void> _sendInMax() async {
@@ -174,11 +175,13 @@ class _CreatedCallCardState extends State<_CreatedCallCard> {
                     clipBehavior: Clip.antiAlias,
                     child: Column(
                       children: [
-                        _action(
-                          cs,
-                          icon: Symbols.content_copy,
-                          label: l10n.sharedCopyLink,
-                          onTap: _copy,
+                        Builder(
+                          builder: (rowContext) => _action(
+                            cs,
+                            icon: Symbols.content_copy,
+                            label: l10n.sharedCopyLink,
+                            onTap: () => _copy(rowContext),
+                          ),
                         ),
                         _action(
                           cs,

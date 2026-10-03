@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/link_opener.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import 'bubble_context.dart';
 
@@ -14,6 +15,7 @@ class LocationBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final isMe = ctx.isMe;
     final lat = location.latitude;
     final lon = location.longitude;
@@ -74,7 +76,7 @@ class LocationBubble extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            location.title ?? 'Геопозиция',
+                            location.title ?? l10n.scheduledAttachLocation,
                             style: TextStyle(
                               color: ctx.text,
                               fontSize: 14,
@@ -85,7 +87,9 @@ class LocationBubble extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            location.address ?? coords ?? 'Открыть на карте',
+                            location.address ??
+                                coords ??
+                                l10n.locationBubbleOpenInMaps,
                             style: TextStyle(color: ctx.dim, fontSize: 12),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

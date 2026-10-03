@@ -4,6 +4,7 @@ import 'package:flutter/rendering.dart';
 import 'package:komet/core/storage/chat_activity_store.dart';
 import 'package:komet/frontend/screens/chats/chat/typing_label.dart';
 import 'package:komet/frontend/widgets/animated_text_swap.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
 class AnimatedChatTile extends StatefulWidget {
   final Widget child;
@@ -95,29 +96,30 @@ class _AnimatedChatTileState extends State<AnimatedChatTile>
   @override
   Widget build(BuildContext context) {
     final c = _controller;
-    if (c == null) return SizedBox(child: widget.child);
-    return SizedBox(
-      child: AnimatedBuilder(
-        animation: c,
-        builder: (context, child) {
-          if (_entering) {
-            final t = Curves.easeOut.transform(c.value);
-            return Opacity(
-              opacity: t,
-              child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
-            );
-          }
-          if (_moveDy != 0) {
-            final t = 1 - Curves.easeOutCubic.transform(c.value);
-            return Transform.translate(
-              offset: Offset(0, _moveDy * t),
-              child: child,
-            );
-          }
-          return child!;
-        },
-        child: widget.child,
-      ),
+    return AnimatedBuilder(
+      animation: c ?? kAlwaysCompleteAnimation,
+      builder: (context, child) {
+        var opacity = 1.0;
+        var scale = 1.0;
+        var dy = 0.0;
+        if (c != null && _entering) {
+          final t = Curves.easeOut.transform(c.value);
+          opacity = t;
+          scale = 0.94 + 0.06 * t;
+        } else if (c != null && _moveDy != 0) {
+          dy = _moveDy * (1 - Curves.easeOutCubic.transform(c.value));
+        }
+        return Opacity(
+          opacity: opacity,
+          child: Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.translationValues(0, dy, 0)
+              ..multiply(Matrix4.diagonal3Values(scale, scale, 1)),
+            child: child,
+          ),
+        );
+      },
+      child: widget.child,
     );
   }
 }
@@ -139,25 +141,30 @@ class ActivitySubtitle extends StatefulWidget {
 }
 
 class _ActivitySubtitleState extends State<ActivitySubtitle> {
-  String _lastLabel = ChatActivity.typing.label.toLowerCase();
+  String? _lastLabel;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return ValueListenableBuilder<ChatActivitySnapshot?>(
       valueListenable: ChatActivityStore.instance.listenable(widget.chatId),
       child: widget.child,
       builder: (context, activity, base) {
         if (activity != null) {
-          final named = chatActivityLabel(activity, withNames: widget.group);
-          _lastLabel = widget.group && named != activity.label
+          final named = chatActivityLabel(
+            l10n,
+            activity,
+            withNames: widget.group,
+          );
+          _lastLabel = widget.group && named != activity.activity.label(l10n)
               ? named
               : named.toLowerCase();
         }
         return AnimatedTextSwap(
           showAlternate: activity != null,
           alternate: Text(
-            _lastLabel,
+            _lastLabel ?? ChatActivity.typing.label(l10n).toLowerCase(),
             style: TextStyle(
               color: cs.primary,
               fontSize: 14,

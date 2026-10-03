@@ -296,9 +296,7 @@ class _AddMembersCardState extends State<_AddMembersCard> {
               ),
             ),
             Icon(
-              selected
-                  ? Symbols.check_circle
-                  : Symbols.radio_button_unchecked,
+              selected ? Symbols.check_circle : Symbols.radio_button_unchecked,
               fill: selected ? 1 : 0,
               color: selected ? cs.primary : cs.outline,
               size: 24,

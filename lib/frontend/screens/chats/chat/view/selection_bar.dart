@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import '../../../../../core/config/app_fonts.dart';
+import '../../../../../l10n/app_localizations.dart';
 
 class SelectionTopBar extends StatelessWidget {
   final ColorScheme cs;
@@ -31,7 +32,9 @@ class SelectionTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final count = selected.length;
-    final label = 'Выбрано $count';
+    final label = AppLocalizations.of(
+      context,
+    )!.selectionBarSelectedCount(count);
 
     if (!glossy) {
       return Padding(
@@ -151,6 +154,7 @@ class SelectionBottomBar extends StatelessWidget {
   final VoidCallback onReply;
   final VoidCallback onForward;
   final bool allowForward;
+  final bool allowReply;
 
   const SelectionBottomBar({
     super.key,
@@ -159,23 +163,25 @@ class SelectionBottomBar extends StatelessWidget {
     required this.onReply,
     required this.onForward,
     this.allowForward = true,
+    this.allowReply = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    final single = selected.length == 1;
+    final showReply = allowReply && selected.length == 1;
+    final l10n = AppLocalizations.of(context)!;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            if (single) ...[
+            if (showReply) ...[
               Expanded(
                 child: _pill(
                   context,
                   cs,
                   icon: Symbols.reply,
-                  label: 'Ответить',
+                  label: l10n.msgActionsReply,
                   iconLeading: false,
                   onTap: onReply,
                 ),
@@ -189,12 +195,12 @@ class SelectionBottomBar extends StatelessWidget {
                   context,
                   cs,
                   icon: Symbols.forward,
-                  label: 'Переслать',
+                  label: l10n.msgActionsForward,
                   iconLeading: true,
                   onTap: onForward,
                 ),
               )
-            else if (!single)
+            else if (!showReply)
               const Spacer(),
           ],
         ),

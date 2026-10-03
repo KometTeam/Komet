@@ -20,7 +20,9 @@ import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_format.dart';
 import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
+import '../../l10n/app_localizations.dart';
 import 'custom_notification.dart';
+import 'hint_bubble.dart';
 import 'formatted_message_text.dart';
 import 'reply_preview.dart';
 import 'text_entity_actions.dart';
@@ -275,58 +277,194 @@ class _RenderStackMatchTopWidth extends RenderBox
   }
 }
 
-/// A [Wrap] that reports its single-line width as the max intrinsic width, so an
-/// enclosing [IntrinsicWidth] grows the bubble to fit the chips on one line
-/// instead of collapsing to the widest single chip (which makes them stack).
-/// It still wraps to multiple lines when the available width is smaller.
-class _ReactionsWrap extends Wrap {
-  const _ReactionsWrap({
-    super.spacing,
-    super.runSpacing,
-    required super.children,
-  });
+class _ReactionsFlow extends MultiChildRenderObjectWidget {
+  _ReactionsFlow({required List<Widget> chips, Widget? meta})
+    : hasMeta = meta != null,
+      super(children: [...chips, ?meta]);
+
+  final bool hasMeta;
 
   @override
-  RenderWrap createRenderObject(BuildContext context) {
-    return _RenderReactionsWrap(
-      direction: direction,
-      alignment: alignment,
-      spacing: spacing,
-      runAlignment: runAlignment,
-      runSpacing: runSpacing,
-      crossAxisAlignment: crossAxisAlignment,
-      textDirection: textDirection ?? Directionality.maybeOf(context),
-      verticalDirection: verticalDirection,
-      clipBehavior: clipBehavior,
-    );
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderReactionsFlow(hasMeta);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderReactionsFlow renderObject,
+  ) {
+    renderObject.hasMeta = hasMeta;
   }
 }
 
-class _RenderReactionsWrap extends RenderWrap {
-  _RenderReactionsWrap({
-    super.direction,
-    super.alignment,
-    super.spacing,
-    super.runAlignment,
-    super.runSpacing,
-    super.crossAxisAlignment,
-    super.textDirection,
-    super.verticalDirection,
-    super.clipBehavior,
-  });
+class _ReactionsFlowParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderReactionsFlow extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _ReactionsFlowParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _ReactionsFlowParentData> {
+  _RenderReactionsFlow(this._hasMeta);
+
+  static const double _spacing = 4;
+  static const double _runSpacing = 4;
+  static const double _metaGap = 8;
+
+  bool _hasMeta;
+  set hasMeta(bool value) {
+    if (value == _hasMeta) return;
+    _hasMeta = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _ReactionsFlowParentData) {
+      child.parentData = _ReactionsFlowParentData();
+    }
+  }
+
+  List<RenderBox> get _children {
+    final result = <RenderBox>[];
+    var child = firstChild;
+    while (child != null) {
+      result.add(child);
+      child = childAfter(child);
+    }
+    return result;
+  }
+
+  List<RenderBox> get _chips {
+    final all = _children;
+    return _hasMeta && all.isNotEmpty ? all.sublist(0, all.length - 1) : all;
+  }
+
+  RenderBox? get _meta => _hasMeta ? lastChild : null;
 
   @override
   double computeMaxIntrinsicWidth(double height) {
+    final chips = _chips;
     var total = 0.0;
-    var count = 0;
-    RenderBox? child = firstChild;
-    while (child != null) {
-      total += child.getMaxIntrinsicWidth(double.infinity);
-      count++;
-      child = childAfter(child);
+    for (final chip in chips) {
+      total += chip.getMaxIntrinsicWidth(double.infinity);
     }
-    if (count > 1) total += spacing * (count - 1);
+    if (chips.length > 1) total += _spacing * (chips.length - 1);
+    final meta = _meta;
+    if (meta != null) {
+      total +=
+          (chips.isEmpty ? 0 : _metaGap) +
+          meta.getMaxIntrinsicWidth(double.infinity);
+    }
     return total;
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) {
+    var widest = 0.0;
+    for (final child in _children) {
+      widest = math.max(widest, child.getMinIntrinsicWidth(double.infinity));
+    }
+    return widest;
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      _flow(BoxConstraints(maxWidth: width), dry: true).height;
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      computeMinIntrinsicHeight(width);
+
+  @override
+  Size computeDryLayout(covariant BoxConstraints constraints) =>
+      _flow(constraints, dry: true);
+
+  @override
+  void performLayout() {
+    size = _flow(constraints, dry: false);
+  }
+
+  Size _flow(BoxConstraints constraints, {required bool dry}) {
+    final childConstraints = BoxConstraints(maxWidth: constraints.maxWidth);
+    Size measure(RenderBox child) {
+      if (dry) return child.getDryLayout(childConstraints);
+      child.layout(childConstraints, parentUsesSize: true);
+      return child.size;
+    }
+
+    final limit = constraints.maxWidth;
+    final placements = <RenderBox, Offset>{};
+    var x = 0.0;
+    var y = 0.0;
+    var lineHeight = 0.0;
+    var widest = 0.0;
+    var hasLine = false;
+    for (final chip in _chips) {
+      final chipSize = measure(chip);
+      if (hasLine && x + chipSize.width > limit) {
+        y += lineHeight + _runSpacing;
+        x = 0;
+        lineHeight = 0;
+      }
+      placements[chip] = Offset(x, y);
+      x += chipSize.width;
+      widest = math.max(widest, x);
+      x += _spacing;
+      lineHeight = math.max(lineHeight, chipSize.height);
+      hasLine = true;
+    }
+
+    final lineEnd = hasLine ? x - _spacing : 0.0;
+    var height = hasLine ? y + lineHeight : 0.0;
+    final meta = _meta;
+    Size? metaSize;
+    var metaTop = 0.0;
+    var metaInline = true;
+    if (meta != null) {
+      metaSize = measure(meta);
+      final gap = hasLine ? _metaGap : 0.0;
+      metaInline = lineEnd + gap + metaSize.width <= limit;
+      if (metaInline) {
+        widest = math.max(widest, lineEnd + gap + metaSize.width);
+        metaTop = hasLine ? y + lineHeight - metaSize.height : 0;
+        height = math.max(height, metaTop + metaSize.height);
+        if (metaTop < 0) {
+          for (final chip in placements.keys) {
+            placements[chip] = placements[chip]!.translate(0, -metaTop);
+          }
+          height -= metaTop;
+          metaTop = 0;
+        }
+      } else {
+        metaTop = height + _runSpacing;
+        height = metaTop + metaSize.height;
+        widest = math.max(widest, metaSize.width);
+      }
+    }
+
+    final width = constraints.hasBoundedWidth ? constraints.maxWidth : widest;
+    final result = constraints.constrain(Size(width, height));
+    if (dry) return result;
+
+    placements.forEach((chip, offset) {
+      (chip.parentData! as _ReactionsFlowParentData).offset = offset;
+    });
+    if (meta != null && metaSize != null) {
+      (meta.parentData! as _ReactionsFlowParentData).offset = Offset(
+        result.width - metaSize.width,
+        metaTop,
+      );
+    }
+    return result;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
   }
 }
 
@@ -488,6 +626,8 @@ class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
 }
 
 class MessageBubble extends StatelessWidget {
+  static const int forwardBurstWindowMs = 250;
+
   static final Color _reactionChipBg = Colors.black.withValues(alpha: 0.18);
   static const BorderRadius _reactionChipRadius = BorderRadius.all(
     Radius.circular(10),
@@ -622,6 +762,16 @@ class MessageBubble extends StatelessWidget {
       !isMe && chatType == "CHAT" && prevMessage?.senderId != message.senderId;
 
   bool get _stretchesTextRow => message.replyInfo != null || _showsSenderName;
+
+  bool get _likelyForwarded =>
+      !message.isControl &&
+      (_sentInOneBurstWith(prevMessage) || _sentInOneBurstWith(nextMessage));
+
+  bool _sentInOneBurstWith(CachedMessage? other) =>
+      other != null &&
+      !other.isControl &&
+      other.senderId == message.senderId &&
+      (other.time - message.time).abs() <= forwardBurstWindowMs;
 
   BubbleShape _computeShape() {
     if (message.isControl) return BubbleShape.singleMiddle;
@@ -997,6 +1147,7 @@ class MessageBubble extends StatelessWidget {
       cs: cs,
       text: textColor,
       metaInFooter: metaInFooter,
+      likelyForwarded: _likelyForwarded,
       shape: shape,
       contentType: contentType,
       hasPhotoWithCaption: hasPhotoCap,
@@ -1148,7 +1299,7 @@ class MessageBubble extends StatelessWidget {
           ? _StackMatchTopWidth(
               growForBottom: true,
               top: Padding(padding: padding, child: innerContent),
-              bottom: _buildCommentsFooter(cs),
+              bottom: _buildCommentsFooter(context, cs),
             )
           : innerContent,
     );
@@ -1192,8 +1343,9 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildCommentsFooter(ColorScheme cs) {
-    final label = commentsLabel ?? 'Комментарии';
+  Widget _buildCommentsFooter(BuildContext context, ColorScheme cs) {
+    final label =
+        commentsLabel ?? AppLocalizations.of(context)!.commentsTitle;
     final accent = isMe ? cs.onPrimaryContainer : cs.primary;
     return Material(
       color: Colors.transparent,
@@ -1256,11 +1408,14 @@ class MessageBubble extends StatelessWidget {
                     for (var i = 0; i < row.length; i++) ...[
                       if (i > 0) const SizedBox(width: 4),
                       Expanded(
-                        child: _buildInlineKeyboardButton(
-                          context,
-                          cs,
-                          keyboard,
-                          row[i],
+                        child: Builder(
+                          builder: (buttonContext) =>
+                              _buildInlineKeyboardButton(
+                                buttonContext,
+                                cs,
+                                keyboard,
+                                row[i],
+                              ),
                         ),
                       ),
                     ],
@@ -1355,12 +1510,19 @@ class MessageBubble extends StatelessWidget {
       case 'CLIPBOARD':
         final payload = button.payload;
         if (payload == null || payload.isEmpty) return;
-        await copyTextEntity(context, payload, 'Скопировано');
+        await copyTextEntity(
+          context,
+          payload,
+          AppLocalizations.of(context)!.msgActionsCopied,
+        );
         return;
       default:
         final callbackId = keyboard.callbackId;
         if (callbackId == null || callbackId.isEmpty) {
-          showCustomNotification(context, 'Кнопка не поддерживается');
+          showHintBubble(
+            context,
+            AppLocalizations.of(context)!.messageBubbleButtonUnsupported,
+          );
           return;
         }
         final answer = await messagesModule.sendButtonCallback(
@@ -1376,9 +1538,7 @@ class MessageBubble extends StatelessWidget {
           return;
         }
         final text = answer?['text']?.toString();
-        if (text != null && text.isNotEmpty) {
-          showCustomNotification(context, text);
-        }
+        if (text != null && text.isNotEmpty) showHintBubble(context, text);
     }
   }
 
@@ -1387,7 +1547,10 @@ class MessageBubble extends StatelessWidget {
     InlineKeyboardButton button,
   ) async {
     if (!webViewSupported) {
-      showCustomNotification(context, 'На вашей платформе это недоступно');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.messageBubblePlatformUnavailable,
+      );
       return;
     }
 
@@ -1404,7 +1567,10 @@ class MessageBubble extends StatelessWidget {
     final botId = button.contactId;
 
     if (botId == null) {
-      showCustomNotification(context, 'Не удалось открыть приложение');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.miniAppFailed,
+      );
       return;
     }
 
@@ -1484,14 +1650,9 @@ class MessageBubble extends StatelessWidget {
     final content = _buildContent(ctx);
     final footer = Padding(
       padding: inset,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: _ReactionsWrap(spacing: 4, runSpacing: 4, children: chips),
-          ),
-          if (carriesMeta) ...[const SizedBox(width: 8), ctx.footerMeta()],
-        ],
+      child: _ReactionsFlow(
+        chips: chips,
+        meta: carriesMeta ? ctx.footerMeta() : null,
       ),
     );
 
@@ -1499,6 +1660,12 @@ class MessageBubble extends StatelessWidget {
     // чтобы длинный ряд чипов не растягивал бабл шире картинки
     if (_mediaDictatesWidth || _isVideoNote) {
       return _StackMatchTopWidth(top: content, bottom: footer);
+    }
+    if (_contentType != MessageType.text && !_isSticker) {
+      return _StackMatchTopWidth(
+        top: IntrinsicWidth(child: content),
+        bottom: footer,
+      );
     }
 
     return IntrinsicWidth(
@@ -1584,6 +1751,7 @@ class MessageBubble extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          ...ctx.metaMarks(Colors.white),
           Text(
             ctx.clockText,
             style: const TextStyle(
@@ -1790,6 +1958,7 @@ class MessageBubble extends StatelessWidget {
     );
     final ranges = message.formatRanges;
     final decryptedText = decryption?.plaintext;
+    final l10n = AppLocalizations.of(ctx.context)!;
 
     final metaRow = Row(
       mainAxisSize: MainAxisSize.min,
@@ -1799,8 +1968,11 @@ class MessageBubble extends StatelessWidget {
           Icon(Symbols.lock, size: 11, weight: 700, fill: 1, color: ctx.dim),
           const SizedBox(width: 3),
         ],
+        ...ctx.metaMarks(ctx.dim),
         Text(
-          message.status == 'EDITED' ? '${ctx.clockText} ред.' : ctx.clockText,
+          message.status == 'EDITED'
+              ? l10n.messageBubbleEditedTime(ctx.clockText)
+              : ctx.clockText,
           style: TextStyle(color: ctx.dim, fontSize: 10),
         ),
         if (isMe) ...[const SizedBox(width: 4), ctx.statusIcon()],
@@ -1814,8 +1986,8 @@ class MessageBubble extends StatelessWidget {
       textWidget = _wrapSelectable(
         Text(
           decryption?.state == MessageDecryptionState.wrongKey
-              ? 'неверный ключ'
-              : 'недоступно на этом устройстве',
+              ? l10n.messageBubbleWrongKey
+              : l10n.messageBubbleUnavailableOnDevice,
           style: textStyle.copyWith(
             color: ctx.cs.error,
             fontStyle: FontStyle.italic,
@@ -1845,22 +2017,12 @@ class MessageBubble extends StatelessWidget {
           children: [
             textWidget,
             const SizedBox(height: 6),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: _ReactionsWrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: reactionChips,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: metaRow,
-                ),
-              ],
+            _ReactionsFlow(
+              chips: reactionChips,
+              meta: Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: metaRow,
+              ),
             ),
           ],
         ),
@@ -1877,10 +2039,11 @@ class MessageBubble extends StatelessWidget {
     ReplyInfo reply,
     double maxBubbleWidth,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final accent = _senderColor(reply.senderId);
     final name = reply.senderId == myId
-        ? 'Вы'
-        : (ContactCache.get(reply.senderId) ?? 'Сообщение');
+        ? l10n.callParticipantYou
+        : (ContactCache.get(reply.senderId) ?? l10n.composerHintMessage);
     final rawPreview = reply.previewText();
     final quotedId = reply.messageId;
 
@@ -1893,7 +2056,7 @@ class MessageBubble extends StatelessWidget {
           border: Border(left: BorderSide(color: accent, width: 3)),
         ),
         child: Text(
-          'сообщение удалено',
+          l10n.messageBubbleReplyDeleted,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -1930,7 +2093,14 @@ class MessageBubble extends StatelessWidget {
         ),
       );
     } else if (rawPreview.isNotEmpty) {
-      body = _replyQuoteText(cs, textColor, preview.icon, rawPreview, quotedId);
+      body = _replyQuoteText(
+        l10n,
+        cs,
+        textColor,
+        preview.icon,
+        rawPreview,
+        quotedId,
+      );
     } else {
       body = null;
     }
@@ -1974,6 +2144,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _replyQuoteText(
+    AppLocalizations l10n,
     ColorScheme cs,
     Color textColor,
     IconData? icon,
@@ -2000,9 +2171,9 @@ class MessageBubble extends StatelessWidget {
             Flexible(
               child: Text(
                 decryption?.state == MessageDecryptionState.unavailable
-                    ? 'недоступно на этом устройстве'
+                    ? l10n.messageBubbleUnavailableOnDevice
                     : wrongKey
-                    ? 'неверный ключ'
+                    ? l10n.messageBubbleWrongKey
                     : (decryption?.plaintext ?? rawPreview),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -2238,6 +2409,7 @@ class MessageBubble extends StatelessWidget {
       status: overrideStatus ?? message.status,
       otherReadTime: otherReadTime,
       time: message.time,
+      likelyForwarded: ctx.likelyForwarded,
       cs: ctx.cs,
       waveData: audio?.waveform,
       chatId: message.chatId,

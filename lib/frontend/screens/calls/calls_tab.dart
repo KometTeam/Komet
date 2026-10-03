@@ -120,10 +120,9 @@ class _CallsTabState extends State<CallsTab>
     return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
   }
 
-  String _formatDate(int timestamp) {
+  String _formatDate(AppLocalizations l10n, int timestamp) {
     if (timestamp == 0) return '';
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    return '${dt.day} ${kRuMonthsShort[dt.month - 1]}';
+    return formatDayMonth(l10n, DateTime.fromMillisecondsSinceEpoch(timestamp));
   }
 
   Widget _buildCallItem(
@@ -132,24 +131,25 @@ class _CallsTabState extends State<CallsTab>
     CallLogEntry call,
   ) {
     final bool isMissed = call.status == CallStatus.missed;
+    final l10n = AppLocalizations.of(context)!;
 
     String statusText;
     IconData statusIcon;
     switch (call.status) {
       case CallStatus.missed:
-        statusText = 'Пропущенный';
+        statusText = l10n.callsTabStatusMissed;
         statusIcon = Symbols.phone_missed;
         break;
       case CallStatus.canceled:
-        statusText = 'Отменённый';
+        statusText = l10n.callsTabStatusCanceled;
         statusIcon = Symbols.phone_disabled;
         break;
       case CallStatus.outgoing:
-        statusText = 'Исходящий';
+        statusText = l10n.callsTabStatusOutgoing;
         statusIcon = Symbols.call_made;
         break;
       case CallStatus.incoming:
-        statusText = 'Входящий';
+        statusText = l10n.callsTabStatusIncoming;
         statusIcon = Symbols.call_received;
         break;
     }
@@ -225,7 +225,7 @@ class _CallsTabState extends State<CallsTab>
               ),
               const SizedBox(width: 8),
               Text(
-                _formatDate(call.time),
+                _formatDate(l10n, call.time),
                 style: TextStyle(
                   color: cs.onSurfaceVariant.withValues(alpha: 0.7),
                   fontSize: 12,
@@ -260,20 +260,21 @@ class _CallsTabState extends State<CallsTab>
     final box = anchorContext.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final anchorRect = box.localToGlobal(Offset.zero) & box.size;
+    final l10n = AppLocalizations.of(context)!;
     showChatMenu(
       context: context,
       anchorRect: anchorRect,
       items: [
         ChatMenuItem(
           icon: Symbols.delete,
-          label: 'Удалить',
+          label: l10n.msgActionsDelete,
           destructive: true,
           onTap: () => _deleteCall(call),
         ),
         if (!call.isGroup)
           ChatMenuItem(
             icon: Symbols.call,
-            label: 'Перезвонить',
+            label: l10n.callsTabCallBack,
             onTap: () => _callBack(call),
           ),
       ],
@@ -299,7 +300,10 @@ class _CallsTabState extends State<CallsTab>
 
   Future<void> _callBack(CallLogEntry call) async {
     if (call.peerId <= 0) {
-      showCustomNotification(context, 'Не удалось определить собеседника');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.callsTabPeerUnknown,
+      );
       return;
     }
     final navigator = Navigator.of(context);
@@ -333,7 +337,10 @@ class _CallsTabState extends State<CallsTab>
       );
     } catch (_) {
       if (!mounted) return;
-      showCustomNotification(context, 'Не удалось начать звонок');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.chatInfoCallFailed,
+      );
     }
   }
 
@@ -376,12 +383,12 @@ class _CallsTabState extends State<CallsTab>
 
   Future<void> _createGroupCall() async {
     final controller = CallController.instance;
+    final l10n = AppLocalizations.of(context)!;
     if (controller.isBusy) {
-      showCustomNotification(context, 'Звонок уже идёт');
+      showCustomNotification(context, l10n.callsTabAlreadyInCall);
       return;
     }
 
-    final l10n = AppLocalizations.of(context)!;
     CreatedCall created;
     try {
       created = await controller.createConference();
@@ -409,29 +416,30 @@ class _CallsTabState extends State<CallsTab>
       );
     } catch (e) {
       if (!mounted) return;
-      showCustomNotification(context, 'Не удалось начать звонок: $e');
+      showCustomNotification(context, l10n.callsTabStartFailed('$e'));
     }
   }
 
   Future<void> _joinGroupCall() async {
+    final l10n = AppLocalizations.of(context)!;
     if (CallController.instance.isBusy) {
-      showCustomNotification(context, 'Звонок уже идёт');
+      showCustomNotification(context, l10n.callsTabAlreadyInCall);
       return;
     }
 
     final url = await showTextInputDialog(
       context,
-      title: 'Присоединиться к звонку',
-      description: 'Вставьте ссылку-приглашение',
+      title: l10n.callsTabJoinTitle,
+      description: l10n.callsTabJoinDescription,
       hint: 'https://max.ru/joincall/...',
-      confirmLabel: 'Присоединиться',
+      confirmLabel: l10n.chatCallJoin,
       keyboardType: TextInputType.url,
     );
     if (url == null || url.trim().isEmpty || !mounted) return;
 
     final handled = await tryHandleCallLink(context, url.trim());
     if (!handled && mounted) {
-      showCustomNotification(context, 'Это не ссылка на звонок');
+      showCustomNotification(context, l10n.callsTabNotACallLink);
     }
   }
 
@@ -468,6 +476,7 @@ class _CallsTabState extends State<CallsTab>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     final filteredCalls = _selectedTabIndex == 1
         ? _calls.where((c) => c.status == CallStatus.missed).toList()
@@ -486,7 +495,7 @@ class _CallsTabState extends State<CallsTab>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Звонки',
+                    l10n.chatListNavCalls,
                     style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 24,
@@ -506,7 +515,7 @@ class _CallsTabState extends State<CallsTab>
                     child: _buildLinkAction(
                       cs,
                       icon: Symbols.link,
-                      label: 'Создать звонок',
+                      label: l10n.callsTabCreateCall,
                       onTap: _createGroupCall,
                     ),
                   ),
@@ -514,7 +523,7 @@ class _CallsTabState extends State<CallsTab>
                     child: _buildLinkAction(
                       cs,
                       icon: Symbols.group_add,
-                      label: 'Присоединиться',
+                      label: l10n.chatCallJoin,
                       onTap: _joinGroupCall,
                       alignEnd: true,
                     ),
@@ -526,9 +535,9 @@ class _CallsTabState extends State<CallsTab>
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
               child: Row(
                 children: [
-                  _buildTabItem('Все', 0, cs),
+                  _buildTabItem(l10n.reactionsSummaryAll, 0, cs),
                   const SizedBox(width: 8),
-                  _buildTabItem('Пропущенные', 1, cs),
+                  _buildTabItem(l10n.callsTabMissed, 1, cs),
                 ],
               ),
             ),
@@ -538,7 +547,7 @@ class _CallsTabState extends State<CallsTab>
                   : filteredCalls.isEmpty
                   ? Center(
                       child: Text(
-                        'Нет звонков',
+                        l10n.callsTabEmpty,
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 16,

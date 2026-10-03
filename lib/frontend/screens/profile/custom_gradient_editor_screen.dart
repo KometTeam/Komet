@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/color_wheel_picker.dart';
 import '../../widgets/mesh_gradient_background.dart';
 
@@ -86,6 +87,7 @@ class _CustomGradientEditorScreenState
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -96,7 +98,7 @@ class _CustomGradientEditorScreenState
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Своя тема',
+          l10n.customGradientTitle,
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w700,
@@ -135,6 +137,7 @@ class _CustomGradientEditorScreenState
   }
 
   Widget _panel(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
@@ -167,7 +170,7 @@ class _CustomGradientEditorScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Анимация',
+                          l10n.customGradientAnimation,
                           style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 15,
@@ -175,7 +178,7 @@ class _CustomGradientEditorScreenState
                           ),
                         ),
                         Text(
-                          'Плавный перелив цветов',
+                          l10n.customGradientAnimationSubtitle,
                           style: TextStyle(
                             color: cs.onSurfaceVariant,
                             fontSize: 12.5,
@@ -350,7 +353,7 @@ class _SaveButton extends StatelessWidget {
         ),
         child: Center(
           child: Text(
-            'Сохранить',
+            AppLocalizations.of(context)!.editProfileSave,
             style: TextStyle(
               color: cs.onPrimary,
               fontSize: 16,

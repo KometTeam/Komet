@@ -45,10 +45,10 @@ class FileBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMe = ctx.isMe;
-    final name =
-        file.name ?? AppLocalizations.of(context)!.attachmentFileFallback;
+    final l10n = AppLocalizations.of(context)!;
+    final name = file.name ?? l10n.attachmentFileFallback;
     final size = file.size ?? 0;
-    final sizeStr = formatBytes(size);
+    final sizeStr = formatBytes(l10n, size);
     final fileId = file.fileId;
     final cacheName = '${fileId}_$name';
     final audioFile = downloadKindForName(name) == DownloadKind.audio;
@@ -286,6 +286,7 @@ class FileBubble extends StatelessWidget {
   }
 
   Widget _encryptedPreview(EncryptedPhotoView? view, String previewUrl) {
+    final l10n = AppLocalizations.of(ctx.context)!;
     switch (view?.status) {
       case EncryptedPhotoStatus.decrypted:
         return _framed(
@@ -297,7 +298,7 @@ class FileBubble extends StatelessWidget {
             cacheWidth: 480,
             errorBuilder: (_, _, _) => _placeholder(
               icon: Symbols.broken_image,
-              label: 'Файл повреждён',
+              label: l10n.fileBubbleCorrupted,
             ),
           ),
         );
@@ -306,11 +307,11 @@ class FileBubble extends StatelessWidget {
             ? const SizedBox.shrink()
             : _networkPreview(previewUrl);
       case EncryptedPhotoStatus.wrongKey:
-        return _placeholder(icon: Symbols.lock, label: 'Неверный ключ');
+        return _placeholder(icon: Symbols.lock, label: l10n.fileBubbleWrongKey);
       case EncryptedPhotoStatus.locked:
         return _placeholder(
           icon: Symbols.lock,
-          label: 'Нажмите, чтобы открыть',
+          label: l10n.fileBubbleTapToOpen,
         );
       case null:
         return _placeholder();
@@ -404,7 +405,10 @@ class FileBubble extends StatelessWidget {
 
     if (!context.mounted) return;
     if (local == null) {
-      showCustomNotification(context, 'Не удалось загрузить файл');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.fileBubbleDownloadFailed,
+      );
       return;
     }
 
@@ -471,10 +475,16 @@ class FileBubble extends StatelessWidget {
       case EncryptedPhotoStatus.plain:
         return local;
       case EncryptedPhotoStatus.wrongKey:
-        showCustomNotification(context, 'Неверный ключ');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.fileBubbleWrongKey,
+        );
         return null;
       case EncryptedPhotoStatus.locked:
-        showCustomNotification(context, 'Не удалось расшифровать фото');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.fileBubbleDecryptPhotoFailed,
+        );
         return null;
     }
   }
@@ -486,7 +496,10 @@ class FileBubble extends StatelessWidget {
   ) async {
     final fileId = file.fileId;
     if (fileId == null) {
-      showCustomNotification(context, 'Не удалось определить файл');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.fileBubbleUnknownFile,
+      );
       return;
     }
     Haptics.tap();
@@ -526,9 +539,12 @@ class FileBubble extends StatelessWidget {
       return;
     }
     if (!result.ok) {
+      final l10n = AppLocalizations.of(context)!;
       showCustomNotification(
         context,
-        'Ошибка загрузки: ${result.error ?? 'не удалось открыть'}',
+        l10n.securityLoadError(
+          result.error ?? l10n.fileBubbleOpenFailedReason,
+        ),
       );
     }
   }
@@ -540,7 +556,10 @@ class FileBubble extends StatelessWidget {
   ) async {
     final fileId = file.fileId;
     if (fileId == null) {
-      showCustomNotification(context, 'Не удалось определить файл');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.fileBubbleUnknownFile,
+      );
       return;
     }
     Haptics.tap();
@@ -573,14 +592,16 @@ class FileBubble extends StatelessWidget {
       ),
     );
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     if (!result.ok || result.path == null) {
       showCustomNotification(
         context,
-        'Ошибка загрузки: ${result.error ?? 'не удалось загрузить'}',
+        l10n.securityLoadError(
+          result.error ?? l10n.fileBubbleDownloadFailedReason,
+        ),
       );
       return;
     }
-    final l10n = AppLocalizations.of(context)!;
     try {
       await playback.activateAudioFile(
         AudioFileTrack(

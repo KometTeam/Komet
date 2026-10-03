@@ -8,22 +8,28 @@ class KometSettings {
   static const _kViewDeleted = 'komet_view_deleted';
   static const _kViewRedacted = 'komet_view_redacted';
   static const _kFullTimestamp = 'komet_full_timestamp';
+  static const _kShowForward = 'komet_show_forward';
+  static const _kShowTypingTime = 'komet_show_typing_time';
   static const _kGhostMode = 'komet_ghost_mode';
   static const _kAntiRead = 'komet_anti_read';
   static const _kSelfOnlineCheck = 'komet_self_online_check';
   static const _kHideAllChatsFolder = 'komet_hide_all_chats_folder';
   static const _kShowHiddenChats = 'komet_show_hidden_chats';
+  static const _kArchiveOnPull = 'komet_archive_on_pull';
   static const _kRecordDebugLogs = 'komet_record_debug_logs';
 
   // #***! каждая настройка это ValueNotifier, юишка подписана напрямую
   static final ValueNotifier<bool> viewDeleted = ValueNotifier(false);
   static final ValueNotifier<bool> viewRedacted = ValueNotifier(false);
   static final ValueNotifier<bool> fullTimestamp = ValueNotifier(false);
+  static final ValueNotifier<bool> showForward = ValueNotifier(false);
+  static final ValueNotifier<bool> showTypingTime = ValueNotifier(false);
   static final ValueNotifier<bool> ghostMode = ValueNotifier(false);
   static final ValueNotifier<bool> antiRead = ValueNotifier(false);
   static final ValueNotifier<bool> selfOnlineCheck = ValueNotifier(true);
   static final ValueNotifier<bool> hideAllChatsFolder = ValueNotifier(false);
   static final ValueNotifier<bool> showHiddenChats = ValueNotifier(false);
+  static final ValueNotifier<bool> archiveOnPull = ValueNotifier(false);
   static final ValueNotifier<bool> recordDebugLogs = ValueNotifier(true);
 
   // #***! читаем всё разом на старте
@@ -37,11 +43,14 @@ class KometSettings {
         BuildProfile.hiddenContentViewers &&
         (prefs.getBool(_kViewRedacted) ?? false);
     fullTimestamp.value = prefs.getBool(_kFullTimestamp) ?? false;
+    showForward.value = prefs.getBool(_kShowForward) ?? false;
+    showTypingTime.value = prefs.getBool(_kShowTypingTime) ?? false;
     ghostMode.value = prefs.getBool(_kGhostMode) ?? false;
     antiRead.value = prefs.getBool(_kAntiRead) ?? false;
     selfOnlineCheck.value = prefs.getBool(_kSelfOnlineCheck) ?? true;
     hideAllChatsFolder.value = prefs.getBool(_kHideAllChatsFolder) ?? false;
     showHiddenChats.value = prefs.getBool(_kShowHiddenChats) ?? false;
+    archiveOnPull.value = prefs.getBool(_kArchiveOnPull) ?? false;
     recordDebugLogs.value = prefs.getBool(_kRecordDebugLogs) ?? true;
   }
 
@@ -62,6 +71,18 @@ class KometSettings {
     fullTimestamp.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kFullTimestamp, value);
+  }
+
+  static Future<void> setShowForward(bool value) async {
+    showForward.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowForward, value);
+  }
+
+  static Future<void> setShowTypingTime(bool value) async {
+    showTypingTime.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowTypingTime, value);
   }
 
   // #***! невидимка влияет на пинг, с interactive false сервер не считает нас онлайн
@@ -87,6 +108,12 @@ class KometSettings {
     hideAllChatsFolder.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kHideAllChatsFolder, value);
+  }
+
+  static Future<void> setArchiveOnPull(bool value) async {
+    archiveOnPull.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kArchiveOnPull, value);
   }
 
   static Future<void> setShowHiddenChats(bool value) async {

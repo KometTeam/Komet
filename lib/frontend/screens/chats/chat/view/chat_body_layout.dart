@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/chats.dart' show CachedChat;
 import 'package:komet/core/config/app_chat_chrome.dart';
@@ -11,6 +9,7 @@ import 'package:komet/frontend/screens/chats/chat/mention_panel_controller.dart'
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/message_search_result.dart';
 import 'package:komet/frontend/widgets/chat_wallpaper_view.dart';
+import 'package:komet/frontend/widgets/toast_placement.dart';
 
 import 'chat_call_banner.dart';
 import 'command_panel_view.dart';
@@ -19,6 +18,7 @@ import 'mention_panel_view.dart';
 import 'message_list_decorations.dart';
 import 'pinned_banner_pill.dart';
 import 'search_view.dart';
+import '../../../../../core/config/ios_release.dart';
 
 class ChatBodyLayout extends StatelessWidget {
   final bool underlap;
@@ -27,9 +27,8 @@ class ChatBodyLayout extends StatelessWidget {
   final ChatChromeStyle effectiveChrome;
   final bool liquidChrome;
   final BackdropKey? pillBackdrop;
-  final int myId;
   final VoidCallback onJumpToPinnedMessage;
-  final Future<void> Function() onUnpinCurrentMessage;
+  final VoidCallback? onUnpinCurrentMessage;
   final VoidCallback? onJoinCall;
   final bool composerFrosted;
   final ValueNotifier<double> composerHeight;
@@ -58,7 +57,6 @@ class ChatBodyLayout extends StatelessWidget {
     required this.effectiveChrome,
     required this.liquidChrome,
     required this.pillBackdrop,
-    required this.myId,
     required this.onJumpToPinnedMessage,
     required this.onUnpinCurrentMessage,
     required this.onJoinCall,
@@ -91,8 +89,7 @@ class ChatBodyLayout extends StatelessWidget {
       liquidChrome: liquidChrome,
       backdropKey: pillBackdrop,
       onTap: onJumpToPinnedMessage,
-      myId: myId,
-      onUnpinRequested: () => unawaited(onUnpinCurrentMessage()),
+      onUnpinRequested: onUnpinCurrentMessage,
     );
   }
 
@@ -111,20 +108,25 @@ class ChatBodyLayout extends StatelessWidget {
   }
 
   Widget _panelsColumn() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        MentionPanelView(mentionPanel: mentionPanel),
-        CommandPanelView(commandPanel: commandPanel),
-      ],
+    return TextFieldTapRegion(
+      enabled: IosRelease.isIOS,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          MentionPanelView(mentionPanel: mentionPanel),
+          CommandPanelView(commandPanel: commandPanel),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final composer = MeasureSize(
-      onHeight: (value) => composerHeight.value = value,
-      child: Builder(builder: composerAreaBuilder),
+    final composer = ToastObstruction(
+      child: MeasureSize(
+        onHeight: (value) => composerHeight.value = value,
+        child: Builder(builder: composerAreaBuilder),
+      ),
     );
 
     if (!underlap) {
@@ -218,26 +220,35 @@ class ChatBodyLayout extends StatelessWidget {
           top: pinnedBannerTop,
           left: 8,
           right: 8,
-          child: MeasureSize(
-            onHeight: (value) => pinnedBannerHeight.value = value,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (callBanner != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: callBanner,
+          child: AnimatedBuilder(
+            animation: searchAnim,
+            builder: (context, child) => IgnorePointer(
+              ignoring: searchAnim.value > 0,
+              child: Opacity(
+                opacity: (1 - searchAnim.value).clamp(0.0, 1.0),
+                child: child,
+              ),
+            ),
+            child: MeasureSize(
+              onHeight: (value) => pinnedBannerHeight.value = value,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (callBanner != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: callBanner,
+                    ),
+                  buildPinnedAndPill(
+                    chat: chat,
+                    frosted: effectiveChrome == ChatChromeStyle.transparent,
+                    liquidChrome: liquidChrome,
+                    backdropKey: pillBackdrop,
+                    onTap: onJumpToPinnedMessage,
+                    onUnpinRequested: onUnpinCurrentMessage,
                   ),
-                buildPinnedAndPill(
-                  chat: chat,
-                  frosted: effectiveChrome == ChatChromeStyle.transparent,
-                  liquidChrome: liquidChrome,
-                  backdropKey: pillBackdrop,
-                  onTap: onJumpToPinnedMessage,
-                  myId: myId,
-                  onUnpinRequested: () => unawaited(onUnpinCurrentMessage()),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

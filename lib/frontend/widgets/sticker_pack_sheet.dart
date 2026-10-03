@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../core/utils/format.dart';
+import '../../l10n/app_localizations.dart';
 import '../../main.dart' show stickersModule, messagesModule;
 import '../../models/sticker.dart';
 import '../screens/chats/chat_list_screen.dart';
@@ -91,18 +91,24 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
           ? await stickersModule.unfavoriteSet(set.id)
           : await stickersModule.favoriteSet(set.id);
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       if (ok) {
         setState(() => _isFavorite = !wasFavorite);
         showCustomNotification(
           context,
-          wasFavorite ? 'Стикерпак удалён' : 'Стикерпак добавлен',
+          wasFavorite
+              ? l10n.stickerPackSheetRemoved
+              : l10n.stickerPackSheetAdded,
         );
       } else {
-        showCustomNotification(context, 'Не удалось выполнить действие');
+        showCustomNotification(context, l10n.stickerPackSheetActionFailed);
       }
     } catch (e) {
       if (!mounted) return;
-      showCustomNotification(context, 'Ошибка: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.devicesGenericError('$e'),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -110,27 +116,32 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
 
   void _copyLink(StickerSet set) {
     final link = set.link;
+    final l10n = AppLocalizations.of(context)!;
     if (link == null || link.isEmpty) {
-      showCustomNotification(context, 'Ссылка недоступна');
+      showCustomNotification(context, l10n.stickerPackSheetLinkUnavailable);
       return;
     }
     Clipboard.setData(ClipboardData(text: link));
-    showCustomNotification(context, 'Ссылка скопирована');
+    showCustomNotification(context, l10n.sharedLinkCopied);
   }
 
   Future<void> _forward(StickerSet set) async {
     final link = set.link;
     if (link == null || link.isEmpty) {
-      showCustomNotification(context, 'Ссылка недоступна');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.stickerPackSheetLinkUnavailable,
+      );
       return;
     }
     final target = await openForwardScreen(context: context);
     if (target == null || !mounted) return;
     final ok = await messagesModule.sendLinkMessage(target.chatId, link);
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     showCustomNotification(
       context,
-      ok ? 'Переслано в «${target.name}»' : 'Не удалось переслать',
+      ok ? l10n.stickerPackSheetForwardedTo(target.name) : l10n.forwardFailed,
     );
   }
 
@@ -170,7 +181,7 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
     if (_error != null || set == null) {
       return Center(
         child: Text(
-          'Стикерпак недоступен',
+          AppLocalizations.of(context)!.stickerPackSheetUnavailable,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
       );
@@ -206,8 +217,9 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${set.stickerIds.length} '
-                  '${pluralRu(set.stickerIds.length, 'стикер', 'стикера', 'стикеров')}',
+                  AppLocalizations.of(
+                    context,
+                  )!.stickerPackSheetStickerCount(set.stickerIds.length),
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 ),
               ],
@@ -239,7 +251,7 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
             children: [
               Icon(Symbols.forward, size: 20, color: cs.onSurface),
               const SizedBox(width: 12),
-              const Text('Переслать'),
+              Text(AppLocalizations.of(context)!.msgActionsForward),
             ],
           ),
         ),
@@ -249,7 +261,7 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
             children: [
               Icon(Symbols.link, size: 20, color: cs.onSurface),
               const SizedBox(width: 12),
-              const Text('Скопировать ссылку'),
+              Text(AppLocalizations.of(context)!.msgActionsCopyLink),
             ],
           ),
         ),
@@ -292,6 +304,7 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
   }
 
   Widget _buildActionButton(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return SafeArea(
       top: false,
       child: Padding(
@@ -314,7 +327,9 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
                     color: _isFavorite ? cs.onSurface : cs.onPrimary,
                   )
                 : Text(
-                    _isFavorite ? 'Убрать' : 'Добавить',
+                    _isFavorite
+                        ? l10n.stickerPackSheetRemove
+                        : l10n.chatInfoAddMembersAction,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

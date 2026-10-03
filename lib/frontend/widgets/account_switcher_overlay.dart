@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/haptics.dart';
+import '../../l10n/app_localizations.dart';
 import 'animated_overlay_popup.dart';
 import 'komet_avatar.dart';
 import '../../core/config/app_frost.dart';
@@ -108,6 +109,7 @@ class _AccountSwitcherLayerState extends State<_AccountSwitcherLayer>
   static const double _hMargin = 12.0;
 
   List<ProfileData> _accounts = const [];
+  Set<int> _signedOut = const {};
   int? _activeId;
   bool _loaded = false;
 
@@ -135,9 +137,14 @@ class _AccountSwitcherLayerState extends State<_AccountSwitcherLayer>
   Future<void> _loadAccounts() async {
     final accounts = await AppDatabase.loadAllProfiles();
     final activeId = await TokenStorage.getActiveAccountId();
+    final signedOut = <int>{
+      for (final account in accounts)
+        if (await TokenStorage.tryReadToken(account.id) == null) account.id,
+    };
     if (!mounted) return;
     setState(() {
       _accounts = accounts;
+      _signedOut = signedOut;
       _activeId = activeId;
       _loaded = true;
       _computeGeometry();
@@ -294,6 +301,7 @@ class _AccountSwitcherLayerState extends State<_AccountSwitcherLayer>
                     profile: _accounts[i],
                     highlighted: _hoveredIndex == i,
                     active: _accounts[i].id == _activeId,
+                    signedOut: _signedOut.contains(_accounts[i].id),
                   ),
                 _AddAccountRow(highlighted: _hoveredIndex == _accounts.length),
               ],
@@ -309,11 +317,13 @@ class _AccountRow extends StatelessWidget {
   final ProfileData profile;
   final bool highlighted;
   final bool active;
+  final bool signedOut;
 
   const _AccountRow({
     required this.profile,
     required this.highlighted,
     required this.active,
+    required this.signedOut,
   });
 
   @override
@@ -328,7 +338,9 @@ class _AccountRow extends StatelessWidget {
     final fullName = (profile.lastName != null && profile.lastName!.isNotEmpty)
         ? '${profile.firstName} ${profile.lastName}'
         : profile.firstName;
-    final phone = profile.phone == 0 ? '' : '+${profile.phone}';
+    final phone = signedOut
+        ? AppLocalizations.of(context)!.accountSessionLostTitle
+        : (profile.phone == 0 ? '' : '+${profile.phone}');
     return SizedBox(
       height: 60,
       child: Padding(
@@ -373,7 +385,9 @@ class _AccountRow extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      fullName.isNotEmpty ? fullName : 'Без имени',
+                      fullName.isNotEmpty
+                          ? fullName
+                          : AppLocalizations.of(context)!.accountSwitcherNoName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -388,7 +402,7 @@ class _AccountRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: subFg,
+                          color: signedOut && !highlighted ? cs.error : subFg,
                           fontSize: 12,
                           fontWeight: FontWeight.w400,
                         ),
@@ -449,7 +463,7 @@ class _AddAccountRow extends StatelessWidget {
               ),
               const SizedBox(width: 14),
               Text(
-                'Добавить аккаунт',
+                AppLocalizations.of(context)!.accountSwitcherAddAccount,
                 style: TextStyle(
                   color: fg,
                   fontSize: 15,

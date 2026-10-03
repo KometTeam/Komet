@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/l10n/app_localizations.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class AttachmentPanel extends StatefulWidget {
@@ -27,7 +28,10 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
     if (s.isEmpty) return;
     final id = int.tryParse(s);
     if (id == null) {
-      showCustomNotification(context, 'Неверный fileId');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.attachmentPanelInvalidFileId,
+      );
       return;
     }
     setState(() => _sendingById = true);
@@ -46,6 +50,7 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
@@ -64,7 +69,7 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
                   children: [
                     Expanded(
                       child: _buildButton(
-                        label: 'Выбрать из файла',
+                        label: l10n.attachmentPanelPickFile,
                         icon: Symbols.folder_open,
                         filled: true,
                         onTap: _sendingById ? null : widget.onPickFile,
@@ -74,7 +79,7 @@ class _AttachmentPanelState extends State<AttachmentPanel> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _buildButton(
-                        label: 'Отправить по id',
+                        label: l10n.attachmentPanelSendById,
                         icon: null,
                         filled: false,
                         onTap: _sendingById ? null : _sendById,

@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/config/build_profile.dart';
 import '../../core/plugins/plugin_host.dart';
 import '../../core/plugins/plugin_manifest.dart';
 import '../../core/plugins/plugin_models.dart';
 import '../../core/plugins/plugin_runtime.dart';
 import '../../core/plugins/plugin_store.dart';
+import '../../l10n/app_localizations.dart';
 
 class PluginCommandContext implements PluginHost {
   const PluginCommandContext({
@@ -77,7 +79,8 @@ typedef CommandRunner = Future<void> Function(PluginCommandContext context);
 class SlashCommand {
   const SlashCommand({
     required this.name,
-    required this.description,
+    this.description = '',
+    this.localizedDescription,
     this.arguments = const [],
     this.run,
     this.hidden = false,
@@ -86,10 +89,14 @@ class SlashCommand {
 
   final String name;
   final String description;
+  final String Function(AppLocalizations l10n)? localizedDescription;
   final List<PluginCommandArgumentManifest> arguments;
   final CommandRunner? run;
   final bool hidden;
   final PluginCommandDescriptor? pluginCommand;
+
+  String describe(AppLocalizations l10n) =>
+      localizedDescription?.call(l10n) ?? description;
 
   String get usage {
     if (arguments.isEmpty) return name;
@@ -104,7 +111,10 @@ class SlashCommand {
 
   Future<void> execute(PluginCommandContext context) {
     final plugin = pluginCommand;
-    if (plugin != null) return PluginRuntime.run(plugin, context);
+    if (plugin != null) {
+      if (!BuildProfile.plugins) return Future.value();
+      return PluginRuntime.run(plugin, context);
+    }
     return run?.call(context) ?? Future.value();
   }
 
@@ -120,9 +130,11 @@ class SlashCommand {
 
 const SlashCommand _shrug = SlashCommand(
   name: '/shrug',
-  description: 'отправить каомодзи',
+  localizedDescription: _shrugDescription,
   run: _runShrug,
 );
+
+String _shrugDescription(AppLocalizations l10n) => l10n.commandShrugDescription;
 
 Future<void> _runShrug(PluginCommandContext context) async {
   await context.sendText(r'¯\_(ツ)_/¯');
@@ -140,6 +152,7 @@ class CommandRegistry {
   void initialize() {
     if (_initialized) return;
     _initialized = true;
+    if (!BuildProfile.plugins) return;
     PluginStore.instance.plugins.addListener(_rebuild);
     _rebuild();
   }

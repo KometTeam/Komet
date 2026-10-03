@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../widgets/custom_notification.dart';
+import '../widgets/hint_bubble.dart';
 import '../widgets/glossy_pill.dart';
 import '../widgets/small_spinner.dart';
 
@@ -280,7 +280,7 @@ class _SearchResultCard extends StatelessWidget {
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: hit.id.toString()));
               if (context.mounted) {
-                showCustomNotification(context, 'id скопирован');
+                showHintBubble(context, 'id скопирован');
               }
             },
           ),

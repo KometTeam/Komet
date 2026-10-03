@@ -4,6 +4,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../../../backend/modules/webapp.dart' show WebAppLaunch;
 import '../../../core/utils/logger.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show digitalIdModule, webAppModule;
 import '../webapp/web_app_screen.dart';
 
@@ -29,7 +30,7 @@ class DigitalIdWebScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return WebAppScreen(
-      title: 'Цифровой ID',
+      title: AppLocalizations.of(context)!.digitalIdTitle,
       preferSystemUserAgent: true,
       privateChannel: true,
       mobileIdVerifier: digitalIdModule.fetchMobileIdVerification,

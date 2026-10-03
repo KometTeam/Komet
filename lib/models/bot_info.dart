@@ -1,3 +1,4 @@
+import '../core/utils/text_format.dart';
 import 'contact_info.dart';
 
 // #***! одна команда бота из меню /
@@ -19,12 +20,70 @@ class BotCommand {
 }
 
 // #***! данные бота плюс карточка контакта
+class BotStartMessage {
+  final String text;
+  final List<FormatRange> ranges;
+
+  const BotStartMessage({required this.text, this.ranges = const []});
+
+  static BotStartMessage? fromPayload(Object? raw) {
+    if (raw is! Map) return null;
+    final body = raw['text'];
+    if (body is! Map) return null;
+    final text = body['text'];
+    if (text is! String || text.trim().isEmpty) return null;
+    return BotStartMessage(
+      text: text,
+      ranges: parseFormatElements(body['elements']),
+    );
+  }
+
+  ({String heading, String body, List<FormatRange> bodyRanges}) get sections {
+    var split = 0;
+    for (final range in ranges) {
+      if (range.format == TextFormat.heading && range.start == 0) {
+        split = range.end.clamp(0, text.length);
+        break;
+      }
+    }
+    final rest = text.substring(split);
+    final bodyStart = split + rest.length - rest.trimLeft().length;
+    final body = text.substring(bodyStart).trimRight();
+    return (
+      heading: text.substring(0, split).trim(),
+      body: body,
+      bodyRanges: [
+        for (final range in ranges)
+          if (range.format != TextFormat.heading &&
+              range.start >= bodyStart &&
+              range.start - bodyStart < body.length)
+            FormatRange(
+              format: range.format,
+              start: range.start - bodyStart,
+              length: range.end - bodyStart > body.length
+                  ? body.length - (range.start - bodyStart)
+                  : range.length,
+              entityId: range.entityId,
+              entityName: range.entityName,
+              attributes: range.attributes,
+            ),
+      ],
+    );
+  }
+}
+
 class BotInfo {
   final int botId;
   final List<BotCommand> commands;
   final ContactInfo? contact;
+  final BotStartMessage? startMessage;
 
-  const BotInfo({required this.botId, required this.commands, this.contact});
+  const BotInfo({
+    required this.botId,
+    required this.commands,
+    this.contact,
+    this.startMessage,
+  });
 
   // #***! склеиваем ответ, пустые имена выкидываем
   factory BotInfo.fromPayload(int botId, Map<String, dynamic> payload) {
@@ -43,6 +102,7 @@ class BotInfo {
       contact: rawContact is Map
           ? ContactInfo.fromMap(Map<String, dynamic>.from(rawContact))
           : null,
+      startMessage: BotStartMessage.fromPayload(payload['startMessage']),
     );
   }
 

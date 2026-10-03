@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../models/story.dart';
 import '../../widgets/komet_avatar.dart';
 import 'story_owner_info.dart';
@@ -376,7 +377,7 @@ class _StorySelfTileState extends State<StorySelfTile> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Ваша история',
+                  AppLocalizations.of(context)!.storyRingYourStory,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

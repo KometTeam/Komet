@@ -1,9 +1,11 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:komet/core/storage/chat_activity_store.dart';
 import 'package:komet/core/storage/chat_members_store.dart';
 import 'package:komet/frontend/screens/chats/chat/typing_label.dart';
+import 'package:komet/l10n/app_localizations.dart';
 
 const int _chatId = 900001;
 const int _alice = 900101;
@@ -55,6 +57,8 @@ void main() {
   });
 
   group('Подпись «печатает»', () {
+    final ru = lookupAppLocalizations(const Locale('ru'));
+
     ChatActivitySnapshot snapshot(List<int> ids) {
       for (final id in ids) {
         ChatActivityStore.instance.mark(_chatId, id, ChatActivity.typing);
@@ -64,13 +68,13 @@ void main() {
 
     test('в диалоге остаётся безымянная подпись', () {
       ContactCache.put(_alice, 'Алиса Тестова');
-      expect(chatActivityLabel(snapshot([_alice])), 'Печатает...');
+      expect(chatActivityLabel(ru, snapshot([_alice])), 'Печатает...');
     });
 
     test('в группе показывает имя печатающего', () {
       ContactCache.put(_alice, 'Алиса Тестова');
       expect(
-        chatActivityLabel(snapshot([_alice]), withNames: true),
+        chatActivityLabel(ru, snapshot([_alice]), withNames: true),
         'Алиса печатает...',
       );
     });
@@ -79,7 +83,7 @@ void main() {
       ContactCache.put(_alice, 'Алиса Тестова');
       ContactCache.put(_bob, 'Борис');
       expect(
-        chatActivityLabel(snapshot([_alice, _bob]), withNames: true),
+        chatActivityLabel(ru, snapshot([_alice, _bob]), withNames: true),
         'Алиса и Борис печатают...',
       );
     });
@@ -89,14 +93,18 @@ void main() {
       ContactCache.put(_bob, 'Борис');
       ContactCache.put(_carol, 'Вера');
       expect(
-        chatActivityLabel(snapshot([_alice, _bob, _carol]), withNames: true),
+        chatActivityLabel(
+          ru,
+          snapshot([_alice, _bob, _carol]),
+          withNames: true,
+        ),
         'Алиса и ещё 2 печатают...',
       );
     });
 
     test('без известного имени откатывается к общей подписи', () {
       expect(
-        chatActivityLabel(snapshot([_alice]), withNames: true),
+        chatActivityLabel(ru, snapshot([_alice]), withNames: true),
         'Печатает...',
       );
     });
@@ -106,7 +114,7 @@ void main() {
       ChatActivityStore.instance.mark(_chatId, _alice, ChatActivity.sticker);
       final snap = ChatActivityStore.instance.snapshot(_chatId)!;
       expect(
-        chatActivityLabel(snap, withNames: true),
+        chatActivityLabel(ru, snap, withNames: true),
         'Алиса выбирает стикер...',
       );
     });

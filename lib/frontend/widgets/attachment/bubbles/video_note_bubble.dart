@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 import 'package:komet/main.dart';
 
 import '../../../../core/media/media_playback.dart';
@@ -16,6 +17,9 @@ import '../../../../core/media/video_note_preloader.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
+import '../../../../core/utils/media_cache.dart';
+import '../../../../l10n/app_localizations.dart';
+import '../../../../backend/modules/messages.dart' show TranscriptionCache;
 import '../../../../models/attachment.dart';
 import '../../small_spinner.dart';
 import '../../upload_progress_ring.dart';
@@ -55,7 +59,7 @@ class VideoNoteBubble extends StatefulWidget {
 }
 
 class _VideoNoteBubbleState extends State<VideoNoteBubble>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const double _baseSize = 210;
   static const double _expandedScale = 1.7;
   static const Duration _expandDuration = Duration(milliseconds: 280);
@@ -78,6 +82,18 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   bool _scrubbing = false;
   bool _seekInFlight = false;
   bool _resumeAfterScrub = false;
+  bool _muted = false;
+  bool _ownsPlayback = false;
+  bool _visible = false;
+  bool _retriedCache = false;
+  bool _transcriptionLoading = false;
+  bool _transcriptionVisible = false;
+  String? _transcriptionText;
+
+  static const double _visibleFraction = 0.6;
+
+  String get _sourceMessageId => widget.sourceMessageId ?? widget.messageId;
+  int get _sourceChatId => widget.sourceChatId ?? widget.chatId;
 
   int? get _videoId => widget.attachment.videoId;
   String get _cacheName => 'videonote_$_videoId.mp4';
@@ -98,7 +114,9 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
 
   bool get _ready {
     final controller = _controller;
-    return controller != null && controller.value.isInitialized;
+    return controller != null &&
+        controller.value.isInitialized &&
+        !controller.value.hasError;
   }
 
   @override
@@ -106,6 +124,10 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     super.initState();
     _expand = AnimationController(vsync: this, duration: _expandDuration);
     _preview = _previewBytes(widget.attachment.previewData);
+    TranscriptionCache.listen(_sourceMessageId, _onTranscriptionPush);
+    _adoptCachedTranscription();
+    WidgetsBinding.instance.addObserver(this);
+    MediaPlayback.instance.videoNote.addListener(_onActiveNoteChanged);
     final local = _localPath;
     if (local != null) {
       unawaited(_openLocalPreview(File(local)));
@@ -127,6 +149,9 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
 
   @override
   void dispose() {
+    TranscriptionCache.unlisten(_sourceMessageId, _onTranscriptionPush);
+    WidgetsBinding.instance.removeObserver(this);
+    MediaPlayback.instance.videoNote.removeListener(_onActiveNoteChanged);
     if (_playingNote == this) _playingNote = null;
     _PreviewPool.unregister(this);
     _expand.dispose();
@@ -172,6 +197,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
   void _claimPlayback() {
     final controller = _controller;
     if (controller == null) return;
+    _ownsPlayback = true;
     MediaPlayback.instance.activateVideoNote(
       VideoNoteTrack(
         cacheName: _cacheName,
@@ -184,6 +210,23 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
         preview: _preview,
       ),
     );
+  }
+
+  void _onActiveNoteChanged() {
+    if (!_ownsPlayback) return;
+    final controller = _controller;
+    if (controller != null &&
+        MediaPlayback.instance.isActiveVideoNote(controller)) {
+      return;
+    }
+    _ownsPlayback = false;
+    if (_playingNote == this) _playingNote = null;
+    _expand.reverse();
+    _ringProgress.value = 0;
+    if (!mounted) return;
+    _PreviewPool.register(this);
+    setState(() => _muted = true);
+    if (_visible) unawaited(_startMuted());
   }
 
   void _onTick() {
@@ -249,7 +292,9 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     }
     final running = _initializing;
     if (running != null) {
-      await running;
+      try {
+        await running;
+      } catch (_) {}
       return _controller;
     }
 
@@ -261,10 +306,10 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     } catch (e) {
       logger.w('VideoNoteBubble: инициализация не удалась: $e');
       await controller.dispose();
-      _initializing = null;
       return null;
+    } finally {
+      if (identical(_initializing, future)) _initializing = null;
     }
-    _initializing = null;
 
     if (!mounted) {
       await controller.dispose();
@@ -291,10 +336,100 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     if (mounted) setState(() => _frameSize = Size.zero);
   }
 
+  // #***! файл из кэша могли вычистить прямо под играющим контроллером,
+  // после такой ошибки он уже не оживает — выбрасываем и качаем заново
+  void _dropFailedController() {
+    final controller = _controller;
+    if (controller == null || !controller.value.hasError) return;
+    logger.w('VideoNoteBubble: ${controller.value.errorDescription}');
+    _ownsPlayback = false;
+    if (MediaPlayback.instance.isActiveVideoNote(controller)) {
+      MediaPlayback.instance.closeVideoNote();
+    }
+    if (_playingNote == this) _playingNote = null;
+    _controller = null;
+    controller.removeListener(_onTick);
+    _PreviewPool.unregister(this);
+    MediaPlayback.instance.releaseVideoNote(controller);
+    _frameSize = Size.zero;
+    _playing = false;
+    _ringProgress.value = 0;
+  }
+
+  Future<VideoPlayerController?> _openController() async {
+    try {
+      final file = await _fetch(priority: true);
+      if (!mounted || file == null) return null;
+      final controller = await _ensureController(file);
+      if (controller != null || !mounted || _retriedCache) return controller;
+      _retriedCache = true;
+      logger.w('VideoNoteBubble: файл в кэше не открылся, качаю заново');
+      await MediaCache.discard(_cacheName);
+      final fresh = await _fetch(priority: true);
+      if (!mounted || fresh == null) return null;
+      return await _ensureController(fresh);
+    } catch (e) {
+      logger.w('VideoNoteBubble: кружок не открылся: $e');
+      return null;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_visible) unawaited(_startMuted());
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      unawaited(_stopMuted());
+    }
+  }
+
+  void _onVisibility(VisibilityInfo info) {
+    final visible = info.visibleFraction >= _visibleFraction;
+    if (visible == _visible || !mounted) return;
+    _visible = visible;
+    unawaited(visible ? _startMuted() : _stopMuted());
+  }
+
+  Future<void> _startMuted() async {
+    if (_videoId == null ||
+        widget.uploadProgress != null ||
+        _local != null ||
+        _error ||
+        _loading) {
+      return;
+    }
+    final existing = _controller;
+    if (existing != null && existing.value.isPlaying) return;
+    final controller = existing ?? await _openController();
+    if (controller == null || !mounted || !_visible) return;
+    if (controller.value.isPlaying ||
+        MediaPlayback.instance.isActiveVideoNote(controller)) {
+      return;
+    }
+    await controller.setVolume(0);
+    _muted = true;
+    await controller.play();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _stopMuted() async {
+    final controller = _controller;
+    if (!_muted || controller == null) return;
+    await controller.pause();
+    if (mounted) setState(() {});
+  }
+
   Future<void> _toggle() async {
     if (_videoId == null) return;
+    _dropFailedController();
     if (_ready) {
-      if (_controller!.value.isPlaying) {
+      final controller = _controller!;
+      if (_muted) {
+        _muted = false;
+        await controller.seekTo(Duration.zero);
+        await _play();
+      } else if (controller.value.isPlaying) {
         await _pause();
       } else {
         await _play();
@@ -309,26 +444,109 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     });
     Haptics.tap();
 
-    final file = await _fetch(priority: true);
-    if (!mounted) return;
-    final controller = file == null ? null : await _ensureController(file);
+    final controller = await _openController();
     if (!mounted) return;
 
     setState(() {
       _loading = false;
       _error = controller == null;
     });
-    if (controller != null) await _play();
+    if (controller != null) {
+      _muted = false;
+      await _play();
+    }
+  }
+
+  void _adoptCachedTranscription() {
+    final cached = TranscriptionCache.get(_sourceMessageId);
+    if (cached == null || cached.status != 1) return;
+    _transcriptionText = cached.text ?? '';
+    _transcriptionVisible = TranscriptionCache.isExpanded(_sourceMessageId);
+  }
+
+  void _onTranscriptionPush() {
+    if (!mounted) return;
+    setState(() {
+      _transcriptionLoading = false;
+      _adoptCachedTranscription();
+    });
+  }
+
+  void _showTranscription(String text) {
+    _transcriptionText = text;
+    _transcriptionVisible = true;
+    TranscriptionCache.setExpanded(_sourceMessageId, true);
+  }
+
+  String _transcriptionLabel(AppLocalizations l10n) =>
+      switch (_transcriptionText) {
+        null => '',
+        '' => l10n.transcriptionNotRecognized,
+        final text => text,
+      };
+
+  Future<void> _requestTranscription() async {
+    final videoId = _videoId;
+    if (videoId == null || _transcriptionLoading) return;
+    Haptics.tap();
+    if (_transcriptionVisible && _transcriptionText != null) {
+      setState(() {
+        _transcriptionVisible = false;
+        TranscriptionCache.setExpanded(_sourceMessageId, false);
+      });
+      return;
+    }
+    final cached = TranscriptionCache.get(_sourceMessageId);
+    if (cached != null && cached.status == 1) {
+      setState(() => _showTranscription(cached.text ?? ''));
+      return;
+    }
+
+    setState(() => _transcriptionLoading = true);
+    try {
+      final result = await messagesModule.requestTranscription(
+        _sourceChatId,
+        int.tryParse(_sourceMessageId) ?? 0,
+        videoId,
+      );
+      TranscriptionCache.put(_sourceMessageId, result);
+      if (!mounted) return;
+      setState(() {
+        _transcriptionLoading = false;
+        if (result.status == 1) {
+          _showTranscription(result.text ?? '');
+        } else if (result.status == 0) {
+          _transcriptionLoading = true;
+        } else {
+          _showTranscription(
+            AppLocalizations.of(context)!.videoNoteBubbleTranscriptionFailed,
+          );
+        }
+      });
+    } catch (e) {
+      logger.w('VideoNoteBubble._requestTranscription: $e');
+      if (!mounted) return;
+      setState(() {
+        _transcriptionLoading = false;
+        _showTranscription(
+          AppLocalizations.of(context)!.videoNoteBubbleTranscriptionFailed,
+        );
+      });
+    }
   }
 
   Future<void> _play() async {
-    final controller = _controller;
-    if (controller == null) return;
+    if (_controller == null) return;
+    _PreviewPool.pin(this);
     final other = _playingNote;
     if (other != null && other != this) await other._pause();
+    if (!mounted) return;
+    final controller = _controller;
+    if (controller == null) return;
+    _muted = false;
     _playingNote = this;
-    _PreviewPool.pin(this);
     _claimPlayback();
+    await controller.setVolume(1);
     await controller.play();
     _expand.forward();
     if (mounted) setState(() {});
@@ -439,7 +657,19 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                _buildCircle(size),
+                VisibilityDetector(
+                  key: ValueKey('note-visibility-${widget.messageId}'),
+                  onVisibilityChanged: _onVisibility,
+                  child: _buildCircle(size),
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  alignment: Alignment.topCenter,
+                  child: _transcriptionVisible
+                      ? _buildTranscription(size)
+                      : const SizedBox(width: 0),
+                ),
                 const SizedBox(height: 6),
                 SizedBox(width: size, child: _buildMetaRow()),
               ],
@@ -450,8 +680,84 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     );
   }
 
+  Widget _buildTranscription(double size) {
+    return Container(
+      width: size,
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: widget.cs.surfaceContainerHigh.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      constraints: const BoxConstraints(maxHeight: 132),
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: Text(
+          _transcriptionLabel(AppLocalizations.of(context)!),
+          style: TextStyle(
+            color: widget.textColor.withValues(alpha: 0.8),
+            fontSize: 13,
+            height: 1.3,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTranscribeButton() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _requestTranscription,
+      child: Container(
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: _transcriptionLoading
+            ? const SmallSpinner(size: 14, color: Colors.white)
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _transcriptionVisible
+                        ? Symbols.keyboard_arrow_up
+                        : Symbols.arrow_right_alt,
+                    size: 15,
+                    color: Colors.white,
+                  ),
+                  const Text(
+                    'T',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildMutedBadge() {
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: const BoxDecoration(
+        color: Colors.black45,
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(Symbols.volume_off, size: 17, color: Colors.white),
+    );
+  }
+
   Widget _buildCircle(double size) {
     final ready = _ready;
+    final muted = ready && _muted;
     final playing = ready && _playing && !_scrubbing;
     final preview = _preview;
     final local = _local;
@@ -503,7 +809,11 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
                 trackColor: Colors.white24,
               ),
             ] else ...[
-              if (ready) _buildRing(size),
+              if (ready && !muted) _buildRing(size),
+              if (muted && playing)
+                Positioned(bottom: 12, child: _buildMutedBadge()),
+              if (_videoId != null && _local == null)
+                Positioned(top: 0, right: 0, child: _buildTranscribeButton()),
               if (!playing)
                 Container(
                   width: 52,

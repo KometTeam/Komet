@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../screens/auth/login_screen.dart';
+import '../screens/profile/traffic_monitor_screen.dart';
+import 'dev_menu_widgets.dart';
 
 class DebugQuickActionsSection extends StatelessWidget {
   final VoidCallback onExportLog;
@@ -10,124 +12,30 @@ class DebugQuickActionsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Column(
+    return DevGroup(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Material(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(20),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: onExportLog,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 17,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Symbols.bug_report,
-                      color: cs.onSurfaceVariant,
-                      size: 22,
-                      weight: 400,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Отладочный лог',
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Zip-архив: логи и запросы за последние 24 часа, каждый заход отдельным файлом',
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Symbols.save_alt,
-                      color: cs.onSurfaceVariant,
-                      size: 22,
-                      weight: 400,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+        DevRow(
+          icon: Symbols.drive_folder_upload,
+          caption: 'Zip: логи и запросы за 24 часа',
+          title: 'Отправить логи',
+          onTap: onExportLog,
+        ),
+        DevRow(
+          icon: Symbols.lan,
+          caption: 'Домены, опкоды и payload сокета',
+          title: 'Монитор трафика',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const TrafficMonitorScreen()),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Material(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(20),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 17,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Symbols.dialpad,
-                      color: cs.onSurfaceVariant,
-                      size: 22,
-                      weight: 400,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Экран ввода номера',
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Открыть без выхода из аккаунта и обрыва сессии',
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Symbols.chevron_right,
-                      color: cs.onSurfaceVariant,
-                      size: 22,
-                      weight: 400,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+        DevRow(
+          icon: Symbols.dialpad,
+          caption: 'Без выхода из аккаунта',
+          title: 'Экран ввода номера',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
           ),
         ),
       ],

@@ -40,10 +40,16 @@ class NativeVideoNoteRecorder {
   }
 
   // #***! инициализация камеры, textureId нужен виджету превью
-  Future<bool> init({bool front = true, int size = 480, int fps = 30}) async {
+  Future<bool> init({
+    bool front = true,
+    String? cameraId,
+    int size = 480,
+    int fps = 30,
+  }) async {
     if (!isAvailable) return false;
     final res = await _channel.invokeMapMethod<String, dynamic>('init', {
       'front': front,
+      'cameraId': ?cameraId,
       'size': size,
       'fps': fps,
     });

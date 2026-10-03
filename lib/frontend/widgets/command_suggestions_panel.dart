@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../commands/commands.dart';
 
 class CommandSuggestionsPanel extends StatelessWidget {
@@ -17,6 +18,7 @@ class CommandSuggestionsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final visible = commands.where((c) => !c.hidden).toList(growable: false);
     return Material(
       type: MaterialType.transparency,
@@ -65,7 +67,7 @@ class CommandSuggestionsPanel extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        c.description,
+                        c.describe(l10n),
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 14,

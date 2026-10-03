@@ -42,3 +42,18 @@ ContactLabels contactLabels({
     subtitle: subtitle == title ? null : subtitle,
   );
 }
+
+bool contactMatchesQuery(
+  String query, {
+  required String title,
+  Object? firstName,
+  Object? lastName,
+  Object? phone,
+}) {
+  final needle = query.trim().toLowerCase();
+  if (needle.isEmpty) return true;
+  final names = [title, displayName(firstName, lastName)];
+  if (names.any((name) => name.toLowerCase().contains(needle))) return true;
+  final digits = needle.replaceAll(RegExp(r'\D'), '');
+  return digits.length >= 3 && phone is int && '$phone'.contains(digits);
+}

@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/backend/modules/animoji.dart' show AnimojiModule;
+import 'package:komet/backend/modules/message_info.dart';
 import 'package:komet/backend/modules/messages.dart' show CachedMessage;
+import 'package:komet/core/config/app_show_extra_info.dart';
 import 'package:komet/core/config/app_fonts.dart';
 import 'package:komet/core/config/app_frost.dart';
 import 'package:komet/core/config/app_message_actions_style.dart';
@@ -28,6 +30,7 @@ import 'package:komet/frontend/widgets/selection_check_circle.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/main.dart' show animojiModule;
 import 'package:komet/models/animoji.dart' show Animoji;
+import 'package:komet/models/chat_reaction_settings.dart';
 
 class SwipeToReply extends StatefulWidget {
   final Widget child;
@@ -359,6 +362,7 @@ class SelectableMessageRow extends StatefulWidget {
   final Future<bool> Function(int reasonId)? onReport;
   final void Function(String emoji)? onReact;
   final ValueListenable<Map<String, dynamic>?>? reactions;
+  final ValueListenable<ChatReactionSettings?>? reactionSettings;
   final ValueListenable<double>? composerHeight;
 
   const SelectableMessageRow({
@@ -389,6 +393,7 @@ class SelectableMessageRow extends StatefulWidget {
     this.onReport,
     this.onReact,
     this.reactions,
+    this.reactionSettings,
     this.composerHeight,
   });
 
@@ -432,6 +437,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
     Haptics.tap();
 
     final controller = MessageActionsController();
+    final offers = _reactionFilter();
     showMessageActions(
       context: ctx,
       snapshot: snapshot,
@@ -442,9 +448,10 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       messageText: widget.message.text,
       copyText: MessageDecryptionCache.instance.readableText(widget.message),
       controller: controller,
-      style: AppMessageActionsStyle.current.value,
+      style: AppMessageActionsStyle.effective,
       interaction: MessageActionsInteraction.tap,
       editHistory: widget.message.editHistory,
+      infoRows: _infoRows(),
       loadReadBy: widget.loadReadBy,
       onReaderTap: widget.onReaderTap,
       loadReportReasons: widget.loadReportReasons,
@@ -459,15 +466,57 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onPin: widget.onPin,
       onCopyLink: widget.onCopyLink,
       isPinned: _isPinnedNow(),
-      onReact: widget.onReact,
-      selectedReaction: widget.reactions?.value?['yourReaction']?.toString(),
-      quickReactions: _quickReactionEmojis(),
+      onReact: _reactionsOpen || _selectedReaction != null
+          ? widget.onReact
+          : null,
+      selectedReaction: _selectedReaction,
+      quickReactions: _offeredQuickReactions(offers),
       loadReactionEmojis: () async {
         await animojiModule.ensureLoaded();
-        return _animojiReactionEmojis();
+        return _animojiReactionEmojis()
+            .where((reaction) => offers(reaction.emoji))
+            .toList();
       },
       onDispose: controller.dispose,
     );
+  }
+
+  // #***! панель «Info» живёт под тем же тумблером, что и остальные
+  // техподробности в интерфейсе
+  List<MessageInfoRow>? _infoRows() => AppShowExtraInfo.current.value
+      ? buildMessageInfoRows(widget.message)
+      : null;
+
+  ChatReactionSettings? get _settings => widget.reactionSettings?.value;
+
+  bool get _reactionsOpen => _settings?.isActive ?? true;
+
+  String? get _selectedReaction =>
+      widget.reactions?.value?['yourReaction']?.toString();
+
+
+  bool Function(String emoji) _reactionFilter() {
+    final settings = _settings;
+    if (settings == null) return (_) => true;
+    final selected = _selectedReaction;
+    final allowed = settings.filterFor(
+      ChatReactionSettings.presentWithoutMine(widget.reactions?.value),
+    );
+    return (emoji) => emoji == selected || allowed(emoji);
+  }
+
+  List<ReactionEmoji> _offeredQuickReactions(bool Function(String) offers) {
+    final quick = _quickReactionEmojis();
+    final offered = quick.where((reaction) => offers(reaction.emoji)).toList();
+    if (offered.length == quick.length || !_reactionsOpen) return offered;
+    final seen = offered.map((reaction) => reaction.emoji).toSet();
+    for (final reaction in _animojiReactionEmojis()) {
+      if (offered.length >= quick.length) break;
+      if (offers(reaction.emoji) && seen.add(reaction.emoji)) {
+        offered.add(reaction);
+      }
+    }
+    return offered;
   }
 
   List<ReactionEmoji> _quickReactionEmojis() {
@@ -518,6 +567,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       style: MessageActionsStyle.list,
       interaction: MessageActionsInteraction.click,
       editHistory: widget.message.editHistory,
+      infoRows: _infoRows(),
       loadReadBy: widget.loadReadBy,
       onReaderTap: widget.onReaderTap,
       loadReportReasons: widget.loadReportReasons,
@@ -541,7 +591,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       widget.onToggleSelection();
       return;
     }
-    final react = widget.onReact;
+    final react = _reactionFilter()('❤️') ? widget.onReact : null;
     if (react != null && (_openTimer?.isActive ?? false)) {
       _openTimer?.cancel();
       _openTimer = null;
@@ -839,6 +889,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -851,7 +902,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Изменить сообщение',
+            l10n.messageRowEditTitle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 18,
@@ -870,7 +921,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
             contextMenuBuilder: (ctx, state) =>
                 widget.contextMenuBuilder(_controller, ctx, state),
             decoration: InputDecoration(
-              hintText: 'Текст сообщения',
+              hintText: l10n.scheduledMessageTextHint,
               filled: true,
               fillColor: cs.surfaceContainerHighest,
               border: OutlineInputBorder(
@@ -883,7 +934,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
           FilledButton(
             onPressed: () =>
                 Navigator.of(context).pop(_controller.buildContent()),
-            child: const Text('Сохранить'),
+            child: Text(l10n.editProfileSave),
           ),
         ],
       ),

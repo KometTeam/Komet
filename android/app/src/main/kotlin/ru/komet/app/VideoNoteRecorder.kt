@@ -101,33 +101,45 @@ class VideoNoteRecorder(
         for (id in mgr.cameraIdList) {
             val ch = mgr.getCameraCharacteristics(id)
             if (ch.get(CameraCharacteristics.LENS_FACING) == facing) {
-                cameraId = id
-                lensFacing = facing
-                sensorOrientation =
-                    ch.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 270
-                val map = ch.get(
-                    CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP,
-                )
-                camSize = pickCamSize(map)
-                fpsRange = pickFpsRange(
-                    ch.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES),
-                )
-                hasOis = ch.get(
-                    CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION,
-                )?.contains(
-                    CameraCharacteristics.LENS_OPTICAL_STABILIZATION_MODE_ON,
-                ) == true
-                hasEis = ch.get(
-                    CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES,
-                )?.contains(
-                    CameraCharacteristics.CONTROL_VIDEO_STABILIZATION_MODE_ON,
-                ) == true
-                hasFlash = ch.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-                if (!hasFlash) torchOn = false
+                applyCamera(id, ch)
                 return true
             }
         }
         return false
+    }
+
+    private fun selectCameraById(id: String): Boolean {
+        val mgr = manager()
+        if (id !in mgr.cameraIdList) return false
+        applyCamera(id, mgr.getCameraCharacteristics(id))
+        return true
+    }
+
+    private fun applyCamera(id: String, ch: CameraCharacteristics) {
+        cameraId = id
+        lensFacing = ch.get(CameraCharacteristics.LENS_FACING)
+            ?: CameraCharacteristics.LENS_FACING_BACK
+        sensorOrientation =
+            ch.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 270
+        val map = ch.get(
+            CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP,
+        )
+        camSize = pickCamSize(map)
+        fpsRange = pickFpsRange(
+            ch.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES),
+        )
+        hasOis = ch.get(
+            CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION,
+        )?.contains(
+            CameraCharacteristics.LENS_OPTICAL_STABILIZATION_MODE_ON,
+        ) == true
+        hasEis = ch.get(
+            CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES,
+        )?.contains(
+            CameraCharacteristics.CONTROL_VIDEO_STABILIZATION_MODE_ON,
+        ) == true
+        hasFlash = ch.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        if (!hasFlash) torchOn = false
     }
 
     // Поддерживаемый камерой размер вывода (для SurfaceTexture): короткая
@@ -167,7 +179,11 @@ class VideoNoteRecorder(
         return ranges.maxByOrNull { it.upper * 1000 - (it.upper - it.lower) }
     }
 
-    fun init(facingFront: Boolean, rawResult: MethodChannel.Result) {
+    fun init(
+        facingFront: Boolean,
+        preferredCameraId: String?,
+        rawResult: MethodChannel.Result,
+    ) {
         val result = OnceResult(rawResult)
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED
@@ -185,7 +201,9 @@ class VideoNoteRecorder(
             } else {
                 CameraCharacteristics.LENS_FACING_BACK
             }
-            if (!selectCamera(facing) &&
+            val preferred = preferredCameraId?.takeIf { it.isNotEmpty() }
+            if ((preferred == null || !selectCameraById(preferred)) &&
+                !selectCamera(facing) &&
                 !selectCamera(CameraCharacteristics.LENS_FACING_BACK)
             ) {
                 result.error("NO_CAMERA", "no camera found", null)

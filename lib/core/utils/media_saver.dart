@@ -4,35 +4,52 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
 
+import '../../l10n/app_localizations.dart';
+import '../config/device_profile.dart';
 import 'download_history.dart';
 import 'image_format.dart';
 import 'media_cache.dart';
+
+enum MediaSaveFailure { noLink, downloadFailed, fileNotFound, noGalleryAccess }
 
 // #***! итог сохранения, в галерею или в папку
 class MediaSaveResult {
   final bool ok;
   final bool toGallery;
   final String? location;
+  final MediaSaveFailure? failure;
   final String? error;
 
   const MediaSaveResult({
     required this.ok,
     this.toGallery = false,
     this.location,
+    this.failure,
     this.error,
   });
+
+  String errorText(AppLocalizations l10n) => switch (failure) {
+    MediaSaveFailure.noLink => l10n.photoViewerErrorNoLink,
+    MediaSaveFailure.downloadFailed => l10n.fileBubbleDownloadFailedReason,
+    MediaSaveFailure.fileNotFound => l10n.mediaSaveFileNotFound,
+    MediaSaveFailure.noGalleryAccess => l10n.mediaSaveNoGalleryAccess,
+    null => error ?? '',
+  };
 }
 
 // #***! аватарка, качаем в кэш и в галерею
 Future<MediaSaveResult> saveImageFromUrl(String url) async {
   if (url.isEmpty) {
-    return const MediaSaveResult(ok: false, error: 'нет ссылки');
+    return const MediaSaveResult(ok: false, failure: MediaSaveFailure.noLink);
   }
   try {
     final cacheName = 'avatar_${url.hashCode & 0x7fffffff}.jpg';
     final file = await MediaCache.getOrDownload(cacheName, url);
     if (file == null) {
-      return const MediaSaveResult(ok: false, error: 'не удалось загрузить');
+      return const MediaSaveResult(
+        ok: false,
+        failure: MediaSaveFailure.downloadFailed,
+      );
     }
     return await _persist(
       file,
@@ -47,6 +64,10 @@ Future<MediaSaveResult> saveImageFromUrl(String url) async {
 // #***! фото и видео в галерею, остальное в папку
 enum SaveMediaKind { image, video, file }
 
+bool get savesToGallery => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+const _scopedStorageSdk = 29;
+
 // #***! сохранение вложения с записью в историю
 Future<MediaSaveResult> saveMediaFile({
   required String cacheName,
@@ -60,12 +81,18 @@ Future<MediaSaveResult> saveMediaFile({
     if (file == null) {
       final url = await resolveUrl();
       if (url == null || url.isEmpty) {
-        return const MediaSaveResult(ok: false, error: 'нет ссылки');
+        return const MediaSaveResult(
+          ok: false,
+          failure: MediaSaveFailure.noLink,
+        );
       }
       file = await MediaCache.getOrDownload(cacheName, url);
     }
     if (file == null) {
-      return const MediaSaveResult(ok: false, error: 'не удалось загрузить');
+      return const MediaSaveResult(
+        ok: false,
+        failure: MediaSaveFailure.downloadFailed,
+      );
     }
     final result = await _persist(file, saveName: saveName, kind: kind);
     if (result.ok && download != null) {
@@ -79,18 +106,20 @@ Future<MediaSaveResult> saveMediaFile({
   }
 }
 
-// #***! картинка уже на диске, просто копируем
-Future<MediaSaveResult> saveLocalImage(String path, {String? saveName}) async {
+// #***! медиа уже на диске, просто копируем
+Future<MediaSaveResult> saveLocalMedia(
+  File file, {
+  required String saveName,
+  required SaveMediaKind kind,
+}) async {
   try {
-    final file = File(path);
     if (!await file.exists()) {
-      return const MediaSaveResult(ok: false, error: 'файл не найден');
+      return const MediaSaveResult(
+        ok: false,
+        failure: MediaSaveFailure.fileNotFound,
+      );
     }
-    return await _persist(
-      file,
-      saveName: saveName ?? 'IMG_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      kind: SaveMediaKind.image,
-    );
+    return await _persist(file, saveName: saveName, kind: kind);
   } catch (e) {
     return MediaSaveResult(ok: false, error: e.toString());
   }
@@ -124,10 +153,12 @@ Future<MediaSaveResult> _write(
   required SaveMediaKind kind,
 }) async {
   final toGallery = kind == SaveMediaKind.image || kind == SaveMediaKind.video;
-  if (!kIsWeb && (Platform.isAndroid || Platform.isIOS) && toGallery) {
-    final state = await PhotoManager.requestPermissionExtend();
-    if (!state.isAuth && !state.hasAccess) {
-      return const MediaSaveResult(ok: false, error: 'нет доступа к галерее');
+  if (savesToGallery && toGallery) {
+    if (!await _mayWriteGallery()) {
+      return const MediaSaveResult(
+        ok: false,
+        failure: MediaSaveFailure.noGalleryAccess,
+      );
     }
     if (kind == SaveMediaKind.video) {
       await PhotoManager.editor.saveVideo(file, title: saveName);
@@ -142,6 +173,15 @@ Future<MediaSaveResult> _write(
   final target = File('${dir.path}${Platform.pathSeparator}$saveName');
   await file.copy(target.path);
   return MediaSaveResult(ok: true, location: target.path);
+}
+
+Future<bool> _mayWriteGallery() async {
+  if (Platform.isAndroid) {
+    final sdkInt = (await DeviceProfile.load()).sdkInt ?? 0;
+    if (sdkInt >= _scopedStorageSdk) return true;
+  }
+  final state = await PhotoManager.requestPermissionExtend();
+  return state.isAuth || state.hasAccess;
 }
 
 // #***! папка загрузок есть не везде, иначе документы приложения
