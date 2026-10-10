@@ -220,9 +220,9 @@
 
 **Изменённые или проверенные файлы:** [ios/Shared/KometShareAccounts.swift](https://github.com/alcovaibe/Komet/blob/fix/dev22-audit-2026-10-11/ios/Shared/KometShareAccounts.swift), [ios/Runner/KometShareBridge.swift](https://github.com/alcovaibe/Komet/blob/fix/dev22-audit-2026-10-11/ios/Runner/KometShareBridge.swift), [lib/core/share/native_share_account_channel.dart](https://github.com/alcovaibe/Komet/blob/fix/dev22-audit-2026-10-11/lib/core/share/native_share_account_channel.dart), [lib/core/share/native_share_account_sync.dart](https://github.com/alcovaibe/Komet/blob/fix/dev22-audit-2026-10-11/lib/core/share/native_share_account_sync.dart), [native/komet_share/src/authorization.rs](https://github.com/alcovaibe/Komet/blob/fix/dev22-audit-2026-10-11/native/komet_share/src/authorization.rs), [native/komet_share/src/engine.rs](https://github.com/alcovaibe/Komet/blob/fix/dev22-audit-2026-10-11/native/komet_share/src/engine.rs), [native/komet_share/src/transport.rs](https://github.com/alcovaibe/Komet/blob/fix/dev22-audit-2026-10-11/native/komet_share/src/transport.rs).
 
-**Статус:** Подготовлено; проверка Swift/iOS остаётся обязательной.
+**Статус:** Подготовлено; Rust и Swift CI прошли, ручная проверка iOS остаётся обязательной.
 
-**Ограничения:** Rust проверен локально; Swift и обмен данными между приложением и Share Extension на iOS ещё не проверены. Снимок старше 5 минут отклоняется и требует открыть Komet. Уже отправленные байты отозвать нельзя. Старые версии extension должны обновляться вместе с приложением.
+**Ограничения:** Rust и Swift-тесты прошли в CI; обмен данными между приложением и Share Extension на реальном iOS ещё не проверен. Снимок старше 5 минут отклоняется и требует открыть Komet. Уже отправленные байты отозвать нельзя. Старые версии extension должны обновляться вместе с приложением.
 
 ## 15. Выбор аватара вызывает ошибку разметки и падение CI
 
@@ -261,10 +261,10 @@
 Проверки выполнялись на синтетических данных, без APK/AAB.
 
 - Flutter 3.47.0: точный framework commit и Dart 3.13.0 из соответствующего engine. Выполнен `dart analyze lib test tool`, замечаний нет.
-- 105 целевых тестов Dart/Flutter в 10 файлах: security audit (14), decrypted photo store (8), media cache (3), launch flags (10), avatar picker (6), WebApp bridge (24), forwarding (15), outbox account (5), text send controller (13), follow-up regressions (7). Использован прямой frontend compiler + Flutter test engine и test_api runner; штатный `flutter test` целиком локально не запускался. Настоящие widget-тесты выполнялись в Flutter engine.
+- 105 целевых тестов Dart/Flutter в 10 файлах: security audit (14), decrypted photo store (8), media cache (3), launch flags (10), avatar picker (6), WebApp bridge (24), forwarding (15), outbox account (5), text send controller (13), follow-up regressions (7). Использован прямой frontend compiler + Flutter test engine и test_api runner; штатный `flutter test` целиком локально не запускался, но затем полный набор прошёл в GitHub CI. Настоящие widget-тесты выполнялись в Flutter engine.
 - Rust: `RUSTFLAGS=-Dwarnings cargo test --locked --manifest-path native/komet_share/Cargo.toml` — 22 теста прошли, включая отсутствие authorization, устаревший epoch, отзыв между upload/send и отмену активной загрузки.
 - C crypto-core: штатные тесты и AddressSanitizer прошли. Для ASan использован `ASAN_OPTIONS=detect_leaks=0`: LeakSanitizer в этой среде не проверен.
 - Python native build/signing: 15 проверок прошли. Полный набор native Python требует macOS `plutil` и локально не подтверждён.
-- В workflow подготовлены штатные `flutter analyze`, полный `flutter test`, Rust-тесты и macOS Swift/Python. Их наличие не означает успешный CI run.
+- GitHub CI для commit `9ec2cf50d5e62cd81367a788104be1671f5034d9`: Rust (22 теста), Swift KometShareAccounts и полный набор Python native (17 тестов) прошли. [Run 38091474979](https://github.com/alcovaibe/Komet/actions/runs/38091474979). Полный штатный Flutter job прошёл: **1060 тестов успешно, 10 пропущено**, анализ Dart без замечаний. Штатный C target `test asan shared` прошёл в CI, включая AddressSanitizer/UndefinedBehaviorSanitizer.
 
-Перед признанием всей ветки готовой к merge остаются полный штатный Flutter CI, Swift/macOS проверки и ручная проверка WebView, SMS/2FA и iOS Share Extension. Обновление WebView до beta и ограничения размеров/свежести требуют внимания при review. Пользователь разрешил подготовку исправлений и issue; создание PR запрещено до отдельного разрешения.
+Перед merge остаётся ручная проверка WebView, SMS/2FA и iOS Share Extension на устройствах; автоматические проверки исходного кода прошли. Обновление WebView до beta и ограничения размеров/свежести требуют внимания при review. Пользователь разрешил подготовку исправлений и issue; создание PR запрещено до отдельного разрешения.
