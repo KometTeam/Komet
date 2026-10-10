@@ -98,6 +98,9 @@ abstract class AppLocalizations {
     Locale('ru'),
   ];
 
+  String get shareEncryptedUnsupported;
+  String get chatEncryptedUnsupportedMedia;
+
   /// No description provided for @loginTitle.
   ///
   /// In en, this message translates to:
@@ -11461,6 +11464,13 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Compact'**
   String get appearanceBottomNavigationCompact;
+  String get temporaryPasswordRecoveryTitle;
+
+  String get temporaryPasswordRecoveryMessage;
+
+  String get temporaryPasswordRecoveryShow;
+
+  String get temporaryPasswordRecoveryInstructions;
 }
 
 class _AppLocalizationsDelegate

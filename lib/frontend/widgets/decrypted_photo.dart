@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/crypto/encrypted_photo_cache.dart';
+import '../../core/crypto/e2ee_service.dart';
 import '../../core/storage/chat_encryption_store.dart';
 
 class DecryptedPhoto extends StatefulWidget {
@@ -36,18 +37,25 @@ class _DecryptedPhotoState extends State<DecryptedPhoto> {
     super.initState();
     _request();
     ChatEncryptionStore.instance.revision.addListener(_onEncryptionChanged);
+    E2eeService.instance.revision.addListener(_onEncryptionChanged);
   }
 
   @override
   void dispose() {
     ChatEncryptionStore.instance.revision.removeListener(_onEncryptionChanged);
+    E2eeService.instance.revision.removeListener(_onEncryptionChanged);
     super.dispose();
   }
 
   @override
   void didUpdateWidget(DecryptedPhoto old) {
     super.didUpdateWidget(old);
-    if (old.cacheName != widget.cacheName) _request();
+    if (old.accountId != widget.accountId ||
+        old.chatId != widget.chatId ||
+        old.cacheName != widget.cacheName ||
+        old.sealedTicket != widget.sealedTicket) {
+      _request();
+    }
   }
 
   void _onEncryptionChanged() => scheduleMicrotask(_request);
@@ -69,6 +77,9 @@ class _DecryptedPhotoState extends State<DecryptedPhoto> {
     return ValueListenableBuilder<EncryptedPhotoView?>(
       valueListenable: EncryptedPhotoCache.instance.listenableFor(
         widget.cacheName,
+        accountId: widget.accountId,
+        chatId: widget.chatId,
+        sealedTicket: widget.sealedTicket,
       ),
       builder: (context, view, _) => widget.builder(view),
     );

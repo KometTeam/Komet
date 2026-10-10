@@ -85,16 +85,17 @@ void main() {
     }
   });
 
-  test('payload LOGIN виден с --dw19p-im-crazy', () {
+  test('LOGIN structure is visible but secrets stay redacted', () {
     final line = WireDebugLog.describe(
       session: 'api1/auth',
       event: _event(opcode: Opcode.login, json: _loginJson),
       revealLoginPayload: true,
     );
-    expect(line, contains('synthetic-token'));
+    expect(line, isNot(contains('synthetic-token')));
+    expect(line, contains('***'));
   });
 
-  test('остальные опкоды пишутся с payload целиком', () {
+  test('all opcodes redact credentials', () {
     final line = WireDebugLog.describe(
       session: 'api2/web',
       event: _event(
@@ -106,7 +107,8 @@ void main() {
       revealLoginPayload: false,
     );
     expect(line, startsWith('WIRE [api2/web] << ok AUTH_REQUEST(17) seq=7 '));
-    expect(line, endsWith('{"token":"synthetic-auth"}'));
+    expect(line, endsWith('{"token":"***"}'));
+    expect(line, isNot(contains('synthetic-auth')));
   });
 
   test('длинная строка режется на куски без разрыва суррогатных пар', () {

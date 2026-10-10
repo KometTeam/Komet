@@ -42,7 +42,7 @@ as `Флаги запуска: …` and warns about unknown arguments. Add a new
 | Argument              | dart-define                 | Effect                                                                  |
 |-----------------------|-----------------------------|-------------------------------------------------------------------------|
 | `--debug`             | `KOMET_DEBUG=true`          | every log level passes; every wire packet is logged with its JSON       |
-| `--dw19p-im-crazy`    | `KOMET_DW19P_IM_CRAZY=true` | same, plus the payload of opcode 19 (`LOGIN`)                           |
+| `--dw19p-im-crazy`    | `KOMET_DW19P_IM_CRAZY=true` | same, plus the redacted structure of opcode 19 (`LOGIN`)                           |
 | `--debug-test`        | `DEBUG_TEST=true`           | fake-data mode: skips login, opens the shell as account `-424242`       |
 | `--contacts N`        | `DEBUG_CONTACTS=N`          | implies `--debug-test` and generates N fake contacts                    |
 | `--berserk`           | `BERSERK=true`              | drops the profile on login to exercise profile recovery                 |
@@ -54,9 +54,9 @@ as `Флаги запуска: …` and warns about unknown arguments. Add a new
 | —                     | `is_appstore_build=true`    | App Store build, trimmed by `BuildProfile`                              |
 
 Without `--dw19p-im-crazy` the `LOGIN` payload is replaced by its length in both directions: it
-carries the session token and the whole account snapshot. Payloads of every other opcode go out
-verbatim — including `AUTH`/`AUTH_REQUEST` responses with their tokens — so a `--debug` log is
-not safe to publish as is.
+carries the session token and the whole account snapshot. With the flag, its structure is
+visible with secrets redacted. All other opcode payloads are also redacted recursively before
+logging; malformed JSON is hidden entirely. Exported logs receive the same redaction.
 
 Packets are logged by `WireDebugLog` from `Api._onWireLog`, tagged `api<N>/<pre|auth|web>`, so
 the two parallel sessions of the experimental "always SMS" login stay apart. Extra login
@@ -287,3 +287,5 @@ Required repo secrets: `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
 Required repo variables: `S3_BUCKET`, `S3_PUBLIC_BASE_URL`.
 Optional: `S3_ENDPOINT` (default `https://s3.twcstorage.ru`), `S3_REGION`
 (default `ru-1`), `S3_KEEP_RELEASES`.
+
+Wire payloads are parsed as JSON and redacted recursively before logging and export. Tokens, passwords, codes, QR links and message text remain hidden with every launch flag. Invalid JSON is hidden entirely.

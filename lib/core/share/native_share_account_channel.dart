@@ -36,10 +36,31 @@ class NativeShareAccountChannel {
   }
 
   Future<void> publish(ShareAccountSnapshot snapshot, int generation) {
+    _generations.putIfAbsent(snapshot.accountId, () => 0);
     if (!enabled) return Future.value();
     return _enqueue(() async {
       if (this.generation(snapshot.accountId) != generation) return;
       await channel.invokeMethod<void>('syncShareAccount', snapshot.toMap());
+    });
+  }
+
+  Future<void> invalidateAll() {
+    for (final accountId in _generations.keys.toList()) {
+      _generations[accountId] = generation(accountId) + 1;
+    }
+    if (!enabled) return Future.value();
+    return _enqueue(
+      () => channel.invokeMethod<void>('invalidateShareAccounts'),
+    );
+  }
+
+  Future<void> invalidate(int accountId) {
+    _generations[accountId] = generation(accountId) + 1;
+    if (!enabled) return Future.value();
+    return _enqueue(() async {
+      await channel.invokeMethod<void>('invalidateShareAccount', {
+        'accountId': accountId.toString(),
+      });
     });
   }
 

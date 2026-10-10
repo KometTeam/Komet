@@ -9,6 +9,14 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get shareEncryptedUnsupported =>
+      'Sharing to an encrypted chat is not supported yet. Open the chat and send the message there.';
+
+  @override
+  String get chatEncryptedUnsupportedMedia =>
+      'This attachment type cannot be encrypted yet. Sending was cancelled.';
+
+  @override
   String get loginTitle => 'Sign in to Komet';
 
   @override
@@ -6452,4 +6460,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceBottomNavigationCompact => 'Compact';
+
+  @override
+  String get temporaryPasswordRecoveryTitle => "Temporary password recovery";
+
+  @override
+  String get temporaryPasswordRecoveryMessage =>
+      "The temporary MAX password could not be removed. Show it privately and save it before removing or changing the password in MAX settings.";
+
+  @override
+  String get temporaryPasswordRecoveryShow => "Show password";
+
+  @override
+  String get temporaryPasswordRecoveryInstructions =>
+      "Remove or change this password in MAX before deleting Komet. Do not include it in screenshots or logs.";
 }

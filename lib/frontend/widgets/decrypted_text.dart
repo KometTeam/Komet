@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/crypto/message_decryption_cache.dart';
+import '../../core/crypto/e2ee_service.dart';
+import '../../core/storage/chat_encryption_store.dart';
 
 class DecryptedContent extends StatefulWidget {
   final int accountId;
@@ -27,12 +31,29 @@ class _DecryptedContentState extends State<DecryptedContent> {
   void initState() {
     super.initState();
     _request();
+    ChatEncryptionStore.instance.revision.addListener(_onEncryptionChanged);
+    E2eeService.instance.revision.addListener(_onEncryptionChanged);
+  }
+
+  void _onEncryptionChanged() {
+    scheduleMicrotask(() {
+      if (mounted) _request();
+    });
+  }
+
+  @override
+  void dispose() {
+    ChatEncryptionStore.instance.revision.removeListener(_onEncryptionChanged);
+    E2eeService.instance.revision.removeListener(_onEncryptionChanged);
+    super.dispose();
   }
 
   @override
   void didUpdateWidget(DecryptedContent old) {
     super.didUpdateWidget(old);
-    if (old.messageId != widget.messageId ||
+    if (old.accountId != widget.accountId ||
+        old.chatId != widget.chatId ||
+        old.messageId != widget.messageId ||
         old.cipherText != widget.cipherText) {
       _request();
     }
@@ -52,6 +73,8 @@ class _DecryptedContentState extends State<DecryptedContent> {
     return ValueListenableBuilder<MessageDecryption?>(
       valueListenable: MessageDecryptionCache.instance.listenableFor(
         widget.messageId,
+        accountId: widget.accountId,
+        chatId: widget.chatId,
       ),
       builder: (context, decryption, _) => widget.builder(decryption),
     );

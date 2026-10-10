@@ -54,7 +54,16 @@ class NativeShareAccountSync with WidgetsBindingObserver {
     });
   }
 
-  void _refreshPrivacy() => unawaited(refresh());
+  void _refreshPrivacy() {
+    unawaited(
+      NativeShareAccountChannel.instance
+          .invalidateAll()
+          .then((_) => refresh())
+          .catchError((Object error) {
+            logger.w('Share privacy invalidation failed: ${error.runtimeType}');
+          }),
+    );
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {

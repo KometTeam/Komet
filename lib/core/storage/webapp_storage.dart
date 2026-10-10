@@ -5,6 +5,17 @@ import 'token_storage.dart';
 enum WebAppStorageBackend { device, secure }
 
 class WebAppStorage {
+  static Future<void> eraseAccount(int accountId) async {
+    for (final prefix in [
+      'webapp_ss_${accountId}_',
+      'webapp_bio_${accountId}_',
+    ]) {
+      for (final key in await TokenStorage.secureKeysWithPrefix(prefix)) {
+        await TokenStorage.deleteSecure(key);
+      }
+    }
+  }
+
   // #***! лимиты ключей на бота чтоб не забил всё
   static const int deviceKeyLimit = 512;
   static const int secureKeyLimit = 128;

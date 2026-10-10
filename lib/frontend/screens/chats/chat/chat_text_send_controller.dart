@@ -409,7 +409,15 @@ class ChatTextSendController {
       sealedText: sealedText,
       e2ee: e2eeFlag,
     );
-    if (encrypted) MessageDecryptionCache.instance.seed(tempId, text);
+    if (encrypted) {
+      MessageDecryptionCache.instance.seed(
+        tempId,
+        text,
+        accountId: accountId,
+        chatId: chatId,
+        cipherText: wireText,
+      );
+    }
 
     hasText.value = false;
     setLastSentId(tempId);
@@ -476,6 +484,7 @@ class ChatTextSendController {
               replySourceChatId: replySrcChatId,
               elements: elements,
               beforeSend: checkSession,
+              encryptedPayload: encrypted,
             );
 
       final mounted = canUpdateChat();
@@ -495,7 +504,12 @@ class ChatTextSendController {
           e2ee: e2eeFlag,
         );
         if (encrypted) {
-          MessageDecryptionCache.instance.adopt(tempId, sent.id);
+          MessageDecryptionCache.instance.adopt(
+            tempId,
+            sent.id,
+            accountId: accountId,
+            chatId: chatId,
+          );
         }
         if (mounted) {
           chatController.setMessageAt(index, sent);
@@ -622,7 +636,13 @@ class ChatTextSendController {
       status: online ? 'sending' : 'pending',
     );
     if (outgoing.encrypted) {
-      MessageDecryptionCache.instance.seed(tempId, outgoing.plaintext);
+      MessageDecryptionCache.instance.seed(
+        tempId,
+        outgoing.plaintext,
+        accountId: _myId,
+        chatId: _chatId,
+        cipherText: outgoing.wireText,
+      );
     }
     chatController.addMessage(composed);
     bumpMessages();
@@ -644,13 +664,19 @@ class ChatTextSendController {
         _myId,
         _chatId,
         outgoing.wireText,
+        encryptedPayload: outgoing.encrypted,
       );
       final realId = actualId.isNotEmpty ? actualId : tempId;
       final i = chatController.indexOfId(tempId);
       if (i != -1) {
         final sent = _replaceMessage(i, id: realId, status: 'sent');
         if (outgoing.encrypted) {
-          MessageDecryptionCache.instance.adopt(tempId, realId);
+          MessageDecryptionCache.instance.adopt(
+            tempId,
+            realId,
+            accountId: _myId,
+            chatId: _chatId,
+          );
         }
         unawaited(chatController.persistOutgoing(sent, removeId: tempId));
         unawaited(
@@ -685,12 +711,23 @@ class ChatTextSendController {
         status: 'EDITED',
       );
       if (outgoing.encrypted) {
-        MessageDecryptionCache.instance.seed(id, outgoing.plaintext);
+        MessageDecryptionCache.instance.seed(
+          id,
+          outgoing.plaintext,
+          accountId: _myId,
+          chatId: _chatId,
+          cipherText: outgoing.wireText,
+        );
       }
       unawaited(chatController.persistOutgoing(edited));
     }
     if (!id.startsWith('temp_')) {
-      await _messages.editMessage(_chatId, id, text: outgoing.wireText);
+      await _messages.editMessage(
+        _chatId,
+        id,
+        text: outgoing.wireText,
+        encryptedPayload: outgoing.encrypted,
+      );
     }
   }
 }

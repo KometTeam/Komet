@@ -8,6 +8,7 @@ import 'package:komet/core/crypto/e2ee_service.dart';
 import 'package:komet/core/protocol/packet.dart';
 import 'package:komet/core/storage/app_database.dart';
 import 'package:komet/core/storage/chat_encryption_store.dart';
+import 'package:komet/core/storage/token_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -89,7 +90,7 @@ void main() {
   }
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'active_account_id': '101'});
     final directory = await Directory.systemTemp.createTemp(
       'synthetic_forward',
     );
@@ -217,6 +218,15 @@ void main() {
     await expectLater(
       ForwardSender.sendCopy(101, 404, _source, sender: sender),
       throwsA(isA<StateError>()),
+    );
+    expect(api.requests, isEmpty);
+  });
+
+  test('account selection change before dispatch blocks the request', () async {
+    api.beforeDispatch = () => TokenStorage.setActiveAccount(202);
+    await expectLater(
+      sender.sendMessage(101, 505, 'Synthetic plaintext'),
+      throwsStateError,
     );
     expect(api.requests, isEmpty);
   });

@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import '../../core/media/gallery_source.dart';
+import '../../core/crypto/outgoing_message_policy.dart';
 import '../../core/media/share_thumbnail.dart';
 import '../../core/media/video_transcoder.dart';
 import '../../core/share/shared_file_usage.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../models/attachment.dart';
 import '../../models/chat_preview_media.dart';
@@ -169,12 +171,29 @@ class ShareSender {
     required List<int> chatIds,
     required PreparedShare share,
     required String caption,
-  }) {
+  }) async {
+    final session = api.session;
+    final epoch = api.sessionEpoch;
+    final accountEpoch = TokenStorage.accountEpoch;
+    await OutgoingMessagePolicy.load(accountId);
+    if (session == null ||
+        !identical(api.session, session) ||
+        api.sessionEpoch != epoch ||
+        TokenStorage.accountEpoch != accountEpoch ||
+        await TokenStorage.getActiveAccountId() != accountId) {
+      throw StateError('Account changed during sharing');
+    }
+    for (final chatId in chatIds) {
+      OutgoingMessagePolicy.requireSupported(accountId, chatId);
+    }
     return SharedFileUsage.instance.use(
       share.files.map((file) => file.source.path),
       () async {
         var messages = 0;
         for (final chatId in chatIds) {
+          if (!identical(api.session, session) || api.sessionEpoch != epoch || TokenStorage.accountEpoch != accountEpoch) {
+            throw StateError('Account changed during sharing');
+          }
           messages += await _sendToChat(
             accountId: accountId,
             chatId: chatId,
@@ -200,6 +219,7 @@ class ShareSender {
     required PreparedShare share,
     required String caption,
   }) async {
+    OutgoingMessagePolicy.requireSupported(accountId, chatId);
     if (share.isTextOnly) {
       final text = caption.trim().isNotEmpty
           ? caption
@@ -258,6 +278,7 @@ class ShareSender {
     required int chatId,
     required String text,
   }) async {
+    final session = api.session;
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = UploadService.instance.newTempId();
     final placeholder = CachedMessage(
@@ -284,7 +305,17 @@ class ShareSender {
     String realId = tempId;
     var status = 'sent';
     try {
-      final sent = await messagesModule.sendMessage(accountId, chatId, text);
+      final sent = await messagesModule.sendMessage(
+        accountId,
+        chatId,
+        text,
+        beforeSend: () {
+          if (session == null || !identical(api.session, session)) {
+            throw StateError('Account changed during sharing');
+          }
+          OutgoingMessagePolicy.requireSupported(accountId, chatId);
+        },
+      );
       if (sent.isNotEmpty) realId = sent;
     } catch (e) {
       logger.w('Поделиться: текст в $chatId не ушёл: $e');

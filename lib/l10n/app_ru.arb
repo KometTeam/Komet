@@ -1,4 +1,7 @@
 {
+  "shareEncryptedUnsupported": "В зашифрованный чат пока нельзя отправлять через «Поделиться». Откройте чат и отправьте сообщение из него.",
+  "chatEncryptedUnsupportedMedia": "Этот тип вложения пока нельзя зашифровать. Отправка отменена.",
+
   "@@locale": "ru",
   "loginTitle": "Войдите в Komet",
   "loginSubtitle": "Проверьте код страны и введите свой\nномер телефона.",
@@ -2016,5 +2019,9 @@
   "appearanceBottomNavigationTitle": "Нижняя панель",
   "appearanceBottomNavigationSubtitle": "Компактная панель занимает меньше места и всегда показывает названия четырёх вкладок.",
   "appearanceBottomNavigationFloating": "Плавающая",
-  "appearanceBottomNavigationCompact": "Компактная"
+  "appearanceBottomNavigationCompact": "Компактная",
+  "temporaryPasswordRecoveryTitle": "Восстановление временного пароля",
+  "temporaryPasswordRecoveryMessage": "Временный пароль MAX не удалось снять. Покажите его в безопасном месте и сохраните перед удалением или сменой пароля в настройках MAX.",
+  "temporaryPasswordRecoveryShow": "Показать пароль",
+  "temporaryPasswordRecoveryInstructions": "Снимите или смените этот пароль в MAX перед удалением Komet. Не отправляйте его на скриншотах или в логах."
 }

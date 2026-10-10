@@ -4,11 +4,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../../core/cache/message_session_cache.dart';
+import '../../core/crypto/outgoing_message_policy.dart';
+import '../../core/storage/token_storage.dart';
 import '../../core/media/gallery_source.dart';
 import '../../core/media/image_optimizer.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
-import '../../main.dart' show fileUploader, messagesModule;
+import '../../main.dart' show api, fileUploader, messagesModule;
 import '../../models/attachment.dart';
 import 'chats.dart' show chats;
 import 'file_uploader.dart';
@@ -91,7 +93,11 @@ class UploadJob {
     this.totalBytes = 0,
     this.placeholder,
     this.scheduledTime,
-  }) : _slots = slots < 1 ? 1 : slots,
+    this.encryptedPayload = false,
+  }) : _session = api.session,
+       _sessionEpoch = api.sessionEpoch,
+       _accountEpoch = TokenStorage.accountEpoch,
+       _slots = slots < 1 ? 1 : slots,
        _sent = List<int>.filled(slots < 1 ? 1 : slots, 0),
        _total = List<int>.filled(slots < 1 ? 1 : slots, 0),
        progress = ValueNotifier<List<double>>(
@@ -109,6 +115,24 @@ class UploadJob {
   final int totalBytes;
   final CachedMessage? placeholder;
   final int? scheduledTime;
+  final bool encryptedPayload;
+  final Object? _session;
+  final int _sessionEpoch;
+  final int _accountEpoch;
+
+  void ensureSendAllowed() {
+    if (_session == null ||
+        !identical(api.session, _session) ||
+        api.sessionEpoch != _sessionEpoch ||
+        TokenStorage.accountEpoch != _accountEpoch) {
+      throw const UploadFailure('account_changed');
+    }
+    OutgoingMessagePolicy.requireSupported(
+      accountId,
+      chatId,
+      encryptedPayload: encryptedPayload,
+    );
+  }
 
   final ValueNotifier<List<double>> progress;
   final ValueNotifier<UploadBytes> bytes;
@@ -254,6 +278,7 @@ class UploadService {
           tokens.cast<String>(),
           caption: caption.isEmpty ? null : caption,
           scheduledTime: scheduledTime,
+          beforeSend: job.ensureSendAllowed,
         );
         if (sent == null) return null;
         return CachedMessage.fromPushPayload(accountId, chatId, sent);
@@ -282,10 +307,13 @@ class UploadService {
         scheduledTime: scheduledTime,
       ),
       (job) async {
-        final info = await messagesModule.requestVideoUploadUrl();
+        final info = await messagesModule.requestVideoUploadUrl(
+          beforeSend: job.ensureSendAllowed,
+        );
         if (info == null || info.url.isEmpty) {
           throw const UploadFailure('no_upload_url');
         }
+        job.ensureSendAllowed();
         final ok = await fileUploader.uploadVideoFile(
           Uri.parse(info.url),
           file,
@@ -298,6 +326,7 @@ class UploadService {
           info.token,
           caption: caption.isEmpty ? null : caption,
           scheduledTime: scheduledTime,
+          beforeSend: job.ensureSendAllowed,
         );
         if (sent == null) return null;
         return CachedMessage.fromPushPayload(accountId, chatId, sent);
@@ -322,15 +351,18 @@ class UploadService {
       file: file,
       kind: UploadKind.voice,
       placeholder: placeholder,
-      requestUpload: () async {
-        final info = await messagesModule.requestAudioUploadUrl();
+      requestUpload: (beforeSend) async {
+        final info = await messagesModule.requestAudioUploadUrl(
+          beforeSend: beforeSend,
+        );
         return info == null ? null : (url: info.url, token: info.token);
       },
-      send: (token) => messagesModule.sendAudioMessage(
+      send: (token, beforeSend) => messagesModule.sendAudioMessage(
         chatId,
         token,
         duration: durationMs,
         wave: wave,
+        beforeSend: beforeSend,
       ),
     );
   }
@@ -351,14 +383,17 @@ class UploadService {
       file: file,
       kind: UploadKind.videoNote,
       placeholder: placeholder,
-      requestUpload: () async {
-        final info = await messagesModule.requestVideoNoteUploadUrl();
+      requestUpload: (beforeSend) async {
+        final info = await messagesModule.requestVideoNoteUploadUrl(
+          beforeSend: beforeSend,
+        );
         return info == null ? null : (url: info.url, token: info.token);
       },
-      send: (token) => messagesModule.sendVideoNoteMessage(
+      send: (token, beforeSend) => messagesModule.sendVideoNoteMessage(
         chatId,
         token,
         duration: durationMs,
+        beforeSend: beforeSend,
       ),
     );
   }
@@ -370,8 +405,15 @@ class UploadService {
     required String tempId,
     required File file,
     required UploadKind kind,
-    required Future<({String url, String token})?> Function() requestUpload,
-    required Future<Map<String, dynamic>?> Function(String token) send,
+    required Future<({String url, String token})?> Function(
+      void Function() beforeSend,
+    )
+    requestUpload,
+    required Future<Map<String, dynamic>?> Function(
+      String token,
+      VoidCallback beforeSend,
+    )
+    send,
     CachedMessage? placeholder,
   }) {
     return _run(
@@ -385,10 +427,11 @@ class UploadService {
       ),
       (job) async {
         try {
-          final info = await requestUpload();
+          final info = await requestUpload(job.ensureSendAllowed);
           if (info == null || info.url.isEmpty) {
             throw const UploadFailure('no_upload_url');
           }
+          job.ensureSendAllowed();
           final ok = await fileUploader.uploadMediaFile(
             Uri.parse(info.url),
             file,
@@ -396,7 +439,7 @@ class UploadService {
           );
           if (!ok) throw const UploadFailure('upload_failed');
           job.markUploaded();
-          final sent = await send(info.token);
+          final sent = await send(info.token, job.ensureSendAllowed);
           if (sent == null) return null;
           return CachedMessage.fromPushPayload(accountId, chatId, sent);
         } finally {
@@ -419,6 +462,7 @@ class UploadService {
     CachedMessage? placeholder,
     String? text,
     int? scheduledTime,
+    bool encryptedPayload = false,
   }) {
     return _run(
       UploadJob._(
@@ -431,6 +475,7 @@ class UploadService {
         totalBytes: size,
         placeholder: placeholder,
         scheduledTime: scheduledTime,
+        encryptedPayload: encryptedPayload,
       ),
       (job) async {
         final done = await _uploadFile(
@@ -501,7 +546,9 @@ class UploadService {
           filename: filename,
           totalSize: size,
           text: text,
+          encryptedPayload: job.encryptedPayload,
           scheduledTime: scheduledTime,
+          beforeSend: job.ensureSendAllowed,
         )
         .listen(
           (event) {
@@ -548,6 +595,12 @@ class UploadService {
     CachedMessage? real;
     String? failure;
     try {
+      await OutgoingMessagePolicy.load(job.accountId);
+      final activeAccount = await TokenStorage.getActiveAccountId();
+      if (activeAccount != job.accountId) {
+        throw const UploadFailure('account_changed');
+      }
+      job.ensureSendAllowed();
       real = await upload(job);
       // #***! для отложенного null это нормально, оно уйдёт позже
       if (real == null && !job.scheduled) failure = 'send_failed';
@@ -697,8 +750,11 @@ class UploadService {
         job.resetSlot(index);
       }
       try {
-        final url = await messagesModule.requestPhotoUploadUrl();
+        final url = await messagesModule.requestPhotoUploadUrl(
+          beforeSend: job.ensureSendAllowed,
+        );
         if (url == null || url.isEmpty) continue;
+        job.ensureSendAllowed();
         final token = await fileUploader.uploadPhoto(
           Uri.parse(url),
           file,

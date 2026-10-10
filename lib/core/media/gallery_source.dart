@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:photo_manager/photo_manager.dart';
+import 'package:flutter/foundation.dart';
 
 import 'desktop_video_probe.dart';
 
@@ -90,6 +90,15 @@ abstract class GallerySource {
   Future<void> manageAccess();
 
   // #***! альбом все спрашиваем один раз, дальше листаем диапазонами
+  @visibleForTesting
+  factory GallerySource.desktopForTesting(
+    List<Directory> directories, {
+    Duration refreshInterval = const Duration(seconds: 30),
+  }) => _DesktopGallerySource(
+    directories: directories,
+    refreshInterval: refreshInterval,
+  );
+
   factory GallerySource.create() {
     if (Platform.isAndroid || Platform.isIOS) {
       return _PhotoManagerSource();
@@ -226,18 +235,43 @@ bool isImagePath(String path) =>
 
 // #***! на десктопе галереи нет, сканируем стандартные папки
 class _DesktopGallerySource implements GallerySource {
+  _DesktopGallerySource({
+    this.directories,
+    this.refreshInterval = const Duration(seconds: 30),
+  });
+  final List<Directory>? directories;
+  final Duration refreshInterval;
   @override
   Future<GalleryPermission> ensurePermission() async =>
       GalleryPermission.granted;
 
   List<_FileGalleryItem> _all = const [];
+  Future<void>? _loading;
+  DateTime? _scannedAt;
+
+  Future<void> _ensureIndex(int offset) async {
+    final scannedAt = _scannedAt;
+    if (scannedAt != null &&
+        (offset != 0 ||
+            DateTime.now().difference(scannedAt) < refreshInterval)) {
+      return;
+    }
+    await (_loading ??= () async {
+      final paths = await compute(
+        _scanDesktopGallery,
+        _candidateDirs().map((dir) => dir.path).toList(),
+      );
+      _all = paths.map((path) => _FileGalleryItem(File(path))).toList();
+      _scannedAt = DateTime.now();
+    }().whenComplete(() => _loading = null));
+  }
 
   @override
   Future<GalleryPage> load({
     int offset = 0,
     int limit = GallerySource.pageSize,
   }) async {
-    if (offset == 0 || _all.isEmpty) _all = _scan();
+    await _ensureIndex(offset);
     if (offset >= _all.length) return GalleryPage.empty;
     final end = offset + limit < _all.length ? offset + limit : _all.length;
     final items = _all.sublist(offset, end);
@@ -257,21 +291,6 @@ class _DesktopGallerySource implements GallerySource {
     return GalleryPage(items: items, hasMore: end < _all.length);
   }
 
-  List<_FileGalleryItem> _scan() {
-    final entries = <({File file, DateTime modified})>[];
-    for (final dir in _candidateDirs()) {
-      if (!dir.existsSync()) continue;
-      try {
-        for (final entity in dir.listSync(followLinks: false)) {
-          if (entity is! File || !_isMedia(entity.path)) continue;
-          entries.add((file: entity, modified: entity.statSync().modified));
-        }
-      } catch (_) {}
-    }
-    entries.sort((a, b) => b.modified.compareTo(a.modified));
-    return entries.map((e) => _FileGalleryItem(e.file)).toList();
-  }
-
   @override
   Future<void> openSettings() async {}
 
@@ -279,6 +298,7 @@ class _DesktopGallerySource implements GallerySource {
   Future<void> manageAccess() async {}
 
   List<Directory> _candidateDirs() {
+    if (directories != null) return directories!;
     final home =
         Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
     if (home == null || home.isEmpty) return const [];
@@ -291,12 +311,34 @@ class _DesktopGallerySource implements GallerySource {
       Directory('$home/Movies'),
     ];
   }
+}
 
-  bool _isMedia(String path) {
-    final ext = _fileExtension(path);
-    return kGalleryImageExtensions.contains(ext) ||
-        kGalleryVideoExtensions.contains(ext);
+List<String> _scanDesktopGallery(List<String> directories) {
+  final entries = <({String path, DateTime modified})>[];
+  for (final path in directories) {
+    try {
+      final directory = Directory(path);
+      if (!directory.existsSync()) continue;
+      for (final entity in directory.listSync(followLinks: false)) {
+        if (entity is! File ||
+            (!isImagePath(entity.path) && !isVideoPath(entity.path))) {
+          continue;
+        }
+        try {
+          entries.add((
+            path: entity.path,
+            modified: entity.statSync().modified,
+          ));
+        } on FileSystemException {
+          continue;
+        }
+      }
+    } on FileSystemException {
+      continue;
+    }
   }
+  entries.sort((a, b) => b.modified.compareTo(a.modified));
+  return entries.map((entry) => entry.path).toList();
 }
 
 // #***! обёртка над обычным файлом
