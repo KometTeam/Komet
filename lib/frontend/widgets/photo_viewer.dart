@@ -78,6 +78,19 @@ class PhotoViewerActions {
       viewAllMedia == null;
 }
 
+class PhotoViewerRoute<T> extends PageRouteBuilder<T> {
+  PhotoViewerRoute({required WidgetBuilder builder})
+    : super(
+        opaque: false,
+        transitionDuration: const Duration(milliseconds: 220),
+        reverseTransitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            builder(context),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+      );
+}
+
 class _ViewerMedia {
   final String id;
   final MessageAttachment attachment;
@@ -198,7 +211,8 @@ class PhotoViewerScreen extends StatefulWidget {
   State<PhotoViewerScreen> createState() => _PhotoViewerScreenState();
 }
 
-class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
+class _PhotoViewerScreenState extends State<PhotoViewerScreen>
+    with SingleTickerProviderStateMixin {
   static const int _prefetchThreshold = 3;
   static const int _maxCachedVideoPlayers = 5;
   static const double _compactHeight = 480;
@@ -216,9 +230,17 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   final Map<String, Future<Map<String, String>>> _videoSourceLoads = {};
   final TransformationController _heroTransform = TransformationController();
   final Map<String, TransformationController> _pageTransforms = {};
-  int _pointers = 0;
   bool _zoomed = false;
   bool _swipeEnabled = true;
+  final Set<int> _pointers = {};
+  late final AnimationController _dismissReturn;
+  final ValueNotifier<Offset> _dismissOffset = ValueNotifier(Offset.zero);
+  Offset _returnFrom = Offset.zero;
+  Offset? _pointerOrigin;
+  VelocityTracker? _velocityTracker;
+  bool _dismissAllowed = false;
+  bool _draggingToDismiss = false;
+  bool _closing = false;
   bool _feedLoaded = false;
   bool _feedFailed = false;
   bool _loadingMore = false;
@@ -230,6 +252,10 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   @override
   void initState() {
     super.initState();
+    _dismissReturn = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+    )..addListener(_animateDismissReturn);
     _heroTransform.addListener(_syncHero);
     _heroTransform.addListener(_syncZoom);
     _items = _localItems();
@@ -271,14 +297,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     _syncSwipe();
   }
 
-  void _updatePointers(int delta) {
-    final next = _pointers + delta;
-    _pointers = next < 0 ? 0 : next;
-    _syncSwipe();
-  }
-
   void _syncSwipe() {
-    final enabled = _pointers < 2 && !_zoomed;
+    final enabled = _pointers.length < 2 && !_zoomed;
     if (enabled == _swipeEnabled) return;
     setState(() => _swipeEnabled = enabled);
   }
@@ -286,6 +306,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _dismissReturn.dispose();
+    _dismissOffset.dispose();
     _heroTransform.dispose();
     for (final transform in _pageTransforms.values) {
       transform.dispose();
@@ -294,6 +316,97 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       session.dispose();
     }
     super.dispose();
+  }
+
+  bool get _canDismiss {
+    final route = ModalRoute.of(context);
+    return !_closing &&
+        !_dismissReturn.isAnimating &&
+        route?.isCurrent == true &&
+        route?.popDisposition != RoutePopDisposition.doNotPop &&
+        Navigator.of(context).canPop() &&
+        (!_controller.hasClients ||
+            !_controller.position.isScrollingNotifier.value) &&
+        (_current.isVideo ||
+            _transformFor(_current.id).value.getMaxScaleOnAxis() <= 1.01);
+  }
+
+  void _onMediaPointerDown(PointerDownEvent event) {
+    _pointers.add(event.pointer);
+    _syncSwipe();
+    if (_pointers.length != 1) {
+      _dismissAllowed = false;
+      _restoreDismiss();
+      return;
+    }
+    _dismissAllowed = event.kind != PointerDeviceKind.mouse && _canDismiss;
+    _pointerOrigin = event.position;
+    _velocityTracker = VelocityTracker.withKind(event.kind)
+      ..addPosition(event.timeStamp, event.position);
+  }
+
+  void _onMediaPointerMove(PointerMoveEvent event) {
+    if (!_dismissAllowed || _pointers.length != 1) return;
+    _velocityTracker?.addPosition(event.timeStamp, event.position);
+    final delta = event.position - _pointerOrigin!;
+    if (!_draggingToDismiss) {
+      if (delta.distance < kTouchSlop) return;
+      if (delta.dx.abs() >= delta.dy.abs()) {
+        _dismissAllowed = false;
+        return;
+      }
+      if (!_current.isVideo &&
+          _transformFor(_current.id).value.getMaxScaleOnAxis() > 1.01) {
+        _dismissAllowed = false;
+        return;
+      }
+      _draggingToDismiss = true;
+    }
+    _dismissOffset.value = Offset(delta.dx * 0.35, delta.dy);
+  }
+
+  void _onMediaPointerUp(PointerUpEvent event) {
+    _pointers.remove(event.pointer);
+    _syncSwipe();
+    if (!_draggingToDismiss || !_dismissAllowed) return;
+    _dismissAllowed = false;
+    _draggingToDismiss = false;
+    _velocityTracker?.addPosition(event.timeStamp, event.position);
+    final velocity = _velocityTracker?.getVelocity().pixelsPerSecond.dy ?? 0;
+    final distance = _dismissOffset.value.dy;
+    final threshold = (MediaQuery.sizeOf(context).height * 0.18).clamp(96, 180);
+    final fling =
+        distance.abs() >= 32 &&
+        velocity.abs() >= 900 &&
+        velocity.sign == distance.sign;
+    final route = ModalRoute.of(context);
+    if ((distance.abs() >= threshold || fling) &&
+        route?.isCurrent == true &&
+        route?.popDisposition != RoutePopDisposition.doNotPop) {
+      _closing = true;
+      Navigator.of(context).pop();
+    } else {
+      _restoreDismiss();
+    }
+  }
+
+  void _onMediaPointerCancel(PointerCancelEvent event) {
+    _pointers.remove(event.pointer);
+    _syncSwipe();
+    _dismissAllowed = false;
+    _restoreDismiss();
+  }
+
+  void _restoreDismiss() {
+    _draggingToDismiss = false;
+    if (_closing || _dismissOffset.value == Offset.zero) return;
+    _returnFrom = _dismissOffset.value;
+    _dismissReturn.forward(from: 0);
+  }
+
+  void _animateDismissReturn() {
+    final value = Curves.easeOutCubic.transform(_dismissReturn.value);
+    _dismissOffset.value = Offset.lerp(_returnFrom, Offset.zero, value)!;
   }
 
   AvatarFeed? get _avatarFeed => widget.avatars;
@@ -929,9 +1042,11 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     final media = MediaQuery.of(context);
     final padding = media.padding;
     final compact = media.size.height < _compactHeight;
+    double dismissProgress(Offset offset) =>
+        (offset.dy.abs() / (media.size.height * 0.55)).clamp(0.0, 1.0);
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.transparent,
       body: CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
@@ -943,52 +1058,90 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
           autofocus: true,
           child: Stack(
             children: [
-              Positioned.fill(child: _buildPager()),
               Positioned.fill(
-                child: IgnorePointer(
-                  ignoring: !_chromeVisible,
-                  child: AnimatedOpacity(
-                    opacity: _chromeVisible ? 1 : 0,
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                    child: Stack(
-                      children: [
-                        if (_canStep(_leftStep))
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Padding(
-                              padding: EdgeInsets.only(left: padding.left),
-                              child: _arrow(
-                                Symbols.chevron_left,
-                                () => _step(_leftStep),
-                              ),
-                            ),
-                          ),
-                        if (_canStep(-_leftStep))
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Padding(
-                              padding: EdgeInsets.only(right: padding.right),
-                              child: _arrow(
-                                Symbols.chevron_right,
-                                () => _step(-_leftStep),
-                              ),
-                            ),
-                          ),
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          child: _buildTopBar(padding, compact: compact),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: _buildBottomBar(padding, compact: compact),
-                        ),
-                      ],
+                child: ValueListenableBuilder<Offset>(
+                  valueListenable: _dismissOffset,
+                  builder: (context, offset, _) => ColoredBox(
+                    key: const ValueKey('media-dismiss-backdrop'),
+                    color: Colors.black.withValues(
+                      alpha: 1 - dismissProgress(offset),
                     ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: _onMediaPointerDown,
+                  onPointerMove: _onMediaPointerMove,
+                  onPointerUp: _onMediaPointerUp,
+                  onPointerCancel: _onMediaPointerCancel,
+                  child: ValueListenableBuilder<Offset>(
+                    valueListenable: _dismissOffset,
+                    child: _buildPager(),
+                    builder: (context, offset, pager) => Transform.translate(
+                      key: const ValueKey('media-dismiss-transform'),
+                      offset: offset,
+                      child: Transform.scale(
+                        scale: 1 - 0.12 * dismissProgress(offset),
+                        child: pager,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: ValueListenableBuilder<Offset>(
+                  valueListenable: _dismissOffset,
+                  builder: (context, offset, chrome) => IgnorePointer(
+                    ignoring: !_chromeVisible || offset != Offset.zero,
+                    child: AnimatedOpacity(
+                      opacity: _chromeVisible ? 1 : 0,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      child: Opacity(
+                        opacity: 1 - dismissProgress(offset),
+                        child: chrome,
+                      ),
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      if (_canStep(_leftStep))
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: EdgeInsets.only(left: padding.left),
+                            child: _arrow(
+                              Symbols.chevron_left,
+                              () => _step(_leftStep),
+                            ),
+                          ),
+                        ),
+                      if (_canStep(-_leftStep))
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Padding(
+                            padding: EdgeInsets.only(right: padding.right),
+                            child: _arrow(
+                              Symbols.chevron_right,
+                              () => _step(-_leftStep),
+                            ),
+                          ),
+                        ),
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: _buildTopBar(padding, compact: compact),
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _buildBottomBar(padding, compact: compact),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1007,23 +1160,18 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       gestureSettings: DeviceGestureSettings(touchSlop: swipeSlop),
     );
 
-    return Listener(
-      onPointerDown: (_) => _updatePointers(1),
-      onPointerUp: (_) => _updatePointers(-1),
-      onPointerCancel: (_) => _updatePointers(-1),
-      child: MediaQuery(
-        data: swipeMedia,
-        child: PageView.builder(
-          key: ValueKey(_pager),
-          controller: _controller,
-          reverse: !_isAvatars,
-          physics: _swipeEnabled ? null : const NeverScrollableScrollPhysics(),
-          itemCount: _items.length,
-          onPageChanged: _onPageChanged,
-          itemBuilder: (_, i) => MediaQuery(
-            data: _zoomed ? media : swipeMedia,
-            child: _buildPage(i),
-          ),
+    return MediaQuery(
+      data: swipeMedia,
+      child: PageView.builder(
+        key: ValueKey(_pager),
+        controller: _controller,
+        reverse: !_isAvatars,
+        physics: _swipeEnabled ? null : const NeverScrollableScrollPhysics(),
+        itemCount: _items.length,
+        onPageChanged: _onPageChanged,
+        itemBuilder: (_, i) => MediaQuery(
+          data: _zoomed ? media : swipeMedia,
+          child: _buildPage(i),
         ),
       ),
     );

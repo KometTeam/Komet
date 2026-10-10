@@ -16,6 +16,7 @@ import '../../widgets/chat_menu_overlay.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/prompt_dialog.dart';
 import '../../widgets/call_link_handler.dart';
+import '../../widgets/direct_call.dart';
 import '../../widgets/spectrum_tint.dart';
 import '../../../l10n/app_localizations.dart';
 import 'call_link_sheet.dart';
@@ -23,7 +24,9 @@ import 'call_screen.dart';
 import '../../../core/config/app_fonts.dart';
 
 class CallsTab extends StatefulWidget {
-  const CallsTab({super.key});
+  const CallsTab({super.key, this.bottomPadding = 120});
+
+  final double bottomPadding;
 
   @override
   State<CallsTab> createState() => _CallsTabState();
@@ -87,19 +90,7 @@ class _CallsTabState extends State<CallsTab>
           grouped.last.status == call.status &&
           _isSameDay(grouped.last.time, call.time)) {
         final last = grouped.removeLast();
-        grouped.add(
-          CallLogEntry(
-            id: last.id,
-            accountId: last.accountId,
-            peerId: last.peerId,
-            name: last.name,
-            avatarUrl: last.avatarUrl,
-            status: last.status,
-            time: last.time,
-            count: last.count + 1,
-            isGroup: last.isGroup,
-          ),
-        );
+        grouped.add(last.withCount(last.count + 1));
       } else {
         grouped.add(call);
       }
@@ -161,7 +152,7 @@ class _CallsTabState extends State<CallsTab>
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: call.isGroup ? null : () => _callBack(call),
+        onTap: call.canCallBack ? () => _callBack(call) : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
@@ -271,7 +262,7 @@ class _CallsTabState extends State<CallsTab>
           destructive: true,
           onTap: () => _deleteCall(call),
         ),
-        if (!call.isGroup)
+        if (call.canCallBack)
           ChatMenuItem(
             icon: Symbols.call,
             label: l10n.callsTabCallBack,
@@ -299,49 +290,12 @@ class _CallsTabState extends State<CallsTab>
   }
 
   Future<void> _callBack(CallLogEntry call) async {
-    if (call.peerId <= 0) {
-      showCustomNotification(
-        context,
-        AppLocalizations.of(context)!.callsTabPeerUnknown,
-      );
-      return;
-    }
-    final navigator = Navigator.of(context);
-    final avatarUrl = (call.avatarUrl?.isNotEmpty ?? false)
-        ? call.avatarUrl
-        : null;
-    final active = CallController.instance.activeSession;
-    if (active != null) {
-      await navigator.push(
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            name: call.name,
-            avatarUrl: avatarUrl,
-            session: active,
-          ),
-        ),
-      );
-      return;
-    }
-    try {
-      final session = await CallController.instance.startOutgoing(call.peerId);
-      if (!mounted) return;
-      await navigator.push(
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            name: call.name,
-            avatarUrl: avatarUrl,
-            session: session,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      showCustomNotification(
-        context,
-        AppLocalizations.of(context)!.chatInfoCallFailed,
-      );
-    }
+    await startDirectCall(
+      context,
+      peerId: call.peerId,
+      name: call.name,
+      avatarUrl: (call.avatarUrl?.isNotEmpty ?? false) ? call.avatarUrl : null,
+    );
   }
 
   Widget _buildLinkAction(
@@ -556,7 +510,7 @@ class _CallsTabState extends State<CallsTab>
                     )
                   : ListView.builder(
                       physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(bottom: 120),
+                      padding: EdgeInsets.only(bottom: widget.bottomPadding),
                       itemCount: filteredCalls.length,
                       itemBuilder: (context, index) {
                         final call = filteredCalls[index];

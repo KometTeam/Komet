@@ -1,11 +1,9 @@
 import 'build_profile.dart';
+import 'launch_flags.dart';
 
 // #***! откуда берём обновления, адрес зашит через --dart-define
 abstract final class UpdateConfig {
-  static const String baseUrl = String.fromEnvironment(
-    'KOMET_UPDATE_BASE_URL',
-    defaultValue: 'https://cdn.komet.pw',
-  );
+  static const String baseUrl = LaunchFlags.updateBaseUrl;
 
   // #***! пустой адрес значит обновления выключены, в App Store сборке их нет вовсе
   static bool get isConfigured =>

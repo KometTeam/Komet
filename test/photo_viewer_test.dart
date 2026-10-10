@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/modules/messages.dart';
+import 'package:komet/frontend/widgets/attachment/photo_hero.dart';
 import 'package:komet/frontend/widgets/photo_viewer.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/models/attachment.dart';
@@ -41,7 +42,212 @@ Future<void> _pumpViewer(
   await tester.pump();
 }
 
+Future<void> _pushViewer(
+  WidgetTester tester, {
+  PhotoHeroController? hero,
+}) async {
+  Widget viewer(BuildContext context) => PhotoViewerScreen(
+    photos: const [
+      PhotoAttachment(baseUrl: 'https://example.test/first.jpg'),
+      PhotoAttachment(baseUrl: 'https://example.test/second.jpg'),
+    ],
+    hero: hero,
+  );
+  await tester.pumpWidget(
+    MaterialApp(
+      locale: const Locale('ru'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Builder(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.green,
+          body: TextButton(
+            onPressed: () => Navigator.of(context).push(
+              hero == null
+                  ? PhotoViewerRoute<void>(builder: viewer)
+                  : PhotoHeroRoute<void>(hero: hero, builder: viewer),
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('open'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+Offset _dismissOffset(WidgetTester tester) {
+  final transform = tester.widget<Transform>(
+    find.byKey(const ValueKey('media-dismiss-transform')),
+  );
+  return Offset(transform.transform[12], transform.transform[13]);
+}
+
 void main() {
+  testWidgets('drag dismissal flies back from the dragged photo position', (
+    tester,
+  ) async {
+    final image = (await tester.runAsync(
+      () => createTestImage(width: 20, height: 10),
+    ))!;
+    addTearDown(image.dispose);
+    final hero = PhotoHeroController(
+      origin: () => const Rect.fromLTWH(20, 60, 80, 80),
+      image: RawImageProvider(image),
+    );
+    await _pushViewer(tester, hero: hero);
+    final gesture = await tester.startGesture(const Offset(400, 260));
+    await gesture.moveBy(
+      const Offset(0, 140),
+      timeStamp: const Duration(milliseconds: 400),
+    );
+    await tester.pump();
+    final draggedPhoto = inscribeRect(const Size(20, 10), hero.areaRect!);
+    await gesture.up(timeStamp: const Duration(milliseconds: 500));
+    await tester.pump();
+
+    final flight = find.byWidgetPredicate(
+      (widget) => widget is Image && widget.image is RawImageProvider,
+    );
+    expect(flight, findsOneWidget);
+    expect(tester.getRect(flight).top, closeTo(draggedPhoto.top, 1));
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(find.byType(PhotoViewerScreen), findsNothing);
+  });
+
+  testWidgets(
+    'vertical drag follows the finger, fades the background and closes',
+    (tester) async {
+      await _pushViewer(tester);
+      final gesture = await tester.startGesture(const Offset(400, 260));
+      await gesture.moveBy(
+        const Offset(12, 140),
+        timeStamp: const Duration(milliseconds: 400),
+      );
+      await tester.pump();
+
+      expect(_dismissOffset(tester).dy, 140);
+      final backdrop = tester.widget<ColoredBox>(
+        find.byKey(const ValueKey('media-dismiss-backdrop')),
+      );
+      expect(backdrop.color.a, lessThan(1));
+
+      await gesture.up(timeStamp: const Duration(milliseconds: 500));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(PhotoViewerScreen), findsNothing);
+    },
+  );
+
+  testWidgets('short slow drag and cancelled drag restore the photo', (
+    tester,
+  ) async {
+    await _pushViewer(tester);
+    var gesture = await tester.startGesture(const Offset(400, 260));
+    await gesture.moveBy(
+      const Offset(0, 50),
+      timeStamp: const Duration(milliseconds: 400),
+    );
+    await gesture.up(timeStamp: const Duration(milliseconds: 700));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_dismissOffset(tester), Offset.zero);
+    expect(find.byType(PhotoViewerScreen), findsOneWidget);
+
+    gesture = await tester.startGesture(const Offset(400, 260));
+    await gesture.moveBy(
+      const Offset(0, -150),
+      timeStamp: const Duration(milliseconds: 400),
+    );
+    await tester.pump();
+    expect(_dismissOffset(tester).dy, -150);
+    await gesture.cancel();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_dismissOffset(tester), Offset.zero);
+    expect(find.byType(PhotoViewerScreen), findsOneWidget);
+  });
+
+  testWidgets('a short fast vertical fling dismisses the photo', (
+    tester,
+  ) async {
+    await _pushViewer(tester);
+    await tester.flingFrom(const Offset(400, 260), const Offset(0, -70), 1500);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(PhotoViewerScreen), findsNothing);
+  });
+
+  testWidgets('horizontal swipe changes photos without dismissing', (
+    tester,
+  ) async {
+    await _pushViewer(tester);
+    await tester.timedDragFrom(
+      const Offset(650, 260),
+      const Offset(-500, 0),
+      const Duration(milliseconds: 600),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(PhotoViewerScreen), findsOneWidget);
+    expect(_dismissOffset(tester), Offset.zero);
+    expect(find.byIcon(Symbols.chevron_left), findsOneWidget);
+    expect(find.byIcon(Symbols.chevron_right), findsNothing);
+  });
+
+  testWidgets('zoomed photos pan vertically without dismissing', (
+    tester,
+  ) async {
+    await _pushViewer(tester);
+    final viewer = tester.widget<InteractiveViewer>(
+      find.byType(InteractiveViewer).first,
+    );
+    viewer.transformationController!.value = Matrix4.diagonal3Values(2, 2, 1);
+    await tester.pump();
+    await tester.dragFrom(const Offset(400, 260), const Offset(0, 160));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(PhotoViewerScreen), findsOneWidget);
+    expect(_dismissOffset(tester), Offset.zero);
+    expect(
+      viewer.transformationController!.value.getMaxScaleOnAxis(),
+      greaterThan(1),
+    );
+  });
+
+  testWidgets('a second finger cancels dismissal and preserves pinch zoom', (
+    tester,
+  ) async {
+    await _pushViewer(tester);
+    final first = await tester.startGesture(const Offset(340, 260), pointer: 1);
+    await first.moveBy(const Offset(0, 40));
+    await tester.pump();
+    expect(_dismissOffset(tester).dy, 40);
+    final second = await tester.startGesture(
+      const Offset(460, 300),
+      pointer: 2,
+    );
+    await first.moveTo(const Offset(280, 300));
+    await second.moveTo(const Offset(520, 300));
+    await tester.pump();
+    await first.up();
+    await second.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(PhotoViewerScreen), findsOneWidget);
+    expect(_dismissOffset(tester), Offset.zero);
+    final viewer = tester.widget<InteractiveViewer>(
+      find.byType(InteractiveViewer).first,
+    );
+    expect(
+      viewer.transformationController!.value.getMaxScaleOnAxis(),
+      greaterThan(1),
+    );
+  });
+
   testWidgets('shows who sent the photo and when', (tester) async {
     await _pumpViewer(tester, message: _message());
 

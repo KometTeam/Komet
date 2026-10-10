@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
+
 import '../api.dart';
-import '../../core/config/debug_test.dart';
+import '../../core/config/app_language.dart';
+import '../../core/config/launch_flags.dart';
 import '../../core/config/komet_settings.dart';
 import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
@@ -15,6 +17,7 @@ import '../../core/utils/parse.dart';
 import '../../core/storage/profile_deletion_store.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
+import '../../core/utils/device_locale.dart';
 import '../../core/utils/logger.dart';
 import '../../models/login_info.dart';
 import 'banners.dart';
@@ -44,6 +47,9 @@ String _maskPhone(String phone) {
   return '${phone.substring(0, 3)}***${phone.substring(phone.length - 2)}';
 }
 
+String _describeSecret(String? value) =>
+    value == null || value.isEmpty ? 'нет' : 'есть (${value.length} симв.)';
+
 // #***! аккаунт целиком, вход регистрация мультиаккаунт
 class AccountModule {
   final Api _api;
@@ -55,6 +61,9 @@ class AccountModule {
   final _loginStatusController = StreamController<LoginStatus>.broadcast();
   final _noticeController = StreamController<AccountNotice>.broadcast();
   bool _loggedIn = false;
+  ({Api api, Future<void> connecting})? _smsSocket;
+  Timer? _smsSocketIdle;
+  static const Duration _smsSocketIdleTimeout = Duration(minutes: 3);
 
   // #***! тяжёлое в подмодулях, тут только оркестрация
   AccountModule(this._api) {
@@ -172,15 +181,11 @@ class AccountModule {
       _twoFactor.remove2fa(trackId);
 
   // #***! запрос кода, первый и повторный отличаются типом
-  Future<RequestCodeResult> requestCode(
-    String phone, {
-    String language = 'ru',
-  }) => _requestCodeInternal(phone, AuthRequestType.startAuth, language);
+  Future<RequestCodeResult> requestCode(String phone, {String? language}) =>
+      _requestCodeInternal(phone, AuthRequestType.startAuth, language);
 
-  Future<RequestCodeResult> resendCode(
-    String phone, {
-    String language = 'ru',
-  }) => _requestCodeInternal(phone, AuthRequestType.resend, language);
+  Future<RequestCodeResult> resendCode(String phone, {String? language}) =>
+      _requestCodeInternal(phone, AuthRequestType.resend, language);
 
   // #***! проверка кода, дальше вход регистрация или 2FA
   Future<VerifyCodeResult> verifyCode(String code, String token) async {
@@ -203,6 +208,13 @@ class AccountModule {
     final loginToken = result.loginToken;
     final verifiedProfile = _profileFromVerifyPayload(result.payload);
     final accountId = result.accountId ?? verifiedProfile?.id;
+    logger.d(
+      '[${_api.debugTag}] verifyCode: нужен пароль=${result.requiresPassword} '
+      'регистрация=${result.isRegistration} '
+      'login-токен ${_describeSecret(loginToken)} accountId=$accountId '
+      'профиль в ответе=${verifiedProfile != null} '
+      'ключи ответа=${data.keys.toList()}',
+    );
 
     // #***! токен сохраняем сразу и переносим спуф профиль
     if (loginToken != null && accountId != null) {
@@ -303,6 +315,12 @@ class AccountModule {
       }
     }
 
+    logger.d(
+      '[${_api.debugTag}] login: accountId=$resolvedAccountId '
+      'токен ${_describeSecret(authToken)} '
+      'боевой сокет=${_api.isAuthenticatedHandshake} '
+      'sync=${syncParams == null ? 'с нуля' : 'по маркерам'}',
+    );
     // #***! сокет мог быть pre-login (прошлая версия): токен шлём только по
     // боевой версии, поэтому при необходимости переподнимаем соединение
     if (!_api.isAuthenticatedHandshake) {
@@ -339,11 +357,26 @@ class AccountModule {
       final result = await _processLoginResponse(dataMap, resolvedAccountId);
       _loggedIn = true;
       _loginStatusController.add(LoginStatus.success);
+      logger.d('[${_api.debugTag}] login: успех, accountId=$resolvedAccountId');
       return result;
-    } catch (e) {
+    } catch (e, st) {
+      logger.d('[${_api.debugTag}] login: ошибка $e\n$st');
       _loginStatusController.add(LoginStatus.error);
       rethrow;
     }
+  }
+
+  Future<void> refreshServerLanguage() async {
+    if (_api.state == SessionState.disconnected) return;
+    logger.i(
+      'Язык сервера: ${AppLanguage.serverLanguageCode ?? 'по умолчанию'}, '
+      'переподключаюсь',
+    );
+    final online = await _api.reconnectToEndpoint();
+    if (!online || !_loggedIn) return;
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return;
+    await FoldersModule.syncFromServer(_api, accountId);
   }
 
   Future<List<SessionInfo>> getSessions() => _sessions.getSessions();
@@ -394,6 +427,10 @@ class AccountModule {
     chats.resetForAccountSwitch();
 
     await _api.connect(authenticated: true);
+    logger.d(
+      '[${_api.debugTag}] loginWithToken: токен ${_describeSecret(token)} '
+      'сессия=${_api.state.name}',
+    );
     if (_api.state != SessionState.online) {
       throw StateError('loginWithToken: нет соединения с сервером');
     }
@@ -418,8 +455,14 @@ class AccountModule {
     required String webToken,
     String? existingPassword,
   }) async {
+    logger.d(
+      '[${_api.debugTag}] SMS-вход: старт, phone=${_maskPhone(phone)} '
+      'accountId=$accountId веб-токен ${_describeSecret(webToken)} '
+      'пароль пользователя=${existingPassword != null}',
+    );
     // #***! шаг 1: логинимся на веб-сессии (её НЕ закрываем — в неё придёт код)
     await _bareLogin(webToken);
+    logger.d('[${_api.debugTag}] SMS-вход: шаг 1 — веб-сессия залогинена');
 
     // #***! шаг 2: пароль. Есть 2FA — помним введённый; нет — ставим свой рандом.
     // Наш временный пароль ОБЯЗАН быть снят к концу — иначе аккаунт без 2FA
@@ -441,16 +484,28 @@ class AccountModule {
         );
         logger.i('SMS-вход: поставлен временный пароль на аккаунт');
       }
+      logger.d(
+        '[${_api.debugTag}] SMS-вход: шаг 2 — пароль '
+        '${weSetPassword ? 'временный' : 'пользователя'}',
+      );
 
       String? socketToken;
       int? socketAccountId;
 
       // #***! шаг 3: настоящий сокет 26.23.2 — отдельной сессией B
-      final apiB = Api();
+      final smsSocket = _takeSmsSocket();
+      final apiB = smsSocket.api;
       final accountB = AccountModule(apiB);
       StreamSubscription<Packet>? codeSub;
       try {
-        await apiB.connect(authenticated: false, web: false);
+        await smsSocket.connecting;
+        if (apiB.state != SessionState.online) {
+          await apiB.reconnectToEndpoint();
+        }
+        logger.d(
+          '[${apiB.debugTag}] SMS-вход: шаг 3 — сокет-сессия B '
+          'состояние=${apiB.state.name}',
+        );
         if (apiB.state != SessionState.online) {
           throw StateError('SMS-вход: не удалось поднять сокет-сессию');
         }
@@ -461,6 +516,11 @@ class AccountModule {
             .where((p) => p.opcode == Opcode.notifMessage)
             .listen((p) {
               final code = _extractLoginCode(p.payload);
+              logger.d(
+                '[${_api.debugTag}] SMS-вход: шаг 4 — пуш '
+                '${Opcode.name(p.opcode)} на веб-сессии, '
+                'код ${code == null ? 'не найден' : 'найден'}',
+              );
               if (code != null && !codeCompleter.isCompleted) {
                 codeCompleter.complete(code);
               }
@@ -468,6 +528,10 @@ class AccountModule {
 
         // #***! шаг 5: запрос кода на сокете — сервер шлёт его сообщением в веб
         final req = await accountB.requestCode(phone);
+        logger.d(
+          '[${apiB.debugTag}] SMS-вход: шаг 5 — код запрошен на сокете, '
+          'жду сообщение в веб-сессии',
+        );
 
         // #***! шаг 6: ждём код из сообщения (opcode 128) на веб-сессии
         final code = await codeCompleter.future.timeout(
@@ -479,6 +543,10 @@ class AccountModule {
 
         // #***! шаг 7: код + пароль на сокете → сокетовый токен
         final verify = await accountB.verifyCode(code, req.token);
+        logger.d(
+          '[${apiB.debugTag}] SMS-вход: шаг 7 — код принят, '
+          'нужен пароль=${verify.requiresPassword}',
+        );
         if (verify.requiresPassword) {
           final trackId = verify.challengeTrackId;
           if (trackId == null) {
@@ -505,6 +573,10 @@ class AccountModule {
       }
 
       final resolvedToken = socketToken;
+      logger.d(
+        '[${_api.debugTag}] SMS-вход: сокетовый токен '
+        '${_describeSecret(resolvedToken)} accountId=$socketAccountId',
+      );
       if (resolvedToken == null) {
         throw StateError('SMS-вход: сокетовый токен не получен');
       }
@@ -514,6 +586,10 @@ class AccountModule {
       // #***! шаг 8: наш временный пароль снимаем на веб-сессии
       if (weSetPassword) {
         passwordCleared = await _removeTempPassword(password);
+        logger.d(
+          '[${_api.debugTag}] SMS-вход: шаг 8 — временный пароль '
+          '${passwordCleared ? 'снят' : 'НЕ снят'} на веб-сессии',
+        );
       }
 
       // #***! шаг 9: серверный выход из веб-сессии и разрыв
@@ -524,6 +600,7 @@ class AccountModule {
       }
       _loggedIn = false;
       await _api.disconnect();
+      logger.d('[${_api.debugTag}] SMS-вход: шаг 9 — веб-сессия закрыта');
 
       // #***! шаг 10: боевой сокет 26.31.0 + сокетовый токен — финальный вход.
       // Автологин-колбэк сам выполнит login по активному аккаунту.
@@ -531,6 +608,10 @@ class AccountModule {
       await TokenStorage.setActiveAccount(resolvedAccountId);
       await SpoofingService.commitPendingSpoof(resolvedAccountId);
       await _api.connect(authenticated: true, web: false);
+      logger.d(
+        '[${_api.debugTag}] SMS-вход: шаг 10 — боевой сокет '
+        'состояние=${_api.state.name} автологин=$_loggedIn',
+      );
       if (_api.state != SessionState.online) {
         throw StateError('SMS-вход: не удалось поднять боевой сокет');
       }
@@ -545,7 +626,11 @@ class AccountModule {
       if (!passwordCleared) {
         logger.e('SMS-вход: ВРЕМЕННЫЙ ПАРОЛЬ НЕ СНЯТ. Пароль: $password');
       }
-    } catch (e) {
+    } catch (e, st) {
+      logger.d(
+        '[${_api.debugTag}] SMS-вход: сбой $e '
+        '(веб-сессия=${_api.state.name})\n$st',
+      );
       // #***! любой сбой после установки пароля — откатываем, пока веб-сессия
       // ещё жива; если не вышло, пароль хотя бы попадёт в лог
       if (weSetPassword && !passwordCleared) {
@@ -560,6 +645,53 @@ class AccountModule {
       }
       rethrow;
     }
+  }
+
+  void prepareWebSmsSocket() {
+    if (!_api.webHandshake) return;
+    _smsSocketIdle?.cancel();
+    _smsSocketIdle = Timer(_smsSocketIdleTimeout, _releaseSmsSocket);
+    if (_smsSocket != null) return;
+    final prepared = _openSmsSocket();
+    _smsSocket = prepared;
+    logger.d(
+      '[${prepared.api.debugTag}] SMS-вход: сокет B поднимается заранее',
+    );
+  }
+
+  ({Api api, Future<void> connecting}) _takeSmsSocket() {
+    _smsSocketIdle?.cancel();
+    _smsSocketIdle = null;
+    final prepared = _smsSocket;
+    _smsSocket = null;
+    return prepared ?? _openSmsSocket();
+  }
+
+  static ({Api api, Future<void> connecting}) _openSmsSocket() {
+    final socket = Api();
+    return (
+      api: socket,
+      connecting: socket.connect(authenticated: false, web: false),
+    );
+  }
+
+  void _releaseSmsSocket() {
+    _smsSocketIdle?.cancel();
+    _smsSocketIdle = null;
+    final prepared = _smsSocket;
+    _smsSocket = null;
+    if (prepared == null) return;
+    logger.d('[${prepared.api.debugTag}] SMS-вход: заготовленный сокет B закрыт');
+    unawaited(_closeSmsSocket(prepared.api));
+  }
+
+  static Future<void> _closeSmsSocket(Api socket) async {
+    try {
+      await socket.disconnect();
+    } catch (_) {}
+    try {
+      await socket.dispose();
+    } catch (_) {}
   }
 
   // #***! снятие временного пароля: панель 2FA → проверка пароля → удаление
@@ -726,10 +858,12 @@ class AccountModule {
   Future<void> logout() async {
     MediaPlayback.instance.closeAudioFile();
     final accountId = await TokenStorage.getActiveAccountId();
-    try {
-      await _logoutOnServer(accountId);
-    } on SessionExpiredException catch (e) {
-      logger.w('logout: сервер отклонил сессию: ${e.message}');
+    if (accountId != null) {
+      try {
+        await _logoutOnServer(accountId);
+      } on SessionExpiredException catch (e) {
+        logger.w('logout: сервер отклонил сессию: ${e.message}');
+      }
     }
     _loggedIn = false;
     try {
@@ -794,6 +928,10 @@ class AccountModule {
     );
 
     final data = _requireMapPayload(packet, 'checkPassword');
+    logger.d(
+      '[${_api.debugTag}] checkPassword: ключи ответа=${data.keys.toList()} '
+      'ошибка=${data['error']}',
+    );
 
     if (data['error'] != null) {
       throw const WrongPasswordException();
@@ -899,7 +1037,7 @@ class AccountModule {
     ProfileData profile;
     final profileMap = data['profile'];
     // #***! берсерк ломает профиль специально чтоб проверить восстановление
-    if (!DebugTest.berserk &&
+    if (!LaunchFlags.berserk &&
         profileMap is Map &&
         profileMap['contact'] is Map) {
       profile = ProfileData.fromServerProfile(
@@ -965,7 +1103,7 @@ class AccountModule {
 
   // #***! профиля нет нигде, тянем через контакт иначе заглушка
   Future<ProfileData> _resurrectProfile(int accountId) async {
-    if (DebugTest.berserk) {
+    if (LaunchFlags.berserk) {
       await AppDatabase.deleteAccount(accountId);
       logger.w(
         'login: [BERSERK] профиль удалён из БД, форсирую регенерацию (id=$accountId)',
@@ -1063,7 +1201,7 @@ class AccountModule {
   Future<RequestCodeResult> _requestCodeInternal(
     String phone,
     AuthRequestType type,
-    String language,
+    String? language,
   ) async {
     _ensureOnline();
 
@@ -1072,7 +1210,8 @@ class AccountModule {
     final payload = <dynamic, dynamic>{
       'phone': normalizedPhone,
       'type': type.value,
-      'language': language,
+      'language':
+          language ?? AppLanguage.serverLanguageCode ?? defaultLanguageCode,
     };
 
     final callsSeed = _api.callsSeed;
@@ -1091,6 +1230,11 @@ class AccountModule {
     logger.i(
       'Запрос OTP-кода: phone=${_maskPhone(normalizedPhone)} type=${type.value}',
     );
+    logger.d(
+      '[${_api.debugTag}] requestCode: mode-отпечаток='
+      '${payload.containsKey('mode')} callsSeed=${callsSeed != null} '
+      'deviceId=${deviceId != null} язык=$language',
+    );
 
     final packet = await _api.sendRequest(Opcode.authRequest, payload);
 
@@ -1102,6 +1246,9 @@ class AccountModule {
     }
 
     logger.i('OTP-код запрошен, получен временный токен');
+    logger.d(
+      '[${_api.debugTag}] requestCode: ключи ответа=${data.keys.toList()}',
+    );
     return RequestCodeResult(token: token);
   }
 

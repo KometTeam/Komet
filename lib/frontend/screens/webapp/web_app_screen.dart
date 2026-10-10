@@ -128,11 +128,17 @@ class _WebAppScreenState extends State<WebAppScreen> {
     contextResolver: () => mounted ? context : null,
     viewportResolver: () => _viewport,
     onClose: _closeFromWebApp,
+    onRestart: _restartFromWebApp,
   );
 
   void _closeFromWebApp() {
     if (!mounted) return;
     Navigator.of(context).pop();
+  }
+
+  void _restartFromWebApp() {
+    if (!mounted) return;
+    _load();
   }
 
   Future<void> _closeByUser() async {

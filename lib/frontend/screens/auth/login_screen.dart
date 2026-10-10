@@ -60,6 +60,10 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _sessionState = api.state;
+    logger.d(
+      '[${api.debugTag}] экран входа: сессия=${api.state.name} '
+      'всегда SMS=$_alwaysSendSms',
+    );
     if (api.state == SessionState.disconnected) {
       // #***! экран входа по телефону — сокет без токена, прошлая версия
       unawaited(api.connect(authenticated: false, web: _alwaysSendSms));
@@ -79,9 +83,15 @@ class _LoginScreenState extends State<LoginScreen> {
       _alwaysSendSms = value;
       _switchingSmsMode = true;
     });
+    logger.d('[${api.debugTag}] всегда SMS: переключаю на $value');
     try {
       await api.reconnectPreLogin(web: value);
+      logger.d(
+        '[${api.debugTag}] всегда SMS: сессия переподнята, '
+        'состояние=${api.state.name}',
+      );
     } catch (e) {
+      logger.d('[${api.debugTag}] всегда SMS: переподнять не вышло: $e');
       if (!mounted) return;
       showCustomNotification(
         context,
@@ -97,6 +107,13 @@ class _LoginScreenState extends State<LoginScreen> {
         !accountModule.isLoggedIn &&
         !api.isAuthenticatedHandshake &&
         api.webHandshake == _alwaysSendSms;
+    logger.d(
+      '[${api.debugTag}] pre-login сессия: '
+      '${fresh ? 'годится' : 'переподнимаю'} '
+      '(залогинен=${accountModule.isLoggedIn} '
+      'боевой сокет=${api.isAuthenticatedHandshake} '
+      'веб=${api.webHandshake} нужен веб=$_alwaysSendSms)',
+    );
     if (fresh) return;
     await api.reconnectPreLogin(web: _alwaysSendSms);
   }
@@ -636,6 +653,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           // сессий, Отмена снимает галочку и не пускает дальше
                           if (_alwaysSendSms) {
                             final choice = await _showExperimentalSmsWarning();
+                            logger.d('всегда SMS: предупреждение — $choice');
                             if (choice == false) {
                               await _setAlwaysSendSms(false);
                               return;
@@ -662,7 +680,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                             );
-                          } catch (e) {
+                          } catch (e, st) {
+                            logger.d(
+                              '[${api.debugTag}] запрос кода упал: $e\n$st',
+                            );
                             if (!screenContext.mounted) return;
                             _showPhoneError(
                               isSessionStateError(e)

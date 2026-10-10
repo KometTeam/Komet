@@ -30,6 +30,7 @@ import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/toast_placement.dart';
 import '../../widgets/sliding_pill_nav.dart';
+import '../../widgets/compact_bottom_navigation_bar.dart';
 import '../../widgets/springy_tap.dart';
 import '../../widgets/visible_page_tickers.dart';
 import '../../widgets/informer_banner_tile.dart';
@@ -71,6 +72,7 @@ import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_spectrum_background.dart';
 import '../../../core/config/app_nav_pill_style.dart';
+import '../../../core/config/app_bottom_navigation_style.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_stories.dart';
@@ -1088,7 +1090,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   void _maybeLoadStories() {
     if (!AppStories.current.value) return;
-    if (api.state != SessionState.online) return;
+    if (api.state != SessionState.online || !accountModule.isLoggedIn) return;
     unawaited(storiesModule.loadFeed());
   }
 
@@ -2222,50 +2224,12 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
                 child: _showFoldersShimmer
                     ? FolderStripShimmer(shimmer: _shimmerController)
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          final availableWidth = constraints.maxWidth - 40;
-                          final folderCount = _folders.length;
-                          final minWidthPerFolder = 80.0;
-                          final totalMinWidth =
-                              folderCount * minWidthPerFolder +
-                              (folderCount - 1) * 8;
-                          final needsScroll = totalMinWidth > availableWidth;
-
-                          if (needsScroll) {
-                            return ListView(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 2,
-                              ),
-                              physics: const BouncingScrollPhysics(),
-                              children: [
-                                for (var i = 0; i < _folders.length; i++) ...[
-                                  if (i > 0) const SizedBox(width: 8),
-                                  _buildFolderChip(_folders[i], i),
-                                ],
-                              ],
-                            );
-                          } else {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 2,
-                              ),
-                              child: Row(
-                                children: [
-                                  for (var i = 0; i < _folders.length; i++) ...[
-                                    if (i > 0) const SizedBox(width: 8),
-                                    Expanded(
-                                      child: _buildFolderChip(_folders[i], i),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            );
-                          }
-                        },
+                    : ValueListenableBuilder<int>(
+                        valueListenable: chats.chatsChanged,
+                        builder: (context, _, _) => LayoutBuilder(
+                          builder: (context, constraints) =>
+                              _buildFolderStrip(constraints.maxWidth),
+                        ),
                       ),
               ),
             ),
@@ -2506,10 +2470,23 @@ class _ChatListScreenState extends State<ChatListScreen>
                 },
               ),
             ),
-          SliverPadding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
-            ),
+          ValueListenableBuilder<BottomNavigationStyle>(
+            valueListenable: AppBottomNavigationStyle.current,
+            builder: (context, style, _) {
+              final compact = style == BottomNavigationStyle.compact;
+              final keyboardVisible =
+                  MediaQuery.viewInsetsOf(context).bottom > 0;
+              final bottom = compact && keyboardVisible
+                  ? 12.0
+                  : MediaQuery.viewPaddingOf(context).bottom +
+                        (compact
+                            ? CompactBottomNavigationBar.contentHeight(
+                                    context,
+                                  ) +
+                                  12
+                            : 100);
+              return SliverPadding(padding: EdgeInsets.only(bottom: bottom));
+            },
           ),
         ],
       ),
@@ -2684,6 +2661,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (widget.archiveMode) {
       return _buildArchiveScaffold(cs);
     }
+    return ValueListenableBuilder<BottomNavigationStyle>(
+      valueListenable: AppBottomNavigationStyle.current,
+      builder: (context, style, _) => _buildMainScaffold(cs, style),
+    );
+  }
+
+  Widget _buildMainScaffold(ColorScheme cs, BottomNavigationStyle navStyle) {
     return Scaffold(
       backgroundColor: cs.surface,
       body: SafeArea(
@@ -2708,6 +2692,16 @@ class _ChatListScreenState extends State<ChatListScreen>
               );
             }
             final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+            final compactNav = navStyle == BottomNavigationStyle.compact;
+            final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+            final compactHeight = CompactBottomNavigationBar.contentHeight(
+              context,
+            );
+            final contentBottomPadding = compactNav
+                ? (keyboardVisible ? 12.0 : bottomInset + compactHeight + 12)
+                : 120.0;
+            final fabBottom =
+                bottomInset + (compactNav ? compactHeight + 12 : 90);
             final pageW = constraints.maxWidth;
             final pageH = constraints.maxHeight;
             final navInnerW = pageW - 20;
@@ -2789,9 +2783,22 @@ class _ChatListScreenState extends State<ChatListScreen>
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               page(0, _getChatsBody()),
-                              page(1, const CallsTab()),
-                              page(2, const ContactsTab()),
-                              page(3, const SettingsTab()),
+                              page(
+                                1,
+                                CallsTab(bottomPadding: contentBottomPadding),
+                              ),
+                              page(
+                                2,
+                                ContactsTab(
+                                  bottomPadding: contentBottomPadding,
+                                ),
+                              ),
+                              page(
+                                3,
+                                SettingsTab(
+                                  bottomPadding: contentBottomPadding,
+                                ),
+                              ),
                             ],
                           ),
                           builder: (context, child) {
@@ -2809,7 +2816,25 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ),
                   ),
                 ),
-                _buildDockedBottomNav(cs, navInnerW, bottomInset),
+                if (compactNav) ...[
+                  if (!_isSelectionMode)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: ToastObstruction(
+                        child: CompactBottomNavigationBar(
+                          items: _chatsNavItems(AppLocalizations.of(context)!),
+                          currentIndex: _currentNavIndex,
+                          onTap: _onNavTabSelected,
+                          onItemLongPress: (index, position) {
+                            if (index == 3) _openAccountSwitcher(position);
+                          },
+                        ),
+                      ),
+                    ),
+                ] else
+                  _buildDockedBottomNav(cs, navInnerW, bottomInset),
                 AnimatedBuilder(
                   animation: Listenable.merge([
                     _fabController,
@@ -2822,6 +2847,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     );
                     final showChatsFab =
                         !_isSelectionMode &&
+                        !(compactNav && keyboardVisible) &&
                         (_navDragging || _navPageAnimController.isAnimating
                             ? pageDisplayT < 1.0
                             : _currentNavIndex == 0);
@@ -2847,7 +2873,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           if (_fabController.value > 0)
                             Positioned(
                               right: 20,
-                              bottom: bottomInset + 90 + 74,
+                              bottom: fabBottom + 74,
                               child: RepaintBoundary(
                                 child: Transform.scale(
                                   scale: val,
@@ -2861,7 +2887,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           Positioned(
                             right: 20,
-                            bottom: bottomInset + 90,
+                            bottom: fabBottom,
                             child: ToastObstruction(
                               child: ValueListenableBuilder<VisualStyle>(
                                 valueListenable: AppVisualStyle.current,
@@ -2885,7 +2911,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                                               : null,
                                           liquid: liquid,
                                           backdropKey: _frostBackdrop,
-                                          borderRadius: BorderRadius.circular(28),
+                                          borderRadius: BorderRadius.circular(
+                                            28,
+                                          ),
                                           elevated: true,
                                           depth: 12,
                                           child: child!,
@@ -3286,8 +3314,97 @@ class _ChatListScreenState extends State<ChatListScreen>
     return (total: total, loud: loud);
   }
 
-  Widget _buildFolderChip(ChatFolder folder, int pageIndex) {
+  static const double _folderStripInset = 20;
+  static const double _folderChipGap = 8;
+  static const double _folderChipPadding = 12;
+  static const double _folderBadgeGap = 6;
+  static const TextStyle _folderChipTextStyle = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w500,
+  );
+  static const TextStyle _countBadgeTextStyle = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    height: 1.1,
+  );
+
+  Widget _buildFolderStrip(double maxWidth) {
+    final unread = [
+      for (var i = 0; i < _folders.length; i++)
+        _liveUnread(_chatsForPageIndex(i)),
+    ];
+    final widths = [
+      for (var i = 0; i < _folders.length; i++)
+        _folderChipWidth(_folders[i], _badgeLabel(unread[i].total)),
+    ];
+    final used =
+        widths.fold(0.0, (sum, w) => sum + w) +
+        _folderChipGap * (_folders.length - 1) +
+        _folderStripInset * 2;
+    final free = maxWidth - used;
+    const padding = EdgeInsets.symmetric(
+      horizontal: _folderStripInset,
+      vertical: 2,
+    );
+    final chips = [
+      for (var i = 0; i < _folders.length; i++) ...[
+        if (i > 0) const SizedBox(width: _folderChipGap),
+        free < 0
+            ? _buildFolderChip(_folders[i], unread[i])
+            : SizedBox(
+                width: widths[i] + free / _folders.length,
+                child: _buildFolderChip(_folders[i], unread[i]),
+              ),
+      ],
+    ];
+    if (free < 0) {
+      return ListView(
+        scrollDirection: Axis.horizontal,
+        padding: padding,
+        physics: const BouncingScrollPhysics(),
+        children: chips,
+      );
+    }
+    return Padding(
+      padding: padding,
+      child: Row(children: chips),
+    );
+  }
+
+  static String? _badgeLabel(int total) =>
+      total <= 0 ? null : (total > 99 ? '99+' : '$total');
+
+  double _folderChipWidth(ChatFolder folder, String? badge) {
+    final base = DefaultTextStyle.of(context).style;
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    double measure(String text, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: base.merge(style)),
+        textDirection: direction,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return width.ceilToDouble();
+    }
+
+    var width =
+        _folderChipPadding * 2 +
+        measure(_folderChipLabel(folder), _folderChipTextStyle) +
+        2;
+    if (badge != null) {
+      width +=
+          _folderBadgeGap +
+          max(20.0, measure(badge, _countBadgeTextStyle) + 12);
+    }
+    return width;
+  }
+
+  Widget _buildFolderChip(ChatFolder folder, ({int total, int loud}) unread) {
     final cs = Theme.of(context).colorScheme;
+    final badge = _badgeLabel(unread.total);
     final folderId = folder.id;
     final isSelected = _selectedFolderId == folderId;
     return GestureDetector(
@@ -3299,7 +3416,10 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: GlossyPill(
         color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(50),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(
+          horizontal: _folderChipPadding,
+          vertical: 4,
+        ),
         depth: 4,
         child: Center(
           child: Row(
@@ -3310,30 +3430,16 @@ class _ChatListScreenState extends State<ChatListScreen>
                   _folderChipLabel(folder),
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: _folderChipTextStyle.copyWith(
                     color: isSelected ? cs.onPrimaryContainer : cs.primary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
-              ValueListenableBuilder<int>(
-                valueListenable: chats.chatsChanged,
-                builder: (context, _, _) {
-                  final (:total, :loud) = _liveUnread(
-                    _chatsForPageIndex(pageIndex),
-                  );
-                  if (total <= 0) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: _countBadge(
-                      cs,
-                      total > 99 ? '99+' : '$total',
-                      muted: loud == 0,
-                    ),
-                  );
-                },
-              ),
+              if (badge != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: _folderBadgeGap),
+                  child: _countBadge(cs, badge, muted: unread.loud == 0),
+                ),
             ],
           ),
         ),
@@ -3443,11 +3549,8 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: Text(
         label,
         textAlign: TextAlign.center,
-        style: TextStyle(
+        style: _countBadgeTextStyle.copyWith(
           color: muted ? cs.outline : cs.onPrimary,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          height: 1.1,
         ),
       ),
     );

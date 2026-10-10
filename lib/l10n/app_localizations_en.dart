@@ -118,6 +118,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageNameEn => 'English';
 
   @override
+  String get languageServerTitle => 'Use this language on the server too';
+
+  @override
+  String get languageServerSubtitle =>
+      'When on, built-in folder names, server error messages and some other built-in elements come in the language you chose. By default they are not translated.';
+
+  @override
   String get selectCountryTitle => 'Select country';
 
   @override
@@ -126,6 +133,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get codeConfirmationSmsSent =>
       'We sent an SMS with a verification code to your phone number.';
+
+  @override
+  String get codeConfirmationCheckMaxChat =>
+      'Check the “Verification codes” chat in MAX.';
+
+  @override
+  String get loginSlowSmsHint =>
+      'Signing in this way takes longer than usual. Please wait and don\'t leave.';
 
   @override
   String codeResendInSeconds(int seconds) {
@@ -4629,6 +4644,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callsTabPeerUnknown => 'Couldn\'t identify the other person';
 
   @override
+  String get callPeerIsBot => 'Bots can\'t be called';
+
+  @override
   String get callsTabAlreadyInCall => 'A call is already in progress';
 
   @override
@@ -6421,4 +6439,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get avatarPickerFilesSubtitle =>
       'If the photo you need isn\'t in the gallery';
+
+  @override
+  String get appearanceBottomNavigationTitle => 'Bottom navigation';
+
+  @override
+  String get appearanceBottomNavigationSubtitle =>
+      'The compact bar keeps all four tab labels visible and takes up less space.';
+
+  @override
+  String get appearanceBottomNavigationFloating => 'Floating';
+
+  @override
+  String get appearanceBottomNavigationCompact => 'Compact';
 }

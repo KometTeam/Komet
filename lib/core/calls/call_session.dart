@@ -8,7 +8,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../config/app_camera.dart';
 import '../config/app_microphone.dart';
 import '../config/app_pulse_source.dart';
-import '../config/call_no_mute.dart';
+import '../config/launch_flags.dart';
 import '../utils/logger.dart';
 import '../utils/parse.dart';
 import 'audio_devices.dart';
@@ -238,7 +238,7 @@ class CallSession {
   bool get peerIsKomet => _peerIsKomet;
 
   bool get isMuted => _muted;
-  bool get audioTransmitting => !_muted || CallNoMute.enabled;
+  bool get audioTransmitting => !_muted || LaunchFlags.noMute;
   String? get micDeviceId => _micDeviceId;
   String? get pulseSource => _pulseSource;
   bool get isSpeaker => _speakerOn;

@@ -8,15 +8,39 @@ on:
       - master
     paths:
       - 'lib/**'
+      - 'test/**'
+      - 'scripts/pseudo_sign_ios.py'
+      - 'scripts/build_ios_share.sh'
+      - 'scripts/sign_ios_appstore.py'
+      - 'native/komet_share/**'
+      - 'native/komet_tlottie/**'
+      - 'native/crypto-core'
+      - 'native/crypto-core/**'
       - 'ios/**'
       - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.gitmodules'
       - '.github/workflows/build-ios.yml'
+      - '.github/actions/setup-rust/**'
+      - '.github/actions/pin-kolibri-crates/**'
   pull_request:
     paths:
       - 'lib/**'
+      - 'test/**'
+      - 'scripts/pseudo_sign_ios.py'
+      - 'scripts/build_ios_share.sh'
+      - 'scripts/sign_ios_appstore.py'
+      - 'native/komet_share/**'
+      - 'native/komet_tlottie/**'
+      - 'native/crypto-core'
+      - 'native/crypto-core/**'
       - 'ios/**'
       - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.gitmodules'
       - '.github/workflows/build-ios.yml'
+      - '.github/actions/setup-rust/**'
+      - '.github/actions/pin-kolibri-crates/**'
 
 env:
   FLUTTER_VERSION: '3.47.0'
@@ -36,6 +60,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+          cache: true
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -45,13 +70,65 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Build crypto core for tests
+        run: make -C native/crypto-core shared
+
+      - name: Verify native share inbox
+        run: |
+          swiftc -suppress-warnings ios/Shared/KometShareStore.swift test/native/ios_share_store_test.swift -o /tmp/ios-share-store-tests
+          /tmp/ios-share-store-tests
+          swiftc -suppress-warnings ios/Shared/KometShareStore.swift ios/Shared/KometShareAccounts.swift test/native/ios_share_accounts_test.swift -o /tmp/ios-share-accounts-tests
+          /tmp/ios-share-accounts-tests
+          clang -c test/native/komet_share_transport_stub.c -o /tmp/ios-share-transport-stub.o
+          swiftc -suppress-warnings -import-objc-header ios/ShareExtension/KometShareTransport.h ios/Shared/KometShareStore.swift ios/ShareExtension/KometShareSender.swift test/native/ios_share_images_test.swift /tmp/ios-share-transport-stub.o -o /tmp/ios-share-image-tests
+          /tmp/ios-share-image-tests
+
+      - name: Verify native share transport
+        run: |
+          cargo test --locked --manifest-path native/komet_share/Cargo.toml
+          python3 -m unittest discover -s test/native -p "test_ios_*.py" -v
+
+      - name: Analyze application
+        run: flutter analyze lib test tool --no-pub
+
+      - name: Verify sharing and chat interactions
+        run: >-
+          flutter test --no-pub
+          test/share_intent_test.dart
+          test/share_inbox_test.dart
+          test/shared_file_usage_test.dart
+          test/chat_swipe_gestures_test.dart
+          test/bottom_navigation_style_test.dart
+          test/file_bubble_test.dart
+          test/photo_viewer_test.dart
+          test/photo_hero_test.dart
+          test/media_viewer_video_test.dart
+          test/share_composer_bar_test.dart
+          test/shared_photo_preview_test.dart
+          test/share_account_snapshot_test.dart
+          test/share_fingerprint_test.dart
+          test/share_recipient_eligibility_test.dart
+          test/account_token_store_test.dart
+          test/per_chat_json_store_test.dart
+
       - name: Pin kolibri crates
         uses: ./.github/actions/pin-kolibri-crates
 
       - name: Build iOS (no codesign)
         run: |
           flutter config --no-enable-swift-package-manager
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign -v > ios-build.log 2>&1 || {
+            tail -n 180 ios-build.log
+            exit 1
+          }
+
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-diagnostics
+          path: ios-build.log
+          retention-days: 7
 
       - name: Package unsigned IPA
         run: |
@@ -72,36 +149,7 @@ jobs:
         run: brew install ldid
 
       - name: Pseudo-sign with ldid
-        run: |
-          set -euo pipefail
-          APP="build/ios/iphoneos/Runner.app"
-          ENT="$(mktemp -t ent).plist"
-          cat > "$ENT" <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>get-task-allow</key><true/>
-            <key>application-identifier</key><string>ru.komet.app</string>
-            <key>keychain-access-groups</key>
-            <array><string>ru.komet.app</string></array>
-          </dict>
-          </plist>
-          PLIST
-          if [ -d "$APP/Frameworks" ]; then
-            find "$APP/Frameworks" -type f -name "*.dylib" -print0 | xargs -0 -I{} ldid -S "{}"
-            find "$APP/Frameworks" -type d -name "*.framework" | while read -r fw; do
-              bin="$fw/$(basename "$fw" .framework)"
-              [ -f "$bin" ] && ldid -S "$bin"
-            done
-          fi
-          if [ -d "$APP/PlugIns" ]; then
-            find "$APP/PlugIns" -type d -name "*.appex" | while read -r ext; do
-              bin="$ext/$(basename "$ext" .appex)"
-              [ -f "$bin" ] && ldid -S"$ENT" "$bin"
-            done
-          fi
-          ldid -S"$ENT" "$APP/Runner"
+        run: python3 scripts/pseudo_sign_ios.py build/ios/iphoneos/Runner.app
 
       - name: Package IPA
         run: |
@@ -166,6 +214,7 @@ jobs:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.APPSTORE_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATE_PASSWORD }}
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.APPSTORE_PROVISION_PROFILE_BASE64 }}
+          SHARE_PROVISION_PROFILE_BASE64: ${{ secrets.APPSTORE_SHARE_PROVISION_PROFILE_BASE64 }}
           KEYCHAIN_PASSWORD: ${{ secrets.APPSTORE_KEYCHAIN_PASSWORD }}
         run: |
           set -euo pipefail
@@ -185,6 +234,10 @@ jobs:
 
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/appstore.mobileprovision
+          rm -f "$RUNNER_TEMP/appstore-share.mobileprovision"
+          if [ -n "$SHARE_PROVISION_PROFILE_BASE64" ]; then
+            printf '%s' "$SHARE_PROVISION_PROFILE_BASE64" | base64 --decode -o "$RUNNER_TEMP/appstore-share.mobileprovision"
+          fi
 
       - name: Build unsigned app
         if: steps.signing.outputs.enabled == 'true'
@@ -217,39 +270,16 @@ jobs:
           IDENTITY: ${{ steps.identity.outputs.identity }}
         run: |
           set -euo pipefail
-          APP="build/ios/iphoneos/Runner.app"
-          PP_PATH="$RUNNER_TEMP/appstore.mobileprovision"
-          BUNDLE_ID="pw.komet.ios"
-
-          # Подменяем bundle id на App Store идентификатор
-          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleURLTypes:0:CFBundleURLName $BUNDLE_ID" "$APP/Info.plist" || true
-
-          # Кладём сам provisioning profile внутрь бандла
-          cp "$PP_PATH" "$APP/embedded.mobileprovision"
-
-          # Достаём entitlements прямо из профиля — они уже содержат
-          # правильный application-identifier для pw.komet.ios
-          security cms -D -i "$PP_PATH" > "$RUNNER_TEMP/profile.plist"
-          ENT_PATH="$RUNNER_TEMP/appstore.entitlements"
-          /usr/libexec/PlistBuddy -x -c "Print :Entitlements" "$RUNNER_TEMP/profile.plist" > "$ENT_PATH"
-
-          # Подписываем вложенные фреймворки (без entitlements)
-          if [ -d "$APP/Frameworks" ]; then
-            find "$APP/Frameworks" -depth 1 \( -name "*.framework" -o -name "*.dylib" \) -print0 \
-              | xargs -0 -I{} codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "{}"
+          args=(
+            build/ios/iphoneos/Runner.app
+            --app-profile "$RUNNER_TEMP/appstore.mobileprovision"
+            --identity "$IDENTITY"
+            --keychain "$KEYCHAIN_PATH"
+          )
+          if [ -f "$RUNNER_TEMP/appstore-share.mobileprovision" ]; then
+            args+=(--share-profile "$RUNNER_TEMP/appstore-share.mobileprovision")
           fi
-
-          # Расширения (если появятся) — с entitlements
-          if [ -d "$APP/PlugIns" ]; then
-            find "$APP/PlugIns" -depth 1 -name "*.appex" -print0 \
-              | xargs -0 -I{} codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" --entitlements "$ENT_PATH" "{}"
-          fi
-
-          # Подписываем само приложение последним
-          codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" --entitlements "$ENT_PATH" "$APP"
-
-          codesign --verify --deep --strict --verbose=2 "$APP"
+          python3 scripts/sign_ios_appstore.py "${args[@]}"
 
       - name: Package IPA
         if: steps.signing.outputs.enabled == 'true'

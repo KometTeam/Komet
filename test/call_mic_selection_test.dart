@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/core/calls/audio_devices.dart';
 import 'package:komet/core/calls/pulse_audio.dart';
-import 'package:komet/core/config/call_no_mute.dart';
+import 'package:komet/core/config/launch_flags.dart';
 
 const _deviceId = 'mic-test-0';
 
@@ -38,16 +38,15 @@ const _sourcesJson = '''
 void main() {
   tearDown(() {
     debugDefaultTargetPlatformOverride = null;
-    CallNoMute.enabled = false;
+    LaunchFlags.reset();
   });
 
   test('--no-mute включается только своим флагом', () {
-    CallNoMute.enabled = false;
-    CallNoMute.parse(const ['--debug-test']);
-    expect(CallNoMute.enabled, isFalse);
+    LaunchFlags.parse(const ['--debug-test']);
+    expect(LaunchFlags.noMute, isFalse);
 
-    CallNoMute.parse(const ['--debug-test', '--no-mute']);
-    expect(CallNoMute.enabled, isTrue);
+    LaunchFlags.parse(const ['--debug-test', '--no-mute']);
+    expect(LaunchFlags.noMute, isTrue);
   });
 
   test('desktop выбирает вход через sourceId', () {

@@ -7,9 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../../core/media/preview_image.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../models/attachment.dart';
+import '../../../../core/media/preview_image.dart';
 import '../../photo_viewer.dart';
 import '../photo_hero.dart';
 import '../../text_with_meta.dart';
@@ -276,7 +276,6 @@ class PhotoBubble extends StatelessWidget {
     required int memWidth,
     required int memHeight,
   }) {
-    final embedded = dataUriImage(photo, photo.previewData);
     final localPath = _localPathOf(photo);
     if (localPath != null) {
       return Image.file(
@@ -286,14 +285,12 @@ class PhotoBubble extends StatelessWidget {
         fit: BoxFit.cover,
         cacheWidth: memWidth,
         gaplessPlayback: true,
-        errorBuilder: (_, _, _) => embedded == null
-            ? _buildPhotoPlaceholder(ctx.cs, width, height)
-            : Image(
-                image: embedded,
-                width: width,
-                height: height,
-                fit: BoxFit.cover,
-              ),
+        frameBuilder: (_, child, frame, synchronouslyLoaded) =>
+            frame != null || synchronouslyLoaded
+            ? child
+            : _buildPreviewImage(ctx, photo, width, height),
+        errorBuilder: (_, _, _) =>
+            _buildPreviewImage(ctx, photo, width, height),
       );
     }
     final imageUrl = _previewUrlOf(photo);
@@ -307,28 +304,29 @@ class PhotoBubble extends StatelessWidget {
         memCacheHeight: memHeight,
         fadeInDuration: Duration.zero,
         placeholderFadeInDuration: Duration.zero,
-        errorWidget: (_, _, _) => embedded == null
-            ? _buildPhotoPlaceholder(ctx.cs, width, height)
-            : Image(
-                image: embedded,
-                width: width,
-                height: height,
-                fit: BoxFit.cover,
-              ),
+        placeholder: (_, _) => _buildPreviewImage(ctx, photo, width, height),
+        errorWidget: (_, _, _) => _buildPreviewImage(ctx, photo, width, height),
       );
     }
-    if (embedded != null) {
-      return Image(
-        image: embedded,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        errorBuilder: (_, _, _) =>
-            _buildPhotoPlaceholder(ctx.cs, width, height),
-      );
-    }
-    return _buildPhotoPlaceholder(ctx.cs, width, height);
+    return _buildPreviewImage(ctx, photo, width, height);
+  }
+
+  Widget _buildPreviewImage(
+    BubbleContext ctx,
+    MessageAttachment photo,
+    double width,
+    double height,
+  ) {
+    final preview = dataUriImage(photo, photo.previewData);
+    if (preview == null) return _buildPhotoPlaceholder(ctx.cs, width, height);
+    return Image(
+      image: preview,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => _buildPhotoPlaceholder(ctx.cs, width, height),
+    );
   }
 
   // #***! плитка видео отличается от фото только кружком плеера и длительностью

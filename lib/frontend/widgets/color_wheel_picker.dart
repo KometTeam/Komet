@@ -1,12 +1,19 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 class ColorWheelPicker extends StatefulWidget {
   final Color color;
   final ValueChanged<Color> onChanged;
+  final double minBrightness;
 
-  const ColorWheelPicker({super.key, required this.color, required this.onChanged});
+  const ColorWheelPicker({
+    super.key,
+    required this.color,
+    required this.onChanged,
+    this.minBrightness = 0,
+  }) : assert(minBrightness >= 0 && minBrightness < 1);
 
   @override
   State<ColorWheelPicker> createState() => _ColorWheelPickerState();
@@ -50,8 +57,8 @@ class _ColorWheelPickerState extends State<ColorWheelPicker> {
   }
 
   void _handleBrightness(double localY, double height) {
-    final value = (1 - localY / height).clamp(0.0, 1.0);
-    _emit(_hsv.withValue(value));
+    final fraction = (localY / height).clamp(0.0, 1.0);
+    _emit(_hsv.withValue(1 - fraction * (1 - widget.minBrightness)));
   }
 
   @override
@@ -69,31 +76,71 @@ class _ColorWheelPickerState extends State<ColorWheelPicker> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onPanDown: (d) => _handleWheel(d.localPosition, wheelSize),
-              onPanUpdate: (d) => _handleWheel(d.localPosition, wheelSize),
+            _ClaimingDragArea(
+              onPosition: (local) => _handleWheel(local, wheelSize),
               child: SizedBox(
                 width: wheelSize,
                 height: wheelSize,
                 child: CustomPaint(painter: _WheelPainter(hsv: _hsv)),
               ),
             ),
-            const SizedBox(width: spacing),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onPanDown: (d) => _handleBrightness(d.localPosition.dy, wheelSize),
-              onPanUpdate: (d) => _handleBrightness(d.localPosition.dy, wheelSize),
-              child: SizedBox(
-                width: barWidth,
-                height: wheelSize,
-                child: CustomPaint(painter: _BrightnessBarPainter(hsv: _hsv)),
+            _ClaimingDragArea(
+              onPosition: (local) => _handleBrightness(local.dy, wheelSize),
+              child: Padding(
+                padding: const EdgeInsets.only(left: spacing),
+                child: SizedBox(
+                  width: barWidth,
+                  height: wheelSize,
+                  child: CustomPaint(
+                    painter: _BrightnessBarPainter(
+                      hsv: _hsv,
+                      minBrightness: widget.minBrightness,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
         );
       },
     );
+  }
+}
+
+class _ClaimingDragArea extends StatelessWidget {
+  final ValueChanged<Offset> onPosition;
+  final Widget child;
+
+  const _ClaimingDragArea({required this.onPosition, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return RawGestureDetector(
+      behavior: HitTestBehavior.opaque,
+      gestures: {
+        _ClaimingPanGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<_ClaimingPanGestureRecognizer>(
+              _ClaimingPanGestureRecognizer.new,
+              (recognizer) {
+                recognizer.onDown = (details) =>
+                    onPosition(details.localPosition);
+                recognizer.onUpdate = (details) =>
+                    onPosition(details.localPosition);
+              },
+            ),
+      },
+      child: child,
+    );
+  }
+}
+
+class _ClaimingPanGestureRecognizer extends PanGestureRecognizer {
+  _ClaimingPanGestureRecognizer({super.debugOwner});
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolvePointer(event.pointer, GestureDisposition.accepted);
   }
 }
 
@@ -134,22 +181,20 @@ class _WheelPainter extends CustomPainter {
       false,
     );
     canvas.drawCircle(thumb, 13, Paint()..color = Colors.white);
-    canvas.drawCircle(
-      thumb,
-      10,
-      Paint()..color = hsv.withValue(1).toColor(),
-    );
+    canvas.drawCircle(thumb, 10, Paint()..color = hsv.withValue(1).toColor());
   }
 
   @override
   bool shouldRepaint(_WheelPainter oldDelegate) =>
-      oldDelegate.hsv.hue != hsv.hue || oldDelegate.hsv.saturation != hsv.saturation;
+      oldDelegate.hsv.hue != hsv.hue ||
+      oldDelegate.hsv.saturation != hsv.saturation;
 }
 
 class _BrightnessBarPainter extends CustomPainter {
   final HSVColor hsv;
+  final double minBrightness;
 
-  const _BrightnessBarPainter({required this.hsv});
+  const _BrightnessBarPainter({required this.hsv, required this.minBrightness});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -157,16 +202,18 @@ class _BrightnessBarPainter extends CustomPainter {
       Offset.zero & size,
       Radius.circular(size.width / 2),
     );
-    final top = hsv.withValue(1).toColor();
     final gradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [top, Colors.black],
+      colors: [
+        hsv.withValue(1).toColor(),
+        hsv.withValue(minBrightness).toColor(),
+      ],
     ).createShader(Offset.zero & size);
     canvas.drawRRect(rrect, Paint()..shader = gradient);
 
-    final thumbY = (1 - hsv.value) * size.height;
-    final thumb = Offset(size.width / 2, thumbY.clamp(0.0, size.height));
+    final fraction = ((1 - hsv.value) / (1 - minBrightness)).clamp(0.0, 1.0);
+    final thumb = Offset(size.width / 2, fraction * size.height);
     canvas.drawShadow(
       Path()..addOval(Rect.fromCircle(center: thumb, radius: 12)),
       Colors.black,
@@ -179,5 +226,5 @@ class _BrightnessBarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BrightnessBarPainter oldDelegate) =>
-      oldDelegate.hsv != hsv;
+      oldDelegate.hsv != hsv || oldDelegate.minBrightness != minBrightness;
 }

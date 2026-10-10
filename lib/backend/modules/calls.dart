@@ -1,12 +1,15 @@
 import 'dart:convert';
 
 import 'contacts.dart';
+import 'messages.dart' show ContactCache;
 import '../api.dart';
+import '../../core/cache/info_cache.dart';
 import '../../core/calls/call_link.dart';
 import '../../core/calls/ws2_signaling.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/utils/ids.dart';
 import '../../core/utils/logger.dart';
+import '../../models/contact_info.dart';
 
 // #***! как звонок выглядит в истории
 enum CallStatus { missed, canceled, outgoing, incoming }
@@ -74,6 +77,7 @@ class CallLogEntry {
   final int time;
   final int count;
   final bool isGroup;
+  final bool isBot;
 
   const CallLogEntry({
     required this.id,
@@ -85,7 +89,32 @@ class CallLogEntry {
     required this.time,
     this.count = 1,
     this.isGroup = false,
+    this.isBot = false,
   });
+
+  bool get canCallBack => !isGroup && !isBot;
+
+  CallLogEntry withCount(int count) => CallLogEntry(
+    id: id,
+    accountId: accountId,
+    peerId: peerId,
+    name: name,
+    avatarUrl: avatarUrl,
+    status: status,
+    time: time,
+    count: count,
+    isGroup: isGroup,
+    isBot: isBot,
+  );
+}
+
+class CallPeerIsBotException implements Exception {
+  final int peerId;
+
+  const CallPeerIsBotException(this.peerId);
+
+  @override
+  String toString() => 'CallPeerIsBotException: $peerId';
 }
 
 class _CallerEndpointMissingException implements Exception {
@@ -135,6 +164,8 @@ class CallsModule {
     int calleeId, {
     bool isVideo = false,
   }) async {
+    if (await _isBotPeer(calleeId)) throw CallPeerIsBotException(calleeId);
+
     final conversationId = uuidV4();
 
     final payload = await _api.sendRequestMap(Opcode.videoChatStartActive, {
@@ -160,6 +191,16 @@ class CallsModule {
       isVideo: isVideo,
     );
   }
+
+  static Future<bool> _isBotPeer(int userId) async {
+    if (_isCachedBot(userId)) return true;
+    final info = await ContactInfoFetch.get(userId);
+    return info?.isBot ?? false;
+  }
+
+  static bool _isCachedBot(int userId) =>
+      (ContactCache.getOptions(userId)?.contains('BOT') ?? false) ||
+      (ContactInfoFetch.peek(userId)?.isBot ?? false);
 
   // #***! конференция со ссылкой
   Future<CreatedCall> createConference() async {
@@ -387,6 +428,7 @@ class CallsModule {
     final List<CallLogEntry> extractedCalls = [];
     for (final e in parsed) {
       final contact = contactsMap[e.peerId];
+      final info = fetched[e.peerId];
       String name;
       String? avatarUrl;
       bool isGroup = false;
@@ -394,7 +436,6 @@ class CallsModule {
         name = '${contact.firstName} ${contact.lastName ?? ''}'.trim();
         avatarUrl = contact.baseUrl;
       } else {
-        final info = fetched[e.peerId];
         final resolved = _nameFromInfo(info);
         if (resolved != null) {
           name = resolved;
@@ -416,12 +457,22 @@ class CallsModule {
           status: e.status,
           time: e.time,
           isGroup: isGroup,
+          isBot: !isGroup && _isHistoryPeerBot(e.peerId, contact, info),
         ),
       );
     }
 
     return extractedCalls;
   }
+
+  static bool _isHistoryPeerBot(
+    int peerId,
+    CachedContact? contact,
+    Map<String, dynamic>? info,
+  ) =>
+      (contact?.isBot ?? false) ||
+      (info != null && ContactInfo.fromMap(info).isBot) ||
+      _isCachedBot(peerId);
 
   static String? _nameFromInfo(Map<String, dynamic>? info) {
     if (info == null) return null;

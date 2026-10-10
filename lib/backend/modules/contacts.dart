@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/cache/info_cache.dart';
-import '../../core/config/debug_test.dart';
+import '../../core/config/launch_flags.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
@@ -653,7 +653,7 @@ class ContactsModule {
   ];
 
   static List<CachedContact> debugContacts() {
-    final count = DebugTest.contactCount;
+    final count = LaunchFlags.contactCount;
     final out = <CachedContact>[];
     for (var i = 0; i < count; i++) {
       final first = _debugFirstNames[i % _debugFirstNames.length];
@@ -663,7 +663,7 @@ class ContactsModule {
       out.add(
         CachedContact(
           id: 900000000 + i,
-          accountId: DebugTest.debugAccountId,
+          accountId: LaunchFlags.debugTestAccountId,
           firstName: '$first ${i + 1}',
           lastName: last,
           phone: 79000000000 + i,

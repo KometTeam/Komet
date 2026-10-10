@@ -15,7 +15,6 @@ import '../../../backend/modules/complaints.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
-import '../../../core/calls/call_controller.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../core/protocol/packet.dart';
@@ -37,6 +36,7 @@ import '../../widgets/photo_viewer.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/direct_call.dart';
 import '../../widgets/hint_bubble.dart';
 import 'chat_removal_undo.dart';
 import '../../widgets/formatted_message_text.dart';
@@ -48,7 +48,6 @@ import '../../widgets/profile_hero.dart';
 import '../../widgets/swipe_route.dart';
 import '../../widgets/local_avatar_builder.dart';
 import '../../../backend/modules/chats.dart';
-import '../calls/call_screen.dart';
 import '../contacts/open_contact_profile.dart';
 import '../profile/profile_qr_sheet.dart';
 import '../stories/story_owner_info.dart';
@@ -1536,38 +1535,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
     if (!mounted || !choice.confirmed) return;
 
-    final navigator = Navigator.of(context);
-    final avatarUrl = _chatImageUrl.isNotEmpty ? _chatImageUrl : null;
-    final active = CallController.instance.activeSession;
-    if (active != null) {
-      await navigator.push(
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            name: _customName,
-            avatarUrl: avatarUrl,
-            session: active,
-          ),
-        ),
-      );
-      return;
-    }
-
-    try {
-      final session = await CallController.instance.startOutgoing(peerId);
-      if (!mounted) return;
-      await navigator.push(
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            name: _customName,
-            avatarUrl: avatarUrl,
-            session: session,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      showCustomNotification(context, l10n.chatInfoCallFailed);
-    }
+    await startDirectCall(
+      context,
+      peerId: peerId,
+      name: _customName,
+      avatarUrl: _chatImageUrl.isNotEmpty ? _chatImageUrl : null,
+    );
   }
 
   Future<void> _leaveChat() async {

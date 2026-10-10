@@ -47,6 +47,7 @@ import '../digital_id/digital_id_web_screen.dart';
 import '../webapp/web_app_bridge.dart';
 import '../webapp/web_app_screen.dart';
 import 'avatar_carousel.dart';
+import 'language_screen.dart';
 import 'cloud_storage_screen.dart';
 import 'customization_section.dart';
 import 'debug_menu_screen.dart';
@@ -64,7 +65,9 @@ import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
 
 class SettingsTab extends StatefulWidget {
-  const SettingsTab({super.key});
+  const SettingsTab({super.key, this.bottomPadding = 120});
+
+  final double bottomPadding;
 
   @override
   State<SettingsTab> createState() => _SettingsTabState();
@@ -100,6 +103,7 @@ class _SettingsTabState extends State<SettingsTab>
   Timer? _versionSecretTapResetTimer;
   StreamSubscription? _profileUpdateSub;
   bool _avatarsLoading = false;
+  bool _loggingOut = false;
 
   @override
   void reloadAfterReconnect() {
@@ -495,6 +499,7 @@ class _SettingsTabState extends State<SettingsTab>
   }
 
   Future<void> _confirmLogout() async {
+    if (_loggingOut) return;
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showModalBottomSheet<bool>(
@@ -544,8 +549,13 @@ class _SettingsTabState extends State<SettingsTab>
         );
       },
     );
-    if (confirmed != true || !mounted) return;
-    await _doLogout();
+    if (confirmed != true || !mounted || _loggingOut) return;
+    _loggingOut = true;
+    try {
+      await _doLogout();
+    } finally {
+      _loggingOut = false;
+    }
   }
 
   Future<void> _doLogout() async {
@@ -562,10 +572,6 @@ class _SettingsTabState extends State<SettingsTab>
       return;
     }
     await resetDigitalIdSession();
-    try {
-      // #***! вышли из аккаунта — дальше экран входа по телефону, прошлая версия
-      await api.connect(authenticated: false);
-    } catch (_) {}
     if (navState != null) {
       await navState.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -713,6 +719,18 @@ class _SettingsTabState extends State<SettingsTab>
                               MaterialPageRoute(
                                 builder: (context) =>
                                     const NotificationsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.translate,
+                          label: l10n.loginLanguage,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const LanguageScreen(),
                               ),
                             );
                           },
@@ -925,7 +943,9 @@ class _SettingsTabState extends State<SettingsTab>
                       ),
                     ),
                   ),
-                const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                SliverToBoxAdapter(
+                  child: SizedBox(height: widget.bottomPadding),
+                ),
               ],
             ),
           ),
@@ -1084,18 +1104,19 @@ class _SettingsTabState extends State<SettingsTab>
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
-                          key: _avatarMenuKey,
-                          icon: Icon(
-                            Symbols.more_vert,
-                            color: iconColor,
-                            size: 22,
-                            weight: 400,
+                        if (hasPhoto)
+                          IconButton(
+                            key: _avatarMenuKey,
+                            icon: Icon(
+                              Symbols.more_vert,
+                              color: iconColor,
+                              size: 22,
+                              weight: 400,
+                            ),
+                            onPressed: _currentAvatar == null
+                                ? null
+                                : _openAvatarMenu,
                           ),
-                          onPressed: _currentAvatar == null
-                              ? null
-                              : _openAvatarMenu,
-                        ),
                         IconButton(
                           icon: Icon(
                             Symbols.edit,

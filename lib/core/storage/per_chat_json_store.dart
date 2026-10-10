@@ -21,6 +21,7 @@ abstract class PerChatJsonStore<T> {
   // #***! revision на каждую запись, списки подписаны
   final ValueNotifier<int> revision = ValueNotifier(0);
   bool _loaded = false;
+  Future<void>? _loading;
 
   String _buildKey(int accountId, int chatId) => '$accountId/$chatId';
 
@@ -32,13 +33,16 @@ abstract class PerChatJsonStore<T> {
   void onBeforeWrite(String key, T? previous, T? next) {}
 
   // #***! читаем один раз, битый джейсон молча игнорим чтоб не блокировать старт
-  Future<void> load() async {
-    if (_loaded) return;
-    _loaded = true;
+  Future<void> load() {
+    if (_loaded) return Future.value();
+    return _loading ??= _load().whenComplete(() => _loading = null);
+  }
+
+  Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_prefsKey);
-    if (raw == null) return;
     try {
+      if (raw == null) return;
       final map = jsonDecode(raw);
       if (map is Map) {
         map.forEach((k, v) {
@@ -47,7 +51,10 @@ abstract class PerChatJsonStore<T> {
           if (value != null) _values[k] = value;
         });
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _loaded = true;
+    }
   }
 
   @protected
@@ -60,6 +67,7 @@ abstract class PerChatJsonStore<T> {
   @protected
   Future<void> write(int accountId, int chatId, T? value) async {
     if (accountId == 0) return;
+    await load();
     final key = _buildKey(accountId, chatId);
     final previous = _values[key];
     onBeforeWrite(key, previous, value);

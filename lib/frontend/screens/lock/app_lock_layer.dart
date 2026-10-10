@@ -23,6 +23,7 @@ class AppLockLayer extends StatefulWidget {
 class _AppLockLayerState extends State<AppLockLayer>
     with TickerProviderStateMixin {
   static const Duration _enterDuration = Duration(milliseconds: 620);
+  static const Duration _softEnterDuration = Duration(milliseconds: 450);
   static const Duration _exitDuration = Duration(milliseconds: 300);
   static const Duration _openDuration = Duration(milliseconds: 240);
 
@@ -38,6 +39,7 @@ class _AppLockLayerState extends State<AppLockLayer>
   );
   bool _shown = false;
   bool _covered = false;
+  bool _animateIn = false;
   Rect? _origin;
 
   @override
@@ -66,19 +68,31 @@ class _AppLockLayerState extends State<AppLockLayer>
     super.dispose();
   }
 
+  bool get _canAnimateLock {
+    final state = WidgetsBinding.instance.lifecycleState;
+    final foreground = state == null || state == AppLifecycleState.resumed;
+    return foreground &&
+        !(MediaQuery.maybeDisableAnimationsOf(context) ?? false);
+  }
+
   void _onLockedChanged() {
     if (_lock.locked.value) {
       _opening.value = 0;
       final origin = _lock.takeOrigin();
+      final animate = _canAnimateLock;
       setState(() {
         _shown = true;
-        _origin = origin;
+        _origin = animate ? origin : null;
+        _animateIn = animate;
       });
-      if (origin == null) {
+      if (!animate) {
         _presence.value = 1;
         _onPresenceStatus(_presence.status);
-      } else {
+      } else if (origin != null) {
         _presence.forward(from: 0);
+      } else {
+        _presence.value = 0;
+        _presence.animateTo(1, duration: _softEnterDuration);
       }
       return;
     }
@@ -94,6 +108,7 @@ class _AppLockLayerState extends State<AppLockLayer>
     setState(() {
       _shown = false;
       _origin = null;
+      _animateIn = false;
     });
   }
 
@@ -118,6 +133,7 @@ class _AppLockLayerState extends State<AppLockLayer>
               presence: _presence,
               opening: _opening,
               origin: _origin,
+              animateIn: _animateIn,
             ),
           ),
       ],
@@ -129,11 +145,13 @@ class _LockScreen extends StatefulWidget {
   final AnimationController presence;
   final AnimationController opening;
   final Rect? origin;
+  final bool animateIn;
 
   const _LockScreen({
     required this.presence,
     required this.opening,
     required this.origin,
+    required this.animateIn,
   });
 
   @override
@@ -299,7 +317,7 @@ class _LockScreenState extends State<_LockScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final animated = widget.origin != null;
+    final animated = widget.animateIn;
     final background = animated
         ? _interval(0, 0.45)
         : const AlwaysStoppedAnimation<double>(1);

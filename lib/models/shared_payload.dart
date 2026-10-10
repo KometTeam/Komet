@@ -38,10 +38,41 @@ class SharedFile {
 
   // #***! тип по mime, svg это документ
   SharedFileKind get kind {
-    if (mime.startsWith('image/') && !mime.contains('svg')) {
+    final type = mime.split(';').first.trim().toLowerCase();
+    if (type.startsWith('image/') && !type.contains('svg')) {
       return SharedFileKind.photo;
     }
-    if (mime.startsWith('video/')) return SharedFileKind.video;
+    if (type.startsWith('video/')) return SharedFileKind.video;
+    if (type.isEmpty || type == 'application/octet-stream') {
+      final dot = name.lastIndexOf('.');
+      if (dot < 0) return SharedFileKind.file;
+      final extension = name.substring(dot + 1).toLowerCase();
+      if (const {
+        'jpg',
+        'jpeg',
+        'png',
+        'gif',
+        'webp',
+        'heic',
+        'heif',
+        'bmp',
+        'tif',
+        'tiff',
+        'avif',
+      }.contains(extension)) {
+        return SharedFileKind.photo;
+      }
+      if (const {
+        'mp4',
+        'mov',
+        'm4v',
+        'webm',
+        'mkv',
+        'avi',
+      }.contains(extension)) {
+        return SharedFileKind.video;
+      }
+    }
     return SharedFileKind.file;
   }
 
