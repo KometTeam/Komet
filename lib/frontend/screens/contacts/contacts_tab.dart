@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import '../../../core/config/debug_test.dart';
+import '../../../core/config/launch_flags.dart';
 import '../../../core/config/ios_release.dart';
 import '../../../core/contacts/contact_labels.dart';
 import '../../../core/contacts/device_contacts_service.dart';
@@ -26,7 +26,9 @@ import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_fonts.dart';
 
 class ContactsTab extends StatefulWidget {
-  const ContactsTab({super.key});
+  const ContactsTab({super.key, this.bottomPadding = 120});
+
+  final double bottomPadding;
 
   @override
   State<ContactsTab> createState() => _ContactsTabState();
@@ -122,7 +124,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
   }
 
   Future<void> _loadContacts() async {
-    if (DebugTest.enabled) {
+    if (LaunchFlags.debugTest) {
       final debug = ContactsModule.debugContacts()
         ..sort((a, b) => a.firstName.compareTo(b.firstName));
       if (mounted) {
@@ -440,7 +442,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
                         physics: const BouncingScrollPhysics(),
                         keyboardDismissBehavior:
                             ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: const EdgeInsets.only(bottom: 120),
+                        padding: EdgeInsets.only(bottom: widget.bottomPadding),
                         itemCount: visible.length,
                         itemBuilder: (context, index) =>
                             _buildContactItem(context, cs, visible[index]),

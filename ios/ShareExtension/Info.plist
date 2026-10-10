@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleDevelopmentRegion</key><string>ru</string>
+  <key>CFBundleDisplayName</key><string>Komet</string>
+  <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+  <key>CFBundlePackageType</key><string>XPC!</string>
+  <key>CFBundleShortVersionString</key><string>$(FLUTTER_BUILD_NAME)</string>
+  <key>CFBundleVersion</key><string>$(FLUTTER_BUILD_NUMBER)</string>
+  <key>KometShareAppGroup</key><string>$(KOMET_SHARE_APP_GROUP)</string>
+  <key>NSExtension</key><dict>
+    <key>NSExtensionPointIdentifier</key><string>com.apple.share-services</string>
+    <key>NSExtensionPrincipalClass</key><string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
+    <key>NSExtensionAttributes</key><dict>
+      <key>NSExtensionActivationRule</key><dict>
+        <key>NSExtensionActivationSupportsImageWithMaxCount</key><integer>30</integer>
+        <key>NSExtensionActivationSupportsMovieWithMaxCount</key><integer>30</integer>
+        <key>NSExtensionActivationSupportsFileWithMaxCount</key><integer>30</integer>
+        <key>NSExtensionActivationSupportsText</key><true/>
+        <key>NSExtensionActivationSupportsWebURLWithMaxCount</key><integer>30</integer>
+        <key>NSExtensionActivationUsesStrictMatching</key><integer>0</integer>
+      </dict>
+    </dict>
+  </dict>
+</dict></plist>

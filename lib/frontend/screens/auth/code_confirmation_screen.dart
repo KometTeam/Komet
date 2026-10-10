@@ -6,10 +6,12 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'password_2fa_screen.dart';
 import 'registration_screen.dart';
 import 'session_stale_recovery.dart';
+import 'slow_login_hint.dart';
 import '../../../backend/api.dart';
 import '../../../core/config/review_access.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/spoofing_service.dart';
+import '../../../core/utils/logger.dart';
 import '../../../core/utils/sms_code_listener.dart';
 import '../../../main.dart';
 import '../../widgets/auth_limits_sheet.dart';
@@ -73,6 +75,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     if (!widget.reviewAccess) {
       _startTimer();
       _listenForSmsCode();
+      accountModule.prepareWebSmsSocket();
     }
 
     _shakeController = AnimationController(
@@ -388,6 +391,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         return;
       }
 
+      logger.d(
+        '[${api.debugTag}] код подтверждён: '
+        '${api.webHandshake ? 'SMS-вход через веб' : 'обычный вход'}',
+      );
       // #***! эксперим. SMS-вход через веб: получаем сокетовый токен хитрой схемой
       if (api.webHandshake) {
         final token = result.loginToken;
@@ -409,7 +416,11 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
       final loginResult = await accountModule.login();
 
       await _completeLogin(loginResult.profile.baseUrl);
-    } catch (e) {
+    } catch (e, st) {
+      logger.d(
+        '[${api.debugTag}] подтверждение кода упало '
+        '(код принят=$verified): $e\n$st',
+      );
       if (!mounted) return;
       if (verified) {
         _showError(e.toString());
@@ -462,7 +473,9 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  l10n.codeConfirmationSmsSent,
+                  api.webHandshake
+                      ? l10n.codeConfirmationSmsSent
+                      : l10n.codeConfirmationCheckMaxChat,
                   style: TextStyle(
                     color: cs.outline,
                     fontSize: 15,
@@ -631,13 +644,16 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
-                      child: Text(
-                        l10n.codeConfirmation2faWarning,
-                        style: TextStyle(
-                          color: cs.error.withValues(alpha: 0.5),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          height: 1.35,
+                      child: SlowLoginHint(
+                        active: _verifying && api.webHandshake,
+                        idle: Text(
+                          l10n.codeConfirmation2faWarning,
+                          style: TextStyle(
+                            color: cs.error.withValues(alpha: 0.5),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            height: 1.35,
+                          ),
                         ),
                       ),
                     ),

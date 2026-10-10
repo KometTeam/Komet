@@ -1,0 +1,28 @@
+[package]
+name = "komet_share"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+kolibri-net = { git = "https://github.com/KometTeam/kolibri", tag = "dart-v0.1.4", default-features = false, features = ["transport", "json"] }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "macros"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rmpv = "1"
+sha2 = "0.10"
+hex = "0.4"
+fs2 = "0.4"
+tempfile = "3"
+
+[workspace]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"

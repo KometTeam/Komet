@@ -35,9 +35,13 @@
   "loginLanguage": "Язык",
   "languageNameRu": "Русский",
   "languageNameEn": "English",
+  "languageServerTitle": "Менять язык и для сервера тоже",
+  "languageServerSubtitle": "При включении переключателя названия встроенных папок, уведомления о серверных ошибках и некоторые встроенные элементы будут на выбранном вами языке. По умолчанию они не переводятся.",
   "selectCountryTitle": "Выберите страну",
   "selectCountrySearchHint": "Поиск страны…",
   "codeConfirmationSmsSent": "Мы отправили SMS с кодом подтверждения на ваш номер телефона.",
+  "codeConfirmationCheckMaxChat": "Проверьте чат «Коды подтверждения» в МАХ.",
+  "loginSlowSmsHint": "Вход с этим способом дольше обычного. Подождите немного, не выходите.",
   "codeResendInSeconds": "Отправить повторно через {seconds} сек.",
   "@codeResendInSeconds": {
     "placeholders": {
@@ -1508,6 +1512,7 @@
   "callsTabStatusIncoming": "Входящий",
   "callsTabCallBack": "Перезвонить",
   "callsTabPeerUnknown": "Не удалось определить собеседника",
+  "callPeerIsBot": "Ботам нельзя звонить",
   "callsTabAlreadyInCall": "Звонок уже идёт",
   "callsTabStartFailed": "Не удалось начать звонок: {error}",
   "callsTabJoinTitle": "Присоединиться к звонку",
@@ -2007,5 +2012,9 @@
   "avatarEditorSetPhoto": "Установить фото",
   "avatarEditorDraw": "Рисовать",
   "avatarPickerFilesTitle": "Выбрать фото из файлов",
-  "avatarPickerFilesSubtitle": "Если нужного фото нет в галерее"
+  "avatarPickerFilesSubtitle": "Если нужного фото нет в галерее",
+  "appearanceBottomNavigationTitle": "Нижняя панель",
+  "appearanceBottomNavigationSubtitle": "Компактная панель занимает меньше места и всегда показывает названия четырёх вкладок.",
+  "appearanceBottomNavigationFloating": "Плавающая",
+  "appearanceBottomNavigationCompact": "Компактная"
 }

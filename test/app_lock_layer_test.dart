@@ -65,4 +65,50 @@ void main() {
     expect(find.text('Введите код-пароль'), findsNothing);
     expect(find.text('synthetic chats'), findsOneWidget);
   });
+
+  testWidgets('auto-lock in the foreground fades in instead of snapping', (
+    tester,
+  ) async {
+    await tester.runAsync(() => lock.setPin('1357'));
+    await _pumpApp(tester);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+
+    lock.lock();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.text('synthetic chats'), findsOneWidget);
+    final blocker = tester.widget<IgnorePointer>(
+      find
+          .ancestor(
+            of: find.text('synthetic chats'),
+            matching: find.byType(IgnorePointer),
+          )
+          .last,
+    );
+    expect(blocker.ignoring, isTrue);
+
+    await tester.pumpAndSettle();
+    expect(find.text('synthetic chats'), findsNothing);
+    expect(find.text('Введите код-пароль'), findsOneWidget);
+  });
+
+  testWidgets('locking in the background covers the app at once', (
+    tester,
+  ) async {
+    await tester.runAsync(() => lock.setPin('1357'));
+    await _pumpApp(tester);
+    final binding = tester.binding;
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+
+    lock.lock();
+
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+
+    expect(find.text('synthetic chats'), findsNothing);
+    expect(find.text('Введите код-пароль'), findsOneWidget);
+  });
 }

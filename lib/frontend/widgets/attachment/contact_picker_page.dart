@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/backend/modules/contacts.dart';
-import 'package:komet/core/config/debug_test.dart';
+import 'package:komet/core/config/launch_flags.dart';
 import 'package:komet/core/contacts/contact_labels.dart';
 import 'package:komet/core/storage/app_database.dart';
 import 'package:komet/frontend/widgets/komet_avatar.dart';
@@ -53,7 +53,7 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
   }
 
   Future<List<CachedContact>> _fetch() async {
-    if (DebugTest.enabled) {
+    if (LaunchFlags.debugTest) {
       return ContactsModule.debugContacts()
         ..sort((a, b) => a.firstName.compareTo(b.firstName));
     }

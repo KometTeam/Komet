@@ -4,6 +4,7 @@ import 'dart:io';
 import '../../core/media/gallery_source.dart';
 import '../../core/media/share_thumbnail.dart';
 import '../../core/media/video_transcoder.dart';
+import '../../core/share/shared_file_usage.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
 import '../../models/attachment.dart';
@@ -53,12 +54,17 @@ class PreparedShare {
   bool get isTextOnly => files.isEmpty;
 
   // #***! миниатюры и размеры считаем один раз а не на каждый чат
-  static Future<PreparedShare> prepare(SharedPayload payload) async {
-    final prepared = <PreparedShareFile>[];
-    for (final source in payload.files) {
-      prepared.add(await _prepareOne(source));
-    }
-    return PreparedShare(files: prepared, text: payload.text);
+  static Future<PreparedShare> prepare(SharedPayload payload) {
+    return SharedFileUsage.instance.use(
+      payload.files.map((file) => file.path),
+      () async {
+        final prepared = <PreparedShareFile>[];
+        for (final source in payload.files) {
+          prepared.add(await _prepareOne(source));
+        }
+        return PreparedShare(files: prepared, text: payload.text);
+      },
+    );
   }
 
   // #***! у фото размеры из файла, у видео через probe
@@ -163,20 +169,28 @@ class ShareSender {
     required List<int> chatIds,
     required PreparedShare share,
     required String caption,
-  }) async {
-    var messages = 0;
-    for (final chatId in chatIds) {
-      messages += await _sendToChat(
-        accountId: accountId,
-        chatId: chatId,
-        share: share,
-        caption: caption,
-      );
-    }
-    logger.i(
-      'Поделиться: отправлено $messages сообщений в ${chatIds.length} чатов',
+  }) {
+    return SharedFileUsage.instance.use(
+      share.files.map((file) => file.source.path),
+      () async {
+        var messages = 0;
+        for (final chatId in chatIds) {
+          messages += await _sendToChat(
+            accountId: accountId,
+            chatId: chatId,
+            share: share,
+            caption: caption,
+          );
+        }
+        logger.i(
+          'Поделиться: отправлено $messages сообщений в ${chatIds.length} чатов',
+        );
+        return ShareSendResult(
+          chatCount: chatIds.length,
+          messageCount: messages,
+        );
+      },
     );
-    return ShareSendResult(chatCount: chatIds.length, messageCount: messages);
   }
 
   // #***! фото альбомом, видео и документы по одному
@@ -361,13 +375,16 @@ class ShareSender {
 
     // #***! загрузку не ждём, экран закрывается сразу дальше UploadService
     unawaited(
-      UploadService.instance.sendPhotos(
-        accountId: accountId,
-        chatId: chatId,
-        tempId: tempId,
-        jobs: jobs,
-        caption: caption,
-        placeholder: placeholder,
+      SharedFileUsage.instance.use(
+        photos.map((photo) => photo.source.path),
+        () => UploadService.instance.sendPhotos(
+          accountId: accountId,
+          chatId: chatId,
+          tempId: tempId,
+          jobs: jobs,
+          caption: caption,
+          placeholder: placeholder,
+        ),
       ),
     );
   }
@@ -427,13 +444,16 @@ class ShareSender {
     );
 
     unawaited(
-      UploadService.instance.sendVideo(
-        accountId: accountId,
-        chatId: chatId,
-        tempId: tempId,
-        file: video.file,
-        caption: caption,
-        placeholder: placeholder,
+      SharedFileUsage.instance.use(
+        [video.source.path],
+        () => UploadService.instance.sendVideo(
+          accountId: accountId,
+          chatId: chatId,
+          tempId: tempId,
+          file: video.file,
+          caption: caption,
+          placeholder: placeholder,
+        ),
       ),
     );
   }
@@ -487,14 +507,17 @@ class ShareSender {
     );
 
     unawaited(
-      UploadService.instance.sendFile(
-        accountId: accountId,
-        chatId: chatId,
-        tempId: tempId,
-        source: document.file,
-        filename: name,
-        size: size,
-        placeholder: placeholder,
+      SharedFileUsage.instance.use(
+        [document.source.path],
+        () => UploadService.instance.sendFile(
+          accountId: accountId,
+          chatId: chatId,
+          tempId: tempId,
+          source: document.file,
+          filename: name,
+          size: size,
+          placeholder: placeholder,
+        ),
       ),
     );
   }

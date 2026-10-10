@@ -43,10 +43,13 @@ class _FakeBiometry implements WebAppBiometry {
   }
 }
 
+const _syntheticDeviceId = 'synthetic-device-id';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late List<(String, Map<String, dynamic>, bool)> sent;
   late int closeCalls;
+  late int restartCalls;
 
   WebAppBridge buildBridge({
     bool privateChannel = false,
@@ -60,7 +63,9 @@ void main() {
       contextResolver: () => null,
       viewportResolver: () => const Size(420, 800),
       onClose: () => closeCalls++,
+      onRestart: () => restartCalls++,
       biometry: biometry,
+      deviceIdResolver: () => _syntheticDeviceId,
       emitter: (method, payload, private) => sent.add((
         method,
         jsonDecode(payload) as Map<String, dynamic>,
@@ -72,6 +77,7 @@ void main() {
   setUp(() {
     sent = [];
     closeCalls = 0;
+    restartCalls = 0;
   });
 
   test('reports the launch context it was created with', () async {
@@ -323,7 +329,7 @@ void main() {
         'accessRequested': false,
         'accessGranted': false,
         'tokenSaved': false,
-        'deviceId': null,
+        'deviceId': _syntheticDeviceId,
       });
       expect(biometry.consentReasons, isEmpty);
       expect(biometry.authReasons, isEmpty);
@@ -358,6 +364,7 @@ void main() {
 
       expect(sent.first.$2['available'], isFalse);
       expect(sent.first.$2['type'], ['unknown']);
+      expect(sent.first.$2['deviceId'], _syntheticDeviceId);
       expect(sent.skip(1).map((event) => event.$2), [
         errorOf('biometry_request_access', 'not_supported', 'synthetic-off'),
         errorOf('biometry_request_auth', 'not_supported', 'synthetic-off'),
@@ -395,7 +402,7 @@ void main() {
       ));
     });
 
-    test('remembers a refusal and keeps the device id private', () async {
+    test('remembers a refusal and still identifies the device', () async {
       biometry.consent = false;
       final bridge = buildBridge(biometry: biometry);
 
@@ -412,7 +419,7 @@ void main() {
 
       expect(sent.first.$2['accessRequested'], isTrue);
       expect(sent.first.$2['accessGranted'], isFalse);
-      expect(sent.first.$2['deviceId'], isNull);
+      expect(sent.first.$2['deviceId'], _syntheticDeviceId);
       expect(
         sent.last.$2,
         errorOf('biometry_request_auth', 'permission_denied', 'synthetic-auth'),
@@ -461,7 +468,7 @@ void main() {
 
         expect(
           sent.first.$2,
-          errorOf('biometry_request_auth', 'auth_failed', 'synthetic-denied'),
+          errorOf('biometry_request_auth', 'access_denied', 'synthetic-denied'),
         );
         expect(sent.last.$2, {
           'requestId': 'synthetic-passed',
@@ -484,7 +491,7 @@ void main() {
 
       expect(
         sent.single.$2,
-        errorOf('biometry_request_auth', 'not_found', 'synthetic-auth'),
+        errorOf('biometry_request_auth', 'token_not_found', 'synthetic-auth'),
       );
       expect(secureValues, isEmpty);
       expect(biometry.authReasons, isEmpty);
@@ -511,7 +518,11 @@ void main() {
 
       expect(
         sent.first.$2,
-        errorOf('biometry_update_token', 'auth_failed', 'synthetic-denied'),
+        errorOf(
+          'biometry_update_token',
+          'permission_denied',
+          'synthetic-denied',
+        ),
       );
       expect(sent.last.$2, {
         'requestId': 'synthetic-passed',
@@ -585,7 +596,7 @@ void main() {
           '{"requestId":"synthetic-kept"}',
           false,
         );
-        expect(closeCalls, 0);
+        expect(restartCalls, 0);
 
         biometry.consent = true;
         await bridge.handleEvent(
@@ -598,7 +609,8 @@ void main() {
           {'requestId': 'synthetic-kept', 'status': 'opened'},
           {'requestId': 'synthetic-changed', 'status': 'opened'},
         ]);
-        expect(closeCalls, 1);
+        expect(restartCalls, 1);
+        expect(closeCalls, 0);
         expect(await AppDatabase.getWebAppBiometryAccess(accountId, botId), (
           true,
           true,

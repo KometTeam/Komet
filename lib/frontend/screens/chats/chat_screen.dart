@@ -40,7 +40,6 @@ import '../../../models/animoji.dart';
 import '../../../backend/modules/complaints.dart';
 import '../../../core/calls/call_controller.dart';
 import '../../../core/media/tlottie/tlottie.dart';
-import '../calls/call_screen.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/push/notification_bridge.dart';
@@ -106,6 +105,7 @@ import '../../widgets/confirm_dialog.dart';
 import '../../widgets/rich_message_controller.dart';
 import '../../../core/utils/text_format.dart';
 import '../../widgets/call_link_handler.dart';
+import '../../widgets/direct_call.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/photo_viewer.dart';
@@ -117,6 +117,8 @@ import '../../widgets/attachment/paste_preview_sheet.dart';
 import '../../widgets/sticker_pack_sheet.dart';
 import '../../widgets/swipe_to_pop.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/swipe_to_reply.dart';
+import '../../widgets/scroll_keyboard_dismiss.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/schedule_time_picker.dart';
 import '../../widgets/chat_wallpaper_sheet.dart';
@@ -3652,51 +3654,20 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _startCall() async {
-    if (widget.chatType != 'DIALOG' || _peerIsBot) {
+    if (widget.chatType != 'DIALOG') {
       showCustomNotification(
         context,
         AppLocalizations.of(context)!.chatScreenCallsDialogsOnly,
       );
       return;
     }
-    // Звонок уже идёт (возможно, свёрнут) — просто открываем его экран снова.
-    final navigator = Navigator.of(context);
-    final active = CallController.instance.activeSession;
-    if (active != null) {
-      await navigator.push(
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            name: widget.name,
-            avatarUrl: widget.imageUrl.isNotEmpty ? widget.imageUrl : null,
-            session: active,
-          ),
-        ),
-      );
-      _onCallScreenClosed();
-      return;
-    }
-    final peerId = widget.chatId ^ _myId;
-    if (peerId <= 0) return;
-    try {
-      final session = await CallController.instance.startOutgoing(peerId);
-      if (!mounted) return;
-      await navigator.push(
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            name: widget.name,
-            avatarUrl: widget.imageUrl.isNotEmpty ? widget.imageUrl : null,
-            session: session,
-          ),
-        ),
-      );
-      _onCallScreenClosed();
-    } catch (_) {
-      if (!mounted) return;
-      showCustomNotification(
-        context,
-        AppLocalizations.of(context)!.chatInfoCallFailed,
-      );
-    }
+    final shown = await startDirectCall(
+      context,
+      peerId: widget.chatId ^ _myId,
+      name: widget.name,
+      avatarUrl: widget.imageUrl.isNotEmpty ? widget.imageUrl : null,
+    );
+    if (shown) _onCallScreenClosed();
   }
 
   void _onCallScreenClosed() {
@@ -4814,7 +4785,10 @@ class _ChatScreenState extends State<ChatScreen>
               }
               return false;
             },
-            child: _buildMessagesList(),
+            child: ScrollKeyboardDismiss(
+              onDismiss: _messageFocusNode.unfocus,
+              child: _buildMessagesList(),
+            ),
           ),
         ),
         if (showShimmer)
@@ -5126,7 +5100,6 @@ class _ChatScreenState extends State<ChatScreen>
                                       !_canReply)
                                   ? pressable
                                   : SwipeToReply(
-                                      isMe: isMe,
                                       onReply: () => _textSend.startReply(message),
                                       child: pressable,
                                     );

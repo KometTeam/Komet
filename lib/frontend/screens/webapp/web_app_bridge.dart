@@ -156,21 +156,28 @@ class WebAppBridge {
     required this.contextResolver,
     required this.viewportResolver,
     required this.onClose,
+    required this.onRestart,
     this.privateChannel = false,
     this.mobileIdVerifier,
     this.emitter,
     WebAppBiometry? biometry,
-  }) : biometry = biometry ?? DeviceWebAppBiometry(contextResolver);
+    String? Function()? deviceIdResolver,
+  }) : biometry = biometry ?? DeviceWebAppBiometry(contextResolver),
+       deviceIdResolver = deviceIdResolver ?? _sessionDeviceId;
 
   final int botId;
   final String entryPoint;
   final BuildContext? Function() contextResolver;
   final Size Function() viewportResolver;
   final VoidCallback onClose;
+  final VoidCallback onRestart;
   final bool privateChannel;
   final WebAppMobileIdVerifier? mobileIdVerifier;
   final WebAppEmitter? emitter;
   final WebAppBiometry biometry;
+  final String? Function() deviceIdResolver;
+
+  static String? _sessionDeviceId() => api.deviceId;
 
   InAppWebViewController? _controller;
   DateTime? _lastGesture;
@@ -601,14 +608,15 @@ class WebAppBridge {
   }
 
   Future<Map<String, dynamic>> _biometryState(int? accountId) async {
+    final deviceId = deviceIdResolver();
     if (accountId == null) {
-      return const {
+      return {
         'available': false,
-        'type': ['unknown'],
+        'type': const ['unknown'],
         'accessRequested': false,
         'accessGranted': false,
         'tokenSaved': false,
-        'deviceId': null,
+        'deviceId': deviceId,
       };
     }
     final types = await biometry.types();
@@ -623,7 +631,7 @@ class WebAppBridge {
       'accessRequested': requested,
       'accessGranted': granted,
       'tokenSaved': token != null,
-      'deviceId': granted ? api.deviceId : null,
+      'deviceId': deviceId,
     };
   }
 
@@ -696,11 +704,11 @@ class WebAppBridge {
     }
     final token = await WebAppStorage.biometryToken(accountId, botId);
     if (token == null) {
-      _fail(method, requestId, 'not_found', private: private);
+      _fail(method, requestId, 'token_not_found', private: private);
       return;
     }
     if (!await biometry.authenticate(_biometryReason(data))) {
-      _fail(method, requestId, 'auth_failed', private: private);
+      _fail(method, requestId, 'access_denied', private: private);
       return;
     }
     _send(method, {
@@ -741,7 +749,7 @@ class WebAppBridge {
       return;
     }
     if (!await biometry.authenticate(_biometryReason(data))) {
-      _fail(method, requestId, 'auth_failed', private: private);
+      _fail(method, requestId, 'permission_denied', private: private);
       return;
     }
     await WebAppStorage.saveBiometryToken(accountId, botId, token);
@@ -775,7 +783,7 @@ class WebAppBridge {
       granted: allowed,
     );
     _ok(method, requestId, 'opened', private: private);
-    if (allowed != granted) onClose();
+    if (allowed != granted) onRestart();
   }
 
   Future<void> _impact(String? style) async {

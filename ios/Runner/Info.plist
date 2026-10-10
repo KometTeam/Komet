@@ -82,20 +82,17 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID разблокирует Komet вместо кода-пароля.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Геолокация нужна, чтобы отправлять ваше текущее местоположение в чатах.</string>
+	<string>Геолокация нужна, чтобы вы могли отправить своё местоположение в чат.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Микрофон нужен для записи голосовых сообщений, видео и звонков.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Доступ к галерее нужен, чтобы сохранять полученные фото и видео.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Доступ к галерее нужен, чтобы отправлять фото и видео в чатах.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Геолокация нужна, чтобы вы могли отправить своё местоположение в чат.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Геолокация нужна, чтобы вы могли отправить своё местоположение в чат.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Распознавание речи нужно, чтобы превращать голосовые сообщения в текст.</string>
-
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
@@ -120,6 +117,24 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>KometShareAppGroup</key>
+	<string>$(KOMET_SHARE_APP_GROUP)</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Files and media</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.data</string>
+				<string>public.content</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

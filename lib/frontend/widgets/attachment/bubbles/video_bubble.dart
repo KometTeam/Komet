@@ -246,8 +246,7 @@ Future<void> openVideoPlayer(BubbleContext ctx, VideoAttachment video) async {
   }
 
   Navigator.of(context).push(
-    MaterialPageRoute(
-      fullscreenDialog: true,
+    PhotoViewerRoute(
       builder: (_) => PhotoViewerScreen.video(
         attachment: video,
         initialVideoSources: sources,

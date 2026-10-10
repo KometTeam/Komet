@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart' show appFlavor;
 
+import 'launch_flags.dart';
+
 // #***! что включено в сборке, всё считается на компиляции из flavor
 abstract final class BuildProfile {
   static const String storeFlavor = 'store';
@@ -17,7 +19,7 @@ abstract final class BuildProfile {
   ///
   /// The gates below are const, so the compiler drops the disabled code
   /// from App Store builds.
-  static const bool isAppStoreBuild = bool.fromEnvironment('is_appstore_build');
+  static const bool isAppStoreBuild = LaunchFlags.appStoreBuild;
 
   /// Plugins and their settings; built-in slash commands stay either way.
   static const bool plugins = !isAppStoreBuild;

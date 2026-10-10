@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../backend/modules/chats.dart';
 import '../../core/config/build_profile.dart';
-import '../../core/config/debug_test.dart';
+import '../../core/config/launch_flags.dart';
 import '../../core/utils/update_checker.dart';
 import '../../l10n/app_localizations.dart';
 import '../screens/chats/chat_list_screen.dart';
@@ -81,7 +81,7 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
 
   Future<void> _maybeCheckUpdate() async {
     if (!BuildProfile.selfUpdate) return;
-    if (DebugTest.enabled) return;
+    if (LaunchFlags.debugTest) return;
     final update = await UpdateChecker.check();
     if (update == null || !mounted) return;
     await showUpdateDialog(context, update);

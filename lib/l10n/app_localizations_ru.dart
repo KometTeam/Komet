@@ -119,6 +119,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get languageNameEn => 'English';
 
   @override
+  String get languageServerTitle => 'Менять язык и для сервера тоже';
+
+  @override
+  String get languageServerSubtitle =>
+      'При включении переключателя названия встроенных папок, уведомления о серверных ошибках и некоторые встроенные элементы будут на выбранном вами языке. По умолчанию они не переводятся.';
+
+  @override
   String get selectCountryTitle => 'Выберите страну';
 
   @override
@@ -127,6 +134,14 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get codeConfirmationSmsSent =>
       'Мы отправили SMS с кодом подтверждения на ваш номер телефона.';
+
+  @override
+  String get codeConfirmationCheckMaxChat =>
+      'Проверьте чат «Коды подтверждения» в МАХ.';
+
+  @override
+  String get loginSlowSmsHint =>
+      'Вход с этим способом дольше обычного. Подождите немного, не выходите.';
 
   @override
   String codeResendInSeconds(int seconds) {
@@ -4668,6 +4683,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get callsTabPeerUnknown => 'Не удалось определить собеседника';
 
   @override
+  String get callPeerIsBot => 'Ботам нельзя звонить';
+
+  @override
   String get callsTabAlreadyInCall => 'Звонок уже идёт';
 
   @override
@@ -6466,4 +6484,17 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get avatarPickerFilesSubtitle => 'Если нужного фото нет в галерее';
+
+  @override
+  String get appearanceBottomNavigationTitle => 'Нижняя панель';
+
+  @override
+  String get appearanceBottomNavigationSubtitle =>
+      'Компактная панель занимает меньше места и всегда показывает названия четырёх вкладок.';
+
+  @override
+  String get appearanceBottomNavigationFloating => 'Плавающая';
+
+  @override
+  String get appearanceBottomNavigationCompact => 'Компактная';
 }

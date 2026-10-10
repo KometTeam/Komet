@@ -35,9 +35,13 @@
   "loginLanguage": "Language",
   "languageNameRu": "Русский",
   "languageNameEn": "English",
+  "languageServerTitle": "Use this language on the server too",
+  "languageServerSubtitle": "When on, built-in folder names, server error messages and some other built-in elements come in the language you chose. By default they are not translated.",
   "selectCountryTitle": "Select country",
   "selectCountrySearchHint": "Search countries…",
   "codeConfirmationSmsSent": "We sent an SMS with a verification code to your phone number.",
+  "codeConfirmationCheckMaxChat": "Check the “Verification codes” chat in MAX.",
+  "loginSlowSmsHint": "Signing in this way takes longer than usual. Please wait and don't leave.",
   "codeResendInSeconds": "Resend in {seconds} s.",
   "@codeResendInSeconds": {
     "placeholders": {
@@ -1865,6 +1869,7 @@
   "callsTabStatusIncoming": "Incoming",
   "callsTabCallBack": "Call back",
   "callsTabPeerUnknown": "Couldn't identify the other person",
+  "callPeerIsBot": "Bots can't be called",
   "callsTabAlreadyInCall": "A call is already in progress",
   "callsTabStartFailed": "Couldn't start the call: {error}",
   "@callsTabStartFailed": {"placeholders": {"error": {"type": "String"}}},
@@ -2449,5 +2454,9 @@
   "avatarEditorSetPhoto": "Set photo",
   "avatarEditorDraw": "Draw",
   "avatarPickerFilesTitle": "Pick a photo from files",
-  "avatarPickerFilesSubtitle": "If the photo you need isn't in the gallery"
+  "avatarPickerFilesSubtitle": "If the photo you need isn't in the gallery",
+  "appearanceBottomNavigationTitle": "Bottom navigation",
+  "appearanceBottomNavigationSubtitle": "The compact bar keeps all four tab labels visible and takes up less space.",
+  "appearanceBottomNavigationFloating": "Floating",
+  "appearanceBottomNavigationCompact": "Compact"
 }

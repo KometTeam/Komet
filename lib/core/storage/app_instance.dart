@@ -1,8 +1,10 @@
+import '../config/launch_flags.dart';
+
 // #***! имя копии приложения из --dart-define, чтоб держать несколько установок раздельно
 class AppInstance {
   AppInstance._();
 
-  static const String id = String.fromEnvironment('KOMET_INSTANCE');
+  static const String id = LaunchFlags.instance;
 
   static bool get isNamed => id.isNotEmpty;
 

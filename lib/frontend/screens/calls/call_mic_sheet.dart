@@ -5,7 +5,7 @@ import '../../../core/calls/audio_devices.dart';
 import '../../../core/calls/call_session.dart';
 import '../../../core/calls/pulse_audio.dart';
 import '../../../core/config/app_fonts.dart';
-import '../../../core/config/call_no_mute.dart';
+import '../../../core/config/launch_flags.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/sheet_helpers.dart';
@@ -135,7 +135,7 @@ class _MicrophoneSheetState extends State<_MicrophoneSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _header(cs, l10n),
-            if (CallNoMute.enabled) _noMuteHint(cs, l10n),
+            if (LaunchFlags.noMute) _noMuteHint(cs, l10n),
             if (options == null)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),

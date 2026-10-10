@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/account/account_models.dart';
 import '../../../core/protocol/packet.dart';
+import '../../../core/utils/logger.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/animated_slash_icon.dart';
@@ -10,6 +11,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
 import '../../widgets/small_spinner.dart';
 import 'session_stale_recovery.dart';
+import 'slow_login_hint.dart';
 
 class Password2FAScreen extends StatefulWidget {
   final String trackId;
@@ -38,10 +40,13 @@ class _Password2FAScreenState extends State<Password2FAScreen>
   String get connectionDroppedMessage =>
       AppLocalizations.of(context)!.password2faConnectionDropped;
 
+  bool get _webSmsLogin => api.webHandshake && widget.rawPhone != null;
+
   @override
   void initState() {
     super.initState();
     startSessionRecovery();
+    if (_webSmsLogin) accountModule.prepareWebSmsSocket();
   }
 
   @override
@@ -86,9 +91,13 @@ class _Password2FAScreenState extends State<Password2FAScreen>
       if (!mounted) return;
 
       String? avatarUrl;
+      logger.d(
+        '[${api.debugTag}] 2FA пройдена, SMS-вход через веб='
+        '$_webSmsLogin',
+      );
       // #***! эксперим. SMS-вход через веб: пароль пользователя уже есть, добываем
       // сокетовый токен и перезаходим боевой версией
-      if (api.webHandshake && widget.rawPhone != null) {
+      if (_webSmsLogin) {
         await accountModule.completeWebSmsSocketLogin(
           phone: widget.rawPhone!,
           accountId: result.accountId,
@@ -123,7 +132,10 @@ class _Password2FAScreenState extends State<Password2FAScreen>
         ),
         (route) => false,
       );
-    } catch (e) {
+    } catch (e, st) {
+      logger.d(
+        '[${api.debugTag}] 2FA-вход упал (пароль принят=$passed): $e\n$st',
+      );
       if (!mounted) return;
 
       setState(() {
@@ -225,8 +237,11 @@ class _Password2FAScreenState extends State<Password2FAScreen>
                 ),
                 const Spacer(),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
+                    Expanded(
+                      child: SlowLoginHint(active: _isLoading && _webSmsLogin),
+                    ),
+                    const SizedBox(width: 16),
                     FloatingActionButton(
                       onPressed: _isLoading ? null : _checkPassword,
                       backgroundColor: _passwordController.text.isNotEmpty

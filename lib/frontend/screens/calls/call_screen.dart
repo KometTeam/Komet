@@ -15,7 +15,7 @@ import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
 import '../../../core/config/app_colors.dart';
-import '../../../core/config/call_no_mute.dart';
+import '../../../core/config/launch_flags.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/screen_wake.dart';
 import '../../../l10n/app_localizations.dart';
@@ -1311,7 +1311,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           slashedIcon: Symbols.mic_off,
           slashed: _isMuted,
           label: _isMuted
-              ? (CallNoMute.enabled ? l10n.callMicStillLive : l10n.callUnmute)
+              ? (LaunchFlags.noMute ? l10n.callMicStillLive : l10n.callUnmute)
               : l10n.callMute,
           background: _isMuted ? cs.primary : cs.surfaceContainerHighest,
           foreground: _isMuted ? cs.onPrimary : cs.onSurface,

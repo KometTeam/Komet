@@ -26,6 +26,7 @@ import 'core/storage/local_contact_avatars.dart';
 import 'core/crypto/e2ee_service.dart';
 import 'core/storage/chat_encryption_store.dart';
 import 'core/config/app_accent.dart';
+import 'core/config/app_language.dart';
 import 'core/config/app_amoled.dart';
 import 'core/config/app_badge.dart';
 import 'core/config/app_show_extra_info.dart';
@@ -34,8 +35,7 @@ import 'core/config/app_bubble_behavior.dart';
 import 'core/config/app_camera.dart';
 import 'core/config/komet_settings.dart';
 import 'core/security/app_lock.dart';
-import 'core/config/call_no_mute.dart';
-import 'core/config/debug_test.dart';
+import 'core/config/launch_flags.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
@@ -57,6 +57,7 @@ import 'core/config/app_chat_chrome.dart';
 import 'core/config/app_composer_background.dart';
 import 'core/config/app_composer_style.dart';
 import 'core/config/app_nav_pill_style.dart';
+import 'core/config/app_bottom_navigation_style.dart';
 import 'core/config/app_wallpaper_tint.dart';
 import 'core/storage/chat_wallpaper_store.dart';
 import 'core/utils/wallpaper_seed.dart';
@@ -92,6 +93,7 @@ import 'core/push/fkm_controller.dart';
 import 'core/push/launcher_badge.dart';
 import 'core/push/notification_bridge.dart';
 import 'core/share/share_intent_bridge.dart';
+import 'core/share/native_share_account_sync.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/transport/tls_config.dart';
@@ -147,19 +149,6 @@ const PageTransitionsTheme _appPageTransitions = PageTransitionsTheme(
   },
 );
 
-Future<Locale> _loadInitialLocale() async {
-  final prefs = await SharedPreferences.getInstance();
-  final code = prefs.getString('app_locale');
-  if (code != null && (code == 'en' || code == 'ru')) {
-    return Locale(code);
-  }
-  final platform = WidgetsBinding.instance.platformDispatcher.locale;
-  if (platform.languageCode == 'en' || platform.languageCode == 'ru') {
-    return Locale(platform.languageCode);
-  }
-  return const Locale('ru');
-}
-
 void _installLogCapture() {
   final previousDebugPrint = debugPrint;
   debugPrint = (String? message, {int? wrapWidth}) {
@@ -200,14 +189,25 @@ void _installLogCapture() {
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  LaunchFlags.parse(args);
   trackHintBubblePresses();
   debugPrint('KOMET-STARTUP: binding ready');
   debugPrint('KOMET-STARTUP: initKolibri...');
   await initKolibri();
   debugPrint('KOMET-STARTUP: initKolibri done');
-  DebugTest.parse(args);
-  CallNoMute.parse(args);
   _installLogCapture();
+  if (LaunchFlags.summary.isNotEmpty) {
+    logger.i('Флаги запуска: ${LaunchFlags.summary.join(' ')}');
+  }
+  if (LaunchFlags.unknown.isNotEmpty) {
+    logger.w('Неизвестные аргументы запуска: ${LaunchFlags.unknown.join(' ')}');
+  }
+  if (LaunchFlags.debug) {
+    logger.w(
+      'Запуск с ${LaunchFlags.activeDebugFlag}: в лог идёт весь трафик с данными'
+      '${LaunchFlags.revealLoginPayload ? ', включая payload LOGIN (19)' : ''}',
+    );
+  }
   MediaKitVideoPlatform.registerOnDesktop();
   if (AppInstance.isNamed) {
     SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
@@ -232,7 +232,7 @@ void main(List<String> args) async {
   unawaited(DeepLinkService.instance.init());
 
   final packageInfoFuture = PackageInfo.fromPlatform();
-  final localeFuture = _loadInitialLocale();
+  final localeFuture = AppLanguage.load();
   final hapticsFuture = Haptics.load();
   final prefsFuture = SharedPreferences.getInstance();
   final accentFuture = AppAccent.load();
@@ -249,6 +249,7 @@ void main(List<String> args) async {
   final composerStyleFuture = AppComposerStyle.load();
   final composerBackgroundFuture = AppComposerBackground.load();
   final navPillStyleFuture = AppNavPillStyle.load();
+  final bottomNavigationStyleFuture = AppBottomNavigationStyle.load();
   final wallpaperTintFuture = AppWallpaperTint.load();
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
@@ -325,6 +326,7 @@ void main(List<String> args) async {
     composerStyleFuture,
     composerBackgroundFuture,
     navPillStyleFuture,
+    bottomNavigationStyleFuture,
     wallpaperTintFuture,
     themeScheduleFuture,
     messageActionsFuture,
@@ -500,6 +502,7 @@ class KometAppState extends State<KometApp>
     NotificationBridge.instance.init();
     unawaited(LauncherBadge.instance.init());
     ShareIntentBridge.instance.init();
+    NativeShareAccountSync.instance.init(api, accountModule, chats);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       CallBridge.instance.checkInitialCall();
       unawaited(NotificationBridge.instance.checkInitialChat());
@@ -634,6 +637,7 @@ class KometAppState extends State<KometApp>
 
   @override
   void dispose() {
+    NativeShareAccountSync.instance.dispose();
     _finishReveal();
     _sessionExpiredSub?.cancel();
     _loginStatusSub?.cancel();
@@ -891,15 +895,13 @@ class KometAppState extends State<KometApp>
   }
 
   Future<void> applyLocale(Locale locale) async {
-    if (!AppLocalizations.supportedLocales.any(
-      (l) => l.languageCode == locale.languageCode,
-    )) {
-      return;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('app_locale', locale.languageCode);
+    final serverLanguageBefore = AppLanguage.serverLanguageCode;
+    if (!await AppLanguage.save(locale)) return;
     if (mounted) {
-      setState(() => _locale = locale);
+      setState(() => _locale = AppLanguage.current.value);
+    }
+    if (AppLanguage.serverLanguageCode != serverLanguageBefore) {
+      unawaited(accountModule.refreshServerLanguage());
     }
   }
 
@@ -964,19 +966,24 @@ class KometAppState extends State<KometApp>
   ThemeData? _lightTheme;
   ThemeData? _darkTheme;
 
-  Color? _seedCacheKey;
+  ({Color seed, bool accent})? _seedCacheKey;
   ColorScheme? _seedCacheLight;
   ColorScheme? _seedCacheDark;
 
-  ({ColorScheme light, ColorScheme dark}) _schemesForSeed(Color seed) {
-    if (_seedCacheKey == seed &&
+  ({ColorScheme light, ColorScheme dark}) _schemesForSeed(
+    Color seed, {
+    required bool accent,
+  }) {
+    final key = (seed: seed, accent: accent);
+    if (_seedCacheKey == key &&
         _seedCacheLight != null &&
         _seedCacheDark != null) {
       return (light: _seedCacheLight!, dark: _seedCacheDark!);
     }
-    _seedCacheKey = seed;
-    _seedCacheLight = schemeFromSeed(seed, Brightness.light);
-    _seedCacheDark = schemeFromSeed(seed, Brightness.dark);
+    final build = accent ? accentSchemeFromSeed : schemeFromSeed;
+    _seedCacheKey = key;
+    _seedCacheLight = build(seed, Brightness.light);
+    _seedCacheDark = build(seed, Brightness.dark);
     return (light: _seedCacheLight!, dark: _seedCacheDark!);
   }
 
@@ -1087,21 +1094,25 @@ class KometAppState extends State<KometApp>
             AppWallpaperTint.current,
           ]),
           builder: (context, _) {
-            final seed =
-                AppWallpaperTint.current.value && wallpaperSeed.value != null
+            final tintSeed = AppWallpaperTint.current.value
                 ? wallpaperSeed.value
-                : accentSeed.value;
+                : null;
+            final accentColor = accentSeed.value;
+            final seeded = tintSeed != null
+                ? _schemesForSeed(tintSeed, accent: false)
+                : accentColor != null
+                ? _schemesForSeed(accentColor, accent: true)
+                : null;
             final ColorScheme lightBase;
             final ColorScheme darkBase;
-            if (seed != null) {
-              final s = _schemesForSeed(seed);
-              lightBase = s.light;
-              darkBase = s.dark;
+            if (seeded != null) {
+              lightBase = seeded.light;
+              darkBase = seeded.dark;
             } else if (lightDynamic != null && darkDynamic != null) {
               lightBase = lightDynamic;
               darkBase = darkDynamic;
             } else {
-              final s = _schemesForSeed(_fallbackSeed);
+              final s = _schemesForSeed(_fallbackSeed, accent: false);
               lightBase = lightDynamic ?? s.light;
               darkBase = darkDynamic ?? s.dark;
             }
@@ -1230,7 +1241,7 @@ class _StartupScreenState extends State<_StartupScreen> {
   }
 
   Future<void> _tryAutoLogin() async {
-    if (DebugTest.enabled) {
+    if (LaunchFlags.debugTest) {
       await Future<void>.delayed(Duration.zero);
       if (!mounted) return;
       Navigator.pushReplacement(

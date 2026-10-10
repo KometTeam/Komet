@@ -7,11 +7,14 @@ import 'package:timezone/data/latest_all.dart' as tz;
 
 import '../core/cache/self_presence.dart';
 import '../core/config/config.dart';
+import '../core/config/app_language.dart';
 import '../core/config/countries.dart';
 import '../core/config/device_profile.dart';
 import '../core/config/komet_settings.dart';
+import '../core/config/launch_flags.dart';
 import '../core/config/proxy_config.dart';
 import '../core/config/web_client_profile.dart';
+import '../core/protocol/chat_cache_fingerprint.dart';
 import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
 import '../core/storage/device_identity.dart';
@@ -21,6 +24,7 @@ import '../core/transport/session_factory.dart';
 import '../core/transport/tls_config.dart';
 import '../core/transport/traffic_monitor.dart';
 import '../core/transport/vpn_bypass.dart';
+import '../core/transport/wire_debug_log.dart';
 import '../core/utils/app_foreground.dart';
 import '../core/utils/debug_session_log.dart';
 import '../core/utils/device_locale.dart';
@@ -33,6 +37,9 @@ enum SessionState { disconnected, connecting, connected, online }
 // #***! весь жизненный цикл соединения
 /// Клиент API
 class Api {
+  static int _instanceCount = 0;
+  final int _instanceNo = ++_instanceCount;
+
   KolibriSession? _session;
 
   final PacketDispatcher _dispatcher = PacketDispatcher();
@@ -49,6 +56,9 @@ class Api {
 
   Map<dynamic, dynamic>? _userAgent;
   Map<dynamic, dynamic>? get userAgent => _userAgent;
+  Map<String, Object?>? _shareSessionOptions;
+  Map<String, Object?>? get shareSessionOptions =>
+      _sessionState == SessionState.online ? _shareSessionOptions : null;
 
   // #***! полезные данные после логина кому то нужные
   int? _callsSeed;
@@ -113,6 +123,15 @@ class Api {
   /// `true`, когда рукопожатие уходит как у веб-клиента (deviceType `WEB`).
   bool get webHandshake => _webHandshake;
 
+  String get debugTag {
+    final mode = _webHandshake
+        ? 'web'
+        : _willAuthenticate
+        ? 'auth'
+        : 'pre';
+    return 'api$_instanceNo/$mode';
+  }
+
   // #***! тайминги
   static const Duration _connectWatchdogTimeout = Duration(seconds: 75);
   static const Duration _shouldArmTimeout = Duration(seconds: 5);
@@ -137,6 +156,10 @@ class Api {
   Future<void> connect({bool? authenticated, bool? web}) async {
     if (authenticated != null) _willAuthenticate = authenticated;
     if (web != null) _webHandshake = web;
+    logger.d(
+      '[$debugTag] connect(authenticated: $authenticated, web: $web) '
+      'состояние=${_sessionState.name} spoofScope=$spoofScope',
+    );
     if (_sessionState != SessionState.disconnected) {
       logger.i('connect пропущен: состояние ${_sessionState.name}');
       return;
@@ -186,6 +209,7 @@ class Api {
       logger.i(
         'connect: endpoint ${endpoint.host}:${endpoint.port}, bypass=$useBypass',
       );
+      logger.d('[$debugTag] connect: userAgent=$_userAgent');
 
       if (useBypass) {
         try {
@@ -228,13 +252,24 @@ class Api {
 
       _callsSeed = info.callsSeed?.toInt();
       _registrationCountries = _parseRegistrationCountries(info.payloadMap);
+      logger.d(
+        '[$debugTag] хэндшейк ок: deviceName=${info.deviceName} '
+        'callsSeed=${_callsSeed != null} '
+        'стран регистрации=${_registrationCountries?.length}',
+      );
       _sessionState = SessionState.online;
       _sessionEpoch++;
       _cancelConnectWatchdog();
       _startLiveness();
       logger.i('Сессия онлайн, хэндшейк ок');
       // #***! автологин токеном (подавлен во время reconnectForLogin)
-      if (_onReconnectCallback != null && !_suppressReconnectLogin) {
+      final autoLogin =
+          _onReconnectCallback != null && !_suppressReconnectLogin;
+      logger.d(
+        '[$debugTag] автологин: ${autoLogin ? 'запускаю' : 'пропущен'} '
+        '(подавлен=$_suppressReconnectLogin)',
+      );
+      if (autoLogin) {
         try {
           await _onReconnectCallback!();
         } catch (e) {
@@ -243,6 +278,11 @@ class Api {
       }
       if (gen != _connectGen) return;
       if (_loginGate.loginUnanswered || _loginGate.loginRejected) {
+        logger.d(
+          '[$debugTag] автологин провален: '
+          'без ответа=${_loginGate.loginUnanswered} '
+          'отклонён=${_loginGate.loginRejected}',
+        );
         await _handleConnectFailure(
           StateError(
             _loginGate.loginRejected
@@ -531,6 +571,9 @@ class Api {
       if (sClientSession is int) clientSessionId = sClientSession;
     }
 
+    final serverLanguage = AppLanguage.serverLanguageCode;
+    if (serverLanguage != null) locale = serverLanguage;
+
     // #***! до логина (сокет без токена) прикидываемся прошлой версией целиком,
     // перекрывая и дефолт, и спуф-профиль; при входе с токеном версию не трогаем
     if (!_willAuthenticate) {
@@ -594,6 +637,39 @@ class Api {
 
     final insecureTls = await TlsConfig.isInsecureAllowed();
     final proxy = await _buildProxyUrl();
+
+    _shareSessionOptions = Map.unmodifiable({
+      'host': endpoint.host,
+      'port': endpoint.port,
+      'trust_mincifry_ca': endpoint.trustMincifryCa,
+      'device_id': deviceId,
+      'instance_id': instanceId,
+      'app_version': appVersion,
+      'build_number': buildNumber,
+      'device_type': deviceType,
+      'os_version': osVersion,
+      'timezone': timezone,
+      'screen': screen,
+      'push_device_type': pushDeviceType,
+      'arch': architecture,
+      'locale': locale,
+      'device_name': deviceName,
+      'device_locale': deviceLocale,
+      'client_session_id': clientSessionId,
+      'ping_interval_secs': ServerConfig.pingInterval.inSeconds,
+      'ping_interactive': !KometSettings.ghostMode.value,
+      'auto_reconnect': false,
+      'insecure_tls': insecureTls,
+      'proxy': proxy,
+      'is_pwa': isPwa,
+      'header_user_agent': headerUserAgent,
+      'fingerprint_digests': _webHandshake
+          ? null
+          : ChatCacheFingerprint.exportDigests(
+              arch: architecture,
+              preLogin: !_willAuthenticate,
+            ),
+    });
 
     // #***! тут реально открывается сокет в расте. Ядро само опускает arch при
     // пустой строке, buildNumber и clientSessionId при нуле, mt_instanceid при
@@ -718,6 +794,7 @@ class Api {
   /// лог вёлся вручную из [sendRequest] по локальному счётчику, из-за чего
   /// хендшейк/пинги в дамп не попадали, а seq был смещён относительно провода.
   void _onWireLog(WireLogEvent e) {
+    if (LaunchFlags.debug) WireDebugLog.record(debugTag, e);
     // #***! в фоне и без монитора не тратим время на разбор
     if (!AppForeground.value && !TrafficMonitor.instance.enabled) return;
     final payload = _decodeWireJson(e.json);
@@ -861,6 +938,9 @@ class Api {
   // переподнимаем соединение боевой версией. Автологин-колбэк на это время
   // подавляем — токен пошлёт вызвавший login(), а не колбэк, иначе войдём дважды.
   Future<void> reconnectForLogin() async {
+    logger.d(
+      '[$debugTag] reconnectForLogin: переподнимаю сокет боевой версией',
+    );
     _suppressReconnectLogin = true;
     try {
       await disconnect();
@@ -872,6 +952,7 @@ class Api {
   }
 
   Future<void> reconnectPreLogin({required bool web}) async {
+    logger.d('[$debugTag] reconnectPreLogin(web: $web)');
     _suppressReconnectLogin = true;
     try {
       await disconnect();

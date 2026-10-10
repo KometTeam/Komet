@@ -308,6 +308,18 @@ abstract class AppLocalizations {
   /// **'English'**
   String get languageNameEn;
 
+  /// No description provided for @languageServerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this language on the server too'**
+  String get languageServerTitle;
+
+  /// No description provided for @languageServerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'When on, built-in folder names, server error messages and some other built-in elements come in the language you chose. By default they are not translated.'**
+  String get languageServerSubtitle;
+
   /// No description provided for @selectCountryTitle.
   ///
   /// In en, this message translates to:
@@ -325,6 +337,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'We sent an SMS with a verification code to your phone number.'**
   String get codeConfirmationSmsSent;
+
+  /// No description provided for @codeConfirmationCheckMaxChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the “Verification codes” chat in MAX.'**
+  String get codeConfirmationCheckMaxChat;
+
+  /// No description provided for @loginSlowSmsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing in this way takes longer than usual. Please wait and don\'t leave.'**
+  String get loginSlowSmsHint;
 
   /// No description provided for @codeResendInSeconds.
   ///
@@ -8408,6 +8432,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t identify the other person'**
   String get callsTabPeerUnknown;
 
+  /// No description provided for @callPeerIsBot.
+  ///
+  /// In en, this message translates to:
+  /// **'Bots can\'t be called'**
+  String get callPeerIsBot;
+
   /// No description provided for @callsTabAlreadyInCall.
   ///
   /// In en, this message translates to:
@@ -11407,6 +11437,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'If the photo you need isn\'t in the gallery'**
   String get avatarPickerFilesSubtitle;
+
+  /// No description provided for @appearanceBottomNavigationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bottom navigation'**
+  String get appearanceBottomNavigationTitle;
+
+  /// No description provided for @appearanceBottomNavigationSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The compact bar keeps all four tab labels visible and takes up less space.'**
+  String get appearanceBottomNavigationSubtitle;
+
+  /// No description provided for @appearanceBottomNavigationFloating.
+  ///
+  /// In en, this message translates to:
+  /// **'Floating'**
+  String get appearanceBottomNavigationFloating;
+
+  /// No description provided for @appearanceBottomNavigationCompact.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact'**
+  String get appearanceBottomNavigationCompact;
 }
 
 class _AppLocalizationsDelegate
