@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../widgets/connection_status.dart';
 
 import '../../../core/config/build_profile.dart';
+import '../../../backend/modules/chats.dart' show chats;
 import '../../../core/config/komet_settings.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
@@ -129,16 +130,7 @@ class KometSettingsScreen extends StatelessWidget {
                     onChanged: KometSettings.setShowHiddenChats,
                   ),
                 ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.archiveOnPull,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.archive,
-                    label: 'Pull-down archive',
-                    subtitle: l10n.kometSettingsArchiveOnPullSubtitle,
-                    value: value,
-                    onChanged: KometSettings.setArchiveOnPull,
-                  ),
-                ),
+
               ],
             ),
             const SizedBox(height: 20),
@@ -209,6 +201,7 @@ class KometSettingsScreen extends StatelessWidget {
 
   Future<void> _setGhostMode(bool value) async {
     await KometSettings.setGhostMode(value);
+    if (!value) await chats.restoreGhostReads();
     api.sendPing(interactive: !value);
   }
 }

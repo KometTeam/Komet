@@ -294,6 +294,11 @@ class _ChatScreenState extends State<ChatScreen>
   ValueListenable<List<double>>? _photoProgressFor(CachedMessage m) =>
       UploadService.instance.progressFor(m.id);
 
+  VoidCallback? _cancelUploadFor(CachedMessage m) =>
+      UploadService.instance.progressFor(m.id) == null
+      ? null
+      : () => UploadService.instance.cancel(m.id);
+
   ValueNotifier<Map<String, dynamic>?> _reactionNotifierFor(CachedMessage m) {
     final existing = _reactionNotifiers[m.id];
     if (existing != null) return existing;
@@ -558,6 +563,7 @@ class _ChatScreenState extends State<ChatScreen>
   set _myId(int v) => _chatController.myId = v;
   CachedChat? chat;
   bool _peerIsBot = false;
+  bool _peerOfficial = false;
   bool _peerKindKnown = false;
   bool _greetingMounted = false;
   bool _botStartRequested = false;
@@ -888,10 +894,18 @@ class _ChatScreenState extends State<ChatScreen>
         avatar.isNotEmpty &&
         ContactCache.getAvatar(peerId) != avatar;
     if (avatarIsNew) ContactCache.putAvatar(peerId, avatar);
-    if (_peerKindKnown && _peerIsBot == info.isBot && !avatarIsNew) return;
+    ContactCache.putOptions(peerId, info.options.toSet());
+    final official = info.isOfficial;
+    if (_peerKindKnown &&
+        _peerIsBot == info.isBot &&
+        _peerOfficial == official &&
+        !avatarIsNew) {
+      return;
+    }
     setState(() {
       _peerKindKnown = true;
       _peerIsBot = info.isBot;
+      _peerOfficial = official;
     });
   }
 
@@ -2842,6 +2856,7 @@ class _ChatScreenState extends State<ChatScreen>
       voiceRec: _voiceRec,
       note: _note,
       onToggleStickerPanel: _toggleStickerPanel,
+      onOpenMiniApp: _hasMiniApp ? () => unawaited(_openMiniApp()) : null,
       onScheduleMessage: _scheduleMessage,
       onOpenAttach: _openAttachmentSheet,
       onOpenAttachScheduled: _openAttachmentSheetScheduled,
@@ -3334,13 +3349,6 @@ class _ChatScreenState extends State<ChatScreen>
       context: context,
       anchorRect: anchorRect,
       items: [
-        if (_hasMiniApp)
-          ChatMenuItem(
-            icon: Symbols.apps,
-            label: l10n.miniAppOpen,
-            dividerAfter: true,
-            onTap: () => unawaited(_openMiniApp()),
-          ),
         ChatMenuItem(
           icon: (chat?.isMuted ?? false)
               ? Symbols.volume_off
@@ -4715,7 +4723,9 @@ class _ChatScreenState extends State<ChatScreen>
                     name: _headerName(),
                     imageUrl: _headerAvatarUrl(),
                     chatType: widget.chatType,
-                    isOfficial: chat?.isOfficial ?? false,
+                    isOfficial: widget.chatType == 'DIALOG'
+                        ? _peerOfficial
+                        : (chat?.isOfficial ?? false),
                     encrypted: _encryptionEnabled,
                     verified: _e2eeVerified,
                     myId: _myId,
@@ -4985,6 +4995,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 ),
                                 reactionAnimation: _reactionAnimation,
                                 uploadProgress: _photoProgressFor(message),
+                                onCancelUpload: _cancelUploadFor(message),
                                 onReplyTap: (id) => unawaited(
                                   _scrollNav.goTo(
                                     id,

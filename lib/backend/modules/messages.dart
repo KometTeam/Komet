@@ -19,6 +19,8 @@ import 'message_copy.dart';
 
 // #***! быстрый кэш id -> имя аватарка телефон, из него подписи в пузырях
 class ContactCache {
+  static final ValueNotifier<int> officialRevision = ValueNotifier(0);
+
   static final Map<int, String> _nameCache = {};
   static final Map<int, String> _avatarCache = {};
   static final Map<int, Set<String>> _optionsCache = {};
@@ -64,8 +66,13 @@ class ContactCache {
     }
   }
 
-  static void putOptions(int id, Set<String> opts) {
+  static void putOptions(int id, Set<String> opts, {bool notify = true}) {
+    final before = _optionsCache[id];
     _optionsCache[id] = opts;
+    final changed =
+        before == null ||
+        before.contains('OFFICIAL') != opts.contains('OFFICIAL');
+    if (notify && changed) officialRevision.value++;
     _scheduleSave();
   }
 

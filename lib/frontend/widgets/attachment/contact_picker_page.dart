@@ -9,6 +9,7 @@ import 'package:komet/frontend/widgets/komet_avatar.dart';
 import 'package:komet/frontend/widgets/small_spinner.dart';
 import 'package:komet/frontend/widgets/springy_tap.dart';
 import 'package:komet/l10n/app_localizations.dart';
+import '../official_name.dart';
 
 class ContactPickerPage extends StatefulWidget {
   final double bottomReserve;
@@ -192,10 +193,9 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      OfficialName(
+                        contactId: contact.id,
+                        text: name,
                         style: TextStyle(
                           color: cs.onSurface,
                           fontSize: 15,

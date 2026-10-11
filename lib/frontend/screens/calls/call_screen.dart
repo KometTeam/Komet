@@ -19,6 +19,7 @@ import '../../../core/config/launch_flags.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/screen_wake.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/official_name.dart';
 import '../../widgets/call_video_view.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
@@ -396,6 +397,23 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _switchCamera() async {
+    final session = _session;
+    if (session == null || _videoBusy) return;
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _videoBusy = true);
+    try {
+      await session.switchCamera();
+    } catch (e) {
+      if (mounted) {
+        showCustomNotification(context, l10n.callCameraUnavailable(e));
+      }
+    } finally {
+      _syncLocalPreview();
+      if (mounted) setState(() => _videoBusy = false);
+    }
+  }
+
   Future<void> _toggleScreen() async {
     final session = _session;
     if (session == null || _videoBusy) return;
@@ -466,6 +484,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
               ? info!.name!
               : l10n.callParticipantFallback,
           avatarUrl: info?.avatar,
+          contactId: ext,
         );
       },
     );
@@ -614,11 +633,11 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
-          Text(
-            _displayName,
+          OfficialName(
+            contactId: _session?.peerUserId ?? 0,
+            text: _displayName,
             textAlign: TextAlign.center,
             maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 24,
@@ -1176,11 +1195,12 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   Widget _buildName(ColorScheme cs) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Text(
-        _displayName,
+      child: OfficialName(
+        contactId: _session?.peerUserId ?? 0,
+        text: _displayName,
         textAlign: TextAlign.center,
+        iconSize: 18,
         maxLines: 2,
-        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: cs.onSurface,
           fontSize: 30,
@@ -1298,6 +1318,15 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           busy: _videoBusy,
           onTap: _toggleVideo,
         ),
+        if (video)
+          CallButton(
+            icon: Symbols.cameraswitch,
+            label: l10n.callSwitchCamera,
+            background: cs.surfaceContainerHighest,
+            foreground: cs.onSurface,
+            busy: _videoBusy,
+            onTap: _switchCamera,
+          ),
         CallButton(
           icon: Symbols.screen_share,
           label: l10n.callScreenLabel,

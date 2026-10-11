@@ -25,6 +25,7 @@ import 'custom_notification.dart';
 import 'hint_bubble.dart';
 import 'formatted_message_text.dart';
 import 'reply_preview.dart';
+import 'sender_badge.dart';
 import 'text_entity_actions.dart';
 import 'sending_clock_icon.dart';
 import 'photo_viewer.dart';
@@ -47,6 +48,7 @@ import 'attachment/bubbles/file_bubble.dart';
 import 'attachment/bubbles/forwarded_bubble.dart';
 import 'lottie_image.dart';
 import 'text_with_meta.dart';
+import 'official_name.dart';
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
 final Expando<List<MessageAttachment>> _contentAttachmentsCache =
@@ -652,6 +654,7 @@ class MessageBubble extends StatelessWidget {
   final ValueListenable<ReactionAnimationEvent?>? reactionAnimation;
   final ReactionAnimojiResolver? reactionAnimojiResolver;
   final ValueListenable<List<double>>? uploadProgress;
+  final VoidCallback? onCancelUpload;
   final void Function(String messageId)? onReplyTap;
   final void Function(int senderId)? onAvatarTap;
   final ForwardedSourceTap? onForwardedSourceTap;
@@ -685,6 +688,7 @@ class MessageBubble extends StatelessWidget {
     this.reactionAnimation,
     this.reactionAnimojiResolver,
     this.uploadProgress,
+    this.onCancelUpload,
     this.onReplyTap,
     this.onAvatarTap,
     this.onForwardedSourceTap,
@@ -982,15 +986,23 @@ class MessageBubble extends StatelessWidget {
       padding: needsInset
           ? const EdgeInsets.fromLTRB(12, 6, 12, 2)
           : const EdgeInsets.only(bottom: 2),
-      child: Text(
-        name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: _senderColor(message.senderId),
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _senderColor(message.senderId),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          SenderBadge(senderId: message.senderId, size: 13),
+        ],
       ),
     );
 
@@ -1162,6 +1174,7 @@ class MessageBubble extends StatelessWidget {
       overrideStatus: overrideStatus,
       otherReadTime: otherReadTime,
       uploadProgress: uploadProgress,
+      onCancelUpload: onCancelUpload,
       onStickerTap: onStickerTap,
       onForwardedSourceTap: onForwardedSourceTap,
       reactionInfo: _resolveReactionInfo(),
@@ -1399,14 +1412,14 @@ class MessageBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final row in keyboard.rows)
+          for (final (r, row) in keyboard.rows.indexed)
             if (row.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.only(bottom: 2),
                 child: Row(
                   children: [
                     for (var i = 0; i < row.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 4),
+                      if (i > 0) const SizedBox(width: 2),
                       Expanded(
                         child: Builder(
                           builder: (buttonContext) =>
@@ -1415,6 +1428,11 @@ class MessageBubble extends StatelessWidget {
                                 cs,
                                 keyboard,
                                 row[i],
+                                radius: _inlineKeyboardRadius(
+                                  keyboard.rows,
+                                  r,
+                                  i,
+                                ),
                               ),
                         ),
                       ),
@@ -1427,12 +1445,38 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  static BorderRadius _inlineKeyboardRadius(
+    List<List<InlineKeyboardButton>> rows,
+    int row,
+    int col,
+  ) {
+    const outer = Radius.circular(14);
+    const inner = Radius.circular(4);
+    bool has(int r, int c) =>
+        r >= 0 &&
+        r < rows.length &&
+        c >= 0 &&
+        c < rows[r].length;
+    Radius corner(bool vertical, bool horizontal) {
+      final vNeighbor = has(row + (vertical ? -1 : 1), col);
+      final hNeighbor = has(row, col + (horizontal ? -1 : 1));
+      return vNeighbor || hNeighbor ? inner : outer;
+    }
+    return BorderRadius.only(
+      topLeft: corner(true, true),
+      topRight: corner(true, false),
+      bottomLeft: corner(false, true),
+      bottomRight: corner(false, false),
+    );
+  }
+
   Widget _buildInlineKeyboardButton(
     BuildContext context,
     ColorScheme cs,
     InlineKeyboardAttachment keyboard,
-    InlineKeyboardButton button,
-  ) {
+    InlineKeyboardButton button, {
+    required BorderRadius radius,
+  }) {
     final trailingIcon = switch (button.type) {
       'LINK' => Symbols.open_in_new,
       'OPEN_APP' => Symbols.chevron_right,
@@ -1441,7 +1485,7 @@ class MessageBubble extends StatelessWidget {
     final isClipboard = button.type == 'CLIPBOARD';
     return Material(
       color: cs.primary.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: radius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _onInlineButtonTap(context, keyboard, button),
@@ -2116,10 +2160,10 @@ class MessageBubble extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          OfficialName(
+            contactId: reply.senderId == myId ? 0 : reply.senderId,
+            text: name,
+            iconSize: 12,
             style: TextStyle(
               color: accent,
               fontSize: 12.5,

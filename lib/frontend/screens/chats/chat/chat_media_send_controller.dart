@@ -897,6 +897,12 @@ class ChatMediaSendController {
         chatController.setMessageAt(idx, real);
         bumpMessages();
       }
+    } else if (event is UploadJobCancelled) {
+      if (event.scheduled) return;
+      final idx = chatController.indexOfId(event.tempId);
+      if (idx == -1) return;
+      chatController.removeMessageAt(idx);
+      bumpMessages();
     } else if (event is UploadJobFailed) {
       if (event.scheduled) {
         Haptics.error();

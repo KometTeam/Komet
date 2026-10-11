@@ -144,6 +144,7 @@ class _FileBubbleState extends State<FileBubble> {
                             strokeWidth: 2.4,
                             iconSize: 14,
                             padding: const EdgeInsets.all(4),
+                            onCancel: ctx.onCancelUpload,
                           ),
                   ),
                   const SizedBox(width: 10),

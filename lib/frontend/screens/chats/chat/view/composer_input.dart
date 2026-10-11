@@ -18,6 +18,7 @@ import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/composer_morph_icon.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/liquid_glass.dart';
+import 'package:komet/frontend/widgets/sender_badge.dart';
 import 'package:komet/frontend/widgets/lottie_slash_icon.dart';
 import 'package:komet/frontend/widgets/paste_media_scope.dart';
 import 'package:komet/frontend/widgets/reply_preview.dart';
@@ -43,6 +44,7 @@ class ComposerInputBar extends StatelessWidget {
     required this.voiceRec,
     required this.note,
     required this.onToggleStickerPanel,
+    this.onOpenMiniApp,
     required this.onSendText,
     required this.onScheduleMessage,
     required this.onOpenAttach,
@@ -87,6 +89,7 @@ class ComposerInputBar extends StatelessWidget {
   final VoiceRecordController voiceRec;
   final VideoNoteController note;
   final VoidCallback onToggleStickerPanel;
+  final VoidCallback? onOpenMiniApp;
   final VoidCallback onSendText;
   final VoidCallback onScheduleMessage;
   final VoidCallback onOpenAttach;
@@ -167,6 +170,21 @@ class ComposerInputBar extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                if (onOpenMiniApp != null) ...[
+                  _actionSurface(
+                    color: cs.primary,
+                    onTap: onOpenMiniApp,
+                    borderSide: BorderSide.none,
+                    child: SizedBox(
+                      width: _controlSize,
+                      height: _controlSize,
+                      child: Center(
+                        child: Icon(Symbols.apps, color: cs.onPrimary, size: 24),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: _actionGap),
+                ],
                 Expanded(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
@@ -600,6 +618,7 @@ class ComposerInputBar extends StatelessWidget {
     required Widget child,
     VoidCallback? onTap,
     VoidCallback? onLongPress,
+    BorderSide? borderSide,
   }) {
     return TweenAnimationBuilder<Color?>(
       tween: ColorTween(end: color),
@@ -609,6 +628,7 @@ class ComposerInputBar extends StatelessWidget {
         color: tinted ?? color,
         onTap: onTap,
         onLongPress: onLongPress,
+        borderSide: borderSide,
         child: child,
       ),
     );
@@ -619,6 +639,7 @@ class ComposerInputBar extends StatelessWidget {
     required Widget child,
     VoidCallback? onTap,
     VoidCallback? onLongPress,
+    BorderSide? borderSide,
   }) {
     if (_flat) {
       return Material(
@@ -634,6 +655,7 @@ class ComposerInputBar extends StatelessWidget {
       liquid: _liquid,
       backdropKey: backdropKey,
       borderRadius: BorderRadius.circular(_controlSize / 2),
+      borderSide: borderSide,
       onTap: onTap,
       onLongPress: onLongPress,
       keepInkLayer: true,
@@ -781,15 +803,24 @@ class ComposerInputBar extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      l10n.composerInputReplyTo(name),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            l10n.composerInputReplyTo(name),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: cs.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (reply.senderId != myId)
+                          SenderBadge(senderId: reply.senderId, size: 13),
+                      ],
                     ),
                     if (preview.isNotEmpty) _previewLine(cs, visual, preview),
                   ],

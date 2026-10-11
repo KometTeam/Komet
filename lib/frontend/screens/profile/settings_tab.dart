@@ -63,6 +63,7 @@ import 'spoof_screen.dart';
 import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
+import 'chat_settings_screen.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key, this.bottomPadding = 120});
@@ -710,6 +711,19 @@ class _SettingsTabState extends State<SettingsTab>
                     child: _buildSection(
                       context,
                       items: [
+                        _SettingsItem(
+                          icon: Symbols.chat,
+                          label: l10n.chatSettingsTitle,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const ChatSettingsScreen(),
+                              ),
+                            );
+                          },
+                        ),
                         _SettingsItem(
                           icon: Symbols.notifications_active,
                           label: l10n.notificationsTitle,

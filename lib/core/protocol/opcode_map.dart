@@ -111,6 +111,7 @@ abstract class Opcode {
   static const int videoChatStartActive = 78; // Инициация активного звонка
   static const int videoChatHistory = 79; // История звонков
   static const int videoChatDeleteHistory = 164; // Удаление записей истории звонков
+  static const int callHistorySync = 163; // Синхронизация истории звонков
   static const int videoChatCreateJoinLink = 84; // Ссылка для входа в видеочат
   static const int videoChatJoinByLink = 166; // Вход в звонок по ссылке
   static const int videoChatMembers = 195; // Участники видеочата
@@ -330,6 +331,7 @@ abstract class Opcode {
     videoChatStartActive: 'VIDEO_CHAT_START_ACTIVE',
     videoChatHistory: 'VIDEO_CHAT_HISTORY',
     videoChatDeleteHistory: 'VIDEO_CHAT_DELETE_HISTORY',
+    callHistorySync: 'CALL_HISTORY_SYNC',
     videoChatCreateJoinLink: 'VIDEO_CHAT_CREATE_JOIN_LINK',
     videoChatJoinByLink: 'VIDEO_CHAT_JOIN_BY_LINK',
     videoChatMembers: 'VIDEO_CHAT_MEMBERS',

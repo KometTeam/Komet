@@ -15,6 +15,7 @@ import '../../core/media/deleted_media_keeper.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/chat_activity_store.dart';
 import '../../core/storage/chat_members_store.dart';
+import '../../core/storage/ghost_read_store.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
@@ -570,8 +571,12 @@ class ChatsModule {
     final row = Map<String, dynamic>.from(rows.first);
     if ((row['unread_count'] as int? ?? 0) == 0) return;
 
+    final ghost = KometSettings.ghostMode.value;
+    if (ghost) {
+      await _rememberGhostRead(accountId, chatId, rows.first, mark);
+    }
     final msgIdNum = int.tryParse(messageId);
-    if (msgIdNum != null && !KometSettings.antiRead.value) {
+    if (msgIdNum != null && !KometSettings.antiRead.value && !ghost) {
       try {
         await api.sendRequest(Opcode.chatMark, {
           'type': 'READ_MESSAGE',
@@ -602,8 +607,9 @@ class ChatsModule {
     int mark, {
     required int remaining,
   }) async {
+    final ghost = KometSettings.ghostMode.value;
     final msgIdNum = int.tryParse(messageId);
-    if (msgIdNum != null && !KometSettings.antiRead.value) {
+    if (msgIdNum != null && !KometSettings.antiRead.value && !ghost) {
       try {
         await api.sendRequest(Opcode.chatMark, {
           'type': 'READ_MESSAGE',
@@ -616,6 +622,9 @@ class ChatsModule {
 
     final rows = await AppDatabase.loadChat(accountId, chatId);
     if (rows.isEmpty) return;
+    if (ghost) {
+      await _rememberGhostRead(accountId, chatId, rows.first, mark);
+    }
     final cached = CachedChat.fromDbRow(rows.first);
     final next = remaining < 0 ? 0 : remaining;
     final currentMark = cached.participants[accountId] ?? 0;
@@ -900,6 +909,36 @@ class ChatsModule {
   void _refreshChatInfo(int chatId) {
     ChatInfoFetch.invalidate(chatId);
     unawaited(ChatInfoFetch.get(chatId));
+  }
+  Future<void> _rememberGhostRead(
+    int accountId,
+    int chatId,
+    Map<String, Object?> row,
+    int mark,
+  ) {
+    final cached = CachedChat.fromDbRow(row);
+    return GhostReadStore.instance.remember(
+      accountId,
+      chatId,
+      mark: mark,
+      unread: cached.unreadCount,
+      ownMark: cached.participants[accountId] ?? 0,
+    );
+  }
+  Future<void> restoreGhostReads() async {
+    final entries = GhostReadStore.instance.snapshot();
+    for (final entry in entries) {
+      final read = entry.read;
+      await _updateChat(entry.accountId, entry.chatId, (chat) {
+        final participants = Map<int, int>.from(chat.participants)
+          ..[entry.accountId] = read.ownMark;
+        return chat.copyWith(
+          unreadCount: read.unread,
+          participants: participants,
+        );
+      });
+    }
+    await GhostReadStore.instance.clearAll();
   }
 
   // #***! шаблон прочитать поменять сохранить оповестить

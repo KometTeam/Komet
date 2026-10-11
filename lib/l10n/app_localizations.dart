@@ -2174,6 +2174,60 @@ abstract class AppLocalizations {
   /// **'Speaker'**
   String get callSpeaker;
 
+  /// No description provided for @callSwitchCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch camera'**
+  String get callSwitchCamera;
+
+  /// No description provided for @callsTabDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not delete the call'**
+  String get callsTabDeleteFailed;
+
+  /// No description provided for @chatSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat settings'**
+  String get chatSettingsTitle;
+
+  /// No description provided for @chatSettingsArchiveOnPull.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull-down archive'**
+  String get chatSettingsArchiveOnPull;
+
+  /// No description provided for @chatSettingsAutoDownloadTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Media auto-download'**
+  String get chatSettingsAutoDownloadTitle;
+
+  /// No description provided for @chatSettingsAutoDownloadPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get chatSettingsAutoDownloadPhoto;
+
+  /// No description provided for @chatSettingsAutoDownloadVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Videos'**
+  String get chatSettingsAutoDownloadVideo;
+
+  /// No description provided for @chatSettingsAutoDownloadVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice messages'**
+  String get chatSettingsAutoDownloadVoice;
+
+  /// No description provided for @chatSettingsAutoDownloadVideoNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Video notes'**
+  String get chatSettingsAutoDownloadVideoNote;
+
   /// No description provided for @callVideoLabel.
   ///
   /// In en, this message translates to:
@@ -4507,6 +4561,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Gallery'**
   String get attachSheetGallery;
+
+  /// No description provided for @attachSheetAlbumsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums'**
+  String get attachSheetAlbumsTitle;
+
+  /// No description provided for @attachSheetAllMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'All photos and videos'**
+  String get attachSheetAllMedia;
+
+  /// No description provided for @attachSheetSort.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get attachSheetSort;
+
+  /// No description provided for @attachSheetSortNewestFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'By date: newest first'**
+  String get attachSheetSortNewestFirst;
+
+  /// No description provided for @attachSheetSortOldestFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'By date: oldest first'**
+  String get attachSheetSortOldestFirst;
+
+  /// No description provided for @attachSheetSortNameAsc.
+  ///
+  /// In en, this message translates to:
+  /// **'By name: A to Z'**
+  String get attachSheetSortNameAsc;
+
+  /// No description provided for @attachSheetSortNameDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'By name: Z to A'**
+  String get attachSheetSortNameDesc;
 
   /// No description provided for @attachSheetPoll.
   ///
@@ -8503,6 +8599,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Encryption enabled'**
   String get chatEncryptionEnabled;
+
+  /// No description provided for @e2eeLegacyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Key-based encryption from the old version is on in this chat. It works separately from the new one. Turn it off so messages are sent without the key.'**
+  String get e2eeLegacyDescription;
+
+  /// No description provided for @e2eeLegacyDisable.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off old encryption'**
+  String get e2eeLegacyDisable;
 
   /// No description provided for @chatEncryptionDisabled.
   ///

@@ -126,8 +126,12 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   static List<GalleryItem>? _cachedItems;
   static GalleryPermission _cachedPermission = GalleryPermission.granted;
   static bool _cachedHasMore = false;
+  static GalleryAlbum? _cachedAlbum;
+  static GallerySort _cachedSort = GallerySort.newestFirst;
 
   final GallerySource _source = GallerySource.create();
+  GalleryAlbum? _album;
+  GallerySort _sort = _cachedSort;
   final ValueNotifier<Set<String>> _selected = ValueNotifier(<String>{});
   final Map<String, GlobalKey<_ThumbnailState>> _thumbKeys = {};
   final Map<String, PhotoEditState> _edits = {};
@@ -154,6 +158,10 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   @override
   void initState() {
     super.initState();
+    _album = _cachedAlbum;
+    final chosen = _album;
+    if (chosen != null) _source.selectAlbum(chosen);
+    _source.setSort(_sort);
     final cached = _cachedItems;
     if (cached != null) {
       _items = cached;
@@ -252,6 +260,160 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       return;
     }
     _publishItems([..._items, ...page.items], page.hasMore);
+  }
+
+  void _chooseAlbum(GalleryAlbum album) {
+    if (_album?.id == album.id) return;
+    _album = album;
+    _cachedAlbum = album;
+    _cachedItems = null;
+    _source.selectAlbum(album);
+    _loadGallery();
+  }
+
+  void _chooseSort(GallerySort sort) {
+    if (_sort.field == sort.field && _sort.ascending == sort.ascending) return;
+    _sort = sort;
+    _cachedSort = sort;
+    _cachedItems = null;
+    _source.setSort(sort);
+    _loadGallery();
+  }
+
+  Future<void> _openSortPicker() async {
+    final l10n = AppLocalizations.of(context)!;
+    final options = <(GallerySort, String)>[
+      (
+        const GallerySort(field: GallerySortField.date, ascending: false),
+        l10n.attachSheetSortNewestFirst,
+      ),
+      (
+        const GallerySort(field: GallerySortField.date, ascending: true),
+        l10n.attachSheetSortOldestFirst,
+      ),
+      (
+        const GallerySort(field: GallerySortField.name, ascending: true),
+        l10n.attachSheetSortNameAsc,
+      ),
+      (
+        const GallerySort(field: GallerySortField.name, ascending: false),
+        l10n.attachSheetSortNameDesc,
+      ),
+    ];
+    final picked = await showModalBottomSheet<GallerySort>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.only(bottom: 12),
+          children: [
+            for (final (sort, label) in options)
+              ListTile(
+                leading: Icon(
+                  sort.ascending ? Symbols.arrow_upward : Symbols.arrow_downward,
+                ),
+                title: Text(label),
+                selected:
+                    sort.field == _sort.field && sort.ascending == _sort.ascending,
+                onTap: () => Navigator.of(sheetContext).pop(sort),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) _chooseSort(picked);
+  }
+
+  Future<void> _openAlbumPicker() async {
+    final l10n = AppLocalizations.of(context)!;
+    final albums = await _source.albums();
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<GalleryAlbum>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.only(bottom: 12),
+          children: [
+            for (final album in albums)
+              ListTile(
+                leading: Icon(
+                  album.isAll ? Symbols.photo_library : Symbols.folder,
+                ),
+                title: Text(_albumTitle(album, l10n)),
+                trailing: Text('${album.count}'),
+                selected: album.id == _album?.id,
+                onTap: () => Navigator.of(sheetContext).pop(album),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) _chooseAlbum(picked);
+  }
+
+  String _albumTitle(GalleryAlbum album, AppLocalizations l10n) =>
+      album.name.isEmpty ? l10n.attachSheetAllMedia : album.name;
+
+  Widget _buildGalleryHeader(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
+    final current = _album;
+    final label = current == null
+        ? l10n.attachSheetAlbumsTitle
+        : _albumTitle(current, l10n);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Material(
+              color: cs.surfaceContainerHigh,
+              shape: const StadiumBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: _openAlbumPicker,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 9, 10, 9),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Icon(Symbols.expand_more, size: 20, color: cs.onSurface),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: l10n.attachSheetSort,
+            onPressed: _openSortPicker,
+            icon: Icon(
+              _sort.ascending ? Symbols.arrow_upward : Symbols.arrow_downward,
+              color: cs.onSurface,
+            ),
+          ),
+          if (widget.onSendSeparately != null)
+            ValueListenableBuilder<Set<String>>(
+              valueListenable: _selected,
+              builder: (context, selected, _) => selected.isEmpty
+                  ? const SizedBox.shrink()
+                  : _GalleryMenuButton(cs: cs, onTap: _openGalleryMenu),
+            ),
+        ],
+      ),
+    );
   }
 
   void _publishItems(List<GalleryItem> items, bool hasMore) {
@@ -842,11 +1004,14 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       return Center(child: SmallSpinner(size: 36, color: cs.primary));
     }
     if (items.isEmpty) {
-      return _buildMessage(
+      return _scrollableCenter(
         scrollController,
-        cs,
-        AppLocalizations.of(context)!.attachSheetNoImagesFound,
         bottomReserve,
+        Text(
+          AppLocalizations.of(context)!.attachSheetNoImagesFound,
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
+        ),
+        header: _buildGalleryHeader(cs),
       );
     }
 
@@ -866,6 +1031,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
           slivers: [
             if (_permission == GalleryPermission.limited)
               SliverToBoxAdapter(child: _buildLimitedBanner(cs)),
+            SliverToBoxAdapter(child: _buildGalleryHeader(cs)),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(hpad, hpad, hpad, 0),
               sliver: SliverToBoxAdapter(
@@ -1112,27 +1278,17 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     );
   }
 
-  Widget _buildMessage(
-    ScrollController scrollController,
-    ColorScheme cs,
-    String text,
-    double bottomReserve,
-  ) {
-    return _scrollableCenter(
-      scrollController,
-      bottomReserve,
-      Text(text, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15)),
-    );
-  }
 
   Widget _scrollableCenter(
     ScrollController scrollController,
     double bottomReserve,
-    Widget child,
-  ) {
+    Widget child, {
+    Widget? header,
+  }) {
     return CustomScrollView(
       controller: scrollController,
       slivers: [
+        if (header != null) SliverToBoxAdapter(child: header),
         SliverFillRemaining(
           hasScrollBody: false,
           child: Padding(
@@ -1144,25 +1300,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
     );
   }
 
-  Widget _buildGrabberBar(ColorScheme cs) {
-    if (widget.onSendSeparately == null) return const SheetGrabber();
-    return SheetGrabberBar(
-      action: AnimatedBuilder(
-        animation: Listenable.merge([_selected, _pageController]),
-        builder: (context, child) {
-          final galleryT = (1 - _currentPageT()).clamp(0.0, 1.0);
-          if (_selected.value.isEmpty || galleryT == 0) {
-            return const SizedBox.shrink();
-          }
-          return Opacity(
-            opacity: galleryT,
-            child: IgnorePointer(ignoring: galleryT < 0.5, child: child),
-          );
-        },
-        child: _GalleryMenuButton(cs: cs, onTap: _openGalleryMenu),
-      ),
-    );
-  }
+  Widget _buildGrabberBar(ColorScheme cs) => const SheetGrabber();
 
   void _openGalleryMenu(BuildContext anchorContext) {
     if (widget.onSendSeparately == null) return;
@@ -1663,9 +1801,9 @@ class _GalleryTileState extends State<_GalleryTile> {
         fit: StackFit.expand,
         children: [
           AnimatedScale(
-            scale: _selected ? 0.86 : 1.0,
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
+            scale: _selected ? 0.88 : 1.0,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeInOutCubic,
             child: _Thumbnail(
               key: widget.thumbKey,
               item: item,

@@ -13,6 +13,7 @@ import 'package:komet/main.dart';
 
 import '../../../../core/media/media_playback.dart';
 import '../../../../core/media/video_note_frame.dart';
+import '../../../../core/config/komet_settings.dart';
 import '../../../../core/media/video_note_preloader.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
@@ -37,6 +38,7 @@ class VideoNoteBubble extends StatefulWidget {
   final Color textColor;
   final Widget meta;
   final ValueListenable<List<double>>? uploadProgress;
+  final VoidCallback? onCancelUpload;
 
   const VideoNoteBubble({
     super.key,
@@ -52,6 +54,7 @@ class VideoNoteBubble extends StatefulWidget {
     required this.textColor,
     required this.meta,
     this.uploadProgress,
+    this.onCancelUpload,
   });
 
   @override
@@ -133,7 +136,8 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
       unawaited(_openLocalPreview(File(local)));
       return;
     }
-    if (VideoNotePreloader.autoLoads(widget.attachment.duration)) {
+    if (KometSettings.autoDownloadVideoNote.value &&
+        VideoNotePreloader.autoLoads(widget.attachment.duration)) {
       unawaited(_warmCache());
     }
   }
@@ -807,6 +811,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
                 progress: uploading,
                 color: Colors.white,
                 trackColor: Colors.white24,
+                onCancel: widget.onCancelUpload,
               ),
             ] else ...[
               if (ready && !muted) _buildRing(size),

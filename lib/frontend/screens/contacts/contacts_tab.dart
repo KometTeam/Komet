@@ -24,6 +24,7 @@ import 'nfc_exchange_sheet.dart';
 import 'open_contact_profile.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../widgets/verified_mark.dart';
 
 class ContactsTab extends StatefulWidget {
   const ContactsTab({super.key, this.bottomPadding = 120});
@@ -284,13 +285,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
                           ),
                           if (contact.isVerified) ...[
                             const SizedBox(width: 4),
-                            Icon(
-                              Symbols.verified,
-                              color: cs.primary,
-                              size: 16,
-                              weight: 600,
-                              fill: 1,
-                            ),
+                            VerifiedMark(color: cs.primary, size: 16),
                           ],
                         ],
                       ),

@@ -1106,6 +1106,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callSpeaker => 'Speaker';
 
   @override
+  String get callSwitchCamera => 'Switch camera';
+
+  @override
+  String get callsTabDeleteFailed => 'Could not delete the call';
+
+  @override
+  String get chatSettingsTitle => 'Chat settings';
+
+  @override
+  String get chatSettingsArchiveOnPull => 'Pull-down archive';
+
+  @override
+  String get chatSettingsAutoDownloadTitle => 'Media auto-download';
+
+  @override
+  String get chatSettingsAutoDownloadPhoto => 'Photos';
+
+  @override
+  String get chatSettingsAutoDownloadVideo => 'Videos';
+
+  @override
+  String get chatSettingsAutoDownloadVoice => 'Voice messages';
+
+  @override
+  String get chatSettingsAutoDownloadVideoNote => 'Video notes';
+
+  @override
   String get callVideoLabel => 'Video';
 
   @override
@@ -2356,6 +2383,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attachSheetGallery => 'Gallery';
+
+  @override
+  String get attachSheetAlbumsTitle => 'Albums';
+
+  @override
+  String get attachSheetAllMedia => 'All photos and videos';
+
+  @override
+  String get attachSheetSort => 'Sort';
+
+  @override
+  String get attachSheetSortNewestFirst => 'By date: newest first';
+
+  @override
+  String get attachSheetSortOldestFirst => 'By date: oldest first';
+
+  @override
+  String get attachSheetSortNameAsc => 'By name: A to Z';
+
+  @override
+  String get attachSheetSortNameDesc => 'By name: Z to A';
 
   @override
   String get attachSheetPoll => 'Poll';
@@ -4680,6 +4728,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatEncryptionEnabled => 'Encryption enabled';
+
+  @override
+  String get e2eeLegacyDescription =>
+      'Key-based encryption from the old version is on in this chat. It works separately from the new one. Turn it off so messages are sent without the key.';
+
+  @override
+  String get e2eeLegacyDisable => 'Turn off old encryption';
 
   @override
   String get chatEncryptionDisabled => 'Encryption disabled';

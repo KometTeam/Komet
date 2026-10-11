@@ -96,6 +96,7 @@ import 'core/share/share_intent_bridge.dart';
 import 'core/share/native_share_account_sync.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
+import 'core/storage/per_chat_json_store.dart';
 import 'core/transport/tls_config.dart';
 import 'core/transport/traffic_monitor.dart';
 import 'core/transport/vpn_bypass.dart';
@@ -348,7 +349,7 @@ void main(List<String> args) async {
     spectrumBackgroundFuture,
   ]);
   debugPrint('KOMET-STARTUP: DeviceContactsService.loadFromStartup...');
-  await DeviceContactsService.loadFromStartup();
+  unawaited(DeviceContactsService.loadFromStartup());
   await trafficCaptureFuture;
   await debugLogFuture;
   debugPrint('KOMET-STARTUP: runApp');
@@ -691,6 +692,9 @@ class KometAppState extends State<KometApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     AppLock.instance.onLifecycle(state);
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      unawaited(PerChatJsonStore.flushAll());
+    }
     final background =
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||

@@ -142,6 +142,10 @@ class ShareSender {
   static void _onUploadEvent(UploadJobEvent event) {
     final entry = _tracked.remove(event.tempId);
     if (entry == null) return;
+    if (event is UploadJobCancelled) {
+      unawaited(chats.reconcileLastMessage(entry.accountId, entry.chatId));
+      return;
+    }
     final status = event is UploadJobDone ? 'sent' : 'error';
     final messageId = event is UploadJobDone
         ? (event.message?.id ?? event.tempId)

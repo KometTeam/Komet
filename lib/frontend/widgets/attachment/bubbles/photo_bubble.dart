@@ -16,6 +16,8 @@ import '../../text_with_meta.dart';
 import 'album_layout.dart';
 import 'bubble_context.dart';
 import 'video_bubble.dart';
+import '../../../../core/config/komet_settings.dart';
+import '../../../../core/media/auto_download_gate.dart';
 
 class PhotoBubble extends StatelessWidget {
   static const Radius _bigRadius = Radius.circular(
@@ -246,20 +248,26 @@ class PhotoBubble extends StatelessWidget {
           ),
           ..._videoBadges(photo, compact: false),
           if (ctx.uploadProgress != null)
-            _buildUploadOverlay(ctx.uploadProgress!, 0),
+            _buildUploadOverlay(ctx, ctx.uploadProgress!, 0),
           if (ctx.uploadProgress == null)
             Positioned.fill(
               child: Builder(
                 builder: (tileContext) => GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _openMedia(
-                    ctx.context,
-                    0,
-                    tileContext: tileContext,
-                    radius: radius,
-                    memWidth: memWidth,
-                    memHeight: memHeight,
-                  ),
+                  onTap: () {
+                    if (_awaitsManualLoad(photo)) {
+                      AutoDownloadGate.loadManually(_previewUrlOf(photo));
+                      return;
+                    }
+                    _openMedia(
+                      ctx.context,
+                      0,
+                      tileContext: tileContext,
+                      radius: radius,
+                      memWidth: memWidth,
+                      memHeight: memHeight,
+                    );
+                  },
                 ),
               ),
             ),
@@ -295,20 +303,69 @@ class PhotoBubble extends StatelessWidget {
     }
     final imageUrl = _previewUrlOf(photo);
     if (imageUrl.isNotEmpty && !imageUrl.startsWith('data:')) {
-      return CachedNetworkImage(
-        imageUrl: imageUrl,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        memCacheWidth: memWidth,
-        memCacheHeight: memHeight,
-        fadeInDuration: Duration.zero,
-        placeholderFadeInDuration: Duration.zero,
-        placeholder: (_, _) => _buildPreviewImage(ctx, photo, width, height),
-        errorWidget: (_, _, _) => _buildPreviewImage(ctx, photo, width, height),
+      return ListenableBuilder(
+        listenable: Listenable.merge([
+          AutoDownloadGate.listen(imageUrl),
+          KometSettings.autoDownloadPhoto,
+        ]),
+        builder: (context, _) {
+          if (!AutoDownloadGate.allows(
+            KometSettings.autoDownloadPhoto.value,
+            imageUrl,
+          )) {
+            return _manualLoadTile(ctx, photo, imageUrl, width, height);
+          }
+          return CachedNetworkImage(
+            imageUrl: imageUrl,
+            width: width,
+            height: height,
+            fit: BoxFit.cover,
+            memCacheWidth: memWidth,
+            memCacheHeight: memHeight,
+            fadeInDuration: Duration.zero,
+            placeholderFadeInDuration: Duration.zero,
+            placeholder: (_, _) =>
+                _buildPreviewImage(ctx, photo, width, height),
+            errorWidget: (_, _, _) =>
+                _buildPreviewImage(ctx, photo, width, height),
+          );
+        },
       );
     }
     return _buildPreviewImage(ctx, photo, width, height);
+  }
+
+  Widget _manualLoadTile(
+    BubbleContext ctx,
+    MessageAttachment photo,
+    String key,
+    double width,
+    double height,
+  ) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _buildPreviewImage(ctx, photo, width, height),
+          Center(
+            child: GestureDetector(
+              onTap: () => AutoDownloadGate.loadManually(key),
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Symbols.download, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildPreviewImage(
@@ -372,25 +429,38 @@ class PhotoBubble extends StatelessWidget {
   }
 
   Widget _buildUploadOverlay(
+    BubbleContext ctx,
     ValueListenable<List<double>> progress,
     int index,
   ) {
+    final onCancel = ctx.onCancelUpload;
     return Positioned.fill(
       child: ValueListenableBuilder<List<double>>(
         valueListenable: progress,
         builder: (context, values, _) {
           final value = index < values.length ? values[index] : 1.0;
           final indeterminate = value <= 0 || value >= 1.0;
-          return Container(
-            color: Colors.black.withValues(alpha: 0.4),
-            alignment: Alignment.center,
-            child: SizedBox(
-              width: 34,
-              height: 34,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                value: indeterminate ? null : value,
-                color: Colors.white,
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onCancel,
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.4),
+              alignment: Alignment.center,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 52,
+                    height: 52,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      value: indeterminate ? null : value,
+                      color: Colors.white,
+                    ),
+                  ),
+                  if (onCancel != null)
+                    const Icon(Symbols.close, size: 18, color: Colors.white),
+                ],
               ),
             ),
           );
@@ -524,9 +594,9 @@ class PhotoBubble extends StatelessWidget {
                 ),
               ),
             if (ctx.uploadProgress != null)
-              _buildUploadOverlay(ctx.uploadProgress!, index),
+              _buildUploadOverlay(ctx, ctx.uploadProgress!, index),
             if (ctx.uploadProgress == null)
-              _buildTileTapTarget(ctx, index, memWidth, memHeight),
+              _buildTileTapTarget(ctx, index, memWidth, memHeight, photo),
           ],
         );
       },
@@ -538,21 +608,38 @@ class PhotoBubble extends StatelessWidget {
     int index,
     int memWidth,
     int memHeight,
+    MessageAttachment photo,
   ) {
     return Positioned.fill(
       child: Builder(
         builder: (tileContext) => GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => _openMedia(
-            ctx.context,
-            index,
-            tileContext: tileContext,
-            radius: BorderRadius.zero,
-            memWidth: memWidth,
-            memHeight: memHeight,
-          ),
+          onTap: () {
+            if (_awaitsManualLoad(photo)) {
+              AutoDownloadGate.loadManually(_previewUrlOf(photo));
+              return;
+            }
+            _openMedia(
+              ctx.context,
+              index,
+              tileContext: tileContext,
+              radius: BorderRadius.zero,
+              memWidth: memWidth,
+              memHeight: memHeight,
+            );
+          },
         ),
       ),
+    );
+  }
+
+  bool _awaitsManualLoad(MessageAttachment photo) {
+    if (_localPathOf(photo) != null) return false;
+    final url = _previewUrlOf(photo);
+    if (url.isEmpty || url.startsWith('data:')) return false;
+    return !AutoDownloadGate.allows(
+      KometSettings.autoDownloadPhoto.value,
+      url,
     );
   }
 
