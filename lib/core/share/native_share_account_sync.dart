@@ -10,6 +10,7 @@ import '../../backend/modules/contacts.dart';
 import '../../backend/modules/messages.dart';
 import '../config/komet_settings.dart';
 import '../crypto/e2ee_service.dart';
+import '../crypto/outgoing_message_policy.dart';
 import '../storage/app_database.dart';
 import '../storage/chat_encryption_store.dart';
 import '../storage/token_storage.dart';
@@ -54,7 +55,16 @@ class NativeShareAccountSync with WidgetsBindingObserver {
     });
   }
 
-  void _refreshPrivacy() => unawaited(refresh());
+  void _refreshPrivacy() {
+    unawaited(
+      NativeShareAccountChannel.instance
+          .invalidateAll()
+          .then((_) => refresh())
+          .catchError((Object error) {
+            logger.w('Share privacy invalidation failed: ${error.runtimeType}');
+          }),
+    );
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -137,11 +147,10 @@ class NativeShareAccountSync with WidgetsBindingObserver {
         }
       }
       final disabledReason = shareRecipientDisabledReason(
-        legacyEncryptionEnabled: ChatEncryptionStore.instance.isEnabled(
+        requiresEncryption: OutgoingMessagePolicy.requiresEncryption(
           accountId,
           chat.id,
         ),
-        e2eePhase: E2eeService.instance.phaseOf(accountId, chat.id),
         isChannel: chat.type == 'CHANNEL',
         canPostToChannel: chat.iAmAdmin(accountId),
       );

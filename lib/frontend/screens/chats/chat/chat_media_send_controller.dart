@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../../../core/crypto/outgoing_message_policy.dart';
 import 'dart:convert' show base64Encode;
 import 'dart:io' show File;
 
@@ -12,7 +13,9 @@ import '../../../../backend/modules/upload_service.dart';
 import '../../../../core/cache/message_session_cache.dart';
 import '../../../../core/crypto/chat_crypto_service.dart';
 import '../../../../core/crypto/e2ee_service.dart';
+
 import 'package:komet_crypto/komet_crypto.dart' show ContentType;
+
 import '../../../../core/crypto/encrypted_photo.dart';
 import '../../../../core/media/desktop_video_probe.dart';
 import '../../../../core/media/gallery_source.dart';
@@ -159,11 +162,28 @@ class ChatMediaSendController {
     Haptics.error();
   }
 
+  void Function() _unencryptedSendGuard() {
+    final session = api.session;
+    final accountId = _myId;
+    final chatId = _chatId;
+    return () {
+      if (session == null || !identical(api.session, session)) {
+        throw StateError('Account changed during sending');
+      }
+      OutgoingMessagePolicy.requireSupported(accountId, chatId);
+    };
+  }
+
   Future<void> sendAttachMessage(
     List<MessageAttachment> optimistic,
-    Future<Map<String, dynamic>?> Function() send,
+    Future<Map<String, dynamic>?> Function(void Function() beforeSend) send,
   ) async {
     if (_myId == 0) return;
+    final beforeSend = _unencryptedSendGuard();
+    if (encryptionEnabled()) {
+      notify(_l10n.chatEncryptedUnsupportedMedia);
+      return;
+    }
     if (!await confirmSend() || !isMounted()) return;
     final tempId = chatController.nextTempId();
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -185,7 +205,7 @@ class ChatMediaSendController {
     scrollToBottom();
 
     try {
-      final serverMsg = await send();
+      final serverMsg = await send(beforeSend);
       final mounted = isMounted();
       final idx = chatController.indexOfId(tempId);
       if (mounted && idx == -1) return;
@@ -194,10 +214,7 @@ class ChatMediaSendController {
           updateFileMessageStatus(tempId, 'error');
           notify(_l10n.cloudStorageSendError);
         } else {
-          _previewInChatList(
-            tempMessage.copyWith(status: 'error'),
-            'error',
-          );
+          _previewInChatList(tempMessage.copyWith(status: 'error'), 'error');
         }
         return;
       }
@@ -217,15 +234,22 @@ class ChatMediaSendController {
   }
 
   Future<void> sendSticker(StickerItem sticker) async {
-    await sendAttachMessage([
-      StickerAttachment(
-        stickerId: sticker.id.toString(),
-        baseUrl: sticker.url,
-        lottieUrl: sticker.lottieUrl,
-        width: sticker.width,
-        height: sticker.height,
+    await sendAttachMessage(
+      [
+        StickerAttachment(
+          stickerId: sticker.id.toString(),
+          baseUrl: sticker.url,
+          lottieUrl: sticker.lottieUrl,
+          width: sticker.width,
+          height: sticker.height,
+        ),
+      ],
+      (beforeSend) => messagesModule.sendStickerMessage(
+        _chatId,
+        sticker.id,
+        beforeSend: beforeSend,
       ),
-    ], () => messagesModule.sendStickerMessage(_chatId, sticker.id));
+    );
   }
 
   Future<void> sendContact(CachedContact contact) async {
@@ -233,15 +257,22 @@ class ChatMediaSendController {
     final fullName = (last != null && last.isNotEmpty)
         ? '${contact.firstName} $last'
         : contact.firstName;
-    await sendAttachMessage([
-      ContactAttachment(
-        contactId: contact.id,
-        firstName: contact.firstName,
-        lastName: last,
-        name: fullName,
-        photoUrl: contact.baseUrl,
+    await sendAttachMessage(
+      [
+        ContactAttachment(
+          contactId: contact.id,
+          firstName: contact.firstName,
+          lastName: last,
+          name: fullName,
+          photoUrl: contact.baseUrl,
+        ),
+      ],
+      (beforeSend) => messagesModule.sendContactMessage(
+        _chatId,
+        contact.id,
+        beforeSend: beforeSend,
       ),
-    ], () => messagesModule.sendContactMessage(_chatId, contact.id));
+    );
   }
 
   Future<Position?> _resolveCurrentPosition() async {
@@ -275,9 +306,15 @@ class ChatMediaSendController {
     if (position == null || !isMounted()) return;
     final lat = position.latitude;
     final lon = position.longitude;
-    await sendAttachMessage([
-      LocationAttachment(latitude: lat, longitude: lon, zoom: 15),
-    ], () => messagesModule.sendLocationMessage(_chatId, lat, lon));
+    await sendAttachMessage(
+      [LocationAttachment(latitude: lat, longitude: lon, zoom: 15)],
+      (beforeSend) => messagesModule.sendLocationMessage(
+        _chatId,
+        lat,
+        lon,
+        beforeSend: beforeSend,
+      ),
+    );
   }
 
   Uint8List _buildWave(List<double> amps, {int bars = 80}) {
@@ -299,6 +336,13 @@ class ChatMediaSendController {
   }
 
   Future<void> sendVoice(File file, int durationMs, List<double> amps) async {
+    if (encryptionEnabled()) {
+      try {
+        await file.delete();
+      } catch (_) {}
+      if (isMounted()) notify(_l10n.chatEncryptedUnsupportedMedia);
+      return;
+    }
     if (_myId == 0 || !await confirmSend()) {
       try {
         await file.delete();
@@ -327,6 +371,13 @@ class ChatMediaSendController {
   }
 
   Future<void> sendVideoNote(File file, int durationMs) async {
+    if (encryptionEnabled()) {
+      try {
+        await file.delete();
+      } catch (_) {}
+      if (isMounted()) notify(_l10n.chatEncryptedUnsupportedMedia);
+      return;
+    }
     if (_myId == 0 || !await confirmSend()) {
       try {
         await file.delete();
@@ -350,6 +401,11 @@ class ChatMediaSendController {
   }
 
   Future<void> sendHistoryFile(FileHistoryEntry entry) async {
+    final beforeSend = _unencryptedSendGuard();
+    if (encryptionEnabled()) {
+      notify(_l10n.chatEncryptedUnsupportedMedia);
+      return;
+    }
     if (!await confirmSend() || !isMounted()) return;
     final tempId = addOptimisticMediaMessage(
       FileAttachment(
@@ -365,6 +421,7 @@ class ChatMediaSendController {
         _chatId,
         entry.fileId,
         token: entry.token,
+        beforeSend: beforeSend,
       );
       updateFileMessageStatus(
         tempId,
@@ -377,10 +434,19 @@ class ChatMediaSendController {
   }
 
   Future<bool> sendFileById(int fileId) async {
+    if (encryptionEnabled()) {
+      notify(_l10n.chatEncryptedUnsupportedMedia);
+      return false;
+    }
+    final beforeSend = _unencryptedSendGuard();
     if (!await confirmSend() || !isMounted()) return false;
     final tempId = addOptimisticMediaMessage(FileAttachment(fileId: fileId)).id;
     try {
-      final realId = await messagesModule.sendFileMessage(_chatId, fileId);
+      final realId = await messagesModule.sendFileMessage(
+        _chatId,
+        fileId,
+        beforeSend: beforeSend,
+      );
       final ok = realId != null;
       if (!isMounted()) return ok;
       if (ok) {
@@ -495,6 +561,10 @@ class ChatMediaSendController {
     int? scheduledTime,
   }) async {
     if (_myId == 0) return;
+    if (encryptionEnabled()) {
+      notify(_l10n.chatMediaSendVideoNotEncryptable);
+      return;
+    }
     final file =
         video.editedFile ??
         video.item.localFile ??
@@ -583,6 +653,10 @@ class ChatMediaSendController {
     bool separate = false,
   }) async {
     if (_myId == 0) return;
+    if (encryptionEnabled()) {
+      notify(_l10n.chatMediaSendScheduledEncryptedPhotos);
+      return;
+    }
     if (!await confirmSend() || !isMounted()) return;
     final videos = picked.where((ph) => ph.item.isVideo).toList();
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
@@ -688,6 +762,7 @@ class ChatMediaSendController {
         await _uploadAsFile(
           source: e2eePhoto.file,
           filename: 'photo_$stamp$kE2eePhotoExtension',
+          encryptedPayload: true,
           size: await e2eePhoto.file.length(),
           text: wire,
           sealedText: sealed,
@@ -717,6 +792,7 @@ class ChatMediaSendController {
       await _uploadAsFile(
         source: encrypted,
         filename: 'photo_$stamp$kEncryptedPhotoExtension',
+        encryptedPayload: true,
         size: await encrypted.length(),
       );
       if (!isMounted()) return;
@@ -725,7 +801,12 @@ class ChatMediaSendController {
     if (caption.isNotEmpty) {
       final wire = await encryptOutgoing(caption);
       if (wire != null && isMounted()) {
-        await messagesModule.sendMessage(_myId, _chatId, wire);
+        await messagesModule.sendMessage(
+          _myId,
+          _chatId,
+          wire,
+          encryptedPayload: wire != caption,
+        );
       }
     }
   }
@@ -760,6 +841,7 @@ class ChatMediaSendController {
     String? text,
     Uint8List? sealedText,
     int e2ee = CachedMessage.e2eeNone,
+    bool encryptedPayload = false,
   }) async {
     if (_myId == 0) return;
 
@@ -784,6 +866,7 @@ class ChatMediaSendController {
       placeholder: placeholder,
       text: text,
       scheduledTime: scheduledTime,
+      encryptedPayload: encryptedPayload,
     );
     syncUploadStatus();
     await sending;

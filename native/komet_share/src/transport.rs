@@ -68,6 +68,9 @@ pub struct Connection {
     session: Session,
     proxy: Option<ProxyConfig>,
     insecure_tls: bool,
+    authorization: crate::authorization::ShareAuthorization,
+    account_id: String,
+    chat_id: String,
     pub refreshed_token: Option<String>,
 }
 
@@ -78,6 +81,7 @@ struct Response {
 
 impl Connection {
     pub async fn connect(input: &Input) -> Result<Self, String> {
+        input.authorize()?;
         let options = &input.session;
         kolibri_net::set_trust_mincifry_ca(options.trust_mincifry_ca);
         let proxy = options
@@ -116,6 +120,12 @@ impl Connection {
             session: Session::new(config),
             proxy,
             insecure_tls: options.insecure_tls,
+            authorization: input
+                .authorization
+                .clone()
+                .ok_or_else(crate::authorization::denied)?,
+            account_id: input.account_id.clone(),
+            chat_id: input.request.chat_id.clone(),
             refreshed_token: None,
         };
         let info = connection
@@ -146,6 +156,9 @@ impl Connection {
     async fn request(&self, opcode: u16, payload: &Value) -> Result<Response, ()> {
         let mut bytes = Vec::new();
         rmpv::encode::write_value(&mut bytes, &kolibri_net::protocol::json_to_value(payload))
+            .map_err(|_| ())?;
+        self.authorization
+            .check(&self.account_id, &self.chat_id)
             .map_err(|_| ())?;
         let packet = self
             .session
@@ -372,6 +385,9 @@ impl Transport for Connection {
     async fn send(&mut self, payload: &Value) -> Result<String, SendError> {
         let max_attempts = send_attempts(payload);
         for attempt in 0..max_attempts {
+            self.authorization
+                .check(&self.account_id, &self.chat_id)
+                .map_err(SendError::Rejected)?;
             let response = self
                 .request(opcodes::MSG_SEND, payload)
                 .await

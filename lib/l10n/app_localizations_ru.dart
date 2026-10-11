@@ -9,6 +9,14 @@ class AppLocalizationsRu extends AppLocalizations {
   AppLocalizationsRu([String locale = 'ru']) : super(locale);
 
   @override
+  String get shareEncryptedUnsupported =>
+      'В зашифрованный чат пока нельзя отправлять через «Поделиться». Откройте чат и отправьте сообщение из него.';
+
+  @override
+  String get chatEncryptedUnsupportedMedia =>
+      'Этот тип вложения пока нельзя зашифровать. Отправка отменена.';
+
+  @override
   String get loginTitle => 'Войдите в Komet';
 
   @override
@@ -6552,4 +6560,19 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get appearanceBottomNavigationCompact => 'Компактная';
+
+  @override
+  String get temporaryPasswordRecoveryTitle =>
+      'Восстановление временного пароля';
+
+  @override
+  String get temporaryPasswordRecoveryMessage =>
+      'Временный пароль MAX не удалось снять. Покажите его в безопасном месте и сохраните перед удалением или сменой пароля в настройках MAX.';
+
+  @override
+  String get temporaryPasswordRecoveryShow => 'Показать пароль';
+
+  @override
+  String get temporaryPasswordRecoveryInstructions =>
+      'Снимите или смените этот пароль в MAX перед удалением Komet. Не отправляйте его на скриншотах или в логах.';
 }

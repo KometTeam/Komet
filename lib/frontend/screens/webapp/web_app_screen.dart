@@ -16,6 +16,8 @@ import '../../widgets/error_view.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/webview_permission_prompt.dart';
 import 'web_app_bridge.dart';
+import 'web_app_origin_policy.dart';
+import '../../../core/storage/token_storage.dart';
 
 class WebAppScreen extends StatefulWidget {
   final String title;
@@ -108,11 +110,17 @@ class _WebAppScreenState extends State<WebAppScreen> {
             await SpoofingService.getWebViewUserAgent() ??
             '';
       }
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId == null) throw StateError('No active account');
       final launch = await widget.loader();
+      if (accountId != await TokenStorage.getActiveAccountId()) {
+        throw StateError('Account changed');
+      }
       if (!mounted) return;
+      final bridge = _createBridge(launch, accountId);
       setState(() {
         _launch = launch;
-        _bridge = _createBridge(launch.botId);
+        _bridge = bridge;
       });
     } catch (e) {
       if (!mounted) return;
@@ -120,16 +128,19 @@ class _WebAppScreenState extends State<WebAppScreen> {
     }
   }
 
-  WebAppBridge _createBridge(int botId) => WebAppBridge(
-    botId: botId,
-    entryPoint: widget.entryPoint,
-    privateChannel: widget.privateChannel,
-    mobileIdVerifier: widget.mobileIdVerifier,
-    contextResolver: () => mounted ? context : null,
-    viewportResolver: () => _viewport,
-    onClose: _closeFromWebApp,
-    onRestart: _restartFromWebApp,
-  );
+  WebAppBridge _createBridge(WebAppLaunch launch, int? accountId) =>
+      WebAppBridge(
+        botId: launch.botId,
+        accountId: accountId,
+        originPolicy: WebAppOriginPolicy(launch.url),
+        entryPoint: widget.entryPoint,
+        privateChannel: widget.privateChannel,
+        mobileIdVerifier: widget.mobileIdVerifier,
+        contextResolver: () => mounted ? context : null,
+        viewportResolver: () => _viewport,
+        onClose: _closeFromWebApp,
+        onRestart: _restartFromWebApp,
+      );
 
   void _closeFromWebApp() {
     if (!mounted) return;
@@ -184,22 +195,40 @@ class _WebAppScreenState extends State<WebAppScreen> {
     NavigationAction action,
   ) async {
     final uri = action.request.url;
+    if (action.isForMainFrame == true &&
+        (uri == null ||
+            _bridge?.originPolicy?.accepts(Uri.parse(uri.toString())) !=
+                true)) {
+      _bridge?.documentStarted(null);
+      if (uri != null && mounted) {
+        await openExternalUrl(context, uri.toString());
+      }
+      return NavigationActionPolicy.CANCEL;
+    }
     final callback = widget.onExternalCallback;
     if (callback != null && uri?.queryParameters['externalCallback'] == '1') {
       try {
+        final accountId = await TokenStorage.getActiveAccountId();
+        if (accountId == null || accountId != _bridge?.accountId) {
+          throw StateError('Account changed');
+        }
         final launch = await callback(uri.toString());
+        if (accountId != await TokenStorage.getActiveAccountId()) {
+          throw StateError('Account changed');
+        }
         if (!mounted) return NavigationActionPolicy.CANCEL;
         if (widget.closeAfterExternalCallback) {
           Navigator.of(context).pop(launch);
           return NavigationActionPolicy.CANCEL;
         }
+        if (!mounted) return NavigationActionPolicy.CANCEL;
+        final bridge = _createBridge(launch, accountId);
         setState(() {
+          _bridge?.dispose();
           _launch = launch;
+          _bridge = bridge;
           _loadError = null;
         });
-        await controller.loadUrl(
-          urlRequest: URLRequest(url: WebUri(launch.url)),
-        );
       } catch (e) {
         if (mounted) setState(() => _loadError = e.toString());
       }
@@ -281,13 +310,15 @@ class _WebAppScreenState extends State<WebAppScreen> {
 
   Widget _buildWebView(WebAppLaunch launch, WebAppBridge bridge) {
     return InAppWebView(
-      initialUrlRequest: URLRequest(url: WebUri(launch.url)),
+      key: ValueKey(bridge),
       initialUserScripts: UnmodifiableListView<UserScript>([
         bridge.userScript,
         ...?widget.extraUserScripts,
       ]),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
+        javaScriptHandlersForMainFrameOnly: true,
+        javaScriptHandlersOriginAllowList: bridge.originPolicy!.patterns,
         domStorageEnabled: true,
         thirdPartyCookiesEnabled: true,
         supportZoom: false,
@@ -302,10 +333,20 @@ class _WebAppScreenState extends State<WebAppScreen> {
         useShouldOverrideUrlLoading: true,
         userAgent: _userAgent,
       ),
-      onWebViewCreated: (controller) {
+      onWebViewCreated: (controller) async {
         _controller = controller;
-        bridge.attach(controller);
-        widget.onWebViewCreated?.call(controller);
+        try {
+          await bridge.attach(controller);
+          if (!mounted || !identical(bridge, _bridge)) return;
+          bridge.documentStarted(Uri.parse(launch.url));
+          widget.onWebViewCreated?.call(controller);
+          await controller.loadUrl(
+            urlRequest: URLRequest(url: WebUri(launch.url)),
+          );
+        } catch (error) {
+          bridge.dispose();
+          if (mounted) setState(() => _loadError = error.toString());
+        }
       },
       onPermissionRequest: (controller, request) =>
           askWebViewPermission(context, request),
@@ -317,7 +358,10 @@ class _WebAppScreenState extends State<WebAppScreen> {
         return false;
       },
       onConsoleMessage: widget.onConsoleMessage,
-      onLoadStart: widget.onLoadStart,
+      onLoadStart: (controller, url) {
+        bridge.documentStarted(url == null ? null : Uri.parse(url.toString()));
+        widget.onLoadStart?.call(controller, url);
+      },
       shouldOverrideUrlLoading: _handleNavigation,
       onProgressChanged: (controller, progress) {
         if (!mounted) return;

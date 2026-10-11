@@ -13,6 +13,8 @@ struct KometShareAccount: Codable {
   let id: String
   let name: String
   let chats: [KometShareChat]
+  var policyEpoch: String? = nil
+  var updatedAtMillis: Int64? = nil
 }
 
 protocol KometShareCredentialStorage {
@@ -120,9 +122,16 @@ final class KometShareAccounts {
         "account_id": id, "token": activeToken, "sourceToken": token, "session": session, "login": login
       ]
       try writeCredentials(credentials, accountID: id)
-      var saved = try readAccounts().filter { $0.id != id }
+      let accounts = try readAccounts()
+      let previous = accounts.first { $0.id == id }
+      let permissions = Dictionary(chats.map { ($0.id, $0.disabledReason ?? "allowed") }, uniquingKeysWith: { _, new in new })
+      let oldPermissions = Dictionary((previous?.chats ?? []).map { ($0.id, $0.disabledReason ?? "allowed") }, uniquingKeysWith: { _, new in new })
+      let sameCredentials = existing?["sourceToken"] as? String == token
+        && (existing?["session"] as? NSDictionary)?.isEqual(to: session) == true
+      let epoch = permissions == oldPermissions && sameCredentials ? previous?.policyEpoch ?? UUID().uuidString : UUID().uuidString
+      var saved = accounts.filter { $0.id != id }
       let name = arguments["accountName"] as? String ?? "Komet"
-      saved.insert(KometShareAccount(id: id, name: name, chats: chats), at: 0)
+      saved.insert(KometShareAccount(id: id, name: name, chats: chats, policyEpoch: epoch, updatedAtMillis: Int64(Date().timeIntervalSince1970 * 1000)), at: 0)
       try writeAccounts(saved)
     }
   }
@@ -134,12 +143,27 @@ final class KometShareAccounts {
   func authorizedCredentials(accountID: String, chatID: String) throws -> [String: Any] {
     try withLock {
       guard let account = try readAccounts().first(where: { $0.id == accountID }),
-            let chat = account.chats.first(where: { $0.id == chatID }), chat.disabledReason == nil else {
+            let chat = account.chats.first(where: { $0.id == chatID }), chat.disabledReason == nil,
+            let epoch = account.policyEpoch, let updated = account.updatedAtMillis,
+            Int64(Date().timeIntervalSince1970 * 1000) >= updated,
+            Int64(Date().timeIntervalSince1970 * 1000) - updated <= 300_000 else {
         throw NSError(domain: "KometShare", code: 1, userInfo: [
           NSLocalizedDescriptionKey: "Этот чат недоступен для отправки. Обновите список чатов в Komet."
         ])
       }
-      return try readCredentials(accountID: accountID)
+      var credentials = try readCredentials(accountID: accountID)
+      credentials["authorization"] = ["snapshot_path": snapshotURL.path, "lock_path": lockURL.path, "epoch": epoch]
+      return credentials
+    }
+  }
+
+  func invalidate(accountID: String?) throws {
+    try withLock {
+      var saved = try readAccounts()
+      for index in saved.indices where accountID == nil || saved[index].id == accountID {
+        saved[index].policyEpoch = nil
+      }
+      try writeAccounts(saved)
     }
   }
 

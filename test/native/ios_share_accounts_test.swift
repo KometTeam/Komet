@@ -37,6 +37,11 @@ struct KometShareAccountsTests {
     input["chats"] = [["id": "34", "title": "Synthetic chat", "type": "DIALOG"]]
     try accounts.sync(input)
     try expect(reopened.authorizedCredentials(accountID: "12", chatID: "34")["account_id"] as? String == "12", "Allowed recipient and credentials must be read in one transaction")
+    try reopened.invalidate(accountID: "12")
+    try expectThrows { _ = try accounts.authorizedCredentials(accountID: "12", chatID: "34") }
+    try accounts.sync(input)
+    let authorized = try reopened.authorizedCredentials(accountID: "12", chatID: "34")
+    try expect(authorized["authorization"] is [String: Any], "Native transport must receive a live policy guard")
     let snapshot = try String(contentsOf: container.appendingPathComponent("KometShare/accounts.json"), encoding: .utf8)
     try expect(!snapshot.contains("synthetic-source-token") && !snapshot.contains("synthetic-secret-proxy"), "Credentials must never enter the shared snapshot")
     try accounts.updateToken(accountID: "12", previousToken: "synthetic-source-token", refreshedToken: "synthetic-renewed-token")

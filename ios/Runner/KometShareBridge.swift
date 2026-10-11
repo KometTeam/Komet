@@ -12,7 +12,7 @@ final class KometShareBridge {
   }
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    if !extensionEnabled && ["syncShareAccount", "clearShareAccount", "clearAllShareAccounts", "readShareToken"].contains(call.method) {
+    if !extensionEnabled && ["syncShareAccount", "invalidateShareAccount", "invalidateShareAccounts", "clearShareAccount", "clearAllShareAccounts", "readShareToken"].contains(call.method) {
       result(nil)
       return
     }
@@ -44,6 +44,20 @@ final class KometShareBridge {
       }
       perform(result) { _ in
         try KometShareAccounts().sync(arguments)
+        return nil
+      }
+    case "invalidateShareAccounts":
+      perform(result) { _ in
+        try KometShareAccounts().invalidate(accountID: nil)
+        return nil
+      }
+    case "invalidateShareAccount":
+      guard let id = (call.arguments as? [String: Any])?["accountId"] as? String else {
+        result(FlutterError(code: "INVALID_SHARE_ACCOUNT", message: "Missing account ID", details: nil))
+        return
+      }
+      perform(result) { _ in
+        try KometShareAccounts().invalidate(accountID: id)
         return nil
       }
     case "clearShareAccount":

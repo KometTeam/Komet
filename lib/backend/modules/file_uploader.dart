@@ -65,6 +65,8 @@ class FileUploader {
     required String filename,
     required int totalSize,
     String? text,
+    bool encryptedPayload = false,
+    void Function()? beforeSend,
     int? scheduledTime,
     Duration autoForceAfter = const Duration(seconds: 1),
     Duration overallTimeout = const Duration(minutes: 5),
@@ -81,7 +83,9 @@ class FileUploader {
 
     Future<void> run() async {
       try {
-        final info = await messages.requestUploadUrl();
+        final initialSession = api.session;
+        beforeSend?.call();
+        final info = await messages.requestUploadUrl(beforeSend: beforeSend);
         if (cancelled) return;
         if (info == null) {
           ctrl.add(const UploadError('no_upload_url'));
@@ -89,6 +93,10 @@ class FileUploader {
         }
 
         final session = api.session;
+        beforeSend?.call();
+        if (!identical(session, initialSession)) {
+          throw StateError('Account changed during upload');
+        }
         if (session == null) {
           ctrl.add(const UploadError('no_session'));
           return;
@@ -100,7 +108,7 @@ class FileUploader {
             await api.sendRequest(Opcode.msgTyping, {
               'chatId': chatId,
               'type': 'FILE',
-            });
+            }, beforeSend: beforeSend);
           } catch (_) {}
         }());
 
@@ -108,39 +116,35 @@ class FileUploader {
         String? error;
         final done = Completer<void>();
         // #***! подписка на события ядра
-        sub =
-            session
-                .uploadFilePath(
-                  url: info.url,
-                  path: file.path,
-                  filename: filename,
-                  connection: 'close',
-                )
-                .listen(
-                  (e) {
-                    switch (e) {
-                      case kb.UploadEvent_Progress(:final sent, :final total):
-                        ctrl.add(
-                          UploadProgress(
-                            sent: sent.toInt(),
-                            total: total.toInt(),
-                          ),
-                        );
-                      case kb.UploadEvent_Done(status: final s):
-                        status = s;
-                      case kb.UploadEvent_Error(:final message):
-                        error = message;
-                    }
-                  },
-                  onError: (Object err) {
-                    error = err.toString();
-                    if (!done.isCompleted) done.complete();
-                  },
-                  onDone: () {
-                    if (!done.isCompleted) done.complete();
-                  },
-                  cancelOnError: true,
-                );
+        sub = session
+            .uploadFilePath(
+              url: info.url,
+              path: file.path,
+              filename: filename,
+              connection: 'close',
+            )
+            .listen(
+              (e) {
+                switch (e) {
+                  case kb.UploadEvent_Progress(:final sent, :final total):
+                    ctrl.add(
+                      UploadProgress(sent: sent.toInt(), total: total.toInt()),
+                    );
+                  case kb.UploadEvent_Done(status: final s):
+                    status = s;
+                  case kb.UploadEvent_Error(:final message):
+                    error = message;
+                }
+              },
+              onError: (Object err) {
+                error = err.toString();
+                if (!done.isCompleted) done.complete();
+              },
+              onDone: () {
+                if (!done.isCompleted) done.complete();
+              },
+              cancelOnError: true,
+            );
         await done.future;
         if (cancelled) return;
         if (error != null) {
@@ -159,7 +163,14 @@ class FileUploader {
           info.fileId,
           token: info.token,
           text: text,
+          encryptedPayload: encryptedPayload,
           scheduledTime: scheduledTime,
+          beforeSend: () {
+            if (!identical(api.session, initialSession)) {
+              throw StateError('Account changed during upload');
+            }
+            beforeSend?.call();
+          },
         );
         if (cancelled) return;
         if (messageId == null) {

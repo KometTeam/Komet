@@ -367,6 +367,7 @@ class E2eeService {
         accountId,
         chatId,
         '$kE2eeOfferPrefix\n${offer.text}',
+        encryptionControl: true,
       );
       if (messageId.isEmpty) return false;
       final previous = info(accountId, chatId);
@@ -414,6 +415,7 @@ class E2eeService {
         accountId,
         chatId,
         '$kE2eeAnswerPrefix\n${answer.text}',
+        encryptionControl: true,
       );
       if (messageId.isEmpty) return false;
       final peek = KometCrypto.handshakePeek(offerText);
@@ -685,7 +687,12 @@ class E2eeService {
       if (offerMessageId != null && messages != null) {
         unawaited(
           messages
-              .editMessage(chatId, offerMessageId, text: kE2eeOfferDonePrefix)
+              .editMessage(
+                chatId,
+                offerMessageId,
+                text: kE2eeOfferDonePrefix,
+                encryptionControl: true,
+              )
               .catchError((_) => false),
         );
       }
@@ -983,7 +990,11 @@ class E2eeService {
     final items = <Uint8List>[];
     var offset = 4;
     final count = _readBe32(container, 0);
-    for (var index = 0; index < count && offset + 4 <= container.length; index++) {
+    for (
+      var index = 0;
+      index < count && offset + 4 <= container.length;
+      index++
+    ) {
       final length = _readBe32(container, offset);
       offset += 4;
       if (offset + length > container.length) return null;

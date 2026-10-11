@@ -10,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 
 class PluginCommandContext implements PluginHost {
   const PluginCommandContext({
+    this.accountId,
     required this.args,
     required this.arguments,
     required this.replyMessage,
@@ -22,6 +23,9 @@ class PluginCommandContext implements PluginHost {
     required this.notifyCallback,
     required this.getPeerCallback,
   });
+
+  @override
+  final int? accountId;
 
   @override
   final String args;
