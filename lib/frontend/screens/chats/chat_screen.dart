@@ -50,6 +50,7 @@ import '../../../core/storage/chat_members_store.dart';
 import '../../../core/crypto/chat_crypto_service.dart';
 import '../../../core/crypto/e2ee_service.dart';
 import '../../../core/crypto/message_decryption_cache.dart';
+import '../../../core/crypto/outgoing_message_policy.dart';
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/chat_wallpaper_store.dart';
 import '../../../core/storage/draft_store.dart';
@@ -2971,6 +2972,7 @@ class _ChatScreenState extends State<ChatScreen>
       message.id,
       text: wireText,
       elements: editEncrypted ? const [] : elements,
+      encryptedPayload: editEncrypted,
     );
     if (!mounted) return;
     if (!ok) {
@@ -3016,7 +3018,13 @@ class _ChatScreenState extends State<ChatScreen>
             : CachedMessage.e2eeText,
       );
       if (editEncrypted) {
-        MessageDecryptionCache.instance.seed(message.id, newText);
+        MessageDecryptionCache.instance.seed(
+          message.id,
+          newText,
+          accountId: _myId,
+          chatId: widget.chatId,
+          cipherText: wireText,
+        );
       }
       _chatController.setMessageAt(idx, edited);
       _bumpMessages();
@@ -3482,8 +3490,10 @@ class _ChatScreenState extends State<ChatScreen>
   void _applyEncryption() {
     if (!mounted) return;
     final e2ee = _e2eeActive;
-    final enabled =
-        e2ee || ChatEncryptionStore.instance.isEnabled(_myId, widget.chatId);
+    final enabled = OutgoingMessagePolicy.requiresEncryption(
+      _myId,
+      widget.chatId,
+    );
     if (enabled != _encryptionEnabled) {
       setState(() => _encryptionEnabled = enabled);
     }
@@ -4006,12 +4016,17 @@ class _ChatScreenState extends State<ChatScreen>
     SlashCommand command,
     String args, {
     Map<String, dynamic>? arguments,
-  }) => PluginCommandContext(
+  }) {
+    final accountId = _myId;
+    final sessionEpoch = api.sessionEpoch;
+    return PluginCommandContext(
+    accountId: accountId,
     args: args,
     arguments: arguments ?? parseCommandArguments(args, command.arguments),
     replyMessage: _pluginReplyMessage(),
     onlineCheck: () => api.state == SessionState.online,
-    activeCheck: () => mounted,
+    activeCheck: () =>
+        mounted && _myId == accountId && api.sessionEpoch == sessionEpoch,
     sendTextCallback: _textSend.postCommandMessage,
     editTextCallback: _textSend.updateCommandMessage,
     sendPhotoCallback: _sendPluginPhoto,
@@ -4021,6 +4036,7 @@ class _ChatScreenState extends State<ChatScreen>
     },
     getPeerCallback: _pluginPeer,
   );
+  }
 
   Map<String, dynamic>? _pluginReplyMessage() {
     final message = _replyTo.value;
@@ -4176,6 +4192,7 @@ class _ChatScreenState extends State<ChatScreen>
         _myId,
         widget.chatId,
         wireText,
+        encryptedPayload: wireText != text,
         scheduledTime: when.millisecondsSinceEpoch,
       );
       if (!mounted) return;
@@ -5310,12 +5327,13 @@ class _ChatScreenState extends State<ChatScreen>
     if (draft == null || !mounted) return;
     await _mediaSend.sendAttachMessage(
       [PollAttachment(pollId: 0, title: draft.title)],
-      () => messagesModule.sendPollMessage(
+      (beforeSend) => messagesModule.sendPollMessage(
         widget.chatId,
         draft.title,
         draft.answers,
         multiple: draft.multiple,
         anonymous: draft.anonymous,
+        beforeSend: beforeSend,
       ),
     );
   }

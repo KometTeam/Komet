@@ -1,12 +1,9 @@
-import '../crypto/e2ee_service.dart';
-
 String? shareRecipientDisabledReason({
-  required bool legacyEncryptionEnabled,
-  required E2eePhase e2eePhase,
+  required bool requiresEncryption,
   required bool isChannel,
   required bool canPostToChannel,
 }) {
-  if (legacyEncryptionEnabled || e2eePhase != E2eePhase.none) {
+  if (requiresEncryption) {
     return 'Зашифрованный чат — отправляйте из Komet';
   }
   if (isChannel && !canPostToChannel) {

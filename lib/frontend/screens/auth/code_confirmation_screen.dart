@@ -18,6 +18,7 @@ import '../../widgets/auth_limits_sheet.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
 import '../../widgets/small_spinner.dart';
+import '../../widgets/temporary_password_recovery_dialog.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -343,12 +344,14 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
 
     setState(() => _verifying = true);
     var verified = false;
+    int? verifiedAccountId;
     try {
       final result = await accountModule.verifyCode(
         _codeController.text,
         _token,
       );
       verified = true;
+      verifiedAccountId = result.accountId;
       stopSessionRecovery();
 
       if (!mounted) return;
@@ -409,6 +412,13 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
           webToken: token,
           existingPassword: null,
         );
+        if (!mounted) return;
+        await showTemporaryPasswordRecovery(
+          context,
+          accId,
+          verifiedAccountId: verifiedAccountId,
+        );
+        if (!mounted) return;
         await _completeLogin(null);
         return;
       }
@@ -422,6 +432,14 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         '(код принят=$verified): $e\n$st',
       );
       if (!mounted) return;
+      if (verified && verifiedAccountId != null) {
+        await showTemporaryPasswordRecovery(
+          context,
+          verifiedAccountId,
+          verifiedAccountId: verifiedAccountId,
+        );
+        if (!mounted) return;
+      }
       if (verified) {
         _showError(e.toString());
       } else if (isAuthSessionLostError(e)) {

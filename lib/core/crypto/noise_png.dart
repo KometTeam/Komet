@@ -5,8 +5,9 @@ import 'dart:typed_data';
 // #***! шифрованное фото едет как валидный RGB8 PNG из шума, пиксели = байты блоба
 const int _channels = 3;
 const int _maxDimension = 16384;
+const int noisePngMaxDecodedBytes = 32 * 1024 * 1024;
 // #***! zlib раздувает без предела, распаковываем порциями по бюджету из IHDR
-const int _inflateChunk = 1 << 16;
+const int _inflateChunk = 1 << 10;
 const List<int> _signature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
 final Uint32List _crcTable = _buildCrcTable();
@@ -23,10 +24,12 @@ Uint32List _buildCrcTable() {
   return table;
 }
 
-int _crc32(List<int> bytes) {
+int _crc32(List<int> bytes, [List<int> tail = const []]) {
   var crc = 0xFFFFFFFF;
-  for (final byte in bytes) {
-    crc = _crcTable[(crc ^ byte) & 0xFF] ^ (crc >> 8);
+  for (final part in [bytes, tail]) {
+    for (final byte in part) {
+      crc = _crcTable[(crc ^ byte) & 0xFF] ^ (crc >> 8);
+    }
   }
   return crc ^ 0xFFFFFFFF;
 }
@@ -36,7 +39,7 @@ void _writeChunk(BytesBuilder out, String type, List<int> data) {
   out.add(_be32(data.length));
   out.add(typeBytes);
   out.add(data);
-  out.add(_be32(_crc32([...typeBytes, ...data])));
+  out.add(_be32(_crc32(typeBytes, data)));
 }
 
 Uint8List _be32(int value) => Uint8List(4)
@@ -58,6 +61,10 @@ Uint8List? wrapNoisePng(Uint8List blob, {Random? random}) {
   if (width > _maxDimension) return null;
   final height = max(1, (pixels + width - 1) ~/ width);
   final stride = width * _channels;
+  if (height > _maxDimension ||
+      (stride + 1) * height > noisePngMaxDecodedBytes) {
+    return null;
+  }
   final raw = Uint8List((stride + 1) * height);
   var source = 0;
   for (var row = 0; row < height; row++) {
@@ -71,15 +78,7 @@ Uint8List? wrapNoisePng(Uint8List blob, {Random? random}) {
   }
   final out = BytesBuilder(copy: false);
   out.add(_signature);
-  _writeChunk(out, 'IHDR', [
-    ..._be32(width),
-    ..._be32(height),
-    8,
-    2,
-    0,
-    0,
-    0,
-  ]);
+  _writeChunk(out, 'IHDR', [..._be32(width), ..._be32(height), 8, 2, 0, 0, 0]);
   _writeChunk(out, 'IDAT', ZLibEncoder(level: 1).convert(raw));
   _writeChunk(out, 'IEND', const []);
   return out.toBytes();
@@ -87,7 +86,10 @@ Uint8List? wrapNoisePng(Uint8List blob, {Random? random}) {
 
 // #***! обратно из PNG в байты, null если это не наш RGB8 без interlace
 Uint8List? unwrapNoisePng(Uint8List png) {
-  if (png.length < _signature.length + 8) return null;
+  if (png.length < _signature.length + 8 ||
+      png.length > noisePngMaxDecodedBytes + 1024 * 1024) {
+    return null;
+  }
   for (var i = 0; i < _signature.length; i++) {
     if (png[i] != _signature[i]) return null;
   }
@@ -111,6 +113,9 @@ Uint8List? unwrapNoisePng(Uint8List png) {
       if (depth != 8 || color != 2 || interlace != 0) return null;
       if (width <= 0 || height <= 0) return null;
       if (width > _maxDimension || height > _maxDimension) return null;
+      if ((width * _channels + 1) * height > noisePngMaxDecodedBytes) {
+        return null;
+      }
     } else if (type == 'IDAT') {
       idat.add(Uint8List.sublistView(png, dataStart, dataEnd));
     } else if (type == 'IEND') {

@@ -35,6 +35,7 @@ pub struct Input {
     #[serde(default)]
     pub login: Value,
     pub request: ShareRequest,
+    pub authorization: Option<crate::authorization::ShareAuthorization>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -63,6 +64,13 @@ impl SharedFile {
 }
 
 impl Input {
+    pub fn authorize(&self) -> Result<(), String> {
+        self.authorization
+            .as_ref()
+            .ok_or_else(crate::authorization::denied)?
+            .check(&self.account_id, &self.request.chat_id)
+    }
+
     pub fn validate_files(&self) -> Result<(), String> {
         for file in &self.request.files {
             let metadata = fs::symlink_metadata(&file.path)
@@ -323,6 +331,9 @@ pub async fn deliver(
     if let Some(outcome) = journal.terminal() {
         return outcome;
     }
+    if let Err(message) = input.authorize() {
+        return journal.outcome("failed", &message);
+    }
     let count = journal.state.entries.len();
     let counter = Arc::new(Mutex::new(UploadCounter {
         total: input.request.files.iter().map(|file| file.size).sum(),
@@ -372,10 +383,15 @@ pub async fn deliver(
                         total,
                     });
                 });
-                match transport
-                    .upload(&input.request.files[*file_index], file_progress)
-                    .await
-                {
+                if let Err(message) = input.authorize() {
+                    return journal.outcome("failed", &message);
+                }
+                let upload = transport.upload(&input.request.files[*file_index], file_progress);
+                let result = tokio::select! {
+                    result = upload => result,
+                    message = watch_authorization(input) => Err(message),
+                };
+                match result {
                     Ok(attachment) => {
                         attachments.push(attachment);
                         let mut bytes = counter.lock().unwrap();
@@ -411,6 +427,9 @@ pub async fn deliver(
         if journal.state.entries[index].status == EntryStatus::Sent {
             continue;
         }
+        if let Err(message) = input.authorize() {
+            return journal.outcome("failed", &message);
+        }
         journal.state.entries[index].status = EntryStatus::Sending;
         if journal.persist().is_err() {
             journal.state.entries[index].status = EntryStatus::Failed;
@@ -427,6 +446,11 @@ pub async fn deliver(
             sent: total,
             total,
         });
+        if let Err(message) = input.authorize() {
+            journal.state.entries[index].status = EntryStatus::Failed;
+            let _ = journal.persist();
+            return journal.outcome("failed", &message);
+        }
         let payload = journal.state.entries[index].payload.as_ref().unwrap();
         match transport.send(payload).await {
             Ok(message_id) => {
@@ -470,3 +494,12 @@ pub async fn deliver(
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+async fn watch_authorization(input: &Input) -> String {
+    loop {
+        if let Err(message) = input.authorize() {
+            return message;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+}

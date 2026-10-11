@@ -123,7 +123,7 @@ void main() {
   setUpAll(AppDatabase.init);
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'active_account_id': '101'});
     MessageSessionCache.clearAll();
     Haptics.enabled = false;
     final directory = await Directory.systemTemp.createTemp('synthetic_send');

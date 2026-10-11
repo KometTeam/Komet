@@ -90,6 +90,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
 import '../../../core/crypto/e2ee_service.dart';
+import '../../../core/crypto/outgoing_message_policy.dart';
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
@@ -416,7 +417,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         return;
       }
       if (!mounted || _profile?.id != myId) return;
-      if (ForwardSender.isBlocked(myId, chatIdValue)) {
+      if (OutgoingMessagePolicy.requiresEncryption(myId, chatIdValue)) {
         showCustomNotification(
           context,
           AppLocalizations.of(context)!.e2eeForwardBlocked,
@@ -465,6 +466,15 @@ class _ChatListScreenState extends State<ChatListScreen>
         share: prepared,
         caption: caption,
       );
+    } on UnencryptedSendException {
+      if (mounted) {
+        setState(() => _shareSending = false);
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.shareEncryptedUnsupported,
+        );
+      }
+      return;
     } catch (e) {
       logger.w('Поделиться: отправка не удалась: $e');
     }

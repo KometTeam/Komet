@@ -1,4 +1,7 @@
 {
+  "shareEncryptedUnsupported": "Sharing to an encrypted chat is not supported yet. Open the chat and send the message there.",
+  "chatEncryptedUnsupportedMedia": "This attachment type cannot be encrypted yet. Sending was cancelled.",
+
   "@@locale": "en",
   "loginTitle": "Sign in to Komet",
   "loginSubtitle": "Check your country code and enter your\nphone number.",
@@ -2476,5 +2479,9 @@
   "appearanceBottomNavigationTitle": "Bottom navigation",
   "appearanceBottomNavigationSubtitle": "The compact bar keeps all four tab labels visible and takes up less space.",
   "appearanceBottomNavigationFloating": "Floating",
-  "appearanceBottomNavigationCompact": "Compact"
+  "appearanceBottomNavigationCompact": "Compact",
+  "temporaryPasswordRecoveryTitle": "Temporary password recovery",
+  "temporaryPasswordRecoveryMessage": "The temporary MAX password could not be removed. Show it privately and save it before removing or changing the password in MAX settings.",
+  "temporaryPasswordRecoveryShow": "Show password",
+  "temporaryPasswordRecoveryInstructions": "Remove or change this password in MAX before deleting Komet. Do not include it in screenshots or logs."
 }

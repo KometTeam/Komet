@@ -1,3 +1,4 @@
+mod authorization;
 mod engine;
 mod transport;
 
@@ -73,6 +74,9 @@ fn send(input: Input, progress: Progress) -> Outcome {
     };
     if let Some(outcome) = journal.terminal() {
         return outcome;
+    }
+    if let Err(message) = input.authorize() {
+        return journal.outcome("failed", &message);
     }
     if let Err(message) = input.validate_files() {
         return journal.outcome("failed", &message);

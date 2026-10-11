@@ -3,6 +3,7 @@ import 'package:kolibri/kolibri.dart' show WireLogEvent;
 import '../config/launch_flags.dart';
 import '../protocol/opcode_map.dart';
 import '../utils/logger.dart';
+import '../utils/log_redact.dart';
 
 class WireDebugLog {
   WireDebugLog._();
@@ -34,12 +35,5 @@ class WireDebugLog {
     return '$head $payload';
   }
 
-  static final RegExp _passwordField = RegExp(
-    r'"(\w*[Pp]assword)"\s*:\s*"(?:[^"\\]|\\.)*"',
-  );
-
-  static String maskPasswords(String json) => json.replaceAllMapped(
-    _passwordField,
-    (match) => '"${match[1]}":"***"',
-  );
+  static String maskPasswords(String json) => redactJsonForLog(json);
 }

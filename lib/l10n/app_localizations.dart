@@ -98,6 +98,18 @@ abstract class AppLocalizations {
     Locale('ru'),
   ];
 
+  /// No description provided for @shareEncryptedUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing to an encrypted chat is not supported yet. Open the chat and send the message there.'**
+  String get shareEncryptedUnsupported;
+
+  /// No description provided for @chatEncryptedUnsupportedMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'This attachment type cannot be encrypted yet. Sending was cancelled.'**
+  String get chatEncryptedUnsupportedMedia;
+
   /// No description provided for @loginTitle.
   ///
   /// In en, this message translates to:
@@ -11569,6 +11581,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Compact'**
   String get appearanceBottomNavigationCompact;
+
+  /// No description provided for @temporaryPasswordRecoveryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Temporary password recovery'**
+  String get temporaryPasswordRecoveryTitle;
+
+  /// No description provided for @temporaryPasswordRecoveryMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The temporary MAX password could not be removed. Show it privately and save it before removing or changing the password in MAX settings.'**
+  String get temporaryPasswordRecoveryMessage;
+
+  /// No description provided for @temporaryPasswordRecoveryShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get temporaryPasswordRecoveryShow;
+
+  /// No description provided for @temporaryPasswordRecoveryInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove or change this password in MAX before deleting Komet. Do not include it in screenshots or logs.'**
+  String get temporaryPasswordRecoveryInstructions;
 }
 
 class _AppLocalizationsDelegate

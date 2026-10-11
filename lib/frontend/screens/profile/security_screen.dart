@@ -20,6 +20,8 @@ import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import 'blacklist_screen.dart';
 import 'password_entry_screen.dart';
+import '../../widgets/temporary_password_recovery_dialog.dart';
+import '../../../core/storage/token_storage.dart';
 import 'passcode_settings_screen.dart';
 import '../../../core/security/app_lock.dart';
 import '../../../core/config/app_fonts.dart';
@@ -106,6 +108,12 @@ class _SecurityScreenState extends State<SecurityScreen>
   }
 
   Future<void> _openPasswordSettings() async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (!mounted) return;
+    if (accountId != null) {
+      await showTemporaryPasswordRecovery(context, accountId);
+    }
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const PasswordEntryScreen()),

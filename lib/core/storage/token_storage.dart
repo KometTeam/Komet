@@ -7,6 +7,8 @@ import 'account_token_store.dart';
 
 // #***! токены и активный аккаунт
 class TokenStorage {
+  static int _accountEpoch = 0;
+  static int get accountEpoch => _accountEpoch;
   static const _tokenPrefix = 'auth_token_';
   static const _activeAccountKey = 'active_account_id';
 
@@ -98,11 +100,13 @@ class TokenStorage {
 
   // #***! активный аккаунт в обычных prefs, это не секрет
   static Future<void> setActiveAccount(int accountId) async {
+    _accountEpoch++;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_activeAccountKey, accountId.toString());
   }
 
   static Future<void> clearActiveAccount() async {
+    _accountEpoch++;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_activeAccountKey);
   }
@@ -120,6 +124,7 @@ class TokenStorage {
   }
 
   static Future<void> deleteAccount(int accountId) async {
+    _accountEpoch++;
     await deleteToken(accountId);
     final activeId = await getActiveAccountId();
     if (activeId == accountId) {

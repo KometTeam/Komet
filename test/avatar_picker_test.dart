@@ -124,7 +124,7 @@ void main() {
     expect(find.text('Опрос'), findsNothing);
     expect(find.text('Контакт'), findsNothing);
 
-    await tester.tap(find.text('Файл'));
+    await tester.tap(find.byKey(const ValueKey('pill-nav-item-1')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Выбрать фото из файлов'), findsOneWidget);
@@ -133,6 +133,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(filesTapped, isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(minutes: 1));
   });
 

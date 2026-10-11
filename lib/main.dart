@@ -24,7 +24,9 @@ import 'core/storage/draft_store.dart';
 import 'core/storage/archived_chats_store.dart';
 import 'core/storage/local_contact_avatars.dart';
 import 'core/crypto/e2ee_service.dart';
+import 'core/crypto/encrypted_photo_cache.dart';
 import 'core/storage/chat_encryption_store.dart';
+import 'core/crypto/decrypted_photo_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_language.dart';
 import 'core/config/app_amoled.dart';
@@ -217,6 +219,7 @@ void main(List<String> args) async {
   await TlsConfig.applyMincifryTrust();
   debugPrint('KOMET-STARTUP: AppDatabase.init...');
   await AppDatabase.init();
+  await DecryptedPhotoStore.clear();
   debugPrint('KOMET-STARTUP: AppDatabase.init done');
   final activeAccountId = await TokenStorage.getActiveAccountId();
   if (activeAccountId != null) {
@@ -708,6 +711,7 @@ class KometAppState extends State<KometApp>
       DebugSessionLog.instance.flushNow();
       SelfCheckService.instance.pause();
       E2eeService.instance.lock();
+      EncryptedPhotoCache.instance.clear();
     }
     if (state != AppLifecycleState.resumed) return;
     api.wakeUp();

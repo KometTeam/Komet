@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../core/protocol/packet.dart';
+import '../../core/crypto/chat_crypto_service.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
@@ -86,6 +87,10 @@ class OutboxService {
             accountId,
             pending.chatId,
             text,
+            encryptedPayload:
+                ChatCryptoService.instance.looksEncrypted(text) ||
+                pending.sealedText != null ||
+                pending.e2ee != CachedMessage.e2eeNone,
             replyToMessageId: replyToMessageId,
             replySourceChatId: replySourceChatId,
             elements: elements,
@@ -123,7 +128,7 @@ class OutboxService {
             status: 'sent',
             elements: elements.isEmpty ? null : elements,
           );
-        // #***! временную ошибку оставляем в очереди, окончательную помечаем и не трогаем
+          // #***! временную ошибку оставляем в очереди, окончательную помечаем и не трогаем
         } catch (e) {
           if (!await _ownsSession(api, epoch, accountId)) return;
           if (!isPermanentSendFailure(e)) {

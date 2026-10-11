@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 const _redacted = '***';
@@ -13,6 +15,8 @@ const _sensitiveExact = {
   'hint',
   'pin',
   'qrlink',
+  'qrcode',
+  'qrurl',
   'text',
   'deviceid',
   'mt_instanceid',
@@ -39,7 +43,7 @@ bool _isPhoneKey(Object? key) {
 
 String _maskPhone(dynamic value) {
   final text = value?.toString() ?? '';
-  if (text.length <= 3) return text;
+  if (text.length <= 3) return '***';
   return '${text.substring(0, 3)}***';
 }
 
@@ -69,4 +73,14 @@ dynamic redactForLog(dynamic value) {
 Object? payloadForLog(dynamic value) {
   if (kReleaseMode) return '<payload hidden>';
   return redactForLog(value);
+}
+
+String redactJsonForLog(String source) {
+  try {
+    final decoded = jsonDecode(source);
+    if (decoded is! Map && decoded is! List) return '<payload hidden>';
+    return jsonEncode(redactForLog(decoded));
+  } catch (_) {
+    return '<invalid payload hidden>';
+  }
 }

@@ -2,8 +2,24 @@ use super::*;
 use std::collections::VecDeque;
 
 pub(crate) fn input(directory: &Path, files: Vec<SharedFile>) -> Input {
+    fs::write(directory.join("accounts.lock"), b"").unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    fs::write(
+        directory.join("accounts.json"),
+        serde_json::to_vec(&json!([{
+            "id": "123", "policyEpoch": "synthetic-policy", "updatedAtMillis": now,
+            "chats": [{"id": "456"}]
+        }]))
+        .unwrap(),
+    )
+    .unwrap();
     serde_json::from_value(json!({
         "account_id": "123", "token": "synthetic-auth-token",
+        "authorization": {"snapshot_path": directory.join("accounts.json"),
+            "lock_path": directory.join("accounts.lock"), "epoch": "synthetic-policy"},
         "session": {
             "host": "example.test", "port": 443, "device_id": "synthetic-device",
             "instance_id": "synthetic-instance", "app_version": "1.0", "build_number": 1,
@@ -37,6 +53,8 @@ struct FakeTransport {
     state_path: Option<String>,
     upload_failure: bool,
     out_of_order_progress: bool,
+    revoke_during_upload: Option<String>,
+    completed_upload: bool,
 }
 
 impl Transport for FakeTransport {
@@ -50,6 +68,11 @@ impl Transport for FakeTransport {
         if self.upload_failure {
             return Err("Synthetic upload failure".into());
         }
+        if let Some(path) = &self.revoke_during_upload {
+            fs::write(path, b"[]").unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        }
+        self.completed_upload = true;
         progress(file.size, file.size);
         if self.out_of_order_progress {
             progress(file.size / 4, file.size);
@@ -339,4 +362,79 @@ async fn concurrent_video_callback_order_cannot_reduce_sent_bytes() {
         .map(|event| event["sent"].as_u64().unwrap())
         .collect();
     assert_eq!(sent, vec![200, 400, 400]);
+}
+
+#[tokio::test]
+async fn policy_revocation_between_upload_and_send_blocks_plaintext() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = input(
+        directory.path(),
+        vec![file(directory.path(), "synthetic.jpg", "image/jpeg", 4)],
+    );
+    let mut journal = Journal::open(&input).unwrap();
+    let policy_path = directory.path().join("accounts.json");
+    let progress: Progress = Arc::new(move |event| {
+        if event.phase == "sending" {
+            fs::write(&policy_path, b"[]").unwrap();
+        }
+    });
+    let mut transport = FakeTransport::default();
+    let outcome = deliver(&input, &mut journal, &mut transport, progress).await;
+    assert_eq!(outcome.status, "failed");
+    assert_eq!(transport.uploaded.len(), 1);
+    assert!(transport.sent.is_empty());
+}
+
+#[test]
+fn policy_rejects_stale_snapshots_and_changed_epochs() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = input(directory.path(), vec![]);
+    assert!(input.authorize().is_ok());
+    let path = directory.path().join("accounts.json");
+    let mut accounts: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    accounts[0]["updatedAtMillis"] = json!(0);
+    fs::write(&path, serde_json::to_vec(&accounts).unwrap()).unwrap();
+    assert!(input.authorize().is_err());
+    let input = self::input(directory.path(), vec![]);
+    let mut accounts: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    accounts[0]["policyEpoch"] = json!("new-policy");
+    fs::write(&path, serde_json::to_vec(&accounts).unwrap()).unwrap();
+    assert!(input.authorize().is_err());
+}
+
+#[tokio::test]
+async fn policy_missing_authorization_sends_nothing() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut input = input(directory.path(), vec![]);
+    input.authorization = None;
+    let mut journal = Journal::open(&input).unwrap();
+    let mut transport = FakeTransport::default();
+    let outcome = deliver(&input, &mut journal, &mut transport, events().0).await;
+    assert_eq!(outcome.status, "failed");
+    assert!(transport.sent.is_empty());
+}
+
+#[tokio::test]
+async fn policy_revocation_cancels_an_active_upload() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = input(
+        directory.path(),
+        vec![file(directory.path(), "synthetic.jpg", "image/jpeg", 4)],
+    );
+    let mut journal = Journal::open(&input).unwrap();
+    let mut transport = FakeTransport {
+        revoke_during_upload: Some(
+            directory
+                .path()
+                .join("accounts.json")
+                .to_str()
+                .unwrap()
+                .into(),
+        ),
+        ..Default::default()
+    };
+    let outcome = deliver(&input, &mut journal, &mut transport, events().0).await;
+    assert_eq!(outcome.status, "failed");
+    assert!(!transport.completed_upload);
+    assert!(transport.sent.is_empty());
 }

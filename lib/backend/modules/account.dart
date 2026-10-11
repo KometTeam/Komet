@@ -12,11 +12,20 @@ import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/media/media_playback.dart';
 import '../../core/crypto/e2ee_service.dart';
+import '../../core/crypto/encrypted_photo_cache.dart';
+import '../../core/crypto/decrypted_photo_store.dart';
+import '../../core/crypto/chat_crypto_service.dart';
+import '../../core/crypto/message_decryption_cache.dart';
+import '../../core/storage/chat_encryption_store.dart';
+import '../../core/storage/webapp_storage.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/parse.dart';
 import '../../core/storage/profile_deletion_store.dart';
 import '../../core/storage/spoofing_service.dart';
 import '../../core/storage/token_storage.dart';
+import '../../core/storage/temporary_password_recovery.dart';
+import '../../core/plugins/plugin_storage.dart';
+import '../../core/share/native_share_account_channel.dart';
 import '../../core/utils/device_locale.dart';
 import '../../core/utils/logger.dart';
 import '../../models/login_info.dart';
@@ -399,6 +408,9 @@ class AccountModule {
 
     await TokenStorage.clearActiveAccount();
 
+    ChatCryptoService.instance.clearKeys();
+    MessageDecryptionCache.instance.clear();
+    EncryptedPhotoCache.instance.clear();
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
@@ -419,6 +431,9 @@ class AccountModule {
       await _api.disconnect();
     } catch (_) {}
 
+    ChatCryptoService.instance.clearKeys();
+    MessageDecryptionCache.instance.clear();
+    EncryptedPhotoCache.instance.clear();
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
@@ -470,6 +485,9 @@ class AccountModule {
     // обёрнуто в try с откатом.
     final bool weSetPassword = existingPassword == null;
     final String password = existingPassword ?? _generateStrongPassword();
+    final recovery = weSetPassword
+        ? await TemporaryPasswordRecovery.save(accountId, password)
+        : null;
     var passwordCleared = !weSetPassword;
 
     try {
@@ -624,7 +642,9 @@ class AccountModule {
         passwordCleared = await _removeTempPassword(password);
       }
       if (!passwordCleared) {
-        logger.e('SMS-вход: ВРЕМЕННЫЙ ПАРОЛЬ НЕ СНЯТ. Пароль: $password');
+        logger.e(
+          'SMS-вход: временный пароль не снят; сохранено защищённое восстановление',
+        );
       }
     } catch (e, st) {
       logger.d(
@@ -632,18 +652,21 @@ class AccountModule {
         '(веб-сессия=${_api.state.name})\n$st',
       );
       // #***! любой сбой после установки пароля — откатываем, пока веб-сессия
-      // ещё жива; если не вышло, пароль хотя бы попадёт в лог
       if (weSetPassword && !passwordCleared) {
         if (_api.state == SessionState.online) {
           passwordCleared = await _removeTempPassword(password);
         }
         if (!passwordCleared) {
           logger.e(
-            'SMS-вход: сбой, ВРЕМЕННЫЙ ПАРОЛЬ НЕ СНЯТ. Пароль: $password',
+            'SMS-вход: временный пароль не снят; сохранено защищённое восстановление',
           );
         }
       }
       rethrow;
+    } finally {
+      if (passwordCleared && recovery != null) {
+        await recovery.clearAfterRollback();
+      }
     }
   }
 
@@ -681,7 +704,9 @@ class AccountModule {
     final prepared = _smsSocket;
     _smsSocket = null;
     if (prepared == null) return;
-    logger.d('[${prepared.api.debugTag}] SMS-вход: заготовленный сокет B закрыт');
+    logger.d(
+      '[${prepared.api.debugTag}] SMS-вход: заготовленный сокет B закрыт',
+    );
     unawaited(_closeSmsSocket(prepared.api));
   }
 
@@ -702,7 +727,7 @@ class AccountModule {
       await remove2fa(trackId);
       return true;
     } catch (e) {
-      logger.w('SMS-вход: снять временный пароль не удалось: $e');
+      logger.w('SMS-вход: снять временный пароль не удалось: ${e.runtimeType}');
       return false;
     }
   }
@@ -719,8 +744,7 @@ class AccountModule {
   }
 
   static String _generateStrongPassword() {
-    const chars =
-        'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
     final rng = Random.secure();
     return List.generate(16, (_) => chars[rng.nextInt(chars.length)]).join();
   }
@@ -734,10 +758,7 @@ class AccountModule {
     final text = msg['text'];
     final looksLikeLogin =
         text is String &&
-        RegExp(
-          r'код|code|войти|профил',
-          caseSensitive: false,
-        ).hasMatch(text);
+        RegExp(r'код|code|войти|профил', caseSensitive: false).hasMatch(text);
     if (!looksLikeLogin) return null;
 
     final attaches = msg['attaches'];
@@ -784,6 +805,9 @@ class AccountModule {
     await AppDatabase.setActiveAccount(accountId);
     await TokenStorage.setActiveAccount(accountId);
 
+    ChatCryptoService.instance.clearKeys();
+    MessageDecryptionCache.instance.clear();
+    EncryptedPhotoCache.instance.clear();
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();
@@ -813,6 +837,14 @@ class AccountModule {
 
   // #***! удаляем локально, база токен спуф и заявка
   Future<void> removeAccount(int accountId) async {
+    await NativeShareAccountChannel.instance.remove(accountId);
+    await PluginStorage.eraseAccount(accountId);
+    ChatCryptoService.instance.clearKeys();
+    MessageDecryptionCache.instance.clear();
+    EncryptedPhotoCache.instance.clear();
+    await DecryptedPhotoStore.clear();
+    await ChatEncryptionStore.instance.eraseAccount(accountId);
+    await WebAppStorage.eraseAccount(accountId);
     await E2eeService.instance.eraseAccount(accountId);
     await AppDatabase.deleteAccount(accountId);
     await TokenStorage.deleteAccount(accountId);
@@ -872,6 +904,9 @@ class AccountModule {
     if (accountId != null) {
       await removeAccount(accountId);
     }
+    ChatCryptoService.instance.clearKeys();
+    MessageDecryptionCache.instance.clear();
+    EncryptedPhotoCache.instance.clear();
     ContactCache.clear();
     TranscriptionCache.clear();
     ComplaintsModule.clear();

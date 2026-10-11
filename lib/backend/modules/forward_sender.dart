@@ -3,7 +3,7 @@ import 'dart:math';
 
 import '../../core/cache/message_session_cache.dart';
 import '../../core/crypto/e2ee_service.dart';
-import '../../core/storage/chat_encryption_store.dart';
+import '../../core/crypto/outgoing_message_policy.dart';
 import '../../core/utils/logger.dart';
 import '../../main.dart';
 import 'chats.dart';
@@ -94,24 +94,19 @@ class ForwardSender {
   static Stream<List<CachedMessage>> get delivered =>
       _deliveredController.stream;
 
-  static bool isBlocked(int accountId, int chatId) =>
-      ChatEncryptionStore.instance.isEnabled(accountId, chatId) ||
-      E2eeService.instance.isActive(accountId, chatId);
-
   static Future<void Function()> _prepareDispatch(
     int accountId,
     int chatId,
     MessagesModule sender,
     int expectedSessionEpoch,
   ) async {
-    await ChatEncryptionStore.instance.load();
-    await E2eeService.instance.ensureLoaded(accountId);
+    await OutgoingMessagePolicy.load(accountId);
     void check() {
       if (!E2eeService.instance.isLoaded(accountId) ||
           sender.sessionEpoch != expectedSessionEpoch) {
         throw StateError('Сессия изменилась до пересылки');
       }
-      if (isBlocked(accountId, chatId)) {
+      if (OutgoingMessagePolicy.requiresEncryption(accountId, chatId)) {
         throw StateError('Пересылка в зашифрованный чат недоступна');
       }
     }
