@@ -16,6 +16,10 @@ class KometSettings {
   static const _kHideAllChatsFolder = 'komet_hide_all_chats_folder';
   static const _kShowHiddenChats = 'komet_show_hidden_chats';
   static const _kArchiveOnPull = 'komet_archive_on_pull';
+  static const _kAutoDownloadPhoto = 'komet_auto_download_photo';
+  static const _kAutoDownloadVideo = 'komet_auto_download_video';
+  static const _kAutoDownloadVoice = 'komet_auto_download_voice';
+  static const _kAutoDownloadVideoNote = 'komet_auto_download_video_note';
   static const _kRecordDebugLogs = 'komet_record_debug_logs';
 
   // #***! каждая настройка это ValueNotifier, юишка подписана напрямую
@@ -30,6 +34,10 @@ class KometSettings {
   static final ValueNotifier<bool> hideAllChatsFolder = ValueNotifier(false);
   static final ValueNotifier<bool> showHiddenChats = ValueNotifier(false);
   static final ValueNotifier<bool> archiveOnPull = ValueNotifier(false);
+  static final ValueNotifier<bool> autoDownloadPhoto = ValueNotifier(true);
+  static final ValueNotifier<bool> autoDownloadVideo = ValueNotifier(true);
+  static final ValueNotifier<bool> autoDownloadVoice = ValueNotifier(true);
+  static final ValueNotifier<bool> autoDownloadVideoNote = ValueNotifier(true);
   static final ValueNotifier<bool> recordDebugLogs = ValueNotifier(true);
 
   // #***! читаем всё разом на старте
@@ -51,6 +59,11 @@ class KometSettings {
     hideAllChatsFolder.value = prefs.getBool(_kHideAllChatsFolder) ?? false;
     showHiddenChats.value = prefs.getBool(_kShowHiddenChats) ?? false;
     archiveOnPull.value = prefs.getBool(_kArchiveOnPull) ?? false;
+    autoDownloadPhoto.value = prefs.getBool(_kAutoDownloadPhoto) ?? true;
+    autoDownloadVideo.value = prefs.getBool(_kAutoDownloadVideo) ?? true;
+    autoDownloadVoice.value = prefs.getBool(_kAutoDownloadVoice) ?? true;
+    autoDownloadVideoNote.value =
+        prefs.getBool(_kAutoDownloadVideoNote) ?? true;
     recordDebugLogs.value = prefs.getBool(_kRecordDebugLogs) ?? true;
   }
 
@@ -108,6 +121,28 @@ class KometSettings {
     hideAllChatsFolder.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kHideAllChatsFolder, value);
+  }
+
+  static Future<void> setAutoDownloadPhoto(bool value) =>
+      _setFlag(autoDownloadPhoto, _kAutoDownloadPhoto, value);
+
+  static Future<void> setAutoDownloadVideo(bool value) =>
+      _setFlag(autoDownloadVideo, _kAutoDownloadVideo, value);
+
+  static Future<void> setAutoDownloadVoice(bool value) =>
+      _setFlag(autoDownloadVoice, _kAutoDownloadVoice, value);
+
+  static Future<void> setAutoDownloadVideoNote(bool value) =>
+      _setFlag(autoDownloadVideoNote, _kAutoDownloadVideoNote, value);
+
+  static Future<void> _setFlag(
+    ValueNotifier<bool> notifier,
+    String key,
+    bool value,
+  ) async {
+    notifier.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
   }
 
   static Future<void> setArchiveOnPull(bool value) async {

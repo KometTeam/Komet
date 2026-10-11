@@ -65,6 +65,7 @@ class ComposerArea extends StatelessWidget {
   final VoiceRecordController voiceRec;
   final VideoNoteController note;
   final VoidCallback onToggleStickerPanel;
+  final VoidCallback? onOpenMiniApp;
   final VoidCallback onScheduleMessage;
   final VoidCallback onOpenAttach;
   final VoidCallback onOpenAttachScheduled;
@@ -142,6 +143,7 @@ class ComposerArea extends StatelessWidget {
     required this.voiceRec,
     required this.note,
     required this.onToggleStickerPanel,
+    this.onOpenMiniApp,
     required this.onScheduleMessage,
     required this.onOpenAttach,
     required this.onOpenAttachScheduled,
@@ -283,6 +285,7 @@ class ComposerArea extends StatelessWidget {
                     voiceRec: voiceRec,
                     note: note,
                     onToggleStickerPanel: onToggleStickerPanel,
+                    onOpenMiniApp: onOpenMiniApp,
                     onSendText: onSendMessage,
                     onScheduleMessage: onScheduleMessage,
                     onOpenAttach: onOpenAttach,

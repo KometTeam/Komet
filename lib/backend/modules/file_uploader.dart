@@ -193,6 +193,7 @@ class FileUploader {
     Uri uri,
     File file, {
     void Function(int sent, int total)? onProgress,
+    Future<void>? cancel,
     Duration overallTimeout = const Duration(minutes: 5),
     Duration progressThrottle = const Duration(milliseconds: 16),
   }) async {
@@ -208,6 +209,7 @@ class FileUploader {
           connection: 'close',
         ),
         onProgress: onProgress,
+        cancel: cancel,
       );
       if (result.error != null) {
         logger.w('uploadMediaFile: ${result.error}');
@@ -262,6 +264,7 @@ class FileUploader {
     File file, {
     String filename = 'photo.jpg',
     void Function(int sent, int total)? onProgress,
+    Future<void>? cancel,
     Duration progressThrottle = const Duration(milliseconds: 16),
   }) async {
     final session = api.session;
@@ -274,6 +277,7 @@ class FileUploader {
           filename: filename,
         ),
         onProgress: onProgress,
+        cancel: cancel,
       );
       if (result.error != null || result.status != 200) {
         logger.w('uploadPhoto: status=${result.status} error=${result.error}');
@@ -291,6 +295,7 @@ class FileUploader {
     Uri uri,
     File file, {
     void Function(int sent, int total)? onProgress,
+    Future<void>? cancel,
     int chunkSize = 2 * 1024 * 1024,
     int concurrency = 4,
     Duration overallTimeout = const Duration(minutes: 30),
@@ -306,10 +311,13 @@ class FileUploader {
           concurrency: concurrency,
         ),
         onProgress: onProgress,
+        cancel: cancel,
       );
       if (result.error != null || result.status != 200) {
+        final respBody = utf8.decode(result.body, allowMalformed: true);
         logger.w(
-          'uploadVideoFile: status=${result.status} error=${result.error}',
+          'uploadVideoFile: status=${result.status} error=${result.error} '
+          'body=${respBody.length > 500 ? respBody.substring(0, 500) : respBody}',
         );
       }
       return result.error == null && result.status == 200;
@@ -400,21 +408,41 @@ class FileUploader {
   Future<({int status, Uint8List body, String? error})> _consume(
     Stream<kb.UploadEvent> stream, {
     void Function(int sent, int total)? onProgress,
+    Future<void>? cancel,
   }) async {
     var status = 0;
     var body = Uint8List(0);
     String? error;
-    await for (final event in stream) {
-      switch (event) {
-        case kb.UploadEvent_Progress(:final sent, :final total):
-          onProgress?.call(sent.toInt(), total.toInt());
-        case kb.UploadEvent_Done(status: final s, body: final b):
-          status = s;
-          body = b;
-        case kb.UploadEvent_Error(:final message):
-          error = message;
-      }
-    }
+    final done = Completer<void>();
+    final sub = stream.listen(
+      (event) {
+        switch (event) {
+          case kb.UploadEvent_Progress(:final sent, :final total):
+            onProgress?.call(sent.toInt(), total.toInt());
+          case kb.UploadEvent_Done(status: final s, body: final b):
+            status = s;
+            body = b;
+          case kb.UploadEvent_Error(:final message):
+            error = message;
+        }
+      },
+      onError: (Object err) {
+        error = err.toString();
+        if (!done.isCompleted) done.complete();
+      },
+      onDone: () {
+        if (!done.isCompleted) done.complete();
+      },
+      cancelOnError: true,
+    );
+    cancel?.then((_) {
+      if (done.isCompleted) return;
+      error = 'cancelled';
+      sub.cancel();
+      done.complete();
+    });
+    await done.future;
+    await sub.cancel();
     return (status: status, body: body, error: error);
   }
 

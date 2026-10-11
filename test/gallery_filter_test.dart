@@ -7,7 +7,7 @@ const int _maxInt32 = 0x7fffffff;
 
 void main() {
   test('длительности в фильтре галереи влезают в int32 миллисекунд', () {
-    final filter = GallerySource.mediaFilter();
+    final filter = GallerySource.mediaFilter(GallerySort.newestFirst);
 
     for (final type in [AssetType.image, AssetType.video, AssetType.audio]) {
       final duration = filter.getOption(type).durationConstraint.toMap();
@@ -26,7 +26,7 @@ void main() {
   });
 
   test('размеры в фильтре галереи влезают в int32', () {
-    final filter = GallerySource.mediaFilter();
+    final filter = GallerySource.mediaFilter(GallerySort.newestFirst);
 
     for (final type in [AssetType.image, AssetType.video, AssetType.audio]) {
       final size = filter.getOption(type).sizeConstraint.toMap();
@@ -44,7 +44,7 @@ void main() {
   });
 
   test('фильтр пропускает видео любой разумной длины', () {
-    final video = GallerySource.mediaFilter().getOption(AssetType.video);
+    final video = GallerySource.mediaFilter(GallerySort.newestFirst).getOption(AssetType.video);
 
     expect(video.sizeConstraint.ignoreSize, isTrue);
     expect(video.durationConstraint.allowNullable, isTrue);
@@ -55,7 +55,7 @@ void main() {
   });
 
   test('фильтр не режет фото по размеру и дате создания', () {
-    final filter = GallerySource.mediaFilter();
+    final filter = GallerySource.mediaFilter(GallerySort.newestFirst);
 
     expect(filter.getOption(AssetType.image).sizeConstraint.ignoreSize, isTrue);
     expect(filter.createTimeCond.ignore, isTrue);

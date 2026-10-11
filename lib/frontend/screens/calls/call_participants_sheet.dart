@@ -12,12 +12,18 @@ import '../../widgets/prompt_dialog.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/official_name.dart';
 
 class CallParticipantView {
   final String name;
   final String? avatarUrl;
+  final int? contactId;
 
-  const CallParticipantView({required this.name, this.avatarUrl});
+  const CallParticipantView({
+    required this.name,
+    this.avatarUrl,
+    this.contactId,
+  });
 }
 
 typedef CallParticipantResolver =
@@ -543,11 +549,10 @@ class _ParticipantsSheetState extends State<_ParticipantsSheet> {
 
     return ListTile(
       leading: KometAvatar(name: view.name, imageUrl: view.avatarUrl, size: 40),
-      title: Text(
-        view.name,
+      title: OfficialName(
+        contactId: view.contactId ?? 0,
+        text: view.name,
         style: TextStyle(color: cs.onSurface, fontSize: 16),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
       ),
       subtitle: subtitle.isEmpty
           ? null

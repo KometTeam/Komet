@@ -2219,12 +2219,22 @@ class CallSession {
   }
 
   // #***! включение камеры
-  Future<void> _startCamera() async {
+  Future<void> switchCamera() async {
+    if (!_localVideo || _pc == null) return;
+    final cameras = await CameraDevices.cameras();
+    if (cameras.length < 2) return;
+    final currentId = _cameraStream?.getVideoTracks().firstOrNull?.getSettings()['deviceId'];
+    final current = cameras.where((c) => c.id == currentId).firstOrNull;
+    final next = cameras.where((c) => c.id != currentId && c.facing != current?.facing).firstOrNull ??
+        cameras.firstWhere((c) => c.id != currentId, orElse: () => cameras.first);
+    await _startCamera(deviceId: next.id);
+  }
+  Future<void> _startCamera({String? deviceId}) async {
     final pc = _pc;
     if (pc == null) return;
 
     final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
-      'video': CameraDevices.constraints(AppCamera.deviceId),
+      'video': CameraDevices.constraints(deviceId ?? AppCamera.deviceId),
       'audio': false,
     });
 

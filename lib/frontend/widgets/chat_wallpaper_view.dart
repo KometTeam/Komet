@@ -62,7 +62,8 @@ class WallpaperImageLayer extends StatefulWidget {
   State<WallpaperImageLayer> createState() => _WallpaperImageLayerState();
 }
 
-class _WallpaperImageLayerState extends State<WallpaperImageLayer> {
+class _WallpaperImageLayerState extends State<WallpaperImageLayer>
+    with WidgetsBindingObserver {
   static const double _maxShift = 20;
   static const double _motionScale = 1.16;
   static const double _blurSigma = 22;
@@ -74,7 +75,17 @@ class _WallpaperImageLayerState extends State<WallpaperImageLayer> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.motion) _startMotion();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (widget.motion) _startMotion();
+    } else {
+      _stopMotion();
+    }
   }
 
   @override
@@ -87,7 +98,7 @@ class _WallpaperImageLayerState extends State<WallpaperImageLayer> {
   void _startMotion() {
     _offset.value = Offset.zero;
     _sub ??= accelerometerEventStream(
-      samplingPeriod: SensorInterval.gameInterval,
+      samplingPeriod: SensorInterval.uiInterval,
     ).listen(_onAccelerometer, onError: (_) {}, cancelOnError: false);
   }
 
@@ -100,14 +111,17 @@ class _WallpaperImageLayerState extends State<WallpaperImageLayer> {
     final targetX = (-event.x / 9.8).clamp(-1.0, 1.0) * _maxShift;
     final targetY = (event.y / 9.8).clamp(-1.0, 1.0) * _maxShift;
     final prev = _offset.value;
-    _offset.value = Offset(
+    final next = Offset(
       prev.dx + (targetX - prev.dx) * 0.12,
       prev.dy + (targetY - prev.dy) * 0.12,
     );
+    if ((next - prev).distance < 0.25) return;
+    _offset.value = next;
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     _offset.dispose();
     super.dispose();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -90,6 +92,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     _audio.failure.addListener(_onFailure);
     TranscriptionCache.listen(_sourceMessageId, _onTranscriptionPush);
     _adoptCachedTranscription();
+    if (KometSettings.autoDownloadVoice.value) unawaited(_audio.prefetch());
   }
 
   @override

@@ -10,6 +10,7 @@ class UploadProgressRing extends StatelessWidget {
   final double strokeWidth;
   final double iconSize;
   final EdgeInsets padding;
+  final VoidCallback? onCancel;
 
   const UploadProgressRing({
     super.key,
@@ -20,6 +21,7 @@ class UploadProgressRing extends StatelessWidget {
     this.strokeWidth = 3,
     this.iconSize = 22,
     this.padding = EdgeInsets.zero,
+    this.onCancel,
   });
 
   @override
@@ -31,30 +33,35 @@ class UploadProgressRing extends StatelessWidget {
             ? 0.0
             : values.reduce((a, b) => a + b) / values.length;
         final done = value >= 1.0;
+        final cancel = onCancel;
         return SizedBox.square(
           dimension: size,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Padding(
-                padding: padding,
-                child: SizedBox.expand(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween<double>(end: value.clamp(0.0, 1.0)),
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                    builder: (context, shown, _) => CircularProgressIndicator(
-                      value: done ? null : shown,
-                      strokeWidth: strokeWidth,
-                      backgroundColor:
-                          trackColor ?? color.withValues(alpha: 0.25),
-                      color: color,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: cancel,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Padding(
+                  padding: padding,
+                  child: SizedBox.expand(
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(end: value.clamp(0.0, 1.0)),
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      builder: (context, shown, _) => CircularProgressIndicator(
+                        value: done ? null : shown,
+                        strokeWidth: strokeWidth,
+                        backgroundColor:
+                            trackColor ?? color.withValues(alpha: 0.25),
+                        color: color,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Icon(Symbols.close, size: iconSize, color: color),
-            ],
+                Icon(Symbols.close, size: iconSize, color: color),
+              ],
+            ),
           ),
         );
       },

@@ -23,6 +23,7 @@ import 'story_owner_info.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/official_name.dart';
 
 const Duration _photoDuration = Duration(seconds: 5);
 
@@ -646,10 +647,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    info?.name.isNotEmpty == true ? info!.name : '…',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  OfficialName(
+                    contactId: preview.owner.ownerId,
+                    text: info?.name.isNotEmpty == true ? info!.name : '…',
+                    iconSize: 15,
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 15,

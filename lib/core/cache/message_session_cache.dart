@@ -63,6 +63,18 @@ class MessageSessionCache {
     save(accountId, chatId, list, reachedStart: cached.reachedStart);
   }
 
+  static void removeMessage(int accountId, int chatId, String messageId) {
+    final cached = get(accountId, chatId);
+    if (cached == null) return;
+    final list = cached.messages.where((m) => m.id != messageId).toList();
+    if (list.length == cached.messages.length) return;
+    if (list.isEmpty) {
+      remove(accountId, chatId);
+      return;
+    }
+    save(accountId, chatId, list, reachedStart: cached.reachedStart);
+  }
+
   static void append(int accountId, int chatId, List<CachedMessage> added) {
     final cached = _store[_key(accountId, chatId)];
     if (cached == null) return;

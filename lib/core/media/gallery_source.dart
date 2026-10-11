@@ -11,6 +11,19 @@ import 'desktop_video_probe.dart';
 enum GalleryPermission { granted, limited, denied }
 
 // #***! элемент галереи, за ним системный ассет или просто файл
+enum GallerySortField { date, name }
+
+class GallerySort {
+  final GallerySortField field;
+  final bool ascending;
+
+  const GallerySort({required this.field, required this.ascending});
+
+  static const newestFirst = GallerySort(
+    field: GallerySortField.date,
+    ascending: false,
+  );
+}
 abstract class GalleryItem {
   String get id;
   bool get isVideo;
@@ -23,6 +36,7 @@ abstract class GalleryItem {
     required int maxDimension,
     required int quality,
   });
+  String get name;
 
   static GalleryItem fromFile(File file) => _FileGalleryItem(file);
 }
@@ -46,6 +60,19 @@ class PickedPhoto {
 }
 
 // #***! размеры картинки без полного декодирования
+class GalleryAlbum {
+  final String id;
+  final String name;
+  final int count;
+  final bool isAll;
+
+  const GalleryAlbum({
+    required this.id,
+    required this.name,
+    required this.count,
+    required this.isAll,
+  });
+}
 Future<(int, int)?> imageFileDimensions(File file) async {
   ui.ImmutableBuffer? buffer;
   ui.ImageDescriptor? descriptor;
@@ -69,7 +96,7 @@ abstract class GallerySource {
   static const Duration maxInt32Duration = Duration(milliseconds: 0x7fffffff);
 
   // #***! фильтр без ограничений, иначе часть видео пропадает
-  static FilterOptionGroup mediaFilter() => FilterOptionGroup(
+  static FilterOptionGroup mediaFilter(GallerySort sort) => FilterOptionGroup(
     imageOption: const FilterOption(
       sizeConstraint: SizeConstraint(ignoreSize: true),
     ),
@@ -81,10 +108,18 @@ abstract class GallerySource {
       ),
     ),
     createTimeCond: DateTimeCond.def().copyWith(ignore: true),
-    orders: const [OrderOption(type: OrderOptionType.createDate, asc: false)],
+    orders: [
+      OrderOption(
+        type: OrderOptionType.createDate,
+        asc: sort.field == GallerySortField.date && sort.ascending,
+      ),
+    ],
   );
 
   Future<GalleryPermission> ensurePermission();
+  Future<List<GalleryAlbum>> albums();
+  void selectAlbum(GalleryAlbum album);
+  void setSort(GallerySort sort);
   Future<GalleryPage> load({int offset, int limit});
   Future<void> openSettings();
   Future<void> manageAccess();
@@ -107,8 +142,95 @@ class _PhotoManagerSource implements GallerySource {
     return GalleryPermission.denied;
   }
 
+  List<AssetPathEntity> _paths = const [];
+  String? _albumId;
   AssetPathEntity? _album;
   int _total = 0;
+  GallerySort _sort = GallerySort.newestFirst;
+  List<AssetEntity>? _nameOrder;
+  String? _nameOrderKey;
+  DateTime _nameOrderAt = DateTime.fromMillisecondsSinceEpoch(0);
+  static List<GalleryAlbum>? _albumsCache;
+  static DateTime _albumsCachedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  Future<void> _fetchPaths() async {
+    _paths = await PhotoManager.getAssetPathList(
+      type: RequestType.common,
+      onlyAll: false,
+      filterOption: GallerySource.mediaFilter(_sort),
+    );
+  }
+
+  AssetPathEntity? _pathFor(String? id) {
+    for (final path in _paths) {
+      if (path.id == id) return path;
+    }
+    for (final path in _paths) {
+      if (path.isAll) return path;
+    }
+    return _paths.isEmpty ? null : _paths.first;
+  }
+
+  @override
+  Future<List<GalleryAlbum>> albums() async {
+    final cached = _albumsCache;
+    if (cached != null &&
+        DateTime.now().difference(_albumsCachedAt) < const Duration(minutes: 1)) {
+      return cached;
+    }
+    await _fetchPaths();
+    final result = <GalleryAlbum>[];
+    for (final path in _paths) {
+      final count = await path.assetCountAsync;
+      if (count == 0) continue;
+      result.add(
+        GalleryAlbum(
+          id: path.id,
+          name: path.name,
+          count: count,
+          isAll: path.isAll,
+        ),
+      );
+    }
+    result.sort((a, b) => (b.isAll ? 1 : 0).compareTo(a.isAll ? 1 : 0));
+    _albumsCache = result;
+    _albumsCachedAt = DateTime.now();
+    return result;
+  }
+
+  @override
+  void selectAlbum(GalleryAlbum album) {
+    _albumId = album.id;
+    _album = null;
+    _total = 0;
+    _nameOrder = null;
+  }
+
+  @override
+  void setSort(GallerySort sort) {
+    _sort = sort;
+    _album = null;
+    _total = 0;
+    _nameOrder = null;
+  }
+
+  Future<List<AssetEntity>> _assetsByName(AssetPathEntity album) async {
+    final key = '${album.id}:${_sort.ascending}';
+    final cached = _nameOrder;
+    if (cached != null &&
+        _nameOrderKey == key &&
+        DateTime.now().difference(_nameOrderAt) < const Duration(minutes: 1)) {
+      return cached;
+    }
+    final assets = await album.getAssetListRange(start: 0, end: _total);
+    int compare(AssetEntity a, AssetEntity b) =>
+        (a.title ?? '').toLowerCase().compareTo((b.title ?? '').toLowerCase());
+    assets.sort(_sort.ascending ? compare : (a, b) => compare(b, a));
+    _nameOrder = assets;
+    _nameOrderKey = key;
+    _nameOrderAt = DateTime.now();
+    return assets;
+  }
 
   @override
   Future<GalleryPage> load({
@@ -116,23 +238,24 @@ class _PhotoManagerSource implements GallerySource {
     int limit = GallerySource.pageSize,
   }) async {
     if (offset == 0 || _album == null) {
-      final paths = await PhotoManager.getAssetPathList(
-        type: RequestType.common,
-        onlyAll: true,
-        filterOption: GallerySource.mediaFilter(),
-      );
-      if (paths.isEmpty) {
-        _album = null;
+      await _fetchPaths();
+      final album = _pathFor(_albumId);
+      _album = album;
+      if (album == null) {
         _total = 0;
         return GalleryPage.empty;
       }
-      _album = paths.first;
-      _total = await paths.first.assetCountAsync;
+      _total = await album.assetCountAsync;
     }
     final album = _album;
     if (album == null || offset >= _total) return GalleryPage.empty;
     final end = offset + limit < _total ? offset + limit : _total;
-    final assets = await album.getAssetListRange(start: offset, end: end);
+    final List<AssetEntity> assets;
+    if (_sort.field == GallerySortField.name) {
+      assets = (await _assetsByName(album)).sublist(offset, end);
+    } else {
+      assets = await album.getAssetListRange(start: offset, end: end);
+    }
     return GalleryPage(
       items: assets.map((a) => _AssetGalleryItem(a)).toList(),
       hasMore: end < _total,
@@ -154,6 +277,9 @@ class _AssetGalleryItem implements GalleryItem {
 
   @override
   String get id => asset.id;
+
+  @override
+  String get name => asset.title ?? '';
 
   @override
   bool get isVideo => asset.type == AssetType.video;
@@ -218,6 +344,8 @@ String _fileExtension(String path) {
   return path.substring(dot).toLowerCase();
 }
 
+String _baseName(String path) => path.split(RegExp(r'[\\/]')).last;
+
 bool isVideoPath(String path) =>
     kGalleryVideoExtensions.contains(_fileExtension(path));
 
@@ -229,6 +357,22 @@ class _DesktopGallerySource implements GallerySource {
   @override
   Future<GalleryPermission> ensurePermission() async =>
       GalleryPermission.granted;
+
+  @override
+  Future<List<GalleryAlbum>> albums() async => const [
+    GalleryAlbum(id: 'desktop', name: '', count: 0, isAll: true),
+  ];
+
+  @override
+  void selectAlbum(GalleryAlbum album) {}
+
+  GallerySort _sort = GallerySort.newestFirst;
+
+  @override
+  void setSort(GallerySort sort) {
+    _sort = sort;
+    _all = const [];
+  }
 
   List<_FileGalleryItem> _all = const [];
 
@@ -268,7 +412,15 @@ class _DesktopGallerySource implements GallerySource {
         }
       } catch (_) {}
     }
-    entries.sort((a, b) => b.modified.compareTo(a.modified));
+    entries.sort((a, b) {
+      final order = switch (_sort.field) {
+        GallerySortField.date => a.modified.compareTo(b.modified),
+        GallerySortField.name => _baseName(
+          a.file.path,
+        ).toLowerCase().compareTo(_baseName(b.file.path).toLowerCase()),
+      };
+      return _sort.ascending ? order : -order;
+    });
     return entries.map((e) => _FileGalleryItem(e.file)).toList();
   }
 
@@ -313,6 +465,9 @@ class _FileGalleryItem implements GalleryItem {
 
   @override
   String get id => file.path;
+
+  @override
+  String get name => _baseName(file.path);
 
   @override
   bool get isVideo => isVideoPath(file.path);

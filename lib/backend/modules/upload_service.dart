@@ -63,6 +63,14 @@ class UploadJobFailed extends UploadJobEvent {
 }
 
 // #***! ошибка загрузки с кодом причины
+class UploadJobCancelled extends UploadJobEvent {
+  const UploadJobCancelled({
+    required super.chatId,
+    required super.tempId,
+    required super.kind,
+    required super.scheduled,
+  });
+}
 class UploadFailure implements Exception {
   const UploadFailure(this.message);
 
@@ -70,6 +78,13 @@ class UploadFailure implements Exception {
 
   @override
   String toString() => 'UploadFailure($message)';
+}
+
+class UploadCancelled implements Exception {
+  const UploadCancelled();
+
+  @override
+  String toString() => 'UploadCancelled';
 }
 
 class UploadBytes {
@@ -119,11 +134,17 @@ class UploadJob {
   final int _slots;
   final List<int> _sent;
   final List<int> _total;
+  final Completer<void> _cancelSignal = Completer<void>();
 
   bool get scheduled => scheduledTime != null;
   int get slots => _slots;
+  bool get isCancelled => _cancelSignal.isCompleted;
+  Future<void> get cancelled => _cancelSignal.future;
 
   // #***! прогресс по слоту, дальше считаем общий
+  void cancel() {
+    if (!isCancelled) _cancelSignal.complete();
+  }
   void report(int slot, int sent, int total) {
     if (slot < 0 || slot >= _slots) return;
     _sent[slot] = sent;
@@ -200,6 +221,8 @@ class UploadService {
 
   UploadJob? job(String tempId) => _jobs[tempId];
 
+  void cancel(String tempId) => _jobs[tempId]?.cancel();
+
   ValueListenable<List<double>>? progressFor(String tempId) =>
       _jobs[tempId]?.progress;
 
@@ -249,6 +272,7 @@ class UploadService {
         if (tokens.any((token) => token == null)) {
           throw const UploadFailure('upload_failed');
         }
+        if (job.isCancelled) throw const UploadCancelled();
         final sent = await messagesModule.sendPhotoMessage(
           chatId,
           tokens.cast<String>(),
@@ -290,9 +314,11 @@ class UploadService {
           Uri.parse(info.url),
           file,
           onProgress: (sent, total) => job.report(0, sent, total),
+          cancel: job.cancelled,
         );
         if (!ok) throw const UploadFailure('upload_failed');
         job.markUploaded();
+        if (job.isCancelled) throw const UploadCancelled();
         final sent = await messagesModule.sendVideoMessage(
           chatId,
           info.token,
@@ -393,6 +419,7 @@ class UploadService {
             Uri.parse(info.url),
             file,
             onProgress: (sent, total) => job.report(0, sent, total),
+            cancel: job.cancelled,
           );
           if (!ok) throw const UploadFailure('upload_failed');
           job.markUploaded();
@@ -525,6 +552,9 @@ class UploadService {
             }
           },
         );
+    job.cancelled.then((_) {
+      if (!result.isCompleted) result.completeError(const UploadCancelled());
+    });
     try {
       return await result.future;
     } finally {
@@ -548,15 +578,35 @@ class UploadService {
     CachedMessage? real;
     String? failure;
     try {
-      real = await upload(job);
       // #***! для отложенного null это нормально, оно уйдёт позже
-      if (real == null && !job.scheduled) failure = 'send_failed';
+      final work = upload(job);
+      unawaited(work.then<void>((_) {}, onError: (_) {}));
+      real = await Future.any<CachedMessage?>([
+        work,
+        job.cancelled.then<CachedMessage?>((_) => null),
+      ]);
+      if (real == null && !job.scheduled && !job.isCancelled) {
+        failure = 'send_failed';
+      }
     } catch (e) {
       failure = e is UploadFailure ? e.message : e.toString();
     }
 
     UploadNotificationService.end(job.id);
     _jobs.remove(job.id);
+
+    if (job.isCancelled && real == null) {
+      _dropCancelled(job);
+      _events.add(
+        UploadJobCancelled(
+          chatId: job.chatId,
+          tempId: job.id,
+          kind: job.kind,
+          scheduled: job.scheduled,
+        ),
+      );
+      return;
+    }
 
     if (failure != null) {
       logger.w('UploadService: ${job.id} — $failure');
@@ -620,6 +670,11 @@ class UploadService {
   }
 
   // #***! строку в списке чатов двигаем отсюда, а не с экрана чата: его
+  void _dropCancelled(UploadJob job) {
+    if (job.scheduled || job.placeholder == null) return;
+    MessageSessionCache.removeMessage(job.accountId, job.chatId, job.id);
+    unawaited(chats.reconcileLastMessage(job.accountId, job.chatId));
+  }
   // могли закрыть сразу после выбора файла, а загрузка живёт дальше
   void _syncChatPreview(
     CachedMessage? message,
@@ -691,26 +746,36 @@ class UploadService {
       logger.w('optimize photo: $e');
       file = photo.file;
     }
-    for (var attempt = 0; attempt < _photoAttempts; attempt++) {
-      if (attempt > 0) {
-        await Future.delayed(Duration(seconds: attempt));
-        job.resetSlot(index);
+    try {
+      if (job.isCancelled) return null;
+      for (var attempt = 0; attempt < _photoAttempts; attempt++) {
+        if (attempt > 0) {
+          await Future.delayed(Duration(seconds: attempt));
+          if (job.isCancelled) return null;
+          job.resetSlot(index);
+        }
+        try {
+          final url = await messagesModule.requestPhotoUploadUrl();
+          if (url == null || url.isEmpty) continue;
+          final token = await fileUploader.uploadPhoto(
+            Uri.parse(url),
+            file,
+            filename: _photoFilename(file),
+            onProgress: (sent, total) => job.report(index, sent, total),
+            cancel: job.cancelled,
+          );
+          if (token != null) return token;
+        } catch (e) {
+          logger.w('uploadOnePhoto attempt ${attempt + 1}: $e');
+        }
+        if (job.isCancelled) return null;
       }
-      try {
-        final url = await messagesModule.requestPhotoUploadUrl();
-        if (url == null || url.isEmpty) continue;
-        final token = await fileUploader.uploadPhoto(
-          Uri.parse(url),
-          file,
-          filename: _photoFilename(file),
-          onProgress: (sent, total) => job.report(index, sent, total),
-        );
-        if (token != null) return token;
-      } catch (e) {
-        logger.w('uploadOnePhoto attempt ${attempt + 1}: $e');
+      return null;
+    } finally {
+      if (file.path != photo.file.path) {
+        unawaited(file.delete().catchError((_) => file));
       }
     }
-    return null;
   }
 
   // #***! имя файла из пути иначе photo.jpg

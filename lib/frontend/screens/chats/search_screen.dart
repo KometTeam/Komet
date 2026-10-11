@@ -16,6 +16,7 @@ import '../../widgets/small_spinner.dart';
 import '../../widgets/swipe_route.dart';
 import '../contacts/open_contact_profile.dart';
 import 'chat_screen.dart';
+import '../../widgets/official_name.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -305,6 +306,7 @@ class _SearchScreenState extends State<SearchScreen> {
             _ResultTile(
               name: _contactName(row),
               imageUrl: row['base_url'] as String?,
+              contactId: row['id'] as int?,
               subtitle: _contactLabels(row).subtitle,
               onTap: () => _openContact(row),
             ),
@@ -397,12 +399,14 @@ class _ResultTile extends StatelessWidget {
   final String? imageUrl;
   final String? subtitle;
   final VoidCallback onTap;
+  final int? contactId;
 
   const _ResultTile({
     required this.name,
     required this.onTap,
     this.imageUrl,
     this.subtitle,
+    this.contactId,
   });
 
   @override
@@ -422,12 +426,11 @@ class _ResultTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    name.isEmpty
+                  OfficialName(
+                    contactId: contactId ?? 0,
+                    text: name.isEmpty
                         ? AppLocalizations.of(context)!.searchScreenUntitled
                         : name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,

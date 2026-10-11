@@ -104,6 +104,7 @@ class ContactInfo {
   bool get isBot => options.contains('BOT');
 
   // #***! accountStatus не ноль значит удалён
+  bool get isOfficial => options.contains('OFFICIAL');
   bool get isDeleted {
     final status = raw['accountStatus'];
     return status is int && status != 0;

@@ -7,6 +7,7 @@ import '../../../../backend/modules/messages.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import 'bubble_context.dart';
+import '../../official_name.dart';
 
 String _forwardedSourceName(
   ForwardedMessageAttachment forwarded,
@@ -90,10 +91,10 @@ class ForwardedHeader extends StatelessWidget {
           else
             _avatar(displaySender),
           Flexible(
-            child: Text(
-              displaySender,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: OfficialName(
+              contactId: forwarded.originalSenderId,
+              text: displaySender,
+              iconSize: 12,
               style: TextStyle(
                 color: headerColor,
                 fontSize: 12,

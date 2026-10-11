@@ -74,6 +74,7 @@ import '../../../core/config/app_spectrum_background.dart';
 import '../../../core/config/app_nav_pill_style.dart';
 import '../../../core/config/app_bottom_navigation_style.dart';
 import '../../../core/cache/info_cache.dart';
+import '../../../core/cache/official_options.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../core/config/app_colors.dart';
@@ -119,6 +120,7 @@ import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
 import '../lock/lock_glyph.dart';
 import '../../../core/security/app_lock.dart';
+import '../../widgets/verified_mark.dart';
 
 const String _savedWelcomeKey = 'welcome.saved.dialog.message';
 
@@ -1015,6 +1017,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
     });
     chats.chatOrderRevision.addListener(_onChatsChanged);
+    ContactCache.officialRevision.addListener(_onOfficialRevision);
     ArchivedChatsStore.instance.revision.addListener(_onArchivedChanged);
     ChatEncryptionStore.instance.revision.addListener(_onEncryptionChanged);
     E2eeService.instance.revision.addListener(_onEncryptionChanged);
@@ -1201,6 +1204,22 @@ class _ChatListScreenState extends State<ChatListScreen>
   void _onChatsChanged() {
     _requestReload();
   }
+  void _prefetchPeerOptions(List<CachedChat> items, int myId) {
+    final peers = <int>[];
+    for (final chat in items) {
+      if (chat.type != 'DIALOG') continue;
+      final peer = chat.participants.keys.firstWhere(
+        (id) => id != myId,
+        orElse: () => 0,
+      );
+      if (peer != 0) peers.add(peer);
+    }
+    OfficialOptions.requestAll(peers);
+  }
+
+  void _onOfficialRevision() {
+    if (mounted) setState(() {});
+  }
 
   Future<void> _reloadChatsAndFolders() async {
     final p = await AppDatabase.loadActiveProfile();
@@ -1291,6 +1310,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           _chats = filteredChats;
           _chatsWithArchived = visibleChats;
           _archivedIds = archivedIds;
+          _prefetchPeerOptions(visibleChats, p.id);
           _archivedCount = archivedCount;
           _contactIds = contactIds;
           _enteringChatIds = entering;
@@ -1779,6 +1799,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
     chats.chatOrderRevision.removeListener(_onChatsChanged);
+    ContactCache.officialRevision.removeListener(_onOfficialRevision);
     ArchivedChatsStore.instance.revision.removeListener(_onArchivedChanged);
     ChatEncryptionStore.instance.revision.removeListener(_onEncryptionChanged);
     E2eeService.instance.revision.removeListener(_onEncryptionChanged);
@@ -3677,8 +3698,9 @@ class _ChatListScreenState extends State<ChatListScreen>
           int.tryParse(id) ?? 0,
         ) ||
         E2eeService.instance.isOn(_profile?.id ?? 0, int.tryParse(id) ?? 0);
-    final isVerified =
+    final e2eeVerified =
         e2eeInfo?.phase == E2eePhase.established && e2eeInfo!.verified;
+    final showVerified = isVerified || e2eeVerified;
     final Widget? statusIcon = (ownStatus != null && draft == null)
         ? _ownStatusIcon(cs, ownStatus, ownRead)
         : null;
@@ -3864,7 +3886,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           bottom: -2,
                           child: EncryptionLockBadge(
                             size: 18,
-                            verified: isVerified,
+                            verified: showVerified,
                           ),
                         ),
                       if (isSelected)
@@ -3943,15 +3965,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    if (isVerified) ...[
+                                    if (showVerified) ...[
                                       const SizedBox(width: 4),
-                                      Icon(
-                                        Symbols.verified,
-                                        color: cs.primary,
-                                        size: 16,
-                                        weight: 600,
-                                        fill: 1,
-                                      ),
+                                      VerifiedMark(color: cs.primary, size: 16),
                                     ],
                                   ],
                                 ),

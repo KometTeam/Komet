@@ -231,11 +231,13 @@ class AppLock {
   Future<bool> authenticateBiometric(String reason) async {
     if (!await biometricAvailable()) return false;
     try {
-      return await _auth.authenticate(
-        localizedReason: reason,
-        biometricOnly: true,
-        sensitiveTransaction: false,
-      );
+      return await _auth
+          .authenticate(
+            localizedReason: reason,
+            biometricOnly: true,
+            sensitiveTransaction: false,
+          )
+          .timeout(const Duration(seconds: 20), onTimeout: () => false);
     } catch (e) {
       logger.w('AppLock: биометрия не прошла: $e');
       return false;

@@ -11,6 +11,7 @@ import '../../../backend/modules/calls.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
+import '../../../core/utils/logger.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/chat_menu_overlay.dart';
 import '../../widgets/small_spinner.dart';
@@ -90,7 +91,7 @@ class _CallsTabState extends State<CallsTab>
           grouped.last.status == call.status &&
           _isSameDay(grouped.last.time, call.time)) {
         final last = grouped.removeLast();
-        grouped.add(last.withCount(last.count + 1));
+        grouped.add(last.mergedWith(call));
       } else {
         grouped.add(call);
       }
@@ -275,10 +276,20 @@ class _CallsTabState extends State<CallsTab>
   void _deleteCall(CallLogEntry call) {
     if (_removing.contains(call.id)) return;
     setState(() => _removing.add(call.id));
-    final historyId = int.tryParse(call.id);
-    if (historyId != null) {
-      unawaited(CallsModule(api).deleteHistory([historyId]));
+    final historyIds = call.ids.map(int.tryParse).whereType<int>().toList();
+    unawaited(_removeOnServer(historyIds));
+  }
+
+  Future<void> _removeOnServer(List<int> historyIds) async {
+    var ok = false;
+    try {
+      ok = await CallsModule(api).deleteHistory(historyIds);
+    } catch (e) {
+      logger.w('deleteHistory: $e');
     }
+    if (ok || !mounted) return;
+    showCustomNotification(context, AppLocalizations.of(context)!.callsTabDeleteFailed);
+    unawaited(_loadHistory());
   }
 
   void _onRemovalComplete(String id) {

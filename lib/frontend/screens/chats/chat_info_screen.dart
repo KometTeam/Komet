@@ -64,6 +64,8 @@ import 'chat_admin/admin_section.dart';
 import 'chat_admin/member_actions.dart';
 import 'chat_admin/chat_admin_state.dart';
 import 'chat_admin/ownership_transfer.dart';
+import '../../widgets/official_name.dart';
+import '../../widgets/verified_mark.dart';
 
 enum ChatInfoTab { media }
 
@@ -340,6 +342,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         if (contact != null) {
           _contactData = contact;
           _isBot = _contactData!.options.contains('BOT');
+          ContactCache.putOptions(otherId, contact.options.toSet());
         }
         if (presence != null) {
           _seenTime = presence['seen'] as int?;
@@ -1287,6 +1290,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             ),
           ),
         ),
+        if (_otherId != null && ContactCache.isOfficial(_otherId!))
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: VerifiedMark(size: 18, color: cs.primary),
+          ),
         SizedBox(
           width: hasToggle ? 30 : 0,
           height: 28,
@@ -2456,8 +2464,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name,
+                  OfficialName(
+                    contactId: member.id,
+                    text: name,
                     style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 15,

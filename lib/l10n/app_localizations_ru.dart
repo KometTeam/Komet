@@ -1107,6 +1107,33 @@ class AppLocalizationsRu extends AppLocalizations {
   String get callSpeaker => 'Динамик';
 
   @override
+  String get callSwitchCamera => 'Переключить камеру';
+
+  @override
+  String get callsTabDeleteFailed => 'Не удалось удалить вызов';
+
+  @override
+  String get chatSettingsTitle => 'Настройки чатов';
+
+  @override
+  String get chatSettingsArchiveOnPull => 'Архив при свайпе вниз';
+
+  @override
+  String get chatSettingsAutoDownloadTitle => 'Автозагрузка медиа';
+
+  @override
+  String get chatSettingsAutoDownloadPhoto => 'Фото';
+
+  @override
+  String get chatSettingsAutoDownloadVideo => 'Видео';
+
+  @override
+  String get chatSettingsAutoDownloadVoice => 'Голосовые';
+
+  @override
+  String get chatSettingsAutoDownloadVideoNote => 'Кружки';
+
+  @override
   String get callVideoLabel => 'Видео';
 
   @override
@@ -2367,6 +2394,27 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get attachSheetGallery => 'Галерея';
+
+  @override
+  String get attachSheetAlbumsTitle => 'Альбомы';
+
+  @override
+  String get attachSheetAllMedia => 'Все фото и видео';
+
+  @override
+  String get attachSheetSort => 'Сортировка';
+
+  @override
+  String get attachSheetSortNewestFirst => 'По дате: сначала новые';
+
+  @override
+  String get attachSheetSortOldestFirst => 'По дате: сначала старые';
+
+  @override
+  String get attachSheetSortNameAsc => 'По имени: от А до Я';
+
+  @override
+  String get attachSheetSortNameDesc => 'По имени: от Я до А';
 
   @override
   String get attachSheetPoll => 'Опрос';
@@ -4719,6 +4767,13 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get chatEncryptionEnabled => 'Шифрование включено';
+
+  @override
+  String get e2eeLegacyDescription =>
+      'В этом чате включено старое шифрование по ключу. Оно работает отдельно от нового и не выключается здесь само. Выключите его, чтобы сообщения шли без ключа.';
+
+  @override
+  String get e2eeLegacyDisable => 'Выключить старое шифрование';
 
   @override
   String get chatEncryptionDisabled => 'Шифрование отключено';

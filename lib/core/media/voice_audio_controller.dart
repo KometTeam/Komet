@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:async';
 import 'dart:io';
 
@@ -15,6 +16,34 @@ import 'opus_ogg_index.dart';
 enum VoiceAudioFailure { none, download, playback }
 
 // #***! воспроизведение одного голосового
+class _PrefetchSlots {
+  _PrefetchSlots(this._limit);
+
+  final int _limit;
+  int _running = 0;
+  final Queue<Completer<void>> _waiting = Queue<Completer<void>>();
+
+  Future<void> acquire() {
+    if (_running < _limit) {
+      _running++;
+      return Future.value();
+    }
+    final waiter = Completer<void>();
+    _waiting.add(waiter);
+    return waiter.future;
+  }
+
+  void release() {
+    if (_waiting.isEmpty) {
+      _running--;
+      return;
+    }
+    _waiting.removeFirst().complete();
+  }
+}
+
+final _PrefetchSlots _prefetchSlots = _PrefetchSlots(2);
+
 class VoiceAudioController {
   VoiceAudioController({
     required this.cacheName,
@@ -174,6 +203,14 @@ class VoiceAudioController {
 
     _disposePlayer();
     if (resume) await _startAt(position.value);
+  }
+  Future<void> prefetch() async {
+    await _prefetchSlots.acquire();
+    try {
+      await _ensureLoaded();
+    } finally {
+      _prefetchSlots.release();
+    }
   }
 
   // #***! качаем один раз, повторные нажатия ждут ту же загрузку

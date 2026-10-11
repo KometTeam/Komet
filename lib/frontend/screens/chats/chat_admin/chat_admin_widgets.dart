@@ -8,6 +8,7 @@ import '../../../../core/utils/format.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../widgets/komet_avatar.dart';
 import '../../../widgets/small_spinner.dart';
+import '../../../widgets/official_name.dart';
 
 class AdminScaffold extends StatelessWidget {
   final String title;
@@ -118,10 +119,9 @@ class AdminMemberTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  OfficialName(
+                    contactId: id,
+                    text: title,
                     style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 15,
