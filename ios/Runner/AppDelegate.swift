@@ -28,6 +28,7 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
   private var eventChannels: [FlutterEventChannel] = []
   private var streamHandlers: [KometStreamHandler] = []
   private var videoNote: KometVideoNote?
+  private let shareBridge = KometShareBridge()
 
   override func application(
     _ application: UIApplication,
@@ -43,6 +44,7 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
       registerVideoNote(messenger)
       registerNotifications(messenger)
       registerScreen(messenger)
+      registerShare(messenger)
       registerClipboard(messenger)
     }
 
@@ -54,6 +56,35 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
     let channel = FlutterMethodChannel(name: name, binaryMessenger: messenger)
     channel.setMethodCallHandler(handler)
     channels.append(channel)
+  }
+
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    guard url.isFileURL else {
+      return super.application(app, open: url, options: options)
+    }
+    shareBridge.importDocument(url) { [weak self] error in
+      guard var controller = self?.window?.rootViewController else { return }
+      while let presented = controller.presentedViewController { controller = presented }
+      let alert = UIAlertController(title: "Не удалось открыть файл",
+                                    message: error.localizedDescription,
+                                    preferredStyle: .alert)
+      alert.addAction(UIAlertAction(title: "ОК", style: .default))
+      controller.present(alert, animated: true)
+    }
+    return true
+  }
+
+  private func registerShare(_ messenger: FlutterBinaryMessenger) {
+    method("ru.komet.app/share", messenger) { [weak self] call, result in
+      self?.shareBridge.handle(call, result: result)
+    }
+    events("ru.komet.app/share_events", messenger) { [weak self] sink in
+      self?.shareBridge.attach(sink)
+    }
   }
 
   private func events(_ name: String, _ messenger: FlutterBinaryMessenger,
@@ -121,6 +152,7 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
         self.videoNote = recorder
         recorder.initialize(
           front: (args["front"] as? NSNumber)?.boolValue ?? true,
+          cameraId: args["cameraId"] as? String,
           edge: (args["size"] as? NSNumber)?.intValue ?? 480,
           fps: (args["fps"] as? NSNumber)?.intValue ?? 30,
           result: result)

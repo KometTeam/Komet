@@ -5,12 +5,14 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import '../config/app_camera.dart';
 import '../config/app_microphone.dart';
 import '../config/app_pulse_source.dart';
-import '../config/call_no_mute.dart';
+import '../config/launch_flags.dart';
 import '../utils/logger.dart';
 import '../utils/parse.dart';
 import 'audio_devices.dart';
+import 'camera_devices.dart';
 import 'call_admin.dart';
 import 'call_bridge.dart';
 import 'call_info.dart';
@@ -236,7 +238,7 @@ class CallSession {
   bool get peerIsKomet => _peerIsKomet;
 
   bool get isMuted => _muted;
-  bool get audioTransmitting => !_muted || CallNoMute.enabled;
+  bool get audioTransmitting => !_muted || LaunchFlags.noMute;
   String? get micDeviceId => _micDeviceId;
   String? get pulseSource => _pulseSource;
   bool get isSpeaker => _speakerOn;
@@ -2217,12 +2219,22 @@ class CallSession {
   }
 
   // #***! включение камеры
-  Future<void> _startCamera() async {
+  Future<void> switchCamera() async {
+    if (!_localVideo || _pc == null) return;
+    final cameras = await CameraDevices.cameras();
+    if (cameras.length < 2) return;
+    final currentId = _cameraStream?.getVideoTracks().firstOrNull?.getSettings()['deviceId'];
+    final current = cameras.where((c) => c.id == currentId).firstOrNull;
+    final next = cameras.where((c) => c.id != currentId && c.facing != current?.facing).firstOrNull ??
+        cameras.firstWhere((c) => c.id != currentId, orElse: () => cameras.first);
+    await _startCamera(deviceId: next.id);
+  }
+  Future<void> _startCamera({String? deviceId}) async {
     final pc = _pc;
     if (pc == null) return;
 
     final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
-      'video': true,
+      'video': CameraDevices.constraints(deviceId ?? AppCamera.deviceId),
       'audio': false,
     });
 

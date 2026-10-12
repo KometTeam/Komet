@@ -50,6 +50,40 @@ void main() {
     expect(gate.loginUnanswered, isTrue);
   });
 
+  test('handshake completion cannot release a rejected login', () async {
+    final gate = LoginGate()
+      ..close()
+      ..noteLoginSent()
+      ..noteLoginAnswer(ok: false)
+      ..open();
+
+    await expectLater(
+      gate.wait(const Duration(milliseconds: 50), 'chatHistory'),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
+
+  test('handshake completion cannot release an unanswered login', () async {
+    final gate = LoginGate()
+      ..close()
+      ..noteLoginSent()
+      ..open();
+
+    await expectLater(
+      gate.wait(const Duration(milliseconds: 50), 'chatHistory'),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
+
+  test('pre-login handshake can release requests without a login', () async {
+    final gate = LoginGate()..close();
+    final waiting = gate.wait(_timeout, 'requestCode');
+
+    gate.open();
+
+    await waiting;
+  });
+
   test('dropping the session fails the waiting requests', () async {
     final gate = LoginGate()..close();
     final waiting = gate.wait(_timeout, 'chatHistory');

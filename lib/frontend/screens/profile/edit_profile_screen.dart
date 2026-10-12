@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/storage/app_database.dart';
@@ -9,6 +8,8 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show accountModule, fileUploader, KometApp;
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/attachment/avatar_editor.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/small_spinner.dart';
 
@@ -21,6 +22,7 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _firstNameController = TextEditingController();
+  final _firstNameFieldKey = GlobalKey();
   final _lastNameController = TextEditingController();
   final _bioController = TextEditingController();
   bool _isLoading = true;
@@ -61,7 +63,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (_isSaving) return;
     final firstName = _firstNameController.text.trim();
     if (firstName.isEmpty) {
-      if (mounted) showCustomNotification(context, 'Имя не может быть пустым');
+      if (mounted) {
+        showHintBubble(
+          _firstNameFieldKey.currentContext ?? context,
+          AppLocalizations.of(context)!.editProfileNameEmpty,
+        );
+      }
       return;
     }
     final lastName = _lastNameController.text.trim();
@@ -78,24 +85,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       KometApp.stateOf(context)?.notifyProfileUpdate();
       if (mounted) {
-        showCustomNotification(context, 'Профиль сохранён');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.editProfileSaved,
+        );
         setState(() => _isSaving = false);
       }
     } catch (e) {
       if (!mounted) return;
-      showCustomNotification(context, 'Ошибка: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.devicesGenericError('$e'),
+      );
       setState(() => _isSaving = false);
     }
   }
 
   Future<void> _changeAvatar() async {
     if (_isSaving) return;
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
-    final path = result?.files.firstOrNull?.path;
+    final path = (await pickAvatarImage(context))?.path;
     if (path == null) return;
     if (await File(path).length() > kMaxAvatarBytes) {
       if (mounted) {
-        showCustomNotification(context, 'Картинка слишком большая (макс 8 МБ)');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.groupSettingsPhotoTooLarge,
+        );
       }
       return;
     }
@@ -105,7 +120,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final processed = await compressAvatarFile(path);
       if (processed == null) {
         if (!mounted) return;
-        showCustomNotification(context, 'Не удалось обработать изображение');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.contactLocalPhotoFailed,
+        );
         setState(() => _isSaving = false);
         return;
       }
@@ -117,7 +135,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
       if (token == null) {
         if (!mounted) return;
-        showCustomNotification(context, 'Не удалось загрузить аватарку');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.editProfileAvatarUploadFailed,
+        );
         setState(() => _isSaving = false);
         return;
       }
@@ -129,10 +150,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _isSaving = false;
       });
       KometApp.stateOf(context)?.notifyProfileUpdate();
-      showCustomNotification(context, 'Аватарка обновлена');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.editProfileAvatarUpdated,
+      );
     } catch (e) {
       if (!mounted) return;
-      showCustomNotification(context, 'Ошибка: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.devicesGenericError('$e'),
+      );
       setState(() => _isSaving = false);
     }
   }
@@ -147,12 +174,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       KometApp.stateOf(context)?.notifyProfileUpdate();
       if (mounted) {
-        showCustomNotification(context, 'Фото удалено');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.editProfilePhotoDeleted,
+        );
         setState(() => _isSaving = false);
       }
     } catch (e) {
       if (!mounted) return;
-      showCustomNotification(context, 'Ошибка: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.devicesGenericError('$e'),
+      );
       setState(() => _isSaving = false);
     }
   }
@@ -254,6 +287,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   _firstNameController,
                   cs,
                   enabled: !_isSaving,
+                  fieldKey: _firstNameFieldKey,
                 ),
                 const SizedBox(height: 12),
                 _buildTextField(
@@ -284,6 +318,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     bool enabled = true,
     int? minLines,
     int maxLines = 1,
+    Key? fieldKey,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -296,6 +331,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
         ),
         TextField(
+          key: fieldKey,
           controller: controller,
           enabled: enabled,
           minLines: minLines,

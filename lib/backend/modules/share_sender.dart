@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:io';
 
 import '../../core/media/gallery_source.dart';
+import '../../core/crypto/outgoing_message_policy.dart';
 import '../../core/media/share_thumbnail.dart';
 import '../../core/media/video_transcoder.dart';
+import '../../core/share/shared_file_usage.dart';
 import '../../core/storage/app_database.dart';
+import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../models/attachment.dart';
 import '../../models/chat_preview_media.dart';
@@ -53,12 +56,17 @@ class PreparedShare {
   bool get isTextOnly => files.isEmpty;
 
   // #***! миниатюры и размеры считаем один раз а не на каждый чат
-  static Future<PreparedShare> prepare(SharedPayload payload) async {
-    final prepared = <PreparedShareFile>[];
-    for (final source in payload.files) {
-      prepared.add(await _prepareOne(source));
-    }
-    return PreparedShare(files: prepared, text: payload.text);
+  static Future<PreparedShare> prepare(SharedPayload payload) {
+    return SharedFileUsage.instance.use(
+      payload.files.map((file) => file.path),
+      () async {
+        final prepared = <PreparedShareFile>[];
+        for (final source in payload.files) {
+          prepared.add(await _prepareOne(source));
+        }
+        return PreparedShare(files: prepared, text: payload.text);
+      },
+    );
   }
 
   // #***! у фото размеры из файла, у видео через probe
@@ -136,6 +144,10 @@ class ShareSender {
   static void _onUploadEvent(UploadJobEvent event) {
     final entry = _tracked.remove(event.tempId);
     if (entry == null) return;
+    if (event is UploadJobCancelled) {
+      unawaited(chats.reconcileLastMessage(entry.accountId, entry.chatId));
+      return;
+    }
     final status = event is UploadJobDone ? 'sent' : 'error';
     final messageId = event is UploadJobDone
         ? (event.message?.id ?? event.tempId)
@@ -164,19 +176,44 @@ class ShareSender {
     required PreparedShare share,
     required String caption,
   }) async {
-    var messages = 0;
-    for (final chatId in chatIds) {
-      messages += await _sendToChat(
-        accountId: accountId,
-        chatId: chatId,
-        share: share,
-        caption: caption,
-      );
+    final session = api.session;
+    final epoch = api.sessionEpoch;
+    final accountEpoch = TokenStorage.accountEpoch;
+    await OutgoingMessagePolicy.load(accountId);
+    if (session == null ||
+        !identical(api.session, session) ||
+        api.sessionEpoch != epoch ||
+        TokenStorage.accountEpoch != accountEpoch ||
+        await TokenStorage.getActiveAccountId() != accountId) {
+      throw StateError('Account changed during sharing');
     }
-    logger.i(
-      'Поделиться: отправлено $messages сообщений в ${chatIds.length} чатов',
+    for (final chatId in chatIds) {
+      OutgoingMessagePolicy.requireSupported(accountId, chatId);
+    }
+    return SharedFileUsage.instance.use(
+      share.files.map((file) => file.source.path),
+      () async {
+        var messages = 0;
+        for (final chatId in chatIds) {
+          if (!identical(api.session, session) || api.sessionEpoch != epoch || TokenStorage.accountEpoch != accountEpoch) {
+            throw StateError('Account changed during sharing');
+          }
+          messages += await _sendToChat(
+            accountId: accountId,
+            chatId: chatId,
+            share: share,
+            caption: caption,
+          );
+        }
+        logger.i(
+          'Поделиться: отправлено $messages сообщений в ${chatIds.length} чатов',
+        );
+        return ShareSendResult(
+          chatCount: chatIds.length,
+          messageCount: messages,
+        );
+      },
     );
-    return ShareSendResult(chatCount: chatIds.length, messageCount: messages);
   }
 
   // #***! фото альбомом, видео и документы по одному
@@ -186,6 +223,7 @@ class ShareSender {
     required PreparedShare share,
     required String caption,
   }) async {
+    OutgoingMessagePolicy.requireSupported(accountId, chatId);
     if (share.isTextOnly) {
       final text = caption.trim().isNotEmpty
           ? caption
@@ -244,6 +282,7 @@ class ShareSender {
     required int chatId,
     required String text,
   }) async {
+    final session = api.session;
     final now = DateTime.now().millisecondsSinceEpoch;
     final tempId = UploadService.instance.newTempId();
     final placeholder = CachedMessage(
@@ -270,7 +309,17 @@ class ShareSender {
     String realId = tempId;
     var status = 'sent';
     try {
-      final sent = await messagesModule.sendMessage(accountId, chatId, text);
+      final sent = await messagesModule.sendMessage(
+        accountId,
+        chatId,
+        text,
+        beforeSend: () {
+          if (session == null || !identical(api.session, session)) {
+            throw StateError('Account changed during sharing');
+          }
+          OutgoingMessagePolicy.requireSupported(accountId, chatId);
+        },
+      );
       if (sent.isNotEmpty) realId = sent;
     } catch (e) {
       logger.w('Поделиться: текст в $chatId не ушёл: $e');
@@ -361,13 +410,16 @@ class ShareSender {
 
     // #***! загрузку не ждём, экран закрывается сразу дальше UploadService
     unawaited(
-      UploadService.instance.sendPhotos(
-        accountId: accountId,
-        chatId: chatId,
-        tempId: tempId,
-        jobs: jobs,
-        caption: caption,
-        placeholder: placeholder,
+      SharedFileUsage.instance.use(
+        photos.map((photo) => photo.source.path),
+        () => UploadService.instance.sendPhotos(
+          accountId: accountId,
+          chatId: chatId,
+          tempId: tempId,
+          jobs: jobs,
+          caption: caption,
+          placeholder: placeholder,
+        ),
       ),
     );
   }
@@ -427,13 +479,16 @@ class ShareSender {
     );
 
     unawaited(
-      UploadService.instance.sendVideo(
-        accountId: accountId,
-        chatId: chatId,
-        tempId: tempId,
-        file: video.file,
-        caption: caption,
-        placeholder: placeholder,
+      SharedFileUsage.instance.use(
+        [video.source.path],
+        () => UploadService.instance.sendVideo(
+          accountId: accountId,
+          chatId: chatId,
+          tempId: tempId,
+          file: video.file,
+          caption: caption,
+          placeholder: placeholder,
+        ),
       ),
     );
   }
@@ -487,14 +542,17 @@ class ShareSender {
     );
 
     unawaited(
-      UploadService.instance.sendFile(
-        accountId: accountId,
-        chatId: chatId,
-        tempId: tempId,
-        source: document.file,
-        filename: name,
-        size: size,
-        placeholder: placeholder,
+      SharedFileUsage.instance.use(
+        [document.source.path],
+        () => UploadService.instance.sendFile(
+          accountId: accountId,
+          chatId: chatId,
+          tempId: tempId,
+          source: document.file,
+          filename: name,
+          size: size,
+          placeholder: placeholder,
+        ),
       ),
     );
   }

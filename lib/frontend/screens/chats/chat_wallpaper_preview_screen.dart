@@ -8,6 +8,7 @@ import 'package:komet/core/storage/chat_wallpaper_store.dart';
 import 'package:komet/frontend/widgets/chat_wallpaper_view.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../l10n/app_localizations.dart';
 
 class ChatWallpaperPreviewScreen extends StatefulWidget {
   final Uint8List imageBytes;
@@ -103,7 +104,7 @@ class _ChatWallpaperPreviewScreenState
             onPressed: () => Navigator.pop(context),
           ),
           Text(
-            'Обои',
+            AppLocalizations.of(context)!.chatWallpaperPreviewTitle,
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -117,6 +118,7 @@ class _ChatWallpaperPreviewScreenState
   }
 
   Widget _controls() {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
@@ -126,7 +128,7 @@ class _ChatWallpaperPreviewScreenState
             children: [
               Expanded(
                 child: _ToggleChip(
-                  label: 'Размытие',
+                  label: l10n.chatWallpaperPreviewBlur,
                   value: _blur,
                   onTap: () => setState(() => _blur = !_blur),
                 ),
@@ -134,7 +136,7 @@ class _ChatWallpaperPreviewScreenState
               const SizedBox(width: 12),
               Expanded(
                 child: _ToggleChip(
-                  label: 'Движение',
+                  label: l10n.chatWallpaperPreviewMotion,
                   value: _motion,
                   onTap: () => setState(() => _motion = !_motion),
                 ),
@@ -269,7 +271,10 @@ class _DimLabel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Text('Затемнение', style: style),
+          Text(
+            AppLocalizations.of(context)!.chatWallpaperPreviewDimming,
+            style: style,
+          ),
           const Spacer(),
           Text('${(value * 100).round()}%', style: style),
         ],
@@ -360,7 +365,7 @@ class _ApplyButton extends StatelessWidget {
           height: 52,
           child: Center(
             child: Text(
-              'Применить',
+              AppLocalizations.of(context)!.spoofButtonApply,
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 17,
@@ -381,6 +386,7 @@ class _SamplePreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Align(
       alignment: Alignment.bottomCenter,
       child: Padding(
@@ -391,7 +397,7 @@ class _SamplePreview extends StatelessWidget {
           children: [
             _bubble(
               context,
-              text: 'Как насчёт новых обоев для этого чата?',
+              text: l10n.chatWallpaperPreviewSampleIncoming,
               color: cs.surfaceContainerHighest.withValues(alpha: 0.92),
               textColor: cs.onSurface,
               alignment: Alignment.centerLeft,
@@ -399,7 +405,7 @@ class _SamplePreview extends StatelessWidget {
             const SizedBox(height: 8),
             _bubble(
               context,
-              text: 'Отличная идея.',
+              text: l10n.chatWallpaperPreviewSampleOutgoing,
               color: cs.primary,
               textColor: cs.onPrimary,
               alignment: Alignment.centerRight,

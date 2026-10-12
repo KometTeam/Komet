@@ -420,7 +420,10 @@ class _InfoScreenState extends State<InfoScreen> {
       final weeks = value ~/ 604800;
       final days = (value % 604800) ~/ 86400;
       if (weeks > 0) {
-        return '$weeks нед ${days > 0 ? '$days дн' : ''}'.trim();
+        final l10n = AppLocalizations.of(context)!;
+        final weeksText = l10n.infoScreenWeeksShort(weeks);
+        if (days == 0) return weeksText;
+        return '$weeksText ${l10n.infoScreenDaysShort(days)}';
       }
       final h = value ~/ 3600;
       final m = (value % 3600) ~/ 60;

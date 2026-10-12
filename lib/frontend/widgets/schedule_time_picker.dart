@@ -2,25 +2,26 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/utils/format.dart';
-import 'custom_notification.dart';
+import '../../l10n/app_localizations.dart';
+import 'hint_bubble.dart';
 import 'sheet_helpers.dart';
 import '../../core/config/app_fonts.dart';
 import '../../core/config/app_shape.dart';
-
-const List<String> _weekdayShort = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
 
 /// Барабан выбора времени отправки («Отправить позже»): три колонки —
 /// день, час, минута. Возвращает выбранный момент в будущем или null.
 Future<DateTime?> showScheduleTimePicker(
   BuildContext context, {
   DateTime? initial,
-  String title = 'Отправить позже',
+  String? title,
 }) {
+  final sheetTitle =
+      title ?? AppLocalizations.of(context)!.scheduleTimePickerTitle;
   return showModalBottomSheet<DateTime>(
     context: context,
     backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
     shape: kSheetShape,
-    builder: (_) => _ScheduleSheet(initial: initial, title: title),
+    builder: (_) => _ScheduleSheet(initial: initial, title: sheetTitle),
   );
 }
 
@@ -77,10 +78,14 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
   }
 
   String _dayLabel(int index) {
-    if (index == 0) return 'Сегодня';
-    if (index == 1) return 'Завтра';
+    final l10n = AppLocalizations.of(context)!;
+    if (index == 0) return l10n.scheduleTimePickerToday;
+    if (index == 1) return l10n.scheduleTimePickerTomorrow;
     final d = _today.add(Duration(days: index));
-    return '${_weekdayShort[d.weekday - 1]}, ${d.day} ${kRuMonthsShort[d.month - 1]}.';
+    return l10n.scheduleTimePickerDayLabel(
+      formatWeekdayShort(l10n, d.weekday),
+      formatDayMonth(l10n, d),
+    );
   }
 
   DateTime get _selected => DateTime(
@@ -92,19 +97,23 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
   );
 
   String get _buttonLabel {
+    final l10n = AppLocalizations.of(context)!;
     final s = _selected;
     final day = _dayIndex == 0
-        ? 'сегодня'
+        ? l10n.scheduleTimePickerTodayLower
         : _dayIndex == 1
-        ? 'завтра'
-        : '${s.day} ${kRuMonthsShort[s.month - 1]}';
-    return 'Отправить $day в ${formatClock(s)}';
+        ? l10n.scheduleTimePickerTomorrowLower
+        : formatDayMonth(l10n, s);
+    return l10n.scheduleTimePickerSendAt(day, formatClock(s));
   }
 
-  void _confirm() {
+  void _confirm(BuildContext buttonContext) {
     final result = _selected;
     if (!result.isAfter(DateTime.now())) {
-      showCustomNotification(context, 'Время должно быть в будущем');
+      showHintBubble(
+        buttonContext,
+        AppLocalizations.of(context)!.scheduleTimePickerPastTime,
+      );
       return;
     }
     Navigator.of(context).pop(result);
@@ -171,17 +180,19 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: AppShape.buttonBorder,
-                ),
-                onPressed: _confirm,
-                child: Text(
-                  _buttonLabel,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+              child: Builder(
+                builder: (buttonContext) => FilledButton(
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: AppShape.buttonBorder,
+                  ),
+                  onPressed: () => _confirm(buttonContext),
+                  child: Text(
+                    _buttonLabel,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),

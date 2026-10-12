@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/config/ios_release.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/settings_card.dart';
 import 'app_icon_screen.dart';
@@ -13,14 +15,18 @@ import 'theme_settings_screen.dart';
 
 class _CustomizationCategory {
   final IconData icon;
-  final String title;
+  final String Function(AppLocalizations l10n) title;
   final WidgetBuilder builder;
+  final bool Function() isAvailable;
 
   const _CustomizationCategory({
     required this.icon,
     required this.title,
     required this.builder,
+    this.isAvailable = _always,
   });
+
+  static bool _always() => true;
 }
 
 class CustomizationSection extends StatefulWidget {
@@ -36,35 +42,39 @@ class _CustomizationSectionState extends State<CustomizationSection> {
   static final List<_CustomizationCategory> _categories = [
     _CustomizationCategory(
       icon: Symbols.dark_mode,
-      title: 'Тема',
+      title: (l10n) => l10n.themeSettingsTitle,
       builder: (context) => const ThemeSettingsScreen(),
     ),
     _CustomizationCategory(
       icon: Symbols.styler,
-      title: 'Внешний вид',
+      title: (l10n) => l10n.appearanceTitle,
       builder: (context) => const AppearanceScreen(),
     ),
     _CustomizationCategory(
       icon: Symbols.wallpaper,
-      title: 'Фон чатов',
+      title: (l10n) => l10n.customizationChatBackground,
       builder: (context) => const ChatBackgroundScreen(),
     ),
     _CustomizationCategory(
       icon: Symbols.text_fields,
-      title: 'Шрифты',
+      title: (l10n) => l10n.fontSettingsTitle,
       builder: (context) => const FontSettingsScreen(),
     ),
     _CustomizationCategory(
       icon: Symbols.touch_app,
-      title: 'Меню действий',
+      title: (l10n) => l10n.customizationMessageActions,
       builder: (context) => const MessageActionsScreen(),
+      isAvailable: _messageActionsStyleChoice,
     ),
     _CustomizationCategory(
       icon: Symbols.apps,
-      title: 'Иконка приложения',
+      title: (l10n) => l10n.customizationAppIcon,
       builder: (context) => const AppIconScreen(),
     ),
   ];
+
+  static bool _messageActionsStyleChoice() =>
+      IosRelease.messageActionsStyleChoice;
 
   void _toggle() {
     Haptics.tap();
@@ -117,7 +127,7 @@ class _CustomizationSectionState extends State<CustomizationSection> {
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
-                  'Кастомизация',
+                  AppLocalizations.of(context)!.customizationTitle,
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 16,
@@ -143,9 +153,14 @@ class _CustomizationSectionState extends State<CustomizationSection> {
   }
 
   List<Widget> _buildCategoryTiles(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     final tiles = <Widget>[];
-    for (var i = 0; i < _categories.length; i++) {
-      final category = _categories[i];
+    final categories = [
+      for (final category in _categories)
+        if (category.isAvailable()) category,
+    ];
+    for (var i = 0; i < categories.length; i++) {
+      final category = categories[i];
       tiles.add(
         Padding(
           padding: const EdgeInsets.only(left: 58),
@@ -159,9 +174,9 @@ class _CustomizationSectionState extends State<CustomizationSection> {
       tiles.add(
         SettingsNavTile(
           icon: category.icon,
-          label: category.title,
+          label: category.title(l10n),
           onTap: () => _open(category),
-          isLast: i == _categories.length - 1,
+          isLast: i == categories.length - 1,
         ),
       );
     }

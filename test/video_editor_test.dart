@@ -183,7 +183,7 @@ void main() {
     late Directory tmp;
 
     setUp(() {
-      tmp = Directory.systemTemp.createTempSync('komet_video_test');
+      tmp = Directory.systemTemp.createTempSync("komet video's [test],;");
       PathProviderPlatform.instance = _FakePathProvider(tmp.path);
     });
 
@@ -313,6 +313,43 @@ void main() {
       final (width, height, _, _) = await _describe(spec.output);
       expect(width, 480);
       expect(height, 640);
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test('цветокоррекция переживает спецсимволы в пути к LUT', () async {
+      if (!await _hasFfmpeg()) {
+        markTestSkipped('ffmpeg недоступен');
+        return;
+      }
+      final input = File('${tmp.path}/graded source.mp4');
+      final make = await Process.run('ffmpeg', [
+        '-y',
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc2=size=320x240:rate=30:duration=1',
+        '-c:v',
+        'libx264',
+        '-pix_fmt',
+        'yuv420p',
+        input.path,
+      ]);
+      expect(make.exitCode, 0, reason: '${make.stderr}');
+
+      final spec = VideoExportSpec(
+        input: input.path,
+        output: '${tmp.path}/graded.mp4',
+        outWidth: 320,
+        outHeight: 240,
+        rgbMatrix: const [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      );
+
+      expect(await VideoTranscoder.export(spec), isTrue);
+
+      final (width, height, _, _) = await _describe(spec.output);
+      expect(width, 320);
+      expect(height, 240);
     }, timeout: const Timeout(Duration(minutes: 3)));
   });
 }

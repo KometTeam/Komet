@@ -32,6 +32,42 @@ Android builds require **Java 17**. Gradle memory is configured to `-Xmx4096m`.
 **Never run APK/AAB builds yourself** (`flutter build apk`, `flutter build appbundle`, gradle assemble tasks) — they are slow and the user builds them. Verify changes with the scoped `flutter analyze` above; the build commands are documentation only.
 Note that `flutter analyze` treats **info**-level lints as fatal by default, so CI fails on any lint.
 
+### Launch flags
+
+Every launch flag and build-time define is declared in one place, `LaunchFlags`
+(`lib/core/config/launch_flags.dart`). `main()` parses the arguments once, logs the active set
+as `Флаги запуска: …` and warns about unknown arguments. Add a new flag there, never as a
+`String.fromEnvironment` or `args.contains` somewhere else.
+
+| Argument              | dart-define                 | Effect                                                                  |
+|-----------------------|-----------------------------|-------------------------------------------------------------------------|
+| `--debug`             | `KOMET_DEBUG=true`          | every log level passes; every wire packet is logged with its JSON       |
+| `--dw19p-im-crazy`    | `KOMET_DW19P_IM_CRAZY=true` | same, plus the payload of opcode 19 (`LOGIN`)                           |
+| `--debug-test`        | `DEBUG_TEST=true`           | fake-data mode: skips login, opens the shell as account `-424242`       |
+| `--contacts N`        | `DEBUG_CONTACTS=N`          | implies `--debug-test` and generates N fake contacts                    |
+| `--berserk`           | `BERSERK=true`              | drops the profile on login to exercise profile recovery                 |
+| `--no-mute`           | `NO_MUTE=true`              | call audio keeps flowing while the mic is shown as muted                |
+| —                     | `KOMET_LOG_LEVEL=…`         | minimum log level: `trace`…`fatal`, `off`                               |
+| —                     | `KOMET_INSTANCE=name`       | separate app copy: own prefs, database, media cache and plugins         |
+| —                     | `KOMET_UPDATE_BASE_URL=…`   | updater manifest base, default `https://cdn.komet.pw`, empty disables   |
+| —                     | `KOMET_REVIEW_PHONE` + `_PAYLOAD` | Google Play review account, see *Review account*                  |
+| —                     | `is_appstore_build=true`    | App Store build, trimmed by `BuildProfile`                              |
+
+Without `--dw19p-im-crazy` the `LOGIN` payload is replaced by its length in both directions: it
+carries the session token and the whole account snapshot. Payloads of every other opcode go out
+verbatim — including `AUTH`/`AUTH_REQUEST` responses with their tokens — so a `--debug` log is
+not safe to publish as is.
+
+Packets are logged by `WireDebugLog` from `Api._onWireLog`, tagged `api<N>/<pre|auth|web>`, so
+the two parallel sessions of the experimental "always SMS" login stay apart. Extra login
+diagnostics are plain `logger.d` calls — release filters them out unless a flag is set. Long
+lines are split into ≤900-char chunks so logcat does not truncate them.
+
+Arguments reach `main()` only on desktop: `flutter run -d linux --dart-entrypoint-args=--debug`
+(repeat the option per argument), or `./build/linux/x64/release/bundle/Komet --debug` for a built
+bundle. On Android the engine is started by `audio_service` without entrypoint args, so mobile
+builds take the dart-define: `flutter run --dart-define=KOMET_DEBUG=true`.
+
 ## Message encryption core
 
 `komet_crypto` is a `dart:ffi` plugin over a C core. `KometTeam/crypto-core` is a **git
@@ -134,6 +170,7 @@ from pub.dev — `core/protocol/packet.dart` only wraps the already-decoded payl
 
 - **No comments in code.** Write self-documenting code instead.
 - **Use `showCustomNotification(context, 'text')`** for all user-facing notifications — never use SnackBars.
+- **Feedback about one specific on-screen element goes through `showHintBubble(anchorContext, 'text')`** (`lib/frontend/widgets/hint_bubble.dart`) — an anchored bubble next to that element instead of the bottom notification. Pass the element's own context, not the screen's.
 - When a fix can be done quickly with a hack or properly with a rewrite, **choose the proper rewrite**.
 - Quality over quantity.
 - **Never leave real data in test files**, including existing message contents or real IDs captured from requests. Use synthetic fixtures instead.
@@ -238,7 +275,7 @@ they are 114 MB each, only Google Play consumes them, and they stay on GitHub.
 The in-app updater (`UpdateChecker`) reads that manifest and nothing else; GitHub
 Releases stay as a human-facing mirror. The bucket URL comes from the
 `S3_PUBLIC_BASE_URL` repo variable and is baked into builds as
-`--dart-define=KOMET_UPDATE_BASE_URL`; it defaults to `https://dl.komet.pw`
+`--dart-define=KOMET_UPDATE_BASE_URL`; it defaults to `https://cdn.komet.pw`
 (`lib/core/config/update_config.dart`), so local builds check for updates too.
 An empty URL makes the updater inert. `UpdateInstaller` verifies the downloaded
 APK against the `size` and `sha256` recorded in the manifest.

@@ -64,6 +64,18 @@ class ChatSearchController {
     results.value = mapped;
     loading.value = false;
     performed.value = true;
+    unawaited(_resolveSenders(seq, mapped));
+  }
+
+  Future<void> _resolveSenders(
+    int seq,
+    List<MessageSearchResult> found,
+  ) async {
+    final resolved = await messagesModule.ensureContactNames(
+      found.map((r) => r.senderId),
+    );
+    if (!resolved || !isMounted() || seq != _seq) return;
+    results.value = List.of(found);
   }
 
   void reset() {

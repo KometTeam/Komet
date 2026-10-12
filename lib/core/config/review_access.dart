@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../models/spoof_profile.dart';
 import '../crypto/chat_crypto_service.dart';
+import 'launch_flags.dart';
 
 class ReviewCredentials {
   final String token;
@@ -11,8 +12,8 @@ class ReviewCredentials {
 }
 
 abstract final class ReviewAccess {
-  static const String _phone = String.fromEnvironment('KOMET_REVIEW_PHONE');
-  static const String _payload = String.fromEnvironment('KOMET_REVIEW_PAYLOAD');
+  static const String _phone = LaunchFlags.reviewPhone;
+  static const String _payload = LaunchFlags.reviewPayload;
 
   static bool get enabled => _phone.isNotEmpty && _payload.isNotEmpty;
 

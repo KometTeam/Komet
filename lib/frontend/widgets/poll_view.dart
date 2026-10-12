@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../main.dart';
-import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/poll.dart';
 import 'custom_notification.dart';
 import 'small_spinner.dart';
@@ -96,7 +96,10 @@ class _PollViewState extends State<PollView>
       }
     });
     if (!ok) {
-      showCustomNotification(context, 'Не удалось проголосовать');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.pollViewVoteFailed,
+      );
     }
   }
 
@@ -112,9 +115,10 @@ class _PollViewState extends State<PollView>
   }
 
   Widget _buildCard(Poll? poll) {
+    final l10n = AppLocalizations.of(context)!;
     final title = poll?.title.isNotEmpty == true
         ? poll!.title
-        : (widget.fallbackTitle ?? 'Опрос');
+        : (widget.fallbackTitle ?? l10n.attachSheetPoll);
     final showResults = poll != null && poll.votedBy(widget.myId);
 
     if (showResults && !_resultsShown) {
@@ -144,7 +148,7 @@ class _PollViewState extends State<PollView>
           ),
           const SizedBox(height: 2),
           Text(
-            poll == null ? 'Загрузка опроса…' : _subtitle(poll),
+            poll == null ? l10n.pollViewLoading : _subtitle(l10n, poll),
             style: TextStyle(color: widget.dimColor, fontSize: 12),
           ),
           const SizedBox(height: 10),
@@ -175,13 +179,12 @@ class _PollViewState extends State<PollView>
     );
   }
 
-  String _subtitle(Poll poll) {
+  String _subtitle(AppLocalizations l10n, Poll poll) {
     final kind = poll.isMultiple
-        ? 'Несколько вариантов ответа'
-        : 'Один вариант ответа';
+        ? l10n.pollViewMultipleAnswers
+        : l10n.pollViewSingleAnswer;
     if (poll.total == 0) return kind;
-    return '$kind · ${poll.total} '
-        '${pluralRu(poll.total, 'голос', 'голоса', 'голосов')}';
+    return '$kind · ${l10n.pollViewVotesCount(poll.total)}';
   }
 
   Widget _buildChoiceRow(PollAnswer answer, bool multiple) {
@@ -247,7 +250,7 @@ class _PollViewState extends State<PollView>
           ),
           child: _voting
               ? SmallSpinner(size: 16, color: widget.accentColor)
-              : const Text('Проголосовать'),
+              : Text(AppLocalizations.of(context)!.pollViewVote),
         ),
       ),
     );

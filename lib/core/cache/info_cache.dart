@@ -369,6 +369,11 @@ class ChatInfoFetch {
 
   static ChatInfo? peek(int id) => _cache.peek(id);
 
+  static void put(int id, ChatInfo info) {
+    ChatMembersStore.instance.applyChatPayload(info.raw);
+    _cache.putValue(id, info);
+  }
+
   static void invalidate(int id) => _cache.invalidate(id);
   static void clear() => _cache.clear();
 

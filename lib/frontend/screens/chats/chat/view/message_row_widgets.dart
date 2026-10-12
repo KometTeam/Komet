@@ -16,7 +16,6 @@ import 'package:komet/core/crypto/message_decryption_cache.dart';
 import 'package:komet/core/utils/haptics.dart';
 import 'package:komet/core/utils/text_format.dart';
 import 'package:komet/frontend/widgets/animated_text_swap.dart';
-import 'package:komet/frontend/widgets/directional_drag_recognizer.dart';
 import 'package:komet/frontend/widgets/liquid_glass.dart';
 import 'package:komet/frontend/widgets/message_actions_overlay.dart'
     show
@@ -30,120 +29,7 @@ import 'package:komet/frontend/widgets/selection_check_circle.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/main.dart' show animojiModule;
 import 'package:komet/models/animoji.dart' show Animoji;
-
-class SwipeToReply extends StatefulWidget {
-  final Widget child;
-  final bool isMe;
-  final VoidCallback onReply;
-
-  const SwipeToReply({
-    super.key,
-    required this.child,
-    required this.isMe,
-    required this.onReply,
-  });
-
-  @override
-  State<SwipeToReply> createState() => _SwipeToReplyState();
-}
-
-class _SwipeToReplyState extends State<SwipeToReply>
-    with SingleTickerProviderStateMixin {
-  static const double _maxDrag = 72.0;
-  static const double _triggerThreshold = 56.0;
-
-  late final AnimationController _springBack;
-  double _dragX = 0.0;
-  double _springFrom = 0.0;
-  bool _triggered = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _springBack =
-        AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 200),
-        )..addListener(() {
-          final t = Curves.easeOut.transform(_springBack.value);
-          setState(() => _dragX = _springFrom * (1 - t));
-        });
-  }
-
-  @override
-  void dispose() {
-    _springBack.dispose();
-    super.dispose();
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (_springBack.isAnimating) _springBack.stop();
-    var next = _dragX + d.delta.dx;
-    if (next > 0) next = 0;
-    if (next < -_maxDrag) next = -_maxDrag;
-    final wasTriggered = _triggered;
-    _triggered = next <= -_triggerThreshold;
-    if (_triggered && !wasTriggered) Haptics.medium();
-    setState(() => _dragX = next);
-  }
-
-  void _onDragEnd(DragEndDetails d) {
-    if (_triggered) widget.onReply();
-    _settle();
-  }
-
-  void _onDragCancel() => _settle();
-
-  void _settle() {
-    _triggered = false;
-    _springFrom = _dragX;
-    _springBack.forward(from: 0);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final progress = (-_dragX / _triggerThreshold).clamp(0.0, 1.0);
-    return RawGestureDetector(
-      behavior: HitTestBehavior.opaque,
-      gestures: <Type, GestureRecognizerFactory>{
-        LeftwardDragRecognizer:
-            GestureRecognizerFactoryWithHandlers<LeftwardDragRecognizer>(
-              () => LeftwardDragRecognizer(debugOwner: this),
-              (instance) {
-                instance
-                  ..onUpdate = _onDragUpdate
-                  ..onEnd = _onDragEnd
-                  ..onCancel = _onDragCancel;
-              },
-            ),
-      },
-      child: Stack(
-        alignment: Alignment.centerRight,
-        children: [
-          Positioned(
-            right: 16,
-            child: Opacity(
-              opacity: progress,
-              child: Transform.scale(
-                scale: 0.6 + 0.4 * progress,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Symbols.reply, size: 20, color: cs.primary),
-                ),
-              ),
-            ),
-          ),
-          Transform.translate(offset: Offset(_dragX, 0), child: widget.child),
-        ],
-      ),
-    );
-  }
-}
+import 'package:komet/models/chat_reaction_settings.dart';
 
 class PinnedMessageBanner extends StatelessWidget {
   final String? text;
@@ -361,6 +247,7 @@ class SelectableMessageRow extends StatefulWidget {
   final Future<bool> Function(int reasonId)? onReport;
   final void Function(String emoji)? onReact;
   final ValueListenable<Map<String, dynamic>?>? reactions;
+  final ValueListenable<ChatReactionSettings?>? reactionSettings;
   final ValueListenable<double>? composerHeight;
 
   const SelectableMessageRow({
@@ -391,6 +278,7 @@ class SelectableMessageRow extends StatefulWidget {
     this.onReport,
     this.onReact,
     this.reactions,
+    this.reactionSettings,
     this.composerHeight,
   });
 
@@ -434,6 +322,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
     Haptics.tap();
 
     final controller = MessageActionsController();
+    final offers = _reactionFilter();
     showMessageActions(
       context: ctx,
       snapshot: snapshot,
@@ -444,7 +333,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       messageText: widget.message.text,
       copyText: MessageDecryptionCache.instance.readableText(widget.message),
       controller: controller,
-      style: AppMessageActionsStyle.current.value,
+      style: AppMessageActionsStyle.effective,
       interaction: MessageActionsInteraction.tap,
       editHistory: widget.message.editHistory,
       infoRows: _infoRows(),
@@ -462,12 +351,16 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onPin: widget.onPin,
       onCopyLink: widget.onCopyLink,
       isPinned: _isPinnedNow(),
-      onReact: widget.onReact,
-      selectedReaction: widget.reactions?.value?['yourReaction']?.toString(),
-      quickReactions: _quickReactionEmojis(),
+      onReact: _reactionsOpen || _selectedReaction != null
+          ? widget.onReact
+          : null,
+      selectedReaction: _selectedReaction,
+      quickReactions: _offeredQuickReactions(offers),
       loadReactionEmojis: () async {
         await animojiModule.ensureLoaded();
-        return _animojiReactionEmojis();
+        return _animojiReactionEmojis()
+            .where((reaction) => offers(reaction.emoji))
+            .toList();
       },
       onDispose: controller.dispose,
     );
@@ -478,6 +371,38 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
   List<MessageInfoRow>? _infoRows() => AppShowExtraInfo.current.value
       ? buildMessageInfoRows(widget.message)
       : null;
+
+  ChatReactionSettings? get _settings => widget.reactionSettings?.value;
+
+  bool get _reactionsOpen => _settings?.isActive ?? true;
+
+  String? get _selectedReaction =>
+      widget.reactions?.value?['yourReaction']?.toString();
+
+
+  bool Function(String emoji) _reactionFilter() {
+    final settings = _settings;
+    if (settings == null) return (_) => true;
+    final selected = _selectedReaction;
+    final allowed = settings.filterFor(
+      ChatReactionSettings.presentWithoutMine(widget.reactions?.value),
+    );
+    return (emoji) => emoji == selected || allowed(emoji);
+  }
+
+  List<ReactionEmoji> _offeredQuickReactions(bool Function(String) offers) {
+    final quick = _quickReactionEmojis();
+    final offered = quick.where((reaction) => offers(reaction.emoji)).toList();
+    if (offered.length == quick.length || !_reactionsOpen) return offered;
+    final seen = offered.map((reaction) => reaction.emoji).toSet();
+    for (final reaction in _animojiReactionEmojis()) {
+      if (offered.length >= quick.length) break;
+      if (offers(reaction.emoji) && seen.add(reaction.emoji)) {
+        offered.add(reaction);
+      }
+    }
+    return offered;
+  }
 
   List<ReactionEmoji> _quickReactionEmojis() {
     final quick = animojiModule.quickAnimojis;
@@ -551,7 +476,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       widget.onToggleSelection();
       return;
     }
-    final react = widget.onReact;
+    final react = _reactionFilter()('❤️') ? widget.onReact : null;
     if (react != null && (_openTimer?.isActive ?? false)) {
       _openTimer?.cancel();
       _openTimer = null;
@@ -849,6 +774,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -861,7 +787,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Изменить сообщение',
+            l10n.messageRowEditTitle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 18,
@@ -880,7 +806,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
             contextMenuBuilder: (ctx, state) =>
                 widget.contextMenuBuilder(_controller, ctx, state),
             decoration: InputDecoration(
-              hintText: 'Текст сообщения',
+              hintText: l10n.scheduledMessageTextHint,
               filled: true,
               fillColor: cs.surfaceContainerHighest,
               border: OutlineInputBorder(
@@ -893,7 +819,7 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
           FilledButton(
             onPressed: () =>
                 Navigator.of(context).pop(_controller.buildContent()),
-            child: const Text('Сохранить'),
+            child: Text(l10n.editProfileSave),
           ),
         ],
       ),

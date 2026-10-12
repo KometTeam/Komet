@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show fileUploader, messagesModule, storiesModule;
 import '../../widgets/custom_notification.dart';
 import '../../widgets/primary_loading_button.dart';
@@ -73,9 +74,10 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
   }
 
   Future<void> _publishPhoto() async {
+    final l10n = AppLocalizations.of(context)!;
     final url = await messagesModule.requestPhotoUploadUrl(type: 1);
     if (url == null || url.isEmpty) {
-      _fail('Не удалось получить адрес загрузки');
+      _fail(l10n.storyComposerUploadUrlFailed);
       return;
     }
     final segments = widget.file.uri.pathSegments;
@@ -86,7 +88,7 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
       filename: filename.isEmpty ? 'story.jpg' : filename,
     );
     if (token == null || token.isEmpty) {
-      _fail('Не удалось загрузить фото');
+      _fail(l10n.storyComposerPhotoUploadFailed);
       return;
     }
     await storiesModule.publishPhoto(
@@ -98,9 +100,10 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
   }
 
   Future<void> _publishVideo() async {
+    final l10n = AppLocalizations.of(context)!;
     final info = await messagesModule.requestVideoUploadUrl(type: 3);
     if (info == null || info.url.isEmpty) {
-      _fail('Не удалось получить адрес загрузки');
+      _fail(l10n.storyComposerUploadUrlFailed);
       return;
     }
     final upload = await fileUploader.uploadVideoWithToken(
@@ -108,7 +111,7 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
       widget.file,
     );
     if (!upload.ok) {
-      _fail('Не удалось загрузить видео');
+      _fail(l10n.storyComposerVideoUploadFailed);
       return;
     }
     final uploadedToken = upload.token;
@@ -116,7 +119,7 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
         ? uploadedToken
         : info.token;
     if (token.isEmpty) {
-      _fail('Не удалось загрузить видео');
+      _fail(l10n.storyComposerVideoUploadFailed);
       return;
     }
     await storiesModule.publishVideo(
@@ -131,8 +134,9 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
   void _onPublished() {
     if (!mounted) return;
     Haptics.success();
+    final message = AppLocalizations.of(context)!.storyComposerPublished;
     Navigator.of(context).pop();
-    showCustomNotification(context, 'История опубликована');
+    showCustomNotification(context, message);
     storiesModule.loadFeed();
   }
 
@@ -255,9 +259,9 @@ class _StoryComposerScreenState extends State<StoryComposerScreen> {
                       child: PrimaryLoadingButton(
                         loading: _publishing,
                         onPressed: _publish,
-                        child: const Text(
-                          'Опубликовать',
-                          style: TextStyle(
+                        child: Text(
+                          AppLocalizations.of(context)!.storyComposerPublish,
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -283,6 +287,7 @@ class _AudienceToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -293,8 +298,8 @@ class _AudienceToggle extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _segment(context, 1, Symbols.public, 'Все'),
-          _segment(context, 2, Symbols.group, 'Контакты'),
+          _segment(context, 1, Symbols.public, l10n.securityPrivacyAll),
+          _segment(context, 2, Symbols.group, l10n.storyComposerContacts),
         ],
       ),
     );

@@ -1,12 +1,15 @@
 import 'dart:convert';
 
 import 'contacts.dart';
+import 'messages.dart' show ContactCache;
 import '../api.dart';
+import '../../core/cache/info_cache.dart';
 import '../../core/calls/call_link.dart';
 import '../../core/calls/ws2_signaling.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/utils/ids.dart';
 import '../../core/utils/logger.dart';
+import '../../models/contact_info.dart';
 
 // #***! как звонок выглядит в истории
 enum CallStatus { missed, canceled, outgoing, incoming }
@@ -74,8 +77,10 @@ class CallLogEntry {
   final int time;
   final int count;
   final bool isGroup;
+  final bool isBot;
+  final List<String> ids;
 
-  const CallLogEntry({
+  CallLogEntry({
     required this.id,
     required this.accountId,
     required this.peerId,
@@ -85,7 +90,34 @@ class CallLogEntry {
     required this.time,
     this.count = 1,
     this.isGroup = false,
-  });
+    this.isBot = false,
+    List<String>? ids,
+  }) : ids = ids ?? [id];
+
+  bool get canCallBack => !isGroup && !isBot;
+
+  CallLogEntry mergedWith(CallLogEntry other) => CallLogEntry(
+    id: id,
+    accountId: accountId,
+    peerId: peerId,
+    name: name,
+    avatarUrl: avatarUrl,
+    status: status,
+    time: time,
+    count: count + 1,
+    isGroup: isGroup,
+    isBot: isBot,
+    ids: [...ids, ...other.ids],
+  );
+}
+
+class CallPeerIsBotException implements Exception {
+  final int peerId;
+
+  const CallPeerIsBotException(this.peerId);
+
+  @override
+  String toString() => 'CallPeerIsBotException: $peerId';
 }
 
 class _CallerEndpointMissingException implements Exception {
@@ -135,6 +167,8 @@ class CallsModule {
     int calleeId, {
     bool isVideo = false,
   }) async {
+    if (await _isBotPeer(calleeId)) throw CallPeerIsBotException(calleeId);
+
     final conversationId = uuidV4();
 
     final payload = await _api.sendRequestMap(Opcode.videoChatStartActive, {
@@ -160,6 +194,16 @@ class CallsModule {
       isVideo: isVideo,
     );
   }
+
+  static Future<bool> _isBotPeer(int userId) async {
+    if (_isCachedBot(userId)) return true;
+    final info = await ContactInfoFetch.get(userId);
+    return info?.isBot ?? false;
+  }
+
+  static bool _isCachedBot(int userId) =>
+      (ContactCache.getOptions(userId)?.contains('BOT') ?? false) ||
+      (ContactInfoFetch.peek(userId)?.isBot ?? false);
 
   // #***! конференция со ссылкой
   Future<CreatedCall> createConference() async {
@@ -272,11 +316,15 @@ class CallsModule {
     int accountId,
     int currentUserId,
   ) async {
-    final payload = await _api.sendRequestMap(Opcode.videoChatHistory, {});
+    final payload = await _api.sendRequestMap(Opcode.callHistorySync, {
+      'callHistorySync': 0,
+    });
     if (payload == null) return [];
 
-    return parseHistoryPayload(
-      payload,
+    final items = payload['callHistoryItems'];
+    if (items is! List) return [];
+    return _entriesFromItems(
+      items.whereType<Map>().toList(),
       accountId,
       currentUserId,
       resolver: resolveContacts,
@@ -315,66 +363,41 @@ class CallsModule {
   }
 
   // #***! разбор истории, запись это сообщение с вложением CALL
-  static Future<List<CallLogEntry>> parseHistoryPayload(
-    Map<dynamic, dynamic> payload,
+  Future<List<CallLogEntry>> _entriesFromItems(
+    List<Map> items,
     int accountId,
     int currentUserId, {
     Future<Map<int, Map<String, dynamic>>> Function(List<int> ids)? resolver,
   }) async {
-    final history = payload['history'];
-    if (history is! List || history.isEmpty) return [];
 
     final recentContacts = await ContactsModule.getContacts(accountId);
     final contactsMap = {for (final c in recentContacts) c.id: c};
 
-    final parsed = <({int peerId, CallStatus status, int time, String id})>[];
 
-    for (final item in history.whereType<Map>()) {
-      final msg = item['message'];
-      if (msg is! Map) continue;
 
-      final attaches = msg['attaches'];
-      if (attaches is! List || attaches.isEmpty) continue;
 
-      final callAttach = attaches.firstWhere(
-        (a) => a is Map && a['_type'] == 'CALL',
-        orElse: () => null,
-      );
 
-      if (callAttach == null) continue;
 
       // #***! у исходящего собеседник в contactIds, у входящего отправитель
-      final senderId = (msg['sender'] as int?) ?? 0;
-      final isOutgoing = senderId == currentUserId;
-
-      int peerId = 0;
-      if (isOutgoing) {
-        final contactIds = callAttach['contactIds'];
-        if (contactIds is List && contactIds.isNotEmpty) {
-          peerId = (contactIds.first as int?) ?? 0;
-        }
-      } else {
-        peerId = senderId;
-      }
-
-      parsed.add((
-        peerId: peerId,
-        status: _parseCallStatus(callAttach, isOutgoing),
-        time: (msg['time'] as int?) ?? 0,
-        id:
-            msg['id']?.toString() ??
-            DateTime.now().millisecondsSinceEpoch.toString(),
-      ));
+    int peerOf(Map item) {
+      final isOutgoing = item['callerId'] == currentUserId;
+      return isOutgoing
+          ? ((item['chatId'] as int?) ?? 0) ^ currentUserId
+          : (item['callerId'] as int?) ?? 0;
     }
 
     // #***! на сервер идём только за теми кого нет локально
+    bool isGroupItem(Map item) =>
+        ((item['chatId'] as int?) ?? 0) < 0 || item['callName'] != null;
+
     bool localResolved(int id) {
       final c = contactsMap[id];
       return c != null && c.firstName.isNotEmpty;
     }
 
-    final unresolvedIds = parsed
-        .map((e) => e.peerId)
+    final unresolvedIds = items
+        .where((item) => !isGroupItem(item))
+        .map(peerOf)
         .where((id) => id != 0 && !localResolved(id))
         .toSet()
         .toList();
@@ -384,44 +407,58 @@ class CallsModule {
       fetched = await resolver(unresolvedIds);
     }
 
-    final List<CallLogEntry> extractedCalls = [];
-    for (final e in parsed) {
-      final contact = contactsMap[e.peerId];
+    final entries = <CallLogEntry>[];
+    for (final item in items) {
+      final historyId = item['historyId'];
+      if (historyId == null) continue;
+      final isOutgoing = item['callerId'] == currentUserId;
+      final isGroup = isGroupItem(item);
+      final peerId = isGroup ? 0 : peerOf(item);
+      final contact = contactsMap[peerId];
+      final info = fetched[peerId];
+
       String name;
       String? avatarUrl;
-      bool isGroup = false;
-      if (contact != null && contact.firstName.isNotEmpty) {
+      if (isGroup) {
+        name = (item['callName'] as String?) ?? 'Групповой звонок';
+      } else if (contact != null && contact.firstName.isNotEmpty) {
         name = '${contact.firstName} ${contact.lastName ?? ''}'.trim();
         avatarUrl = contact.baseUrl;
       } else {
-        final info = fetched[e.peerId];
-        final resolved = _nameFromInfo(info);
-        if (resolved != null) {
-          name = resolved;
-          avatarUrl = (info?['baseUrl'] as String?) ?? contact?.baseUrl;
-        } else {
           // #***! имя не нашлось, значит групповой
-          name = 'Групповой звонок';
-          isGroup = true;
-        }
+        name = _nameFromInfo(info) ?? '$peerId';
+        avatarUrl = (info?['baseUrl'] as String?) ?? contact?.baseUrl;
       }
 
-      extractedCalls.add(
+      final duration = ((item['durationMs'] as int?) ?? 0) ~/ 1000;
+      entries.add(
         CallLogEntry(
-          id: e.id,
+          id: historyId.toString(),
           accountId: accountId,
-          peerId: e.peerId,
+          peerId: peerId,
           name: name,
           avatarUrl: avatarUrl,
-          status: e.status,
-          time: e.time,
+          status: _parseCallStatus({
+            'hangupType': item['hangupType'],
+            'duration': duration,
+          }, isOutgoing),
+          time: (item['time'] as int?) ?? 0,
           isGroup: isGroup,
+          isBot: !isGroup && _isHistoryPeerBot(peerId, contact, info),
         ),
       );
     }
-
-    return extractedCalls;
+    return entries;
   }
+
+  static bool _isHistoryPeerBot(
+    int peerId,
+    CachedContact? contact,
+    Map<String, dynamic>? info,
+  ) =>
+      (contact?.isBot ?? false) ||
+      (info != null && ContactInfo.fromMap(info).isBot) ||
+      _isCachedBot(peerId);
 
   static String? _nameFromInfo(Map<String, dynamic>? info) {
     if (info == null) return null;

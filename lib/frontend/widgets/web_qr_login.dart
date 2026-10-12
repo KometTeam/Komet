@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../main.dart' show accountModule;
 import 'custom_notification.dart';
 import 'sheet_helpers.dart';
@@ -13,6 +14,7 @@ Future<bool> showWebQrLoginConfirmSheet(BuildContext context) async {
     shape: kSheetShape,
     builder: (sheetContext) {
       final cs = Theme.of(sheetContext).colorScheme;
+      final l10n = AppLocalizations.of(sheetContext)!;
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
@@ -23,7 +25,7 @@ Future<bool> showWebQrLoginConfirmSheet(BuildContext context) async {
               const Center(child: SheetGrabber(margin: EdgeInsets.zero)),
               const SizedBox(height: 20),
               Text(
-                'Вход по QR',
+                l10n.webQrLoginTitle,
                 style: TextStyle(
                   fontFamily: displayFontOf(context),
                   fontSize: 20,
@@ -33,8 +35,7 @@ Future<bool> showWebQrLoginConfirmSheet(BuildContext context) async {
               ),
               const SizedBox(height: 12),
               Text(
-                'Вы точно хотите войти в аккаунт через веб или приложение MAX '
-                'на компьютере?',
+                l10n.webQrLoginMessage,
                 style: TextStyle(
                   fontSize: 15,
                   height: 1.35,
@@ -48,7 +49,7 @@ Future<bool> showWebQrLoginConfirmSheet(BuildContext context) async {
                     child: OutlinedButton(
                       onPressed: () => Navigator.of(sheetContext).pop(false),
                       child: Text(
-                        'Отмена',
+                        l10n.chatInfoActionCancel,
                         style: TextStyle(color: cs.onSurface),
                       ),
                     ),
@@ -57,7 +58,7 @@ Future<bool> showWebQrLoginConfirmSheet(BuildContext context) async {
                   Expanded(
                     child: FilledButton(
                       onPressed: () => Navigator.of(sheetContext).pop(true),
-                      child: const Text('Войти'),
+                      child: Text(l10n.tokenLoginButton),
                     ),
                   ),
                 ],
@@ -102,13 +103,19 @@ Future<bool> confirmAndAuthorizeWebQrLogin(
     await accountModule.authorizeWebQrLogin(qrLink.trim());
     if (context.mounted) {
       Navigator.of(context, rootNavigator: true).pop();
-      showCustomNotification(context, 'Вход подтверждён');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.webQrLoginConfirmed,
+      );
     }
     return true;
   } catch (e) {
     if (context.mounted) {
       Navigator.of(context, rootNavigator: true).pop();
-      showCustomNotification(context, 'Не удалось подтвердить вход: $e');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.webQrLoginFailed('$e'),
+      );
     }
     return false;
   }

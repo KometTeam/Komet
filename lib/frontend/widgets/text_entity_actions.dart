@@ -6,9 +6,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../backend/modules/contacts.dart';
 import '../../core/utils/text_entities.dart';
+import '../../l10n/app_localizations.dart';
 import '../../main.dart' show api;
 import 'chat_menu_overlay.dart';
 import 'custom_notification.dart';
+import 'hint_bubble.dart';
 import 'komet_avatar.dart';
 import 'max_link_handler.dart';
 import 'small_spinner.dart';
@@ -16,7 +18,10 @@ import 'small_spinner.dart';
 Future<void> openMentionProfile(BuildContext context, String nickname) async {
   final handled = await tryHandleMaxLink(context, 'https://max.ru/$nickname');
   if (handled || !context.mounted) return;
-  showCustomNotification(context, 'Профиль @$nickname не найден');
+  showCustomNotification(
+    context,
+    AppLocalizations.of(context)!.textEntityProfileNotFound(nickname),
+  );
 }
 
 Future<void> copyTextEntity(
@@ -26,7 +31,7 @@ Future<void> copyTextEntity(
 ) async {
   await Clipboard.setData(ClipboardData(text: value));
   if (!context.mounted) return;
-  showCustomNotification(context, message);
+  showHintBubble(context, message);
 }
 
 void showPhoneEntityMenu(
@@ -34,6 +39,7 @@ void showPhoneEntityMenu(
   String phone, {
   required Offset at,
 }) {
+  final l10n = AppLocalizations.of(context)!;
   showChatMenu(
     context: context,
     anchorRect: Rect.fromLTWH(at.dx, at.dy, 0, 0),
@@ -42,14 +48,14 @@ void showPhoneEntityMenu(
     items: [
       ChatMenuItem(
         icon: Symbols.content_copy,
-        label: 'Скопировать номер телефона',
-        onTap: () => copyTextEntity(context, phone, 'Номер скопирован'),
+        label: l10n.textEntityCopyPhone,
+        onTap: () => copyTextEntity(context, phone, l10n.textEntityPhoneCopied),
       ),
       if (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS)
         ChatMenuItem(
           icon: Symbols.call,
-          label: 'Позвонить',
+          label: l10n.textEntityCall,
           onTap: () => _dial(context, phone),
         ),
     ],
@@ -61,6 +67,7 @@ void showCardEntityMenu(
   String digits, {
   required Offset at,
 }) {
+  final l10n = AppLocalizations.of(context)!;
   showChatMenu(
     context: context,
     anchorRect: Rect.fromLTWH(at.dx, at.dy, 0, 0),
@@ -68,8 +75,9 @@ void showCardEntityMenu(
     items: [
       ChatMenuItem(
         icon: Symbols.content_copy,
-        label: 'Скопировать номер карты',
-        onTap: () => copyTextEntity(context, digits, 'Номер карты скопирован'),
+        label: l10n.textEntityCopyCard,
+        onTap: () =>
+            copyTextEntity(context, digits, l10n.textEntityCardCopied),
       ),
     ],
     footer: _CardFooter(digits: digits),
@@ -85,7 +93,10 @@ Future<void> _dial(BuildContext context, String phone) async {
     launched = false;
   }
   if (launched || !context.mounted) return;
-  showCustomNotification(context, 'Не удалось открыть приложение звонков');
+  showCustomNotification(
+    context,
+    AppLocalizations.of(context)!.textEntityDialFailed,
+  );
 }
 
 class _CardFooter extends StatelessWidget {
@@ -157,7 +168,7 @@ class _PhoneOwnerHeaderState extends State<_PhoneOwnerHeader> {
           final found = snapshot.data;
           content = found == null
               ? Text(
-                  'Человека ещё нет в MAX',
+                  AppLocalizations.of(context)!.textEntityNotOnMax,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 )
               : _OwnerRow(found: found, phone: widget.phone);

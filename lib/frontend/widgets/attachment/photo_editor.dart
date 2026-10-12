@@ -87,7 +87,7 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
     bool identity,
   ) async {
     if (!changed) return null;
-    final file = await _bakeCrop(_image!, state, vp);
+    final file = await bakeCropToFile(_image!, state, vp);
     if (file == null) return null;
     final result = CropResult(file, state);
     await widget.onPreview?.call(result);
@@ -113,7 +113,7 @@ class _PhotoCropEditorState extends State<PhotoCropEditor> {
   }
 }
 
-Future<File?> _bakeCrop(ui.Image img, CropState state, Size vp) async {
+Future<File?> bakeCropToFile(ui.Image img, CropState state, Size vp) async {
   if (vp == Size.zero) return null;
   try {
     final geometry = CropGeometry(

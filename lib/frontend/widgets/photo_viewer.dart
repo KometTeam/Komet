@@ -18,6 +18,7 @@ import '../../core/utils/format.dart';
 import '../../core/utils/image_format.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/media_cache.dart';
+import '../../core/utils/media_cache_names.dart';
 import '../../core/utils/media_saver.dart';
 import '../../core/utils/save_file_as.dart';
 import '../../core/media/video_request_headers.dart';
@@ -25,12 +26,37 @@ import '../../l10n/app_localizations.dart';
 import '../../core/config/app_colors.dart';
 import '../../main.dart';
 import '../../models/attachment.dart';
+import '../screens/profile/avatar_carousel.dart';
 import 'attachment/photo_hero.dart';
 import 'animated_slash_icon.dart';
+import 'avatar_gallery.dart';
+import 'avatar_photo_actions.dart';
 import 'chat_menu_overlay.dart';
 import 'custom_notification.dart';
 import 'liquid_glass.dart';
 import 'small_spinner.dart';
+
+Future<void> openAvatarViewer(
+  BuildContext context,
+  AvatarGallery gallery, {
+  required PhotoHeroOrigin origin,
+  required ImageProvider image,
+  BorderRadius radius = BorderRadius.zero,
+}) async {
+  if (gallery.currentUrl.isEmpty) return;
+  final hero = PhotoHeroController(
+    origin: origin,
+    image: image,
+    radius: radius,
+  );
+  await Navigator.of(context).push(
+    PhotoHeroRoute<void>(
+      hero: hero,
+      builder: (_) =>
+          PhotoViewerScreen.avatars(avatars: AvatarFeed(gallery), hero: hero),
+    ),
+  );
+}
 
 class PhotoViewerActions {
   final void Function(String messageId, int time)? goToMessage;
@@ -52,6 +78,19 @@ class PhotoViewerActions {
       viewAllMedia == null;
 }
 
+class PhotoViewerRoute<T> extends PageRouteBuilder<T> {
+  PhotoViewerRoute({required WidgetBuilder builder})
+    : super(
+        opaque: false,
+        transitionDuration: const Duration(milliseconds: 220),
+        reverseTransitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            builder(context),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+      );
+}
+
 class _ViewerMedia {
   final String id;
   final MessageAttachment attachment;
@@ -59,6 +98,7 @@ class _ViewerMedia {
   final int senderId;
   final int time;
   final String? caption;
+  final int? avatarId;
 
   const _ViewerMedia({
     required this.id,
@@ -67,6 +107,7 @@ class _ViewerMedia {
     required this.senderId,
     required this.time,
     this.caption,
+    this.avatarId,
   });
 
   factory _ViewerMedia.fromFeed(SharedMediaItem item) => _ViewerMedia(
@@ -100,6 +141,7 @@ class PhotoViewerScreen extends StatefulWidget {
   final bool isFile;
   final String? sourceName;
   final String? Function()? videoUserAgentProvider;
+  final AvatarFeed? avatars;
 
   const PhotoViewerScreen({
     super.key,
@@ -114,7 +156,8 @@ class PhotoViewerScreen extends StatefulWidget {
     this.videoUserAgentProvider,
   }) : video = null,
        initialVideoSources = const {},
-       initialVideoQuality = null;
+       initialVideoQuality = null,
+       avatars = null;
 
   const PhotoViewerScreen.video({
     super.key,
@@ -130,7 +173,24 @@ class PhotoViewerScreen extends StatefulWidget {
        video = attachment,
        initialIndex = 0,
        hero = null,
-       isFile = false;
+       isFile = false,
+       avatars = null;
+
+  const PhotoViewerScreen.avatars({
+    super.key,
+    required AvatarFeed this.avatars,
+    this.hero,
+  }) : photos = const [],
+       video = null,
+       initialVideoSources = const {},
+       initialVideoQuality = null,
+       initialIndex = 0,
+       chatId = null,
+       message = null,
+       actions = null,
+       isFile = false,
+       sourceName = null,
+       videoUserAgentProvider = null;
 
   PhotoViewerScreen.single(String baseUrl, {super.key})
     : photos = [PhotoAttachment(baseUrl: baseUrl)],
@@ -144,15 +204,18 @@ class PhotoViewerScreen extends StatefulWidget {
       hero = null,
       isFile = false,
       sourceName = null,
-      videoUserAgentProvider = null;
+      videoUserAgentProvider = null,
+      avatars = null;
 
   @override
   State<PhotoViewerScreen> createState() => _PhotoViewerScreenState();
 }
 
-class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
+class _PhotoViewerScreenState extends State<PhotoViewerScreen>
+    with SingleTickerProviderStateMixin {
   static const int _prefetchThreshold = 3;
   static const int _maxCachedVideoPlayers = 5;
+  static const double _compactHeight = 480;
 
   late PageController _controller;
   late List<_ViewerMedia> _items;
@@ -167,9 +230,17 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   final Map<String, Future<Map<String, String>>> _videoSourceLoads = {};
   final TransformationController _heroTransform = TransformationController();
   final Map<String, TransformationController> _pageTransforms = {};
-  int _pointers = 0;
   bool _zoomed = false;
   bool _swipeEnabled = true;
+  final Set<int> _pointers = {};
+  late final AnimationController _dismissReturn;
+  final ValueNotifier<Offset> _dismissOffset = ValueNotifier(Offset.zero);
+  Offset _returnFrom = Offset.zero;
+  Offset? _pointerOrigin;
+  VelocityTracker? _velocityTracker;
+  bool _dismissAllowed = false;
+  bool _draggingToDismiss = false;
+  bool _closing = false;
   bool _feedLoaded = false;
   bool _feedFailed = false;
   bool _loadingMore = false;
@@ -181,12 +252,19 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   @override
   void initState() {
     super.initState();
+    _dismissReturn = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+    )..addListener(_animateDismissReturn);
     _heroTransform.addListener(_syncHero);
     _heroTransform.addListener(_syncZoom);
     _items = _localItems();
-    _index = widget.video == null
-        ? (_items.length - 1 - widget.initialIndex).clamp(0, _items.length - 1)
-        : 0;
+    _index = switch (_avatarFeed) {
+      final avatars? => avatars.initialIndex.clamp(0, _items.length - 1),
+      null when widget.video == null =>
+        (_items.length - 1 - widget.initialIndex).clamp(0, _items.length - 1),
+      null => 0,
+    };
     _heroId = _items[_index].id;
     _initialMediaId = _heroId;
     _controller = PageController(initialPage: _index);
@@ -219,14 +297,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     _syncSwipe();
   }
 
-  void _updatePointers(int delta) {
-    final next = _pointers + delta;
-    _pointers = next < 0 ? 0 : next;
-    _syncSwipe();
-  }
-
   void _syncSwipe() {
-    final enabled = _pointers < 2 && !_zoomed;
+    final enabled = _pointers.length < 2 && !_zoomed;
     if (enabled == _swipeEnabled) return;
     setState(() => _swipeEnabled = enabled);
   }
@@ -234,6 +306,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _dismissReturn.dispose();
+    _dismissOffset.dispose();
     _heroTransform.dispose();
     for (final transform in _pageTransforms.values) {
       transform.dispose();
@@ -244,7 +318,123 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     super.dispose();
   }
 
+  bool get _canDismiss {
+    final route = ModalRoute.of(context);
+    return !_closing &&
+        !_dismissReturn.isAnimating &&
+        route?.isCurrent == true &&
+        route?.popDisposition != RoutePopDisposition.doNotPop &&
+        Navigator.of(context).canPop() &&
+        (!_controller.hasClients ||
+            !_controller.position.isScrollingNotifier.value) &&
+        (_current.isVideo ||
+            _transformFor(_current.id).value.getMaxScaleOnAxis() <= 1.01);
+  }
+
+  void _onMediaPointerDown(PointerDownEvent event) {
+    _pointers.add(event.pointer);
+    _syncSwipe();
+    if (_pointers.length != 1) {
+      _dismissAllowed = false;
+      _restoreDismiss();
+      return;
+    }
+    _dismissAllowed = event.kind != PointerDeviceKind.mouse && _canDismiss;
+    _pointerOrigin = event.position;
+    _velocityTracker = VelocityTracker.withKind(event.kind)
+      ..addPosition(event.timeStamp, event.position);
+  }
+
+  void _onMediaPointerMove(PointerMoveEvent event) {
+    if (!_dismissAllowed || _pointers.length != 1) return;
+    _velocityTracker?.addPosition(event.timeStamp, event.position);
+    final delta = event.position - _pointerOrigin!;
+    if (!_draggingToDismiss) {
+      if (delta.distance < kTouchSlop) return;
+      if (delta.dx.abs() >= delta.dy.abs()) {
+        _dismissAllowed = false;
+        return;
+      }
+      if (!_current.isVideo &&
+          _transformFor(_current.id).value.getMaxScaleOnAxis() > 1.01) {
+        _dismissAllowed = false;
+        return;
+      }
+      _draggingToDismiss = true;
+    }
+    _dismissOffset.value = Offset(delta.dx * 0.35, delta.dy);
+  }
+
+  void _onMediaPointerUp(PointerUpEvent event) {
+    _pointers.remove(event.pointer);
+    _syncSwipe();
+    if (!_draggingToDismiss || !_dismissAllowed) return;
+    _dismissAllowed = false;
+    _draggingToDismiss = false;
+    _velocityTracker?.addPosition(event.timeStamp, event.position);
+    final velocity = _velocityTracker?.getVelocity().pixelsPerSecond.dy ?? 0;
+    final distance = _dismissOffset.value.dy;
+    final threshold = (MediaQuery.sizeOf(context).height * 0.18).clamp(96, 180);
+    final fling =
+        distance.abs() >= 32 &&
+        velocity.abs() >= 900 &&
+        velocity.sign == distance.sign;
+    final route = ModalRoute.of(context);
+    if ((distance.abs() >= threshold || fling) &&
+        route?.isCurrent == true &&
+        route?.popDisposition != RoutePopDisposition.doNotPop) {
+      _closing = true;
+      Navigator.of(context).pop();
+    } else {
+      _restoreDismiss();
+    }
+  }
+
+  void _onMediaPointerCancel(PointerCancelEvent event) {
+    _pointers.remove(event.pointer);
+    _syncSwipe();
+    _dismissAllowed = false;
+    _restoreDismiss();
+  }
+
+  void _restoreDismiss() {
+    _draggingToDismiss = false;
+    if (_closing || _dismissOffset.value == Offset.zero) return;
+    _returnFrom = _dismissOffset.value;
+    _dismissReturn.forward(from: 0);
+  }
+
+  void _animateDismissReturn() {
+    final value = Curves.easeOutCubic.transform(_dismissReturn.value);
+    _dismissOffset.value = Offset.lerp(_returnFrom, Offset.zero, value)!;
+  }
+
+  AvatarFeed? get _avatarFeed => widget.avatars;
+
+  bool get _isAvatars => _avatarFeed != null;
+
+  int get _leftStep => _isAvatars ? -1 : 1;
+
+  bool _canStep(int delta) {
+    final next = _index + delta;
+    return next >= 0 && next < _items.length;
+  }
+
+  List<_ViewerMedia> _avatarItems(List<AvatarPhoto> photos) => [
+    for (final photo in photos)
+      _ViewerMedia(
+        id: 'avatar:${photo.id ?? photo.url}',
+        attachment: PhotoAttachment(baseUrl: photo.url),
+        messageId: '',
+        senderId: widget.avatars!.gallery.contactId,
+        time: 0,
+        avatarId: photo.id,
+      ),
+  ];
+
   List<_ViewerMedia> _localItems() {
+    final avatars = _avatarFeed;
+    if (avatars != null) return _avatarItems(avatars.photos);
     final message = widget.message;
     final video = widget.video;
     if (video != null) {
@@ -314,13 +504,20 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
 
   _ViewerMedia get _current => _items[_index];
 
-  bool get _feedPending =>
-      !_feedLoaded &&
-      !_feedFailed &&
-      widget.chatId != null &&
-      _feedKey(_items[_index].attachment, widget.message) != null;
+  bool get _feedPending {
+    if (_feedLoaded || _feedFailed) return false;
+    final avatars = _avatarFeed;
+    if (avatars != null) return avatars.gallery.hasHistory;
+    return widget.chatId != null &&
+        _feedKey(_items[_index].attachment, widget.message) != null;
+  }
 
   Future<void> _loadFeed() async {
+    final avatars = _avatarFeed;
+    if (avatars != null) {
+      if (avatars.gallery.hasHistory) await _syncAvatars(avatars.load);
+      return;
+    }
     final chatId = widget.chatId;
     final key = _feedKey(_items[_index].attachment, widget.message);
     if (chatId == null || key == null) return;
@@ -343,18 +540,47 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       return;
     }
 
-    _adoptFeed(items, at, feed);
+    _adoptFeed(items, at, total: feed.total, reachedEnd: feed.reachedEnd);
   }
 
-  void _adoptFeed(List<_ViewerMedia> items, int at, ChatMediaFeed feed) {
+  Future<void> _syncAvatars(Future<void> Function() fetch) async {
+    final avatars = _avatarFeed!;
+    try {
+      await fetch();
+    } catch (e) {
+      logger.w('avatar history ${avatars.gallery.contactId}: $e');
+      if (mounted && !_feedLoaded) setState(() => _feedFailed = true);
+      return;
+    }
+    if (!mounted) return;
+    final items = _avatarItems(avatars.photos);
+    if (items.isEmpty) return;
+    final currentUrl = _current.photo?.baseUrl;
+    var at = _current.id == _initialMediaId ? avatars.initialIndex : -1;
+    if (at < 0) at = items.indexWhere((i) => i.id == _current.id);
+    if (at < 0) at = items.indexWhere((i) => i.photo?.baseUrl == currentUrl);
+    _adoptFeed(
+      items,
+      at < 0 ? _index.clamp(0, items.length - 1) : at,
+      total: avatars.total,
+      reachedEnd: avatars.reachedEnd,
+    );
+  }
+
+  void _adoptFeed(
+    List<_ViewerMedia> items,
+    int at, {
+    required int total,
+    required bool reachedEnd,
+  }) {
     final movesPage = at != _index;
     final previous = _controller;
 
     setState(() {
       _items = items;
       _index = at;
-      _total = feed.total;
-      _reachedEnd = feed.reachedEnd;
+      _total = total;
+      _reachedEnd = reachedEnd;
       _feedLoaded = true;
       if (movesPage) {
         _pager++;
@@ -369,8 +595,19 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   Future<void> _loadMore() async {
+    if (_loadingMore || _reachedEnd || !_feedLoaded) return;
+    final avatars = _avatarFeed;
+    if (avatars != null) {
+      _loadingMore = true;
+      try {
+        await _syncAvatars(avatars.loadMore);
+      } finally {
+        _loadingMore = false;
+      }
+      return;
+    }
     final chatId = widget.chatId;
-    if (chatId == null || _loadingMore || _reachedEnd || !_feedLoaded) return;
+    if (chatId == null) return;
     _loadingMore = true;
     try {
       final feed = await sharedContentModule.loadMoreMedia(
@@ -388,7 +625,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         });
         return;
       }
-      _adoptFeed(items, at, feed);
+      _adoptFeed(items, at, total: feed.total, reachedEnd: feed.reachedEnd);
     } finally {
       _loadingMore = false;
     }
@@ -445,10 +682,9 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   void _step(int delta) {
-    final next = _index + delta;
-    if (next < 0 || next >= _items.length) return;
+    if (!_canStep(delta)) return;
     _controller.animateToPage(
-      next,
+      _index + delta,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
     );
@@ -500,10 +736,11 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   String _cacheNameFor(PhotoAttachment photo, String url) =>
-      'photo_${photo.photoId ?? (url.hashCode & 0x7fffffff)}.jpg';
+      photoCacheName(photo, url);
 
   String _downloadSource(_ViewerMedia item) {
-    final sourceName = widget.sourceName?.trim();
+    final sourceName = (widget.avatars?.gallery.name ?? widget.sourceName)
+        ?.trim();
     if (sourceName != null && sourceName.isNotEmpty) return sourceName;
     return ContactCache.get(item.senderId) ?? '';
   }
@@ -524,7 +761,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   );
 
   String _videoCacheName(_ViewerMedia item, VideoAttachment video) =>
-      'video_${video.videoId ?? item.messageId}.mp4';
+      videoCacheName(video, item.messageId);
 
   DownloadMetadata _videoDownload(
     _ViewerMedia item,
@@ -552,54 +789,92 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     return MediaCache.getOrDownload(_cacheNameFor(photo, url), url);
   }
 
-  Future<File?> _videoFileFor(_ViewerMedia item) async {
-    final video = item.video;
-    if (video == null) return null;
+  Future<String?> _videoUrlFor(_ViewerMedia item) async {
     final sources = await _loadVideoSources(item);
     if (sources.isEmpty) return null;
     final sessionQuality = _videoSessions[item.id]?.quality;
-    final url = sessionQuality != null
+    return sessionQuality != null
         ? sources[sessionQuality] ?? sources.values.first
         : sources.values.first;
+  }
+
+  Future<File?> _videoFileFor(_ViewerMedia item) async {
+    final video = item.video;
+    if (video == null) return null;
+    final url = await _videoUrlFor(item);
+    if (url == null) return null;
     return MediaCache.getOrDownload(_videoCacheName(item, video), url);
   }
 
-  Future<void> _save() async {
-    final photo = _current.photo;
-    if (photo == null || _saving) return;
+  Future<void> _saveToDevice() async {
+    if (_saving) return;
     setState(() => _saving = true);
-    final localPath = photo.localPath;
-    final url = photo.baseUrl ?? '';
-    final cacheName = _cacheNameFor(photo, url);
-
     final MediaSaveResult result;
-    if (localPath != null) {
-      result = await saveLocalImage(localPath);
-    } else if (url.isEmpty) {
-      result = const MediaSaveResult(ok: false, error: 'нет ссылки');
-    } else {
-      result = await saveMediaFile(
-        cacheName: cacheName,
-        resolveUrl: () async => url,
-        saveName: 'IMG_${DateTime.now().millisecondsSinceEpoch}.jpg',
-        kind: SaveMediaKind.image,
-        download: _photoDownload(_current, photo, cacheName),
-      );
+    try {
+      result = await _persistToDevice(_current);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-
     if (!mounted) return;
-    setState(() => _saving = false);
+    final l10n = AppLocalizations.of(context)!;
     if (result.ok) {
       showCustomNotification(
         context,
-        result.toGallery ? 'Сохранено в галерею' : 'Файл сохранён',
+        result.toGallery
+            ? l10n.photoViewerSavedToGallery
+            : l10n.photoViewerFileSaved,
       );
     } else {
       showCustomNotification(
         context,
-        'Не удалось сохранить: ${result.error ?? ''}',
+        l10n.notificationsSaveFailed(result.errorText(l10n)),
       );
     }
+  }
+
+  Future<MediaSaveResult> _persistToDevice(_ViewerMedia item) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final photo = item.photo;
+    if (photo != null) {
+      final localPath = photo.localPath;
+      if (localPath != null) {
+        return saveLocalMedia(
+          File(localPath),
+          saveName: 'IMG_$now.jpg',
+          kind: SaveMediaKind.image,
+        );
+      }
+      final url = photo.baseUrl ?? '';
+      if (url.isEmpty) {
+        return const MediaSaveResult(
+          ok: false,
+          failure: MediaSaveFailure.noLink,
+        );
+      }
+      final cacheName = _cacheNameFor(photo, url);
+      return saveMediaFile(
+        cacheName: cacheName,
+        resolveUrl: () async => url,
+        saveName: 'IMG_$now.jpg',
+        kind: SaveMediaKind.image,
+        download: _photoDownload(item, photo, cacheName),
+      );
+    }
+    final video = item.video;
+    if (video == null) {
+      return MediaSaveResult(
+        ok: false,
+        error: AppLocalizations.of(context)!.photoViewerErrorNoMedia,
+      );
+    }
+    final cacheName = _videoCacheName(item, video);
+    return saveMediaFile(
+      cacheName: cacheName,
+      resolveUrl: () => _videoUrlFor(item),
+      saveName: 'VID_$now.mp4',
+      kind: SaveMediaKind.video,
+      download: _videoDownload(item, video, cacheName),
+    );
   }
 
   Future<void> _saveAs() async {
@@ -639,7 +914,10 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
 
       if (!mounted) return;
       if (file == null) {
-        showCustomNotification(context, 'Не удалось загрузить медиа');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.photoViewerMediaLoadFailed,
+        );
         return;
       }
       final result = await saveFileAs(
@@ -649,7 +927,10 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       );
       if (!mounted || result.cancelled) return;
       if (!result.saved) {
-        showCustomNotification(context, 'Не удалось сохранить файл');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.photoViewerSaveFileFailed,
+        );
         return;
       }
       if (download != null) {
@@ -657,9 +938,19 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
           await DownloadHistory.record(download, file);
         } catch (_) {}
       }
-      if (mounted) showCustomNotification(context, 'Файл сохранён');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.photoViewerFileSaved,
+        );
+      }
     } catch (_) {
-      if (mounted) showCustomNotification(context, 'Не удалось сохранить файл');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.photoViewerSaveFileFailed,
+        );
+      }
     } finally {
       await image?.discard();
       if (mounted) setState(() => _saving = false);
@@ -668,7 +959,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
 
   void _openMenu(BuildContext anchorContext) {
     final actions = widget.actions;
-    if (actions == null && !_current.isVideo) return;
+    if (actions == null && !_current.isVideo && !_isAvatars) return;
     final box = anchorContext.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final l10n = AppLocalizations.of(context)!;
@@ -701,6 +992,20 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
             onTap: () =>
                 _popThen(() => actions!.delete!(item.messageId, item.senderId)),
           ),
+        if (_canDeleteAvatar(item))
+          ChatMenuItem(
+            icon: Symbols.delete,
+            label: l10n.msgActionsDelete,
+            destructive: true,
+            dividerAfter: true,
+            onTap: () => _deleteAvatar(item),
+          ),
+        if (savesToGallery)
+          ChatMenuItem(
+            icon: Symbols.photo_library,
+            label: l10n.photoViewerSaveToGallery,
+            onTap: _saveToDevice,
+          ),
         ChatMenuItem(
           icon: Symbols.download,
           label: l10n.photoViewerSaveAs,
@@ -721,80 +1026,122 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     action();
   }
 
+  bool _canDeleteAvatar(_ViewerMedia item) =>
+      item.avatarId != null && widget.avatars?.gallery.onDelete != null;
+
+  Future<void> _deleteAvatar(_ViewerMedia item) async {
+    final id = item.avatarId;
+    final onDelete = widget.avatars?.gallery.onDelete;
+    if (id == null || onDelete == null) return;
+    if (!await confirmAvatarDeletion(context) || !mounted) return;
+    _popThen(() => onDelete(id));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final padding = MediaQuery.of(context).padding;
-    final hasMenu = _current.isVideo || !(widget.actions?.isEmpty ?? true);
+    final media = MediaQuery.of(context);
+    final padding = media.padding;
+    final compact = media.size.height < _compactHeight;
+    double dismissProgress(Offset offset) =>
+        (offset.dy.abs() / (media.size.height * 0.55)).clamp(0.0, 1.0);
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.transparent,
       body: CallbackShortcuts(
         bindings: {
-          const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _step(1),
-          const SingleActivator(LogicalKeyboardKey.arrowRight): () => _step(-1),
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+              _step(_leftStep),
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+              _step(-_leftStep),
         },
         child: Focus(
           autofocus: true,
           child: Stack(
             children: [
-              Positioned.fill(child: _buildPager()),
               Positioned.fill(
-                child: IgnorePointer(
-                  ignoring: !_chromeVisible,
-                  child: AnimatedOpacity(
-                    opacity: _chromeVisible ? 1 : 0,
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                    child: Stack(
-                      children: [
-                        if (_index < _items.length - 1)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: _arrow(Symbols.chevron_left, () => _step(1)),
-                          ),
-                        if (_index > 0)
-                          Align(
-                            alignment: Alignment.centerRight,
+                child: ValueListenableBuilder<Offset>(
+                  valueListenable: _dismissOffset,
+                  builder: (context, offset, _) => ColoredBox(
+                    key: const ValueKey('media-dismiss-backdrop'),
+                    color: Colors.black.withValues(
+                      alpha: 1 - dismissProgress(offset),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: _onMediaPointerDown,
+                  onPointerMove: _onMediaPointerMove,
+                  onPointerUp: _onMediaPointerUp,
+                  onPointerCancel: _onMediaPointerCancel,
+                  child: ValueListenableBuilder<Offset>(
+                    valueListenable: _dismissOffset,
+                    child: _buildPager(),
+                    builder: (context, offset, pager) => Transform.translate(
+                      key: const ValueKey('media-dismiss-transform'),
+                      offset: offset,
+                      child: Transform.scale(
+                        scale: 1 - 0.12 * dismissProgress(offset),
+                        child: pager,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: ValueListenableBuilder<Offset>(
+                  valueListenable: _dismissOffset,
+                  builder: (context, offset, chrome) => IgnorePointer(
+                    ignoring: !_chromeVisible || offset != Offset.zero,
+                    child: AnimatedOpacity(
+                      opacity: _chromeVisible ? 1 : 0,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      child: Opacity(
+                        opacity: 1 - dismissProgress(offset),
+                        child: chrome,
+                      ),
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      if (_canStep(_leftStep))
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: EdgeInsets.only(left: padding.left),
                             child: _arrow(
-                              Symbols.chevron_right,
-                              () => _step(-1),
+                              Symbols.chevron_left,
+                              () => _step(_leftStep),
                             ),
                           ),
-                        Positioned(
-                          top: padding.top + 8,
-                          left: 8,
-                          right: 8,
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(
-                                  Symbols.close,
-                                  color: Colors.white,
-                                ),
-                                onPressed: () => Navigator.of(context).pop(),
-                              ),
-                              const Spacer(),
-                              if (hasMenu)
-                                Builder(
-                                  builder: (btnContext) => IconButton(
-                                    icon: const Icon(
-                                      Symbols.more_vert,
-                                      color: Colors.white,
-                                    ),
-                                    onPressed: () => _openMenu(btnContext),
-                                  ),
-                                ),
-                            ],
+                        ),
+                      if (_canStep(-_leftStep))
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Padding(
+                            padding: EdgeInsets.only(right: padding.right),
+                            child: _arrow(
+                              Symbols.chevron_right,
+                              () => _step(-_leftStep),
+                            ),
                           ),
                         ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: _buildBottomBar(padding.bottom),
-                        ),
-                      ],
-                    ),
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: _buildTopBar(padding, compact: compact),
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _buildBottomBar(padding, compact: compact),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -813,23 +1160,18 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       gestureSettings: DeviceGestureSettings(touchSlop: swipeSlop),
     );
 
-    return Listener(
-      onPointerDown: (_) => _updatePointers(1),
-      onPointerUp: (_) => _updatePointers(-1),
-      onPointerCancel: (_) => _updatePointers(-1),
-      child: MediaQuery(
-        data: swipeMedia,
-        child: PageView.builder(
-          key: ValueKey(_pager),
-          controller: _controller,
-          reverse: true,
-          physics: _swipeEnabled ? null : const NeverScrollableScrollPhysics(),
-          itemCount: _items.length,
-          onPageChanged: _onPageChanged,
-          itemBuilder: (_, i) => MediaQuery(
-            data: _zoomed ? media : swipeMedia,
-            child: _buildPage(i),
-          ),
+    return MediaQuery(
+      data: swipeMedia,
+      child: PageView.builder(
+        key: ValueKey(_pager),
+        controller: _controller,
+        reverse: !_isAvatars,
+        physics: _swipeEnabled ? null : const NeverScrollableScrollPhysics(),
+        itemCount: _items.length,
+        onPageChanged: _onPageChanged,
+        itemBuilder: (_, i) => MediaQuery(
+          data: _zoomed ? media : swipeMedia,
+          child: _buildPage(i),
         ),
       ),
     );
@@ -884,13 +1226,72 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     );
   }
 
-  Widget _buildBottomBar(double bottomInset) {
+  Widget _buildTopBar(EdgeInsets padding, {required bool compact}) {
     final l10n = AppLocalizations.of(context)!;
-    final caption = _current.caption;
-    final videoSession = _current.isVideo ? _videoSessionFor(_current) : null;
+    final hasMenu =
+        _isAvatars || _current.isVideo || !(widget.actions?.isEmpty ?? true);
 
     return Container(
-      padding: EdgeInsets.fromLTRB(12, 12, 12, bottomInset + 10),
+      padding: EdgeInsets.fromLTRB(
+        padding.left + 8,
+        padding.top + 8,
+        padding.right + 8,
+        compact ? 12 : 0,
+      ),
+      decoration: compact
+          ? const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [Color(0x00000000), Color(0xB3000000)],
+              ),
+            )
+          : null,
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Symbols.close, color: Colors.white),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          if (compact) ...[
+            const SizedBox(width: 4),
+            Expanded(child: _buildInfo(l10n)),
+          ] else
+            const Spacer(),
+          if (_saving && _current.isVideo)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14),
+              child: SmallSpinner(size: 20, color: Colors.white),
+            ),
+          if (compact) ..._buildMediaActions(l10n),
+          if (hasMenu)
+            Builder(
+              builder: (btnContext) => IconButton(
+                icon: const Icon(Symbols.more_vert, color: Colors.white),
+                onPressed: () => _openMenu(btnContext),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(EdgeInsets padding, {required bool compact}) {
+    final l10n = AppLocalizations.of(context)!;
+    final caption = _current.caption;
+    final hasCaption = caption != null && caption.isNotEmpty;
+    final videoSession = _current.isVideo ? _videoSessionFor(_current) : null;
+    if (compact && videoSession == null && !hasCaption) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        padding.left + 12,
+        compact ? 8 : 12,
+        padding.right + 12,
+        padding.bottom + (compact ? 8 : 10),
+      ),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -902,45 +1303,52 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (videoSession != null) ...[
-            _buildVideoAttachment(videoSession, caption),
-            const SizedBox(height: 12),
-          ] else if (caption != null && caption.isNotEmpty) ...[
-            _buildCaption(caption),
-            const SizedBox(height: 12),
+          if (videoSession != null)
+            _buildVideoAttachment(videoSession, caption, compact: compact)
+          else if (hasCaption)
+            _buildCaption(caption, compact: compact),
+          if (!compact) ...[
+            if (videoSession != null || hasCaption) const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(child: _buildInfo(l10n)),
+                ..._buildMediaActions(l10n),
+              ],
+            ),
           ],
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(child: _buildInfo(l10n)),
-              if (!_current.isVideo)
-                IconButton(
-                  icon: _saving
-                      ? const SmallSpinner(size: 20, color: Colors.white)
-                      : const Icon(Symbols.download, color: Colors.white),
-                  onPressed: _saving ? null : _save,
-                  tooltip: l10n.sharedDownload,
-                ),
-              IconButton(
-                icon: const Icon(
-                  Symbols.rotate_90_degrees_ccw,
-                  color: Colors.white,
-                ),
-                onPressed: _rotate,
-                tooltip: l10n.photoViewerRotate,
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildCaption(String caption) {
-    return _ViewerGlassSurface(child: _buildCaptionContent(caption));
+  List<Widget> _buildMediaActions(AppLocalizations l10n) => [
+    if (!_current.isVideo)
+      IconButton(
+        icon: _saving
+            ? const SmallSpinner(size: 20, color: Colors.white)
+            : const Icon(Symbols.download, color: Colors.white),
+        onPressed: _saving ? null : _saveToDevice,
+        tooltip: l10n.sharedDownload,
+      ),
+    IconButton(
+      icon: const Icon(Symbols.rotate_90_degrees_ccw, color: Colors.white),
+      onPressed: _rotate,
+      tooltip: l10n.photoViewerRotate,
+    ),
+  ];
+
+  Widget _buildCaption(String caption, {required bool compact}) {
+    return _ViewerGlassSurface(
+      child: _buildCaptionContent(caption, compact: compact),
+    );
   }
 
-  Widget _buildVideoAttachment(_VideoPlaybackSession session, String? caption) {
+  Widget _buildVideoAttachment(
+    _VideoPlaybackSession session,
+    String? caption, {
+    required bool compact,
+  }) {
     return AnimatedBuilder(
       animation: session,
       builder: (context, _) => _ViewerGlassSurface(
@@ -948,6 +1356,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _VideoControlPanel(
+              compact: compact,
               value: session.value,
               fallbackDuration: Duration(
                 milliseconds: session.attachment.duration ?? 0,
@@ -970,7 +1379,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                 thickness: 0.5,
                 color: Colors.white.withValues(alpha: 0.12),
               ),
-              _buildCaptionContent(caption),
+              _buildCaptionContent(caption, compact: compact),
             ],
           ],
         ),
@@ -978,11 +1387,11 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     );
   }
 
-  Widget _buildCaptionContent(String caption) {
+  Widget _buildCaptionContent(String caption, {required bool compact}) {
     return Container(
-      constraints: const BoxConstraints(maxHeight: 120),
+      constraints: BoxConstraints(maxHeight: compact ? 56 : 120),
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: 14, vertical: compact ? 8 : 10),
       child: SingleChildScrollView(
         child: Text(
           caption,
@@ -997,6 +1406,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   }
 
   Widget _buildInfo(AppLocalizations l10n) {
+    final avatars = _avatarFeed;
+    if (avatars != null) return _buildAvatarInfo(l10n, avatars);
     final item = _current;
     if (item.messageId.isEmpty) return const SizedBox.shrink();
     final total = _feedLoaded ? _total : _items.length;
@@ -1030,6 +1441,38 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     );
   }
 
+  Widget _buildAvatarInfo(AppLocalizations l10n, AvatarFeed avatars) {
+    final total = _feedLoaded ? _total : avatars.total;
+    final counted = _feedPending || total > 1;
+    final name = avatars.gallery.name;
+    const titleStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_feedPending)
+          const _CounterShimmer()
+        else if (counted)
+          Text(l10n.mediaViewerCounter(_index + 1, total), style: titleStyle),
+        if (name.isNotEmpty) ...[
+          if (counted) const SizedBox(height: 2),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: counted
+                ? const TextStyle(color: Colors.white70, fontSize: 13)
+                : titleStyle,
+          ),
+        ],
+      ],
+    );
+  }
+
   String _sentLine(AppLocalizations l10n, _ViewerMedia item) {
     final sourceName = widget.sourceName?.trim();
     final sender = sourceName != null && sourceName.isNotEmpty
@@ -1044,7 +1487,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         sentAt.day == now.day;
     return isToday
         ? l10n.photoViewerSentToday(sender, time)
-        : l10n.photoViewerSentOn(sender, formatDateWords(sentAt), time);
+        : l10n.photoViewerSentOn(sender, formatDateWords(l10n, sentAt), time);
   }
 
   Widget _buildImage(PhotoAttachment photo) {
@@ -1053,10 +1496,13 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       return Image.file(
         File(localPath),
         fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => _broken(),
+        errorBuilder: (_, _, _) => _buildRemoteImage(photo),
       );
     }
+    return _buildRemoteImage(photo);
+  }
 
+  Widget _buildRemoteImage(PhotoAttachment photo) {
     final url = photo.baseUrl ?? '';
     if (url.isEmpty) return _broken();
 
@@ -1151,12 +1597,18 @@ class _VideoPlaybackSession extends ChangeNotifier {
     final old = _controller;
     final previousQuality = _quality;
     final uri = Uri.parse(url);
+    final headers = videoRequestHeaders(
+      uri,
+      sessionUserAgent: userAgentProvider?.call(),
+    );
+    logger.d(
+      'PhotoViewer video open: host=${uri.host}, '
+      'srcAg=${uri.queryParameters['srcAg'] ?? 'none'}, '
+      'ua=${headers['User-Agent'] ?? 'player default'}',
+    );
     final controller = VideoPlayerController.networkUrl(
       uri,
-      httpHeaders: videoRequestHeaders(
-        uri,
-        sessionUserAgent: userAgentProvider?.call(),
-      ),
+      httpHeaders: headers,
     );
     var installed = false;
     _quality = quality;
@@ -1197,7 +1649,8 @@ class _VideoPlaybackSession extends ChangeNotifier {
       final sourceAgent = uri.queryParameters['srcAg'] ?? 'unknown';
       logger.w(
         'PhotoViewer video init failed: host=${uri.host}, '
-        'srcAg=$sourceAgent, error=$error',
+        'srcAg=$sourceAgent, ua=${headers['User-Agent'] ?? 'player default'}, '
+        'error=$error',
       );
       if (!installed) unawaited(controller.dispose().catchError((_) {}));
       if (generation == _loadGeneration && !_disposed) {
@@ -1447,6 +1900,7 @@ class _ViewerGlassSurface extends StatelessWidget {
 }
 
 class _VideoControlPanel extends StatelessWidget {
+  final bool compact;
   final VideoPlayerValue? value;
   final Duration fallbackDuration;
   final double? dragValue;
@@ -1462,6 +1916,7 @@ class _VideoControlPanel extends StatelessWidget {
   final ValueChanged<double> onSeekEnd;
 
   const _VideoControlPanel({
+    required this.compact,
     required this.value,
     required this.fallbackDuration,
     required this.dragValue,
@@ -1486,6 +1941,86 @@ class _VideoControlPanel extends StatelessWidget {
     final sliderValue = dragValue ?? positionMs.toDouble();
     final isPlaying = value?.isPlaying ?? false;
 
+    final volumeControl = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedSlashIcon(
+          icon: Symbols.volume_up,
+          slashedIcon: Symbols.volume_off,
+          slashed: volume == 0,
+          color: Colors.white,
+          size: 20,
+        ),
+        SizedBox(
+          width: 112,
+          child: _ViewerSlider(
+            value: volume,
+            max: 1,
+            onChanged: onVolumeChanged,
+          ),
+        ),
+      ],
+    );
+    final playToggle = IconButton(
+      key: const ValueKey('video-play-toggle'),
+      icon: Icon(
+        isPlaying ? Symbols.pause : Symbols.play_arrow,
+        color: Colors.white,
+        fill: 1,
+      ),
+      onPressed: onTogglePlay,
+    );
+    final settings = _VideoSettingsButton(
+      speed: speed,
+      quality: quality,
+      qualities: qualities,
+      onSpeedChanged: onSpeedChanged,
+      onQualityChanged: onQualityChanged,
+    );
+    final elapsed = SizedBox(
+      width: 42,
+      child: Text(
+        _formatViewerDuration(position),
+        style: const TextStyle(color: Colors.white, fontSize: 11),
+      ),
+    );
+    final seekBar = Expanded(
+      child: _ViewerSlider(
+        value: maxMs <= 0 ? 0 : sliderValue.clamp(0, maxMs).toDouble(),
+        max: maxMs <= 0 ? 1 : maxMs,
+        onChanged: maxMs <= 0 ? null : onSeekChanged,
+        onChangeEnd: maxMs <= 0 ? null : onSeekEnd,
+      ),
+    );
+    final total = SizedBox(
+      width: 42,
+      child: Text(
+        _formatViewerDuration(duration),
+        textAlign: TextAlign.end,
+        style: const TextStyle(color: Colors.white, fontSize: 11),
+      ),
+    );
+
+    if (compact) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              playToggle,
+              elapsed,
+              seekBar,
+              total,
+              const SizedBox(width: 8),
+              volumeControl,
+              settings,
+            ],
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
       child: Column(
@@ -1495,82 +2030,13 @@ class _VideoControlPanel extends StatelessWidget {
             height: 48,
             child: Stack(
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedSlashIcon(
-                        icon: Symbols.volume_up,
-                        slashedIcon: Symbols.volume_off,
-                        slashed: volume == 0,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      SizedBox(
-                        width: 112,
-                        child: _ViewerSlider(
-                          value: volume,
-                          max: 1,
-                          onChanged: onVolumeChanged,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Center(
-                  child: IconButton(
-                    key: const ValueKey('video-play-toggle'),
-                    icon: Icon(
-                      isPlaying ? Symbols.pause : Symbols.play_arrow,
-                      color: Colors.white,
-                      fill: 1,
-                    ),
-                    onPressed: onTogglePlay,
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _VideoSettingsButton(
-                    speed: speed,
-                    quality: quality,
-                    qualities: qualities,
-                    onSpeedChanged: onSpeedChanged,
-                    onQualityChanged: onQualityChanged,
-                  ),
-                ),
+                Align(alignment: Alignment.centerLeft, child: volumeControl),
+                Center(child: playToggle),
+                Align(alignment: Alignment.centerRight, child: settings),
               ],
             ),
           ),
-          Row(
-            children: [
-              SizedBox(
-                width: 42,
-                child: Text(
-                  _formatViewerDuration(position),
-                  style: const TextStyle(color: Colors.white, fontSize: 11),
-                ),
-              ),
-              Expanded(
-                child: _ViewerSlider(
-                  value: maxMs <= 0
-                      ? 0
-                      : sliderValue.clamp(0, maxMs).toDouble(),
-                  max: maxMs <= 0 ? 1 : maxMs,
-                  onChanged: maxMs <= 0 ? null : onSeekChanged,
-                  onChangeEnd: maxMs <= 0 ? null : onSeekEnd,
-                ),
-              ),
-              SizedBox(
-                width: 42,
-                child: Text(
-                  _formatViewerDuration(duration),
-                  textAlign: TextAlign.end,
-                  style: const TextStyle(color: Colors.white, fontSize: 11),
-                ),
-              ),
-            ],
-          ),
+          Row(children: [elapsed, seekBar, total]),
         ],
       ),
     );

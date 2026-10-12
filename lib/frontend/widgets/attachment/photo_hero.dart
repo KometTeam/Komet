@@ -68,6 +68,7 @@ class PhotoHeroController {
 class PhotoHeroRoute<T> extends PageRouteBuilder<T> {
   PhotoHeroRoute({required this.hero, required WidgetBuilder builder})
     : super(
+        opaque: false,
         transitionDuration: const Duration(milliseconds: 320),
         reverseTransitionDuration: const Duration(milliseconds: 280),
         pageBuilder: (context, animation, secondaryAnimation) =>
@@ -301,7 +302,7 @@ class _PhotoHeroTransitionState extends State<_PhotoHeroTransition> {
     }
     return Stack(
       children: [
-        widget.child,
+        FadeTransition(opacity: widget.animation, child: widget.child),
         Positioned.fill(
           child: IgnorePointer(
             child: AnimatedBuilder(

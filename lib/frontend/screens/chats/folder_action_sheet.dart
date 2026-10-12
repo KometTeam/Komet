@@ -6,6 +6,7 @@ import '../../../backend/modules/folders.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
@@ -19,6 +20,7 @@ Future<void> showFolderActionSheet(
   required ChatFolder folder,
 }) async {
   final cs = Theme.of(context).colorScheme;
+  final l10n = AppLocalizations.of(context)!;
   final isAllChats = folder.id == FoldersModule.allChatsFolderId;
   final canEdit = !isAllChats && (folder.canEditTitle || folder.canEditFilters);
   final canDelete = !isAllChats && folder.canDelete;
@@ -49,18 +51,18 @@ Future<void> showFolderActionSheet(
           if (canEdit)
             _ActionRow(
               icon: Symbols.edit,
-              label: 'Изменить',
+              label: l10n.msgActionsEdit,
               onTap: () => Navigator.pop(ctx, _FolderAction.edit),
             ),
           _ActionRow(
             icon: Symbols.create_new_folder,
-            label: 'Новая папка',
+            label: l10n.folderActionNewFolder,
             onTap: () => Navigator.pop(ctx, _FolderAction.create),
           ),
           if (canDelete)
             _ActionRow(
               icon: Symbols.delete,
-              label: 'Удалить',
+              label: l10n.msgActionsDelete,
               color: cs.error,
               onTap: () => Navigator.pop(ctx, _FolderAction.delete),
             ),
@@ -83,10 +85,11 @@ Future<void> showFolderActionSheet(
 }
 
 Future<void> _confirmDelete(BuildContext context, ChatFolder folder) async {
+  final l10n = AppLocalizations.of(context)!;
   final confirmed = await showConfirmDialog(
     context,
-    message: 'Удалить папку «${folder.title}»? Чаты останутся на месте.',
-    confirmLabel: 'Удалить',
+    message: l10n.folderActionDeleteConfirm(folder.title),
+    confirmLabel: l10n.msgActionsDelete,
     destructive: true,
   );
   if (!confirmed || !context.mounted) return;
@@ -102,7 +105,7 @@ Future<void> _confirmDelete(BuildContext context, ChatFolder folder) async {
     if (!context.mounted) return;
     showCustomNotification(
       context,
-      e is PacketError ? e.message : 'Не удалось удалить папку',
+      e is PacketError ? e.message : l10n.folderActionDeleteFailed,
     );
   }
 }

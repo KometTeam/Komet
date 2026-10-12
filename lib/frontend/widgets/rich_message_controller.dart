@@ -5,6 +5,34 @@ import '../../models/animoji.dart';
 import 'formatted_message_text.dart';
 import 'lottie_image.dart';
 
+typedef RichMessageContent = ({
+  String text,
+  List<Map<String, dynamic>> elements,
+});
+
+List<Map<String, dynamic>> trimmedElements(
+  List<Map<String, dynamic>> raw,
+  String rawText,
+  String text,
+) {
+  if (raw.isEmpty) return const [];
+  final leading = rawText.length - rawText.trimLeft().length;
+  final result = <Map<String, dynamic>>[];
+  for (final element in raw) {
+    var from = (element['from'] as int) - leading;
+    var length = element['length'] as int;
+    if (from < 0) {
+      length += from;
+      from = 0;
+    }
+    if (from >= text.length || length <= 0) continue;
+    if (from + length > text.length) length = text.length - from;
+    if (length <= 0) continue;
+    result.add({...element, 'from': from, 'length': length});
+  }
+  return result;
+}
+
 const List<TextFormat> composerFormats = [
   TextFormat.strong,
   TextFormat.emphasized,
@@ -103,7 +131,16 @@ class RichMessageController extends TextEditingController {
     notifyListeners();
   }
 
-  ({String text, List<Map<String, dynamic>> elements}) buildContent() {
+  RichMessageContent buildTrimmedContent() {
+    final content = buildContent();
+    final text = content.text.trim();
+    return (
+      text: text,
+      elements: trimmedElements(content.elements, content.text, text),
+    );
+  }
+
+  RichMessageContent buildContent() {
     final src = value.text;
     if (_animoji.isEmpty) {
       return (text: src, elements: elementsForSend());

@@ -272,7 +272,7 @@ class PluginStore {
       if (await directory.exists()) await directory.delete(recursive: true);
     }
     _state.remove(pluginId);
-    await PluginStorage(pluginId).clear();
+    await PluginStorage.erasePlugin(pluginId);
     await _persistState();
     await refresh();
   }

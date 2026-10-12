@@ -4,17 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:m3e_collection/m3e_collection.dart';
 
 import '../../backend/api.dart';
+import '../../l10n/app_localizations.dart';
 import '../../main.dart' show api;
 import 'small_spinner.dart';
 
 final ValueNotifier<bool> debugForceOffline = ValueNotifier<bool>(false);
 
-String? connectionStatusLabel(SessionState state) {
-  if (debugForceOffline.value) return 'Ожидание сети...';
+String? connectionStatusLabel(AppLocalizations l10n, SessionState state) {
+  if (debugForceOffline.value) return l10n.connectionStatusWaitingForNetwork;
   return switch (state) {
     SessionState.online => null,
-    SessionState.connecting || SessionState.connected => 'Соединение...',
-    SessionState.disconnected => 'Ожидание сети...',
+    SessionState.connecting ||
+    SessionState.connected => l10n.connectionStatusConnecting,
+    SessionState.disconnected => l10n.connectionStatusWaitingForNetwork,
   };
 }
 
@@ -53,8 +55,10 @@ class _ConnectionStatusBuilderState extends State<ConnectionStatusBuilder> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      widget.builder(context, connectionStatusLabel(_state));
+  Widget build(BuildContext context) => widget.builder(
+    context,
+    connectionStatusLabel(AppLocalizations.of(context)!, _state),
+  );
 }
 
 class ConnectionStatusLine extends StatelessWidget {

@@ -9,12 +9,14 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/config/app_fonts.dart';
 import '../../../core/crypto/e2ee_service.dart';
+import '../../../core/storage/chat_encryption_store.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/primary_loading_button.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/small_spinner.dart';
+import '../../../core/security/app_lock.dart';
 
 class E2eeScreen extends StatefulWidget {
   final int accountId;
@@ -203,7 +205,7 @@ class _E2eeScreenState extends State<E2eeScreen> {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/komet-e2ee-${widget.accountId}.kct');
     await file.writeAsBytes(bytes, flush: true);
-    await Share.shareXFiles([XFile(file.path)]);
+    await AppLock.instance.external(() => Share.shareXFiles([XFile(file.path)]));
     // #***! файл содержит ключ личности и все сессии, в кэше ему делать нечего
     try {
       await file.delete();
@@ -214,7 +216,7 @@ class _E2eeScreenState extends State<E2eeScreen> {
 
   Future<void> _import() async {
     final l10n = AppLocalizations.of(context)!;
-    final picked = await FilePicker.platform.pickFiles(withData: true);
+    final picked = await AppLock.instance.external(() => FilePicker.platform.pickFiles(withData: true));
     final file = picked?.files.singleOrNull;
     if (file == null || !mounted) return;
     Uint8List? bytes = file.bytes;
@@ -358,11 +360,51 @@ class _E2eeScreenState extends State<E2eeScreen> {
     }
   }
 
+  Future<void> _disableLegacy() async {
+    final store = ChatEncryptionStore.instance;
+    await store.deleteKey(widget.accountId, widget.chatId);
+    await store.setEnabled(widget.accountId, widget.chatId, false);
+    if (!mounted) return;
+    setState(() {});
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.chatEncryptionDisabled,
+    );
+  }
+
+  Widget _legacyBlock(ColorScheme cs, AppLocalizations l10n) {
+    return GlossyPill(
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(20),
+      padding: const EdgeInsets.all(20),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.e2eeLegacyDescription,
+            style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.3),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.tonal(
+            onPressed: _disableLegacy,
+            child: Text(l10n.e2eeLegacyDisable),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final info = _info;
+    final legacyEnabled = ChatEncryptionStore.instance.isEnabled(
+      widget.accountId,
+      widget.chatId,
+    );
     final showFingerprint =
         _phase == E2eePhase.established || _phase == E2eePhase.keyChanged;
     return Scaffold(
@@ -415,6 +457,10 @@ class _E2eeScreenState extends State<E2eeScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  if (legacyEnabled) ...[
+                    _legacyBlock(cs, l10n),
+                    const SizedBox(height: 16),
+                  ],
                   ..._actions(l10n),
                   if (showFingerprint) ...[
                     const SizedBox(height: 16),

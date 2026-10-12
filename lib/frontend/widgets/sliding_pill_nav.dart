@@ -76,19 +76,20 @@ class SlidingPillNav extends StatelessWidget {
 
   static const double height = 68;
 
-  double _interpWidth(int tab) {
+  double _interpWidth(int tab, PillNavGeometry geometry) {
     final maxIndex = items.length - 1;
     final rt = position.clamp(0.0, maxIndex.toDouble());
     final i0 = rt.floor();
     final i1 = rt.ceil();
     final frac = i0 == i1 ? 0.0 : rt - i0;
     double at(int sel) =>
-        (tab == sel ? geometry.activeWidth : geometry.inactiveWidth) - 0.5;
+        tab == sel ? geometry.activeWidth : geometry.inactiveWidth;
     return at(i0) + (at(i1) - at(i0)) * frac;
   }
 
   @override
   Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
     return ValueListenableBuilder<VisualStyle>(
       valueListenable: AppVisualStyle.current,
       builder: (context, style, _) {
@@ -158,91 +159,108 @@ class SlidingPillNav extends StatelessWidget {
                 ),
               ],
       ),
-      child: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          if (liquid)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: LiquidGlassSurface(
-                  borderRadius: BorderRadius.circular(34),
-                  tint: base,
-                ),
-              ),
-            ),
-          if (frosted)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(34),
-                  child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(
-                      sigmaX: AppFrost.sigma,
-                      sigmaY: AppFrost.sigma,
-                    ),
-                    backdropGroupKey: backdropKey,
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ),
-            ),
-          if (useGradient)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(34),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: GlossyDecor.topSheen(base),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.hasBoundedWidth
+              ? constraints.maxWidth
+              : geometry.navInnerW;
+          final scale = geometry.navInnerW > 0
+              ? width / geometry.navInnerW
+              : 0.0;
+          final layout = PillNavGeometry(
+            width,
+            geometry.activeWidth * scale,
+            geometry.inactiveWidth * scale,
+          );
+          return Stack(
+            clipBehavior: Clip.hardEdge,
+            children: [
+              if (liquid)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: LiquidGlassSurface(
+                      borderRadius: BorderRadius.circular(34),
+                      tint: base,
                     ),
                   ),
                 ),
-              ),
-            ),
-          AnimatedPositioned(
-            duration: animationDuration,
-            curve: Curves.easeOutCubic,
-            left: position * geometry.inactiveWidth + 4,
-            top: 8,
-            bottom: 8,
-            width: geometry.activeWidth - 8,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: cs.primary,
-                borderRadius: BorderRadius.circular(26),
-              ),
-            ),
-          ),
-          SizedBox(
-            width: geometry.navInnerW,
-            child: Row(
-              children: List.generate(items.length, (i) {
-                return AnimatedContainer(
-                  duration: animationDuration,
-                  curve: Curves.easeOutCubic,
-                  width: _interpWidth(i),
-                  child: ClipRRect(
+              if (frosted)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(34),
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(
+                          sigmaX: AppFrost.sigma,
+                          sigmaY: AppFrost.sigma,
+                        ),
+                        backdropGroupKey: backdropKey,
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                ),
+              if (useGradient)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(34),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: GlossyDecor.topSheen(base),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              AnimatedPositioned(
+                duration: animationDuration,
+                curve: Curves.easeOutCubic,
+                left: position * layout.inactiveWidth + 4,
+                top: 8,
+                bottom: 8,
+                width: (layout.activeWidth - 8).clamp(0.0, layout.navInnerW),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: cs.primary,
                     borderRadius: BorderRadius.circular(26),
-                    child: _PillNavCell(
-                      item: items[i],
-                      selected: i == visualSel,
-                      cs: cs,
-                      animationDuration: animationDuration,
-                      iconSize: iconSize,
-                      labelGap: labelGap,
-                      iconsOnly: iconsOnly,
-                      onTap: () => onTap(i),
-                      onLongPress:
-                          (onItemLongPress == null || !items[i].longPressable)
-                          ? null
-                          : (pos) => onItemLongPress!(i, pos),
-                    ),
                   ),
-                );
-              }),
-            ),
-          ),
-        ],
+                ),
+              ),
+              SizedBox(
+                width: layout.navInnerW,
+                child: Row(
+                  children: List.generate(items.length, (i) {
+                    return AnimatedContainer(
+                      duration: animationDuration,
+                      curve: Curves.easeOutCubic,
+                      width: _interpWidth(i, layout),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(26),
+                        child: _PillNavCell(
+                          key: ValueKey('pill-nav-item-$i'),
+                          item: items[i],
+                          selected: i == visualSel,
+                          cs: cs,
+                          animationDuration: animationDuration,
+                          iconSize: iconSize,
+                          labelGap: labelGap,
+                          iconsOnly: iconsOnly,
+                          onTap: () => onTap(i),
+                          onLongPress:
+                              (onItemLongPress == null ||
+                                  !items[i].longPressable)
+                              ? null
+                              : (pos) => onItemLongPress!(i, pos),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -260,6 +278,7 @@ class _PillNavCell extends StatelessWidget {
   final void Function(Offset globalPosition)? onLongPress;
 
   const _PillNavCell({
+    super.key,
     required this.item,
     required this.selected,
     required this.cs,

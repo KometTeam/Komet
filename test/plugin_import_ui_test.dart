@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/core/plugins/plugin_manifest.dart';
 import 'package:komet/frontend/screens/profile/plugins_screen.dart';
 
@@ -13,6 +14,9 @@ void main() {
     String? result;
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
           builder: (context) => Scaffold(
             body: FilledButton(
@@ -47,6 +51,9 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
           builder: (context) => Scaffold(
             body: FilledButton(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/config/app_shape.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Shared confirmation dialog. Returns true if confirmed, false otherwise.
 Future<bool> showConfirmDialog(
@@ -7,10 +8,12 @@ Future<bool> showConfirmDialog(
   String? title,
   required String message,
   String confirmLabel = 'OK',
-  String cancelLabel = 'Отмена',
+  String? cancelLabel,
   bool destructive = false,
 }) async {
   final cs = Theme.of(context).colorScheme;
+  final cancelText =
+      cancelLabel ?? AppLocalizations.of(context)!.chatInfoActionCancel;
   final result = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
@@ -27,7 +30,7 @@ Future<bool> showConfirmDialog(
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
           child: Text(
-            cancelLabel,
+            cancelText,
             style: TextStyle(color: cs.onSurfaceVariant),
           ),
         ),

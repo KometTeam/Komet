@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/backend/models/chat_folder.dart';
 import 'package:komet/backend/modules/folders.dart';
 import 'package:komet/frontend/screens/chats/folder_action_sheet.dart';
@@ -7,6 +8,9 @@ import 'package:komet/frontend/screens/chats/folder_action_sheet.dart';
 Future<void> _openSheet(WidgetTester tester, ChatFolder folder) async {
   await tester.pumpWidget(
     MaterialApp(
+      locale: const Locale('ru'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: Builder(
           builder: (context) => TextButton(

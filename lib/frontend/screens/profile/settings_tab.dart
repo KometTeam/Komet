@@ -15,18 +15,23 @@ import '../../../core/config/komet_settings.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/logger.dart';
 import '../../../core/utils/update_checker.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../widgets/animated_slash_icon.dart';
-import '../../widgets/avatar_history_screen.dart';
+import 'media_devices_screen.dart';
+import '../../widgets/attachment/photo_hero.dart';
+import '../../widgets/avatar_gallery.dart';
+import '../../widgets/photo_viewer.dart';
 import '../../widgets/avatar_photo_actions.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/profile_header_scroll.dart';
+import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
@@ -42,6 +47,7 @@ import '../digital_id/digital_id_web_screen.dart';
 import '../webapp/web_app_bridge.dart';
 import '../webapp/web_app_screen.dart';
 import 'avatar_carousel.dart';
+import 'language_screen.dart';
 import 'cloud_storage_screen.dart';
 import 'customization_section.dart';
 import 'debug_menu_screen.dart';
@@ -57,9 +63,12 @@ import 'spoof_screen.dart';
 import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
+import 'chat_settings_screen.dart';
 
 class SettingsTab extends StatefulWidget {
-  const SettingsTab({super.key});
+  const SettingsTab({super.key, this.bottomPadding = 120});
+
+  final double bottomPadding;
 
   @override
   State<SettingsTab> createState() => _SettingsTabState();
@@ -68,8 +77,10 @@ class SettingsTab extends StatefulWidget {
 const int _settingsTabIndex = 3;
 const double _headerVignette = 64;
 const int _avatarHistoryPageSize = 50;
+const int _avatarThumbSize = 264;
 
-class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
+class _SettingsTabState extends State<SettingsTab>
+    with ReloadOnReconnect, SpectrumSurface {
   ProfileData? _profile;
   List<String> _avatarUrls = const [];
   List<int?> _avatarIds = const [];
@@ -77,6 +88,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   int _avatarIndex = 0;
   bool _avatarForward = true;
   final GlobalKey _avatarMenuKey = GlobalKey();
+  final GlobalKey _avatarHeroKey = GlobalKey();
   bool _isPhoneVisible = false;
   ScrollController? _scrollController;
   double _headerDelta = 0;
@@ -91,6 +103,13 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   int _versionSecretTapCount = 0;
   Timer? _versionSecretTapResetTimer;
   StreamSubscription? _profileUpdateSub;
+  bool _avatarsLoading = false;
+  bool _loggingOut = false;
+
+  @override
+  void reloadAfterReconnect() {
+    if (!_avatarsLoading) unawaited(_loadAvatars());
+  }
 
   @override
   void initState() {
@@ -246,13 +265,22 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   Future<void> _loadAvatars() async {
     final profile = _profile;
     if (profile == null || profile.id <= 0) return;
-    final photos =
-        ContactsModule.cachedPhotos(profile.id) ??
-        await ContactsModule.fetchPhotos(
-          api,
-          profile.id,
-          count: _avatarHistoryPageSize,
-        );
+    final ContactPhotos photos;
+    _avatarsLoading = true;
+    try {
+      photos =
+          ContactsModule.cachedPhotos(profile.id) ??
+          await ContactsModule.fetchPhotos(
+            api,
+            profile.id,
+            count: _avatarHistoryPageSize,
+          );
+    } catch (e) {
+      logger.w('Не удалось получить аватарки профиля: $e');
+      return;
+    } finally {
+      _avatarsLoading = false;
+    }
     if (!mounted) return;
     final ids = List<int?>.generate(photos.urls.length, (i) => photos.idAt(i));
     if (listEquals(_avatarUrls, photos.urls) && listEquals(_avatarIds, ids)) {
@@ -313,22 +341,33 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
         : '${profile.firstName} $last';
   }
 
-  Future<void> _openAvatarViewer() async {
+  void _openAvatarViewer(double radius) {
     final profile = _profile;
     final current = _currentAvatar;
     if (profile == null || current == null) return;
-    final updated = await AvatarHistoryScreen.open(
+    openAvatarViewer(
       context,
-      contactId: profile.id,
-      name: _fullName,
-      currentAvatarUrl: profile.baseUrl,
-      initialUrl: current.url,
-      initialPhotoId: current.id,
-      mainPhotoId: profile.photoId,
-      allowDelete: true,
+      AvatarGallery(
+        contactId: profile.id,
+        name: _fullName,
+        currentUrl: profile.baseUrl ?? '',
+        mainPhotoId: profile.photoId,
+        initialUrl: current.url,
+        initialPhotoId: current.id,
+        onDelete: _removeAvatar,
+      ),
+      origin: () => photoHeroRect(_avatarHeroKey),
+      image: _avatarThumbnail(current.url),
+      radius: BorderRadius.circular(radius),
     );
-    if (updated != null && mounted) await _applyProfileAfterDeletion(updated);
   }
+
+  static ImageProvider _avatarThumbnail(String url) =>
+      ResizeImage.resizeIfNeeded(
+        _avatarThumbSize,
+        _avatarThumbSize,
+        CachedNetworkImageProvider(url),
+      );
 
   void _openAvatarMenu() {
     final rect = anchorRectOf(_avatarMenuKey);
@@ -345,14 +384,27 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
 
   Future<void> _deleteAvatar(int id) async {
     if (!await confirmAvatarDeletion(context)) return;
-    if (!mounted) return;
+    if (mounted) await _removeAvatar(id);
+  }
+
+  Future<void> _removeAvatar(int id) async {
     try {
       final profile = await accountModule.removeProfilePhoto(id);
       if (!mounted) return;
       await _applyProfileAfterDeletion(profile);
-      if (mounted) showCustomNotification(context, 'Фото удалено');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.settingsTabPhotoDeleted,
+        );
+      }
     } catch (e) {
-      if (mounted) showCustomNotification(context, 'Не удалось удалить фото: $e');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.settingsTabPhotoDeleteFailed('$e'),
+        );
+      }
     }
   }
 
@@ -374,8 +426,12 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   Future<void> _loadAppVersion() async {
     final info = await PackageInfo.fromPlatform();
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
-      _appVersionLabel = 'Версия ${info.version} (${info.buildNumber})';
+      _appVersionLabel = l10n.settingsTabAppVersion(
+        info.version,
+        info.buildNumber,
+      );
     });
   }
 
@@ -408,32 +464,31 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
 
   Future<void> _openCloudStorage(BuildContext context) async {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final ok = await showInfoActionSheet(
       context,
       headerIcon: Symbols.cloud,
-      title: 'Облачное хранилище',
-      subtitle: 'Через МАХ',
+      title: l10n.cloudStorageTitle,
+      subtitle: l10n.settingsTabCloudStorageSubtitle,
       items: [
-        const InfoActionSheetItem(
+        InfoActionSheetItem(
           icon: Symbols.cloud_done,
-          title: 'Работает при белых списках',
-          body: 'Вы сможете передать файл даже при ограниченном интернете.',
+          title: l10n.settingsTabCloudStorageWhitelistTitle,
+          body: l10n.settingsTabCloudStorageWhitelistBody,
         ),
-        const InfoActionSheetItem(
+        InfoActionSheetItem(
           icon: Symbols.inventory_2,
-          title: 'Файлы до 4ГБ, безлимитное количество.',
-          body: 'Можете хранить массивный обьем информации.',
+          title: l10n.settingsTabCloudStorageLimitsTitle,
+          body: l10n.settingsTabCloudStorageLimitsBody,
         ),
         InfoActionSheetItem(
           icon: Symbols.gpp_maybe,
-          title: 'Не обеспечивается конфединциальность файлов',
-          body:
-              'Облачное хранилище работает через ваш аккаунт на сервере МАХ, '
-              'нужные люди всё равно могут его посмотреть.',
+          title: l10n.settingsTabCloudStoragePrivacyTitle,
+          body: l10n.settingsTabCloudStoragePrivacyBody,
           titleColor: cs.error,
         ),
       ],
-      confirmLabel: 'ОК',
+      confirmLabel: l10n.photoEditorOk,
       confirmDelay: const Duration(seconds: 3),
       seenKey: 'cloud_storage_intro_seen',
     );
@@ -445,7 +500,9 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
   }
 
   Future<void> _confirmLogout() async {
+    if (_loggingOut) return;
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: cs.surfaceContainerHigh,
@@ -459,7 +516,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Выйти из аккаунта?',
+                  l10n.settingsTabLogoutConfirmTitle,
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 18,
@@ -468,7 +525,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Данные аккаунта будут удалены с этого устройства.',
+                  l10n.settingsTabLogoutConfirmBody,
                   style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
                 const SizedBox(height: 20),
@@ -480,12 +537,12 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: AppShape.buttonBorder,
                   ),
-                  child: const Text('Выйти'),
+                  child: Text(l10n.settingsTabLogoutConfirm),
                 ),
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Отмена'),
+                  child: Text(l10n.chatInfoActionCancel),
                 ),
               ],
             ),
@@ -493,8 +550,13 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
         );
       },
     );
-    if (confirmed != true || !mounted) return;
-    await _doLogout();
+    if (confirmed != true || !mounted || _loggingOut) return;
+    _loggingOut = true;
+    try {
+      await _doLogout();
+    } finally {
+      _loggingOut = false;
+    }
   }
 
   Future<void> _doLogout() async {
@@ -502,13 +564,15 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
     try {
       await accountModule.logout();
     } catch (e) {
-      if (mounted) showCustomNotification(context, 'Не удалось выйти: $e');
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.settingsTabLogoutFailed('$e'),
+        );
+      }
       return;
     }
     await resetDigitalIdSession();
-    try {
-      await api.connect();
-    } catch (_) {}
     if (navState != null) {
       await navState.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -586,7 +650,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                             if (BuildProfile.digitalId)
                               _SettingsItem(
                                 icon: Symbols.badge,
-                                label: 'Цифровой ID',
+                                label: l10n.digitalIdTitle,
                                 onTap: () {
                                   Navigator.push(
                                     context,
@@ -602,13 +666,13 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                               ),
                             _SettingsItem(
                               icon: Symbols.language,
-                              label: 'Войти в Сферум',
+                              label: l10n.settingsTabSferumSignIn,
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => WebAppScreen(
-                                      title: 'Сферум',
+                                      title: l10n.settingsTabSferumTitle,
                                       entryPoint: WebAppEntryPoint.settings,
                                       loader: () => webAppModule.fetchSferum(),
                                     ),
@@ -648,8 +712,21 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                       context,
                       items: [
                         _SettingsItem(
+                          icon: Symbols.chat,
+                          label: l10n.chatSettingsTitle,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const ChatSettingsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _SettingsItem(
                           icon: Symbols.notifications_active,
-                          label: 'Уведомления',
+                          label: l10n.notificationsTitle,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -661,13 +738,38 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                           },
                         ),
                         _SettingsItem(
+                          icon: Symbols.translate,
+                          label: l10n.loginLanguage,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const LanguageScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.videocam,
+                          label: l10n.mediaDevicesTitle,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const MediaDevicesScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _SettingsItem(
                           icon: Symbols.cloud,
-                          label: 'Облачное хранилище [BETA]',
+                          label: l10n.settingsTabCloudStorageBeta,
                           onTap: () => _openCloudStorage(context),
                         ),
                         _SettingsItem(
                           icon: Symbols.vpn_lock,
-                          label: 'Прокси',
+                          label: l10n.proxySettingsTitle,
                           onTap: () {
                             final cs = Theme.of(context).colorScheme;
                             showModalBottomSheet<void>(
@@ -699,7 +801,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                           ),
                         _SettingsItem(
                           icon: Symbols.lock,
-                          label: 'Безопасность',
+                          label: l10n.securityTitle,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -714,7 +816,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                         ),
                         _SettingsItem(
                           icon: Symbols.devices,
-                          label: 'Устройства',
+                          label: l10n.devicesTitle,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -762,7 +864,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                                 items: [
                                   _SettingsItem(
                                     icon: Symbols.construction,
-                                    label: 'Для разработчиков',
+                                    label: l10n.settingsTabDevelopers,
                                     onTap: () {
                                       Navigator.push(
                                         context,
@@ -818,7 +920,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                         ),
                         _SettingsItem(
                           icon: Symbols.logout,
-                          label: 'Выйти из аккаунта',
+                          label: l10n.settingsTabLogout,
                           tintColor: cs.error,
                           onTap: _confirmLogout,
                         ),
@@ -855,7 +957,9 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                       ),
                     ),
                   ),
-                const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                SliverToBoxAdapter(
+                  child: SizedBox(height: widget.bottomPadding),
+                ),
               ],
             ),
           ),
@@ -908,7 +1012,8 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
               Positioned.fromRect(
                 rect: avatarRect,
                 child: GestureDetector(
-                  onTap: _openAvatarViewer,
+                  key: _avatarHeroKey,
+                  onTap: () => _openAvatarViewer(radius),
                   child: _buildMorphAvatar(cs, name, radius, pt),
                 ),
               ),
@@ -1013,18 +1118,19 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
-                          key: _avatarMenuKey,
-                          icon: Icon(
-                            Symbols.more_vert,
-                            color: iconColor,
-                            size: 22,
-                            weight: 400,
+                        if (hasPhoto)
+                          IconButton(
+                            key: _avatarMenuKey,
+                            icon: Icon(
+                              Symbols.more_vert,
+                              color: iconColor,
+                              size: 22,
+                              weight: 400,
+                            ),
+                            onPressed: _currentAvatar == null
+                                ? null
+                                : _openAvatarMenu,
                           ),
-                          onPressed: _currentAvatar == null
-                              ? null
-                              : _openAvatarMenu,
-                        ),
                         IconButton(
                           icon: Icon(
                             Symbols.edit,
@@ -1220,8 +1326,8 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
                   CachedNetworkImage(
                     imageUrl: base,
                     fit: BoxFit.cover,
-                    memCacheWidth: 264,
-                    memCacheHeight: 264,
+                    memCacheWidth: _avatarThumbSize,
+                    memCacheHeight: _avatarThumbSize,
                     placeholder: (_, _) => letterFallback,
                     errorWidget: (_, _, _) => letterFallback,
                   ),
@@ -1350,7 +1456,7 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
     );
   }
 
-  String _formatSelfSeen(int seconds) {
+  String _formatSelfSeen(AppLocalizations l10n, int seconds) {
     final dt = DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
     final now = DateTime.now();
     final time = formatClock(dt);
@@ -1358,8 +1464,8 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
         dt.year == now.year && dt.month == now.month && dt.day == now.day;
     if (isToday) return time;
     final datePart = dt.year == now.year
-        ? '${dt.day} ${kRuMonthsShort[dt.month - 1]}'
-        : '${dt.day} ${kRuMonthsShort[dt.month - 1]} ${dt.year}';
+        ? formatDayMonth(l10n, dt)
+        : formatDateWords(l10n, dt);
     return '$datePart, $time';
   }
 
@@ -1375,11 +1481,14 @@ class _SettingsTabState extends State<SettingsTab> with SpectrumSurface {
             builder: (context, online, _) => ValueListenableBuilder<int?>(
               valueListenable: SelfPresence.lastSeenSeconds,
               builder: (context, seen, _) {
+                final l10n = AppLocalizations.of(context)!;
                 final label = online
-                    ? 'онлайн'
+                    ? l10n.settingsTabOnline
                     : (seen != null
-                          ? 'Был(-а) ${_formatSelfSeen(seen)}'
-                          : 'офлайн');
+                          ? l10n.settingsTabLastSeen(
+                              _formatSelfSeen(l10n, seen),
+                            )
+                          : l10n.settingsTabOffline);
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,

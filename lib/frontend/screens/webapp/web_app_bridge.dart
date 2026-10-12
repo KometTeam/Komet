@@ -1,20 +1,27 @@
 import 'dart:convert';
-import 'dart:math';
+import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/webapp_storage.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../core/crypto/outgoing_message_policy.dart';
+import '../../../core/utils/logger.dart';
 import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/media_saver.dart';
 import '../../../core/utils/share_origin.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show api, messagesModule, webAppModule;
 import '../../widgets/confirm_dialog.dart';
 import '../chats/chat_list_screen.dart' show openForwardScreen;
 import '../profile/web_qr_scan_screen.dart';
+import 'web_app_biometry.dart';
+import 'web_app_origin_policy.dart';
+import '../../../core/security/app_lock.dart';
 
 abstract class WebAppEntryPoint {
   static const String webApp = 'web_app';
@@ -27,9 +34,8 @@ abstract class WebAppEntryPoint {
   static const String fromSearch = 'from_search';
 }
 
-typedef WebAppMobileIdVerifier = Future<Map<String, dynamic>?> Function(
-  String url,
-);
+typedef WebAppMobileIdVerifier =
+    Future<Map<String, dynamic>?> Function(String url);
 
 typedef WebAppEmitter =
     void Function(String method, String payload, bool private);
@@ -115,19 +121,13 @@ const String _shim = r'''
   };
   function post(name, data, priv){
     try {
-      window.flutter_inappwebview.callHandler('webAppEvent', name, data, priv);
+      if (window.__kometWebAppNative) {
+        window.__kometWebAppNative.postMessage(JSON.stringify([name, data, priv]));
+      } else {
+        window.flutter_inappwebview.callHandler('webAppEvent', name, data, priv);
+      }
     } catch (e) {}
   }
-  var lastGesture = 0;
-  function gesture(){
-    var now = Date.now();
-    if (now - lastGesture < 400) { return; }
-    lastGesture = now;
-    try { window.flutter_inappwebview.callHandler('webAppGesture'); } catch (e) {}
-  }
-  ['touchstart', 'pointerdown', 'mousedown', 'click'].forEach(function(name){
-    try { document.addEventListener(name, gesture, true); } catch (e) {}
-  });
   window.WebViewHandler = {
     postEvent: function(name, data){ post(name, data, false); },
     resolveShare: function(requestId, bytes, mimeType, fileName){
@@ -148,25 +148,57 @@ const String _shim = r'''
 ''';
 
 class WebAppBridge {
+  static final Object _requestGenerationKey = Object();
+  int _documentGeneration = 0;
+  bool _disposed = false;
+
+  bool get _requestIsCurrent =>
+      !_disposed &&
+      (originPolicy == null || _trustedDocument) &&
+      (Zone.current[_requestGenerationKey] == null ||
+          Zone.current[_requestGenerationKey] == _documentGeneration);
+
+  Future<bool> _authorizedRequest() async {
+    if (!_requestIsCurrent) return false;
+    final active =
+        accountId == null ||
+        await TokenStorage.getActiveAccountId() == accountId;
+    return active && _requestIsCurrent;
+  }
+
   WebAppBridge({
     required this.botId,
     required this.entryPoint,
     required this.contextResolver,
     required this.viewportResolver,
     required this.onClose,
+    required this.onRestart,
     this.privateChannel = false,
     this.mobileIdVerifier,
     this.emitter,
-  });
+    this.originPolicy,
+    this.accountId,
+    WebAppBiometry? biometry,
+    String? Function()? deviceIdResolver,
+  }) : biometry = biometry ?? DeviceWebAppBiometry(contextResolver),
+       deviceIdResolver = deviceIdResolver ?? _sessionDeviceId;
 
   final int botId;
   final String entryPoint;
   final BuildContext? Function() contextResolver;
   final Size Function() viewportResolver;
   final VoidCallback onClose;
+  final VoidCallback onRestart;
   final bool privateChannel;
   final WebAppMobileIdVerifier? mobileIdVerifier;
   final WebAppEmitter? emitter;
+  final WebAppBiometry biometry;
+  final String? Function() deviceIdResolver;
+
+  static String? _sessionDeviceId() => api.deviceId;
+  final WebAppOriginPolicy? originPolicy;
+  final int? accountId;
+  bool _trustedDocument = false;
 
   InAppWebViewController? _controller;
   DateTime? _lastGesture;
@@ -180,13 +212,75 @@ class WebAppBridge {
   UserScript get userScript => UserScript(
     source: _shim,
     injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+    forMainFrameOnly: true,
+    allowedOriginRules: originPolicy == null
+        ? <String>{}
+        : {originPolicy!.origin},
   );
 
-  void attach(InAppWebViewController controller) {
+  Future<void> attach(InAppWebViewController controller) async {
+    if (defaultTargetPlatform == TargetPlatform.linux || kIsWeb) {
+      throw UnsupportedError('Secure mini-app bridge is unavailable');
+    }
+    _disposed = false;
     _controller = controller;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      if (!await WebViewFeature.isFeatureSupported(
+        WebViewFeature.WEB_MESSAGE_LISTENER,
+      )) {
+        throw UnsupportedError(
+          'Update Android System WebView to open mini-apps',
+        );
+      }
+      await controller.addWebMessageListener(
+        WebMessageListener(
+          jsObjectName: '__kometWebAppNative',
+          allowedOriginRules: {originPolicy!.origin},
+          onPostMessage: (message, sourceOrigin, isMainFrame, replyProxy) {
+            if (!_trustedDocument ||
+                sourceOrigin == null ||
+                !originPolicy!.accepts(
+                  sourceOrigin,
+                  isMainFrame: isMainFrame,
+                )) {
+              return;
+            }
+            final raw = message?.data;
+            if (raw is! String || raw.length > 65536) return;
+            try {
+              final args = jsonDecode(raw);
+              if (args is! List ||
+                  args.length != 3 ||
+                  args[0] is! String ||
+                  (args[1] != null && args[1] is! String) ||
+                  args[2] is! bool) {
+                return;
+              }
+              handleEvent(
+                args[0] as String,
+                args[1] as String?,
+                args[2] as bool,
+              );
+            } on FormatException {
+              return;
+            }
+          },
+        ),
+      );
+      return;
+    }
     controller.addJavaScriptHandler(
       handlerName: 'webAppEvent',
-      callback: (args) {
+      callback: (JavaScriptHandlerFunctionData data) {
+        if (!_trustedDocument ||
+            originPolicy?.accepts(
+                  Uri.parse(data.origin.toString()),
+                  isMainFrame: data.isMainFrame,
+                ) !=
+                true) {
+          return null;
+        }
+        final args = data.args;
         final name = args.isNotEmpty ? args[0]?.toString() : null;
         if (name == null || name.isEmpty) return null;
         final raw = args.length > 1 ? args[1]?.toString() : null;
@@ -196,25 +290,35 @@ class WebAppBridge {
       },
     );
     controller.addJavaScriptHandler(
-      handlerName: 'webAppGesture',
-      callback: (args) {
-        registerGesture();
-        return null;
-      },
-    );
-    controller.addJavaScriptHandler(
       handlerName: 'webAppResolveShare',
-      callback: (args) => null,
+      callback: (JavaScriptHandlerFunctionData data) => null,
     );
   }
 
-  void registerGesture() => _lastGesture = DateTime.now();
+  void registerGesture() {
+    if (_trustedDocument || originPolicy == null) _lastGesture = DateTime.now();
+  }
+
+  void documentStarted(Uri? uri) {
+    _documentGeneration++;
+    _lastGesture = null;
+    _trustedDocument = uri != null && originPolicy?.accepts(uri) == true;
+  }
 
   void notifyBackPressed() => _send('WebAppBackButtonPressed', const {});
 
-  void dispose() => _controller = null;
+  void dispose() {
+    _disposed = true;
+    _documentGeneration++;
+    _controller = null;
+  }
 
-  void _send(String method, Map<String, dynamic> data, {bool private = false}) {
+  void _send(
+    String method,
+    Map<String, dynamic> data, {
+    bool private = false,
+  }) async {
+    if (!_requestIsCurrent) return;
     final payload = jsonEncode(data);
     final custom = emitter;
     if (custom != null) {
@@ -222,12 +326,30 @@ class WebAppBridge {
       return;
     }
     final controller = _controller;
-    if (controller == null) return;
-    controller.evaluateJavascript(
-      source:
-          'window.__kometWebAppDeliver('
-          '${jsonEncode(method)}, ${jsonEncode(payload)}, $private);',
-    );
+    if (controller == null || !_trustedDocument) return;
+    try {
+      final url = await controller.getUrl();
+      if (url == null ||
+          originPolicy?.accepts(Uri.parse(url.toString())) != true ||
+          !identical(controller, _controller) ||
+          !_requestIsCurrent) {
+        return;
+      }
+      if (accountId != null &&
+          await TokenStorage.getActiveAccountId() != accountId) {
+        return;
+      }
+      if (!_requestIsCurrent) return;
+      await controller.evaluateJavascript(
+        source:
+            'if (window === window.top && '
+            'location.origin === ${jsonEncode(originPolicy?.origin)}) {'
+            'window.__kometWebAppDeliver('
+            '${jsonEncode(method)}, ${jsonEncode(payload)}, $private);}',
+      );
+    } catch (error) {
+      logger.w('webapp delivery: $error');
+    }
   }
 
   void _ok(
@@ -256,7 +378,18 @@ class WebAppBridge {
     }, private: private);
   }
 
-  Future<void> handleEvent(String method, String? raw, bool private) async {
+  Future<void> handleEvent(String method, String? raw, bool private) =>
+      runZoned(
+        () => _handleEvent(method, raw, private),
+        zoneValues: {_requestGenerationKey: _documentGeneration},
+      );
+
+  Future<void> _handleEvent(String method, String? raw, bool private) async {
+    if (!await _authorizedRequest()) return;
+    if (accountId != null &&
+        await TokenStorage.getActiveAccountId() != accountId) {
+      return;
+    }
     if (private && !privateChannel) return;
     if (_gestureGated.contains(method) && !_hasRecentGesture) return;
 
@@ -289,10 +422,7 @@ class WebAppBridge {
         });
         return;
       case 'WebAppGetLaunchContext':
-        _send(method, {
-          'requestId': ?requestId,
-          'entryPoint': entryPoint,
-        });
+        _send(method, {'requestId': ?requestId, 'entryPoint': entryPoint});
         return;
       case 'WebAppGetViewportSize':
         final size = viewportResolver();
@@ -329,17 +459,19 @@ class WebAppBridge {
         await _storageClear(method, requestId);
         return;
       case 'WebAppBiometryGetInfo':
-        await _biometryInfo(method, requestId);
+        await _biometryInfo(method, requestId, private);
         return;
       case 'WebAppBiometryRequestAccess':
+        await _biometryRequestAccess(method, requestId, data, private);
+        return;
       case 'WebAppBiometryRequestAuth':
-        await _biometryAuth(method, requestId);
+        await _biometryAuth(method, requestId, data, private);
         return;
       case 'WebAppBiometryUpdateToken':
-        await _biometryUpdateToken(method, requestId, data);
+        await _biometryUpdateToken(method, requestId, data, private);
         return;
       case 'WebAppBiometryOpenSettings':
-        _ok(method, requestId, 'opened');
+        await _biometryOpenSettings(method, requestId, private);
         return;
       case 'WebAppHapticFeedbackImpact':
         await _impact(data['impactStyle']?.toString());
@@ -392,18 +524,20 @@ class WebAppBridge {
       _fail(method, requestId, 'request_error');
       return;
     }
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showConfirmDialog(
       context,
-      title: 'Передать номер телефона?',
-      message: 'Мини-приложение получит ваш номер телефона.',
-      confirmLabel: 'Поделиться',
-      cancelLabel: 'Отклонить',
+      title: l10n.webAppPhoneRequestTitle,
+      message: l10n.webAppPhoneRequestMessage,
+      confirmLabel: l10n.webAppPhoneRequestShare,
+      cancelLabel: l10n.joinRequestsDecline,
     );
     if (!confirmed) {
       _fail(method, requestId, 'user_refused_provide_phone_number');
       return;
     }
     try {
+      if (!await _authorizedRequest()) return;
       final phone = await webAppModule.requestPhone(botId);
       _send(method, {
         'requestId': ?requestId,
@@ -420,6 +554,8 @@ class WebAppBridge {
     if (url == null || url.isEmpty) return;
     final context = contextResolver();
     if (context == null) return;
+    if (!await _authorizedRequest()) return;
+    if (!context.mounted) return;
     await openExternalUrl(context, url);
   }
 
@@ -434,9 +570,11 @@ class WebAppBridge {
       return;
     }
     try {
-      final result = await Share.share(
-        text,
-        sharePositionOrigin: shareOriginOf(contextResolver()),
+      final result = await AppLock.instance.external(
+        () => Share.share(
+          text,
+          sharePositionOrigin: shareOriginOf(contextResolver()),
+        ),
       );
       _send(method, {
         'requestId': ?requestId,
@@ -464,25 +602,35 @@ class WebAppBridge {
       _fail(method, requestId, 'invalid_request');
       return;
     }
+    final session = api.session;
     final target = await openForwardScreen(context: context);
     if (target == null) {
-      _send(method, {
-        'requestId': ?requestId,
-        'status': 'cancelled',
-      });
+      _send(method, {'requestId': ?requestId, 'status': 'cancelled'});
       return;
     }
-    final accountId = await TokenStorage.getActiveAccountId();
+    final accountId = this.accountId ?? await TokenStorage.getActiveAccountId();
     if (accountId == null) {
       _fail(method, requestId, 'invalid_request');
       return;
     }
     try {
-      await messagesModule.sendMessage(accountId, target.chatId, text);
-      _send(method, {
-        'requestId': ?requestId,
-        'status': 'shared',
-      });
+      await OutgoingMessagePolicy.load(accountId);
+      if (accountId != await TokenStorage.getActiveAccountId()) {
+        throw StateError('Account changed');
+      }
+      if (!await _authorizedRequest()) return;
+      await messagesModule.sendMessage(
+        accountId,
+        target.chatId,
+        text,
+        beforeSend: () {
+          if (session == null || !identical(api.session, session)) {
+            throw StateError('Account changed');
+          }
+          OutgoingMessagePolicy.requireSupported(accountId, target.chatId);
+        },
+      );
+      _send(method, {'requestId': ?requestId, 'status': 'shared'});
     } catch (_) {
       _fail(method, requestId, 'invalid_request');
     }
@@ -514,7 +662,7 @@ class WebAppBridge {
       _fail(method, requestId, 'invalid_request');
       return;
     }
-    final accountId = await TokenStorage.getActiveAccountId();
+    final accountId = this.accountId ?? await TokenStorage.getActiveAccountId();
     if (accountId == null) {
       _fail(method, requestId, 'invalid_request');
       return;
@@ -522,10 +670,12 @@ class WebAppBridge {
     final backend = _backendOf(method);
     final value = data['value'];
     if (value == null) {
+      if (!await _authorizedRequest()) return;
       await WebAppStorage.remove(accountId, botId, backend, key);
       _ok(method, requestId, 'removed');
       return;
     }
+    if (!await _authorizedRequest()) return;
     final saved = await WebAppStorage.save(
       accountId,
       botId,
@@ -550,7 +700,7 @@ class WebAppBridge {
       _fail(method, requestId, 'invalid_request');
       return;
     }
-    final accountId = await TokenStorage.getActiveAccountId();
+    final accountId = this.accountId ?? await TokenStorage.getActiveAccountId();
     if (accountId == null) {
       _fail(method, requestId, 'invalid_request');
       return;
@@ -565,98 +715,212 @@ class WebAppBridge {
       _fail(method, requestId, 'not_found');
       return;
     }
-    _send(method, {
-      'requestId': ?requestId,
-      'key': key,
-      'value': value,
-    });
+    _send(method, {'requestId': ?requestId, 'key': key, 'value': value});
   }
 
   Future<void> _storageClear(String method, String? requestId) async {
-    final accountId = await TokenStorage.getActiveAccountId();
+    final accountId = this.accountId ?? await TokenStorage.getActiveAccountId();
     if (accountId == null) {
       _fail(method, requestId, 'invalid_request');
       return;
     }
+    if (!await _authorizedRequest()) return;
     await WebAppStorage.clear(accountId, botId, _backendOf(method));
     _ok(method, requestId, 'cleared');
   }
 
-  Future<void> _biometryInfo(String method, String? requestId) async {
-    final accountId = await TokenStorage.getActiveAccountId();
-    final deviceId = api.deviceId ?? '';
+  static const int _biometryReasonLimit = 128;
+  static const int _biometryTokenLimit = 1024;
+
+  String? _biometryReason(Map<String, dynamic> data) {
+    final reason = data['reason']?.toString().trim();
+    if (reason == null || reason.isEmpty) return null;
+    return reason.length > _biometryReasonLimit
+        ? reason.substring(0, _biometryReasonLimit)
+        : reason;
+  }
+
+  Future<Map<String, dynamic>> _biometryState(int? accountId) async {
+    final deviceId = deviceIdResolver();
     if (accountId == null) {
-      _send(method, {
-        'requestId': ?requestId,
+      return {
         'available': false,
+        'type': const ['unknown'],
+        'accessRequested': false,
+        'accessGranted': false,
+        'tokenSaved': false,
         'deviceId': deviceId,
-      });
-      return;
+      };
     }
+    final types = await biometry.types();
     final (requested, granted) = await WebAppStorage.biometryAccess(
       accountId,
       botId,
     );
     final token = await WebAppStorage.biometryToken(accountId, botId);
-    _send(method, {
-      'requestId': ?requestId,
-      'available': true,
-      'type': const ['unknown'],
+    return {
+      'available': types.isNotEmpty,
+      'type': types.isEmpty ? const ['unknown'] : types,
       'accessRequested': requested,
       'accessGranted': granted,
       'tokenSaved': token != null,
       'deviceId': deviceId,
-    });
+    };
   }
 
-  Future<void> _biometryAuth(String method, String? requestId) async {
-    final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId == null) {
-      _fail(method, requestId, 'access_denied');
-      return;
-    }
-    var token = await WebAppStorage.biometryToken(accountId, botId);
-    if (token == null) {
-      token = _randomToken();
-      await WebAppStorage.saveBiometryToken(accountId, botId, token);
-    }
-    await WebAppStorage.setBiometryAccess(
-      accountId,
-      botId,
-      requested: true,
-      granted: true,
-    );
+  Future<void> _biometryInfo(
+    String method,
+    String? requestId,
+    bool private,
+  ) async {
+    final accountId = this.accountId ?? await TokenStorage.getActiveAccountId();
     _send(method, {
       'requestId': ?requestId,
-      'token': token,
+      ...await _biometryState(accountId),
+    }, private: private);
+  }
+
+  Future<void> _biometryRequestAccess(
+    String method,
+    String? requestId,
+    Map<String, dynamic> data,
+    bool private,
+  ) async {
+    final accountId = this.accountId ?? await TokenStorage.getActiveAccountId();
+    if (accountId == null) {
+      _fail(method, requestId, 'access_denied', private: private);
+      return;
+    }
+    if ((await biometry.types()).isEmpty) {
+      _fail(method, requestId, 'not_supported', private: private);
+      return;
+    }
+    final (requested, _) = await WebAppStorage.biometryAccess(accountId, botId);
+    if (!requested) {
+      final allowed = await biometry.confirmAccess(_biometryReason(data));
+      if (allowed == null) {
+        _fail(method, requestId, 'request_error', private: private);
+        return;
+      }
+      if (!await _authorizedRequest()) return;
+      await WebAppStorage.setBiometryAccess(
+        accountId,
+        botId,
+        requested: true,
+        granted: allowed,
+      );
+    }
+    _send(method, {
+      'requestId': ?requestId,
+      ...await _biometryState(accountId),
+    }, private: private);
+  }
+
+  Future<void> _biometryAuth(
+    String method,
+    String? requestId,
+    Map<String, dynamic> data,
+    bool private,
+  ) async {
+    final accountId = this.accountId ?? await TokenStorage.getActiveAccountId();
+    if (accountId == null) {
+      _fail(method, requestId, 'access_denied', private: private);
+      return;
+    }
+    if ((await biometry.types()).isEmpty) {
+      _fail(method, requestId, 'not_supported', private: private);
+      return;
+    }
+    final (_, granted) = await WebAppStorage.biometryAccess(accountId, botId);
+    if (!granted) {
+      _fail(method, requestId, 'permission_denied', private: private);
+      return;
+    }
+    final token = await WebAppStorage.biometryToken(accountId, botId);
+    if (token == null) {
+      _fail(method, requestId, 'token_not_found', private: private);
+      return;
+    }
+    if (!await biometry.authenticate(_biometryReason(data))) {
+      _fail(method, requestId, 'access_denied', private: private);
+      return;
+    }
+    _send(method, {
+      'requestId': ?requestId,
       'status': 'authorized',
-      'granted': true,
-      'accessGranted': true,
-    });
+      'token': token,
+    }, private: private);
   }
 
   Future<void> _biometryUpdateToken(
     String method,
     String? requestId,
     Map<String, dynamic> data,
+    bool private,
   ) async {
-    final accountId = await TokenStorage.getActiveAccountId();
+    final accountId = this.accountId ?? await TokenStorage.getActiveAccountId();
     if (accountId == null) {
-      _fail(method, requestId, 'access_denied');
+      _fail(method, requestId, 'access_denied', private: private);
       return;
     }
     final token = data['token']?.toString();
     if (token == null || token.isEmpty) {
+      if (!await _authorizedRequest()) return;
       await WebAppStorage.removeBiometryToken(accountId, botId);
-      _ok(method, requestId, 'removed');
+      _ok(method, requestId, 'removed', private: private);
       return;
     }
-    if (token.length > 1024) {
-      _fail(method, requestId, 'too_large');
+    if (token.length > _biometryTokenLimit) {
+      _fail(method, requestId, 'too_large', private: private);
       return;
     }
+    if ((await biometry.types()).isEmpty) {
+      _fail(method, requestId, 'not_supported', private: private);
+      return;
+    }
+    final (_, granted) = await WebAppStorage.biometryAccess(accountId, botId);
+    if (!granted) {
+      _fail(method, requestId, 'permission_denied', private: private);
+      return;
+    }
+    if (!await biometry.authenticate(_biometryReason(data))) {
+      _fail(method, requestId, 'permission_denied', private: private);
+      return;
+    }
+    if (!await _authorizedRequest()) return;
     await WebAppStorage.saveBiometryToken(accountId, botId, token);
-    _ok(method, requestId, 'updated');
+    _ok(method, requestId, 'updated', private: private);
+  }
+
+  Future<void> _biometryOpenSettings(
+    String method,
+    String? requestId,
+    bool private,
+  ) async {
+    final accountId = this.accountId ?? await TokenStorage.getActiveAccountId();
+    if (accountId == null) {
+      _fail(method, requestId, 'access_denied', private: private);
+      return;
+    }
+    if ((await biometry.types()).isEmpty) {
+      _fail(method, requestId, 'not_supported', private: private);
+      return;
+    }
+    final (_, granted) = await WebAppStorage.biometryAccess(accountId, botId);
+    final allowed = await biometry.confirmAccess(null);
+    if (allowed == null) {
+      _fail(method, requestId, 'request_error', private: private);
+      return;
+    }
+    if (!await _authorizedRequest()) return;
+    await WebAppStorage.setBiometryAccess(
+      accountId,
+      botId,
+      requested: true,
+      granted: allowed,
+    );
+    _ok(method, requestId, 'opened', private: private);
+    if (allowed != granted) onRestart();
   }
 
   Future<void> _impact(String? style) async {
@@ -724,10 +988,7 @@ class WebAppBridge {
       _fail(method, requestId, 'cancelled');
       return;
     }
-    _send(method, {
-      'requestId': ?requestId,
-      'value': value,
-    });
+    _send(method, {'requestId': ?requestId, 'value': value});
   }
 
   Future<void> _verifyMobileId(
@@ -757,11 +1018,5 @@ class WebAppBridge {
     } catch (_) {
       _fail(method, requestId, 'request_error', private: private);
     }
-  }
-
-  static String _randomToken() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 }

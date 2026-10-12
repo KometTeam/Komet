@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../core/utils/format.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import 'bubble_context.dart';
 
@@ -17,22 +18,25 @@ class CallBubble extends StatelessWidget {
     final missed = call.isMissedOrFailed;
     final accent = isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary;
     final iconColor = missed ? ctx.cs.error : accent;
+    final l10n = AppLocalizations.of(context)!;
 
     final IconData icon;
     final String label;
     if (call.isGroup) {
       icon = call.isVideo ? Symbols.videocam : Symbols.groups;
-      label = call.isVideo ? 'Групповой видеозвонок' : 'Групповой звонок';
+      label = call.isVideo ? l10n.callBubbleGroupVideo : l10n.callLinkGroupCall;
     } else if (call.isVideo) {
       icon = Symbols.videocam;
       label = missed
-          ? (isMe ? 'Отменённый видеозвонок' : 'Пропущенный видеозвонок')
-          : (isMe ? 'Исходящий видеозвонок' : 'Входящий видеозвонок');
+          ? (isMe ? l10n.callBubbleCanceledVideo : l10n.callBubbleMissedVideo)
+          : (isMe
+                ? l10n.callBubbleOutgoingVideo
+                : l10n.callBubbleIncomingVideo);
     } else {
       icon = Symbols.call;
       label = missed
-          ? (isMe ? 'Отменённый звонок' : 'Пропущенный звонок')
-          : (isMe ? 'Исходящий звонок' : 'Входящий звонок');
+          ? (isMe ? l10n.callBubbleCanceled : l10n.callBubbleMissed)
+          : (isMe ? l10n.callBubbleOutgoing : l10n.callIncoming);
     }
 
     final directionIcon = isMe ? Symbols.call_made : Symbols.call_received;

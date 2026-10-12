@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/config/app_shape.dart';
 import '../../../core/links/profile_link.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/qr_code_view.dart';
 import '../../widgets/sheet_helpers.dart';
@@ -101,13 +101,13 @@ class _LinkQrSheetState extends State<_LinkQrSheet> {
     });
   }
 
-  Future<void> _copy() async {
+  Future<void> _copy(BuildContext buttonContext) async {
     final link = _link;
     if (link == null) return;
     final message = AppLocalizations.of(context)!.sharedLinkCopied;
     await Clipboard.setData(ClipboardData(text: link));
-    if (!mounted) return;
-    showCustomNotification(context, message);
+    if (!buttonContext.mounted) return;
+    showHintBubble(buttonContext, message);
   }
 
   @override
@@ -156,13 +156,15 @@ class _LinkQrSheetState extends State<_LinkQrSheet> {
               ),
             ),
             const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: link == null ? null : _copy,
-              icon: const Icon(Icons.link, size: 20),
-              label: Text(l10n.sharedCopyLink),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: AppShape.buttonBorder,
+            Builder(
+              builder: (buttonContext) => FilledButton.icon(
+                onPressed: link == null ? null : () => _copy(buttonContext),
+                icon: const Icon(Icons.link, size: 20),
+                label: Text(l10n.sharedCopyLink),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: AppShape.buttonBorder,
+                ),
               ),
             ),
           ],

@@ -82,7 +82,7 @@ class _DebugPerformanceSectionState extends State<DebugPerformanceSection> {
           const SizedBox(height: 4),
           Text(
             'Захватывает build/raster время каждого кадра через '
-            'SchedulerBinding.addTimingsCallback — живой FPS/джанк без '
+            'SchedulerBinding.addTimingsCallback — задержки кадров без '
             'внешних инструментов. Включи, повзаимодействуй с приложением '
             '(скролл, ресайз), потом скопируй лог.',
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
@@ -121,7 +121,16 @@ class _DebugPerformanceSectionState extends State<DebugPerformanceSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _statRow(cs, 'FPS (5с)', stats.fps.toStringAsFixed(0)),
+                  _statRow(
+                    cs,
+                    'Build p95 / p99 (5с)',
+                    '${stats.build.p95.toStringAsFixed(1)} / ${stats.build.p99.toStringAsFixed(1)} мс',
+                  ),
+                  _statRow(
+                    cs,
+                    'Raster p95 / p99 (5с)',
+                    '${stats.raster.p95.toStringAsFixed(1)} / ${stats.raster.p99.toStringAsFixed(1)} мс',
+                  ),
                   _statRow(
                     cs,
                     'Средний кадр (5с)',

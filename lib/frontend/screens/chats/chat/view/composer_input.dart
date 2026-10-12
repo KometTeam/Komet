@@ -11,12 +11,15 @@ import 'package:komet/core/config/app_colors.dart';
 import 'package:komet/core/config/app_composer_background.dart';
 import 'package:komet/core/config/app_composer_style.dart';
 import 'package:komet/core/config/app_frost.dart';
+import 'package:komet/backend/modules/forward_sender.dart';
 import 'package:komet/frontend/screens/chats/chat/upload_status.dart';
 import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/composer_morph_icon.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/liquid_glass.dart';
+import 'package:komet/frontend/widgets/sender_badge.dart';
+import 'package:komet/frontend/widgets/lottie_slash_icon.dart';
 import 'package:komet/frontend/widgets/paste_media_scope.dart';
 import 'package:komet/frontend/widgets/reply_preview.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
@@ -32,7 +35,7 @@ class ComposerInputBar extends StatelessWidget {
     this.backdropKey,
     required this.attachAnim,
     required this.replyTo,
-    required this.forwardMessages,
+    required this.forward,
     required this.myId,
     required this.hasText,
     required this.uploadStatus,
@@ -41,6 +44,7 @@ class ComposerInputBar extends StatelessWidget {
     required this.voiceRec,
     required this.note,
     required this.onToggleStickerPanel,
+    this.onOpenMiniApp,
     required this.onSendText,
     required this.onScheduleMessage,
     required this.onOpenAttach,
@@ -48,6 +52,7 @@ class ComposerInputBar extends StatelessWidget {
     required this.onSendHistory,
     required this.onCancelReply,
     required this.onCancelForward,
+    required this.onToggleForwardSender,
     this.onPickReplyChat,
     required this.formatElapsed,
     required this.contextMenuBuilder,
@@ -75,7 +80,7 @@ class ComposerInputBar extends StatelessWidget {
   final BackdropKey? backdropKey;
   final Animation<double> attachAnim;
   final ValueListenable<CachedMessage?> replyTo;
-  final ValueListenable<List<CachedMessage>> forwardMessages;
+  final ValueListenable<ForwardRequest?> forward;
   final int myId;
   final ValueListenable<bool> hasText;
   final ValueListenable<UploadStatus> uploadStatus;
@@ -84,6 +89,7 @@ class ComposerInputBar extends StatelessWidget {
   final VoiceRecordController voiceRec;
   final VideoNoteController note;
   final VoidCallback onToggleStickerPanel;
+  final VoidCallback? onOpenMiniApp;
   final VoidCallback onSendText;
   final VoidCallback onScheduleMessage;
   final VoidCallback onOpenAttach;
@@ -91,12 +97,12 @@ class ComposerInputBar extends StatelessWidget {
   final Future<void> Function(FileHistoryEntry entry) onSendHistory;
   final VoidCallback onCancelReply;
   final VoidCallback onCancelForward;
+  final VoidCallback onToggleForwardSender;
   final VoidCallback? onPickReplyChat;
   final String Function(int ms) formatElapsed;
   final Widget Function(BuildContext, EditableTextState) contextMenuBuilder;
   final Future<bool> Function()? onPasteMedia;
-  final Future<void> Function(KeyboardInsertedContent content)?
-  onInsertContent;
+  final Future<void> Function(KeyboardInsertedContent content)? onInsertContent;
   final bool isMuted;
   final VoidCallback onToggleMute;
   final bool channelSubscribed;
@@ -113,97 +119,40 @@ class ComposerInputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<List<CachedMessage>>(
-      valueListenable: forwardMessages,
-      builder: (context, forwards, _) => _build(context, forwards),
+    return ValueListenableBuilder<ForwardRequest?>(
+      valueListenable: forward,
+      builder: (context, request, _) => _build(context, request),
     );
   }
 
-  Widget _build(BuildContext context, List<CachedMessage> forwards) {
+  Widget _build(BuildContext context, ForwardRequest? request) {
     final cs = Theme.of(context).colorScheme;
     final mutedIcon = cs.onSurfaceVariant.withValues(alpha: 0.85);
-    final hasForward = forwards.isNotEmpty;
+    final hasForward = request != null;
 
     final isChannel = chatType == "CHANNEL";
     final isGroup = chatType == "CHAT" || chatType == "GROUP";
     if ((isChannel || isGroup) && !hasForward && !channelSubscribed) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12.0,
-            vertical: 8.0,
-          ),
-          child: GlossyPill(
-            onTap: channelSubscribing ? null : onSubscribe,
-            color: cs.primary,
-            borderRadius: BorderRadius.circular(28),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            depth: 8,
-            borderSide: BorderSide(
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-              width: 0.5,
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              child: Center(
-                child: channelSubscribing
-                    ? SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.onPrimary,
-                        ),
-                      )
-                    : Text(
-                        isChannel ? 'Подписаться' : 'Вступить',
-                        style: TextStyle(
-                          color: cs.onPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-              ),
-            ),
-          ),
-        ),
+      final l10n = AppLocalizations.of(context)!;
+      return ComposerPillBar(
+        label: isChannel
+            ? l10n.chatInfoActionSubscribe
+            : l10n.chatInfoActionJoin,
+        primary: true,
+        busy: channelSubscribing,
+        onTap: onSubscribe,
       );
     }
 
     // Regular channel members can't post — show the mute toggle instead of
     // a composer. Groups always keep the real composer once joined.
     if (isChannel && !hasForward && !canPostToChannel) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-          child: GlossyPill(
-            onTap: onToggleMute,
-            color: Color.alphaBlend(
-              cs.surfaceContainerHighest.withValues(alpha: 0.92),
-              cs.surface,
-            ),
-            borderRadius: BorderRadius.circular(28),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            depth: 8,
-            borderSide: BorderSide(
-              color: cs.outlineVariant.withValues(alpha: 0.5),
-              width: 0.5,
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              child: Center(
-                child: Text(
-                  isMuted ? 'Включить уведомления' : 'Отключить уведомления',
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+      final l10n = AppLocalizations.of(context)!;
+      return ComposerPillBar(
+        label: isMuted
+            ? l10n.notificationsFkmEnableLabel
+            : l10n.composerInputMuteNotifications,
+        onTap: onToggleMute,
       );
     }
 
@@ -212,7 +161,7 @@ class ComposerInputBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _messagePreview(cs, forwards),
+          _messagePreview(context, cs, request),
           Padding(
             padding: EdgeInsets.symmetric(
               horizontal: _barSideInset,
@@ -221,6 +170,21 @@ class ComposerInputBar extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                if (onOpenMiniApp != null) ...[
+                  _actionSurface(
+                    color: cs.primary,
+                    onTap: onOpenMiniApp,
+                    borderSide: BorderSide.none,
+                    child: SizedBox(
+                      width: _controlSize,
+                      height: _controlSize,
+                      child: Center(
+                        child: Icon(Symbols.apps, color: cs.onPrimary, size: 24),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: _actionGap),
+                ],
                 Expanded(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
@@ -654,6 +618,7 @@ class ComposerInputBar extends StatelessWidget {
     required Widget child,
     VoidCallback? onTap,
     VoidCallback? onLongPress,
+    BorderSide? borderSide,
   }) {
     return TweenAnimationBuilder<Color?>(
       tween: ColorTween(end: color),
@@ -663,6 +628,7 @@ class ComposerInputBar extends StatelessWidget {
         color: tinted ?? color,
         onTap: onTap,
         onLongPress: onLongPress,
+        borderSide: borderSide,
         child: child,
       ),
     );
@@ -673,6 +639,7 @@ class ComposerInputBar extends StatelessWidget {
     required Widget child,
     VoidCallback? onTap,
     VoidCallback? onLongPress,
+    BorderSide? borderSide,
   }) {
     if (_flat) {
       return Material(
@@ -688,6 +655,7 @@ class ComposerInputBar extends StatelessWidget {
       liquid: _liquid,
       backdropKey: backdropKey,
       borderRadius: BorderRadius.circular(_controlSize / 2),
+      borderSide: borderSide,
       onTap: onTap,
       onLongPress: onLongPress,
       keepInkLayer: true,
@@ -706,12 +674,23 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
-  Widget _messagePreview(ColorScheme cs, List<CachedMessage> forwards) {
-    if (forwards.isNotEmpty) return _forwardPreview(cs, forwards);
+  Widget _messagePreview(
+    BuildContext context,
+    ColorScheme cs,
+    ForwardRequest? request,
+  ) {
+    if (request != null) return _forwardPreview(context, cs, request);
     return _replyPreview(cs);
   }
 
-  Widget _forwardPreview(ColorScheme cs, List<CachedMessage> messages) {
+  Widget _forwardPreview(
+    BuildContext context,
+    ColorScheme cs,
+    ForwardRequest request,
+  ) {
+    final l10n = AppLocalizations.of(context)!;
+    final messages = request.messages;
+    final hideSender = request.hideSender;
     final first = messages.first;
     final senderName = ContactCache.get(first.senderId);
     final info = ReplyInfo(
@@ -724,13 +703,22 @@ class ComposerInputBar extends StatelessWidget {
       text: first.text,
       attachments: first.attachments,
     );
-    final title = messages.length == 1
+    final title = hideSender
+        ? messages.length == 1
+              ? l10n.forwardWithoutSender
+              : l10n.forwardWithoutSenderCount(messages.length)
+        : messages.length == 1
         ? first.senderId == myId
-              ? 'Пересылка от вас'
+              ? l10n.composerInputForwardFromYou
               : senderName == null
-              ? 'Пересылка сообщения'
-              : 'Пересылка от $senderName'
-        : 'Пересылка: ${_forwardCount(messages.length)}';
+              ? l10n.composerInputForwardMessage
+              : l10n.composerInputForwardFrom(senderName)
+        : l10n.composerInputForwardCount(messages.length);
+    final senderToggleColor = hideSender
+        ? cs.primary
+        : request.canHideSender
+        ? cs.onSurfaceVariant
+        : cs.onSurfaceVariant.withValues(alpha: 0.38);
     final row = Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
       child: Row(
@@ -760,6 +748,18 @@ class ComposerInputBar extends StatelessWidget {
             ),
           ),
           IconButton(
+            tooltip: hideSender
+                ? l10n.forwardShowSender
+                : l10n.forwardHideSender,
+            icon: LottieSlashIcon(
+              asset: 'assets/lottie/ic_person_on_to_off.json',
+              slashed: hideSender,
+              color: senderToggleColor,
+              size: 20,
+            ),
+            onPressed: onToggleForwardSender,
+          ),
+          IconButton(
             icon: const Icon(Symbols.close, size: 20),
             color: cs.onSurfaceVariant,
             onPressed: onCancelForward,
@@ -770,24 +770,15 @@ class ComposerInputBar extends StatelessWidget {
     return _previewSurface(cs, row);
   }
 
-  String _forwardCount(int count) {
-    final last = count % 10;
-    final lastTwo = count % 100;
-    if (last == 1 && lastTwo != 11) return '$count сообщение';
-    if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) {
-      return '$count сообщения';
-    }
-    return '$count сообщений';
-  }
-
   Widget _replyPreview(ColorScheme cs) {
     return ValueListenableBuilder<CachedMessage?>(
       valueListenable: replyTo,
       builder: (context, reply, _) {
         if (reply == null) return const SizedBox.shrink();
+        final l10n = AppLocalizations.of(context)!;
         final name = reply.senderId == myId
-            ? 'Вы'
-            : (ContactCache.get(reply.senderId) ?? 'Сообщение');
+            ? l10n.callParticipantYou
+            : (ContactCache.get(reply.senderId) ?? l10n.composerHintMessage);
         final info = ReplyInfo(
           senderId: reply.senderId,
           text: reply.text,
@@ -812,15 +803,24 @@ class ComposerInputBar extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Ответ $name',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            l10n.composerInputReplyTo(name),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: cs.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (reply.senderId != myId)
+                          SenderBadge(senderId: reply.senderId, size: 13),
+                      ],
                     ),
                     if (preview.isNotEmpty) _previewLine(cs, visual, preview),
                   ],
@@ -1032,12 +1032,13 @@ class ComposerInputBar extends StatelessWidget {
             child: ValueListenableBuilder<double>(
               valueListenable: video ? note.cancelDrag : voiceRec.cancelDrag,
               builder: (context, drag, _) {
+                final l10n = AppLocalizations.of(context)!;
                 if (video) {
                   return Opacity(
                     opacity: (0.55 + drag * 0.45).clamp(0.0, 1.0),
                     child: Center(
                       child: Text(
-                        '‹ Влево — отмена',
+                        l10n.composerInputSwipeToCancel,
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 14,
@@ -1059,7 +1060,7 @@ class ComposerInputBar extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Отмена',
+                          l10n.chatInfoActionCancel,
                           style: TextStyle(
                             color: cs.onSurfaceVariant,
                             fontSize: 14,
@@ -1102,7 +1103,9 @@ class ComposerInputBar extends StatelessWidget {
                 : video
                 ? const SizedBox.shrink()
                 : Text(
-                    '‹ влево — отмена',
+                    AppLocalizations.of(
+                      context,
+                    )!.composerInputSwipeToCancelHint,
                     style: TextStyle(color: cs.mutedText, fontSize: 11),
                   ),
           ),
@@ -1234,7 +1237,7 @@ class _HistoryStrip extends StatelessWidget {
                 return Opacity(
                   opacity: v,
                   child: Text(
-                    'история пуста...',
+                    AppLocalizations.of(context)!.composerInputHistoryEmpty,
                     style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                   ),
                 );
@@ -1512,5 +1515,81 @@ IconData _iconForFilename(String? name) {
       return Symbols.code;
     default:
       return Symbols.description;
+  }
+}
+
+class BotStartPrompt {
+  final Listenable revision;
+  final bool Function() due;
+  final VoidCallback onStart;
+
+  const BotStartPrompt({
+    required this.revision,
+    required this.due,
+    required this.onStart,
+  });
+}
+
+class ComposerPillBar extends StatelessWidget {
+  final String label;
+  final bool primary;
+  final bool busy;
+  final VoidCallback? onTap;
+
+  const ComposerPillBar({
+    super.key,
+    required this.label,
+    this.primary = false,
+    this.busy = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final foreground = primary ? cs.onPrimary : cs.onSurface;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: GlossyPill(
+          onTap: busy ? null : onTap,
+          color: primary
+              ? cs.primary
+              : Color.alphaBlend(
+                  cs.surfaceContainerHighest.withValues(alpha: 0.92),
+                  cs.surface,
+                ),
+          borderRadius: BorderRadius.circular(28),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          depth: 8,
+          borderSide: BorderSide(
+            color: cs.outlineVariant.withValues(alpha: 0.5),
+            width: 0.5,
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: Center(
+              child: busy
+                  ? SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: foreground,
+                      ),
+                    )
+                  : Text(
+                      label,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: 16,
+                        fontWeight: primary ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

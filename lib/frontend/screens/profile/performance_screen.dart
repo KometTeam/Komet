@@ -3,6 +3,7 @@ import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/settings_card.dart';
 
@@ -44,7 +45,7 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
 
     if (inLow && !_lowWarnDismissed) {
       final ok = await _showWarning(
-        text: 'Производительность приложения может снизиться, вы уверены?',
+        text: AppLocalizations.of(context)!.performanceScreenLowWarning,
       );
       if (ok) {
         _lowWarnDismissed = true;
@@ -59,9 +60,7 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
 
     if (inHigh && !_highWarnDismissed) {
       final ok = await _showWarning(
-        text:
-            'Это врядли даст хотя-бы немного заметный прирост к FPS, '
-            'но может потреблять больше памяти. Вы уверены?',
+        text: AppLocalizations.of(context)!.performanceScreenHighWarning,
       );
       if (ok) {
         _highWarnDismissed = true;
@@ -78,11 +77,12 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
   }
 
   Future<bool> _showWarning({required String text}) {
+    final l10n = AppLocalizations.of(context)!;
     return showConfirmDialog(
       context,
       message: text,
-      confirmLabel: 'Да',
-      cancelLabel: 'Нет',
+      confirmLabel: l10n.chatInfoConfirmYes,
+      cancelLabel: l10n.chatInfoConfirmNo,
     );
   }
 
@@ -90,11 +90,12 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final hint = cs.onSurfaceVariant;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: ConnectionTitleBar(
-        titleText: 'Производительность',
+        titleText: l10n.performanceScreenTitle,
         backgroundColor: cs.surface,
       ),
       body: SafeArea(
@@ -108,7 +109,7 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Кеш сообщений',
+                    l10n.performanceScreenCacheTitle,
                     style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
@@ -117,12 +118,12 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Сколько пикселей сообщений держать построенными за пределами видимой области.',
+                    l10n.performanceScreenCacheSubtitle,
                     style: TextStyle(color: hint, fontSize: 13, height: 1.3),
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'Текущий cacheExtent: ${_value.round()}',
+                    l10n.performanceScreenCurrentExtent(_value.round()),
                     style: TextStyle(color: hint, fontSize: 12),
                   ),
                   const SizedBox(height: 4),
@@ -137,11 +138,11 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Меньше потребление',
+                        l10n.performanceScreenLessUsage,
                         style: TextStyle(color: hint, fontSize: 11),
                       ),
                       Text(
-                        'Больше FPS',
+                        l10n.performanceScreenMoreFps,
                         style: TextStyle(color: hint, fontSize: 11),
                       ),
                     ],

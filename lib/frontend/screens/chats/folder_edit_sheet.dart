@@ -10,6 +10,7 @@ import '../../../backend/modules/messages.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
@@ -17,18 +18,38 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 
-typedef _ChatType = ({int filter, IconData icon, String label});
+typedef _ChatType = ({
+  int filter,
+  IconData icon,
+  String Function(AppLocalizations l10n) label,
+});
 
-const List<_ChatType> _chatTypes = [
-  (filter: FolderFilter.contact, icon: Symbols.person, label: 'Контакты'),
+final List<_ChatType> _chatTypes = [
+  (
+    filter: FolderFilter.contact,
+    icon: Symbols.person,
+    label: (l10n) => l10n.folderEditTypeContacts,
+  ),
   (
     filter: FolderFilter.notContact,
     icon: Symbols.person_off,
-    label: 'Не в контактах',
+    label: (l10n) => l10n.folderEditTypeNonContacts,
   ),
-  (filter: FolderFilter.chat, icon: Symbols.group, label: 'Группы'),
-  (filter: FolderFilter.channel, icon: Symbols.campaign, label: 'Каналы'),
-  (filter: FolderFilter.bot, icon: Symbols.smart_toy, label: 'Боты'),
+  (
+    filter: FolderFilter.chat,
+    icon: Symbols.group,
+    label: (l10n) => l10n.authLimitsSignupGroupsTitle,
+  ),
+  (
+    filter: FolderFilter.channel,
+    icon: Symbols.campaign,
+    label: (l10n) => l10n.folderEditTypeChannels,
+  ),
+  (
+    filter: FolderFilter.bot,
+    icon: Symbols.smart_toy,
+    label: (l10n) => l10n.folderEditTypeBots,
+  ),
 ];
 
 const Set<int> _editableFilters = {
@@ -135,11 +156,14 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
   }
 
   String _chatTitle(CachedChat chat) {
-    if (chat.id == 0) return 'Избранное';
+    final l10n = AppLocalizations.of(context)!;
+    if (chat.id == 0) return l10n.folderEditSavedMessages;
     if (chat.type == 'DIALOG') {
-      return ContactCache.get(_peerId(chat)) ?? chat.title ?? 'Пользователь';
+      return ContactCache.get(_peerId(chat)) ??
+          chat.title ??
+          l10n.msgActionsReadByUnknownUser;
     }
-    return chat.title ?? 'Чат';
+    return chat.title ?? l10n.hubChatTileTitle;
   }
 
   String? _chatAvatar(CachedChat chat) {
@@ -163,8 +187,9 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
 
   Future<void> _submit() async {
     if (!_canSubmit) return;
+    final l10n = AppLocalizations.of(context)!;
     if (_myId == 0) {
-      showCustomNotification(context, 'Нет активного аккаунта');
+      showCustomNotification(context, l10n.folderEditNoActiveAccount);
       return;
     }
     setState(() => _busy = true);
@@ -198,7 +223,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
       setState(() => _busy = false);
       showCustomNotification(
         context,
-        e is PacketError ? e.message : 'Не удалось сохранить папку',
+        e is PacketError ? e.message : l10n.folderEditSaveFailed,
       );
     }
   }
@@ -206,14 +231,15 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
   Future<void> _delete() async {
     final folder = widget.folder;
     if (folder == null || _busy) return;
+    final l10n = AppLocalizations.of(context)!;
     if (_myId == 0) {
-      showCustomNotification(context, 'Нет активного аккаунта');
+      showCustomNotification(context, l10n.folderEditNoActiveAccount);
       return;
     }
     final confirmed = await showConfirmDialog(
       context,
-      message: 'Удалить папку «${folder.title}»? Чаты останутся на месте.',
-      confirmLabel: 'Удалить',
+      message: l10n.folderEditDeleteConfirm(folder.title),
+      confirmLabel: l10n.msgActionsDelete,
       destructive: true,
     );
     if (!confirmed || !mounted) return;
@@ -230,7 +256,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
       setState(() => _busy = false);
       showCustomNotification(
         context,
-        e is PacketError ? e.message : 'Не удалось удалить папку',
+        e is PacketError ? e.message : l10n.folderEditDeleteFailed,
       );
     }
   }
@@ -247,12 +273,13 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     final viewInsets = MediaQuery.of(context).viewInsets;
     final query = _search.text.trim().toLowerCase();
     final types = query.isEmpty
         ? _chatTypes
         : _chatTypes
-              .where((t) => t.label.toLowerCase().contains(query))
+              .where((t) => t.label(l10n).toLowerCase().contains(query))
               .toList();
     final visibleChats = query.isEmpty
         ? _chats
@@ -270,23 +297,23 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildHeader(cs),
+              _buildHeader(cs, l10n),
               Flexible(
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                   physics: const BouncingScrollPhysics(),
                   children: [
-                    _buildTitleCard(cs),
+                    _buildTitleCard(cs, l10n),
                     const SizedBox(height: 12),
-                    _buildPickerCard(cs, types, visibleChats),
+                    _buildPickerCard(cs, l10n, types, visibleChats),
                     if (widget.folder?.canEditFilters ?? true) ...[
                       const SizedBox(height: 12),
-                      _buildShowOnlyCard(cs),
+                      _buildShowOnlyCard(cs, l10n),
                     ],
                   ],
                 ),
               ),
-              _buildActions(cs),
+              _buildActions(cs, l10n),
             ],
           ),
         ),
@@ -294,13 +321,13 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
     );
   }
 
-  Widget _buildHeader(ColorScheme cs) => Padding(
+  Widget _buildHeader(ColorScheme cs, AppLocalizations l10n) => Padding(
     padding: const EdgeInsets.fromLTRB(20, 16, 8, 4),
     child: Row(
       children: [
         Expanded(
           child: Text(
-            _isNew ? 'Новая папка' : 'Изменение папки',
+            _isNew ? l10n.folderEditNewTitle : l10n.folderEditEditTitle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 18,
@@ -325,7 +352,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
     child: child,
   );
 
-  Widget _buildTitleCard(ColorScheme cs) {
+  Widget _buildTitleCard(ColorScheme cs, AppLocalizations l10n) {
     final canEditTitle = widget.folder?.canEditTitle ?? true;
     return _buildCard(
       cs,
@@ -346,7 +373,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
                 ],
                 style: TextStyle(color: cs.onSurface, fontSize: 16),
                 decoration: InputDecoration(
-                  hintText: 'Название папки',
+                  hintText: l10n.folderEditNameHint,
                   hintStyle: TextStyle(
                     color: cs.onSurfaceVariant,
                     fontSize: 16,
@@ -369,6 +396,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
 
   Widget _buildPickerCard(
     ColorScheme cs,
+    AppLocalizations l10n,
     List<_ChatType> types,
     List<CachedChat> visibleChats,
   ) {
@@ -385,7 +413,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
               onChanged: (_) => setState(() {}),
               style: TextStyle(color: cs.onSurface, fontSize: 14),
               decoration: InputDecoration(
-                hintText: 'Найти по имени',
+                hintText: l10n.membersSearchHint,
                 hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
                 prefixIcon: Icon(
                   Symbols.search,
@@ -403,7 +431,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
             ),
           ),
           if (types.isNotEmpty && canEditFilters) ...[
-            _buildSectionLabel(cs, 'ТИПЫ ЧАТОВ'),
+            _buildSectionLabel(cs, l10n.folderEditChatTypesSection),
             for (final type in types)
               _buildRow(
                 cs,
@@ -416,7 +444,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
                   ),
                   child: Icon(type.icon, color: cs.onSurface, size: 20),
                 ),
-                title: type.label,
+                title: type.label(l10n),
                 selected: _types.contains(type.filter),
                 onTap: () => setState(() {
                   if (!_types.remove(type.filter)) _types.add(type.filter);
@@ -425,13 +453,13 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
               ),
           ],
           if (_loading) ...[
-            _buildSectionLabel(cs, 'ЧАТЫ И КАНАЛЫ'),
+            _buildSectionLabel(cs, l10n.folderEditChatsSection),
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Center(child: SmallSpinner(size: 28)),
             ),
           ] else if (visibleChats.isNotEmpty) ...[
-            _buildSectionLabel(cs, 'ЧАТЫ И КАНАЛЫ'),
+            _buildSectionLabel(cs, l10n.folderEditChatsSection),
             for (final chat in visibleChats)
               _buildRow(
                 cs,
@@ -441,7 +469,9 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
                   imageUrl: _chatAvatar(chat),
                 ),
                 title: _chatTitle(chat),
-                subtitle: chat.id == 0 ? 'Сообщения себе' : null,
+                subtitle: chat.id == 0
+                    ? l10n.folderEditSavedMessagesSubtitle
+                    : null,
                 selected: _chatIds.contains(chat.id),
                 onTap: () => setState(() {
                   if (!_chatIds.remove(chat.id)) _chatIds.add(chat.id);
@@ -453,7 +483,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
               child: Text(
-                'Ничего не найдено',
+                l10n.contactsSearchEmpty,
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
               ),
             ),
@@ -538,10 +568,10 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
     ),
   );
 
-  Widget _buildShowOnlyCard(ColorScheme cs) => Column(
+  Widget _buildShowOnlyCard(ColorScheme cs, AppLocalizations l10n) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _buildSectionLabel(cs, 'ПОКАЗЫВАТЬ ТОЛЬКО'),
+      _buildSectionLabel(cs, l10n.folderEditShowOnlySection),
       _buildCard(
         cs,
         Column(
@@ -549,14 +579,14 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
             _buildToggle(
               cs,
               icon: Symbols.notifications,
-              title: 'Чаты с уведомлениями',
+              title: l10n.folderEditNotMutedChats,
               value: _onlyNotMuted,
               onChanged: (v) => setState(() => _onlyNotMuted = v),
             ),
             _buildToggle(
               cs,
               icon: Symbols.mark_chat_unread,
-              title: 'Непрочитанные чаты',
+              title: l10n.folderEditUnreadChats,
               value: _onlyUnread,
               onChanged: (v) => setState(() => _onlyUnread = v),
             ),
@@ -597,7 +627,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
     ),
   );
 
-  Widget _buildActions(ColorScheme cs) {
+  Widget _buildActions(ColorScheme cs, AppLocalizations l10n) {
     final folder = widget.folder;
     final hasSelection =
         _types.isNotEmpty ||
@@ -611,12 +641,12 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
           Expanded(
             child: folder == null
                 ? SheetButton(
-                    label: 'Очистить выбор',
+                    label: l10n.folderEditClearSelection,
                     filled: false,
                     onTap: hasSelection && !_busy ? _clearSelection : null,
                   )
                 : SheetButton(
-                    label: 'Удалить папку',
+                    label: l10n.folderEditDeleteFolder,
                     filled: false,
                     color: cs.error,
                     onTap: folder.canDelete && !_busy ? _delete : null,
@@ -625,7 +655,7 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
           const SizedBox(width: 12),
           Expanded(
             child: SheetButton(
-              label: _isNew ? 'Создать папку' : 'Сохранить',
+              label: _isNew ? l10n.folderEditCreate : l10n.editProfileSave,
               filled: true,
               onTap: _canSubmit ? _submit : null,
             ),

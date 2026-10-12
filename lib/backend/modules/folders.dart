@@ -160,6 +160,19 @@ class FoldersModule {
     return false;
   }
 
+  static const Set<int> _knownRestrictions = {
+    FolderFilter.unread,
+    FolderFilter.read,
+    FolderFilter.muted,
+    FolderFilter.notMuted,
+  };
+
+  static bool _narrowsAllChats(ChatFolder folder) =>
+      folder.include.isEmpty &&
+      folder.filters.any(
+        (f) => _knownRestrictions.contains(f) || FolderFilter.roles.contains(f),
+      );
+
   // #***! фильтр ограничение, непрочитанные беззвучные и прочее
   static bool _matchesRestriction(int filter, CachedChat chat) {
     switch (filter) {
@@ -186,11 +199,13 @@ class FoldersModule {
       final typeFilters = folder.filters
           .where(FolderFilter.chatTypes.contains)
           .toList();
-      if (typeFilters.isEmpty) return false;
-      final matchesType = typeFilters.any(
+      if (typeFilters.isEmpty) {
+        if (!_narrowsAllChats(folder)) return false;
+      } else if (!typeFilters.any(
         (f) => _matchesType(f, chat, myId: myId, contactIds: contactIds),
-      );
-      if (!matchesType) return false;
+      )) {
+        return false;
+      }
     }
 
     // #***! роли по или, ограничения по и

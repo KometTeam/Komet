@@ -1,12 +1,13 @@
+import 'build_profile.dart';
+import 'launch_flags.dart';
+
 // #***! откуда берём обновления, адрес зашит через --dart-define
 abstract final class UpdateConfig {
-  static const String baseUrl = String.fromEnvironment(
-    'KOMET_UPDATE_BASE_URL',
-    defaultValue: 'https://dl.komet.pw',
-  );
+  static const String baseUrl = LaunchFlags.updateBaseUrl;
 
-  // #***! пустой адрес значит обновления выключены
-  static bool get isConfigured => _normalizedBase.isNotEmpty;
+  // #***! пустой адрес значит обновления выключены, в App Store сборке их нет вовсе
+  static bool get isConfigured =>
+      !BuildProfile.isAppStoreBuild && _normalizedBase.isNotEmpty;
 
   // #***! цепляем метку минуты иначе CDN отдаст старый манифест
   static Uri get manifestUri => Uri.parse(

@@ -461,6 +461,8 @@ class ControlAttachment extends MessageAttachment {
   final List<int>? userIds;
   final int? userId;
   final String? startPayload;
+  final String? imageUrl;
+  final String? fullImageUrl;
 
   const ControlAttachment({
     super.previewData,
@@ -471,6 +473,8 @@ class ControlAttachment extends MessageAttachment {
     this.userIds,
     this.userId,
     this.startPayload,
+    this.imageUrl,
+    this.fullImageUrl,
   }) : super(type: AttachmentType.control);
 
   // #***! запуск бота кнопкой начать, он особенный
@@ -493,6 +497,8 @@ class ControlAttachment extends MessageAttachment {
           ? map['userId'] as int
           : int.tryParse(map['userId']?.toString() ?? ''),
       startPayload: map['startPayload']?.toString(),
+      imageUrl: map['url']?.toString(),
+      fullImageUrl: map['fullUrl']?.toString(),
     );
   }
 
@@ -506,6 +512,8 @@ class ControlAttachment extends MessageAttachment {
     'userIds': userIds,
     'userId': userId,
     'startPayload': startPayload,
+    'url': imageUrl,
+    'fullUrl': fullImageUrl,
   };
 }
 

@@ -149,7 +149,9 @@ class _EmojiPanelState extends State<EmojiPanel> {
     if (_error != null || _sections.isEmpty) {
       return Center(
         child: Text(
-          _error != null ? 'Не удалось загрузить эмодзи' : 'Нет эмодзи',
+          _error != null
+              ? AppLocalizations.of(context)!.emojiPanelLoadFailed
+              : AppLocalizations.of(context)!.emojiPanelEmpty,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
       );

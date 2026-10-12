@@ -6,6 +6,7 @@ import 'package:komet_crypto/komet_crypto.dart';
 
 import '../storage/chat_encryption_store.dart';
 import '../utils/logger.dart';
+import 'chat_crypto_key_cache.dart';
 import 'noise_png.dart';
 
 const int kMaxEncryptedMessageLength = 1000;
@@ -59,35 +60,20 @@ class ChatCryptoService {
 
   static final ChatCryptoService instance = ChatCryptoService._();
 
-  // #***! ключи в памяти по аккаунт/чат, _pending схлопывает параллельный вывод
-  final Map<String, Uint8List> _keys = {};
-  final Map<String, Future<Uint8List?>> _pending = {};
-
-  String _cacheKey(int accountId, int chatId) => '$accountId/$chatId';
+  // #***! ключ выводится из парольной фразы и это дорого, отсюда кэш
+  late final ChatCryptoKeyCache _keyCache = ChatCryptoKeyCache(
+    _deriveKey,
+    wipe: KometCrypto.wipe,
+  );
 
   bool get _unavailable => !KometCrypto.isAvailable;
 
-  void clearKeys() {
-    for (final key in _keys.values) {
-      KometCrypto.wipe(key);
-    }
-    _keys.clear();
-    _pending.clear();
-  }
+  void clearKeys() => _keyCache.clear();
 
-  // #***! ключ выводится из парольной фразы и это дорого, отсюда кэш
-  Future<Uint8List?> _keyFor(int accountId, int chatId) {
-    final cacheKey = _cacheKey(accountId, chatId);
-    final cached = _keys[cacheKey];
-    if (cached != null) return Future.value(cached);
-    return _pending[cacheKey] ??= _deriveKey(accountId, chatId, cacheKey);
-  }
+  Future<Uint8List?> _keyFor(int accountId, int chatId) =>
+      _keyCache.keyFor(accountId, chatId);
 
-  Future<Uint8List?> _deriveKey(
-    int accountId,
-    int chatId,
-    String cacheKey,
-  ) async {
+  Future<Uint8List?> _deriveKey(int accountId, int chatId) async {
     try {
       if (_unavailable) return null;
       final password = await ChatEncryptionStore.instance.readKey(
@@ -95,14 +81,14 @@ class ChatCryptoService {
         chatId,
       );
       if (password == null || password.isEmpty) return null;
-      final key = await Isolate.run(() => KometCrypto.deriveKey(password));
-      _keys[cacheKey] = key;
-      return key;
+      final libraryPath = KometCrypto.libraryPath;
+      return await Isolate.run(() {
+        KometCrypto.libraryPath = libraryPath;
+        return KometCrypto.deriveKey(password);
+      });
     } catch (e) {
       logger.w('derive key for chat $chatId: $e');
       return null;
-    } finally {
-      _pending.remove(cacheKey);
     }
   }
 
@@ -151,7 +137,7 @@ class ChatCryptoService {
     if (key == null) return CryptoBytesResult.failed(_noKeyFailure());
     try {
       final blob = KometCrypto.encryptImageBlob(png, key);
-      final wrapped = wrapNoisePng(blob);
+      final wrapped = await Isolate.run(() => wrapNoisePng(blob));
       if (wrapped == null) {
         return const CryptoBytesResult.failed(CryptoFailure.malformed);
       }
@@ -162,23 +148,36 @@ class ChatCryptoService {
     }
   }
 
+  Future<void> _imageWork = Future.value();
+
+  Future<T> _runImageWork<T>(Future<T> Function() work) {
+    final result = _imageWork.then((_) => work());
+    _imageWork = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
   Future<CryptoBytesResult> decryptImageBytes(
     int accountId,
     int chatId,
     Uint8List noisePng,
   ) async {
-    final key = await _keyFor(accountId, chatId);
-    if (key == null) return CryptoBytesResult.failed(_noKeyFailure());
-    final raw = unwrapNoisePng(noisePng);
-    if (raw == null) {
-      return const CryptoBytesResult.failed(CryptoFailure.notEncrypted);
-    }
-    try {
-      return CryptoBytesResult.ok(KometCrypto.decryptImageBlob(raw, key));
-    } catch (e) {
-      logger.w('image decrypt for chat $chatId: $e');
-      return CryptoBytesResult.failed(cryptoFailureOf(e));
-    }
+    return _runImageWork(() async {
+      final key = await _keyFor(accountId, chatId);
+      if (key == null) return CryptoBytesResult.failed(_noKeyFailure());
+      final workerKey = Uint8List.fromList(key);
+      final libraryPath = KometCrypto.libraryPath;
+      try {
+        return await _decryptImageInIsolate(noisePng, workerKey, libraryPath);
+      } catch (e) {
+        logger.w('image decrypt for chat $chatId: $e');
+        return CryptoBytesResult.failed(cryptoFailureOf(e));
+      } finally {
+        KometCrypto.wipe(workerKey);
+      }
+    });
   }
 
   // #***! похоже ли это вообще на наш шифр, чтоб отличить чужой ключ от обычного текста
@@ -217,3 +216,20 @@ class ChatCryptoService {
     }
   }
 }
+
+Future<CryptoBytesResult> _decryptImageInIsolate(
+  Uint8List noisePng,
+  Uint8List key,
+  String? libraryPath,
+) => Isolate.run(() {
+  KometCrypto.libraryPath = libraryPath;
+  try {
+    final raw = unwrapNoisePng(noisePng);
+    if (raw == null || !KometCrypto.looksEncryptedImageBlob(raw)) {
+      return const CryptoBytesResult.failed(CryptoFailure.notEncrypted);
+    }
+    return CryptoBytesResult.ok(KometCrypto.decryptImageBlob(raw, key));
+  } finally {
+    KometCrypto.wipe(key);
+  }
+});

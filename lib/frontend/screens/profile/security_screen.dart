@@ -14,11 +14,16 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/info_action_sheet.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 import 'blacklist_screen.dart';
 import 'password_entry_screen.dart';
+import '../../widgets/temporary_password_recovery_dialog.dart';
+import '../../../core/storage/token_storage.dart';
+import 'passcode_settings_screen.dart';
+import '../../../core/security/app_lock.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
 
@@ -33,6 +38,9 @@ class SecurityScreen extends StatefulWidget {
 
 class _SecurityScreenState extends State<SecurityScreen>
     with SingleTickerProviderStateMixin, ReloadOnReconnect {
+  static const _contentLevelSafe = 'SAFE';
+  static const _contentLevelAll = 'ALL';
+
   bool _isLoading = true;
   bool _isSaving = false;
   bool _is2faEnabled = false;
@@ -69,15 +77,8 @@ class _SecurityScreenState extends State<SecurityScreen>
       final results = await Future.wait([
         accountModule.getPrivacyConfig(),
         accountModule.getBlockedContacts(),
-        AppDatabase.loadActiveProfile(),
       ]);
-      bool is2faEnabled;
-      try {
-        is2faEnabled = (await accountModule.get2faStatus()).enabled;
-      } catch (_) {
-        final profile = results[2] as ProfileData?;
-        is2faEnabled = profile?.profileOptions?.contains(2) ?? false;
-      }
+      final is2faEnabled = await _fetch2faEnabled();
       if (mounted) {
         setState(() {
           _privacyConfig = results[0] as PrivacyConfig;
@@ -95,6 +96,30 @@ class _SecurityScreenState extends State<SecurityScreen>
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<bool> _fetch2faEnabled() async {
+    try {
+      return (await accountModule.get2faStatus()).enabled;
+    } catch (_) {
+      final profile = await AppDatabase.loadActiveProfile();
+      return profile?.profileOptions?.contains(2) ?? false;
+    }
+  }
+
+  Future<void> _openPasswordSettings() async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (!mounted) return;
+    if (accountId != null) {
+      await showTemporaryPasswordRecovery(context, accountId);
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const PasswordEntryScreen()),
+    );
+    final enabled = await _fetch2faEnabled();
+    if (mounted) setState(() => _is2faEnabled = enabled);
   }
 
   Future<void> _setSafeMode(bool value) async {
@@ -343,6 +368,15 @@ class _SecurityScreenState extends State<SecurityScreen>
       child: Column(
         children: [
           _buildPasswordRow(cs),
+          Padding(
+            padding: const EdgeInsets.only(left: 58),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: cs.outlineVariant.withValues(alpha: 0.35),
+            ),
+          ),
+          _buildPasscodeRow(cs),
           if (_showFamilyProtection)
             _settingsRow(
               cs,
@@ -358,6 +392,67 @@ class _SecurityScreenState extends State<SecurityScreen>
     );
   }
 
+  Widget _buildPasscodeRow(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PasscodeSettingsScreen()),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+          child: Row(
+            children: [
+              Icon(
+                Symbols.lock,
+                color: cs.onSurfaceVariant,
+                size: 22,
+                weight: 400,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.passcodeTitle,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: AppLock.instance.enabled,
+                      builder: (context, enabled, _) => Text(
+                        enabled
+                            ? l10n.securityEnabledMasc
+                            : l10n.securityDisabledMasc,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Symbols.chevron_right,
+                color: cs.outline,
+                size: 20,
+                weight: 400,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPasswordRow(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
     return Column(
@@ -365,14 +460,7 @@ class _SecurityScreenState extends State<SecurityScreen>
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PasswordEntryScreen(),
-                ),
-              );
-            },
+            onTap: _openPasswordSettings,
             borderRadius: BorderRadius.zero,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
@@ -410,8 +498,10 @@ class _SecurityScreenState extends State<SecurityScreen>
                       ],
                     ),
                   ),
-                  _buildWarningBadge(cs),
-                  const SizedBox(width: 4),
+                  if (!_is2faEnabled) ...[
+                    _buildWarningBadge(cs),
+                    const SizedBox(width: 4),
+                  ],
                   Icon(
                     Symbols.chevron_right,
                     color: cs.outline,
@@ -439,6 +529,7 @@ class _SecurityScreenState extends State<SecurityScreen>
   Widget _buildPrivacySettings(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
     final isSafeMode = _privacyConfig?.safeMode ?? false;
+    final contentLevelAccess = _privacyConfig?.contentLevelAccess ?? false;
     return GlossyPill(
       color: cs.surfaceContainerHigh,
       borderRadius: AppShape.cardRadius,
@@ -506,16 +597,31 @@ class _SecurityScreenState extends State<SecurityScreen>
               onSelect: (value) => _updateSetting('SEARCH_BY_PHONE', value),
             ),
           ),
-          if (isSafeMode)
-            _settingsRow(
+          _settingsRow(
+            cs,
+            icon: Symbols.filter_alt,
+            label: l10n.securityShowContent,
+            trailingText: contentLevelAccess
+                ? l10n.securityContentSafe
+                : l10n.securityContentAll,
+            lockedBySafeMode: isSafeMode,
+            onTap: () => _showOptionSheet(
+              context,
               cs,
-              icon: Symbols.filter_alt,
-              label: l10n.securityShowContact,
-              trailingText: _privacyConfig?.contentLevelAccess == true
-                  ? l10n.securityContentSafe
-                  : l10n.securityContentAll,
-              lockedBySafeMode: true,
+              title: l10n.securityShowContent,
+              currentValue: contentLevelAccess
+                  ? _contentLevelSafe
+                  : _contentLevelAll,
+              options: [
+                (_contentLevelSafe, l10n.securityContentSafe),
+                (_contentLevelAll, l10n.securityContentAll),
+              ],
+              onSelect: (value) => _updateSetting(
+                'CONTENT_LEVEL_ACCESS',
+                value == _contentLevelSafe,
+              ),
             ),
+          ),
           _settingsRow(
             cs,
             icon: Symbols.visibility_off,
@@ -543,7 +649,8 @@ class _SecurityScreenState extends State<SecurityScreen>
                 ('CONTACTS', l10n.securityPrivacyContacts),
                 ('NOBODY', l10n.securityPrivacyNobody),
               ],
-              onSelect: (value) => _updateSetting('PHONE_NUMBER_PRIVACY', value),
+              onSelect: (value) =>
+                  _updateSetting('PHONE_NUMBER_PRIVACY', value),
             ),
           ),
         ],
@@ -560,10 +667,7 @@ class _SecurityScreenState extends State<SecurityScreen>
           child: InkWell(
             onTap: _isSaving ? null : () => _setSafeMode(!isSafeMode),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 17,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
               child: Row(
                 children: [
                   Icon(
@@ -749,18 +853,13 @@ class _SecurityScreenState extends State<SecurityScreen>
             label: l10n.securityReadReceipts,
             trailingWidget: Switch(
               value: showReadMark,
-              onChanged: (v) => _updateConfidentialSetting(
-                'SHOW_READ_MARK',
-                v,
-              ),
+              onChanged: (v) => _updateConfidentialSetting('SHOW_READ_MARK', v),
             ),
             showChevron: false,
             verticalPadding: 14,
             isLast: false,
-            onTap: () => _updateConfidentialSetting(
-              'SHOW_READ_MARK',
-              !showReadMark,
-            ),
+            onTap: () =>
+                _updateConfidentialSetting('SHOW_READ_MARK', !showReadMark),
           ),
           _settingsRow(
             cs,
@@ -773,10 +872,8 @@ class _SecurityScreenState extends State<SecurityScreen>
             showChevron: false,
             verticalPadding: 14,
             isLast: false,
-            onTap: () => _updateConfidentialSetting(
-              'ALT_KEYBOARD',
-              !altKeyboard,
-            ),
+            onTap: () =>
+                _updateConfidentialSetting('ALT_KEYBOARD', !altKeyboard),
           ),
           _settingsRow(
             cs,
@@ -789,10 +886,8 @@ class _SecurityScreenState extends State<SecurityScreen>
             showChevron: false,
             verticalPadding: 14,
             isLast: false,
-            onTap: () => _updateConfidentialSetting(
-              'UNSAFE_FILES',
-              !unsafeFiles,
-            ),
+            onTap: () =>
+                _updateConfidentialSetting('UNSAFE_FILES', !unsafeFiles),
           ),
           _settingsRow(
             cs,
@@ -800,10 +895,8 @@ class _SecurityScreenState extends State<SecurityScreen>
             label: l10n.securityAudioTranscription,
             trailingWidget: Switch(
               value: audioTranscription,
-              onChanged: (v) => _updateConfidentialSetting(
-                'AUDIO_TRANSCRIPTION_ENABLED',
-                v,
-              ),
+              onChanged: (v) =>
+                  _updateConfidentialSetting('AUDIO_TRANSCRIPTION_ENABLED', v),
             ),
             showChevron: false,
             verticalPadding: 14,
@@ -944,7 +1037,7 @@ class _SecurityScreenState extends State<SecurityScreen>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '$count ${_getBlockedCountText(count)}',
+                        l10n.securityScreenBlockedCount(count),
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 13,
@@ -966,14 +1059,6 @@ class _SecurityScreenState extends State<SecurityScreen>
         ),
       ),
     );
-  }
-
-  String _getBlockedCountText(int count) {
-    if (count == 0) return 'контактов';
-    final mod = count % 10;
-    if (mod == 1 && count != 11) return 'контакт';
-    if (mod >= 2 && mod <= 4 && (count < 10 || count > 20)) return 'контакта';
-    return 'контактов';
   }
 
   Widget _settingsRow(
@@ -999,82 +1084,84 @@ class _SecurityScreenState extends State<SecurityScreen>
       children: [
         Material(
           color: Colors.transparent,
-          child: InkWell(
-            onTap: lockedBySafeMode
-                ? () => showCustomNotification(context, l10n.securityModeLocked)
-                : (onTap ?? () => showCustomNotification(context, label)),
-            borderRadius: isLast
-                ? const BorderRadius.vertical(
-                    bottom: Radius.circular(AppShape.card),
-                  )
-                : BorderRadius.zero,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: verticalPadding,
-              ),
-              child: Row(
-                children: [
-                  if (icon != null) ...[
-                    Icon(
-                      icon,
-                      color: accentColor ?? cs.onSurfaceVariant,
-                      size: 22,
-                      weight: 400,
-                    ),
-                    const SizedBox(width: 16),
-                  ],
-                  Expanded(
-                    child: subtitle != null
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                label,
-                                style: TextStyle(
-                                  color: accentColor ?? cs.onSurface,
-                                  fontSize: labelFontSize,
-                                  fontWeight: labelFontWeight,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                subtitle,
-                                style: TextStyle(
-                                  color: cs.onSurfaceVariant,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          )
-                        : Text(
-                            label,
-                            style: TextStyle(
-                              color: accentColor ?? cs.onSurface,
-                              fontSize: labelFontSize,
-                              fontWeight: labelFontWeight,
-                            ),
-                          ),
-                  ),
-                  if (trailingText != null)
-                    Text(
-                      trailingText,
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 14,
+          child: Builder(
+            builder: (rowContext) => InkWell(
+              onTap: lockedBySafeMode
+                  ? () => showHintBubble(rowContext, l10n.securityModeLocked)
+                  : (onTap ?? () => showCustomNotification(context, label)),
+              borderRadius: isLast
+                  ? const BorderRadius.vertical(
+                      bottom: Radius.circular(AppShape.card),
+                    )
+                  : BorderRadius.zero,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: verticalPadding,
+                ),
+                child: Row(
+                  children: [
+                    if (icon != null) ...[
+                      Icon(
+                        icon,
+                        color: accentColor ?? cs.onSurfaceVariant,
+                        size: 22,
+                        weight: 400,
                       ),
+                      const SizedBox(width: 16),
+                    ],
+                    Expanded(
+                      child: subtitle != null
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  label,
+                                  style: TextStyle(
+                                    color: accentColor ?? cs.onSurface,
+                                    fontSize: labelFontSize,
+                                    fontWeight: labelFontWeight,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  subtitle,
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Text(
+                              label,
+                              style: TextStyle(
+                                color: accentColor ?? cs.onSurface,
+                                fontSize: labelFontSize,
+                                fontWeight: labelFontWeight,
+                              ),
+                            ),
                     ),
-                  ?trailingWidget,
-                  if (showChevron) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      lockedBySafeMode ? Symbols.lock : Symbols.chevron_right,
-                      color: cs.outline,
-                      size: chevronSize,
-                      weight: 400,
-                    ),
+                    if (trailingText != null)
+                      Text(
+                        trailingText,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ?trailingWidget,
+                    if (showChevron) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        lockedBySafeMode ? Symbols.lock : Symbols.chevron_right,
+                        color: cs.outline,
+                        size: chevronSize,
+                        weight: 400,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

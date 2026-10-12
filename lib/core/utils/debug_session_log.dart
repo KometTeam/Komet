@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../protocol/opcode_map.dart';
@@ -264,8 +265,19 @@ class DebugSessionLog {
   }
 
   // #***! чистим ANSI цвета иначе в файле мусор
+  static String _redactWireLine(String line) {
+    final start = line.indexOf('WIRE [');
+    if (start < 0) return line;
+    final match = RegExp(r'seq=\d+\s+').firstMatch(line.substring(start));
+    if (match == null) return '${line.substring(0, start)}WIRE <payload hidden>';
+    final end = start + match.end;
+    final payload = line.substring(end);
+    if (payload.startsWith('<')) return line;
+    return '${line.substring(0, end)}${redactJsonForLog(payload)}';
+  }
+
   void recordLogLine(String line) {
-    final clean = line.replaceAll(_ansiEscape, '');
+    final clean = _redactWireLine(line.replaceAll(_ansiEscape, ''));
     _logLines.add(clean);
     if (_logLines.length > _maxLogLinesPerSession) {
       _logLines.removeRange(0, _logLines.length - _maxLogLinesPerSession);
@@ -453,7 +465,9 @@ class DebugSessionLog {
     final dir = _dir;
     if (dir != null) {
       for (final file in await _sessionFiles()) {
-        if (_currentFile != null && file.path == _currentFile!.path) continue;
+        if (_currentFile != null && p.equals(file.path, _currentFile!.path)) {
+          continue;
+        }
         try {
           final session = await _readSession(file);
           if (session != null && !session.startedAt.isBefore(cutoff)) {

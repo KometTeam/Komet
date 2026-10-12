@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/cache/info_cache.dart';
-import '../../core/config/debug_test.dart';
+import '../../core/config/launch_flags.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
@@ -362,10 +362,22 @@ class ContactsModule {
   // #***! заблокированных держим в памяти, сервер отдаёт только списком
   static final Set<int> _blockedIds = <int>{};
   static bool _blockedLoaded = false;
+  static Future<void>? _blockedLoading;
+  static int _blockedGeneration = 0;
+
+  static Set<int> get blockedIds => Set.unmodifiable(_blockedIds);
 
   static void clearBlockedCache() {
     _blockedIds.clear();
     _blockedLoaded = false;
+    _blockedLoading = null;
+    _blockedGeneration++;
+  }
+
+  static Future<void> ensureBlockedLoaded(Api api) {
+    if (_blockedLoaded) return Future.value();
+    return _blockedLoading ??= _loadBlockedIds(api)
+        .whenComplete(() => _blockedLoading = null);
   }
 
   // #***! по 100, максимум 20 страниц дальше нужен свой экран
@@ -374,11 +386,12 @@ class ContactsModule {
 
   // #***! первый запрос тянет всё, дальше из памяти
   static Future<bool> isBlocked(Api api, int contactId) async {
-    if (!_blockedLoaded) await _loadBlockedIds(api);
+    await ensureBlockedLoaded(api);
     return _blockedIds.contains(contactId);
   }
 
   static Future<void> _loadBlockedIds(Api api) async {
+    final generation = _blockedGeneration;
     final ids = <int>{};
     try {
       for (var page = 0; page < _blockedMaxPages; page++) {
@@ -398,10 +411,13 @@ class ContactsModule {
       logger.w('Не удалось получить список заблокированных: $e');
       return;
     }
+    if (generation != _blockedGeneration) return;
+    final changed = !setEquals(_blockedIds, ids);
     _blockedIds
       ..clear()
       ..addAll(ids);
     _blockedLoaded = true;
+    if (changed) revision.value++;
   }
 
   // #***! блокировка, локальный список правим сразу
@@ -637,7 +653,7 @@ class ContactsModule {
   ];
 
   static List<CachedContact> debugContacts() {
-    final count = DebugTest.contactCount;
+    final count = LaunchFlags.contactCount;
     final out = <CachedContact>[];
     for (var i = 0; i < count; i++) {
       final first = _debugFirstNames[i % _debugFirstNames.length];
@@ -647,7 +663,7 @@ class ContactsModule {
       out.add(
         CachedContact(
           id: 900000000 + i,
-          accountId: DebugTest.debugAccountId,
+          accountId: LaunchFlags.debugTestAccountId,
           firstName: '$first ${i + 1}',
           lastName: last,
           phone: 79000000000 + i,

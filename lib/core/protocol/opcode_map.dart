@@ -111,6 +111,7 @@ abstract class Opcode {
   static const int videoChatStartActive = 78; // Инициация активного звонка
   static const int videoChatHistory = 79; // История звонков
   static const int videoChatDeleteHistory = 164; // Удаление записей истории звонков
+  static const int callHistorySync = 163; // Синхронизация истории звонков
   static const int videoChatCreateJoinLink = 84; // Ссылка для входа в видеочат
   static const int videoChatJoinByLink = 166; // Вход в звонок по ссылке
   static const int videoChatMembers = 195; // Участники видеочата
@@ -226,6 +227,17 @@ abstract class Opcode {
   static const int storiesDelete = 218; // Удаление историй
   static const int storiesGetByStoryId = 220; // Истории по ID
 
+  // ── Дополнительные опкоды (сверено с официалкой 26.31) ─────────────
+  static const int searchFeedback = 31; // Фидбэк по результатам поиска
+  static const int chatLivestreamInfo = 62; // Инфо о трансляции в чате
+  static const int locationSend = 125; // Отправка геолокации
+  static const int locationRequest = 126; // Запрос геолокации собеседника
+  static const int orgInfo = 256; // Инфо об организации / бизнес-профиле
+  static const int getQr = 288; // Получение QR для входа
+  static const int getQrStatus = 289; // Статус QR-входа
+  static const int loginByQr = 291; // Вход по QR
+  static const int msgDelivery = 303; // Подтверждение доставки сообщения
+
   // ── Human-readable names ───────────────────────────────────────────
 
   // #***! имя опкода для логов
@@ -319,6 +331,7 @@ abstract class Opcode {
     videoChatStartActive: 'VIDEO_CHAT_START_ACTIVE',
     videoChatHistory: 'VIDEO_CHAT_HISTORY',
     videoChatDeleteHistory: 'VIDEO_CHAT_DELETE_HISTORY',
+    callHistorySync: 'CALL_HISTORY_SYNC',
     videoChatCreateJoinLink: 'VIDEO_CHAT_CREATE_JOIN_LINK',
     videoChatJoinByLink: 'VIDEO_CHAT_JOIN_BY_LINK',
     videoChatMembers: 'VIDEO_CHAT_MEMBERS',
@@ -405,5 +418,14 @@ abstract class Opcode {
     storiesEdit: 'STORIES_EDIT',
     storiesDelete: 'STORIES_DELETE',
     storiesGetByStoryId: 'STORIES_GET_BY_STORY_ID',
+    searchFeedback: 'SEARCH_FEEDBACK',
+    chatLivestreamInfo: 'CHAT_LIVESTREAM_INFO',
+    locationSend: 'LOCATION_SEND',
+    locationRequest: 'LOCATION_REQUEST',
+    orgInfo: 'ORG_INFO',
+    getQr: 'GET_QR',
+    getQrStatus: 'GET_QR_STATUS',
+    loginByQr: 'LOGIN_BY_QR',
+    msgDelivery: 'MSG_DELIVERY',
   };
 }

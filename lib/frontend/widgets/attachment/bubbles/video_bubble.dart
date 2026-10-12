@@ -6,9 +6,12 @@ import 'package:komet/main.dart';
 import '../../../../core/media/preview_image.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
 import '../../upload_progress_ring.dart';
+import '../../../../core/config/komet_settings.dart';
+import '../../../../core/media/auto_download_gate.dart';
 import '../../photo_viewer.dart';
 import '../../text_with_meta.dart';
 import 'bubble_context.dart';
@@ -46,6 +49,7 @@ class VideoBubble extends StatelessWidget {
         textColor: ctx.text,
         meta: ctx.meta(),
         uploadProgress: ctx.uploadProgress,
+        onCancelUpload: ctx.onCancelUpload,
       );
     }
     final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
@@ -75,26 +79,73 @@ class VideoBubble extends StatelessWidget {
     );
 
     final localThumb = dataUriImage(video, video.previewData);
+    final awaitsPreviewLoad =
+        previewUrl.isNotEmpty &&
+        !previewUrl.startsWith('data:') &&
+        !AutoDownloadGate.allows(
+          KometSettings.autoDownloadVideo.value,
+          previewUrl,
+        );
     final uploading = ctx.uploadProgress;
 
     Widget previewImage() {
       if (previewUrl.isNotEmpty && !previewUrl.startsWith('data:')) {
-        return CachedNetworkImage(
-          imageUrl: previewUrl,
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
-          memCacheWidth: (width * dpr).round(),
-          fadeInDuration: Duration.zero,
-          placeholderFadeInDuration: Duration.zero,
-          errorWidget: (_, _, _) => localThumb == null
-              ? placeholder()
-              : Image(
-                  image: localThumb,
-                  width: width,
-                  height: height,
-                  fit: BoxFit.cover,
+        return ListenableBuilder(
+          listenable: Listenable.merge([
+            AutoDownloadGate.listen(previewUrl),
+            KometSettings.autoDownloadVideo,
+          ]),
+          builder: (context, _) {
+            if (!AutoDownloadGate.allows(
+              KometSettings.autoDownloadVideo.value,
+              previewUrl,
+            )) {
+              return SizedBox(
+                width: width,
+                height: height,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    placeholder(),
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => AutoDownloadGate.loadManually(previewUrl),
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Symbols.download,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+              );
+            }
+            return CachedNetworkImage(
+              imageUrl: previewUrl,
+              width: width,
+              height: height,
+              fit: BoxFit.cover,
+              memCacheWidth: (width * dpr).round(),
+              fadeInDuration: Duration.zero,
+              placeholderFadeInDuration: Duration.zero,
+              errorWidget: (_, _, _) => localThumb == null
+                  ? placeholder()
+                  : Image(
+                      image: localThumb,
+                      width: width,
+                      height: height,
+                      fit: BoxFit.cover,
+                    ),
+            );
+          },
         );
       }
       if (localThumb != null) {
@@ -124,6 +175,7 @@ class VideoBubble extends StatelessWidget {
                     progress: uploading,
                     color: Colors.white,
                     trackColor: Colors.white24,
+                    onCancel: ctx.onCancelUpload,
                   ),
                 ),
               ),
@@ -166,7 +218,13 @@ class VideoBubble extends StatelessWidget {
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => _playVideo(ctx.context, video),
+                onTap: () {
+                  if (awaitsPreviewLoad) {
+                    AutoDownloadGate.loadManually(previewUrl);
+                    return;
+                  }
+                  _playVideo(ctx.context, video);
+                },
               ),
             ),
         ],
@@ -221,7 +279,10 @@ Future<void> openVideoPlayer(BubbleContext ctx, VideoAttachment video) async {
   final videoId = video.videoId;
   final token = video.videoToken;
   if (videoId == null || token == null) {
-    showCustomNotification(context, 'Не удалось открыть видео');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.videoBubbleOpenFailed,
+    );
     return;
   }
   Haptics.tap();
@@ -234,13 +295,15 @@ Future<void> openVideoPlayer(BubbleContext ctx, VideoAttachment video) async {
   );
   if (!context.mounted) return;
   if (sources.isEmpty) {
-    showCustomNotification(context, 'Не удалось получить видео');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.videoBubbleLoadFailed,
+    );
     return;
   }
 
   Navigator.of(context).push(
-    MaterialPageRoute(
-      fullscreenDialog: true,
+    PhotoViewerRoute(
       builder: (_) => PhotoViewerScreen.video(
         attachment: video,
         initialVideoSources: sources,

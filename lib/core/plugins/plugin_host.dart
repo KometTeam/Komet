@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 abstract interface class PluginHost {
+  int? get accountId;
   String get args;
   Map<String, dynamic> get arguments;
   Map<String, dynamic>? get replyMessage;

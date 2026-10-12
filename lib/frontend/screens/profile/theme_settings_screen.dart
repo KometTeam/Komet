@@ -230,7 +230,7 @@ class _ThemeModeCardState extends State<_ThemeModeCard> {
                                   ),
                           ),
                         ),
-                        label: 'Настроить',
+                        label: l10n.themeSettingsCustomizeAction,
                       ),
                     ),
                 ],
@@ -486,4 +486,3 @@ class _TimeRow extends StatelessWidget {
     if (picked != null) onPick(picked);
   }
 }
-

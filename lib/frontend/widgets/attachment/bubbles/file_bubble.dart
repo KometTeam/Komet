@@ -27,28 +27,49 @@ import '../../share_unopenable_file.dart';
 import '../../upload_progress_ring.dart';
 import 'bubble_context.dart';
 
-class FileBubble extends StatelessWidget {
-  static const double _previewWidth = 240;
-  static const double _previewHeight = 160;
+typedef FileBubbleOpener =
+    Future<FileDownloadResult> Function(
+      String cacheName,
+      Future<String?> Function() resolveUrl, {
+      void Function(double progress)? onProgress,
+      void Function()? onReady,
+      DownloadMetadata? download,
+    });
 
+class FileBubble extends StatefulWidget {
   final BubbleContext ctx;
   final FileAttachment file;
   final bool fill;
+  final FileBubbleOpener openFile;
 
   const FileBubble({
     super.key,
     required this.ctx,
     required this.file,
     this.fill = false,
+    this.openFile = openCachedFile,
   });
+
+  @override
+  State<FileBubble> createState() => _FileBubbleState();
+}
+
+class _FileBubbleState extends State<FileBubble> {
+  static const double _previewWidth = 240;
+  static const double _previewHeight = 160;
+
+  bool _opening = false;
+
+  BubbleContext get ctx => widget.ctx;
+  FileAttachment get file => widget.file;
 
   @override
   Widget build(BuildContext context) {
     final isMe = ctx.isMe;
-    final name =
-        file.name ?? AppLocalizations.of(context)!.attachmentFileFallback;
+    final l10n = AppLocalizations.of(context)!;
+    final name = file.name ?? l10n.attachmentFileFallback;
     final size = file.size ?? 0;
-    final sizeStr = formatBytes(size);
+    final sizeStr = formatBytes(l10n, size);
     final fileId = file.fileId;
     final cacheName = '${fileId}_$name';
     final audioFile = downloadKindForName(name) == DownloadKind.audio;
@@ -62,174 +83,208 @@ class FileBubble extends StatelessWidget {
       encrypted: fileId != null && _isEncryptedImage(name),
     );
 
-    final inner = Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ?previewWidget,
-          Row(
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        MediaCache.presence(cacheName),
+        MediaDownloadProgress.notifier(cacheName),
+        if (audioFile) MediaPlayback.instance.audioFile,
+        if (audioFile && AudioPlaybackController.isInitialized)
+          AudioPlaybackController.instance.playing,
+      ]),
+      builder: (context, _) {
+        final cached = MediaCache.presence(cacheName).value;
+        final progress = MediaDownloadProgress.notifier(cacheName).value;
+        final busy = _opening || progress != null;
+        final available = fileId != null && ctx.uploadProgress == null;
+        final status = progress != null
+            ? 'Загрузка ${(progress * 100).round()}%'
+            : _opening
+            ? 'Открытие…'
+            : cached
+            ? 'Открыть'
+            : available
+            ? 'Скачать'
+            : ctx.uploadProgress != null
+            ? 'Отправка…'
+            : 'Файл недоступен';
+        final inner = Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: isMe ? ctx.systemTint : ctx.cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: ctx.uploadProgress == null
-                    ? Icon(
-                        audioFile ? Symbols.audio_file : Symbols.description,
-                        color: isMe
-                            ? ctx.cs.onPrimaryContainer
-                            : ctx.cs.primary,
-                        size: 20,
-                      )
-                    : UploadProgressRing(
-                        progress: ctx.uploadProgress!,
-                        color: isMe
-                            ? ctx.cs.onPrimaryContainer
-                            : ctx.cs.primary,
-                        size: 38,
-                        strokeWidth: 2.4,
-                        iconSize: 14,
-                        padding: const EdgeInsets.all(4),
-                      ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      name,
-                      style: TextStyle(
-                        color: ctx.text,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        height: 1.2,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+              ?previewWidget,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: isMe ? ctx.systemTint : ctx.cs.primaryContainer,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(height: 2),
-                    ValueListenableBuilder<double?>(
-                      valueListenable: MediaDownloadProgress.notifier(
-                        cacheName,
-                      ),
-                      builder: (context, progress, _) => Text(
-                        progress != null
-                            ? '${(progress * 100).round()}% · $sizeStr'
-                            : sizeStr,
-                        style: TextStyle(
-                          color: ctx.dim,
-                          fontSize: 12,
-                          height: 1.2,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              ValueListenableBuilder<double?>(
-                valueListenable: MediaDownloadProgress.notifier(cacheName),
-                builder: (context, progress, _) {
-                  final iconColor = isMe
-                      ? ctx.cs.onPrimaryContainer
-                      : ctx.cs.primary;
-                  Widget circle(Widget child, VoidCallback? onTap) {
-                    return GestureDetector(
-                      onTap: onTap,
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: isMe
-                              ? ctx.systemTint
-                              : ctx.cs.surfaceContainerHighest,
-                          shape: BoxShape.circle,
-                        ),
-                        child: child,
-                      ),
-                    );
-                  }
-
-                  if (progress != null) {
-                    return circle(
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          value: progress > 0 ? progress : null,
-                          color: iconColor,
-                        ),
-                      ),
-                      null,
-                    );
-                  }
-
-                  return ValueListenableBuilder<bool>(
-                    valueListenable: MediaCache.presence(cacheName),
-                    builder: (context, cached, _) {
-                      if (!audioFile) {
-                        return circle(
-                          Icon(
-                            cached ? Symbols.check : Symbols.download,
-                            color: iconColor,
-                            size: 18,
+                    child: ctx.uploadProgress == null
+                        ? Icon(
+                            audioFile
+                                ? Symbols.audio_file
+                                : Symbols.description,
+                            color: isMe
+                                ? ctx.cs.onPrimaryContainer
+                                : ctx.cs.primary,
+                            size: 20,
+                          )
+                        : UploadProgressRing(
+                            progress: ctx.uploadProgress!,
+                            color: isMe
+                                ? ctx.cs.onPrimaryContainer
+                                : ctx.cs.primary,
+                            size: 38,
+                            strokeWidth: 2.4,
+                            iconSize: 14,
+                            padding: const EdgeInsets.all(4),
+                            onCancel: ctx.onCancelUpload,
                           ),
-                          () => _downloadFile(ctx.context, file, name),
-                        );
-                      }
-                      Widget button(IconData icon) => circle(
-                        Icon(icon, color: iconColor, size: 18, fill: 1),
-                        () => _playAudioFile(ctx.context, file, name),
-                      );
-                      return ValueListenableBuilder<AudioFileTrack?>(
-                        valueListenable: MediaPlayback.instance.audioFile,
-                        builder: (context, track, _) {
-                          if (!cached) return button(Symbols.download);
-                          if (track?.cacheName != cacheName ||
-                              !AudioPlaybackController.isInitialized) {
-                            return button(Symbols.play_arrow);
-                          }
-                          return ValueListenableBuilder<bool>(
-                            valueListenable:
-                                AudioPlaybackController.instance.playing,
-                            builder: (context, playing, _) => button(
-                              playing ? Symbols.pause : Symbols.play_arrow,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          name,
+                          style: TextStyle(
+                            color: ctx.text,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            height: 1.2,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$status · $sizeStr',
+                          style: TextStyle(
+                            color: ctx.dim,
+                            fontSize: 12,
+                            height: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  if (available)
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: isMe
+                            ? ctx.systemTint
+                            : ctx.cs.surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                      ),
+                      child: busy
+                          ? Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                value: progress != null && progress > 0
+                                    ? progress
+                                    : null,
+                                color: isMe
+                                    ? ctx.cs.onPrimaryContainer
+                                    : ctx.cs.primary,
+                              ),
+                            )
+                          : Icon(
+                              !cached
+                                  ? Symbols.download
+                                  : audioFile
+                                  ? MediaPlayback
+                                                    .instance
+                                                    .audioFile
+                                                    .value
+                                                    ?.cacheName ==
+                                                cacheName &&
+                                            AudioPlaybackController
+                                                .isInitialized &&
+                                            AudioPlaybackController
+                                                .instance
+                                                .playing
+                                                .value
+                                        ? Symbols.pause
+                                        : Symbols.play_arrow
+                                  : Symbols.open_in_new,
+                              color: isMe
+                                  ? ctx.cs.onPrimaryContainer
+                                  : ctx.cs.primary,
+                              size: 18,
                             ),
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
+                    ),
+                ],
               ),
+              if (audioFile)
+                _AudioFilePlaybackControl(
+                  cacheName: cacheName,
+                  color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
+                  textColor: ctx.dim,
+                ),
+              ctx.meta(),
             ],
           ),
-          if (audioFile)
-            _AudioFilePlaybackControl(
-              cacheName: cacheName,
-              color: isMe ? ctx.cs.onPrimaryContainer : ctx.cs.primary,
-              textColor: ctx.dim,
-            ),
-          ctx.meta(),
-        ],
-      ),
+        );
+        final body = widget.fill ? inner : IntrinsicWidth(child: inner);
+        final onTap = available ? () => _activate(name, cacheName) : null;
+        return Semantics(
+          button: true,
+          enabled: available && !busy,
+          label: name,
+          value: '$status · $sizeStr',
+          hint: available && !busy
+              ? cached
+                    ? 'Открыть файл'
+                    : 'Скачать и открыть файл'
+              : null,
+          onTap: busy ? null : onTap,
+          excludeSemantics: !audioFile,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            excludeFromSemantics: true,
+            onTap: onTap,
+            child: body,
+          ),
+        );
+      },
     );
-    final body = fill ? inner : IntrinsicWidth(child: inner);
-    if (!_isViewableImage(name)) return body;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _openInViewer(ctx.context, name, cacheName),
-      child: body,
-    );
+  }
+
+  Future<void> _activate(String name, String cacheName) async {
+    if (_opening || MediaDownloadProgress.notifier(cacheName).value != null) {
+      return;
+    }
+    setState(() => _opening = true);
+    try {
+      if (downloadKindForName(name) == DownloadKind.audio) {
+        await _playAudioFile(context, file, name);
+      } else if (_isViewableImage(name)) {
+        await _openInViewer(context, name, cacheName);
+      } else {
+        await _downloadFile(context, file, name);
+      }
+    } catch (_) {
+      if (mounted) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.fileBubbleOpenFailedReason,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
   }
 
   static const Set<String> _coverExtensions = {
@@ -247,8 +302,9 @@ class FileBubble extends StatelessWidget {
       name.toLowerCase().endsWith('.png') ||
       name.toLowerCase().endsWith('.kce');
 
-  Uint8List? get _sealedTicket =>
-      ctx.message.e2ee == CachedMessage.e2eeFile ? ctx.message.sealedText : null;
+  Uint8List? get _sealedTicket => ctx.message.e2ee == CachedMessage.e2eeFile
+      ? ctx.message.sealedText
+      : null;
 
   static bool _hasCover(String name) {
     final dot = name.lastIndexOf('.');
@@ -286,6 +342,7 @@ class FileBubble extends StatelessWidget {
   }
 
   Widget _encryptedPreview(EncryptedPhotoView? view, String previewUrl) {
+    final l10n = AppLocalizations.of(ctx.context)!;
     switch (view?.status) {
       case EncryptedPhotoStatus.decrypted:
         return _framed(
@@ -297,7 +354,7 @@ class FileBubble extends StatelessWidget {
             cacheWidth: 480,
             errorBuilder: (_, _, _) => _placeholder(
               icon: Symbols.broken_image,
-              label: 'Файл повреждён',
+              label: l10n.fileBubbleCorrupted,
             ),
           ),
         );
@@ -306,11 +363,11 @@ class FileBubble extends StatelessWidget {
             ? const SizedBox.shrink()
             : _networkPreview(previewUrl);
       case EncryptedPhotoStatus.wrongKey:
-        return _placeholder(icon: Symbols.lock, label: 'Неверный ключ');
+        return _placeholder(icon: Symbols.lock, label: l10n.fileBubbleWrongKey);
       case EncryptedPhotoStatus.locked:
         return _placeholder(
           icon: Symbols.lock,
-          label: 'Нажмите, чтобы открыть',
+          label: l10n.fileBubbleTapToOpen,
         );
       case null:
         return _placeholder();
@@ -386,17 +443,19 @@ class FileBubble extends StatelessWidget {
     if (fileId == null) return;
     Haptics.tap();
 
-    final wasCached = (await MediaCache.existing(cacheName)) != null;
+    File? local = await MediaCache.existing(cacheName);
+    final wasCached = local != null;
     if (!wasCached) MediaDownloadProgress.set(cacheName, 0);
-    File? local;
     try {
-      final url = await _fileUrl();
-      if (url != null && url.isNotEmpty) {
-        local = await MediaCache.getOrDownload(
-          cacheName,
-          url,
-          onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
-        );
+      if (local == null) {
+        final url = await _fileUrl();
+        if (url != null && url.isNotEmpty) {
+          local = await MediaCache.getOrDownload(
+            cacheName,
+            url,
+            onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
+          );
+        }
       }
     } finally {
       if (!wasCached) MediaDownloadProgress.set(cacheName, null);
@@ -404,7 +463,10 @@ class FileBubble extends StatelessWidget {
 
     if (!context.mounted) return;
     if (local == null) {
-      showCustomNotification(context, 'Не удалось загрузить файл');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.fileBubbleDownloadFailed,
+      );
       return;
     }
 
@@ -431,7 +493,7 @@ class FileBubble extends StatelessWidget {
     if (!context.mounted || shown == null) return;
 
     await Navigator.of(context).push(
-      MaterialPageRoute(
+      PhotoViewerRoute(
         builder: (_) => PhotoViewerScreen(
           photos: [PhotoAttachment(localPath: shown.path)],
           chatId: ctx.message.chatId,
@@ -471,10 +533,16 @@ class FileBubble extends StatelessWidget {
       case EncryptedPhotoStatus.plain:
         return local;
       case EncryptedPhotoStatus.wrongKey:
-        showCustomNotification(context, 'Неверный ключ');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.fileBubbleWrongKey,
+        );
         return null;
       case EncryptedPhotoStatus.locked:
-        showCustomNotification(context, 'Не удалось расшифровать фото');
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.fileBubbleDecryptPhotoFailed,
+        );
         return null;
     }
   }
@@ -486,39 +554,42 @@ class FileBubble extends StatelessWidget {
   ) async {
     final fileId = file.fileId;
     if (fileId == null) {
-      showCustomNotification(context, 'Не удалось определить файл');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.fileBubbleUnknownFile,
+      );
       return;
     }
     Haptics.tap();
 
     final cacheName = '${fileId}_$name';
-    final cached = (await MediaCache.existing(cacheName)) != null;
+    final cached = MediaCache.presence(cacheName).value;
     final kind = downloadKindForName(name);
 
     if (!cached) MediaDownloadProgress.set(cacheName, 0);
-    final result = await openCachedFile(
-      cacheName,
-      () => messagesModule.getFileUrl(
-        messageId: ctx.message.id,
-        chatId: ctx.message.chatId,
-        fileId: fileId,
-      ),
-      onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
-      onReady: () {
-        if (!cached) MediaDownloadProgress.set(cacheName, null);
-      },
-      download: DownloadMetadata(
-        cacheName: cacheName,
-        name: name,
-        kind: kind,
-        sourceName: ctx.chatName ?? '',
-        thumbnailUrl: _thumbnailUrl,
-        expectedSize: file.size ?? 0,
-        chatId: ctx.message.chatId,
-        messageId: ctx.message.id,
-        messageTime: ctx.message.time,
-      ),
-    );
+    final result = await widget
+        .openFile(
+          cacheName,
+          () => messagesModule.getFileUrl(
+            messageId: ctx.message.id,
+            chatId: ctx.message.chatId,
+            fileId: fileId,
+          ),
+          onProgress: (p) => MediaDownloadProgress.set(cacheName, p),
+          onReady: () => MediaDownloadProgress.set(cacheName, null),
+          download: DownloadMetadata(
+            cacheName: cacheName,
+            name: name,
+            kind: kind,
+            sourceName: ctx.chatName ?? '',
+            thumbnailUrl: _thumbnailUrl,
+            expectedSize: file.size ?? 0,
+            chatId: ctx.message.chatId,
+            messageId: ctx.message.id,
+            messageTime: ctx.message.time,
+          ),
+        )
+        .whenComplete(() => MediaDownloadProgress.set(cacheName, null));
     if (!context.mounted) return;
     final path = result.path;
     if (result.noAppToOpen && path != null) {
@@ -526,9 +597,10 @@ class FileBubble extends StatelessWidget {
       return;
     }
     if (!result.ok) {
+      final l10n = AppLocalizations.of(context)!;
       showCustomNotification(
         context,
-        'Ошибка загрузки: ${result.error ?? 'не удалось открыть'}',
+        l10n.securityLoadError(result.error ?? l10n.fileBubbleOpenFailedReason),
       );
     }
   }
@@ -540,7 +612,10 @@ class FileBubble extends StatelessWidget {
   ) async {
     final fileId = file.fileId;
     if (fileId == null) {
-      showCustomNotification(context, 'Не удалось определить файл');
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.fileBubbleUnknownFile,
+      );
       return;
     }
     Haptics.tap();
@@ -557,9 +632,7 @@ class FileBubble extends StatelessWidget {
       cacheName,
       _fileUrl,
       onProgress: (value) => MediaDownloadProgress.set(cacheName, value),
-      onReady: () {
-        if (!cached) MediaDownloadProgress.set(cacheName, null);
-      },
+      onReady: () => MediaDownloadProgress.set(cacheName, null),
       download: DownloadMetadata(
         cacheName: cacheName,
         name: name,
@@ -573,14 +646,16 @@ class FileBubble extends StatelessWidget {
       ),
     );
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
     if (!result.ok || result.path == null) {
       showCustomNotification(
         context,
-        'Ошибка загрузки: ${result.error ?? 'не удалось загрузить'}',
+        l10n.securityLoadError(
+          result.error ?? l10n.fileBubbleDownloadFailedReason,
+        ),
       );
       return;
     }
-    final l10n = AppLocalizations.of(context)!;
     try {
       await playback.activateAudioFile(
         AudioFileTrack(
@@ -619,7 +694,8 @@ class _AudioFilePlaybackControl extends StatelessWidget {
     return ValueListenableBuilder<AudioFileTrack?>(
       valueListenable: MediaPlayback.instance.audioFile,
       builder: (context, track, _) =>
-          track?.cacheName != cacheName || !AudioPlaybackController.isInitialized
+          track?.cacheName != cacheName ||
+              !AudioPlaybackController.isInitialized
           ? const SizedBox.shrink()
           : _AudioFileScrubber(color: color, textColor: textColor),
     );
@@ -648,7 +724,10 @@ class _AudioFileScrubberState extends State<_AudioFileScrubber> {
         final total = audio.duration.value.inMilliseconds;
         final elapsed = _dragMilliseconds != null
             ? _dragMilliseconds!.round()
-            : audio.position.value.inMilliseconds.clamp(0, total > 0 ? total : 0);
+            : audio.position.value.inMilliseconds.clamp(
+                0,
+                total > 0 ? total : 0,
+              );
         return Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Row(

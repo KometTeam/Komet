@@ -35,20 +35,65 @@ class PerfMark {
   const PerfMark(this.time, this.label);
 }
 
+class FrameTimeDistribution {
+  final double p50;
+  final double p95;
+  final double p99;
+  final double maximum;
+  final int over8Ms;
+  final int over16Ms;
+  final int over33Ms;
+
+  const FrameTimeDistribution({
+    this.p50 = 0,
+    this.p95 = 0,
+    this.p99 = 0,
+    this.maximum = 0,
+    this.over8Ms = 0,
+    this.over16Ms = 0,
+    this.over33Ms = 0,
+  });
+
+  factory FrameTimeDistribution.fromValues(Iterable<double> values) {
+    final sorted = values.toList()..sort();
+    if (sorted.isEmpty) return const FrameTimeDistribution();
+    double percentile(double fraction) =>
+        sorted[math.max(0, (sorted.length * fraction).ceil() - 1)];
+    return FrameTimeDistribution(
+      p50: percentile(0.50),
+      p95: percentile(0.95),
+      p99: percentile(0.99),
+      maximum: sorted.last,
+      over8Ms: sorted.where((value) => value > 1000 / 120).length,
+      over16Ms: sorted.where((value) => value > 1000 / 60).length,
+      over33Ms: sorted.where((value) => value > 1000 / 30).length,
+    );
+  }
+
+  String get summary =>
+      'p50=${p50.toStringAsFixed(2)}, p95=${p95.toStringAsFixed(2)}, '
+      'p99=${p99.toStringAsFixed(2)}, max=${maximum.toStringAsFixed(2)} ms; '
+      '>8.33ms=$over8Ms, >16.67ms=$over16Ms, >33.33ms=$over33Ms';
+}
+
 class PerfStats {
   final double avgMs;
   final double worstMs;
-  final double fps;
   final int sampleCount;
+  final FrameTimeDistribution build;
+  final FrameTimeDistribution raster;
+  final FrameTimeDistribution total;
 
   const PerfStats({
     required this.avgMs,
     required this.worstMs,
-    required this.fps,
     required this.sampleCount,
+    this.build = const FrameTimeDistribution(),
+    this.raster = const FrameTimeDistribution(),
+    this.total = const FrameTimeDistribution(),
   });
 
-  static const empty = PerfStats(avgMs: 0, worstMs: 0, fps: 0, sampleCount: 0);
+  static const empty = PerfStats(avgMs: 0, worstMs: 0, sampleCount: 0);
 }
 
 class PerformanceMonitor {
@@ -126,7 +171,9 @@ class PerformanceMonitor {
       final buildMs = t.buildDuration.inMicroseconds / 1000;
       final rasterMs = t.rasterDuration.inMicroseconds / 1000;
       final totalMs = t.totalSpan.inMicroseconds / 1000;
-      _samples.addLast(PerfSample(now, buildMs, rasterMs, totalMs, _currentContext));
+      _samples.addLast(
+        PerfSample(now, buildMs, rasterMs, totalMs, _currentContext),
+      );
       if (totalMs > jankThresholdMs) _jankCount++;
       if (totalMs > bigJankThresholdMs) _bigJankCount++;
     }
@@ -167,11 +214,12 @@ class PerformanceMonitor {
       if (s.totalMs > worst) worst = s.totalMs;
     }
     final avg = sum / recent.length;
-    final fps = avg > 0 ? math.min(60.0, 1000 / avg) : 60.0;
     return PerfStats(
       avgMs: avg,
       worstMs: worst,
-      fps: fps,
+      build: FrameTimeDistribution.fromValues(recent.map((s) => s.buildMs)),
+      raster: FrameTimeDistribution.fromValues(recent.map((s) => s.rasterMs)),
+      total: FrameTimeDistribution.fromValues(recent.map((s) => s.totalMs)),
       sampleCount: recent.length,
     );
   }
@@ -197,11 +245,19 @@ class PerformanceMonitor {
       'jank(>${jankThresholdMs}ms): $_jankCount, '
       'big jank(>${bigJankThresholdMs}ms): $_bigJankCount',
     );
+    buffer.writeln('buffer build: ${stats.build.summary}');
+    buffer.writeln('buffer raster: ${stats.raster.summary}');
+    buffer.writeln('buffer totalSpan: ${stats.total.summary}');
+    buffer.writeln(
+      'Threshold counts are timing samples, not measured display FPS.',
+    );
     final worst = worstContexts();
     if (worst.isNotEmpty) {
       buffer.writeln('worst contexts by jank-time:');
       for (final e in worst) {
-        buffer.writeln('  ${e.key}: ${e.value.toStringAsFixed(1)}ms over budget');
+        buffer.writeln(
+          '  ${e.key}: ${e.value.toStringAsFixed(1)}ms over budget',
+        );
       }
     }
     if (_marks.isNotEmpty) {

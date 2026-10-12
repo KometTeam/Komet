@@ -6,6 +6,7 @@ import 'package:komet/l10n/app_localizations.dart';
 
 import '../../../main.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/hint_bubble.dart';
 import '../../widgets/labeled_settings_field.dart';
 import '../../widgets/sheet_helpers.dart';
 
@@ -17,6 +18,7 @@ class ProxySettingsSheet extends StatefulWidget {
 }
 
 class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
+  final _hostFieldKey = GlobalKey();
   final _hostController = TextEditingController();
   final _portController = TextEditingController(text: '1080');
   final _usernameController = TextEditingController();
@@ -52,7 +54,10 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
     final host = _hostController.text.trim();
     final port = int.tryParse(_portController.text.trim());
     if (host.isEmpty || port == null || port < 1 || port > 65535) {
-      showCustomNotification(context, l10n.proxyInvalidHostOrPort);
+      showHintBubble(
+        _hostFieldKey.currentContext ?? context,
+        l10n.proxyInvalidHostOrPort,
+      );
       return;
     }
 
@@ -159,6 +164,7 @@ class _ProxySettingsSheetState extends State<ProxySettingsSheet> {
                     ? Column(
                         children: [
                           LabeledSettingsField(
+                            key: _hostFieldKey,
                             controller: _hostController,
                             label: l10n.proxyHostLabel,
                             hintText: '127.0.0.1',

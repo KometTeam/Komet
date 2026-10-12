@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'sheet_helpers.dart';
 import '../../core/config/app_shape.dart';
+import '../../l10n/app_localizations.dart';
 
 class InfoActionSheetItem {
   final IconData icon;
@@ -31,7 +32,7 @@ Future<bool> showInfoActionSheet(
   required String title,
   String? subtitle,
   List<InfoActionSheetItem> items = const [],
-  String confirmLabel = 'ОК',
+  String? confirmLabel,
   Duration confirmDelay = Duration.zero,
   String? seenKey,
 }) async {
@@ -60,7 +61,7 @@ Future<bool> showInfoActionSheet(
       title: title,
       subtitle: subtitle,
       items: items,
-      confirmLabel: confirmLabel,
+      confirmLabel: confirmLabel ?? AppLocalizations.of(ctx)!.photoEditorOk,
       confirmDelay: confirmDelay,
     ),
   );

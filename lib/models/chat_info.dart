@@ -1,3 +1,5 @@
+import 'admin_rights.dart';
+
 // #***! расширенная карточка чата
 class ChatInfo {
   final Map<String, dynamic> raw;
@@ -42,18 +44,43 @@ class ChatInfo {
 
   // #***! у админа бывает подпись должность
   String? adminAlias(int id) {
-    final source = raw['adminParticipants'];
-    if (source is! Map) return null;
-    final entry = source[id.toString()] ?? source[id];
-    if (entry is! Map) return null;
+    final entry = _adminEntry(id);
+    if (entry == null) return null;
     final alias = entry['alias'];
     if (alias is String && alias.trim().isNotEmpty) return alias.trim();
     return null;
   }
 
+  AdminRights rightsOf(int id) {
+    if (isOwner(id)) {
+      return const AdminRights(AdminRights.ownerBits);
+    }
+    final permissions = _adminEntry(id)?['permissions'];
+    return AdminRights(permissions is int ? permissions : 0);
+  }
+
+  bool can(int id, AdminRight right) =>
+      isOwner(id) || (isAdmin(id) && rightsOf(id).has(right));
+
+  Map<dynamic, dynamic>? _adminEntry(int id) {
+    final source = raw['adminParticipants'];
+    if (source is! Map) return null;
+    final entry = source[id.toString()] ?? source[id];
+    return entry is Map ? entry : null;
+  }
+
   int? get participantsCount => raw['participantsCount'] as int?;
   int? get blockedParticipantsCount => raw['blockedParticipantsCount'] as int?;
+  // #***! счётчик заявок на вступление, приходит в объекте чата
+  int get pendingJoinRequestsCount =>
+      (raw['pendingJoinRequestsCount'] as int?) ?? 0;
   String? get link => raw['link'] as String?;
+  bool get joinRequests => option('JOIN_REQUEST');
+  bool get commentsEnabled => option('COMMENTS');
+  String? get title => raw['title'] as String?;
+  String? get iconUrl => raw['baseIconUrl'] as String?;
+  AdminChatKind get adminKind =>
+      raw['type'] == 'CHANNEL' ? AdminChatKind.channel : AdminChatKind.group;
   String? get description => raw['description'] as String?;
 
   // #***! ключи то int то строка, приводим к int

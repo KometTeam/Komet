@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'package:komet/backend/modules/contacts.dart';
-import 'package:komet/core/config/debug_test.dart';
+import 'package:komet/core/config/launch_flags.dart';
 import 'package:komet/core/contacts/contact_labels.dart';
 import 'package:komet/core/storage/app_database.dart';
 import 'package:komet/frontend/widgets/komet_avatar.dart';
 import 'package:komet/frontend/widgets/small_spinner.dart';
 import 'package:komet/frontend/widgets/springy_tap.dart';
 import 'package:komet/l10n/app_localizations.dart';
+import '../official_name.dart';
 
 class ContactPickerPage extends StatefulWidget {
   final double bottomReserve;
@@ -53,7 +54,7 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
   }
 
   Future<List<CachedContact>> _fetch() async {
-    if (DebugTest.enabled) {
+    if (LaunchFlags.debugTest) {
       return ContactsModule.debugContacts()
         ..sort((a, b) => a.firstName.compareTo(b.firstName));
     }
@@ -192,10 +193,9 @@ class _ContactPickerPageState extends State<ContactPickerPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      OfficialName(
+                        contactId: contact.id,
+                        text: name,
                         style: TextStyle(
                           color: cs.onSurface,
                           fontSize: 15,

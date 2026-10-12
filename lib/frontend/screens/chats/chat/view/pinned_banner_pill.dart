@@ -13,8 +13,7 @@ Widget? buildPinnedMessageBanner({
   required bool liquidChrome,
   required BackdropKey? backdropKey,
   required VoidCallback onTap,
-  required int myId,
-  required VoidCallback onUnpinRequested,
+  required VoidCallback? onUnpinRequested,
 }) {
   final pinned = chat;
   if (pinned == null || !pinned.hasPinnedMessage) return null;
@@ -27,7 +26,7 @@ Widget? buildPinnedMessageBanner({
     liquid: liquidChrome,
     backdropKey: backdropKey,
     onTap: onTap,
-    onUnpin: pinned.canPinMessages(myId) ? onUnpinRequested : null,
+    onUnpin: onUnpinRequested,
   );
 }
 
@@ -37,8 +36,7 @@ Widget buildPinnedAndPill({
   required bool liquidChrome,
   required BackdropKey? backdropKey,
   required VoidCallback onTap,
-  required int myId,
-  required VoidCallback onUnpinRequested,
+  required VoidCallback? onUnpinRequested,
 }) {
   return ValueListenableBuilder<PlaybackKind?>(
     valueListenable: MediaPlayback.instance.primary,
@@ -54,7 +52,6 @@ Widget buildPinnedAndPill({
         liquidChrome: liquidChrome,
         backdropKey: backdropKey,
         onTap: onTap,
-        myId: myId,
         onUnpinRequested: onUnpinRequested,
       );
       return Column(

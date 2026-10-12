@@ -15,20 +15,21 @@ import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
 import '../../../core/config/app_colors.dart';
-import '../../../core/config/call_no_mute.dart';
+import '../../../core/config/launch_flags.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/screen_wake.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/official_name.dart';
 import '../../widgets/call_video_view.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
-import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/sheet_helpers.dart';
-import '../../widgets/small_spinner.dart';
+import 'call_controls.dart';
 import 'call_mic_sheet.dart';
 import 'call_participants_sheet.dart';
 import 'komet_hub.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../core/utils/seed_scheme.dart';
 
 class CallScreen extends StatefulWidget {
   final String name;
@@ -228,10 +229,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     final seed = Theme.of(context).colorScheme.primary;
     if (_seedKey != seed || _scheme == null) {
       _seedKey = seed;
-      _scheme = ColorScheme.fromSeed(
-        seedColor: seed,
-        brightness: Brightness.dark,
-      );
+      _scheme = schemeFromSeed(seed, Brightness.dark);
     }
     return _scheme!;
   }
@@ -399,16 +397,34 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _switchCamera() async {
+    final session = _session;
+    if (session == null || _videoBusy) return;
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _videoBusy = true);
+    try {
+      await session.switchCamera();
+    } catch (e) {
+      if (mounted) {
+        showCustomNotification(context, l10n.callCameraUnavailable(e));
+      }
+    } finally {
+      _syncLocalPreview();
+      if (mounted) setState(() => _videoBusy = false);
+    }
+  }
+
   Future<void> _toggleScreen() async {
     final session = _session;
     if (session == null || _videoBusy) return;
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _videoBusy = true);
     await WidgetsBinding.instance.endOfFrame;
     try {
       await session.setScreenSharing(!session.localScreen);
     } catch (e) {
       if (mounted) {
-        showCustomNotification(context, 'Трансляция не запустилась: $e');
+        showCustomNotification(context, l10n.callScreenShareFailed('$e'));
       }
     } finally {
       _syncLocalPreview();
@@ -468,6 +484,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
               ? info!.name!
               : l10n.callParticipantFallback,
           avatarUrl: info?.avatar,
+          contactId: ext,
         );
       },
     );
@@ -610,18 +627,17 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     } else if (count <= 1) {
       subtitle = l10n.callGroupWaitingParticipants;
     } else {
-      subtitle =
-          '$count ${pluralRu(count, 'участник', 'участника', 'участников')}';
+      subtitle = l10n.chatCallParticipants(count);
     }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
-          Text(
-            _displayName,
+          OfficialName(
+            contactId: _session?.peerUserId ?? 0,
+            text: _displayName,
             textAlign: TextAlign.center,
             maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 24,
@@ -1179,11 +1195,12 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   Widget _buildName(ColorScheme cs) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Text(
-        _displayName,
+      child: OfficialName(
+        contactId: _session?.peerUserId ?? 0,
+        text: _displayName,
         textAlign: TextAlign.center,
+        iconSize: 18,
         maxLines: 2,
-        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: cs.onSurface,
           fontSize: 30,
@@ -1259,14 +1276,14 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _CallButton(
+          CallButton(
             icon: Symbols.call_end,
             label: l10n.callDecline,
             background: kDangerRed,
             foreground: Colors.white,
             onTap: _decline,
           ),
-          _CallButton(
+          CallButton(
             icon: Symbols.call,
             label: l10n.callAccept,
             background: kSuccessGreen,
@@ -1282,57 +1299,62 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     final l10n = AppLocalizations.of(context)!;
     final video = _session?.localVideo == true;
     final screen = _session?.localScreen == true;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _CallButton(
-            icon: _isSpeaker ? Symbols.volume_up : Symbols.volume_down,
-            label: l10n.callSpeaker,
-            background: _isSpeaker ? cs.primary : cs.surfaceContainerHighest,
-            foreground: _isSpeaker ? cs.onPrimary : cs.onSurface,
-            onTap: _toggleSpeaker,
-          ),
-          _CallButton(
-            icon: Symbols.videocam,
-            slashedIcon: Symbols.videocam_off,
-            slashed: !video,
-            label: l10n.callVideoLabel,
-            background: video ? cs.primary : cs.surfaceContainerHighest,
-            foreground: video ? cs.onPrimary : cs.onSurface,
+    return CallControlBar(
+      children: [
+        CallButton(
+          icon: _isSpeaker ? Symbols.volume_up : Symbols.volume_down,
+          label: l10n.callSpeaker,
+          background: _isSpeaker ? cs.primary : cs.surfaceContainerHighest,
+          foreground: _isSpeaker ? cs.onPrimary : cs.onSurface,
+          onTap: _toggleSpeaker,
+        ),
+        CallButton(
+          icon: Symbols.videocam,
+          slashedIcon: Symbols.videocam_off,
+          slashed: !video,
+          label: l10n.callVideoLabel,
+          background: video ? cs.primary : cs.surfaceContainerHighest,
+          foreground: video ? cs.onPrimary : cs.onSurface,
+          busy: _videoBusy,
+          onTap: _toggleVideo,
+        ),
+        if (video)
+          CallButton(
+            icon: Symbols.cameraswitch,
+            label: l10n.callSwitchCamera,
+            background: cs.surfaceContainerHighest,
+            foreground: cs.onSurface,
             busy: _videoBusy,
-            onTap: _toggleVideo,
+            onTap: _switchCamera,
           ),
-          _CallButton(
-            icon: Symbols.screen_share,
-            label: l10n.callScreenLabel,
-            background: screen ? cs.primary : cs.surfaceContainerHighest,
-            foreground: screen ? cs.onPrimary : cs.onSurface,
-            busy: _videoBusy,
-            onTap: _toggleScreen,
-          ),
-          _CallButton(
-            icon: Symbols.mic,
-            slashedIcon: Symbols.mic_off,
-            slashed: _isMuted,
-            label: _isMuted
-                ? (CallNoMute.enabled ? l10n.callMicStillLive : l10n.callUnmute)
-                : l10n.callMute,
-            background: _isMuted ? cs.primary : cs.surfaceContainerHighest,
-            foreground: _isMuted ? cs.onPrimary : cs.onSurface,
-            onTap: _toggleMute,
-            onLongPress: _showMicrophones,
-          ),
-          _CallButton(
-            icon: Symbols.call_end,
-            label: l10n.callEndButton,
-            background: kDangerRed,
-            foreground: Colors.white,
-            onTap: _hangup,
-          ),
-        ],
-      ),
+        CallButton(
+          icon: Symbols.screen_share,
+          label: l10n.callScreenLabel,
+          background: screen ? cs.primary : cs.surfaceContainerHighest,
+          foreground: screen ? cs.onPrimary : cs.onSurface,
+          busy: _videoBusy,
+          onTap: _toggleScreen,
+        ),
+        CallButton(
+          icon: Symbols.mic,
+          slashedIcon: Symbols.mic_off,
+          slashed: _isMuted,
+          label: _isMuted
+              ? (LaunchFlags.noMute ? l10n.callMicStillLive : l10n.callUnmute)
+              : l10n.callMute,
+          background: _isMuted ? cs.primary : cs.surfaceContainerHighest,
+          foreground: _isMuted ? cs.onPrimary : cs.onSurface,
+          onTap: _toggleMute,
+          onLongPress: _showMicrophones,
+        ),
+        CallButton(
+          icon: Symbols.call_end,
+          label: l10n.callEndButton,
+          background: kDangerRed,
+          foreground: Colors.white,
+          onTap: _hangup,
+        ),
+      ],
     );
   }
 }
@@ -1376,80 +1398,6 @@ class _CallingDots extends StatelessWidget {
           }),
         );
       },
-    );
-  }
-}
-
-class _CallButton extends StatelessWidget {
-  final IconData icon;
-  final IconData? slashedIcon;
-  final bool slashed;
-  final String label;
-  final Color background;
-  final Color foreground;
-  final VoidCallback onTap;
-  final VoidCallback? onLongPress;
-  final bool busy;
-
-  const _CallButton({
-    required this.icon,
-    required this.label,
-    required this.background,
-    required this.foreground,
-    required this.onTap,
-    this.onLongPress,
-    this.slashedIcon,
-    this.slashed = false,
-    this.busy = false,
-  });
-
-  Widget _buildIcon() {
-    final crossed = slashedIcon;
-    if (crossed == null) {
-      return Icon(icon, color: foreground, size: 26, fill: 1);
-    }
-    return AnimatedSlashIcon(
-      icon: icon,
-      slashedIcon: crossed,
-      slashed: slashed,
-      color: foreground,
-      size: 26,
-      fill: 1,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 62,
-          height: 62,
-          child: GlossyPill(
-            color: background,
-            borderRadius: BorderRadius.circular(31),
-            onTap: busy ? null : onTap,
-            onLongPress: busy ? null : onLongPress,
-            depth: 9,
-            child: Center(
-              child: busy
-                  ? SmallSpinner(size: 22, color: foreground)
-                  : _buildIcon(),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: TextStyle(
-            color: cs.onSurfaceVariant,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
     );
   }
 }

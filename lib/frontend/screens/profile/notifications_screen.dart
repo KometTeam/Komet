@@ -3,8 +3,10 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../../core/config/app_badge.dart';
 import '../../../core/push/fkm_bridge.dart';
 import '../../../core/push/fkm_controller.dart';
+import '../../../core/push/launcher_badge.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../core/config/build_profile.dart';
@@ -268,6 +270,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                     ],
                   ),
                   const SizedBox(height: 20),
+                  const _LauncherBadgeSection(),
                   SectionHeader(
                     l10n.notificationsAdditionalSectionTitle,
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
@@ -317,6 +320,67 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 ],
               ),
       ),
+    );
+  }
+}
+
+class _LauncherBadgeSection extends StatelessWidget {
+  const _LauncherBadgeSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return ValueListenableBuilder<bool>(
+      valueListenable: LauncherBadge.instance.supported,
+      builder: (context, supported, _) {
+        if (!supported) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SectionHeader(
+              l10n.notificationsBadgeSectionTitle,
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              fontSize: 14,
+            ),
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                AppBadge.enabled.current,
+                AppBadge.includeMuted.current,
+                AppBadge.countMessages.current,
+              ]),
+              builder: (context, _) {
+                final enabled = AppBadge.enabled.current.value;
+                return SettingsCard(
+                  children: [
+                    SettingsToggleTile(
+                      icon: Symbols.app_badging,
+                      label: l10n.notificationsBadgeLabel,
+                      value: enabled,
+                      onChanged: AppBadge.enabled.save,
+                    ),
+                    SettingsToggleTile(
+                      icon: Symbols.notifications_off,
+                      label: l10n.notificationsBadgeMutedLabel,
+                      value: AppBadge.includeMuted.current.value,
+                      enabled: enabled,
+                      onChanged: AppBadge.includeMuted.save,
+                    ),
+                    SettingsToggleTile(
+                      icon: Symbols.mark_chat_unread,
+                      label: l10n.notificationsBadgeMessagesLabel,
+                      subtitle: l10n.notificationsBadgeMessagesSubtitle,
+                      value: AppBadge.countMessages.current.value,
+                      enabled: enabled,
+                      onChanged: AppBadge.countMessages.save,
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        );
+      },
     );
   }
 }

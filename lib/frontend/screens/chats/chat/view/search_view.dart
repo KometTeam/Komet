@@ -12,6 +12,7 @@ import 'package:komet/frontend/widgets/komet_avatar.dart';
 import 'package:komet/frontend/widgets/small_spinner.dart';
 import 'package:komet/frontend/screens/chats/chat/chat_search_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/message_search_result.dart';
+import 'package:komet/l10n/app_localizations.dart';
 import '../../../../../core/config/app_fonts.dart';
 
 class SearchTopBar extends StatelessWidget {
@@ -44,7 +45,7 @@ class SearchTopBar extends StatelessWidget {
         fontFamily: displayFontOf(context),
       ),
       decoration: InputDecoration(
-        hintText: 'Поиск...',
+        hintText: AppLocalizations.of(context)!.searchViewHint,
         hintStyle: TextStyle(
           color: cs.onSurfaceVariant,
           fontSize: 16,
@@ -186,7 +187,7 @@ class SearchOverlay extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'Поиск ничего не вернул...',
+                        AppLocalizations.of(context)!.searchViewNoResults,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
@@ -204,7 +205,10 @@ class SearchOverlay extends StatelessWidget {
 
   Widget _tile(BuildContext context, MessageSearchResult r) {
     final name = senderName(r.senderId);
-    final date = formatDateWords(DateTime.fromMillisecondsSinceEpoch(r.time));
+    final date = formatDateWords(
+      AppLocalizations.of(context)!,
+      DateTime.fromMillisecondsSinceEpoch(r.time),
+    );
     return InkWell(
       onTap: () => onOpenResult(r),
       child: Padding(

@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
-import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
 import '../calls/active_call.dart';
 import 'audio_file_track.dart';
 import 'background_audio_handler.dart';
+import 'desktop_audio_backend.dart';
 
 // #***! плеер музыки с управлением из шторки
 class AudioPlaybackController {
@@ -67,7 +67,7 @@ class AudioPlaybackController {
   }
 
   static Future<AudioPlaybackController> _create(String channelName) async {
-    JustAudioMediaKit.ensureInitialized(linux: true, windows: true);
+    DesktopAudioBackend.ensureRegistered();
     final handler = switch (defaultTargetPlatform) {
       TargetPlatform.windows ||
       TargetPlatform.linux => BackgroundAudioHandler(),

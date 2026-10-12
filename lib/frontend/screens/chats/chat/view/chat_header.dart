@@ -17,6 +17,8 @@ import 'package:komet/frontend/widgets/profile_hero.dart';
 import 'package:komet/main.dart' show storiesModule;
 import 'package:komet/models/story.dart';
 import '../../../../../core/config/app_fonts.dart';
+import '../../../../widgets/local_avatar_builder.dart';
+import '../../../../widgets/verified_mark.dart';
 
 class ChatHeaderRow extends StatelessWidget {
   final bool glossy;
@@ -148,27 +150,32 @@ class ChatHeaderRow extends StatelessWidget {
                                 size: d * 0.5,
                               ),
                             )
-                          : imageUrl.isNotEmpty
-                          ? CircleAvatar(
-                              radius: d / 2,
-                              backgroundImage: CachedNetworkImageProvider(
-                                imageUrl,
-                                maxWidth: 144,
-                                maxHeight: 144,
-                              ),
-                            )
-                          : CircleAvatar(
-                              radius: d / 2,
-                              backgroundColor: cs.primaryContainer,
-                              child: Text(
-                                name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                style: TextStyle(
-                                  color: cs.onPrimaryContainer,
-                                  fontSize: d * 0.36,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: displayFontOf(context),
-                                ),
-                              ),
+                          : LocalAvatarBuilder(
+                              userId: _peerId,
+                              builder: (context, local) {
+                                final photo = _photo(local);
+                                if (photo != null) {
+                                  return CircleAvatar(
+                                    radius: d / 2,
+                                    backgroundImage: photo,
+                                  );
+                                }
+                                return CircleAvatar(
+                                  radius: d / 2,
+                                  backgroundColor: cs.primaryContainer,
+                                  child: Text(
+                                    name.isNotEmpty
+                                        ? name[0].toUpperCase()
+                                        : '?',
+                                    style: TextStyle(
+                                      color: cs.onPrimaryContainer,
+                                      fontSize: d * 0.36,
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: displayFontOf(context),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                     ),
                   ),
@@ -196,13 +203,7 @@ class ChatHeaderRow extends StatelessWidget {
                             ),
                             if (isOfficial) ...[
                               const SizedBox(width: 4),
-                              Icon(
-                                Symbols.verified,
-                                color: cs.primary,
-                                size: 16,
-                                weight: 600,
-                                fill: 1,
-                              ),
+                              VerifiedMark(color: cs.primary, size: 16),
                             ],
                           ],
                         ),
@@ -325,25 +326,28 @@ class ChatHeaderRow extends StatelessWidget {
                               size: d * 0.5,
                             ),
                           )
-                        : imageUrl.isNotEmpty
-                        ? CircleAvatar(
-                            radius: d / 2,
-                            backgroundImage: CachedNetworkImageProvider(
-                              imageUrl,
-                              maxWidth: 144,
-                              maxHeight: 144,
-                            ),
-                          )
-                        : CircleAvatar(
-                            radius: d / 2,
-                            backgroundColor: cs.primaryContainer,
-                            child: Text(
-                              name.isNotEmpty ? name[0].toUpperCase() : '?',
-                              style: TextStyle(
-                                color: cs.onPrimaryContainer,
-                                fontSize: d / 3,
-                              ),
-                            ),
+                        : LocalAvatarBuilder(
+                            userId: _peerId,
+                            builder: (context, local) {
+                              final photo = _photo(local);
+                              if (photo != null) {
+                                return CircleAvatar(
+                                  radius: d / 2,
+                                  backgroundImage: photo,
+                                );
+                              }
+                              return CircleAvatar(
+                                radius: d / 2,
+                                backgroundColor: cs.primaryContainer,
+                                child: Text(
+                                  name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                  style: TextStyle(
+                                    color: cs.onPrimaryContainer,
+                                    fontSize: d / 3,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                   ),
                   dotSize: 11,
@@ -372,13 +376,7 @@ class ChatHeaderRow extends StatelessWidget {
                           ),
                           if (isOfficial) ...[
                             const SizedBox(width: 4),
-                            Icon(
-                              Symbols.verified,
-                              color: cs.primary,
-                              size: 16,
-                              weight: 600,
-                              fill: 1,
-                            ),
+                            VerifiedMark(color: cs.primary, size: 16),
                           ],
                         ],
                       ),
@@ -431,6 +429,16 @@ class ChatHeaderRow extends StatelessWidget {
   }
 
   bool get _isSavedMessages => chatId == 0;
+
+  int get _peerId => chatType == 'DIALOG' && !_isSavedMessages && myId != 0
+      ? chatId ^ myId
+      : 0;
+
+  ImageProvider? _photo(ImageProvider? local) {
+    if (local != null) return ResizeImage(local, width: 144, height: 144);
+    if (imageUrl.isEmpty) return null;
+    return CachedNetworkImageProvider(imageUrl, maxWidth: 144, maxHeight: 144);
+  }
 
   int get _storyOwnerId =>
       chatType == 'DIALOG' ? (_isSavedMessages ? 0 : chatId ^ myId) : chatId;

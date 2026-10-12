@@ -3,12 +3,12 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
 
+import '../config/launch_flags.dart';
 import 'debug_session_log.dart';
 
 // #***! уровень логов задаётся при сборке
 Level _minimumLogLevel() {
-  const raw = String.fromEnvironment('KOMET_LOG_LEVEL', defaultValue: '');
-  switch (raw.toLowerCase()) {
+  switch (LaunchFlags.logLevel.toLowerCase()) {
     case 'trace':
       return Level.trace;
     case 'debug':
@@ -36,9 +36,31 @@ Level _minimumLogLevel() {
 
 LogFilter _logFilter() {
   if (kReleaseMode) {
-    return ProductionFilter();
+    return LaunchDebugFilter(ProductionFilter());
   }
-  return DevelopmentFilter();
+  return LaunchDebugFilter(DevelopmentFilter());
+}
+
+class LaunchDebugFilter extends LogFilter {
+  LaunchDebugFilter(this._base);
+
+  final LogFilter _base;
+
+  @override
+  Level? get level => _base.level;
+
+  @override
+  set level(Level? value) => _base.level = value;
+
+  @override
+  Future<void> init() => _base.init();
+
+  @override
+  bool shouldLog(LogEvent event) =>
+      LaunchFlags.debug || _base.shouldLog(event);
+
+  @override
+  Future<void> destroy() => _base.destroy();
 }
 
 // #***! единый логгер, консоль плюс лог сессии
@@ -127,6 +149,9 @@ class KometLogPrinter extends LogPrinter {
 
   final bool colors;
 
+  static const int maxLineLength = 900;
+  static const String continuationPrefix = '   |         ';
+
   @override
   List<String> log(LogEvent event) {
     final lines = <String>[];
@@ -136,21 +161,49 @@ class KometLogPrinter extends LogPrinter {
     final ord = _importanceSortKey(event.level).toString().padLeft(2, '0');
     final letter = _levelLetter(event.level);
     final label = colors ? _levelColor(event.level)(letter) : letter;
-    final msg = _stringifyMessage(event.message);
-    lines.add('$ord|$timeStr $label $msg');
+    final msgLines = splitForConsole(_stringifyMessage(event.message));
+    lines.add('$ord|$timeStr $label ${msgLines.first}');
+    for (final line in msgLines.skip(1)) {
+      lines.add('$continuationPrefix$line');
+    }
     if (event.error != null) {
-      lines.add('${' ' * 3}|         ${event.error}');
+      lines.add('$continuationPrefix${event.error}');
     }
     // #***! стек только для ошибок и не длиннее 12 строк
     if (event.stackTrace != null && event.level.value >= 5000) {
       final st = event.stackTrace.toString().split('\n');
       const limit = 12;
       for (var i = 0; i < st.length && i < limit; i++) {
-        lines.add('${' ' * 3}|         ${st[i]}');
+        lines.add('$continuationPrefix${st[i]}');
       }
     }
     return lines;
   }
+
+  static List<String> splitForConsole(String message) {
+    final out = <String>[];
+    for (final line in message.split('\n')) {
+      if (line.length <= maxLineLength) {
+        out.add(line);
+        continue;
+      }
+      var start = 0;
+      while (start < line.length) {
+        var end = start + maxLineLength;
+        if (end >= line.length) {
+          end = line.length;
+        } else if (_isHighSurrogate(line.codeUnitAt(end - 1))) {
+          end--;
+        }
+        out.add(line.substring(start, end));
+        start = end;
+      }
+    }
+    return out;
+  }
+
+  static bool _isHighSurrogate(int codeUnit) =>
+      codeUnit >= 0xD800 && codeUnit <= 0xDBFF;
 
   // #***! карты и списки печатаем джейсоном
   String _stringifyMessage(dynamic message) {

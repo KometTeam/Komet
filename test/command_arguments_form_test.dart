@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/core/plugins/plugin_manifest.dart';
 import 'package:komet/frontend/commands/commands.dart';
 import 'package:komet/frontend/screens/chats/chat/view/command_arguments_form.dart';
@@ -36,6 +37,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: CommandArgumentsForm(
             command: command,
@@ -86,6 +90,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: CommandArgumentsForm(
             command: command,

@@ -65,6 +65,8 @@ class FileUploader {
     required String filename,
     required int totalSize,
     String? text,
+    bool encryptedPayload = false,
+    void Function()? beforeSend,
     int? scheduledTime,
     Duration autoForceAfter = const Duration(seconds: 1),
     Duration overallTimeout = const Duration(minutes: 5),
@@ -81,7 +83,9 @@ class FileUploader {
 
     Future<void> run() async {
       try {
-        final info = await messages.requestUploadUrl();
+        final initialSession = api.session;
+        beforeSend?.call();
+        final info = await messages.requestUploadUrl(beforeSend: beforeSend);
         if (cancelled) return;
         if (info == null) {
           ctrl.add(const UploadError('no_upload_url'));
@@ -89,6 +93,10 @@ class FileUploader {
         }
 
         final session = api.session;
+        beforeSend?.call();
+        if (!identical(session, initialSession)) {
+          throw StateError('Account changed during upload');
+        }
         if (session == null) {
           ctrl.add(const UploadError('no_session'));
           return;
@@ -100,7 +108,7 @@ class FileUploader {
             await api.sendRequest(Opcode.msgTyping, {
               'chatId': chatId,
               'type': 'FILE',
-            });
+            }, beforeSend: beforeSend);
           } catch (_) {}
         }());
 
@@ -108,39 +116,35 @@ class FileUploader {
         String? error;
         final done = Completer<void>();
         // #***! подписка на события ядра
-        sub =
-            session
-                .uploadFilePath(
-                  url: info.url,
-                  path: file.path,
-                  filename: filename,
-                  connection: 'close',
-                )
-                .listen(
-                  (e) {
-                    switch (e) {
-                      case kb.UploadEvent_Progress(:final sent, :final total):
-                        ctrl.add(
-                          UploadProgress(
-                            sent: sent.toInt(),
-                            total: total.toInt(),
-                          ),
-                        );
-                      case kb.UploadEvent_Done(status: final s):
-                        status = s;
-                      case kb.UploadEvent_Error(:final message):
-                        error = message;
-                    }
-                  },
-                  onError: (Object err) {
-                    error = err.toString();
-                    if (!done.isCompleted) done.complete();
-                  },
-                  onDone: () {
-                    if (!done.isCompleted) done.complete();
-                  },
-                  cancelOnError: true,
-                );
+        sub = session
+            .uploadFilePath(
+              url: info.url,
+              path: file.path,
+              filename: filename,
+              connection: 'close',
+            )
+            .listen(
+              (e) {
+                switch (e) {
+                  case kb.UploadEvent_Progress(:final sent, :final total):
+                    ctrl.add(
+                      UploadProgress(sent: sent.toInt(), total: total.toInt()),
+                    );
+                  case kb.UploadEvent_Done(status: final s):
+                    status = s;
+                  case kb.UploadEvent_Error(:final message):
+                    error = message;
+                }
+              },
+              onError: (Object err) {
+                error = err.toString();
+                if (!done.isCompleted) done.complete();
+              },
+              onDone: () {
+                if (!done.isCompleted) done.complete();
+              },
+              cancelOnError: true,
+            );
         await done.future;
         if (cancelled) return;
         if (error != null) {
@@ -159,7 +163,14 @@ class FileUploader {
           info.fileId,
           token: info.token,
           text: text,
+          encryptedPayload: encryptedPayload,
           scheduledTime: scheduledTime,
+          beforeSend: () {
+            if (!identical(api.session, initialSession)) {
+              throw StateError('Account changed during upload');
+            }
+            beforeSend?.call();
+          },
         );
         if (cancelled) return;
         if (messageId == null) {
@@ -193,6 +204,7 @@ class FileUploader {
     Uri uri,
     File file, {
     void Function(int sent, int total)? onProgress,
+    Future<void>? cancel,
     Duration overallTimeout = const Duration(minutes: 5),
     Duration progressThrottle = const Duration(milliseconds: 16),
   }) async {
@@ -208,6 +220,7 @@ class FileUploader {
           connection: 'close',
         ),
         onProgress: onProgress,
+        cancel: cancel,
       );
       if (result.error != null) {
         logger.w('uploadMediaFile: ${result.error}');
@@ -262,6 +275,7 @@ class FileUploader {
     File file, {
     String filename = 'photo.jpg',
     void Function(int sent, int total)? onProgress,
+    Future<void>? cancel,
     Duration progressThrottle = const Duration(milliseconds: 16),
   }) async {
     final session = api.session;
@@ -274,6 +288,7 @@ class FileUploader {
           filename: filename,
         ),
         onProgress: onProgress,
+        cancel: cancel,
       );
       if (result.error != null || result.status != 200) {
         logger.w('uploadPhoto: status=${result.status} error=${result.error}');
@@ -291,6 +306,7 @@ class FileUploader {
     Uri uri,
     File file, {
     void Function(int sent, int total)? onProgress,
+    Future<void>? cancel,
     int chunkSize = 2 * 1024 * 1024,
     int concurrency = 4,
     Duration overallTimeout = const Duration(minutes: 30),
@@ -306,10 +322,13 @@ class FileUploader {
           concurrency: concurrency,
         ),
         onProgress: onProgress,
+        cancel: cancel,
       );
       if (result.error != null || result.status != 200) {
+        final respBody = utf8.decode(result.body, allowMalformed: true);
         logger.w(
-          'uploadVideoFile: status=${result.status} error=${result.error}',
+          'uploadVideoFile: status=${result.status} error=${result.error} '
+          'body=${respBody.length > 500 ? respBody.substring(0, 500) : respBody}',
         );
       }
       return result.error == null && result.status == 200;
@@ -400,21 +419,41 @@ class FileUploader {
   Future<({int status, Uint8List body, String? error})> _consume(
     Stream<kb.UploadEvent> stream, {
     void Function(int sent, int total)? onProgress,
+    Future<void>? cancel,
   }) async {
     var status = 0;
     var body = Uint8List(0);
     String? error;
-    await for (final event in stream) {
-      switch (event) {
-        case kb.UploadEvent_Progress(:final sent, :final total):
-          onProgress?.call(sent.toInt(), total.toInt());
-        case kb.UploadEvent_Done(status: final s, body: final b):
-          status = s;
-          body = b;
-        case kb.UploadEvent_Error(:final message):
-          error = message;
-      }
-    }
+    final done = Completer<void>();
+    final sub = stream.listen(
+      (event) {
+        switch (event) {
+          case kb.UploadEvent_Progress(:final sent, :final total):
+            onProgress?.call(sent.toInt(), total.toInt());
+          case kb.UploadEvent_Done(status: final s, body: final b):
+            status = s;
+            body = b;
+          case kb.UploadEvent_Error(:final message):
+            error = message;
+        }
+      },
+      onError: (Object err) {
+        error = err.toString();
+        if (!done.isCompleted) done.complete();
+      },
+      onDone: () {
+        if (!done.isCompleted) done.complete();
+      },
+      cancelOnError: true,
+    );
+    cancel?.then((_) {
+      if (done.isCompleted) return;
+      error = 'cancelled';
+      sub.cancel();
+      done.complete();
+    });
+    await done.future;
+    await sub.cancel();
     return (status: status, body: body, error: error);
   }
 

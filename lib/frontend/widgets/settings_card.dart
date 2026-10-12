@@ -139,6 +139,7 @@ class SettingsNavTile extends StatelessWidget {
   final IconData? icon;
   final Widget? leading;
   final String label;
+  final String? value;
   final Color? tintColor;
   final VoidCallback? onTap;
   final bool isLast;
@@ -148,6 +149,7 @@ class SettingsNavTile extends StatelessWidget {
     this.icon,
     this.leading,
     required this.label,
+    this.value,
     this.tintColor,
     this.onTap,
     this.isLast = false,
@@ -187,6 +189,14 @@ class SettingsNavTile extends StatelessWidget {
                   ),
                 ),
               ),
+              if (value != null) ...[
+                const SizedBox(width: 12),
+                Text(
+                  value!,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15),
+                ),
+                const SizedBox(width: 4),
+              ],
               Icon(
                 Symbols.chevron_right,
                 color: cs.outline,

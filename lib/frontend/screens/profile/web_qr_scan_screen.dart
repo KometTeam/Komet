@@ -10,6 +10,7 @@ import '../../../core/config/app_colors.dart';
 import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/connection_status.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../l10n/app_localizations.dart';
 
 class WebQrScanScreen extends StatefulWidget {
   const WebQrScanScreen({super.key});
@@ -60,6 +61,7 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Colors.black,
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
@@ -73,7 +75,7 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'QR для веба и ПК',
+          l10n.webQrScanTitle,
           style: TextStyle(
             fontFamily: displayFontOf(context),
             fontSize: 20,
@@ -115,7 +117,8 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        error.errorDetails?.message ?? 'Камера недоступна',
+                        error.errorDetails?.message ??
+                            l10n.webQrScanCameraUnavailable,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white70,
@@ -137,7 +140,7 @@ class _WebQrScanScreenState extends State<WebQrScanScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Text(
-                    'Наведите камеру на QR-код на экране компьютера',
+                    l10n.webQrScanHint,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: displayFontOf(context),

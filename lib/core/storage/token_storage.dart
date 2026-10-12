@@ -2,14 +2,18 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../share/native_share_account_channel.dart';
+import 'account_token_store.dart';
+
 // #***! токены и активный аккаунт
 class TokenStorage {
+  static int _accountEpoch = 0;
+  static int get accountEpoch => _accountEpoch;
   static const _tokenPrefix = 'auth_token_';
   static const _activeAccountKey = 'active_account_id';
 
   // #***! на иосе ключ только после первой разблокировки и без синхры в айклауд
   static const _secure = FlutterSecureStorage(
-    aOptions: AndroidOptions(),
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
       synchronizable: false,
@@ -19,6 +23,18 @@ class TokenStorage {
 
   // #***! иос иногда даёт дубликат вместо перезаписи, удаляем и пишем заново
   static const int _duplicateKeychainItem = -25299;
+  static final _tokens = AccountTokenStore(
+    readStored: _readStoredToken,
+    writeStored: (accountId, token) => _write('$_tokenPrefix$accountId', token),
+    deleteStored: (accountId) async {
+      final key = '$_tokenPrefix$accountId';
+      await _secure.delete(key: key);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(key);
+    },
+    readRenewed: NativeShareAccountChannel.instance.renewedToken,
+    clearShared: NativeShareAccountChannel.instance.remove,
+  );
 
   static bool _isDuplicateItem(PlatformException error) =>
       error.details == _duplicateKeychainItem ||
@@ -52,10 +68,12 @@ class TokenStorage {
   }
 
   static Future<void> saveToken(String token, int accountId) =>
-      _write('$_tokenPrefix$accountId', token);
+      _tokens.save(accountId, token);
+
+  static Future<String?> readToken(int accountId) => _tokens.read(accountId);
 
   // #***! токены раньше лежали в открытых prefs, переносим и стираем
-  static Future<String?> readToken(int accountId) async {
+  static Future<String?> _readStoredToken(int accountId) async {
     final key = '$_tokenPrefix$accountId';
     final secured = await _secure.read(key: key);
     if (secured != null) return secured;
@@ -70,20 +88,25 @@ class TokenStorage {
     return null;
   }
 
-  static Future<void> deleteToken(int accountId) async {
-    final key = '$_tokenPrefix$accountId';
-    await _secure.delete(key: key);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(key);
+  static Future<String?> tryReadToken(int accountId) async {
+    try {
+      return await readToken(accountId);
+    } on PlatformException {
+      return null;
+    }
   }
+
+  static Future<void> deleteToken(int accountId) => _tokens.delete(accountId);
 
   // #***! активный аккаунт в обычных prefs, это не секрет
   static Future<void> setActiveAccount(int accountId) async {
+    _accountEpoch++;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_activeAccountKey, accountId.toString());
   }
 
   static Future<void> clearActiveAccount() async {
+    _accountEpoch++;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_activeAccountKey);
   }
@@ -101,6 +124,7 @@ class TokenStorage {
   }
 
   static Future<void> deleteAccount(int accountId) async {
+    _accountEpoch++;
     await deleteToken(accountId);
     final activeId = await getActiveAccountId();
     if (activeId == accountId) {

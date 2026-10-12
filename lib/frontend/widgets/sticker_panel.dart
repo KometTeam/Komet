@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/utils/debouncer.dart';
 import '../../core/utils/emoji_keyword_index.dart';
+import '../../l10n/app_localizations.dart';
 import '../../main.dart' show stickersModule;
 import '../../models/animoji.dart';
 import '../../models/sticker.dart';
@@ -186,7 +187,7 @@ class _StickerPanelState extends State<StickerPanel>
     if (recents.isNotEmpty) {
       sections.add(
         _Section(
-          title: 'Недавние',
+          title: AppLocalizations.of(context)!.emojiPanelRecent,
           stickerIds: recents,
           icon: Symbols.schedule,
         ),
@@ -297,9 +298,10 @@ class _StickerPanelState extends State<StickerPanel>
   Widget _buildStickerBody(ColorScheme cs) {
     if (_loading) return Center(child: SmallSpinner());
     if (_error != null || _sections.isEmpty) {
+      final l10n = AppLocalizations.of(context)!;
       return Center(
         child: Text(
-          _error != null ? 'Не удалось загрузить стикеры' : 'Нет стикеров',
+          _error != null ? l10n.stickerPanelLoadFailed : l10n.stickerPanelEmpty,
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
         ),
       );
@@ -371,6 +373,7 @@ class _StickerPanelState extends State<StickerPanel>
   }
 
   Widget _buildToggleBar(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -383,7 +386,7 @@ class _StickerPanelState extends State<StickerPanel>
           height: _toggleBarHeight,
           child: Center(
             child: SegmentedPillToggle(
-              labels: const ['Эмодзи', 'Стикеры'],
+              labels: [l10n.stickerPanelEmojiTab, l10n.stickerPanelStickersTab],
               selected: _mode,
               onChanged: _setMode,
             ),
@@ -478,7 +481,7 @@ class _StickerPanelState extends State<StickerPanel>
                   hasScrollBody: false,
                   child: Center(
                     child: Text(
-                      'Ничего не найдено',
+                      AppLocalizations.of(context)!.contactsSearchEmpty,
                       style: TextStyle(
                         color: cs.onSurfaceVariant,
                         fontSize: 14,
@@ -507,6 +510,7 @@ class _StickerPanelState extends State<StickerPanel>
   }
 
   Widget _buildSearchField(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 2, 10, 6),
       child: Container(
@@ -531,7 +535,7 @@ class _StickerPanelState extends State<StickerPanel>
                 decoration: InputDecoration(
                   isCollapsed: true,
                   border: InputBorder.none,
-                  hintText: 'Поиск',
+                  hintText: l10n.chatInfoMembersSearchHint,
                   hintStyle: TextStyle(
                     color: cs.onSurfaceVariant,
                     fontSize: 15,

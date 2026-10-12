@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komet/l10n/app_localizations.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:komet/backend/modules/share_sender.dart';
 import 'package:komet/frontend/screens/chats/share_composer_bar.dart';
@@ -15,21 +16,27 @@ Future<RichMessageController> _pump(
   required PreparedShare share,
   required List<String> recipients,
   bool sending = false,
-  Future<void> Function(String)? onSend,
+  Future<void> Function(RichMessageContent)? onSend,
 }) async {
   final controller = RichMessageController();
   addTearDown(controller.dispose);
   await tester.pumpWidget(
     MaterialApp(
+      locale: const Locale('ru'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: Align(
           alignment: Alignment.bottomCenter,
-          child: ShareComposerBar(
-            share: share,
-            controller: controller,
-            recipientNames: recipients,
-            sending: sending,
-            onSend: onSend ?? (_) async {},
+          child: Builder(
+            builder: (context) => ShareComposerBar.forShare(
+              l10n: AppLocalizations.of(context)!,
+              share: share,
+              controller: controller,
+              recipientNames: recipients,
+              sending: sending,
+              onSend: onSend ?? (_) async {},
+            ),
           ),
         ),
       ),
@@ -103,7 +110,7 @@ void main() {
       tester,
       share: PreparedShare(files: [_file('a.jpg', 'image/jpeg')]),
       recipients: const ['ЛУКА'],
-      onSend: (caption) async => captured = caption,
+      onSend: (content) async => captured = content.text,
     );
 
     controller.text = '  привет  ';
@@ -127,5 +134,81 @@ void main() {
     await tester.tap(find.byIcon(Symbols.send));
     await tester.pump();
     expect(sent, isFalse);
+  });
+
+  testWidgets('a forward shows its own title, hint and header action', (
+    tester,
+  ) async {
+    final controller = RichMessageController();
+    addTearDown(controller.dispose);
+    var sent = <String>[];
+    var actionTaps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: ShareComposerBar(
+              title: 'Переслать 2 сообщения',
+              hintText: 'Добавить комментарий...',
+              headerAction: IconButton(
+                icon: const Icon(Symbols.person),
+                onPressed: () => actionTaps++,
+              ),
+              controller: controller,
+              recipientNames: const ['a', 'b', 'c'],
+              onSend: (content) async => sent = [...sent, content.text],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Переслать 2 сообщения'), findsOneWidget);
+    expect(find.text('В 3 чата'), findsOneWidget);
+    expect(find.text('Добавить комментарий...'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Symbols.person));
+    expect(actionTaps, 1);
+
+    await tester.enterText(find.byType(TextField), '  synthetic note  ');
+    await tester.tap(find.byIcon(Symbols.send));
+    await tester.pump();
+    expect(sent, ['synthetic note']);
+  });
+
+  testWidgets('the hint sits level with the emoji and send buttons', (
+    tester,
+  ) async {
+    final controller = RichMessageController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: ShareComposerBar(
+              title: 'Переслать сообщение',
+              hintText: 'Добавить комментарий...',
+              controller: controller,
+              recipientNames: const ['a', 'b'],
+              onSend: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final hint = tester.getCenter(find.text('Добавить комментарий...')).dy;
+    final emoji = tester.getCenter(find.byIcon(Symbols.mood)).dy;
+    final send = tester.getCenter(find.byIcon(Symbols.send)).dy;
+    expect(hint, moreOrLessEquals(send, epsilon: 1));
+    expect(emoji, moreOrLessEquals(send, epsilon: 1));
   });
 }

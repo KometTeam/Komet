@@ -330,7 +330,7 @@ class _WebPushScreenState extends State<WebPushScreen> {
           _detailRow(
             cs,
             l10n.webPushStatusLinkedAt,
-            formatDateTimeWords(link.linkedAt!),
+            formatDateTimeWords(l10n, link.linkedAt!),
           ),
         _detailRow(cs, l10n.webPushStatusDevice, link.deviceId),
       ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../../core/plugins/plugin_manifest.dart';
+import '../../../../../l10n/app_localizations.dart';
 import '../../../../commands/commands.dart';
 
 class CommandArgumentsForm extends StatelessWidget {
@@ -23,6 +24,7 @@ class CommandArgumentsForm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Material(
@@ -60,7 +62,7 @@ class CommandArgumentsForm extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        command.description,
+                        command.describe(l10n),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -70,7 +72,7 @@ class CommandArgumentsForm extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Отменить команду',
+                      tooltip: l10n.commandArgumentsCancel,
                       onPressed: onCancel,
                       icon: const Icon(Symbols.close, size: 20),
                     ),
@@ -121,7 +123,9 @@ class _ArgumentField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final optional = argument.required ? '' : ' · необязательно';
+    final label = argument.required
+        ? argument.name
+        : AppLocalizations.of(context)!.commandArgumentsOptional(argument.name);
     return TextField(
       key: ValueKey('command_argument_${argument.name}'),
       controller: controller,
@@ -133,7 +137,7 @@ class _ArgumentField extends StatelessWidget {
           : TextInputAction.next,
       onSubmitted: argument.rest ? null : (_) => onSubmit(),
       decoration: InputDecoration(
-        labelText: '${argument.name}$optional',
+        labelText: label,
         hintText: argument.description.isEmpty ? null : argument.description,
         filled: true,
         fillColor: cs.surfaceContainerHighest,

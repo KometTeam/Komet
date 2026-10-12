@@ -38,6 +38,9 @@ class KometFcmService : FirebaseMessagingService() {
             return
         }
         KometNotifier(applicationContext).handle(data)
+        if (type != "InboundCall" && type != "CallFinished") {
+            LauncherBadge.countPush(applicationContext, data["mc"]?.toLongOrNull() ?: 0L)
+        }
     }
 }
 

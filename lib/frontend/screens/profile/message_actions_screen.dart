@@ -5,6 +5,7 @@ import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_message_actions_style.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../widgets/settings_radio_tile.dart';
 import '../../widgets/settings_card.dart';
 
@@ -17,7 +18,7 @@ class MessageActionsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: ConnectionTitleBar(
-        titleText: 'Меню действий',
+        titleText: AppLocalizations.of(context)!.messageActionsScreenTitle,
         backgroundColor: cs.surface,
       ),
       body: SafeArea(
@@ -35,31 +36,31 @@ class MessageActionsScreen extends StatelessWidget {
 class _StyleCard extends StatelessWidget {
   const _StyleCard();
 
-  static const _items = [
-    (
-      style: MessageActionsStyle.radial,
-      icon: Symbols.bubble_chart,
-      label: 'Радиальное',
-      description: 'Дуга кнопок вокруг точки нажатия',
-    ),
-    (
-      style: MessageActionsStyle.list,
-      icon: Symbols.menu,
-      label: 'Список',
-      description: 'Вертикальное меню рядом с сообщением',
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final items = [
+      (
+        style: MessageActionsStyle.radial,
+        icon: Symbols.bubble_chart,
+        label: l10n.photoEditorBlurRadial,
+        description: l10n.messageActionsScreenRadialDescription,
+      ),
+      (
+        style: MessageActionsStyle.list,
+        icon: Symbols.menu,
+        label: l10n.messageActionsScreenList,
+        description: l10n.messageActionsScreenListDescription,
+      ),
+    ];
     return SettingsPanel(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Стиль',
+            l10n.messageActionsScreenStyle,
             style: TextStyle(
               color: cs.onSurface,
               fontSize: 16,
@@ -68,7 +69,7 @@ class _StyleCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Как показывается меню при долгом нажатии на сообщение',
+            l10n.messageActionsScreenStyleSubtitle,
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 8),
@@ -77,7 +78,7 @@ class _StyleCard extends StatelessWidget {
             builder: (context, current, _) {
               return Column(
                 children: [
-                  for (final item in _items)
+                  for (final item in items)
                     SettingsRadioTile(
                       leading: Icon(
                         item.icon,

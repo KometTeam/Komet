@@ -20,7 +20,9 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/liquid_glass.dart';
 import '../../widgets/settings_card.dart';
+import '../../widgets/bottom_navigation_style_card.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../core/utils/seed_scheme.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({super.key});
@@ -130,6 +132,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                   const _ChatChromeCard(),
                   const SizedBox(height: 12),
                   const _ComposerBarCard(),
+                  const SizedBox(height: 12),
+                  const BottomNavigationStyleCard(),
                   const SizedBox(height: 12),
                   const _NavPillStyleCard(),
                   const SizedBox(height: 12),
@@ -602,10 +606,7 @@ class _PreviewSectionState extends State<_PreviewSection> {
     }
     _cachedColor = color;
     _cachedBrightness = brightness;
-    _cachedScheme = ColorScheme.fromSeed(
-      seedColor: color,
-      brightness: brightness,
-    );
+    _cachedScheme = accentSchemeFromSeed(color, brightness);
     return _cachedScheme!;
   }
 
@@ -852,7 +853,12 @@ class _ColorPickerCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ColorWheelPicker(
-                          color: swatchColor,
+                          color: sys
+                              ? HSVColor.fromColor(
+                                  cs.primary,
+                                ).withValue(1).toColor()
+                              : col,
+                          minBrightness: kAccentMinBrightness,
                           onChanged: onColorChanged,
                         ),
                         const SizedBox(height: 20),
@@ -1005,4 +1011,3 @@ class _BubbleBehaviorCard extends StatelessWidget {
     );
   }
 }
-

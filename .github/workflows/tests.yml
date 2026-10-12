@@ -2,6 +2,7 @@ name: Tests
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -25,15 +26,39 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.44.3'
+          flutter-version: '3.47.0'
           channel: 'stable'
           cache: true
 
       - name: Build crypto core
-        run: make -C native/crypto-core shared
+        run: make -C native/crypto-core test asan shared
 
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Analyze Dart
+        run: flutter analyze lib test tool
+
       - name: Flutter test
         run: flutter test
+
+  share-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test share authorization and transport
+        run: cargo test --locked --manifest-path native/komet_share/Cargo.toml
+
+  share-swift:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test share accounts
+        run: |
+          swiftc ios/Shared/KometShareStore.swift ios/Shared/KometShareAccounts.swift test/native/ios_share_accounts_test.swift -o /tmp/komet-share-accounts-test
+          /tmp/komet-share-accounts-test
+      - name: Test native build scripts
+        run: python3 -m unittest discover -s test/native -p 'test*.py'

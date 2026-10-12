@@ -28,8 +28,9 @@ final _message = CachedMessage(
 Future<void> _pumpVideo(
   WidgetTester tester, {
   PhotoViewerActions? actions,
+  Size size = const Size(1200, 1800),
 }) async {
-  tester.view.physicalSize = const Size(1200, 1800);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
 
@@ -76,6 +77,33 @@ void main() {
       find.byKey(const ValueKey('video-play-toggle')),
     );
     expect(playCenter.dx, closeTo(tester.view.physicalSize.width / 4, 0.1));
+  });
+
+  testWidgets('landscape folds the controls into one row clear of the video', (
+    tester,
+  ) async {
+    await _pumpVideo(tester, size: const Size(1800, 720));
+    final height =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+
+    final play = tester.getCenter(
+      find.byKey(const ValueKey('video-play-toggle')),
+    );
+    expect(tester.getCenter(find.text('00:12')).dy, closeTo(play.dy, 0.5));
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('video-settings'))).dy,
+      closeTo(play.dy, 0.5),
+    );
+
+    expect(tester.getCenter(find.text('1 из 1')).dy, lessThan(height / 4));
+    expect(
+      tester.getCenter(find.byIcon(Symbols.rotate_90_degrees_ccw)).dy,
+      lessThan(height / 4),
+    );
+    expect(
+      tester.getTopLeft(find.byType(GlassSurface)).dy,
+      greaterThan(height * 0.7),
+    );
   });
 
   testWidgets('video rotates left inside the shared viewer', (tester) async {

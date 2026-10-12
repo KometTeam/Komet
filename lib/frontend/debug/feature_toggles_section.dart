@@ -15,10 +15,13 @@ import '../../core/contacts/device_contacts_service.dart';
 import '../screens/digital_id/digital_id_web_screen.dart';
 import '../widgets/custom_notification.dart';
 import '../widgets/sheet_helpers.dart';
-import 'debug_toggle_tile.dart';
+import '../../main.dart' show KometAppState;
+import 'dev_menu_widgets.dart';
 
 class DebugFeatureTogglesSection extends StatelessWidget {
-  const DebugFeatureTogglesSection({super.key});
+  final KometAppState? appState;
+
+  const DebugFeatureTogglesSection({super.key, required this.appState});
 
   Future<void> _onPhonebookNamesChanged(
     BuildContext context,
@@ -117,227 +120,131 @@ class DebugFeatureTogglesSection extends StatelessWidget {
     );
   }
 
+  Future<void> _resetDigitalId(BuildContext context) async {
+    await resetDigitalIdWebData();
+    if (!context.mounted) return;
+    showCustomNotification(
+      context,
+      'Цифровой ID сброшен — Госуслуги спросят вход заново',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final state = appState;
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: DebugToggleTile(
-            icon: Symbols.swipe_right,
-            title: 'Свайп-назад в десктоп-режиме',
-            subtitle: (_) =>
-                'Включает жест «провести от левого края, чтобы '
-                'закрыть» внутри встроенной панели чата на '
-                'десктопе — для тестирования курсором',
-            valueListenable: AppSwipeBackDesktop.current,
-            onChanged: AppSwipeBackDesktop.save,
-          ),
+        const DevGroupLabel('Интерфейс'),
+        DevGroup(
+          children: [
+            DevToggleRow(
+              title: 'Истории',
+              description: (_) => 'Лента историй в списке чатов',
+              valueListenable: AppStories.current,
+              onChanged: AppStories.save,
+            ),
+            DevToggleRow(
+              title: 'Команды',
+              description: (_) => 'Панель команд по вводу «/»',
+              valueListenable: AppCommands.current,
+              onChanged: AppCommands.save,
+            ),
+            DevToggleRow(
+              title: 'Предпросмотр ссылок',
+              description: (_) => 'Карточки с превью ссылок в сообщениях',
+              valueListenable: AppLinkPreview.current,
+              onChanged: AppLinkPreview.save,
+            ),
+            DevToggleRow(
+              title: 'Доп. информация',
+              description: (_) =>
+                  'Раздел «Info» в настройках и техническая вкладка '
+                  'в профиле собеседника',
+              valueListenable: AppShowExtraInfo.current,
+              onChanged: AppShowExtraInfo.save,
+            ),
+            DevToggleRow(
+              title: 'Имена из телефонной книги',
+              description: (v) => v
+                  ? 'Как записаны в телефонной книге устройства'
+                  : 'Как их прислал сервер',
+              valueListenable: AppPhonebookNames.current,
+              onChanged: (v) => _onPhonebookNamesChanged(context, v),
+            ),
+            DevToggleRow(
+              title: 'Приколь4ики',
+              valueListenable: AppPranks.current,
+              onChanged: AppPranks.save,
+            ),
+          ],
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: DebugToggleTile(
-            icon: Symbols.auto_awesome,
-            title: 'Приколь4ики',
-            valueListenable: AppPranks.current,
-            onChanged: AppPranks.save,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: DebugToggleTile(
-            icon: Symbols.badge,
-            title: 'Нативный Цифровой ID',
-            subtitle: (native) => native
-                ? 'Нативный экран (REST ext-api.max.ru)'
-                : 'Оригинальная страница в WebView',
-            valueListenable: AppDigitalIdNative.current,
-            onChanged: AppDigitalIdNative.save,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Material(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(20),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () async {
-                await resetDigitalIdWebData();
-                if (!context.mounted) return;
-                showCustomNotification(
-                  context,
-                  'Цифровой ID сброшен — Госуслуги спросят вход заново',
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 17,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Symbols.restart_alt,
-                      color: cs.onSurfaceVariant,
-                      size: 22,
-                      weight: 400,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Сбросить Цифровой ID',
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Очистить куки и данные WebView',
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+        const DevGroupLabel('Кружки'),
+        DevGroup(
+          children: [
+            ValueListenableBuilder<int>(
+              valueListenable: AppVideoNoteResolution.current,
+              builder: (context, res, _) => ValueListenableBuilder<int>(
+                valueListenable: AppVideoNoteFps.current,
+                builder: (context, fps, _) => DevRow(
+                  caption: 'Качество записи (только Android)',
+                  title: '$res×$res • $fps fps',
+                  onTap: () => _pickVideoNoteQuality(context),
+                  trailing: Icon(
+                    Symbols.chevron_right,
+                    color: cs.outline,
+                    size: 20,
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: DebugToggleTile(
-            icon: Symbols.amp_stories,
-            title: 'Истории',
-            subtitle: (_) => 'Отображение ленты историй в списке чатов',
-            valueListenable: AppStories.current,
-            onChanged: AppStories.save,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Material(
-            color: cs.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(20),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () => _pickVideoNoteQuality(context),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 17,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Symbols.video_camera_front,
-                      color: cs.onSurfaceVariant,
-                      size: 22,
-                      weight: 400,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Качество записи кружков',
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          ValueListenableBuilder<int>(
-                            valueListenable: AppVideoNoteResolution.current,
-                            builder: (context, res, _) =>
-                                ValueListenableBuilder<int>(
-                                  valueListenable: AppVideoNoteFps.current,
-                                  builder: (context, fps, _) => Text(
-                                    '$res×$res • $fps fps (только Android)',
-                                    style: TextStyle(
-                                      color: cs.onSurfaceVariant,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            DevToggleRow(
+              title: 'Кружки с задней камеры',
+              description: (v) => v
+                  ? 'Запись начинается с задней камеры'
+                  : 'Запись начинается с фронтальной камеры',
+              valueListenable: AppVideoNoteRearCamera.current,
+              onChanged: AppVideoNoteRearCamera.save,
             ),
-          ),
+          ],
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: DebugToggleTile(
-            icon: Symbols.flip_camera_android,
-            title: 'Кружки с задней камеры',
-            subtitle: (v) => v
-                ? 'Запись кружка начинается с задней камеры'
-                : 'Запись кружка начинается с фронтальной камеры',
-            valueListenable: AppVideoNoteRearCamera.current,
-            onChanged: AppVideoNoteRearCamera.save,
-          ),
+        const DevGroupLabel('Цифровой ID'),
+        DevGroup(
+          children: [
+            DevToggleRow(
+              title: 'Нативный Цифровой ID',
+              description: (native) => native
+                  ? 'Нативный экран (REST ext-api.max.ru)'
+                  : 'Оригинальная страница в WebView',
+              valueListenable: AppDigitalIdNative.current,
+              onChanged: AppDigitalIdNative.save,
+            ),
+            DevRow(
+              caption: 'Очистить куки и данные WebView',
+              title: 'Сбросить Цифровой ID',
+              onTap: () => _resetDigitalId(context),
+            ),
+          ],
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: DebugToggleTile(
-            icon: Symbols.contacts,
-            title: 'Имена из телефонной книги',
-            subtitle: (v) => v
-                ? 'Имена собеседников показываются так, как записаны в '
-                      'телефонной книге устройства'
-                : 'Имена показываются так, как их прислал сервер',
-            valueListenable: AppPhonebookNames.current,
-            onChanged: (v) => _onPhonebookNamesChanged(context, v),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: DebugToggleTile(
-            icon: Symbols.terminal,
-            title: 'Команды',
-            subtitle: (_) => 'Панель команд по вводу «/» в строке сообщения',
-            valueListenable: AppCommands.current,
-            onChanged: AppCommands.save,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: DebugToggleTile(
-            icon: Symbols.link,
-            title: 'Предпросмотр ссылок',
-            subtitle: (_) => 'Карточки с превью для ссылок в сообщениях',
-            valueListenable: AppLinkPreview.current,
-            onChanged: AppLinkPreview.save,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: DebugToggleTile(
-            icon: Symbols.info,
-            title: 'Доп. информация',
-            subtitle: (_) =>
-                'Раздел «Info» в настройках и вкладка с '
-                'технической информацией в профиле собеседника',
-            valueListenable: AppShowExtraInfo.current,
-            onChanged: AppShowExtraInfo.save,
-          ),
+        const DevGroupLabel('Отладка'),
+        DevGroup(
+          children: [
+            if (state != null)
+              DevToggleRow(
+                title: 'Оверлей FPS',
+                description: (_) => 'Фреймрейт поверх интерфейса',
+                valueListenable: state.fpsOverlayEnabled,
+                onChanged: state.setFpsOverlayEnabled,
+              ),
+            DevToggleRow(
+              title: 'Свайп-назад в десктоп-режиме',
+              description: (_) =>
+                  'Жест от левого края во встроенной панели чата — '
+                  'для теста курсором',
+              valueListenable: AppSwipeBackDesktop.current,
+              onChanged: AppSwipeBackDesktop.save,
+            ),
+          ],
         ),
       ],
     );

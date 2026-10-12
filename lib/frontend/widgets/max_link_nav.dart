@@ -7,6 +7,7 @@ import '../../backend/modules/messages.dart' show ContactCache;
 import '../../core/cache/info_cache.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/utils/webview_support.dart';
+import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../screens/chats/chat_list_screen.dart';
 import '../screens/chats/chat_screen.dart';
@@ -24,7 +25,7 @@ void popToAppRoot(BuildContext context) {
 Future<BuildContext?> popToAppRootAndSettle(BuildContext context) async {
   popToAppRoot(context);
   await WidgetsBinding.instance.endOfFrame;
-  return KometApp.navigatorKey.currentContext;
+  return KometApp.overlayContext;
 }
 
 Future<int> currentAccountId() async {
@@ -71,8 +72,9 @@ Future<bool> openChatAtMessage(
   if (myId == 0) return false;
   final chat = await resolveChat(myId, chatId);
   if (!context.mounted) return false;
+  final l10n = AppLocalizations.of(context)!;
   if (chat == null) {
-    showCustomNotification(context, 'Чат не найден');
+    showCustomNotification(context, l10n.maxLinkNavChatNotFound);
     return true;
   }
 
@@ -80,7 +82,7 @@ Future<bool> openChatAtMessage(
   final peerId = (chat.type == 'DIALOG' && chatId != 0) ? chatId ^ myId : 0;
   final name = (title != null && title.isNotEmpty)
       ? title
-      : (ContactCache.get(chatId ^ myId) ?? 'Чат');
+      : (ContactCache.get(chatId ^ myId) ?? l10n.hubChatTileTitle);
   final imageUrl =
       (peerId > 0 ? ContactCache.getAvatar(peerId) : null) ??
       chat.iconUrl ??
@@ -107,7 +109,10 @@ Future<bool> openContactById(BuildContext context, int userId) async {
   await openContactDialogProfile(
     context,
     contactId: userId,
-    name: ContactCache.get(userId) ?? info?.displayName ?? 'Профиль',
+    name:
+        ContactCache.get(userId) ??
+        info?.displayName ??
+        AppLocalizations.of(context)!.maxLinkNavProfileFallback,
     avatarUrl: info?.avatarUrl,
   );
   return true;
@@ -117,7 +122,10 @@ Future<bool> openStickerSetByPath(BuildContext context, String path) async {
   final set = await stickersModule.resolveSetByLink(path);
   if (!context.mounted) return true;
   if (set == null) {
-    showCustomNotification(context, 'Стикерпак недоступен');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.stickerPackSheetUnavailable,
+    );
     return true;
   }
   await showStickerPackSheet(context, knownSetId: set.id);
@@ -136,13 +144,18 @@ Future<bool> openWebAppForBot(
   int? chatId,
 }) async {
   if (!webViewSupported) {
-    showCustomNotification(context, 'На вашей платформе это недоступно');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.maxLinkNavPlatformUnsupported,
+    );
     return true;
   }
   final myId = await currentAccountId();
   if (!context.mounted) return false;
   final dialogId = chatId ?? (myId == 0 ? null : myId ^ botId);
-  final title = ContactCache.get(botId) ?? 'Приложение';
+  final title =
+      ContactCache.get(botId) ??
+      AppLocalizations.of(context)!.maxLinkNavAppFallback;
 
   await pushSwipeable(
     context,
@@ -161,7 +174,10 @@ Future<bool> openWebAppForBot(
 
 Future<bool> shareTextToChat(BuildContext context, String text) async {
   if (text.isEmpty) {
-    showCustomNotification(context, 'Нечего отправлять');
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.maxLinkNavNothingToSend,
+    );
     return true;
   }
   final target = await openForwardScreen(context: context);
@@ -184,7 +200,10 @@ Future<bool> openFolderChatList(BuildContext context, String folderId) async {
   final root = await popToAppRootAndSettle(context);
   if (ChatListScreen.selectFolder(folderId)) return true;
   if (root != null && root.mounted) {
-    showCustomNotification(root, 'Папка не найдена');
+    showCustomNotification(
+      root,
+      AppLocalizations.of(root)!.maxLinkNavFolderNotFound,
+    );
   }
   return true;
 }
@@ -196,5 +215,7 @@ Future<bool> openRootTab(BuildContext context, int index) async {
   return true;
 }
 
-void notifyNeedsAccount(BuildContext context) =>
-    showCustomNotification(context, 'Сначала войдите в аккаунт');
+void notifyNeedsAccount(BuildContext context) => showCustomNotification(
+  context,
+  AppLocalizations.of(context)!.maxLinkNavSignInFirst,
+);

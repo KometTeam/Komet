@@ -11,6 +11,7 @@ import '../../../../models/attachment.dart';
 import '../../formatted_message_text.dart';
 import '../../sending_clock_icon.dart';
 import '../../photo_viewer.dart';
+import 'meta_marks.dart';
 
 enum MessageType { text, attachment, voice, control }
 
@@ -90,10 +91,12 @@ class BubbleContext {
   final String? overrideStatus;
   final ValueListenable<int>? otherReadTime;
   final ValueListenable<List<double>>? uploadProgress;
+  final VoidCallback? onCancelUpload;
   final void Function(StickerAttachment sticker)? onStickerTap;
   final ForwardedSourceTap? onForwardedSourceTap;
   final BubblePresentation? presentation;
   final bool metaInFooter;
+  final bool likelyForwarded;
   final Widget Function(Widget)? selectable;
 
   BubbleContext({
@@ -114,11 +117,13 @@ class BubbleContext {
     this.overrideStatus,
     this.otherReadTime,
     this.uploadProgress,
+    this.onCancelUpload,
     this.onStickerTap,
     this.onForwardedSourceTap,
     this.reactionInfo,
     this.presentation,
     this.metaInFooter = false,
+    this.likelyForwarded = false,
     this.selectable,
   }) : dim = text.withValues(alpha: 0.7);
 
@@ -150,11 +155,13 @@ class BubbleContext {
     overrideStatus: overrideStatus,
     otherReadTime: otherReadTime,
     uploadProgress: uploadProgress,
+    onCancelUpload: onCancelUpload,
     onStickerTap: onStickerTap,
     onForwardedSourceTap: onForwardedSourceTap,
     reactionInfo: reactionInfo,
     presentation: value,
     metaInFooter: metaInFooter,
+    likelyForwarded: likelyForwarded,
     selectable: selectable,
   );
 
@@ -171,6 +178,14 @@ class BubbleContext {
   }
 
   Color get systemTint => cs.onPrimaryContainer.withValues(alpha: 0.12);
+
+  List<Widget> metaMarks(Color color) {
+    final typingMs = message.typingMs;
+    return [
+      if (likelyForwarded) LikelyForwardedMark(color: color),
+      if (typingMs != null) TypingTimeMark(typingMs: typingMs, color: color),
+    ];
+  }
 
   Widget caption() {
     final style = TextStyle(color: text, fontSize: 16, height: 1.3);
@@ -201,6 +216,7 @@ class BubbleContext {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          ...metaMarks(dim),
           Text(clockText, style: TextStyle(color: dim, fontSize: 11)),
           if (isMe) ...[const SizedBox(width: 4), statusIcon()],
           if (message.deleted) ...[const SizedBox(width: 4), deletedIcon()],
@@ -225,6 +241,7 @@ class BubbleContext {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          ...metaMarks(Colors.white),
           Text(
             clockText,
             style: const TextStyle(

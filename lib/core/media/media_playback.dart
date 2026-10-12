@@ -219,9 +219,9 @@ class MediaPlayback {
   bool _clearVideoNote() {
     final track = videoNote.value;
     if (track == null) return false;
-    videoNote.value = null;
     track.controller.pause();
     track.controller.seekTo(Duration.zero);
+    videoNote.value = null;
     _disposeNoteIfIdle(track.controller);
     return true;
   }
