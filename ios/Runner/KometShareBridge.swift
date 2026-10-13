@@ -1,7 +1,7 @@
 import Flutter
 import UIKit
 
-final class KometShareBridge {
+final class KometShareBridge: NSObject, FlutterSceneLifeCycleDelegate {
   private let queue = DispatchQueue(label: "ru.komet.app.share", qos: .userInitiated)
   private var store: KometShareStore?
   private var sink: FlutterEventSink?
@@ -91,7 +91,35 @@ final class KometShareBridge {
     }
   }
 
-  func importDocument(_ url: URL, onError: @escaping (Error) -> Void) {
+  func scene(_ scene: UIScene,
+             willConnectTo session: UISceneSession,
+             options connectionOptions: UIScene.ConnectionOptions?) -> Bool {
+    guard let contexts = connectionOptions?.urlContexts else { return false }
+    return importDocuments(contexts, in: scene)
+  }
+
+  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) -> Bool {
+    importDocuments(URLContexts, in: scene)
+  }
+
+  private func importDocuments(_ contexts: Set<UIOpenURLContext>, in scene: UIScene) -> Bool {
+    let documents = contexts.map(\.url).filter(\.isFileURL)
+    for url in documents {
+      importDocument(url) { [weak scene] error in
+        guard let window = (scene as? UIWindowScene)?.keyWindow,
+              var controller = window.rootViewController else { return }
+        while let presented = controller.presentedViewController { controller = presented }
+        let alert = UIAlertController(title: "Не удалось открыть файл",
+                                      message: error.localizedDescription,
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "ОК", style: .default))
+        controller.present(alert, animated: true)
+      }
+    }
+    return !documents.isEmpty
+  }
+
+  private func importDocument(_ url: URL, onError: @escaping (Error) -> Void) {
     let scoped = url.startAccessingSecurityScopedResource()
     queue.async {
       defer { if scoped { url.stopAccessingSecurityScopedResource() } }
