@@ -21,6 +21,47 @@ void main() {
       BuildProfile.spoofUi,
       BuildProfile.spoofUiFor(store: store, appStoreBuild: appStore),
     );
+    expect(
+      BuildProfile.isStoreRelease,
+      BuildProfile.storeReleaseFor(store: store, appStoreBuild: appStore),
+    );
+  });
+
+  test('features store rules forbid follow the store release flag', () {
+    const release = BuildProfile.isStoreRelease;
+    expect(BuildProfile.devTools, !release);
+    expect(BuildProfile.insecureTransport, !release);
+    expect(BuildProfile.trafficCapture, !release);
+    expect(BuildProfile.pranks, !release);
+    expect(BuildProfile.hiddenContentViewers, !release);
+    expect(BuildProfile.digitalId, !release);
+    expect(BuildProfile.ipGeoLookup, !release);
+    expect(BuildProfile.sessionCityLookup, !release);
+  });
+
+  test('presence tweaks and the log link follow the App Store flag', () {
+    expect(BuildProfile.stealthPresence, !BuildProfile.isAppStoreBuild);
+    expect(BuildProfile.logExportLink, !BuildProfile.isAppStoreBuild);
+  });
+
+  group('store release', () {
+    test('is off only outside both stores', () {
+      expect(
+        BuildProfile.storeReleaseFor(store: false, appStoreBuild: false),
+        isFalse,
+      );
+    });
+
+    test('covers the Play flavor and the App Store build', () {
+      expect(
+        BuildProfile.storeReleaseFor(store: true, appStoreBuild: false),
+        isTrue,
+      );
+      expect(
+        BuildProfile.storeReleaseFor(store: false, appStoreBuild: true),
+        isTrue,
+      );
+    });
   });
 
   group('plugins', () {

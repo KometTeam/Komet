@@ -6535,4 +6535,21 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get temporaryPasswordRecoveryInstructions =>
       'Remove or change this password in MAX before deleting Komet. Do not include it in screenshots or logs.';
+
+  @override
+  String get settingsTabCloudStorage => 'Cloud storage';
+
+  @override
+  String get settingsTabPrivacyPolicy => 'Privacy policy';
+
+  @override
+  String get settingsTabTermsOfUse => 'Terms of use';
+
+  @override
+  String get appIconScreenHintIos =>
+      'The icon changes right away, iOS confirms it with a system dialog.';
+
+  @override
+  String get webPushIntroAppStore =>
+      'MAX\'s server sends ordinary push notifications only to the official MAX app, so Komet receives them through a web app on the Home Screen. MAX\'s own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.';
 }

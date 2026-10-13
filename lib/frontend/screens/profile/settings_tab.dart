@@ -12,9 +12,11 @@ import '../../../core/cache/self_presence.dart';
 import '../../../core/config/build_profile.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/komet_settings.dart';
+import '../../../core/config/legal_links.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/update_checker.dart';
 import '../../../l10n/app_localizations.dart';
@@ -764,7 +766,9 @@ class _SettingsTabState extends State<SettingsTab>
                         ),
                         _SettingsItem(
                           icon: Symbols.cloud,
-                          label: l10n.settingsTabCloudStorageBeta,
+                          label: BuildProfile.isStoreRelease
+                              ? l10n.settingsTabCloudStorage
+                              : l10n.settingsTabCloudStorageBeta,
                           onTap: () => _openCloudStorage(context),
                         ),
                         _SettingsItem(
@@ -917,6 +921,20 @@ class _SettingsTabState extends State<SettingsTab>
                               ),
                             );
                           },
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.policy,
+                          label: l10n.settingsTabPrivacyPolicy,
+                          onTap: () => openExternalUrl(
+                            context,
+                            LegalLinks.privacyPolicy,
+                          ),
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.gavel,
+                          label: l10n.settingsTabTermsOfUse,
+                          onTap: () =>
+                              openExternalUrl(context, LegalLinks.terms),
                         ),
                         _SettingsItem(
                           icon: Symbols.logout,

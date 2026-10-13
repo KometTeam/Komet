@@ -8,7 +8,7 @@ import 'tos_store_ru.dart';
 
 String termsOfServiceBody(Locale locale) {
   final russian = locale.languageCode == 'ru';
-  if (BuildProfile.isStore) {
+  if (BuildProfile.isStoreRelease) {
     return russian ? kTermsOfServiceStoreRu : kTermsOfServiceStoreEn;
   }
   return russian ? kTermsOfServiceRu : kTermsOfServiceEn;

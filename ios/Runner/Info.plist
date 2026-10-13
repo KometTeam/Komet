@@ -76,7 +76,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Камера нужна для съёмки фото и видео в чатах, сканирования QR-кода входа и работы веб-приложений.</string>
+	<string>Камера нужна для съёмки фото и видео в чатах, сканирования QR-кодов и работы веб-приложений.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Доступ к контактам нужен, чтобы показывать имена собеседников так, как они записаны в вашей телефонной книге.</string>
 	<key>NSFaceIDUsageDescription</key>
@@ -89,10 +89,7 @@
 	<string>Доступ к галерее нужен, чтобы сохранять полученные фото и видео.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Доступ к галерее нужен, чтобы отправлять фото и видео в чатах.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Геолокация нужна, чтобы вы могли отправить своё местоположение в чат.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Распознавание речи нужно, чтобы превращать голосовые сообщения в текст.</string>
+
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

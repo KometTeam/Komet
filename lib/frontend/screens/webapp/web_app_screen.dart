@@ -201,7 +201,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
                 true)) {
       _bridge?.documentStarted(null);
       if (uri != null && mounted) {
-        await openExternalUrl(context, uri.toString());
+        await openExternalUrl(context, uri.toString(), fromWebContent: true);
       }
       return NavigationActionPolicy.CANCEL;
     }
@@ -238,7 +238,9 @@ class _WebAppScreenState extends State<WebAppScreen> {
     if (handler != null) return handler(controller, action, _launch?.url);
 
     if (uri != null && leavesWebView(uri.scheme)) {
-      if (mounted) await openExternalUrl(context, uri.toString());
+      if (mounted) {
+        await openExternalUrl(context, uri.toString(), fromWebContent: true);
+      }
       return NavigationActionPolicy.CANCEL;
     }
     return NavigationActionPolicy.ALLOW;
@@ -353,7 +355,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
       onCreateWindow: (controller, action) async {
         final url = action.request.url?.toString();
         if (url != null && url.isNotEmpty && mounted) {
-          await openExternalUrl(context, url);
+          await openExternalUrl(context, url, fromWebContent: true);
         }
         return false;
       },

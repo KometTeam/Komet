@@ -75,7 +75,7 @@ class DeepLinkService {
 
   // #***! разбор ссылки и в очередь
   void _onUri(Uri uri) {
-    if (_isLogExportLink(uri)) {
+    if (BuildProfile.logExportLink && _isLogExportLink(uri)) {
       _pendingLogExport = true;
       _flushPending();
       return;

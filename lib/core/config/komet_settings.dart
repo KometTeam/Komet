@@ -53,8 +53,10 @@ class KometSettings {
     fullTimestamp.value = prefs.getBool(_kFullTimestamp) ?? false;
     showForward.value = prefs.getBool(_kShowForward) ?? false;
     showTypingTime.value = prefs.getBool(_kShowTypingTime) ?? false;
-    ghostMode.value = prefs.getBool(_kGhostMode) ?? false;
-    antiRead.value = prefs.getBool(_kAntiRead) ?? false;
+    ghostMode.value =
+        BuildProfile.stealthPresence && (prefs.getBool(_kGhostMode) ?? false);
+    antiRead.value =
+        BuildProfile.stealthPresence && (prefs.getBool(_kAntiRead) ?? false);
     selfOnlineCheck.value = prefs.getBool(_kSelfOnlineCheck) ?? true;
     hideAllChatsFolder.value = prefs.getBool(_kHideAllChatsFolder) ?? false;
     showHiddenChats.value = prefs.getBool(_kShowHiddenChats) ?? false;
