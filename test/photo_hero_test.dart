@@ -114,6 +114,52 @@ void main() {
     expect(tester.getSize(find.byKey(const ValueKey('target'))).height, 500);
   });
 
+  testWidgets('узкое фото с заливкой краёв не раздувается в полёте', (
+    tester,
+  ) async {
+    final tall = await tester.runAsync(
+      () => createTestImage(width: 2, height: 10),
+    );
+    const box = Rect.fromLTWH(50, 300, 200, 120);
+    const imageSize = Size(2, 10);
+    final hero = PhotoHeroController(
+      origin: () => inscribeRect(imageSize, box),
+      image: _TestImageProvider(tall!),
+      size: imageSize,
+    );
+    late BuildContext context;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (ctx) {
+            context = ctx;
+            return const Scaffold();
+          },
+        ),
+      ),
+    );
+
+    Navigator.of(
+      context,
+    ).push(PhotoHeroRoute<void>(hero: hero, builder: (_) => _page()));
+    await tester.pump();
+
+    var previous = 0.0;
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (_flying.evaluate().isEmpty) break;
+      final size = tester.getSize(_flying);
+      expect(size.width / size.height, closeTo(0.2, 0.01));
+      expect(size.height, greaterThanOrEqualTo(previous - 0.01));
+      expect(size.height, lessThanOrEqualTo(500.01));
+      previous = size.height;
+    }
+    expect(previous, greaterThan(120));
+
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('photo flies back to the origin rect on pop', (tester) async {
     final hero = PhotoHeroController(
       origin: () => _origin,

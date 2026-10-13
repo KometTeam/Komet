@@ -4679,6 +4679,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatListArchive => 'Архив';
 
   @override
+  String get chatListArchivePull => 'Потяните, чтобы открыть архив';
+
+  @override
+  String get chatListArchiveRelease => 'Отпустите, чтобы открыть архив';
+
+  @override
   String get chatListNewStory => 'Новая история';
 
   @override

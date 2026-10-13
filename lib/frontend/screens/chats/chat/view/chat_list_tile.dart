@@ -9,14 +9,14 @@ import 'package:komet/l10n/app_localizations.dart';
 class AnimatedChatTile extends StatefulWidget {
   final Widget child;
   final String id;
-  final int revision;
+  final Listenable moves;
   final bool isNew;
 
   const AnimatedChatTile({
     required super.key,
     required this.child,
     required this.id,
-    required this.revision,
+    required this.moves,
     required this.isNew,
   });
 
@@ -31,14 +31,14 @@ class _AnimatedChatTileState extends State<AnimatedChatTile>
 
   AnimationController? _controller;
   double? _lastContentY;
-  late int _lastRevision;
   double _moveDy = 0;
   bool _entering = false;
+  bool _visible = true;
 
   @override
   void initState() {
     super.initState();
-    _lastRevision = widget.revision;
+    widget.moves.addListener(_onMoves);
     if (widget.isNew) {
       _entering = true;
       final c = _controller = AnimationController(
@@ -49,16 +49,35 @@ class _AnimatedChatTileState extends State<AnimatedChatTile>
         if (mounted) setState(() => _entering = false);
       });
     }
+    _remeasure();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = TickerMode.valuesOf(context).enabled;
+    if (visible == _visible) return;
+    _visible = visible;
+    _lastContentY = null;
+    if (visible) _remeasure();
+  }
+
+  void _remeasure() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _lastContentY = _measureContentY();
+      if (mounted && _visible) _lastContentY = _measureContentY();
     });
   }
 
   @override
   void didUpdateWidget(covariant AnimatedChatTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.revision == _lastRevision) return;
-    _lastRevision = widget.revision;
+    if (identical(oldWidget.moves, widget.moves)) return;
+    oldWidget.moves.removeListener(_onMoves);
+    widget.moves.addListener(_onMoves);
+  }
+
+  void _onMoves() {
+    if (!_visible) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _runMove();
     });
@@ -89,6 +108,7 @@ class _AnimatedChatTileState extends State<AnimatedChatTile>
 
   @override
   void dispose() {
+    widget.moves.removeListener(_onMoves);
     _controller?.dispose();
     super.dispose();
   }

@@ -103,6 +103,32 @@ void main() {
     expect(find.byType(FittedBox), findsNothing);
   });
 
+  testWidgets('the source avatar stays under the sharper one in flight', (
+    tester,
+  ) async {
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigator,
+        home: _header(tag: _tag),
+      ),
+    );
+
+    navigator.currentState!.push(
+      MaterialPageRoute(builder: (_) => _profile(tag: _tag)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+
+    final layers = tester
+        .widgetList<FittedBox>(find.byType(FittedBox))
+        .map((f) => (f.child! as SizedBox).width)
+        .toList();
+    expect(layers, [44, 96]);
+
+    await tester.pumpAndSettle();
+  });
+
   testWidgets(
     'flying name inherits no decoration from the app fallback style',
     (tester) async {
@@ -164,7 +190,7 @@ void main() {
       final flying = find.byType(FittedBox);
       if (flying.evaluate().isEmpty) break;
       final fade = tester.widget<FadeTransition>(
-        find.ancestor(of: flying, matching: find.byType(FadeTransition)),
+        find.ancestor(of: flying.first, matching: find.byType(FadeTransition)),
       );
       minOpacity = fade.opacity.value < minOpacity
           ? fade.opacity.value

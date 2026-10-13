@@ -17,7 +17,6 @@ void main() {
             for (var index = 0; index < keys.length; index++)
               VisiblePageTickers(
                 index: index,
-                enabled: true,
                 positionChanges: position,
                 pagePosition: () => position.value,
                 child: SizedBox(key: keys[index]),
@@ -41,23 +40,5 @@ void main() {
     await tester.pump();
     expect(active(), [true, false, false]);
     expect(identical(keys[0].currentContext, original), isTrue);
-  });
-
-  testWidgets('disabled optimization preserves page ticker behavior', (
-    tester,
-  ) async {
-    final position = ValueNotifier<double>(0);
-    addTearDown(position.dispose);
-    final key = GlobalKey();
-    await tester.pumpWidget(
-      VisiblePageTickers(
-        index: 3,
-        enabled: false,
-        positionChanges: position,
-        pagePosition: () => position.value,
-        child: SizedBox(key: key),
-      ),
-    );
-    expect(TickerMode.valuesOf(key.currentContext!).enabled, isTrue);
   });
 }

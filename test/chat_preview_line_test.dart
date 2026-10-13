@@ -193,4 +193,24 @@ void main() {
     expect(chatKindIcon('DIALOG', isBot: true), Symbols.smart_toy);
     expect(chatKindIcon('DIALOG', isBot: false), isNull);
   });
+
+  test('превью длинного сообщения обрезается до шейпинга', () {
+    final long = 'а' * 5000;
+    expect(chatPreviewSnippet(long).length, 160);
+    expect(chatPreviewSnippet('коротко'), 'коротко');
+  });
+
+  test('обрезка не рвёт суррогатную пару', () {
+    final text = '${'x' * 159}😀хвост';
+    final snippet = chatPreviewSnippet(text);
+    expect(snippet, 'x' * 159);
+    expect(snippet.codeUnits.last, isNot(inInclusiveRange(0xD800, 0xDBFF)));
+  });
+
+  testWidgets('в строку превью уходит уже обрезанный текст', (tester) async {
+    await tester.pumpWidget(
+      _host(ChatPreviewLine(text: 'б' * 3000, style: _style)),
+    );
+    expect(_plainText(tester).length, 160);
+  });
 }

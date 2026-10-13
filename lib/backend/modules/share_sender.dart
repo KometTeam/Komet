@@ -142,6 +142,7 @@ class ShareSender {
 
   // #***! загрузка кончилась, правим строку чата на отправлено или ошибку
   static void _onUploadEvent(UploadJobEvent event) {
+    if (event is UploadJobUpdated) return;
     final entry = _tracked.remove(event.tempId);
     if (entry == null) return;
     if (event is UploadJobCancelled) {

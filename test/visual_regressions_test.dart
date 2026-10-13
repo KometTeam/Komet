@@ -32,19 +32,26 @@ class _MountCounterState extends State<_MountCounter> {
       SizedBox(height: 72, child: Text(widget.label));
 }
 
-Widget _chatList(List<String> order, int revision) => MaterialApp(
+Widget _chatList(
+  List<String> order,
+  Listenable moves, {
+  bool visible = true,
+}) => MaterialApp(
   home: Scaffold(
-    body: ListView(
-      children: [
-        for (final id in order)
-          AnimatedChatTile(
-            key: ValueKey('chat_$id'),
-            id: id,
-            revision: revision,
-            isNew: false,
-            child: _MountCounter(id),
-          ),
-      ],
+    body: TickerMode(
+      enabled: visible,
+      child: ListView(
+        children: [
+          for (final id in order)
+            AnimatedChatTile(
+              key: ValueKey('chat_$id'),
+              id: id,
+              moves: moves,
+              isNew: false,
+              child: _MountCounter(id),
+            ),
+        ],
+      ),
     ),
   ),
 );
@@ -73,11 +80,14 @@ void _useScreen(WidgetTester tester, {double keyboard = 0}) {
 void main() {
   testWidgets('a moving chat tile keeps its content mounted', (tester) async {
     _mounts = 0;
-    await tester.pumpWidget(_chatList(['a', 'b', 'c'], 0));
+    final moves = ValueNotifier(0);
+    addTearDown(moves.dispose);
+    await tester.pumpWidget(_chatList(['a', 'b', 'c'], moves));
     await tester.pump();
     expect(_mounts, 3);
 
-    await tester.pumpWidget(_chatList(['c', 'a', 'b'], 1));
+    moves.value++;
+    await tester.pumpWidget(_chatList(['c', 'a', 'b'], moves));
     await tester.pump();
     await tester.pumpAndSettle();
 
@@ -86,6 +96,28 @@ void main() {
       tester.getTopLeft(find.text('c')).dy,
       lessThan(tester.getTopLeft(find.text('a')).dy),
     );
+  });
+
+  testWidgets('плитки скрытой папки не меряют и не анимируют перестановку', (
+    tester,
+  ) async {
+    final moves = ValueNotifier(0);
+    addTearDown(moves.dispose);
+    await tester.pumpWidget(_chatList(['a', 'b', 'c'], moves, visible: false));
+    await tester.pump();
+
+    moves.value++;
+    await tester.pumpWidget(_chatList(['c', 'a', 'b'], moves, visible: false));
+    await tester.pump();
+    expect(tester.hasRunningAnimations, isFalse);
+
+    await tester.pumpWidget(_chatList(['c', 'a', 'b'], moves));
+    await tester.pump();
+    moves.value++;
+    await tester.pumpWidget(_chatList(['b', 'c', 'a'], moves));
+    await tester.pump();
+    expect(tester.hasRunningAnimations, isTrue);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a new notification replaces the previous one', (tester) async {

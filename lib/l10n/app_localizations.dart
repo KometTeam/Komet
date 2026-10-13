@@ -8420,6 +8420,18 @@ abstract class AppLocalizations {
   /// **'Archive'**
   String get chatListArchive;
 
+  /// No description provided for @chatListArchivePull.
+  ///
+  /// In en, this message translates to:
+  /// **'Swipe down to go to archive'**
+  String get chatListArchivePull;
+
+  /// No description provided for @chatListArchiveRelease.
+  ///
+  /// In en, this message translates to:
+  /// **'Release to go to archive'**
+  String get chatListArchiveRelease;
+
   /// No description provided for @chatListNewStory.
   ///
   /// In en, this message translates to:

@@ -92,6 +92,7 @@ class BubbleContext {
   final ValueListenable<int>? otherReadTime;
   final ValueListenable<List<double>>? uploadProgress;
   final VoidCallback? onCancelUpload;
+  final void Function(int index)? onCancelUploadItem;
   final void Function(StickerAttachment sticker)? onStickerTap;
   final ForwardedSourceTap? onForwardedSourceTap;
   final BubblePresentation? presentation;
@@ -118,6 +119,7 @@ class BubbleContext {
     this.otherReadTime,
     this.uploadProgress,
     this.onCancelUpload,
+    this.onCancelUploadItem,
     this.onStickerTap,
     this.onForwardedSourceTap,
     this.reactionInfo,
@@ -156,6 +158,7 @@ class BubbleContext {
     otherReadTime: otherReadTime,
     uploadProgress: uploadProgress,
     onCancelUpload: onCancelUpload,
+    onCancelUploadItem: onCancelUploadItem,
     onStickerTap: onStickerTap,
     onForwardedSourceTap: onForwardedSourceTap,
     reactionInfo: reactionInfo,
