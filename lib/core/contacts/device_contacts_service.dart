@@ -1,7 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:permission_handler/permission_handler.dart'
+    hide PermissionStatus;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_phonebook_names.dart';
@@ -74,8 +75,11 @@ class DeviceContactsService {
     final prefs = await SharedPreferences.getInstance();
     if (!force && prefs.getBool(_deniedKey) == true) return false;
 
-    final granted = await FlutterContacts.requestPermission(readonly: true);
-    if (!granted) {
+    final status = await FlutterContacts.permissions.request(
+      PermissionType.read,
+    );
+    if (status != PermissionStatus.granted &&
+        status != PermissionStatus.limited) {
       await prefs.setBool(_deniedKey, true);
       return false;
     }
@@ -97,11 +101,12 @@ class DeviceContactsService {
   // #***! дубли номера, берём первое имя
   static Future<bool> _readBook() async {
     try {
-      FlutterContacts.config.includeNonVisibleOnAndroid = true;
-      final contacts = await FlutterContacts.getContacts(withProperties: true);
+      final contacts = await FlutterContacts.getAll(
+        properties: {ContactProperty.name, ContactProperty.phone},
+      );
       _byLast10.clear();
       for (final contact in contacts) {
-        final name = contact.displayName.trim();
+        final name = contact.displayName?.trim() ?? '';
         if (name.isEmpty) continue;
         for (final phone in contact.phones) {
           final key = _last10(phone.number);
