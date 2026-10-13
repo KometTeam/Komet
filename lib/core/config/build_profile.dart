@@ -21,6 +21,10 @@ abstract final class BuildProfile {
   /// from App Store builds.
   static const bool isAppStoreBuild = LaunchFlags.appStoreBuild;
 
+  /// Any build reviewed by a store, Google Play or the App Store. Features
+  /// that store rules forbid are cut by this one flag on both platforms.
+  static const bool isStoreRelease = isStore || isAppStoreBuild;
+
   /// Plugins and their settings; built-in slash commands stay either way.
   static const bool plugins = !isAppStoreBuild;
 
@@ -33,14 +37,21 @@ abstract final class BuildProfile {
   static const bool spoofUi = !isStore && !isAppStoreBuild;
   static const bool tokenLogin = false;
   static const bool qrLogin = false;
-  static const bool devTools = !isStore;
-  static const bool insecureTransport = !isStore;
-  static const bool trafficCapture = !isStore;
-  static const bool pranks = !isStore;
-  static const bool hiddenContentViewers = !isStore;
-  static const bool digitalId = !isStore;
-  static const bool ipGeoLookup = !isStore;
-  static const bool sessionCityLookup = !isStore;
+  static const bool devTools = !isStoreRelease;
+  static const bool insecureTransport = !isStoreRelease;
+  static const bool trafficCapture = !isStoreRelease;
+  static const bool pranks = !isStoreRelease;
+  static const bool hiddenContentViewers = !isStoreRelease;
+  static const bool digitalId = !isStoreRelease;
+  static const bool ipGeoLookup = !isStoreRelease;
+  static const bool sessionCityLookup = !isStoreRelease;
+
+  /// Ghost mode and anti read hide presence and read receipts from other
+  /// people, which App Review treats as working around their privacy.
+  static const bool stealthPresence = !isAppStoreBuild;
+
+  /// The `komet://export-logs` link, an undocumented entry point.
+  static const bool logExportLink = !isAppStoreBuild;
 
   // Pure versions of the gates above. dart-define values are fixed at
   // compile time, so tests check every combination through these.
@@ -53,4 +64,9 @@ abstract final class BuildProfile {
 
   static bool spoofUiFor({required bool store, required bool appStoreBuild}) =>
       !store && !appStoreBuild;
+
+  static bool storeReleaseFor({
+    required bool store,
+    required bool appStoreBuild,
+  }) => store || appStoreBuild;
 }

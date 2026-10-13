@@ -2485,5 +2485,10 @@
   "temporaryPasswordRecoveryTitle": "Temporary password recovery",
   "temporaryPasswordRecoveryMessage": "The temporary MAX password could not be removed. Show it privately and save it before removing or changing the password in MAX settings.",
   "temporaryPasswordRecoveryShow": "Show password",
-  "temporaryPasswordRecoveryInstructions": "Remove or change this password in MAX before deleting Komet. Do not include it in screenshots or logs."
+  "temporaryPasswordRecoveryInstructions": "Remove or change this password in MAX before deleting Komet. Do not include it in screenshots or logs.",
+  "settingsTabCloudStorage": "Cloud storage",
+  "settingsTabPrivacyPolicy": "Privacy policy",
+  "settingsTabTermsOfUse": "Terms of use",
+  "appIconScreenHintIos": "The icon changes right away, iOS confirms it with a system dialog.",
+  "webPushIntroAppStore": "MAX's server sends ordinary push notifications only to the official MAX app, so Komet receives them through a web app on the Home Screen. MAX's own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required."
 }

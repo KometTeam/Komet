@@ -12,12 +12,21 @@ require 'json'
 # to the iOS 15 deployment target that firebase_core's podspec requires.
 FIREBASE_IOS_PLUGINS = %w[firebase_core firebase_messaging].freeze
 
+# The App Store build (KOMET_APPSTORE_BUILD=true, set next to
+# --dart-define=is_appstore_build=true) compiles the plugin runtime out, so the
+# QuickJS engine behind it is left out of the binary too.
+APPSTORE_STRIPPED_PLUGINS = %w[fjs].freeze
+STRIPPED_IOS_PLUGINS =
+  ENV['KOMET_APPSTORE_BUILD'] == 'true' ? APPSTORE_STRIPPED_PLUGINS : []
+
 deps_file = File.expand_path('../.flutter-plugins-dependencies', __dir__)
 if File.exist?(deps_file)
   deps = JSON.parse(File.read(deps_file))
   ios_plugins = deps.dig('plugins', 'ios')
   if ios_plugins
-    ios_plugins.reject! { |p| FIREBASE_IOS_PLUGINS.include?(p['name']) }
+    ios_plugins.reject! do |p|
+      FIREBASE_IOS_PLUGINS.include?(p['name']) || STRIPPED_IOS_PLUGINS.include?(p['name'])
+    end
     File.write(deps_file, JSON.generate(deps))
   end
 end

@@ -11617,6 +11617,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove or change this password in MAX before deleting Komet. Do not include it in screenshots or logs.'**
   String get temporaryPasswordRecoveryInstructions;
+
+  /// No description provided for @settingsTabCloudStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud storage'**
+  String get settingsTabCloudStorage;
+
+  /// No description provided for @settingsTabPrivacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get settingsTabPrivacyPolicy;
+
+  /// No description provided for @settingsTabTermsOfUse.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of use'**
+  String get settingsTabTermsOfUse;
+
+  /// No description provided for @appIconScreenHintIos.
+  ///
+  /// In en, this message translates to:
+  /// **'The icon changes right away, iOS confirms it with a system dialog.'**
+  String get appIconScreenHintIos;
+
+  /// No description provided for @webPushIntroAppStore.
+  ///
+  /// In en, this message translates to:
+  /// **'MAX\'s server sends ordinary push notifications only to the official MAX app, so Komet receives them through a web app on the Home Screen. MAX\'s own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.'**
+  String get webPushIntroAppStore;
 }
 
 class _AppLocalizationsDelegate

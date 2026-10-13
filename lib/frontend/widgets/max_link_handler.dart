@@ -23,9 +23,16 @@ import 'swipe_route.dart';
 import 'web_qr_login.dart';
 import '../../core/security/app_lock.dart';
 
-Future<bool> tryHandleMaxLink(BuildContext context, String url) async {
+Future<bool> tryHandleMaxLink(
+  BuildContext context,
+  String url, {
+  bool allowAppRoutes = true,
+}) async {
   final link = MaxLink.parse(url);
   if (link == null) return false;
+  if (!allowAppRoutes && (link is MaxRouteLink || link is MaxAuthLink)) {
+    return false;
+  }
 
   switch (link) {
     case MaxRootLink():
