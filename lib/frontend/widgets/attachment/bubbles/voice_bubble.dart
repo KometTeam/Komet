@@ -16,6 +16,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../custom_notification.dart';
 import '../../small_spinner.dart';
 import 'meta_marks.dart';
+import '../../upload_progress_ring.dart';
 
 class VoiceMessageBubble extends StatefulWidget {
   final int duration;
@@ -294,27 +295,13 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   }
 
   Widget _buildUploadIndicator(ValueListenable<List<double>> progress) {
-    return Padding(
+    return UploadProgressRing(
+      progress: progress,
+      color: _accent,
+      trackColor: _accent.withValues(alpha: 0.2),
+      size: 32,
+      strokeWidth: 2,
       padding: const EdgeInsets.all(4),
-      child: ValueListenableBuilder<List<double>>(
-        valueListenable: progress,
-        builder: (context, values, _) {
-          final value = values.isEmpty
-              ? 0.0
-              : values.reduce((a, b) => a + b) / values.length;
-          return TweenAnimationBuilder<double>(
-            tween: Tween<double>(end: value.clamp(0.0, 1.0)),
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            builder: (context, shown, _) => CircularProgressIndicator(
-              strokeWidth: 2,
-              value: shown >= 1.0 ? null : shown,
-              color: _accent,
-              backgroundColor: _accent.withValues(alpha: 0.2),
-            ),
-          );
-        },
-      ),
     );
   }
 

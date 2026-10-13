@@ -203,7 +203,14 @@ class ChatHeaderRow extends StatelessWidget {
                             ),
                             if (isOfficial) ...[
                               const SizedBox(width: 4),
-                              VerifiedMark(color: cs.primary, size: 16),
+                              ProfileHeroBadge(
+                                tag: heroTag,
+                                size: 16,
+                                child: VerifiedMark(
+                                  color: cs.primary,
+                                  size: 16,
+                                ),
+                              ),
                             ],
                           ],
                         ),
@@ -376,7 +383,11 @@ class ChatHeaderRow extends StatelessWidget {
                           ),
                           if (isOfficial) ...[
                             const SizedBox(width: 4),
-                            VerifiedMark(color: cs.primary, size: 16),
+                            ProfileHeroBadge(
+                              tag: heroTag,
+                              size: 16,
+                              child: VerifiedMark(color: cs.primary, size: 16),
+                            ),
                           ],
                         ],
                       ),

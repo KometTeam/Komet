@@ -980,6 +980,11 @@ class ChatMediaSendController {
         chatController.setMessageAt(idx, real);
         bumpMessages();
       }
+    } else if (event is UploadJobUpdated) {
+      final idx = chatController.indexOfId(event.tempId);
+      if (idx == -1) return;
+      chatController.setMessageAt(idx, event.message);
+      bumpMessages();
     } else if (event is UploadJobCancelled) {
       if (event.scheduled) return;
       final idx = chatController.indexOfId(event.tempId);

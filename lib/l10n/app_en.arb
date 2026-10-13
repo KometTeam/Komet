@@ -1868,6 +1868,8 @@
   "chatListEmpty": "Looks like it's empty here...",
   "chatListOpenToLoad": "open the chat to load it",
   "chatListArchive": "Archive",
+  "chatListArchivePull": "Swipe down to go to archive",
+  "chatListArchiveRelease": "Release to go to archive",
   "chatListNewStory": "New story",
   "chatListOpenVideoFailed": "Couldn't open the video",
   "chatListOpenPhotoFailed": "Couldn't open the photo",

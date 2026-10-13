@@ -1511,6 +1511,8 @@
   "chatListEmpty": "Кажется, тут пусто...",
   "chatListOpenToLoad": "зайдите в чат для подгрузки",
   "chatListArchive": "Архив",
+  "chatListArchivePull": "Потяните, чтобы открыть архив",
+  "chatListArchiveRelease": "Отпустите, чтобы открыть архив",
   "chatListNewStory": "Новая история",
   "chatListOpenVideoFailed": "Не удалось открыть видео",
   "chatListOpenPhotoFailed": "Не удалось открыть фото",

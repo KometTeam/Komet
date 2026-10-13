@@ -14,6 +14,8 @@ import '../../photo_viewer.dart';
 import '../photo_hero.dart';
 import '../../text_with_meta.dart';
 import 'album_layout.dart';
+import '../../upload_progress_ring.dart';
+import 'edge_stretch_fill.dart';
 import 'bubble_context.dart';
 import 'video_bubble.dart';
 import '../../../../core/config/komet_settings.dart';
@@ -210,8 +212,6 @@ class PhotoBubble extends StatelessWidget {
     required bool hasContentAbove,
   }) {
     final size = _displaySize(photo, hasCaption: hasCaption);
-    final constrainedWidth = size.width;
-    final constrainedHeight = size.height;
     final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
 
     final matchTop = hasCaption && !hasContentAbove;
@@ -231,18 +231,19 @@ class PhotoBubble extends StatelessWidget {
       bottomLeft: bottomL,
       bottomRight: bottomR,
     );
-    final memWidth = (constrainedWidth * dpr).round();
-    final memHeight = (constrainedHeight * dpr).round();
+    final shown = _shownSize(photo, size);
+    final memWidth = (shown.width * dpr).round();
+    final memHeight = (shown.height * dpr).round();
 
     return ClipRRect(
       borderRadius: radius,
       child: Stack(
         children: [
-          _buildPhotoImage(
+          _buildLetterboxedImage(
             ctx,
             photo,
-            constrainedWidth,
-            constrainedHeight,
+            size,
+            shown,
             memWidth: memWidth,
             memHeight: memHeight,
           ),
@@ -266,6 +267,7 @@ class PhotoBubble extends StatelessWidget {
                       radius: radius,
                       memWidth: memWidth,
                       memHeight: memHeight,
+                      letterboxed: shown != size,
                     );
                   },
                 ),
@@ -274,6 +276,63 @@ class PhotoBubble extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static const double _letterboxTolerance = 0.04;
+
+  static bool _isLetterboxed(MessageAttachment photo, Size box) {
+    final imageAspect = _aspectRatio(photo);
+    final boxAspect = box.width / box.height;
+    return (imageAspect - boxAspect).abs() / imageAspect > _letterboxTolerance;
+  }
+
+  static Size _shownSize(MessageAttachment photo, Size box) {
+    if (!_isLetterboxed(photo, box)) return box;
+    final imageAspect = _aspectRatio(photo);
+    return imageAspect < box.width / box.height
+        ? Size(box.height * imageAspect, box.height)
+        : Size(box.width, box.width / imageAspect);
+  }
+
+  Widget _buildLetterboxedImage(
+    BubbleContext ctx,
+    MessageAttachment photo,
+    Size box,
+    Size shown, {
+    required int memWidth,
+    required int memHeight,
+  }) {
+    final image = _buildPhotoImage(
+      ctx,
+      photo,
+      shown.width,
+      shown.height,
+      memWidth: memWidth,
+      memHeight: memHeight,
+    );
+    if (shown == box) return image;
+    return SizedBox.fromSize(
+      size: box,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          EdgeStretchFill(
+            source: _edgeSource(photo),
+            imageAspect: _aspectRatio(photo),
+            fallback: ctx.cs.surfaceContainerHighest,
+          ),
+          Center(child: image),
+        ],
+      ),
+    );
+  }
+
+  static ImageProvider? _edgeSource(MessageAttachment photo) {
+    final preview = dataUriImage(photo, photo.previewData);
+    if (preview != null) return preview;
+    final localPath = _localPathOf(photo);
+    if (localPath == null) return null;
+    return ResizeImage(FileImage(File(localPath)), width: 64);
   }
 
   Widget _buildPhotoImage(
@@ -433,38 +492,14 @@ class PhotoBubble extends StatelessWidget {
     ValueListenable<List<double>> progress,
     int index,
   ) {
-    final onCancel = ctx.onCancelUpload;
+    final cancelItem = ctx.onCancelUploadItem;
     return Positioned.fill(
-      child: ValueListenableBuilder<List<double>>(
-        valueListenable: progress,
-        builder: (context, values, _) {
-          final value = index < values.length ? values[index] : 1.0;
-          final indeterminate = value <= 0 || value >= 1.0;
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onCancel,
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.4),
-              alignment: Alignment.center,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 52,
-                    height: 52,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      value: indeterminate ? null : value,
-                      color: Colors.white,
-                    ),
-                  ),
-                  if (onCancel != null)
-                    const Icon(Symbols.close, size: 18, color: Colors.white),
-                ],
-              ),
-            ),
-          );
-        },
+      child: _UploadSlotOverlay(
+        progress: progress,
+        slot: index,
+        onCancel: cancelItem != null
+            ? () => cancelItem(index)
+            : ctx.onCancelUpload,
       ),
     );
   }
@@ -693,6 +728,7 @@ class PhotoBubble extends StatelessWidget {
     required BorderRadius radius,
     required int memWidth,
     required int memHeight,
+    bool letterboxed = false,
   }) {
     final photo = media[index];
     if (photo is VideoAttachment) {
@@ -701,8 +737,13 @@ class PhotoBubble extends StatelessWidget {
     }
     final photos = media.whereType<PhotoAttachment>().toList();
     final photoIndex = photos.indexOf(photo as PhotoAttachment);
+    final imageSize = _photoSize(photo);
     final hero = PhotoHeroController(
-      origin: () => photoHeroRectOf(tileContext),
+      origin: () {
+        final box = photoHeroRectOf(tileContext);
+        if (box == null || !letterboxed || imageSize == null) return box;
+        return inscribeRect(imageSize, box);
+      },
       image: _photoProvider(photo, memWidth: memWidth, memHeight: memHeight),
       size: _photoSize(photo),
       radius: radius,
@@ -719,6 +760,84 @@ class PhotoBubble extends StatelessWidget {
           hero: hero,
           sourceName: ctx.chatName,
           videoUserAgentProvider: () => api.session?.userAgent(),
+        ),
+      ),
+    );
+  }
+}
+
+class _UploadSlotOverlay extends StatefulWidget {
+  const _UploadSlotOverlay({
+    required this.progress,
+    required this.slot,
+    required this.onCancel,
+  });
+
+  final ValueListenable<List<double>> progress;
+  final int slot;
+  final VoidCallback? onCancel;
+
+  @override
+  State<_UploadSlotOverlay> createState() => _UploadSlotOverlayState();
+}
+
+class _UploadSlotOverlayState extends State<_UploadSlotOverlay> {
+  late bool _done = _isDone;
+
+  bool get _isDone =>
+      UploadProgressRing.fractionOf(widget.progress.value, widget.slot) >= 1;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.progress.addListener(_onProgress);
+  }
+
+  @override
+  void didUpdateWidget(_UploadSlotOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.progress, widget.progress)) {
+      oldWidget.progress.removeListener(_onProgress);
+      widget.progress.addListener(_onProgress);
+    }
+    _done = _isDone;
+  }
+
+  @override
+  void dispose() {
+    widget.progress.removeListener(_onProgress);
+    super.dispose();
+  }
+
+  void _onProgress() {
+    final done = _isDone;
+    if (done != _done) setState(() => _done = done);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: _done,
+      child: AnimatedOpacity(
+        opacity: _done ? 0 : 1,
+        duration: const Duration(milliseconds: 240),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onCancel,
+          child: ColoredBox(
+            color: Colors.black.withValues(alpha: 0.4),
+            child: Center(
+              child: UploadProgressRing(
+                progress: widget.progress,
+                slot: widget.slot,
+                color: Colors.white,
+                trackColor: Colors.white24,
+                size: 52,
+                iconSize: 18,
+                onCancel: widget.onCancel,
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -300,6 +300,11 @@ class _ChatScreenState extends State<ChatScreen>
       ? null
       : () => UploadService.instance.cancel(m.id);
 
+  void Function(int index)? _cancelUploadItemFor(CachedMessage m) =>
+      UploadService.instance.progressFor(m.id) == null
+      ? null
+      : (index) => UploadService.instance.cancelItem(m.id, index);
+
   ValueNotifier<Map<String, dynamic>?> _reactionNotifierFor(CachedMessage m) {
     final existing = _reactionNotifiers[m.id];
     if (existing != null) return existing;
@@ -1279,6 +1284,7 @@ class _ChatScreenState extends State<ChatScreen>
           imageUrl: _headerAvatarUrl(),
           chatType: widget.chatType,
           heroTag: _profileHeroTag,
+          initialOfficial: widget.chatType == 'DIALOG' && _peerOfficial,
           initialTab: initialTab,
           openedFromChat: true,
           onJumpToMessage: (chatRoute == null || widget.embedded)
@@ -5013,6 +5019,9 @@ class _ChatScreenState extends State<ChatScreen>
                                 reactionAnimation: _reactionAnimation,
                                 uploadProgress: _photoProgressFor(message),
                                 onCancelUpload: _cancelUploadFor(message),
+                                onCancelUploadItem: _cancelUploadItemFor(
+                                  message,
+                                ),
                                 onReplyTap: (id) => unawaited(
                                   _scrollNav.goTo(
                                     id,

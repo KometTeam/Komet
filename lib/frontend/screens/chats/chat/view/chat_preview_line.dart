@@ -10,6 +10,15 @@ import 'package:komet/frontend/widgets/formatted_message_text.dart';
 import 'package:komet/models/chat_preview_media.dart';
 
 const String _forwardMark = '↪ ';
+const int _previewMaxLength = 160;
+
+String chatPreviewSnippet(String text) {
+  if (text.length <= _previewMaxLength) return text;
+  var end = _previewMaxLength;
+  final last = text.codeUnitAt(end - 1);
+  if (last >= 0xD800 && last <= 0xDBFF) end--;
+  return text.substring(0, end);
+}
 
 IconData? chatKindIcon(String chatType, {required bool isBot}) {
   switch (chatType) {
@@ -127,10 +136,14 @@ class ChatPreviewLine extends StatelessWidget {
       final body = detail != null
           ? ': $detail'
           : label!.substring(forwarded ? _forwardMark.length : 0);
-      spans.add(TextSpan(text: body, style: bodyStyle));
+      spans.add(TextSpan(text: chatPreviewSnippet(body), style: bodyStyle));
     } else {
       spans.addAll(
-        FormattedMessageText.buildInlineChildren(text, ranges, bodyStyle),
+        FormattedMessageText.buildInlineChildren(
+          chatPreviewSnippet(text),
+          ranges,
+          bodyStyle,
+        ),
       );
     }
 

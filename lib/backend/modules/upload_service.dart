@@ -52,6 +52,18 @@ class UploadJobDone extends UploadJobEvent {
   final String? fileToken;
 }
 
+class UploadJobUpdated extends UploadJobEvent {
+  const UploadJobUpdated({
+    required super.chatId,
+    required super.tempId,
+    required super.kind,
+    required super.scheduled,
+    required this.message,
+  });
+
+  final CachedMessage message;
+}
+
 class UploadJobFailed extends UploadJobEvent {
   const UploadJobFailed({
     required super.chatId,
@@ -73,6 +85,7 @@ class UploadJobCancelled extends UploadJobEvent {
     required super.scheduled,
   });
 }
+
 class UploadFailure implements Exception {
   const UploadFailure(this.message);
 
@@ -106,10 +119,11 @@ class UploadJob {
     required int slots,
     this.filename,
     this.totalBytes = 0,
-    this.placeholder,
+    CachedMessage? placeholder,
     this.scheduledTime,
     this.encryptedPayload = false,
-  }) : _session = api.session,
+  }) : _placeholder = placeholder,
+       _session = api.session,
        _sessionEpoch = api.sessionEpoch,
        _accountEpoch = TokenStorage.accountEpoch,
        _slots = slots < 1 ? 1 : slots,
@@ -120,6 +134,8 @@ class UploadJob {
        ),
        bytes = ValueNotifier<UploadBytes>(UploadBytes(0, totalBytes)) {
     if (_slots == 1 && totalBytes > 0) _total[0] = totalBytes;
+    _activeSlots = List<int>.generate(_slots, (i) => i);
+    _slotCancels = List.generate(_slots, (_) => Completer<void>());
   }
 
   final String id;
@@ -128,7 +144,8 @@ class UploadJob {
   final UploadKind kind;
   final String? filename;
   final int totalBytes;
-  final CachedMessage? placeholder;
+  CachedMessage? _placeholder;
+  CachedMessage? get placeholder => _placeholder;
   final int? scheduledTime;
   final bool encryptedPayload;
   final Object? _session;
@@ -159,16 +176,42 @@ class UploadJob {
   final List<int> _sent;
   final List<int> _total;
   final Completer<void> _cancelSignal = Completer<void>();
+  late final List<int> _activeSlots;
+  late final List<Completer<void>> _slotCancels;
 
   bool get scheduled => scheduledTime != null;
   int get slots => _slots;
   bool get isCancelled => _cancelSignal.isCompleted;
   Future<void> get cancelled => _cancelSignal.future;
+  int get activeSlotCount => _activeSlots.length;
+
+  bool isSlotCancelled(int slot) => _slotCancels[slot].isCompleted;
+
+  Future<void> slotCancelled(int slot) =>
+      Future.any([_cancelSignal.future, _slotCancels[slot].future]);
+
+  bool dropVisible(int visibleIndex) {
+    if (visibleIndex < 0 || visibleIndex >= _activeSlots.length) return false;
+    final slot = _activeSlots.removeAt(visibleIndex);
+    if (!_slotCancels[slot].isCompleted) _slotCancels[slot].complete();
+    final placeholder = _placeholder;
+    final attachments = placeholder?.attachments;
+    if (placeholder != null &&
+        attachments != null &&
+        visibleIndex < attachments.length) {
+      _placeholder = placeholder.copyWith(
+        attachments: [...attachments]..removeAt(visibleIndex),
+      );
+    }
+    _publish();
+    return true;
+  }
 
   // #***! прогресс по слоту, дальше считаем общий
   void cancel() {
     if (!isCancelled) _cancelSignal.complete();
   }
+
   void report(int slot, int sent, int total) {
     if (slot < 0 || slot >= _slots) return;
     _sent[slot] = sent;
@@ -193,16 +236,17 @@ class UploadJob {
 
   // #***! общий прогресс по байтам, размеров нет усредняем доли
   void _publish() {
-    final fractions = List<double>.generate(_slots, (i) {
-      if (_total[i] <= 0) return 0.0;
-      return (_sent[i] / _total[i]).clamp(0.0, 1.0);
-    });
+    final fractions = [
+      for (final slot in _activeSlots)
+        _total[slot] <= 0 ? 0.0 : (_sent[slot] / _total[slot]).clamp(0.0, 1.0),
+    ];
     var sumSent = 0;
     var sumTotal = 0;
     var fractionSum = 0.0;
-    for (var i = 0; i < _slots; i++) {
-      sumSent += _sent[i];
-      sumTotal += _total[i];
+    for (var i = 0; i < _activeSlots.length; i++) {
+      final slot = _activeSlots[i];
+      sumSent += _sent[slot];
+      sumTotal += _total[slot];
       fractionSum += fractions[i];
     }
     progress.value = fractions;
@@ -211,7 +255,7 @@ class UploadJob {
       id,
       sent: sumSent,
       total: sumTotal,
-      fraction: fractionSum / _slots,
+      fraction: fractions.isEmpty ? 0 : fractionSum / fractions.length,
     );
   }
 }
@@ -246,6 +290,33 @@ class UploadService {
   UploadJob? job(String tempId) => _jobs[tempId];
 
   void cancel(String tempId) => _jobs[tempId]?.cancel();
+
+  void cancelItem(String tempId, int index) {
+    final job = _jobs[tempId];
+    if (job == null) return;
+    if (job.activeSlotCount <= 1) {
+      job.cancel();
+      return;
+    }
+    if (!job.dropVisible(index)) return;
+    final placeholder = job.placeholder;
+    if (placeholder == null || job.scheduled) return;
+    MessageSessionCache.replace(
+      job.accountId,
+      job.chatId,
+      job.id,
+      (_) => placeholder,
+    );
+    _events.add(
+      UploadJobUpdated(
+        chatId: job.chatId,
+        tempId: job.id,
+        kind: job.kind,
+        scheduled: job.scheduled,
+        message: placeholder,
+      ),
+    );
+  }
 
   ValueListenable<List<double>>? progressFor(String tempId) =>
       _jobs[tempId]?.progress;
@@ -293,13 +364,18 @@ class UploadService {
       ),
       (job) async {
         final tokens = await _uploadPhotos(jobs, job);
-        if (tokens.any((token) => token == null)) {
+        if (job.isCancelled) throw const UploadCancelled();
+        final kept = [
+          for (var i = 0; i < tokens.length; i++)
+            if (!job.isSlotCancelled(i)) tokens[i],
+        ];
+        if (kept.isEmpty) throw const UploadCancelled();
+        if (kept.any((token) => token == null)) {
           throw const UploadFailure('upload_failed');
         }
-        if (job.isCancelled) throw const UploadCancelled();
         final sent = await messagesModule.sendPhotoMessage(
           chatId,
-          tokens.cast<String>(),
+          kept.cast<String>(),
           caption: caption.isEmpty ? null : caption,
           scheduledTime: scheduledTime,
           beforeSend: job.ensureSendAllowed,
@@ -728,6 +804,7 @@ class UploadService {
     MessageSessionCache.removeMessage(job.accountId, job.chatId, job.id);
     unawaited(chats.reconcileLastMessage(job.accountId, job.chatId));
   }
+
   // могли закрыть сразу после выбора файла, а загрузка живёт дальше
   void _syncChatPreview(
     CachedMessage? message,
@@ -770,8 +847,10 @@ class UploadService {
       while (!failed) {
         final i = nextIndex++;
         if (i >= jobs.length) return;
+        if (job.isSlotCancelled(i)) continue;
         final token = await _uploadOnePhoto(jobs[i], i, job);
         if (token == null) {
+          if (job.isSlotCancelled(i)) continue;
           failed = true;
           return;
         }
@@ -800,11 +879,11 @@ class UploadService {
       file = photo.file;
     }
     try {
-      if (job.isCancelled) return null;
+      if (job.isCancelled || job.isSlotCancelled(index)) return null;
       for (var attempt = 0; attempt < _photoAttempts; attempt++) {
         if (attempt > 0) {
           await Future.delayed(Duration(seconds: attempt));
-          if (job.isCancelled) return null;
+          if (job.isCancelled || job.isSlotCancelled(index)) return null;
           job.resetSlot(index);
         }
         try {
@@ -818,13 +897,13 @@ class UploadService {
             file,
             filename: _photoFilename(file),
             onProgress: (sent, total) => job.report(index, sent, total),
-            cancel: job.cancelled,
+            cancel: job.slotCancelled(index),
           );
           if (token != null) return token;
         } catch (e) {
           logger.w('uploadOnePhoto attempt ${attempt + 1}: $e');
         }
-        if (job.isCancelled) return null;
+        if (job.isCancelled || job.isSlotCancelled(index)) return null;
       }
       return null;
     } finally {

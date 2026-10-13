@@ -14,11 +14,11 @@ class LocalAvatarBuilder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (userId <= 0) return builder(context, null);
     final store = LocalContactAvatars.instance;
     return ValueListenableBuilder<int>(
       valueListenable: store.revision,
-      builder: (context, _, _) => builder(context, store.imageFor(userId)),
+      builder: (context, _, _) =>
+          builder(context, userId <= 0 ? null : store.imageFor(userId)),
     );
   }
 }

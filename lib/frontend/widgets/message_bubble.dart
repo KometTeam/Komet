@@ -655,6 +655,7 @@ class MessageBubble extends StatelessWidget {
   final ReactionAnimojiResolver? reactionAnimojiResolver;
   final ValueListenable<List<double>>? uploadProgress;
   final VoidCallback? onCancelUpload;
+  final void Function(int index)? onCancelUploadItem;
   final void Function(String messageId)? onReplyTap;
   final void Function(int senderId)? onAvatarTap;
   final ForwardedSourceTap? onForwardedSourceTap;
@@ -689,6 +690,7 @@ class MessageBubble extends StatelessWidget {
     this.reactionAnimojiResolver,
     this.uploadProgress,
     this.onCancelUpload,
+    this.onCancelUploadItem,
     this.onReplyTap,
     this.onAvatarTap,
     this.onForwardedSourceTap,
@@ -1175,6 +1177,7 @@ class MessageBubble extends StatelessWidget {
       otherReadTime: otherReadTime,
       uploadProgress: uploadProgress,
       onCancelUpload: onCancelUpload,
+      onCancelUploadItem: onCancelUploadItem,
       onStickerTap: onStickerTap,
       onForwardedSourceTap: onForwardedSourceTap,
       reactionInfo: _resolveReactionInfo(),

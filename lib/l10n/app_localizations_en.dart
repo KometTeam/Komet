@@ -4640,6 +4640,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatListArchive => 'Archive';
 
   @override
+  String get chatListArchivePull => 'Swipe down to go to archive';
+
+  @override
+  String get chatListArchiveRelease => 'Release to go to archive';
+
+  @override
   String get chatListNewStory => 'New story';
 
   @override

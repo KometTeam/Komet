@@ -40,6 +40,7 @@ class _FpsOverlayLayerState extends State<FpsOverlayLayer> {
   int _jankCount = 0;
   bool _worstRasterBound = false;
   DateTime _lastUiUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+  int _ownFrames = 0;
   double? _left;
   double? _top;
 
@@ -99,6 +100,10 @@ class _FpsOverlayLayerState extends State<FpsOverlayLayer> {
 
   void _onTimings(List<FrameTiming> timings) {
     for (final t in timings) {
+      if (_ownFrames > 0) {
+        _ownFrames--;
+        continue;
+      }
       final build = t.buildDuration.inMicroseconds;
       final raster = t.rasterDuration.inMicroseconds;
       final sample = _FrameSample(
@@ -133,8 +138,15 @@ class _FpsOverlayLayerState extends State<FpsOverlayLayer> {
 
     final now = DateTime.now();
     if (now.difference(_lastUiUpdate).inMilliseconds < _minUiRefreshMs) return;
-    _lastUiUpdate = now;
     if (!mounted) return;
+    final unchanged =
+        fps.round() == _fps.round() &&
+        worst ~/ 1000 == _worstMicros ~/ 1000 &&
+        _janky.length == _jankCount &&
+        worstRasterBound == _worstRasterBound;
+    if (unchanged) return;
+    _lastUiUpdate = now;
+    _ownFrames++;
     setState(() {
       _fps = fps;
       _worstMicros = worst;
@@ -169,40 +181,45 @@ class _FpsOverlayLayerState extends State<FpsOverlayLayer> {
               _clampPositionToScreen();
             });
           },
-          child: Material(
-            key: _badgeKey,
-            color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xCC000000),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${_fps.round()} FPS · ${_refreshRate.round()} Hz',
-                    style: TextStyle(
-                      color: tint,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                  if (_jankCount > 0)
+          child: RepaintBoundary(
+            child: Material(
+              key: _badgeKey,
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xCC000000),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
                     Text(
-                      '${(_worstMicros / 1000).round()} ms ×$_jankCount '
-                      '${_worstRasterBound ? 'gpu' : 'ui'}',
+                      '${_fps.round()} FPS · ${_refreshRate.round()} Hz',
                       style: TextStyle(
                         color: tint,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
-                ],
+                    if (_jankCount > 0)
+                      Text(
+                        '${(_worstMicros / 1000).round()} ms ×$_jankCount '
+                        '${_worstRasterBound ? 'gpu' : 'ui'}',
+                        style: TextStyle(
+                          color: tint,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

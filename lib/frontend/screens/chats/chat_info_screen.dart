@@ -76,6 +76,7 @@ class ChatInfoScreen extends StatefulWidget {
   final String chatType;
 
   final int? dialogPeerId;
+  final bool initialOfficial;
   final ChatInfoTab? initialTab;
   final Object? heroTag;
   final bool openedFromChat;
@@ -89,6 +90,7 @@ class ChatInfoScreen extends StatefulWidget {
     required this.imageUrl,
     required this.chatType,
     this.dialogPeerId,
+    this.initialOfficial = false,
     this.initialTab,
     this.heroTag,
     this.openedFromChat = false,
@@ -961,12 +963,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
   }
 
-  Widget _avatarPhoto(ColorScheme cs, String url) {
+  Widget _avatarPhoto(ColorScheme cs, String url, {bool fadeIn = true}) {
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
       memCacheWidth: _avatarMemWidth,
-      fadeInDuration: const Duration(milliseconds: 150),
+      fadeInDuration: fadeIn
+          ? const Duration(milliseconds: 150)
+          : Duration.zero,
       errorWidget: (_, _, _) => ColoredBox(
         color: cs.surfaceContainerHigh,
         child: Center(
@@ -992,7 +996,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         fadeIn: false,
       );
     }
-    return _avatarPhoto(cs, url);
+    return _avatarPhoto(cs, url, fadeIn: false);
   }
 
   void _refreshUnreadStories() {
@@ -1290,10 +1294,16 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             ),
           ),
         ),
-        if (_otherId != null && ContactCache.isOfficial(_otherId!))
+        if (_otherId != null
+            ? ContactCache.isOfficial(_otherId!)
+            : widget.initialOfficial)
           Padding(
             padding: const EdgeInsets.only(left: 4),
-            child: VerifiedMark(size: 18, color: cs.primary),
+            child: ProfileHeroBadge(
+              tag: widget.heroTag,
+              size: 18,
+              child: VerifiedMark(size: 18, color: cs.primary),
+            ),
           ),
         SizedBox(
           width: hasToggle ? 30 : 0,

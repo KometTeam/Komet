@@ -19,6 +19,7 @@ import '../core/protocol/opcode_map.dart';
 import '../core/protocol/packet.dart';
 import '../core/storage/device_identity.dart';
 import '../core/storage/spoofing_service.dart';
+import '../core/transport/dial_host.dart';
 import '../core/transport/dispatcher.dart';
 import '../core/transport/session_factory.dart';
 import '../core/transport/tls_config.dart';
@@ -230,11 +231,12 @@ class Api {
       );
 
       _setSessionState(SessionState.connected);
-      _reconnectAttempts = 0;
 
       // #***! Сервер отвечает кто мы для него💔
       HandshakeInfo info;
       try {
+        await resolveDialHost(await _dialHost(endpoint.host));
+        if (gen != _connectGen) return;
         logger.i('connect: сокет готов, отправляю хэндшейк');
         info = await session.connect();
       } catch (e) {
@@ -294,6 +296,7 @@ class Api {
         return;
       }
       _loginGate.open();
+      _reconnectAttempts = 0;
       if (_sessionState == SessionState.online) {
         _stateController.add(SessionState.online);
         _handshakeSuccessController.add(info.deviceName ?? 'Unknown');
@@ -766,6 +769,11 @@ class Api {
   };
 
   // #***! прокси в строку socks5h://user:pass@host:port
+  static Future<String> _dialHost(String endpointHost) async {
+    final proxy = await ProxyConfig.load();
+    return proxy.isEnabled ? proxy.host : endpointHost;
+  }
+
   static Future<String?> _buildProxyUrl() async {
     final p = await ProxyConfig.load();
     if (!p.isEnabled) return null;

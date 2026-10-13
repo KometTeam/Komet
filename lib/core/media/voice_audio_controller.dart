@@ -11,6 +11,7 @@ import '../utils/download_progress.dart';
 import '../utils/logger.dart';
 import '../utils/media_cache.dart';
 import 'opus_ogg_index.dart';
+import 'voice_playback_session.dart';
 
 // #***! почему не играет, не скачалось или плеер не открыл
 enum VoiceAudioFailure { none, download, playback }
@@ -310,6 +311,9 @@ class VoiceAudioController {
 
     _sliceOffset = offset;
     position.value = offset;
+
+    await VoicePlaybackSession.prepare();
+    if (_disposed || generation != _startGeneration) return;
 
     try {
       final player = OggOpusPlayer(path);
