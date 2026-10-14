@@ -8,6 +8,7 @@ import '../../../core/games/checkers.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../../core/config/app_fonts.dart';
+import '../../../core/config/build_profile.dart';
 
 Future<void> showKometHub(
   BuildContext context, {
@@ -173,13 +174,14 @@ class _KometHubState extends State<_KometHub> {
           l10n.hubCheckersTileSubtitle,
           () => _go(_HubPage.checkers),
         ),
-        _tile(
-          cs,
-          Symbols.more_horiz,
-          l10n.hubMoreSoonTitle,
-          l10n.hubMoreSoonSubtitle,
-          null,
-        ),
+        if (!BuildProfile.isStoreRelease)
+          _tile(
+            cs,
+            Symbols.more_horiz,
+            l10n.hubMoreSoonTitle,
+            l10n.hubMoreSoonSubtitle,
+            null,
+          ),
         const SizedBox(height: 12),
       ],
     );

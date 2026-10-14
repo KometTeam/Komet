@@ -556,7 +556,7 @@ class WebAppBridge {
     if (context == null) return;
     if (!await _authorizedRequest()) return;
     if (!context.mounted) return;
-    await openExternalUrl(context, url);
+    await openExternalUrl(context, url, fromWebContent: true);
   }
 
   Future<void> _share(

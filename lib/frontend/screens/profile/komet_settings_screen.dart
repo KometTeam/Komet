@@ -133,31 +133,33 @@ class KometSettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             const SectionHeader(
-              'Ghost Mode',
+              BuildProfile.stealthPresence ? 'Ghost Mode' : 'Presence',
               padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
             ),
             SettingsCard(
               children: [
-                ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.ghostMode,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.visibility_off,
-                    label: 'Ghost Mode',
-                    subtitle: l10n.kometSettingsGhostModeSubtitle,
-                    value: value,
-                    onChanged: _setGhostMode,
+                if (BuildProfile.stealthPresence) ...[
+                  ValueListenableBuilder<bool>(
+                    valueListenable: KometSettings.ghostMode,
+                    builder: (context, value, _) => SettingsToggleTile(
+                      icon: Symbols.visibility_off,
+                      label: 'Ghost Mode',
+                      subtitle: l10n.kometSettingsGhostModeSubtitle,
+                      value: value,
+                      onChanged: _setGhostMode,
+                    ),
                   ),
-                ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.antiRead,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.mark_chat_read,
-                    label: 'Anti read',
-                    subtitle: l10n.kometSettingsAntiReadSubtitle,
-                    value: value,
-                    onChanged: KometSettings.setAntiRead,
+                  ValueListenableBuilder<bool>(
+                    valueListenable: KometSettings.antiRead,
+                    builder: (context, value, _) => SettingsToggleTile(
+                      icon: Symbols.mark_chat_read,
+                      label: 'Anti read',
+                      subtitle: l10n.kometSettingsAntiReadSubtitle,
+                      value: value,
+                      onChanged: KometSettings.setAntiRead,
+                    ),
                   ),
-                ),
+                ],
                 ValueListenableBuilder<bool>(
                   valueListenable: KometSettings.selfOnlineCheck,
                   builder: (context, value, _) => SettingsToggleTile(

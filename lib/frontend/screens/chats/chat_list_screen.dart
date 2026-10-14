@@ -4414,10 +4414,12 @@ class _ChatListScreenState extends State<ChatListScreen>
         openMiniApp(context, botId: botId, chatId: chatId, title: name),
       ),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        height: 18,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: cs.primary,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(9),
         ),
         child: Text(
           AppLocalizations.of(context)!.miniAppOpen,
@@ -4425,6 +4427,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             color: cs.onPrimary,
             fontSize: 13,
             fontWeight: FontWeight.w600,
+            height: 1,
           ),
         ),
       ),
