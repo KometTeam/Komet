@@ -18,6 +18,7 @@ import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/hint_bubble.dart';
+import '../../widgets/info_action_sheet.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
@@ -278,6 +279,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
       return;
     }
     await CloudStorageModule.cacheEnvGroupId(profile.id, result.id);
+    if (!mounted) return;
     setState(() {
       _isCreatingEnv = false;
       _envState = _EnvState.ready;
@@ -285,6 +287,46 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
       _accountId = profile.id;
     });
     _loadFiles(profile.id, result.id);
+    unawaited(_showHowItWorks());
+  }
+
+  Future<void> _showHowItWorks() async {
+    final l10n = AppLocalizations.of(context)!;
+    final groupId = _envGroupId;
+    await showInfoActionSheet(
+      context,
+      headerIcon: Symbols.cloud,
+      title: l10n.cloudStorageAboutTitle,
+      subtitle: l10n.cloudStorageAboutSubtitle,
+      items: [
+        InfoActionSheetItem(
+          icon: Symbols.visibility_off,
+          title: l10n.cloudStorageAboutGroupTitle,
+          body: l10n.cloudStorageAboutGroupBody,
+        ),
+        InfoActionSheetItem(
+          icon: Symbols.badge,
+          title: groupId == null
+              ? l10n.cloudStorageAboutSampleNameTitle(
+                  CloudStorageModule.sampleTitle,
+                )
+              : l10n.cloudStorageAboutNameTitle(
+                  CloudStorageModule.titleFor(groupId),
+                ),
+          body: l10n.cloudStorageAboutNameBody,
+        ),
+        InfoActionSheetItem(
+          icon: Symbols.devices,
+          title: l10n.cloudStorageAboutOtherAppsTitle,
+          body: l10n.cloudStorageAboutOtherAppsBody,
+        ),
+        InfoActionSheetItem(
+          icon: Symbols.link,
+          title: l10n.cloudStorageAboutLinksTitle,
+          body: l10n.cloudStorageAboutLinksBody,
+        ),
+      ],
+    );
   }
 
   Future<void> _pickAndUploadFile() async {
@@ -382,6 +424,13 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
           l10n.cloudStorageTitle,
           style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Symbols.info, color: cs.onSurface),
+            tooltip: l10n.cloudStorageAboutTooltip,
+            onPressed: _showHowItWorks,
+          ),
+        ],
       ),
       body: switch (_envState) {
         _EnvState.loading => const Center(child: SmallSpinner(size: 36)),

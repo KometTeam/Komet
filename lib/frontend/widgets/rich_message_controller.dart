@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/utils/text_format.dart';
@@ -38,13 +40,24 @@ const List<TextFormat> composerFormats = [
   TextFormat.emphasized,
   TextFormat.underline,
   TextFormat.strikethrough,
+  TextFormat.monospaced,
+  TextFormat.code,
+  TextFormat.heading,
   TextFormat.quote,
+  TextFormat.link,
 ];
 
 class _Interval {
   int start;
   int end;
   _Interval(this.start, this.end);
+}
+
+class _LinkEntity {
+  int start;
+  int end;
+  final String url;
+  _LinkEntity(this.start, this.end, this.url);
 }
 
 class _MentionEntity {
@@ -76,6 +89,7 @@ class RichMessageController extends TextEditingController {
   final Map<TextFormat, List<_Interval>> _intervals = {};
   final List<_AnimojiEntity> _animoji = [];
   final List<_MentionEntity> _mentions = [];
+  final List<_LinkEntity> _links = [];
   int _entitySeq = 0;
 
   RichMessageController({super.text});
@@ -190,6 +204,7 @@ class RichMessageController extends TextEditingController {
         'from': from,
         'length': to - from,
         if (range.entityId != null) 'entityId': range.entityId,
+        if (range.attributes != null) 'attributes': range.attributes,
       });
     }
     return (text: glyphText, elements: elements);
@@ -206,22 +221,33 @@ class RichMessageController extends TextEditingController {
   }
 
   bool get hasFormatting =>
-      _intervals.values.any((list) => list.isNotEmpty) || _mentions.isNotEmpty;
+      _intervals.values.any((list) => list.isNotEmpty) ||
+      _mentions.isNotEmpty ||
+      _links.isNotEmpty;
 
   void clearFormatting() {
-    if (_intervals.isEmpty) return;
+    if (_intervals.isEmpty && _links.isEmpty) return;
     _intervals.clear();
+    _links.clear();
     notifyListeners();
   }
 
   void setFormatRanges(Iterable<FormatRange> ranges) {
     _intervals.clear();
     _mentions.clear();
+    _links.clear();
     for (final range in ranges) {
       if (range.format == TextFormat.userMention) {
         final userId = range.entityId;
         if (userId != null) {
           _mentions.add(_MentionEntity(range.start, range.end, userId));
+        }
+        continue;
+      }
+      if (range.format == TextFormat.link) {
+        final url = range.url;
+        if (url != null && url.isNotEmpty) {
+          _links.add(_LinkEntity(range.start, range.end, url));
         }
         continue;
       }
@@ -231,6 +257,7 @@ class RichMessageController extends TextEditingController {
           .add(_Interval(range.start, range.end));
     }
     _mentions.sort((a, b) => a.start.compareTo(b.start));
+    _links.sort((a, b) => a.start.compareTo(b.start));
     for (final list in _intervals.values) {
       _normalize(list);
     }
@@ -264,20 +291,78 @@ class RichMessageController extends TextEditingController {
         ),
       );
     }
+    for (final link in _links) {
+      ranges.add(
+        FormatRange(
+          format: TextFormat.link,
+          start: link.start,
+          length: link.end - link.start,
+          attributes: {'url': link.url},
+        ),
+      );
+    }
     return ranges;
   }
 
   bool isFormatActive(TextFormat format) {
     final selection = value.selection;
     if (!selection.isValid || selection.isCollapsed) return false;
-    return _isCovered(_intervals[format], selection.start, selection.end);
+    if (format == TextFormat.link) {
+      return _isCovered(
+        [for (final link in _links) _Interval(link.start, link.end)],
+        selection.start,
+        selection.end,
+      );
+    }
+    final (start, end) = _formatSpan(format, selection.start, selection.end);
+    return _isCovered(_intervals[format], start, end);
+  }
+
+  void setLink(TextRange range, String? url) {
+    final start = range.start;
+    final end = range.end;
+    if (start < 0 || end > value.text.length || end <= start) return;
+    _cutLinks(start, end);
+    if (url != null && url.isNotEmpty) {
+      _links
+        ..add(_LinkEntity(start, end, url))
+        ..sort((a, b) => a.start.compareTo(b.start));
+    }
+    notifyListeners();
+  }
+
+  void _cutLinks(int start, int end) {
+    final kept = <_LinkEntity>[];
+    for (final link in _links) {
+      if (link.end <= start || link.start >= end) {
+        kept.add(link);
+        continue;
+      }
+      if (link.start < start) {
+        kept.add(_LinkEntity(link.start, start, link.url));
+      }
+      if (link.end > end) {
+        kept.add(_LinkEntity(end, link.end, link.url));
+      }
+    }
+    _links
+      ..clear()
+      ..addAll(kept);
+  }
+
+  (int, int) _formatSpan(TextFormat format, int start, int end) {
+    if (format != TextFormat.heading) return (start, end);
+    final text = value.text;
+    final lineStart = start == 0 ? 0 : text.lastIndexOf('\n', start - 1) + 1;
+    final lineEnd = text.indexOf('\n', math.max(start, end - 1));
+    return (lineStart, lineEnd == -1 ? text.length : lineEnd);
   }
 
   void toggleFormat(TextFormat format) {
     final selection = value.selection;
     if (!selection.isValid || selection.isCollapsed) return;
-    final start = selection.start;
-    final end = selection.end;
+    final (start, end) = _formatSpan(format, selection.start, selection.end);
+    if (end <= start) return;
     final list = _intervals.putIfAbsent(format, () => []);
     if (_isCovered(list, start, end)) {
       _subtract(list, start, end);
@@ -289,7 +374,12 @@ class RichMessageController extends TextEditingController {
   }
 
   void _remap(String oldText, String newText) {
-    if (_intervals.isEmpty && _animoji.isEmpty && _mentions.isEmpty) return;
+    if (_intervals.isEmpty &&
+        _animoji.isEmpty &&
+        _mentions.isEmpty &&
+        _links.isEmpty) {
+      return;
+    }
     final oldLen = oldText.length;
     final newLen = newText.length;
 
@@ -337,6 +427,14 @@ class RichMessageController extends TextEditingController {
         mention.start = mapStart(mention.start);
         mention.end = mapEnd(mention.end);
       }
+    }
+
+    if (_links.isNotEmpty) {
+      for (final link in _links) {
+        link.start = mapStart(link.start);
+        link.end = mapEnd(link.end);
+      }
+      _links.removeWhere((link) => link.end <= link.start);
     }
 
     final empty = <TextFormat>[];

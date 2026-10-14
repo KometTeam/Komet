@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
+
 import '../api.dart';
 import '../../core/config/app_language.dart';
 import '../../core/config/launch_flags.dart';
@@ -99,6 +101,14 @@ class AccountModule {
       _privacy.updatePrivacyConfig(settings);
 
   Future<PrivacyConfig> setSafeMode(bool value) => _privacy.setSafeMode(value);
+
+  ValueListenable<String?> get doubleTapReaction => _privacy.doubleTapReaction;
+
+  Future<void> restoreDoubleTapReaction() =>
+      _privacy.restoreDoubleTapReaction();
+
+  Future<PrivacyConfig> setDoubleTapReaction(String? emoji) =>
+      _privacy.setDoubleTapReaction(emoji);
 
   Future<PrivacyConfig> setChatsPushNotification(bool value) =>
       _privacy.setChatsPushNotification(value);
@@ -804,6 +814,7 @@ class AccountModule {
 
     await AppDatabase.setActiveAccount(accountId);
     await TokenStorage.setActiveAccount(accountId);
+    await _privacy.restoreDoubleTapReaction();
 
     ChatCryptoService.instance.clearKeys();
     MessageDecryptionCache.instance.clear();
@@ -1106,7 +1117,7 @@ class AccountModule {
       await chats.applyFavorites(profile.id);
       final userConfig = config['user'];
       if (userConfig is Map) {
-        await AppDatabase.savePrivacyConfig(profile.id, jsonEncode(userConfig));
+        await _privacy.storeLoginConfig(profile.id, userConfig);
       }
     }
     try {
@@ -1213,6 +1224,16 @@ class AccountModule {
       await AppDatabase.setWelcomeStickerIds(
         accountId,
         parseIntList(serverConfig['welcome-sticker-ids']),
+      );
+      await AppDatabase.setSyncValue(
+        accountId,
+        SyncKey.channelsFolderSuggested,
+        serverConfig['channels-suggests-folder'] == true ? '1' : '0',
+      );
+      await AppDatabase.setSyncValue(
+        accountId,
+        SyncKey.folderFiltersEnabled,
+        serverConfig['enable-filters-for-folders'] == true ? '1' : '0',
       );
       await _persistEntryBannerApps(accountId, serverConfig);
     }

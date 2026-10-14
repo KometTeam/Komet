@@ -670,6 +670,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgActionsUnpin => 'Unpin';
 
   @override
+  String get msgActionsPinSticker => 'Pin sticker';
+
+  @override
+  String get msgActionsUnpinSticker => 'Unpin sticker';
+
+  @override
   String get pinnedMessageTitle => 'Pinned message';
 
   @override
@@ -903,10 +909,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceVisualStyleSubtitle =>
-      'Material You or dimensional Glossy capsules';
-
-  @override
-  String get appearanceStyleAuto => 'Match theme';
+      'Sets the look of panels, switchers and the message bar';
 
   @override
   String get appearanceVisualStyleMaterialYou => 'Material You';
@@ -915,55 +918,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceVisualStyleGlossy => 'Glossy';
 
   @override
-  String get appearanceVisualStyleLiquidGlass => 'Liquid Glass';
-
-  @override
-  String get appearanceGlassMaterial => 'Glass';
-
-  @override
-  String get appearanceChatChromeTitle => 'Chat screen elements';
-
-  @override
-  String get appearanceChatChromeSubtitle =>
-      'Background of the top and bottom panels: color, blur, or transparent. With blur or transparency, messages scroll under the panels';
-
-  @override
-  String get appearanceChatChromeColor => 'Color';
-
-  @override
-  String get appearanceChatChromeBlur => 'Blur';
-
-  @override
   String get appearanceChatChromeNone => 'None';
-
-  @override
-  String get appearanceChatChromeTransparent => 'Frost blur';
-
-  @override
-  String get appearanceComposerTitle => 'Input bar';
-
-  @override
-  String get appearanceComposerSubtitle =>
-      'Style and background of the message input bar';
-
-  @override
-  String get appearanceComposerBackgroundStandard => 'Default';
-
-  @override
-  String get appearanceComposerBackgroundFrost => 'Frost blur';
-
-  @override
-  String get appearanceNavPillTitle => 'Switcher style';
-
-  @override
-  String get appearanceNavPillSubtitle =>
-      'Section switcher on the chats screen';
-
-  @override
-  String get appearanceNavPillGlossy => 'Glossy';
-
-  @override
-  String get appearanceNavPillFrost => 'G-FrostBlur';
 
   @override
   String get playbackPillAt => 'at';
@@ -977,6 +932,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get appearanceGradientSubtitle =>
       'Depth and highlights in Glossy capsules';
+
+  @override
+  String get appearanceElementsBlurTitle => 'Element blur';
+
+  @override
+  String get appearanceElementsBlurSubtitle =>
+      'Frosted glass on the section switcher and floating buttons';
+
+  @override
+  String get appearanceMaterialYouEmpty => 'Nothing here yet…';
 
   @override
   String get appearanceSpectrumTitle => 'Spectrum background';
@@ -1120,7 +1085,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callsTabDeleteFailed => 'Could not delete the call';
 
   @override
-  String get chatSettingsTitle => 'Chat settings';
+  String get chatSettingsTitle => 'Chat and folder settings';
+
+  @override
+  String get chatSettingsTabChats => 'Chats';
+
+  @override
+  String get chatSettingsTabFolders => 'Folders';
 
   @override
   String get chatSettingsArchiveOnPull => 'Pull-down archive';
@@ -1139,6 +1110,106 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatSettingsAutoDownloadVideoNote => 'Video notes';
+
+  @override
+  String get chatSettingsAutoplayTitle => 'Autoplay';
+
+  @override
+  String get chatSettingsAutoplayVideo => 'Videos';
+
+  @override
+  String get chatSettingsAutoplayVideoHint =>
+      'Muted, clips up to a minute when their auto-download is on';
+
+  @override
+  String get chatSettingsAutoplayGif => 'GIFs';
+
+  @override
+  String get chatSettingsAutoplayAnimoji => 'Animated emoji';
+
+  @override
+  String get chatSettingsAutoplayVideoNote => 'Video messages';
+
+  @override
+  String get chatSettingsReactionsTitle => 'Reactions';
+
+  @override
+  String get chatSettingsDoubleTapReaction => 'Double-tap reaction';
+
+  @override
+  String get chatSettingsDoubleTapReactionHint =>
+      'Sent when you double-tap a message. Shared with your other devices.';
+
+  @override
+  String get chatSettingsDoubleTapReactionNone => 'Don\'t react';
+
+  @override
+  String get chatSettingsDoubleTapReactionOff => 'Off';
+
+  @override
+  String get chatSettingsDoubleTapReactionFailed =>
+      'Couldn\'t save the reaction';
+
+  @override
+  String get archiveLockTitle => 'Archive passcode';
+
+  @override
+  String get archiveLockPrompt => 'Enter archive passcode';
+
+  @override
+  String get archiveLockEnable => 'Set passcode';
+
+  @override
+  String get archiveLockEnabled => 'Archive passcode set';
+
+  @override
+  String get archiveLockChange => 'Change passcode';
+
+  @override
+  String get archiveLockChanged => 'Archive passcode changed';
+
+  @override
+  String get archiveLockRelock => 'Lock archive';
+
+  @override
+  String get archiveLockRelockHint =>
+      'How long the archive stays open after you leave it. Coming back earlier restarts the countdown.';
+
+  @override
+  String get archiveLockRelockNow => 'Right after leaving';
+
+  @override
+  String archiveLockRelockHours(int hours) {
+    return 'After $hours h';
+  }
+
+  @override
+  String get archiveLockDisable => 'Remove passcode';
+
+  @override
+  String get archiveLockDisableTitle => 'Remove archive passcode?';
+
+  @override
+  String get archiveLockDisableMessage =>
+      'The archive will open without a passcode.';
+
+  @override
+  String get archiveLockDisableAction => 'Remove';
+
+  @override
+  String get archiveLockDisabled => 'Archive passcode removed';
+
+  @override
+  String get archiveLockOnDescription =>
+      'The archive opens only with the passcode and locks again if you stay out of it longer than the chosen time.';
+
+  @override
+  String get archiveLockOffDescription =>
+      'Hide the archive behind a passcode: it will ask for four digits when you open it.';
+
+  @override
+  String get archiveLockForgotHint =>
+      'The archive passcode can\'t be recovered: if you forget it, you\'ll have to clear Komet\'s data. After five wrong attempts input is blocked for five minutes.';
 
   @override
   String get callVideoLabel => 'Video';
@@ -2025,7 +2096,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'You won\'t be able to see the online status of other users.';
 
   @override
-  String get securityConfidentialityHeader => 'PRIVACY';
+  String get securityConfidentialityHeader => 'Privacy';
 
   @override
   String get securityReadReceipts => 'Read receipts';
@@ -2270,6 +2341,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cloudStorageSend => 'Send';
+
+  @override
+  String get cloudStorageAboutTooltip => 'How storage works';
+
+  @override
+  String get cloudStorageAboutTitle => 'How cloud storage works';
+
+  @override
+  String get cloudStorageAboutSubtitle =>
+      'There is no separate server: everything lives in your MAX account';
+
+  @override
+  String get cloudStorageAboutGroupTitle => 'It\'s a hidden MAX group';
+
+  @override
+  String get cloudStorageAboutGroupBody =>
+      'Komet creates a group with nobody in it but you and sends your files there as regular messages. Komet keeps it out of the chat list, folders and the unread counter.';
+
+  @override
+  String cloudStorageAboutNameTitle(String name) {
+    return 'Your group is $name';
+  }
+
+  @override
+  String cloudStorageAboutSampleNameTitle(String name) {
+    return 'The group is named like $name';
+  }
+
+  @override
+  String get cloudStorageAboutNameBody =>
+      'Komet derives the number in the name from the group\'s id, so it recognizes its own storage and never mistakes another group for it. Rename the group and Komet won\'t find it; delete it and the files go with it.';
+
+  @override
+  String get cloudStorageAboutOtherAppsTitle => 'Other apps can see the group';
+
+  @override
+  String get cloudStorageAboutOtherAppsBody =>
+      'The official MAX app and web client show it as a regular chat: the server doesn\'t know it\'s storage.';
+
+  @override
+  String get cloudStorageAboutLinksTitle => 'Download links expire';
+
+  @override
+  String get cloudStorageAboutLinksBody =>
+      'The MAX server issues each link for a limited time. Once it expires, just create a new one.';
 
   @override
   String get digitalIdGosuslugiLinkUnavailable =>
@@ -3556,6 +3672,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'Otherwise a video message starts with the front camera';
 
   @override
+  String get mediaDevicesVideoNoteResolution => 'Resolution';
+
+  @override
+  String get mediaDevicesVideoNoteResolutionHint =>
+      'Higher means a sharper video message and a heavier file';
+
+  @override
+  String get mediaDevicesVideoNoteFps => 'Frame rate';
+
+  @override
+  String get mediaDevicesVideoNoteFpsHint =>
+      '60 is smoother but heavier. A camera without 60 fps records at its highest supported rate';
+
+  @override
+  String mediaDevicesVideoNoteFpsValue(int fps) {
+    return '$fps fps';
+  }
+
+  @override
   String get chatPreviewMarkRead => 'Mark as read';
 
   @override
@@ -4278,10 +4413,38 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatScreenFormatMonospace => 'Monospace';
 
   @override
+  String get chatScreenFormatRed => 'Red';
+
+  @override
   String get chatScreenFormatQuote => 'Quote';
 
   @override
   String get chatScreenFormatMention => 'Mention';
+
+  @override
+  String get chatScreenFormatLink => 'Link';
+
+  @override
+  String get chatScreenFormatLinkTitle => 'Add link';
+
+  @override
+  String get chatScreenFormatLinkHint => 'https://example.com';
+
+  @override
+  String get chatScreenFormatLinkInvalid => 'That doesn\'t look like a link';
+
+  @override
+  String get linkConfirmTitle => 'Open this link?';
+
+  @override
+  String get linkConfirmBody =>
+      'The link text doesn\'t match its address, and you haven\'t visited this site before. Check the address above before you continue.';
+
+  @override
+  String get linkConfirmOpen => 'Open';
+
+  @override
+  String get linkConfirmCancel => 'Cancel';
 
   @override
   String get chatScreenMessageTooLong =>
@@ -4492,24 +4655,24 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get messageActionsScreenTitle => 'Action menu';
+  String get appearanceMessageActionsTitle => 'Action menu';
 
   @override
-  String get messageActionsScreenRadialDescription =>
+  String get appearanceMessageActionsRadial => 'Radial';
+
+  @override
+  String get appearanceMessageActionsRadialDescription =>
       'An arc of buttons around the tap point';
 
   @override
-  String get messageActionsScreenList => 'List';
+  String get appearanceMessageActionsList => 'List';
 
   @override
-  String get messageActionsScreenListDescription =>
+  String get appearanceMessageActionsListDescription =>
       'A vertical menu next to the message';
 
   @override
-  String get messageActionsScreenStyle => 'Style';
-
-  @override
-  String get messageActionsScreenStyleSubtitle =>
+  String get appearanceMessageActionsSubtitle =>
       'How the menu appears when you long-press a message';
 
   @override
@@ -4921,9 +5084,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customizationChatBackground => 'Chat background';
 
   @override
-  String get customizationMessageActions => 'Actions menu';
-
-  @override
   String get customizationAppIcon => 'App icon';
 
   @override
@@ -4936,6 +5096,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String folderActionDeleteConfirm(String title) {
     return 'Delete the folder “$title”? The chats will stay where they are.';
   }
+
+  @override
+  String get foldersSettingsCreate => 'Create folder';
+
+  @override
+  String get foldersSettingsRecommended => 'Recommended folders';
+
+  @override
+  String get foldersSettingsPresetUnread => 'New';
+
+  @override
+  String get foldersSettingsPresetPersonal => 'Personal';
+
+  @override
+  String get foldersSettingsPresetChannels => 'Channels';
+
+  @override
+  String get foldersSettingsAdd => 'Add';
+
+  @override
+  String get foldersSettingsReorder => 'Drag to reorder';
+
+  @override
+  String get foldersSettingsReorderFailed => 'Couldn\'t reorder folders';
+
+  @override
+  String get foldersSettingsAddFailed => 'Couldn\'t add the folder';
 
   @override
   String get folderActionDeleteFailed => 'Couldn\'t delete the folder';
@@ -6181,6 +6368,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stickerPanelStickersTab => 'Stickers';
 
   @override
+  String get stickerPanelPinned => 'Pinned';
+
+  @override
+  String get stickerPanelClearRecent => 'Clear recent';
+
+  @override
+  String get stickerPanelClearRecentTitle => 'Clear recent stickers?';
+
+  @override
+  String get stickerPanelClearRecentBody =>
+      'Recently sent stickers will be removed from the list.';
+
+  @override
+  String get stickerPanelClearRecentFailed => 'Couldn\'t clear recent stickers';
+
+  @override
+  String get stickerPinned => 'Sticker pinned';
+
+  @override
+  String get stickerUnpinned => 'Sticker unpinned';
+
+  @override
   String get callBubbleGroupVideo => 'Group video call';
 
   @override
@@ -6508,19 +6717,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get avatarPickerFilesSubtitle =>
       'If the photo you need isn\'t in the gallery';
-
-  @override
-  String get appearanceBottomNavigationTitle => 'Bottom navigation';
-
-  @override
-  String get appearanceBottomNavigationSubtitle =>
-      'The compact bar keeps all four tab labels visible and takes up less space.';
-
-  @override
-  String get appearanceBottomNavigationFloating => 'Floating';
-
-  @override
-  String get appearanceBottomNavigationCompact => 'Compact';
 
   @override
   String get temporaryPasswordRecoveryTitle => 'Temporary password recovery';

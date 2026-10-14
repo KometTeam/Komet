@@ -20,6 +20,10 @@ class KometSettings {
   static const _kAutoDownloadVideo = 'komet_auto_download_video';
   static const _kAutoDownloadVoice = 'komet_auto_download_voice';
   static const _kAutoDownloadVideoNote = 'komet_auto_download_video_note';
+  static const _kAutoplayVideo = 'komet_autoplay_video';
+  static const _kAutoplayGif = 'komet_autoplay_gif';
+  static const _kAutoplayAnimoji = 'komet_autoplay_animoji';
+  static const _kAutoplayVideoNote = 'komet_autoplay_video_note';
   static const _kRecordDebugLogs = 'komet_record_debug_logs';
 
   // #***! каждая настройка это ValueNotifier, юишка подписана напрямую
@@ -38,6 +42,10 @@ class KometSettings {
   static final ValueNotifier<bool> autoDownloadVideo = ValueNotifier(true);
   static final ValueNotifier<bool> autoDownloadVoice = ValueNotifier(true);
   static final ValueNotifier<bool> autoDownloadVideoNote = ValueNotifier(true);
+  static final ValueNotifier<bool> autoplayVideo = ValueNotifier(true);
+  static final ValueNotifier<bool> autoplayGif = ValueNotifier(true);
+  static final ValueNotifier<bool> autoplayAnimoji = ValueNotifier(true);
+  static final ValueNotifier<bool> autoplayVideoNote = ValueNotifier(true);
   static final ValueNotifier<bool> recordDebugLogs = ValueNotifier(true);
 
   // #***! читаем всё разом на старте
@@ -66,6 +74,10 @@ class KometSettings {
     autoDownloadVoice.value = prefs.getBool(_kAutoDownloadVoice) ?? true;
     autoDownloadVideoNote.value =
         prefs.getBool(_kAutoDownloadVideoNote) ?? true;
+    autoplayVideo.value = prefs.getBool(_kAutoplayVideo) ?? true;
+    autoplayGif.value = prefs.getBool(_kAutoplayGif) ?? true;
+    autoplayAnimoji.value = prefs.getBool(_kAutoplayAnimoji) ?? true;
+    autoplayVideoNote.value = prefs.getBool(_kAutoplayVideoNote) ?? true;
     recordDebugLogs.value = prefs.getBool(_kRecordDebugLogs) ?? true;
   }
 
@@ -136,6 +148,18 @@ class KometSettings {
 
   static Future<void> setAutoDownloadVideoNote(bool value) =>
       _setFlag(autoDownloadVideoNote, _kAutoDownloadVideoNote, value);
+
+  static Future<void> setAutoplayVideo(bool value) =>
+      _setFlag(autoplayVideo, _kAutoplayVideo, value);
+
+  static Future<void> setAutoplayGif(bool value) =>
+      _setFlag(autoplayGif, _kAutoplayGif, value);
+
+  static Future<void> setAutoplayAnimoji(bool value) =>
+      _setFlag(autoplayAnimoji, _kAutoplayAnimoji, value);
+
+  static Future<void> setAutoplayVideoNote(bool value) =>
+      _setFlag(autoplayVideoNote, _kAutoplayVideoNote, value);
 
   static Future<void> _setFlag(
     ValueNotifier<bool> notifier,

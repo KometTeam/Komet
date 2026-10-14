@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/config/app_fonts.dart';
-import '../../../core/security/app_lock.dart';
+import '../../../core/security/pin_credential.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/connection_status.dart';
@@ -12,7 +12,14 @@ import 'lock_glyph.dart';
 import 'passcode_pad.dart';
 
 class PasscodeSetupScreen extends StatefulWidget {
-  const PasscodeSetupScreen({super.key});
+  final String title;
+  final Future<void> Function(String pin) onSave;
+
+  const PasscodeSetupScreen({
+    super.key,
+    required this.title,
+    required this.onSave,
+  });
 
   @override
   State<PasscodeSetupScreen> createState() => _PasscodeSetupScreenState();
@@ -21,21 +28,36 @@ class PasscodeSetupScreen extends StatefulWidget {
 class _PasscodeSetupScreenState extends State<PasscodeSetupScreen> {
   String _first = '';
   String _pin = '';
+  String _carry = '';
   bool _confirming = false;
   bool _mismatch = false;
   bool _saving = false;
   int _errorTick = 0;
 
+  bool get _awaitingConfirmation =>
+      !_confirming && _pin.length == PinCredential.length;
+
   void _onDigit(int digit) {
-    if (_saving || _pin.length >= AppLock.pinLength) return;
+    if (_saving) return;
+    if (_awaitingConfirmation) {
+      if (_carry.length < PinCredential.length) _carry += '$digit';
+      return;
+    }
+    if (_pin.length >= PinCredential.length) return;
     setState(() {
       _pin += '$digit';
       _mismatch = false;
     });
-    if (_pin.length == AppLock.pinLength) unawaited(_advance());
+    if (_pin.length == PinCredential.length) unawaited(_advance());
   }
 
   void _onBackspace() {
+    if (_awaitingConfirmation) {
+      if (_carry.isNotEmpty) {
+        _carry = _carry.substring(0, _carry.length - 1);
+      }
+      return;
+    }
     if (_saving || _pin.isEmpty) return;
     setState(() => _pin = _pin.substring(0, _pin.length - 1));
   }
@@ -46,9 +68,11 @@ class _PasscodeSetupScreenState extends State<PasscodeSetupScreen> {
     if (!_confirming) {
       setState(() {
         _first = _pin;
-        _pin = '';
+        _pin = _carry;
+        _carry = '';
         _confirming = true;
       });
+      if (_pin.length == PinCredential.length) unawaited(_advance());
       return;
     }
     if (_pin != _first) {
@@ -63,7 +87,7 @@ class _PasscodeSetupScreenState extends State<PasscodeSetupScreen> {
       return;
     }
     setState(() => _saving = true);
-    await AppLock.instance.setPin(_pin);
+    await widget.onSave(_pin);
     if (!mounted) return;
     Haptics.success();
     Navigator.pop(context, true);
@@ -93,7 +117,7 @@ class _PasscodeSetupScreenState extends State<PasscodeSetupScreen> {
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: ConnectionTitleBar(
-        titleText: l10n.passcodeTitle,
+        titleText: widget.title,
         backgroundColor: cs.surface,
       ),
       body: Focus(
@@ -148,7 +172,7 @@ class _PasscodeSetupScreenState extends State<PasscodeSetupScreen> {
                       ),
                       const SizedBox(height: 30),
                       PasscodeDots(
-                        length: AppLock.pinLength,
+                        length: PinCredential.length,
                         filled: _pin.length,
                         errorTick: _errorTick,
                         color: cs.primary,

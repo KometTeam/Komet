@@ -471,7 +471,6 @@ class _SpoofScreenState extends State<SpoofScreen> {
   Widget _sectionHeader(String title) => SectionHeader(
     title,
     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-    fontSize: 14,
   );
 
   Widget _buildEnableCard() {

@@ -228,31 +228,44 @@ class BubbleContext {
     );
   }
 
+  static const EdgeInsets _overlayChipPadding = EdgeInsets.symmetric(
+    horizontal: 6,
+    vertical: 3,
+  );
+  static const BorderRadius _overlayChipRadius = BorderRadius.all(
+    Radius.circular(4),
+  );
+  static const TextStyle _overlayChipText = TextStyle(
+    color: Colors.white,
+    fontSize: 10,
+    fontWeight: FontWeight.w500,
+  );
+
+  BoxDecoration get _overlayChipDecoration => BoxDecoration(
+    color: Colors.black.withValues(alpha: isMe ? 0.4 : 0.5),
+    borderRadius: _overlayChipRadius,
+  );
+
+  Widget overlayLabel(String text) => Container(
+    padding: _overlayChipPadding,
+    decoration: _overlayChipDecoration,
+    child: Text(
+      text,
+      style: _overlayChipText.copyWith(fontWeight: FontWeight.w700),
+    ),
+  );
+
   Widget compactTime() {
     if (metaInFooter) return const SizedBox.shrink();
 
-    final bgColor = isMe
-        ? Colors.black.withValues(alpha: 0.4)
-        : Colors.black.withValues(alpha: 0.5);
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(4),
-      ),
+      padding: _overlayChipPadding,
+      decoration: _overlayChipDecoration,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           ...metaMarks(Colors.white),
-          Text(
-            clockText,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text(clockText, style: _overlayChipText),
           if (message.deleted) ...[
             const SizedBox(width: 3),
             const Icon(Symbols.delete, size: 11, color: Colors.white),

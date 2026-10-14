@@ -17,11 +17,13 @@ import 'album_layout.dart';
 import '../../upload_progress_ring.dart';
 import 'edge_stretch_fill.dart';
 import 'bubble_context.dart';
+import 'media_autoplay.dart';
 import 'video_bubble.dart';
 import '../../../../core/config/komet_settings.dart';
 import '../../../../core/media/auto_download_gate.dart';
 
 class PhotoBubble extends StatelessWidget {
+  static const String gifLabel = 'GIF';
   static const Radius _bigRadius = Radius.circular(
     BubbleContext.bubbleBorderRadius,
   );
@@ -77,8 +79,39 @@ class PhotoBubble extends StatelessWidget {
       if (thumb != null && thumb.isNotEmpty) return thumb;
       return item.baseUrl ?? '';
     }
-    if (item is PhotoAttachment) return item.baseUrl ?? '';
+    if (item is PhotoAttachment) {
+      final still = item.isGif ? item.previewUrl : null;
+      if (still != null && still.isNotEmpty) return still;
+      return item.baseUrl ?? '';
+    }
     return '';
+  }
+
+  Widget _autoplay(
+    BuildContext context,
+    BubbleContext ctx,
+    MessageAttachment item, {
+    required MediaAutoplayBuilder builder,
+  }) {
+    final clip = switch (item) {
+      VideoAttachment() => AutoplayClip.video(
+        item,
+        messageId: ctx.sourceMessageId,
+        chatId: ctx.sourceChatId,
+      ),
+      PhotoAttachment() => AutoplayClip.gif(item),
+      _ => null,
+    };
+    if (clip == null) return builder(context, const SizedBox.shrink(), false);
+    final previewUrl = _previewUrlOf(item);
+    return MediaAutoplay(
+      clip: clip,
+      manualLoadKey: previewUrl.isEmpty || previewUrl.startsWith('data:')
+          ? null
+          : previewUrl,
+      suspended: ctx.uploadProgress != null,
+      builder: builder,
+    );
   }
 
   static double layoutWidth(
@@ -232,12 +265,17 @@ class PhotoBubble extends StatelessWidget {
       bottomRight: bottomR,
     );
     final shown = _shownSize(photo, size);
-    final memWidth = (shown.width * dpr).round();
-    final memHeight = (shown.height * dpr).round();
+    final decoded = _coverSize(photo, shown);
+    final memWidth = (decoded.width * dpr).round();
+    final memHeight = (decoded.height * dpr).round();
 
     return ClipRRect(
       borderRadius: radius,
-      child: Stack(
+      child: _autoplay(
+        ctx.context,
+        ctx,
+        photo,
+        builder: (context, surface, playing) => Stack(
         children: [
           _buildLetterboxedImage(
             ctx,
@@ -247,7 +285,12 @@ class PhotoBubble extends StatelessWidget {
             memWidth: memWidth,
             memHeight: memHeight,
           ),
-          ..._videoBadges(photo, compact: false),
+          Positioned.fill(
+            child: shown == size
+                ? surface
+                : Center(child: SizedBox.fromSize(size: shown, child: surface)),
+          ),
+          ..._mediaBadges(ctx, photo, compact: false, playing: playing),
           if (ctx.uploadProgress != null)
             _buildUploadOverlay(ctx, ctx.uploadProgress!, 0),
           if (ctx.uploadProgress == null)
@@ -274,16 +317,26 @@ class PhotoBubble extends StatelessWidget {
               ),
             ),
         ],
+        ),
       ),
     );
   }
 
-  static const double _letterboxTolerance = 0.04;
+  static const double _minVisibleFraction = 0.6;
 
   static bool _isLetterboxed(MessageAttachment photo, Size box) {
     final imageAspect = _aspectRatio(photo);
     final boxAspect = box.width / box.height;
-    return (imageAspect - boxAspect).abs() / imageAspect > _letterboxTolerance;
+    final visible =
+        math.min(imageAspect, boxAspect) / math.max(imageAspect, boxAspect);
+    return visible < _minVisibleFraction;
+  }
+
+  static Size _coverSize(MessageAttachment photo, Size box) {
+    final imageAspect = _aspectRatio(photo);
+    return imageAspect > box.width / box.height
+        ? Size(box.height * imageAspect, box.height)
+        : Size(box.width, box.width / imageAspect);
   }
 
   static Size _shownSize(MessageAttachment photo, Size box) {
@@ -316,23 +369,44 @@ class PhotoBubble extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          EdgeStretchFill(
-            source: _edgeSource(photo),
-            imageAspect: _aspectRatio(photo),
-            fallback: ctx.cs.surfaceContainerHighest,
-          ),
+          _buildEdgeFill(ctx, photo, memWidth: memWidth, memHeight: memHeight),
           Center(child: image),
         ],
       ),
     );
   }
 
-  static ImageProvider? _edgeSource(MessageAttachment photo) {
+  Widget _buildEdgeFill(
+    BubbleContext ctx,
+    MessageAttachment photo, {
+    required int memWidth,
+    required int memHeight,
+  }) {
+    Widget fill(ImageProvider? source) => EdgeStretchFill(
+      source: source,
+      imageAspect: _aspectRatio(photo),
+      fallback: ctx.cs.surfaceContainerHighest,
+    );
     final preview = dataUriImage(photo, photo.previewData);
-    if (preview != null) return preview;
-    final localPath = _localPathOf(photo);
-    if (localPath == null) return null;
-    return ResizeImage(FileImage(File(localPath)), width: 64);
+    if (preview != null || _localPathOf(photo) != null) {
+      return fill(
+        preview ??
+            _photoProvider(photo, memWidth: memWidth, memHeight: memHeight),
+      );
+    }
+    final url = _previewUrlOf(photo);
+    if (url.isEmpty || url.startsWith('data:')) return fill(null);
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        AutoDownloadGate.listen(url),
+        KometSettings.autoDownloadPhoto,
+      ]),
+      builder: (context, _) => fill(
+        AutoDownloadGate.allows(KometSettings.autoDownloadPhoto.value, url)
+            ? _photoProvider(photo, memWidth: memWidth, memHeight: memHeight)
+            : null,
+      ),
+    );
   }
 
   Widget _buildPhotoImage(
@@ -446,24 +520,42 @@ class PhotoBubble extends StatelessWidget {
   }
 
   // #***! плитка видео отличается от фото только кружком плеера и длительностью
-  List<Widget> _videoBadges(MessageAttachment item, {required bool compact}) {
+  List<Widget> _mediaBadges(
+    BubbleContext ctx,
+    MessageAttachment item, {
+    required bool compact,
+    bool playing = false,
+  }) {
+    if (item is PhotoAttachment && item.isGif) {
+      return [
+        Positioned(
+          left: BubbleContext.compactTimePadding,
+          bottom: BubbleContext.compactTimePadding,
+          child: ctx.overlayLabel(gifLabel),
+        ),
+      ];
+    }
     if (item is! VideoAttachment) return const [];
     final side = compact ? 36.0 : 48.0;
     final durationMs = item.duration;
     return [
       Positioned.fill(
         child: Center(
-          child: Container(
-            width: side,
-            height: side,
-            decoration: const BoxDecoration(
-              color: Colors.black54,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Symbols.play_arrow,
-              color: Colors.white,
-              size: side * 0.625,
+          child: AnimatedOpacity(
+            opacity: playing ? 0 : 1,
+            duration: const Duration(milliseconds: 200),
+            child: Container(
+              width: side,
+              height: side,
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Symbols.play_arrow,
+                color: Colors.white,
+                size: side * 0.625,
+              ),
             ),
           ),
         ),
@@ -478,9 +570,18 @@ class PhotoBubble extends StatelessWidget {
               color: Colors.black54,
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Text(
-              formatSecondsMmSs((durationMs / 1000).round()),
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  formatSecondsMmSs((durationMs / 1000).round()),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+                if (playing) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Symbols.volume_off, color: Colors.white, size: 13),
+                ],
+              ],
             ),
           ),
         ),
@@ -600,7 +701,7 @@ class PhotoBubble extends StatelessWidget {
         final coverWidth = math.max(tileWidth, tileHeight * ratio);
         final memWidth = (coverWidth * dpr).round().clamp(1, 2048);
         final memHeight = math.max(1, (memWidth / ratio).round());
-        return Stack(
+        Widget tile(Widget surface, bool playing) => Stack(
           children: [
             _buildPhotoImage(
               ctx,
@@ -610,8 +711,9 @@ class PhotoBubble extends StatelessWidget {
               memWidth: memWidth,
               memHeight: memHeight,
             ),
+            Positioned.fill(child: surface),
             if (overlay == null)
-              ..._videoBadges(photo, compact: true)
+              ..._mediaBadges(ctx, photo, compact: true, playing: playing)
             else
               Positioned.fill(
                 child: Container(
@@ -633,6 +735,13 @@ class PhotoBubble extends StatelessWidget {
             if (ctx.uploadProgress == null)
               _buildTileTapTarget(ctx, index, memWidth, memHeight, photo),
           ],
+        );
+        if (overlay != null) return tile(const SizedBox.shrink(), false);
+        return _autoplay(
+          context,
+          ctx,
+          photo,
+          builder: (context, surface, playing) => tile(surface, playing),
         );
       },
     );

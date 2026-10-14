@@ -4,8 +4,8 @@ import 'dart:io';
 
 import '../utils/media_cache.dart';
 
-// #***! подкачка кружков чтоб играли сразу как появятся
-class VideoNotePreloader {
+// #***! подкачка кружков и видео чтоб играли сразу как появятся
+class VideoPreloader {
   // #***! сами тянем только короткие до 30 секунд
   static const int autoLoadMaxMs = 30000;
   // #***! не больше двух разом иначе мешают открытому чату
@@ -24,11 +24,18 @@ class VideoNotePreloader {
     bool priority = false,
     void Function(double progress)? onProgress,
     bool Function()? cancelled,
+    int? maxBytes,
   }) async {
     final cached = await MediaCache.existing(cacheName);
     if (cached != null) return cached;
 
-    final job = _PreloadJob(cacheName, resolveUrl, onProgress, cancelled);
+    final job = _PreloadJob(
+      cacheName,
+      resolveUrl,
+      onProgress,
+      cancelled,
+      maxBytes,
+    );
     // #***! видимый кружок в начало очереди
     if (priority) {
       _queue.addFirst(job);
@@ -65,6 +72,7 @@ class VideoNotePreloader {
           job.cacheName,
           url,
           onProgress: job.onProgress,
+          maxBytes: job.maxBytes,
         );
       }
     } catch (_) {
@@ -75,11 +83,18 @@ class VideoNotePreloader {
 }
 
 class _PreloadJob {
-  _PreloadJob(this.cacheName, this.resolveUrl, this.onProgress, this.cancelled);
+  _PreloadJob(
+    this.cacheName,
+    this.resolveUrl,
+    this.onProgress,
+    this.cancelled,
+    this.maxBytes,
+  );
 
   final String cacheName;
   final Future<String?> Function() resolveUrl;
   final void Function(double progress)? onProgress;
   final bool Function()? cancelled;
+  final int? maxBytes;
   final Completer<File?> result = Completer<File?>();
 }

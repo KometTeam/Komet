@@ -37,6 +37,7 @@ import 'core/config/app_bubble_behavior.dart';
 import 'core/config/app_camera.dart';
 import 'core/config/komet_settings.dart';
 import 'core/security/app_lock.dart';
+import 'core/security/archive_lock.dart';
 import 'core/config/launch_flags.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
@@ -51,15 +52,11 @@ import 'core/config/app_commands.dart';
 import 'core/config/app_phonebook_names.dart';
 import 'core/contacts/device_contacts_service.dart';
 import 'core/config/app_link_preview.dart';
+import 'core/config/app_unchecked_links.dart';
 import 'core/config/app_media_cache.dart';
 import 'core/config/app_video_note_quality.dart';
 import 'core/config/app_pill_gradient.dart';
 import 'core/config/app_visual_style.dart';
-import 'core/config/app_chat_chrome.dart';
-import 'core/config/app_composer_background.dart';
-import 'core/config/app_composer_style.dart';
-import 'core/config/app_nav_pill_style.dart';
-import 'core/config/app_bottom_navigation_style.dart';
 import 'core/config/app_wallpaper_tint.dart';
 import 'core/storage/chat_wallpaper_store.dart';
 import 'core/utils/wallpaper_seed.dart';
@@ -249,11 +246,7 @@ void main(List<String> args) async {
   final visualStyleFuture = AppVisualStyle.load();
   final liquidGlassFuture = LiquidGlass.load();
   final meshGradientFuture = MeshGradient.load();
-  final chatChromeFuture = AppChatChrome.load();
-  final composerStyleFuture = AppComposerStyle.load();
-  final composerBackgroundFuture = AppComposerBackground.load();
-  final navPillStyleFuture = AppNavPillStyle.load();
-  final bottomNavigationStyleFuture = AppBottomNavigationStyle.load();
+  final elementsBlurFuture = AppElementsBlur.load();
   final wallpaperTintFuture = AppWallpaperTint.load();
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
@@ -266,6 +259,7 @@ void main(List<String> args) async {
   final commandsFuture = AppCommands.load();
   final phonebookNamesFuture = AppPhonebookNames.load();
   final linkPreviewFuture = AppLinkPreview.load();
+  final uncheckedLinksFuture = AppUncheckedLinks.load();
   final cacheLimitFuture = AppMediaCacheLimit.load();
   final videoNoteResolutionFuture = AppVideoNoteResolution.load();
   final videoNoteFpsFuture = AppVideoNoteFps.load();
@@ -294,6 +288,8 @@ void main(List<String> args) async {
   E2eeService.instance.attach(messagesModule);
   await KometSettings.load();
   await AppLock.instance.load();
+  await ArchiveLock.instance.load();
+  unawaited(accountModule.restoreDoubleTapReaction());
   if (BuildProfile.plugins) await PluginStore.instance.load();
   CommandRegistry.instance.initialize();
   if (KometSettings.ghostMode.value) SelfPresence.markOffline();
@@ -326,11 +322,7 @@ void main(List<String> args) async {
     visualStyleFuture,
     liquidGlassFuture,
     meshGradientFuture,
-    chatChromeFuture,
-    composerStyleFuture,
-    composerBackgroundFuture,
-    navPillStyleFuture,
-    bottomNavigationStyleFuture,
+    elementsBlurFuture,
     wallpaperTintFuture,
     themeScheduleFuture,
     messageActionsFuture,
@@ -343,6 +335,7 @@ void main(List<String> args) async {
     commandsFuture,
     phonebookNamesFuture,
     linkPreviewFuture,
+    uncheckedLinksFuture,
     cacheLimitFuture,
     videoNoteResolutionFuture,
     videoNoteFpsFuture,
@@ -695,6 +688,10 @@ class KometAppState extends State<KometApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     AppLock.instance.onLifecycle(state);
+    ArchiveLock.instance.onLifecycle(
+      state,
+      external: AppLock.instance.inExternal,
+    );
     if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
       unawaited(PerChatJsonStore.flushAll());
     }

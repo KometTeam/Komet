@@ -76,3 +76,23 @@ class PersistedEnum<T extends Enum> {
     await prefs.setString(prefKey, encode(value));
   }
 }
+
+class DerivedSetting<T> extends ChangeNotifier implements ValueListenable<T> {
+  DerivedSetting(List<Listenable> sources, this._compute)
+    : _value = _compute() {
+    Listenable.merge(sources).addListener(_recompute);
+  }
+
+  final T Function() _compute;
+  T _value;
+
+  @override
+  T get value => _value;
+
+  void _recompute() {
+    final next = _compute();
+    if (next == _value) return;
+    _value = next;
+    notifyListeners();
+  }
+}

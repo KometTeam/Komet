@@ -203,7 +203,6 @@ class _TokenLoginScreenState extends State<TokenLoginScreen> {
             SectionHeader(
               l10n.spoofMainSectionTitle,
               padding: const EdgeInsets.only(bottom: 16, top: 4),
-              fontSize: 20,
             ),
             _field(
               _deviceNameController,
@@ -240,7 +239,6 @@ class _TokenLoginScreenState extends State<TokenLoginScreen> {
             SectionHeader(
               l10n.spoofIdentifiersSectionTitle,
               padding: const EdgeInsets.only(bottom: 16, top: 4),
-              fontSize: 20,
             ),
             _field(
               _deviceIdController,

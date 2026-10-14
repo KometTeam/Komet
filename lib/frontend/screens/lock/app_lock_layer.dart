@@ -1,15 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/config/app_fonts.dart';
 import '../../../core/security/app_lock.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import 'lock_glyph.dart';
-import 'passcode_pad.dart';
+import 'passcode_prompt.dart';
 
 class AppLockLayer extends StatefulWidget {
   final Widget child;
@@ -160,27 +158,18 @@ class _LockScreen extends StatefulWidget {
 
 class _LockScreenState extends State<_LockScreen> with WidgetsBindingObserver {
   static const double _glyphSize = 72;
-  static const double _chromeHeight = 300;
 
   final AppLock _lock = AppLock.instance;
   final GlobalKey _slotKey = GlobalKey();
   final GlobalKey _stackKey = GlobalKey();
-  final FocusNode _focus = FocusNode();
-  String _pin = '';
-  int _errorTick = 0;
-  bool _checking = false;
-  bool _wrong = false;
   bool _biometricReady = false;
   bool _wasBackground = false;
-  Timer? _countdown;
   Rect? _target;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _lock.blockedUntil.addListener(_onBlockedChanged);
-    _onBlockedChanged();
     WidgetsBinding.instance.addPostFrameCallback((_) => _measureTarget());
     unawaited(_prepareBiometric());
   }
@@ -188,9 +177,6 @@ class _LockScreenState extends State<_LockScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _lock.blockedUntil.removeListener(_onBlockedChanged);
-    _countdown?.cancel();
-    _focus.dispose();
     super.dispose();
   }
 
@@ -233,80 +219,6 @@ class _LockScreenState extends State<_LockScreen> with WidgetsBindingObserver {
     if (ok) Haptics.success();
   }
 
-  void _onBlockedChanged() {
-    _countdown?.cancel();
-    if (_lock.blockedUntil.value == null) {
-      if (mounted) setState(() {});
-      return;
-    }
-    _countdown = Timer.periodic(const Duration(seconds: 1), (_) {
-      _lock.refreshLockout();
-      if (mounted) setState(() {});
-    });
-    if (mounted) setState(() => _pin = '');
-  }
-
-  bool get _blocked => _lock.blockedUntil.value != null;
-
-  void _onDigit(int digit) {
-    if (_checking || _blocked || _pin.length >= AppLock.pinLength) return;
-    setState(() {
-      _pin += '$digit';
-      _wrong = false;
-    });
-    if (_pin.length == AppLock.pinLength) unawaited(_submit());
-  }
-
-  void _onBackspace() {
-    if (_checking || _pin.isEmpty) return;
-    setState(() => _pin = _pin.substring(0, _pin.length - 1));
-  }
-
-  Future<void> _submit() async {
-    setState(() => _checking = true);
-    final ok = await _lock.unlockWithPin(_pin);
-    if (!mounted) return;
-    if (ok) {
-      Haptics.success();
-      setState(() => _checking = false);
-      return;
-    }
-    Haptics.error();
-    setState(() {
-      _checking = false;
-      _pin = '';
-      _wrong = true;
-      _errorTick++;
-    });
-  }
-
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    final digit = PasscodeKeypad.digitOf(event);
-    if (digit != null) {
-      _onDigit(digit);
-      return KeyEventResult.handled;
-    }
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.backspace) {
-      _onBackspace();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  String _status(AppLocalizations l10n) {
-    final until = _lock.blockedUntil.value;
-    if (until != null) {
-      final left = until.difference(DateTime.now());
-      final seconds = left.inSeconds.clamp(0, 3600);
-      final text =
-          '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
-      return l10n.lockBlocked(text);
-    }
-    if (_wrong) return l10n.lockAttemptsLeft(_lock.attemptsLeft);
-    return '';
-  }
-
   Animation<double> _interval(double begin, double end, {Curve? curve}) =>
       CurvedAnimation(
         parent: widget.presence,
@@ -324,138 +236,84 @@ class _LockScreenState extends State<_LockScreen> with WidgetsBindingObserver {
     final content = animated
         ? _interval(0.3, 1)
         : const AlwaysStoppedAnimation<double>(1);
-    final status = _status(l10n);
 
-    return Focus(
-      focusNode: _focus,
-      autofocus: true,
-      onKeyEvent: _onKey,
-      child: Material(
-        type: MaterialType.transparency,
-        child: Stack(
-          key: _stackKey,
-          fit: StackFit.expand,
-          children: [
-            FadeTransition(
-              opacity: background,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color.alphaBlend(
-                        cs.primary.withValues(alpha: 0.08),
-                        cs.surface,
-                      ),
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        key: _stackKey,
+        fit: StackFit.expand,
+        children: [
+          FadeTransition(
+            opacity: background,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.alphaBlend(
+                      cs.primary.withValues(alpha: 0.08),
                       cs.surface,
-                      cs.surfaceContainerLow,
-                    ],
-                  ),
+                    ),
+                    cs.surface,
+                    cs.surfaceContainerLow,
+                  ],
                 ),
               ),
             ),
-            AnimatedBuilder(
-              animation: Listenable.merge([widget.presence, widget.opening]),
-              builder: (context, child) {
-                final out = widget.opening.value;
-                return Opacity(
-                  opacity: widget.presence.status == AnimationStatus.reverse
-                      ? widget.presence.value
-                      : 1,
-                  child: Transform.scale(scale: 1 + out * 0.03, child: child),
-                );
-              },
-              child: SafeArea(
-                child: FadeTransition(
-                  opacity: content,
-                  child: SlideTransition(
-                    position: Tween(
-                      begin: const Offset(0, 0.04),
-                      end: Offset.zero,
-                    ).animate(content),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) => SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minHeight: constraints.maxHeight,
-                            minWidth: constraints.maxWidth,
-                            maxWidth: constraints.maxWidth,
-                          ),
-                          child: IntrinsicHeight(
-                            child: Column(
-                              children: [
-                                const Spacer(flex: 5),
-                                SizedBox.square(
-                                  key: _slotKey,
-                                  dimension: _glyphSize,
-                                  child: _restingGlyph(cs),
-                                ),
-                                const SizedBox(height: 30),
-                                Text(
-                                  l10n.lockTitle,
-                                  style: TextStyle(
-                                    fontFamily: displayFontOf(context),
-                                    fontSize: 21,
-                                    fontWeight: FontWeight.w600,
-                                    color: cs.onSurface,
-                                  ),
-                                ),
-                                const SizedBox(height: 30),
-                                PasscodeDots(
-                                  length: AppLock.pinLength,
-                                  filled: _pin.length,
-                                  errorTick: _errorTick,
-                                  color: cs.primary,
-                                ),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  height: 40,
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 200),
-                                    child: Text(
-                                      status,
-                                      key: ValueKey(status),
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 13.5,
-                                        height: 1.35,
-                                        color: _blocked || _wrong
-                                            ? cs.error
-                                            : cs.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const Spacer(flex: 3),
-                                PasscodeKeypad(
-                                  onDigit: _onDigit,
-                                  onBackspace: _onBackspace,
-                                  enabled: !_blocked && !_checking,
-                                  canErase: _pin.isNotEmpty,
-                                  onBiometric: _biometricReady
-                                      ? () => unawaited(_promptBiometric())
-                                      : null,
-                                  biometricIcon: Symbols.fingerprint,
-                                  keySize: PasscodeKeypad.keySizeFor(
-                                    constraints.maxHeight - _chromeHeight,
-                                  ),
-                                ),
-                                const SizedBox(height: 40),
-                              ],
-                            ),
+          ),
+          AnimatedBuilder(
+            animation: Listenable.merge([widget.presence, widget.opening]),
+            builder: (context, child) {
+              final out = widget.opening.value;
+              return Opacity(
+                opacity: widget.presence.status == AnimationStatus.reverse
+                    ? widget.presence.value
+                    : 1,
+                child: Transform.scale(scale: 1 + out * 0.03, child: child),
+              );
+            },
+            child: SafeArea(
+              child: FadeTransition(
+                opacity: content,
+                child: SlideTransition(
+                  position: Tween(
+                    begin: const Offset(0, 0.04),
+                    end: Offset.zero,
+                  ).animate(content),
+                  child: PasscodePrompt(
+                    credential: _lock.credential,
+                    onSubmit: _lock.unlockWithPin,
+                    onBiometric: _biometricReady
+                        ? () => unawaited(_promptBiometric())
+                        : null,
+                    header: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox.square(
+                          key: _slotKey,
+                          dimension: _glyphSize,
+                          child: _restingGlyph(cs),
+                        ),
+                        const SizedBox(height: 30),
+                        Text(
+                          l10n.lockTitle,
+                          style: TextStyle(
+                            fontFamily: displayFontOf(context),
+                            fontSize: 21,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
                           ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
-            _flyingGlyph(cs),
-          ],
-        ),
+          ),
+          _flyingGlyph(cs),
+        ],
       ),
     );
   }
