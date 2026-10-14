@@ -7,6 +7,7 @@ import '../../../../backend/modules/chats.dart';
 import '../../../../backend/modules/comments.dart';
 import '../../../../backend/modules/message_copy.dart';
 import '../../../../backend/modules/messages.dart';
+import '../../../../backend/modules/sent_message.dart';
 import '../../../../core/config/app_commands.dart';
 import '../../../../core/crypto/message_decryption_cache.dart';
 import '../../../../core/plugins/plugin_outgoing_text.dart';
@@ -465,14 +466,16 @@ class ChatTextSendController {
       }
 
       checkSession();
-      final actualId = commentsMode
-          ? await _comments.sendComment(
-              accountId,
-              chatId,
-              commentPostId!,
-              wireText,
-              replyToMessageId: replyId,
-              elements: elements,
+      final accepted = commentsMode
+          ? SentMessage(
+              await _comments.sendComment(
+                accountId,
+                chatId,
+                commentPostId!,
+                wireText,
+                replyToMessageId: replyId,
+                elements: elements,
+              ),
             )
           : await _messages.sendMessage(
               accountId,
@@ -484,6 +487,14 @@ class ChatTextSendController {
               beforeSend: checkSession,
               encryptedPayload: encrypted,
             );
+      final actualId = accepted.id;
+      final sentText = encrypted ? wireText : (accepted.text ?? wireText);
+      final sentPayload = encrypted
+          ? composedPayload
+          : accepted.payloadOver(composedPayload);
+      final sentElements = encrypted
+          ? elements
+          : (accepted.elements ?? elements);
 
       final mounted = canUpdateChat();
       final index = chatController.indexOfId(tempId);
@@ -494,10 +505,10 @@ class ChatTextSendController {
           accountId: accountId,
           chatId: chatId,
           senderId: accountId,
-          text: wireText,
+          text: sentText,
           time: sentTime,
           status: 'sent',
-          payload: composedPayload,
+          payload: sentPayload,
           sealedText: sealedText,
           e2ee: e2eeFlag,
         );
@@ -525,9 +536,9 @@ class ChatTextSendController {
               chatId,
               messageId: sent.id,
               time: sentTime,
-              text: wireText,
+              text: sentText,
               status: 'sent',
-              elements: elements,
+              elements: sentElements,
               replacesTime: now,
             ),
           );
@@ -658,12 +669,12 @@ class ChatTextSendController {
     );
     if (!online) return tempId;
     try {
-      final actualId = await _messages.sendMessage(
+      final actualId = (await _messages.sendMessage(
         _myId,
         _chatId,
         outgoing.wireText,
         encryptedPayload: outgoing.encrypted,
-      );
+      )).id;
       final realId = actualId.isNotEmpty ? actualId : tempId;
       final i = chatController.indexOfId(tempId);
       if (i != -1) {

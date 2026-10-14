@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/core/config/app_bottom_navigation_style.dart';
+import 'package:komet/core/config/app_visual_style.dart';
 import 'package:komet/core/utils/haptics.dart';
-import 'package:komet/frontend/widgets/bottom_navigation_style_card.dart';
 import 'package:komet/frontend/widgets/compact_bottom_navigation_bar.dart';
 import 'package:komet/frontend/widgets/main_navigation_items.dart';
 import 'package:komet/l10n/app_localizations.dart';
@@ -13,40 +13,34 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    AppBottomNavigationStyle.current.value = BottomNavigationStyle.floating;
+    AppVisualStyle.current.value = VisualStyle.glossy;
     Haptics.enabled = false;
   });
 
   tearDown(() {
-    AppBottomNavigationStyle.current.value = BottomNavigationStyle.floating;
+    AppVisualStyle.current.value = VisualStyle.glossy;
     Haptics.enabled = true;
   });
 
-  test(
-    'keeps the existing style by default and restores the saved choice',
-    () async {
-      expect(
-        await AppBottomNavigationStyle.load(),
-        BottomNavigationStyle.floating,
-      );
-      await AppBottomNavigationStyle.save(BottomNavigationStyle.compact);
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AppBottomNavigationStyle.prefKey), 'compact');
-      AppBottomNavigationStyle.current.value = BottomNavigationStyle.floating;
-      expect(
-        await AppBottomNavigationStyle.load(),
-        BottomNavigationStyle.compact,
-      );
-      await prefs.setString(AppBottomNavigationStyle.prefKey, 'unknown-style');
-      expect(
-        await AppBottomNavigationStyle.load(),
-        BottomNavigationStyle.floating,
-      );
-    },
-  );
+  test('Glossy floats the bar and Material You makes it compact', () {
+    expect(
+      AppBottomNavigationStyle.current.value,
+      BottomNavigationStyle.floating,
+    );
+    AppVisualStyle.current.value = VisualStyle.materialYou;
+    expect(
+      AppBottomNavigationStyle.current.value,
+      BottomNavigationStyle.compact,
+    );
+    AppVisualStyle.current.value = VisualStyle.glossy;
+    expect(
+      AppBottomNavigationStyle.current.value,
+      BottomNavigationStyle.floating,
+    );
+  });
 
   testWidgets(
-    'the appearance setting applies live and keeps the selected tab',
+    'switching the visual style applies live and keeps the selected tab',
     (tester) async {
       var selected = 2;
       await tester.pumpWidget(
@@ -56,10 +50,6 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           home: StatefulBuilder(
             builder: (context, setState) => Scaffold(
-              body: const Align(
-                alignment: Alignment.topCenter,
-                child: BottomNavigationStyleCard(),
-              ),
               bottomNavigationBar:
                   ValueListenableBuilder<BottomNavigationStyle>(
                     valueListenable: AppBottomNavigationStyle.current,
@@ -77,7 +67,7 @@ void main() {
         ),
       );
       expect(find.byType(CompactBottomNavigationBar), findsNothing);
-      await tester.tap(find.text('Компактная'));
+      AppVisualStyle.current.value = VisualStyle.materialYou;
       await tester.pumpAndSettle();
       expect(find.byType(CompactBottomNavigationBar), findsOneWidget);
       expect(
@@ -88,8 +78,6 @@ void main() {
             .currentIndex,
         2,
       );
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString(AppBottomNavigationStyle.prefKey), 'compact');
 
       final semantics = tester.ensureSemantics();
       for (var index = 0; index < mainNavigationItems.length; index++) {
@@ -110,11 +98,10 @@ void main() {
       }
       semantics.dispose();
 
-      await tester.tap(find.text('Плавающая'));
+      AppVisualStyle.current.value = VisualStyle.glossy;
       await tester.pumpAndSettle();
       expect(find.byType(CompactBottomNavigationBar), findsNothing);
       expect(selected, 3);
-      expect(prefs.getString(AppBottomNavigationStyle.prefKey), 'floating');
     },
   );
 

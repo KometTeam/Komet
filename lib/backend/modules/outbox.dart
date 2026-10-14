@@ -83,29 +83,35 @@ class OutboxService {
         final elements = _elementsFromPayload(payload);
 
         try {
-          final actualId = await messages.sendMessage(
+          final encrypted =
+              ChatCryptoService.instance.looksEncrypted(text) ||
+              pending.sealedText != null ||
+              pending.e2ee != CachedMessage.e2eeNone;
+          final accepted = await messages.sendMessage(
             accountId,
             pending.chatId,
             text,
-            encryptedPayload:
-                ChatCryptoService.instance.looksEncrypted(text) ||
-                pending.sealedText != null ||
-                pending.e2ee != CachedMessage.e2eeNone,
+            encryptedPayload: encrypted,
             replyToMessageId: replyToMessageId,
             replySourceChatId: replySourceChatId,
             elements: elements,
           );
+          final sentText = encrypted ? text : (accepted.text ?? text);
+          final sentPayload = encrypted
+              ? payload
+              : accepted.payloadOver(payload);
+          final sentElements = _elementsFromPayload(sentPayload);
           // #***! отправилось, сервер дал настоящий id а временный удаляем
           // #***! sealedText не терять, ключ потрачен и текста больше нигде нет
           final sent = CachedMessage(
-            id: actualId.isNotEmpty ? actualId : pending.id,
+            id: accepted.id.isNotEmpty ? accepted.id : pending.id,
             accountId: accountId,
             chatId: pending.chatId,
             senderId: accountId,
-            text: text,
+            text: sentText,
             time: pending.time,
             status: 'sent',
-            payload: payload,
+            payload: sentPayload,
             sealedText: pending.sealedText,
             e2ee: pending.e2ee,
           );
@@ -124,9 +130,9 @@ class OutboxService {
             pending.chatId,
             messageId: sent.id,
             time: sent.time,
-            text: text,
+            text: sentText,
             status: 'sent',
-            elements: elements.isEmpty ? null : elements,
+            elements: sentElements.isEmpty ? null : sentElements,
           );
           // #***! временную ошибку оставляем в очереди, окончательную помечаем и не трогаем
         } catch (e) {

@@ -81,6 +81,46 @@ class FoldersModule {
     return t == 'все' || t == 'все чаты' || t == 'all' || t == 'all chats';
   }
 
+  static Future<({bool channelsSuggested, bool filtersEnabled})>
+  loadSuggestionFlags(int accountId) async {
+    final values = await AppDatabase.getAllSyncValues(accountId);
+    return (
+      channelsSuggested: values[SyncKey.channelsFolderSuggested] == '1',
+      filtersEnabled: values[SyncKey.folderFiltersEnabled] == '1',
+    );
+  }
+
+  static bool isUnreadFolder(ChatFolder f, {required bool filtersEnabled}) {
+    final filters = f.filters.toSet();
+    if (!filters.contains(FolderFilter.unread)) return false;
+    return filtersEnabled || filters.length == 1;
+  }
+
+  static bool isPersonalFolder(ChatFolder f, {required bool filtersEnabled}) {
+    final filters = f.filters.toSet();
+    if (!filters.contains(FolderFilter.contact) ||
+        !filters.contains(FolderFilter.notContact)) {
+      return false;
+    }
+    return filtersEnabled || filters.length == 2;
+  }
+
+  static List<String> spliceOrder(List<String> stored, List<String> moved) {
+    final movedIds = moved.toSet();
+    final seen = <String>{};
+    var next = 0;
+    return [
+      for (final id in stored)
+        if (seen.add(id)) movedIds.contains(id) ? moved[next++] : id,
+      ...moved.skip(next),
+    ];
+  }
+
+  static bool isChannelsFolder(ChatFolder f) {
+    final filters = f.filters.toSet();
+    return filters.length == 1 && filters.contains(FolderFilter.channel);
+  }
+
   static String? preferredInitialFolderId(List<ChatFolder> folders) {
     if (folders.isEmpty) return null;
     for (final f in folders) {

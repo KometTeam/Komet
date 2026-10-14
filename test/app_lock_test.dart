@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/core/security/app_lock.dart';
+import 'package:komet/core/security/pin_credential.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -32,24 +33,24 @@ void main() {
 
     expect(await lock.unlockWithPin('1111'), isFalse);
     expect(lock.locked.value, isTrue);
-    expect(lock.attemptsLeft, AppLock.maxAttempts - 1);
+    expect(lock.attemptsLeft, PinCredential.maxAttempts - 1);
 
     expect(await lock.unlockWithPin('2468'), isTrue);
     expect(lock.locked.value, isFalse);
-    expect(lock.attemptsLeft, AppLock.maxAttempts);
+    expect(lock.attemptsLeft, PinCredential.maxAttempts);
   });
 
   test('five wrong attempts block input even for the right code', () async {
     await lock.setPin('2468');
     lock.lock();
-    for (var i = 0; i < AppLock.maxAttempts; i++) {
+    for (var i = 0; i < PinCredential.maxAttempts; i++) {
       expect(await lock.unlockWithPin('0000'), isFalse);
     }
 
     expect(lock.blockedUntil.value, isNotNull);
     expect(
       lock.blockedUntil.value!.difference(DateTime.now()),
-      greaterThan(AppLock.lockout - const Duration(seconds: 5)),
+      greaterThan(PinCredential.lockout - const Duration(seconds: 5)),
     );
     expect(await lock.unlockWithPin('2468'), isFalse);
     expect(lock.locked.value, isTrue);
@@ -57,7 +58,7 @@ void main() {
 
   test('the lockout survives a restart', () async {
     await lock.setPin('2468');
-    for (var i = 0; i < AppLock.maxAttempts; i++) {
+    for (var i = 0; i < PinCredential.maxAttempts; i++) {
       await lock.unlockWithPin('0000');
     }
 

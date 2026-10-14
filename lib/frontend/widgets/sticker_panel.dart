@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -12,11 +13,14 @@ import '../../l10n/app_localizations.dart';
 import '../../main.dart' show stickersModule;
 import '../../models/animoji.dart';
 import '../../models/sticker.dart';
+import 'confirm_dialog.dart';
+import 'custom_notification.dart';
 import 'emoji_panel.dart';
 import 'segmented_pill_toggle.dart';
 import 'small_spinner.dart';
 import 'lottie_image.dart';
 import 'sticker_peek.dart';
+import 'sticker_pin.dart';
 import '../../core/config/app_frost.dart';
 import 'liquid_glass.dart';
 
@@ -34,16 +38,20 @@ class _DragScrollBehavior extends MaterialScrollBehavior {
 }
 
 class _Section {
+  final String id;
   final String title;
   final List<int> stickerIds;
   final IconData? icon;
   final String? iconUrl;
+  final VoidCallback? onClear;
 
   const _Section({
+    required this.id,
     required this.title,
     required this.stickerIds,
     this.icon,
     this.iconUrl,
+    this.onClear,
   });
 }
 
@@ -69,6 +77,7 @@ class _StickerPanelState extends State<StickerPanel>
     with SingleTickerProviderStateMixin {
   static const double _tabBarHeight = 52;
   static const double _headerHeight = 34;
+  static const double _clearableHeaderHeight = 48;
   static const double _searchFieldHeight = 50;
   static const double _toggleBarHeight = 48;
   static const double _resizeHandleHeight = 16;
@@ -94,6 +103,7 @@ class _StickerPanelState extends State<StickerPanel>
   List<_Section> _sections = const [];
   List<double> _heights = const [];
   List<double> _offsets = const [];
+  List<int> _recents = const [];
   String _query = '';
   bool _searchLoading = false;
   List<StickerItem> _results = const [];
@@ -108,12 +118,14 @@ class _StickerPanelState extends State<StickerPanel>
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
     _scroll.addListener(_onScroll);
+    stickersModule.favoriteStickerIds.addListener(_onPinnedChanged);
     EmojiKeywordIndex.instance.ensureLoaded();
     _load();
   }
 
   @override
   void dispose() {
+    stickersModule.favoriteStickerIds.removeListener(_onPinnedChanged);
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
     _scrolling.dispose();
@@ -170,6 +182,7 @@ class _StickerPanelState extends State<StickerPanel>
     try {
       await stickersModule.ensureLoaded();
       if (!mounted) return;
+      _recents = stickersModule.recentStickerIds.value;
       _buildSections();
       setState(() => _loading = false);
     } catch (e) {
@@ -182,14 +195,28 @@ class _StickerPanelState extends State<StickerPanel>
   }
 
   void _buildSections() {
+    final l10n = AppLocalizations.of(context)!;
     final sections = <_Section>[];
-    final recents = stickersModule.recentStickerIds;
+    final pinned = stickersModule.favoriteStickerIds.value;
+    if (pinned.isNotEmpty) {
+      sections.add(
+        _Section(
+          id: 'pinned',
+          title: l10n.stickerPanelPinned,
+          stickerIds: pinned,
+          icon: Symbols.push_pin,
+        ),
+      );
+    }
+    final recents = _recents;
     if (recents.isNotEmpty) {
       sections.add(
         _Section(
-          title: AppLocalizations.of(context)!.emojiPanelRecent,
+          id: 'recent',
+          title: l10n.emojiPanelRecent,
           stickerIds: recents,
           icon: Symbols.schedule,
+          onClear: _confirmClearRecents,
         ),
       );
     }
@@ -197,6 +224,7 @@ class _StickerPanelState extends State<StickerPanel>
       if (set.stickerIds.isEmpty) continue;
       sections.add(
         _Section(
+          id: 'set:${set.id}',
           title: set.name,
           stickerIds: set.stickerIds,
           iconUrl: set.iconUrl,
@@ -204,6 +232,59 @@ class _StickerPanelState extends State<StickerPanel>
       );
     }
     _sections = sections;
+  }
+
+  double _headerHeightOf(_Section section) =>
+      section.onClear == null ? _headerHeight : _clearableHeaderHeight;
+
+  void _onPinnedChanged() {
+    if (!mounted || _loading || _error != null) return;
+    setState(_buildSections);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _onScroll();
+    });
+  }
+
+  Future<void> _confirmClearRecents() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.stickerPanelClearRecentTitle,
+      message: l10n.stickerPanelClearRecentBody,
+      confirmLabel: l10n.downloadsClearConfirm,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    String? failure;
+    try {
+      if (!await stickersModule.clearRecentStickers()) {
+        failure = l10n.stickerPanelClearRecentFailed;
+      }
+    } catch (e) {
+      failure = stickerActionError(e) ?? l10n.stickerPanelClearRecentFailed;
+    }
+    if (!mounted) return;
+    if (failure != null) {
+      showCustomNotification(context, failure);
+      return;
+    }
+    setState(() {
+      _recents = const [];
+      _buildSections();
+    });
+  }
+
+  List<StickerPeekAction> _peekActions(Object peekId) {
+    final item = peekId is int ? stickersModule.cachedSticker(peekId) : null;
+    if (item == null) return const [];
+    return [
+      StickerPeekAction(
+        icon: Symbols.send,
+        label: AppLocalizations.of(context)!.chatSendConfirmAction,
+        onTap: () => widget.onStickerTap(item),
+      ),
+      stickerPinPeekAction(context, item.id),
+    ];
   }
 
   void _onScroll() {
@@ -319,7 +400,7 @@ class _StickerPanelState extends State<StickerPanel>
           var acc = _searchFieldHeight;
           for (final s in _sections) {
             final rows = (s.stickerIds.length / columns).ceil();
-            final h = _headerHeight + rows * cell;
+            final h = _headerHeightOf(s) + rows * cell;
             offsets.add(acc);
             heights.add(h);
             acc += h;
@@ -448,6 +529,7 @@ class _StickerPanelState extends State<StickerPanel>
     return LottieScrollScope(
       isScrolling: _scrolling,
       child: StickerPeekScope(
+        actionsFor: _peekActions,
         child: NotificationListener<ScrollNotification>(
           onNotification: _onScrollNotification,
           child: CustomScrollView(
@@ -459,12 +541,13 @@ class _StickerPanelState extends State<StickerPanel>
                   itemExtentBuilder: (i, _) => _heights[i],
                   delegate: SliverChildBuilderDelegate(
                     (context, i) => _StickerSection(
-                      key: ValueKey(_sections[i].title + i.toString()),
+                      key: ValueKey(_sections[i].id),
                       title: _sections[i].title,
+                      onClear: _sections[i].onClear,
                       stickerIds: _sections[i].stickerIds,
                       columns: columns,
                       cell: cell,
-                      headerHeight: _headerHeight,
+                      headerHeight: _headerHeightOf(_sections[i]),
                       shimmer: _shimmer,
                       onTap: widget.onStickerTap,
                     ),
@@ -588,6 +671,7 @@ class _StickerPanelState extends State<StickerPanel>
 
 class _StickerSection extends StatefulWidget {
   final String title;
+  final VoidCallback? onClear;
   final List<int> stickerIds;
   final int columns;
   final double cell;
@@ -598,6 +682,7 @@ class _StickerSection extends StatefulWidget {
   const _StickerSection({
     super.key,
     required this.title,
+    this.onClear,
     required this.stickerIds,
     required this.columns,
     required this.cell,
@@ -619,9 +704,16 @@ class _StickerSectionState extends State<_StickerSection> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(_StickerSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.stickerIds, widget.stickerIds)) _load();
+  }
+
   Future<void> _load() async {
-    await stickersModule.ensureStickers(widget.stickerIds);
-    if (!mounted) return;
+    final ids = widget.stickerIds;
+    await stickersModule.ensureStickers(ids);
+    if (!mounted || !listEquals(ids, widget.stickerIds)) return;
     setState(() => _loaded = true);
   }
 
@@ -639,19 +731,40 @@ class _StickerSectionState extends State<_StickerSection> {
         SizedBox(
           height: widget.headerHeight,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                widget.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+            padding: EdgeInsets.only(
+              left: 14,
+              right: widget.onClear == null ? 14 : 0,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
+                if (widget.onClear != null)
+                  IconButton(
+                    onPressed: widget.onClear,
+                    tooltip: AppLocalizations.of(
+                      context,
+                    )!.stickerPanelClearRecent,
+                    icon: const Icon(Symbols.close),
+                    iconSize: 18,
+                    color: cs.onSurfaceVariant,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 48,
+                      height: 48,
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

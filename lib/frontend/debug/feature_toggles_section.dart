@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../../backend/modules/contacts.dart';
 import '../../core/config/app_commands.dart';
@@ -10,11 +9,11 @@ import '../../core/config/app_pranks.dart';
 import '../../core/config/app_show_extra_info.dart';
 import '../../core/config/app_stories.dart';
 import '../../core/config/app_swipe_back_desktop.dart';
+import '../../core/config/app_unchecked_links.dart';
 import '../../core/config/app_video_note_quality.dart';
 import '../../core/contacts/device_contacts_service.dart';
 import '../screens/digital_id/digital_id_web_screen.dart';
 import '../widgets/custom_notification.dart';
-import '../widgets/sheet_helpers.dart';
 import '../../main.dart' show KometAppState;
 import 'dev_menu_widgets.dart';
 
@@ -40,86 +39,6 @@ class DebugFeatureTogglesSection extends StatelessWidget {
     ContactsModule.revision.value++;
   }
 
-  void _pickVideoNoteQuality(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: cs.surfaceContainerHigh,
-      shape: kSheetShape,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Качество записи кружков',
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Разрешение',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                ),
-              ),
-            ),
-            for (final preset in AppVideoNoteResolution.presets)
-              ValueListenableBuilder<int>(
-                valueListenable: AppVideoNoteResolution.current,
-                builder: (context, value, _) => ListTile(
-                  title: Text(
-                    '$preset×$preset',
-                    style: TextStyle(color: cs.onSurface, fontSize: 16),
-                  ),
-                  trailing: value == preset
-                      ? Icon(Symbols.check, color: cs.primary)
-                      : null,
-                  onTap: () => AppVideoNoteResolution.save(preset),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Частота кадров',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                ),
-              ),
-            ),
-            for (final preset in AppVideoNoteFps.presets)
-              ValueListenableBuilder<int>(
-                valueListenable: AppVideoNoteFps.current,
-                builder: (context, value, _) => ListTile(
-                  title: Text(
-                    '$preset fps',
-                    style: TextStyle(color: cs.onSurface, fontSize: 16),
-                  ),
-                  trailing: value == preset
-                      ? Icon(Symbols.check, color: cs.primary)
-                      : null,
-                  onTap: () => AppVideoNoteFps.save(preset),
-                ),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _resetDigitalId(BuildContext context) async {
     await resetDigitalIdWebData();
     if (!context.mounted) return;
@@ -131,7 +50,6 @@ class DebugFeatureTogglesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final state = appState;
     return Column(
       children: [
@@ -182,22 +100,6 @@ class DebugFeatureTogglesSection extends StatelessWidget {
         const DevGroupLabel('Кружки'),
         DevGroup(
           children: [
-            ValueListenableBuilder<int>(
-              valueListenable: AppVideoNoteResolution.current,
-              builder: (context, res, _) => ValueListenableBuilder<int>(
-                valueListenable: AppVideoNoteFps.current,
-                builder: (context, fps, _) => DevRow(
-                  caption: 'Качество записи (только Android)',
-                  title: '$res×$res • $fps fps',
-                  onTap: () => _pickVideoNoteQuality(context),
-                  trailing: Icon(
-                    Symbols.chevron_right,
-                    color: cs.outline,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
             DevToggleRow(
               title: 'Кружки с задней камеры',
               description: (v) => v
@@ -243,6 +145,14 @@ class DebugFeatureTogglesSection extends StatelessWidget {
                   'для теста курсором',
               valueListenable: AppSwipeBackDesktop.current,
               onChanged: AppSwipeBackDesktop.save,
+            ),
+            DevToggleRow(
+              title: 'Не проверять ссылки',
+              description: (v) => v
+                  ? 'Адрес ссылки уходит как введён, без https://'
+                  : 'Адрес ссылки проверяется, https:// дописывается',
+              valueListenable: AppUncheckedLinks.current,
+              onChanged: AppUncheckedLinks.save,
             ),
           ],
         ),

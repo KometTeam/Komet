@@ -363,12 +363,12 @@ class E2eeService {
         myId: accountId,
         peerId: peerId,
       );
-      final messageId = await messages.sendMessage(
+      final messageId = (await messages.sendMessage(
         accountId,
         chatId,
         '$kE2eeOfferPrefix\n${offer.text}',
         encryptionControl: true,
-      );
+      )).id;
       if (messageId.isEmpty) return false;
       final previous = info(accountId, chatId);
       await _persist(
@@ -411,12 +411,12 @@ class E2eeService {
         offerText: offerText,
         oldState: hadSession ? await _state(accountId, chatId) : null,
       );
-      final messageId = await messages.sendMessage(
+      final messageId = (await messages.sendMessage(
         accountId,
         chatId,
         '$kE2eeAnswerPrefix\n${answer.text}',
         encryptionControl: true,
-      );
+      )).id;
       if (messageId.isEmpty) return false;
       final peek = KometCrypto.handshakePeek(offerText);
       await _persist(
@@ -693,7 +693,7 @@ class E2eeService {
                 text: kE2eeOfferDonePrefix,
                 encryptionControl: true,
               )
-              .catchError((_) => false),
+              .catchError((_) => null),
         );
       }
     } on KometCryptoException catch (e) {

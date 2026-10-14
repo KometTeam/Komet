@@ -73,7 +73,7 @@ class MediaKitVideoPlatform extends VideoPlayerPlatform {
 
   @override
   Future<void> setVolume(int playerId, double volume) =>
-      _session(playerId).player.setVolume(volume * 100);
+      _session(playerId).setVolume(volume);
 
   @override
   Future<void> seekTo(int playerId, Duration position) =>
@@ -164,6 +164,8 @@ class _VideoSession {
   }
 
   static const Duration _startTimeout = Duration(seconds: 20);
+  static const String _timingOffset = 'video-timing-offset';
+  static const String _immediateTiming = '0';
   static const int _maxLoggedLines = 40;
   static const List<String> _loadFailures = [
     'Failed to open',
@@ -183,6 +185,9 @@ class _VideoSession {
   Size? _size;
   bool _initialized = false;
   bool _failed = false;
+  bool _silent = false;
+  String? _audibleTimingOffset;
+  Future<void> _volumeChange = Future<void>.value();
   String? _lastError;
   int _loggedLines = 0;
 
@@ -203,6 +208,31 @@ class _VideoSession {
     } catch (error) {
       _fail(_redact('$error'));
     }
+  }
+
+  Future<void> setVolume(double volume) {
+    final change = _volumeChange.then((_) async {
+      await player.setVolume(volume * 100);
+      await _setSilent(volume <= 0);
+    });
+    _volumeChange = change.catchError((Object _) {});
+    return change;
+  }
+
+  Future<void> _setSilent(bool silent) async {
+    if (silent == _silent) return;
+    _silent = silent;
+    final native = player.platform;
+    if (native is! NativePlayer) return;
+    if (silent) {
+      _audibleTimingOffset ??= await native.getProperty(_timingOffset);
+      await player.setAudioTrack(AudioTrack.no());
+      await native.setProperty(_timingOffset, _immediateTiming);
+      return;
+    }
+    final restored = _audibleTimingOffset;
+    if (restored != null) await native.setProperty(_timingOffset, restored);
+    await player.setAudioTrack(AudioTrack.auto());
   }
 
   void _onDuration(Duration duration) {

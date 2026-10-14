@@ -63,6 +63,7 @@ import '../../widgets/local_avatar_builder.dart';
 import '../../widgets/lost_account_dialog.dart';
 import 'chat/view/chat_list_shimmer.dart';
 import 'chat/view/archive_pull.dart';
+import '../lock/archive_gate.dart';
 import 'chat/view/drag_intercept_scroll.dart';
 import 'chat/view/chat_list_tile.dart';
 import 'chat/view/chat_preview_line.dart';
@@ -322,6 +323,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     controller: _archivePull,
   );
   bool _archiveWasRevealed = false;
+  Offset? _archiveTapPosition;
 
   final _StoriesUi _storiesUi = _StoriesUi();
   double get _pullRatio => _storiesUi.pullRatio;
@@ -3353,77 +3355,100 @@ class _ChatListScreenState extends State<ChatListScreen>
     return pageIndex == (allIdx >= 0 ? allIdx : 0);
   }
 
+  void _openArchive(BuildContext anchor) {
+    final tapPosition = _archiveTapPosition;
+    _archiveTapPosition = null;
+    if (_isSelectionMode) return;
+    pushPastArchiveLock(
+      anchor,
+      tapPosition: tapPosition,
+      destination: () => SwipeRoute<void>(
+        builder: (_) =>
+            const ArchiveSessionScope(child: ChatListScreen(archiveMode: true)),
+      ),
+    );
+  }
+
   Widget _buildArchiveEntry(
     ColorScheme cs, {
     bool accent = false,
     bool avatarVisible = true,
   }) {
-    return InkWell(
-      onTap: () {
-        if (_isSelectionMode) return;
-        pushSwipeable(context, (_) => const ChatListScreen(archiveMode: true));
-      },
-      child: Container(
-        height: kArchiveRowExtent,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          children: [
-            Opacity(
-              opacity: avatarVisible ? 1 : 0,
-              child: CircleAvatar(
-                radius: 24,
-                backgroundColor: accent
-                    ? cs.primary
-                    : cs.surfaceContainerHighest,
-                child: Icon(
-                  Symbols.archive,
-                  color: accent ? cs.onPrimary : cs.onSurfaceVariant,
-                  size: 24,
-                  weight: 500,
+    return Builder(
+      builder: (rowContext) => InkWell(
+        onTapDown: (details) => _archiveTapPosition = details.globalPosition,
+        onTap: () => _openArchive(rowContext),
+        child: Container(
+          height: kArchiveRowExtent,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Opacity(
+                opacity: avatarVisible ? 1 : 0,
+                child: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: accent
+                      ? cs.primary
+                      : cs.surfaceContainerHighest,
+                  child: Icon(
+                    Symbols.archive,
+                    color: accent ? cs.onPrimary : cs.onSurfaceVariant,
+                    size: 24,
+                    weight: 500,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                AppLocalizations.of(context)!.chatListArchive,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            ValueListenableBuilder<int>(
-              valueListenable: chats.chatsChanged,
-              builder: (context, _, _) {
-                final unread = _liveUnread(
-                  _chatsWithArchived.where((c) => _archivedIds.contains(c.id)),
-                ).total;
-                if (unread <= 0) return const SizedBox.shrink();
-                return Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cs.primary,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    unread > 99 ? '99+' : '$unread',
-                    style: TextStyle(
-                      color: cs.onPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        AppLocalizations.of(context)!.chatListArchive,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-            Icon(Symbols.chevron_right, color: cs.outline),
-          ],
+                    ArchiveLockBadge(color: cs.onSurfaceVariant),
+                  ],
+                ),
+              ),
+              ValueListenableBuilder<int>(
+                valueListenable: chats.chatsChanged,
+                builder: (context, _, _) {
+                  final unread = _liveUnread(
+                    _chatsWithArchived.where(
+                      (c) => _archivedIds.contains(c.id),
+                    ),
+                  ).total;
+                  if (unread <= 0) return const SizedBox.shrink();
+                  return Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      unread > 99 ? '99+' : '$unread',
+                      style: TextStyle(
+                        color: cs.onPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              Icon(Symbols.chevron_right, color: cs.outline),
+            ],
+          ),
         ),
       ),
     );

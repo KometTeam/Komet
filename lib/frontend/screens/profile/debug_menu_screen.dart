@@ -27,6 +27,7 @@ import '../../debug/sync_probe_section.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/sheet_helpers.dart';
+import '../../widgets/underline_tab_bar.dart';
 import '../chats/profile_action_sheets.dart';
 
 class DebugMenuScreen extends StatefulWidget {
@@ -260,28 +261,7 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                       : _resetServer,
                 ),
               ),
-              TabBar(
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                dividerColor: Colors.transparent,
-                indicatorSize: TabBarIndicatorSize.label,
-                indicator: UnderlineTabIndicator(
-                  borderSide: BorderSide(color: cs.primary, width: 3),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                labelColor: cs.primary,
-                unselectedLabelColor: cs.onSurfaceVariant,
-                labelStyle: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                tabs: const [
-                  Tab(text: 'Общее'),
-                  Tab(text: 'Рубильники'),
-                  Tab(text: 'Инфо'),
-                ],
-              ),
+              const UnderlineTabBar(labels: ['Общее', 'Рубильники', 'Инфо']),
               Expanded(
                 child: TabBarView(
                   children: [

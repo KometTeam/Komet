@@ -47,6 +47,8 @@ import 'attachment/bubbles/video_bubble.dart';
 import 'attachment/bubbles/file_bubble.dart';
 import 'attachment/bubbles/forwarded_bubble.dart';
 import 'lottie_image.dart';
+import 'message_animoji.dart';
+import 'bubble_geometry.dart';
 import 'text_with_meta.dart';
 import 'official_name.dart';
 
@@ -59,11 +61,13 @@ class ReactionAnimationEvent {
   final String messageId;
   final String emoji;
   final int token;
+  final bool emphasized;
 
   const ReactionAnimationEvent({
     required this.messageId,
     required this.emoji,
     required this.token,
+    this.emphasized = false,
   });
 }
 
@@ -104,6 +108,238 @@ class _RenderCapIntrinsicWidth extends RenderProxyBox {
   @override
   double computeMaxIntrinsicWidth(double height) =>
       math.min(super.computeMaxIntrinsicWidth(height), _cap);
+}
+
+class _IntrinsicColumn extends MultiChildRenderObjectWidget {
+  const _IntrinsicColumn({
+    required this.stretch,
+    required this.measureLast,
+    this.fillHeight = false,
+    required super.children,
+  });
+
+  final bool stretch;
+  final bool measureLast;
+  final bool fillHeight;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderIntrinsicColumn(
+        stretch: stretch,
+        measureLast: measureLast,
+        fillHeight: fillHeight,
+        textDirection: Directionality.of(context),
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderIntrinsicColumn renderObject,
+  ) {
+    renderObject
+      ..stretch = stretch
+      ..measureLast = measureLast
+      ..fillHeight = fillHeight
+      ..textDirection = Directionality.of(context);
+  }
+}
+
+class _IntrinsicColumnParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderIntrinsicColumn extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _IntrinsicColumnParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _IntrinsicColumnParentData> {
+  _RenderIntrinsicColumn({
+    required bool stretch,
+    required bool measureLast,
+    required bool fillHeight,
+    required TextDirection textDirection,
+  }) : _stretch = stretch,
+       _measureLast = measureLast,
+       _fillHeight = fillHeight,
+       _textDirection = textDirection;
+
+  bool _stretch;
+  set stretch(bool value) {
+    if (value == _stretch) return;
+    _stretch = value;
+    markNeedsLayout();
+  }
+
+  bool _measureLast;
+  set measureLast(bool value) {
+    if (value == _measureLast) return;
+    _measureLast = value;
+    markNeedsLayout();
+  }
+
+  bool _fillHeight;
+  set fillHeight(bool value) {
+    if (value == _fillHeight) return;
+    _fillHeight = value;
+    markNeedsLayout();
+  }
+
+  TextDirection _textDirection;
+  set textDirection(TextDirection value) {
+    if (value == _textDirection) return;
+    _textDirection = value;
+    markNeedsLayout();
+  }
+
+  double? _layoutIntrinsicWidth;
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _IntrinsicColumnParentData) {
+      child.parentData = _IntrinsicColumnParentData();
+    }
+  }
+
+  static double _crossIntrinsicWidth(RenderBox child) =>
+      child.getMaxIntrinsicWidth(child.getMaxIntrinsicHeight(double.infinity));
+
+  @override
+  double computeMaxIntrinsicWidth(double height) {
+    var widest = 0.0;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      widest = math.max(widest, _crossIntrinsicWidth(child));
+    }
+    return widest;
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) =>
+      getMaxIntrinsicWidth(height);
+
+  double _stackedHeight(
+    double width,
+    double Function(RenderBox child, double width) heightOf,
+  ) {
+    final extent = width.isFinite
+        ? width
+        : getMaxIntrinsicWidth(double.infinity);
+    var total = 0.0;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      total += heightOf(child, extent);
+    }
+    return total;
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      _stackedHeight(width, (child, w) => child.getMinIntrinsicHeight(w));
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      _stackedHeight(width, (child, w) => child.getMaxIntrinsicHeight(w));
+
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) =>
+      defaultComputeDistanceToFirstActualBaseline(baseline);
+
+  BoxConstraints _childConstraints(double width) => _stretch
+      ? BoxConstraints.tightFor(width: width)
+      : BoxConstraints(maxWidth: width);
+
+  Size _sizeFor(double width, double stacked, BoxConstraints constraints) {
+    final main = _fillHeight && constraints.maxHeight.isFinite
+        ? constraints.maxHeight
+        : stacked;
+    return Size(width, constraints.constrainHeight(main));
+  }
+
+  @override
+  @protected
+  Size computeDryLayout(covariant BoxConstraints constraints) {
+    final width = constraints.hasTightWidth
+        ? constraints.maxWidth
+        : constraints.constrainWidth(
+            getMaxIntrinsicWidth(constraints.maxHeight),
+          );
+    final childConstraints = _childConstraints(width);
+    var stacked = 0.0;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      stacked += child.getDryLayout(childConstraints).height;
+    }
+    return _sizeFor(width, stacked, constraints);
+  }
+
+  double? _intrinsicWidthAfterLooseLayout(RenderBox child) {
+    RenderBox? inner = child;
+    while (inner is RenderBubbleGeometryReporter) {
+      inner = inner.child;
+    }
+    final loose = BoxConstraints(maxWidth: constraints.maxWidth);
+    switch (inner) {
+      case RenderTextWithMeta():
+        child.layout(loose, parentUsesSize: true);
+        return inner.layoutIntrinsicWidth;
+      case _RenderIntrinsicColumn():
+        child.layout(loose, parentUsesSize: true);
+        return inner._layoutIntrinsicWidth;
+      case RenderParagraph() when isPlainParagraph(inner):
+        child.layout(loose, parentUsesSize: true);
+        final width = child.size.width;
+        return width < constraints.maxWidth ? width : double.infinity;
+      default:
+        return null;
+    }
+  }
+
+  double _resolveWidth() {
+    if (constraints.hasTightWidth) return constraints.maxWidth;
+    final measured = _measureLast ? lastChild : firstChild;
+    final fromLayout = measured == null
+        ? null
+        : _intrinsicWidthAfterLooseLayout(measured);
+    if (fromLayout == null) {
+      return constraints.constrainWidth(
+        getMaxIntrinsicWidth(constraints.maxHeight),
+      );
+    }
+    var widest = fromLayout;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      if (child == measured) continue;
+      widest = math.max(widest, _crossIntrinsicWidth(child));
+    }
+    return constraints.constrainWidth(widest);
+  }
+
+  @override
+  void performLayout() {
+    final width = _resolveWidth();
+    final childConstraints = _childConstraints(width);
+    var stacked = 0.0;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      child.layout(childConstraints, parentUsesSize: true);
+      final dx = _stretch || _textDirection == TextDirection.ltr
+          ? 0.0
+          : width - child.size.width;
+      (child.parentData! as _IntrinsicColumnParentData).offset = Offset(
+        dx,
+        stacked,
+      );
+      stacked += child.size.height;
+    }
+    size = _sizeFor(width, stacked, constraints);
+    _layoutIntrinsicWidth = constraints.minWidth > 0
+        ? null
+        : size.width < constraints.maxWidth
+        ? size.width
+        : double.infinity;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
 }
 
 class _HeaderAboveMatchWidth extends MultiChildRenderObjectWidget {
@@ -477,7 +713,6 @@ class _ReactionAnimojiGlyph extends StatefulWidget {
   final ValueListenable<ReactionAnimationEvent?>? animation;
 
   const _ReactionAnimojiGlyph({
-    super.key,
     required this.messageId,
     required this.emoji,
     required this.animoji,
@@ -627,6 +862,106 @@ class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
   }
 }
 
+class _ReactionEmphasis extends StatefulWidget {
+  final String messageId;
+  final String emoji;
+  final ValueListenable<ReactionAnimationEvent?>? animation;
+  final Widget child;
+
+  const _ReactionEmphasis({
+    super.key,
+    required this.messageId,
+    required this.emoji,
+    required this.animation,
+    required this.child,
+  });
+
+  @override
+  State<_ReactionEmphasis> createState() => _ReactionEmphasisState();
+}
+
+class _ReactionEmphasisState extends State<_ReactionEmphasis>
+    with SingleTickerProviderStateMixin {
+  static const double _peak = 1.65;
+  static const Duration _grow = Duration(milliseconds: 150);
+  static const Duration _hold = Duration(seconds: 1);
+  static const Duration _settle = Duration(milliseconds: 300);
+  static const Animation<double> _rest = AlwaysStoppedAnimation(1);
+
+  static final Animatable<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween<double>(
+        begin: 1,
+        end: _peak,
+      ).chain(CurveTween(curve: Curves.easeOutCubic)),
+      weight: _grow.inMilliseconds.toDouble(),
+    ),
+    TweenSequenceItem(
+      tween: ConstantTween<double>(_peak),
+      weight: _hold.inMilliseconds.toDouble(),
+    ),
+    TweenSequenceItem(
+      tween: Tween<double>(
+        begin: _peak,
+        end: 1,
+      ).chain(CurveTween(curve: Curves.easeInOutCubic)),
+      weight: _settle.inMilliseconds.toDouble(),
+    ),
+  ]);
+
+  AnimationController? _controller;
+  Animation<double>? _scaleAnimation;
+  int? _token;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.animation?.addListener(_onAnimation);
+  }
+
+  @override
+  void didUpdateWidget(_ReactionEmphasis oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.animation, widget.animation)) {
+      oldWidget.animation?.removeListener(_onAnimation);
+      widget.animation?.addListener(_onAnimation);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.animation?.removeListener(_onAnimation);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _onAnimation() {
+    final event = widget.animation?.value;
+    if (event == null ||
+        !event.emphasized ||
+        event.token == _token ||
+        event.messageId != widget.messageId ||
+        EmojiKeywordIndex.normalize(event.emoji) !=
+            EmojiKeywordIndex.normalize(widget.emoji)) {
+      return;
+    }
+    _token = event.token;
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return;
+    final controller = _controller ??= AnimationController(
+      vsync: this,
+      duration: _grow + _hold + _settle,
+    );
+    if (_scaleAnimation == null) {
+      setState(() => _scaleAnimation = controller.drive(_scale));
+    }
+    controller.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ScaleTransition(scale: _scaleAnimation ?? _rest, child: widget.child);
+}
+
 class MessageBubble extends StatelessWidget {
   static const int forwardBurstWindowMs = 250;
 
@@ -672,6 +1007,7 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onCommentsTap;
   final CachedMessage? Function(String messageId)? resolveLocalMessage;
   final double? listWidth;
+  final BubbleGeometry? geometry;
 
   const MessageBubble({
     super.key,
@@ -707,6 +1043,7 @@ class MessageBubble extends StatelessWidget {
     this.onCommentsTap,
     this.resolveLocalMessage,
     this.listWidth,
+    this.geometry,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -1059,14 +1396,21 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (_hasShareAttachment) {
-      return ValueListenableBuilder<bool>(
-        valueListenable: AppLinkPreview.current,
-        builder: (context, _, _) => _buildBubble(context),
-      );
-    }
-    return _buildBubble(context);
+    return BubbleGeometryReporter(
+      geometry: _reportedGeometry(context),
+      slot: BubbleSlot.root,
+      bubble: this,
+      child: _hasShareAttachment
+          ? ValueListenableBuilder<bool>(
+              valueListenable: AppLinkPreview.current,
+              builder: (context, _, _) => _buildBubble(context),
+            )
+          : _buildBubble(context),
+    );
   }
+
+  BubbleGeometry? _reportedGeometry(BuildContext context) =>
+      BubbleChrome.hiddenOf(context) ? null : geometry;
 
   Widget _buildBubble(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -1152,7 +1496,7 @@ class MessageBubble extends StatelessWidget {
         : math.min(screenWidth * 0.75, 760.0);
     final noBubbleBackground =
         isVideoNote || _isSticker || jumboAnimoji != null;
-    final bubbleColor = noBubbleBackground
+    final bubbleColor = noBubbleBackground || BubbleChrome.hiddenOf(context)
         ? Colors.transparent
         : (isMe ? cs.primaryContainer : cs.surfaceContainerHighest);
 
@@ -1233,32 +1577,30 @@ class MessageBubble extends StatelessWidget {
         contentType == MessageType.text &&
             jumboAnimoji == null &&
             _stretchesTextRow
-        ? IntrinsicWidth(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (senderHeader != null)
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: senderHeader,
+        ? _IntrinsicColumn(
+            stretch: true,
+            measureLast: true,
+            children: [
+              if (senderHeader != null)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: senderHeader,
+                ),
+              if (reply != null) ...[
+                _CapIntrinsicWidth(
+                  cap: maxBubbleWidth * _replyWidthShare,
+                  child: _buildReplyQuote(
+                    context,
+                    cs,
+                    textColor,
+                    reply,
+                    maxBubbleWidth,
                   ),
-                if (reply != null) ...[
-                  _CapIntrinsicWidth(
-                    cap: maxBubbleWidth * _replyWidthShare,
-                    child: _buildReplyQuote(
-                      context,
-                      cs,
-                      textColor,
-                      reply,
-                      maxBubbleWidth,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                ],
-                contentWithReactions,
+                ),
+                const SizedBox(height: 4),
               ],
-            ),
+              contentWithReactions,
+            ],
           )
         : _mediaDictatesWidth && (senderHeader != null || replyHeader != null)
         ? _HeaderAboveMatchWidth(
@@ -1289,27 +1631,31 @@ class MessageBubble extends StatelessWidget {
         AppBubbleShape.current,
         AppBubbleBehavior.current,
       ]),
-      builder: (context, child) => Container(
-        constraints: BoxConstraints(
-          maxWidth: maxBubbleWidth,
-          minHeight: showAvatarSlot && chatType == "CHAT"
-              ? _groupAvatarSize
-              : 0,
+      builder: (context, child) => BubbleGeometryReporter(
+        geometry: _reportedGeometry(context),
+        slot: BubbleSlot.background,
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: maxBubbleWidth,
+            minHeight: showAvatarSlot && chatType == "CHAT"
+                ? _groupAvatarSize
+                : 0,
+          ),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: noBubbleBackground
+                ? null
+                : _borderRadiusFor(
+                    AppBubbleShape.current.value,
+                    AppBubbleBehavior.current.value,
+                    shape,
+                    hasPhotoCap,
+                    hasMultiPhotos,
+                  ),
+          ),
+          padding: containerPadding,
+          child: child,
         ),
-        decoration: BoxDecoration(
-          color: bubbleColor,
-          borderRadius: noBubbleBackground
-              ? null
-              : _borderRadiusFor(
-                  AppBubbleShape.current.value,
-                  AppBubbleBehavior.current.value,
-                  shape,
-                  hasPhotoCap,
-                  hasMultiPhotos,
-                ),
-        ),
-        padding: containerPadding,
-        child: child,
       ),
       child: hasCommentsFooter
           ? _StackMatchTopWidth(
@@ -1760,7 +2106,7 @@ class MessageBubble extends StatelessWidget {
               SizedBox(
                 width: size,
                 height: size,
-                child: LottieImage(
+                child: MessageAnimoji(
                   lottieUrl: url,
                   size: size,
                   memCacheWidth: cache,
@@ -1866,16 +2212,21 @@ class MessageBubble extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_resolveReactionAnimoji(c.reaction) case final animoji?)
-              _ReactionAnimojiGlyph(
-                key: ValueKey((message.id, c.reaction)),
-                messageId: message.id,
-                emoji: c.reaction,
-                animoji: animoji,
-                animation: reactionAnimation,
-              )
-            else
-              Text(c.reaction, style: const TextStyle(fontSize: 13)),
+            _ReactionEmphasis(
+              key: ValueKey((message.id, c.reaction)),
+              messageId: message.id,
+              emoji: c.reaction,
+              animation: reactionAnimation,
+              child: switch (_resolveReactionAnimoji(c.reaction)) {
+                final animoji? => _ReactionAnimojiGlyph(
+                  messageId: message.id,
+                  emoji: c.reaction,
+                  animoji: animoji,
+                  animation: reactionAnimation,
+                ),
+                null => Text(c.reaction, style: const TextStyle(fontSize: 13)),
+              },
+            ),
             if (c.count > 1) ...[
               const SizedBox(width: 3),
               Text(
@@ -1967,7 +2318,11 @@ class MessageBubble extends StatelessWidget {
     chatId: message.chatId,
     messageId: message.id,
     cipherText: message.text ?? '',
-    builder: (decryption) => _buildTextContentBody(ctx, decryption),
+    builder: (decryption) => BubbleGeometryReporter(
+      geometry: _reportedGeometry(ctx.context),
+      slot: BubbleSlot.text,
+      child: _buildTextContentBody(ctx, decryption),
+    ),
   );
 
   Widget _buildTextContentBody(
@@ -2058,21 +2413,21 @@ class MessageBubble extends StatelessWidget {
     }
 
     if (hasReactions) {
-      return IntrinsicWidth(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            textWidget,
-            const SizedBox(height: 6),
-            _ReactionsFlow(
-              chips: reactionChips,
-              meta: Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: metaRow,
-              ),
+      return _IntrinsicColumn(
+        stretch: false,
+        measureLast: false,
+        fillHeight: true,
+        children: [
+          textWidget,
+          const SizedBox(height: 6),
+          _ReactionsFlow(
+            chips: reactionChips,
+            meta: Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: metaRow,
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 

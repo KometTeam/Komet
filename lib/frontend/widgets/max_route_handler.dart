@@ -12,7 +12,6 @@ import '../screens/profile/debug_menu_screen.dart';
 import '../screens/profile/devices_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/info_screen.dart';
-import '../screens/profile/message_actions_screen.dart';
 import '../screens/profile/notifications_screen.dart';
 import '../screens/profile/security_screen.dart';
 import '../screens/profile/web_qr_scan_screen.dart';
@@ -134,7 +133,7 @@ Future<bool> openMaxRoute(
       return _push(context, const SecurityScreen());
     case ':settings/messages':
       if (!IosRelease.messageActionsStyleChoice) break;
-      return _push(context, const MessageActionsScreen());
+      return _push(context, const AppearanceScreen());
     case ':settings/dev':
     case ':settings/dev/logsviewer':
     case ':settings/dev/memorydebugger':

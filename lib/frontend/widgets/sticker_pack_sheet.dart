@@ -10,6 +10,7 @@ import 'custom_notification.dart';
 import 'small_spinner.dart';
 import 'lottie_image.dart';
 import 'sticker_peek.dart';
+import 'sticker_pin.dart';
 import '../../core/config/app_shape.dart';
 
 enum _PackAction { forward, copyLink }
@@ -271,6 +272,8 @@ class _StickerPackSheetState extends State<_StickerPackSheet> {
 
   Widget _buildGrid(StickerSet set) {
     return StickerPeekScope(
+      actionsFor: (peekId) =>
+          peekId is int ? [stickerPinPeekAction(context, peekId)] : const [],
       child: GridView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

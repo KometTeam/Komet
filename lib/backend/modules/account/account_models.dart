@@ -123,6 +123,14 @@ class PrivacyConfig {
     required this.hash,
   });
 
+  static const String defaultDoubleTapReaction = '❤️';
+
+  String? get doubleTapReaction {
+    if (doubleTapReactionDisabled) return null;
+    final value = doubleTapReactionValue;
+    return value == null || value.isEmpty ? defaultDoubleTapReaction : value;
+  }
+
   // #***! незнакомое игнорим, пустое берём дефолтом
   factory PrivacyConfig.fromMap(Map<dynamic, dynamic> map) {
     return PrivacyConfig(
@@ -433,7 +441,7 @@ class LoginSyncParams {
   final String? chatCacheFingerprint;
   final bool serverConfigSeen;
 
-  static const String serverConfigRevision = '2';
+  static const String serverConfigRevision = '3';
 
   static Future<void> forgetServerConfig(int accountId) =>
       AppDatabase.setSyncValue(accountId, SyncKey.serverConfigSeen, '');

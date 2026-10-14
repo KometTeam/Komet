@@ -1358,6 +1358,18 @@ abstract class AppLocalizations {
   /// **'Unpin'**
   String get msgActionsUnpin;
 
+  /// No description provided for @msgActionsPinSticker.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin sticker'**
+  String get msgActionsPinSticker;
+
+  /// No description provided for @msgActionsUnpinSticker.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin sticker'**
+  String get msgActionsUnpinSticker;
+
   /// No description provided for @pinnedMessageTitle.
   ///
   /// In en, this message translates to:
@@ -1781,14 +1793,8 @@ abstract class AppLocalizations {
   /// No description provided for @appearanceVisualStyleSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Material You or dimensional Glossy capsules'**
+  /// **'Sets the look of panels, switchers and the message bar'**
   String get appearanceVisualStyleSubtitle;
-
-  /// No description provided for @appearanceStyleAuto.
-  ///
-  /// In en, this message translates to:
-  /// **'Match theme'**
-  String get appearanceStyleAuto;
 
   /// No description provided for @appearanceVisualStyleMaterialYou.
   ///
@@ -1802,101 +1808,11 @@ abstract class AppLocalizations {
   /// **'Glossy'**
   String get appearanceVisualStyleGlossy;
 
-  /// No description provided for @appearanceVisualStyleLiquidGlass.
-  ///
-  /// In en, this message translates to:
-  /// **'Liquid Glass'**
-  String get appearanceVisualStyleLiquidGlass;
-
-  /// No description provided for @appearanceGlassMaterial.
-  ///
-  /// In en, this message translates to:
-  /// **'Glass'**
-  String get appearanceGlassMaterial;
-
-  /// No description provided for @appearanceChatChromeTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Chat screen elements'**
-  String get appearanceChatChromeTitle;
-
-  /// No description provided for @appearanceChatChromeSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Background of the top and bottom panels: color, blur, or transparent. With blur or transparency, messages scroll under the panels'**
-  String get appearanceChatChromeSubtitle;
-
-  /// No description provided for @appearanceChatChromeColor.
-  ///
-  /// In en, this message translates to:
-  /// **'Color'**
-  String get appearanceChatChromeColor;
-
-  /// No description provided for @appearanceChatChromeBlur.
-  ///
-  /// In en, this message translates to:
-  /// **'Blur'**
-  String get appearanceChatChromeBlur;
-
   /// No description provided for @appearanceChatChromeNone.
   ///
   /// In en, this message translates to:
   /// **'None'**
   String get appearanceChatChromeNone;
-
-  /// No description provided for @appearanceChatChromeTransparent.
-  ///
-  /// In en, this message translates to:
-  /// **'Frost blur'**
-  String get appearanceChatChromeTransparent;
-
-  /// No description provided for @appearanceComposerTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Input bar'**
-  String get appearanceComposerTitle;
-
-  /// No description provided for @appearanceComposerSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Style and background of the message input bar'**
-  String get appearanceComposerSubtitle;
-
-  /// No description provided for @appearanceComposerBackgroundStandard.
-  ///
-  /// In en, this message translates to:
-  /// **'Default'**
-  String get appearanceComposerBackgroundStandard;
-
-  /// No description provided for @appearanceComposerBackgroundFrost.
-  ///
-  /// In en, this message translates to:
-  /// **'Frost blur'**
-  String get appearanceComposerBackgroundFrost;
-
-  /// No description provided for @appearanceNavPillTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Switcher style'**
-  String get appearanceNavPillTitle;
-
-  /// No description provided for @appearanceNavPillSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Section switcher on the chats screen'**
-  String get appearanceNavPillSubtitle;
-
-  /// No description provided for @appearanceNavPillGlossy.
-  ///
-  /// In en, this message translates to:
-  /// **'Glossy'**
-  String get appearanceNavPillGlossy;
-
-  /// No description provided for @appearanceNavPillFrost.
-  ///
-  /// In en, this message translates to:
-  /// **'G-FrostBlur'**
-  String get appearanceNavPillFrost;
 
   /// No description provided for @playbackPillAt.
   ///
@@ -1921,6 +1837,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Depth and highlights in Glossy capsules'**
   String get appearanceGradientSubtitle;
+
+  /// No description provided for @appearanceElementsBlurTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Element blur'**
+  String get appearanceElementsBlurTitle;
+
+  /// No description provided for @appearanceElementsBlurSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Frosted glass on the section switcher and floating buttons'**
+  String get appearanceElementsBlurSubtitle;
+
+  /// No description provided for @appearanceMaterialYouEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing here yet…'**
+  String get appearanceMaterialYouEmpty;
 
   /// No description provided for @appearanceSpectrumTitle.
   ///
@@ -2201,8 +2135,20 @@ abstract class AppLocalizations {
   /// No description provided for @chatSettingsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Chat settings'**
+  /// **'Chat and folder settings'**
   String get chatSettingsTitle;
+
+  /// No description provided for @chatSettingsTabChats.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats'**
+  String get chatSettingsTabChats;
+
+  /// No description provided for @chatSettingsTabFolders.
+  ///
+  /// In en, this message translates to:
+  /// **'Folders'**
+  String get chatSettingsTabFolders;
 
   /// No description provided for @chatSettingsArchiveOnPull.
   ///
@@ -2239,6 +2185,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Video notes'**
   String get chatSettingsAutoDownloadVideoNote;
+
+  /// No description provided for @chatSettingsAutoplayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Autoplay'**
+  String get chatSettingsAutoplayTitle;
+
+  /// No description provided for @chatSettingsAutoplayVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Videos'**
+  String get chatSettingsAutoplayVideo;
+
+  /// No description provided for @chatSettingsAutoplayVideoHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Muted, clips up to a minute when their auto-download is on'**
+  String get chatSettingsAutoplayVideoHint;
+
+  /// No description provided for @chatSettingsAutoplayGif.
+  ///
+  /// In en, this message translates to:
+  /// **'GIFs'**
+  String get chatSettingsAutoplayGif;
+
+  /// No description provided for @chatSettingsAutoplayAnimoji.
+  ///
+  /// In en, this message translates to:
+  /// **'Animated emoji'**
+  String get chatSettingsAutoplayAnimoji;
+
+  /// No description provided for @chatSettingsAutoplayVideoNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Video messages'**
+  String get chatSettingsAutoplayVideoNote;
+
+  /// No description provided for @chatSettingsReactionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reactions'**
+  String get chatSettingsReactionsTitle;
+
+  /// No description provided for @chatSettingsDoubleTapReaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Double-tap reaction'**
+  String get chatSettingsDoubleTapReaction;
+
+  /// No description provided for @chatSettingsDoubleTapReactionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent when you double-tap a message. Shared with your other devices.'**
+  String get chatSettingsDoubleTapReactionHint;
+
+  /// No description provided for @chatSettingsDoubleTapReactionNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t react'**
+  String get chatSettingsDoubleTapReactionNone;
+
+  /// No description provided for @chatSettingsDoubleTapReactionOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get chatSettingsDoubleTapReactionOff;
+
+  /// No description provided for @chatSettingsDoubleTapReactionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the reaction'**
+  String get chatSettingsDoubleTapReactionFailed;
+
+  /// No description provided for @archiveLockTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive passcode'**
+  String get archiveLockTitle;
+
+  /// No description provided for @archiveLockPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter archive passcode'**
+  String get archiveLockPrompt;
+
+  /// No description provided for @archiveLockEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Set passcode'**
+  String get archiveLockEnable;
+
+  /// No description provided for @archiveLockEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive passcode set'**
+  String get archiveLockEnabled;
+
+  /// No description provided for @archiveLockChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change passcode'**
+  String get archiveLockChange;
+
+  /// No description provided for @archiveLockChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive passcode changed'**
+  String get archiveLockChanged;
+
+  /// No description provided for @archiveLockRelock.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock archive'**
+  String get archiveLockRelock;
+
+  /// No description provided for @archiveLockRelockHint.
+  ///
+  /// In en, this message translates to:
+  /// **'How long the archive stays open after you leave it. Coming back earlier restarts the countdown.'**
+  String get archiveLockRelockHint;
+
+  /// No description provided for @archiveLockRelockNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Right after leaving'**
+  String get archiveLockRelockNow;
+
+  /// No description provided for @archiveLockRelockHours.
+  ///
+  /// In en, this message translates to:
+  /// **'After {hours} h'**
+  String archiveLockRelockHours(int hours);
+
+  /// No description provided for @archiveLockDisable.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove passcode'**
+  String get archiveLockDisable;
+
+  /// No description provided for @archiveLockDisableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove archive passcode?'**
+  String get archiveLockDisableTitle;
+
+  /// No description provided for @archiveLockDisableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The archive will open without a passcode.'**
+  String get archiveLockDisableMessage;
+
+  /// No description provided for @archiveLockDisableAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get archiveLockDisableAction;
+
+  /// No description provided for @archiveLockDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive passcode removed'**
+  String get archiveLockDisabled;
+
+  /// No description provided for @archiveLockOnDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The archive opens only with the passcode and locks again if you stay out of it longer than the chosen time.'**
+  String get archiveLockOnDescription;
+
+  /// No description provided for @archiveLockOffDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide the archive behind a passcode: it will ask for four digits when you open it.'**
+  String get archiveLockOffDescription;
+
+  /// No description provided for @archiveLockForgotHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The archive passcode can\'t be recovered: if you forget it, you\'ll have to clear Komet\'s data. After five wrong attempts input is blocked for five minutes.'**
+  String get archiveLockForgotHint;
 
   /// No description provided for @callVideoLabel.
   ///
@@ -3899,7 +4025,7 @@ abstract class AppLocalizations {
   /// No description provided for @securityConfidentialityHeader.
   ///
   /// In en, this message translates to:
-  /// **'PRIVACY'**
+  /// **'Privacy'**
   String get securityConfidentialityHeader;
 
   /// No description provided for @securityReadReceipts.
@@ -4357,6 +4483,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send'**
   String get cloudStorageSend;
+
+  /// No description provided for @cloudStorageAboutTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'How storage works'**
+  String get cloudStorageAboutTooltip;
+
+  /// No description provided for @cloudStorageAboutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How cloud storage works'**
+  String get cloudStorageAboutTitle;
+
+  /// No description provided for @cloudStorageAboutSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no separate server: everything lives in your MAX account'**
+  String get cloudStorageAboutSubtitle;
+
+  /// No description provided for @cloudStorageAboutGroupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'It\'s a hidden MAX group'**
+  String get cloudStorageAboutGroupTitle;
+
+  /// No description provided for @cloudStorageAboutGroupBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet creates a group with nobody in it but you and sends your files there as regular messages. Komet keeps it out of the chat list, folders and the unread counter.'**
+  String get cloudStorageAboutGroupBody;
+
+  /// No description provided for @cloudStorageAboutNameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your group is {name}'**
+  String cloudStorageAboutNameTitle(String name);
+
+  /// No description provided for @cloudStorageAboutSampleNameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The group is named like {name}'**
+  String cloudStorageAboutSampleNameTitle(String name);
+
+  /// No description provided for @cloudStorageAboutNameBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet derives the number in the name from the group\'s id, so it recognizes its own storage and never mistakes another group for it. Rename the group and Komet won\'t find it; delete it and the files go with it.'**
+  String get cloudStorageAboutNameBody;
+
+  /// No description provided for @cloudStorageAboutOtherAppsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Other apps can see the group'**
+  String get cloudStorageAboutOtherAppsTitle;
+
+  /// No description provided for @cloudStorageAboutOtherAppsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The official MAX app and web client show it as a regular chat: the server doesn\'t know it\'s storage.'**
+  String get cloudStorageAboutOtherAppsBody;
+
+  /// No description provided for @cloudStorageAboutLinksTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Download links expire'**
+  String get cloudStorageAboutLinksTitle;
+
+  /// No description provided for @cloudStorageAboutLinksBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The MAX server issues each link for a limited time. Once it expires, just create a new one.'**
+  String get cloudStorageAboutLinksBody;
 
   /// No description provided for @digitalIdGosuslugiLinkUnavailable.
   ///
@@ -6614,6 +6812,36 @@ abstract class AppLocalizations {
   /// **'Otherwise a video message starts with the front camera'**
   String get mediaDevicesVideoNoteRearHint;
 
+  /// No description provided for @mediaDevicesVideoNoteResolution.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolution'**
+  String get mediaDevicesVideoNoteResolution;
+
+  /// No description provided for @mediaDevicesVideoNoteResolutionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Higher means a sharper video message and a heavier file'**
+  String get mediaDevicesVideoNoteResolutionHint;
+
+  /// No description provided for @mediaDevicesVideoNoteFps.
+  ///
+  /// In en, this message translates to:
+  /// **'Frame rate'**
+  String get mediaDevicesVideoNoteFps;
+
+  /// No description provided for @mediaDevicesVideoNoteFpsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'60 is smoother but heavier. A camera without 60 fps records at its highest supported rate'**
+  String get mediaDevicesVideoNoteFpsHint;
+
+  /// No description provided for @mediaDevicesVideoNoteFpsValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{fps} fps'**
+  String mediaDevicesVideoNoteFpsValue(int fps);
+
   /// No description provided for @chatPreviewMarkRead.
   ///
   /// In en, this message translates to:
@@ -7820,6 +8048,12 @@ abstract class AppLocalizations {
   /// **'Monospace'**
   String get chatScreenFormatMonospace;
 
+  /// No description provided for @chatScreenFormatRed.
+  ///
+  /// In en, this message translates to:
+  /// **'Red'**
+  String get chatScreenFormatRed;
+
   /// No description provided for @chatScreenFormatQuote.
   ///
   /// In en, this message translates to:
@@ -7831,6 +8065,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Mention'**
   String get chatScreenFormatMention;
+
+  /// No description provided for @chatScreenFormatLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Link'**
+  String get chatScreenFormatLink;
+
+  /// No description provided for @chatScreenFormatLinkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add link'**
+  String get chatScreenFormatLinkTitle;
+
+  /// No description provided for @chatScreenFormatLinkHint.
+  ///
+  /// In en, this message translates to:
+  /// **'https://example.com'**
+  String get chatScreenFormatLinkHint;
+
+  /// No description provided for @chatScreenFormatLinkInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That doesn\'t look like a link'**
+  String get chatScreenFormatLinkInvalid;
+
+  /// No description provided for @linkConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open this link?'**
+  String get linkConfirmTitle;
+
+  /// No description provided for @linkConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The link text doesn\'t match its address, and you haven\'t visited this site before. Check the address above before you continue.'**
+  String get linkConfirmBody;
+
+  /// No description provided for @linkConfirmOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get linkConfirmOpen;
+
+  /// No description provided for @linkConfirmCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get linkConfirmCancel;
 
   /// No description provided for @chatScreenMessageTooLong.
   ///
@@ -8180,41 +8462,41 @@ abstract class AppLocalizations {
   /// **'Couldn\'t confirm sign-in: {error}'**
   String webQrLoginFailed(String error);
 
-  /// No description provided for @messageActionsScreenTitle.
+  /// No description provided for @appearanceMessageActionsTitle.
   ///
   /// In en, this message translates to:
   /// **'Action menu'**
-  String get messageActionsScreenTitle;
+  String get appearanceMessageActionsTitle;
 
-  /// No description provided for @messageActionsScreenRadialDescription.
+  /// No description provided for @appearanceMessageActionsRadial.
+  ///
+  /// In en, this message translates to:
+  /// **'Radial'**
+  String get appearanceMessageActionsRadial;
+
+  /// No description provided for @appearanceMessageActionsRadialDescription.
   ///
   /// In en, this message translates to:
   /// **'An arc of buttons around the tap point'**
-  String get messageActionsScreenRadialDescription;
+  String get appearanceMessageActionsRadialDescription;
 
-  /// No description provided for @messageActionsScreenList.
+  /// No description provided for @appearanceMessageActionsList.
   ///
   /// In en, this message translates to:
   /// **'List'**
-  String get messageActionsScreenList;
+  String get appearanceMessageActionsList;
 
-  /// No description provided for @messageActionsScreenListDescription.
+  /// No description provided for @appearanceMessageActionsListDescription.
   ///
   /// In en, this message translates to:
   /// **'A vertical menu next to the message'**
-  String get messageActionsScreenListDescription;
+  String get appearanceMessageActionsListDescription;
 
-  /// No description provided for @messageActionsScreenStyle.
-  ///
-  /// In en, this message translates to:
-  /// **'Style'**
-  String get messageActionsScreenStyle;
-
-  /// No description provided for @messageActionsScreenStyleSubtitle.
+  /// No description provided for @appearanceMessageActionsSubtitle.
   ///
   /// In en, this message translates to:
   /// **'How the menu appears when you long-press a message'**
-  String get messageActionsScreenStyleSubtitle;
+  String get appearanceMessageActionsSubtitle;
 
   /// No description provided for @videoNoteBubbleTranscriptionFailed.
   ///
@@ -8918,12 +9200,6 @@ abstract class AppLocalizations {
   /// **'Chat background'**
   String get customizationChatBackground;
 
-  /// No description provided for @customizationMessageActions.
-  ///
-  /// In en, this message translates to:
-  /// **'Actions menu'**
-  String get customizationMessageActions;
-
   /// No description provided for @customizationAppIcon.
   ///
   /// In en, this message translates to:
@@ -8947,6 +9223,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete the folder “{title}”? The chats will stay where they are.'**
   String folderActionDeleteConfirm(String title);
+
+  /// No description provided for @foldersSettingsCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create folder'**
+  String get foldersSettingsCreate;
+
+  /// No description provided for @foldersSettingsRecommended.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended folders'**
+  String get foldersSettingsRecommended;
+
+  /// No description provided for @foldersSettingsPresetUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get foldersSettingsPresetUnread;
+
+  /// No description provided for @foldersSettingsPresetPersonal.
+  ///
+  /// In en, this message translates to:
+  /// **'Personal'**
+  String get foldersSettingsPresetPersonal;
+
+  /// No description provided for @foldersSettingsPresetChannels.
+  ///
+  /// In en, this message translates to:
+  /// **'Channels'**
+  String get foldersSettingsPresetChannels;
+
+  /// No description provided for @foldersSettingsAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get foldersSettingsAdd;
+
+  /// No description provided for @foldersSettingsReorder.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to reorder'**
+  String get foldersSettingsReorder;
+
+  /// No description provided for @foldersSettingsReorderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reorder folders'**
+  String get foldersSettingsReorderFailed;
+
+  /// No description provided for @foldersSettingsAddFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t add the folder'**
+  String get foldersSettingsAddFailed;
 
   /// No description provided for @folderActionDeleteFailed.
   ///
@@ -11078,6 +11408,48 @@ abstract class AppLocalizations {
   /// **'Stickers'**
   String get stickerPanelStickersTab;
 
+  /// No description provided for @stickerPanelPinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get stickerPanelPinned;
+
+  /// No description provided for @stickerPanelClearRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear recent'**
+  String get stickerPanelClearRecent;
+
+  /// No description provided for @stickerPanelClearRecentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear recent stickers?'**
+  String get stickerPanelClearRecentTitle;
+
+  /// No description provided for @stickerPanelClearRecentBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently sent stickers will be removed from the list.'**
+  String get stickerPanelClearRecentBody;
+
+  /// No description provided for @stickerPanelClearRecentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t clear recent stickers'**
+  String get stickerPanelClearRecentFailed;
+
+  /// No description provided for @stickerPinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Sticker pinned'**
+  String get stickerPinned;
+
+  /// No description provided for @stickerUnpinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Sticker unpinned'**
+  String get stickerUnpinned;
+
   /// No description provided for @callBubbleGroupVideo.
   ///
   /// In en, this message translates to:
@@ -11569,30 +11941,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'If the photo you need isn\'t in the gallery'**
   String get avatarPickerFilesSubtitle;
-
-  /// No description provided for @appearanceBottomNavigationTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Bottom navigation'**
-  String get appearanceBottomNavigationTitle;
-
-  /// No description provided for @appearanceBottomNavigationSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'The compact bar keeps all four tab labels visible and takes up less space.'**
-  String get appearanceBottomNavigationSubtitle;
-
-  /// No description provided for @appearanceBottomNavigationFloating.
-  ///
-  /// In en, this message translates to:
-  /// **'Floating'**
-  String get appearanceBottomNavigationFloating;
-
-  /// No description provided for @appearanceBottomNavigationCompact.
-  ///
-  /// In en, this message translates to:
-  /// **'Compact'**
-  String get appearanceBottomNavigationCompact;
 
   /// No description provided for @temporaryPasswordRecoveryTitle.
   ///

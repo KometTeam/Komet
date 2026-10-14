@@ -24,11 +24,14 @@ import 'package:komet/frontend/widgets/message_actions_overlay.dart'
         MessageReader,
         ReactionEmoji,
         showMessageActions;
+import 'package:komet/frontend/widgets/reaction_picker.dart'
+    show availableReactions;
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
 import 'package:komet/frontend/widgets/selection_check_circle.dart';
+import 'package:komet/frontend/widgets/sticker_pin.dart';
 import 'package:komet/l10n/app_localizations.dart';
-import 'package:komet/main.dart' show animojiModule;
-import 'package:komet/models/animoji.dart' show Animoji;
+import 'package:komet/main.dart'
+    show accountModule, animojiModule, stickersModule;
 import 'package:komet/models/chat_reaction_settings.dart';
 
 class PinnedMessageBanner extends StatelessWidget {
@@ -246,6 +249,7 @@ class SelectableMessageRow extends StatefulWidget {
   final Future<List<({int id, String title})>> Function()? loadReportReasons;
   final Future<bool> Function(int reasonId)? onReport;
   final void Function(String emoji)? onReact;
+  final void Function(String emoji)? onDoubleTapReact;
   final ValueListenable<Map<String, dynamic>?>? reactions;
   final ValueListenable<ChatReactionSettings?>? reactionSettings;
   final ValueListenable<double>? composerHeight;
@@ -277,6 +281,7 @@ class SelectableMessageRow extends StatefulWidget {
     this.loadReportReasons,
     this.onReport,
     this.onReact,
+    this.onDoubleTapReact,
     this.reactions,
     this.reactionSettings,
     this.composerHeight,
@@ -294,6 +299,15 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
   Timer? _openTimer;
 
   bool _isPinnedNow() => widget.isPinned();
+
+  int? get _stickerId =>
+      int.tryParse(widget.message.stickerAttachment?.stickerId ?? '');
+
+  VoidCallback? _pinStickerAction(int? stickerId) =>
+      stickerId == null ? null : () => toggleStickerPin(context, stickerId);
+
+  bool _isStickerPinned(int? stickerId) =>
+      stickerId != null && stickersModule.isFavoriteSticker(stickerId);
 
   @override
   void dispose() {
@@ -323,6 +337,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
 
     final controller = MessageActionsController();
     final offers = _reactionFilter();
+    final stickerId = _stickerId;
     showMessageActions(
       context: ctx,
       snapshot: snapshot,
@@ -351,6 +366,8 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onPin: widget.onPin,
       onCopyLink: widget.onCopyLink,
       isPinned: _isPinnedNow(),
+      onPinSticker: _pinStickerAction(stickerId),
+      isStickerPinned: _isStickerPinned(stickerId),
       onReact: _reactionsOpen || _selectedReaction != null
           ? widget.onReact
           : null,
@@ -358,7 +375,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       quickReactions: _offeredQuickReactions(offers),
       loadReactionEmojis: () async {
         await animojiModule.ensureLoaded();
-        return _animojiReactionEmojis()
+        return availableReactions()
             .where((reaction) => offers(reaction.emoji))
             .toList();
       },
@@ -395,7 +412,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
     final offered = quick.where((reaction) => offers(reaction.emoji)).toList();
     if (offered.length == quick.length || !_reactionsOpen) return offered;
     final seen = offered.map((reaction) => reaction.emoji).toSet();
-    for (final reaction in _animojiReactionEmojis()) {
+    for (final reaction in availableReactions()) {
       if (offered.length >= quick.length) break;
       if (offers(reaction.emoji) && seen.add(reaction.emoji)) {
         offered.add(reaction);
@@ -411,24 +428,8 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
           .map((e) => ReactionEmoji(emoji: e))
           .toList();
     }
-    return quick.map(_toReactionEmoji).toList();
+    return quick.map(ReactionEmoji.fromAnimoji).toList();
   }
-
-  List<ReactionEmoji> _animojiReactionEmojis() {
-    final list = animojiModule.animojis;
-    if (list.isEmpty) {
-      return AnimojiModule.fallbackReactions
-          .map((e) => ReactionEmoji(emoji: e))
-          .toList();
-    }
-    return list.map(_toReactionEmoji).toList();
-  }
-
-  ReactionEmoji _toReactionEmoji(Animoji a) => ReactionEmoji(
-    emoji: a.emoji,
-    animationUrl: a.lottieUrl,
-    staticUrl: a.iconUrl,
-  );
 
   void _onSecondaryTapDown(TapDownDetails details) {
     final ctx = _boundaryKey.currentContext;
@@ -440,6 +441,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
     final rect = origin & renderObject.size;
 
     final controller = MessageActionsController();
+    final stickerId = _stickerId;
     showMessageActions(
       context: ctx,
       originRect: rect,
@@ -467,6 +469,8 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onPin: widget.onPin,
       onCopyLink: widget.onCopyLink,
       isPinned: _isPinnedNow(),
+      onPinSticker: _pinStickerAction(stickerId),
+      isStickerPinned: _isStickerPinned(stickerId),
       onDispose: controller.dispose,
     );
   }
@@ -476,12 +480,16 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       widget.onToggleSelection();
       return;
     }
-    final react = _reactionFilter()('❤️') ? widget.onReact : null;
-    if (react != null && (_openTimer?.isActive ?? false)) {
+    final emoji = accountModule.doubleTapReaction.value;
+    final react = widget.onDoubleTapReact;
+    if (emoji != null &&
+        react != null &&
+        (_openTimer?.isActive ?? false) &&
+        _reactionFilter()(emoji)) {
       _openTimer?.cancel();
       _openTimer = null;
       Haptics.tap();
-      react('❤️');
+      react(emoji);
       return;
     }
     _openTimer?.cancel();
@@ -673,63 +681,6 @@ class _DeletingMessageAnimationState extends State<DeletingMessageAnimation>
           child: widget.child,
         ),
       ),
-    );
-  }
-}
-
-class SentMessageAnimation extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onComplete;
-
-  const SentMessageAnimation({
-    super.key,
-    required this.child,
-    required this.onComplete,
-  });
-
-  @override
-  State<SentMessageAnimation> createState() => _SentMessageAnimationState();
-}
-
-class _SentMessageAnimationState extends State<SentMessageAnimation>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _opacity;
-  late final Animation<double> _slide;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-    );
-    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-    _slide = Tween<double>(
-      begin: 16,
-      end: 0,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    _ctrl.forward().whenComplete(widget.onComplete);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, child) => Opacity(
-        opacity: _opacity.value,
-        child: Transform.translate(
-          offset: Offset(0, _slide.value),
-          child: child,
-        ),
-      ),
-      child: widget.child,
     );
   }
 }
