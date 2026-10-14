@@ -8,19 +8,15 @@ import '../../../core/config/app_bubble_behavior.dart';
 import '../../../core/config/app_bubble_shape.dart';
 import '../../../core/config/app_pill_gradient.dart';
 import '../../../core/config/app_visual_style.dart';
-import '../../../core/config/app_chat_chrome.dart';
-import '../../../core/config/app_composer_background.dart';
-import '../../../core/config/app_composer_style.dart';
-import '../../../core/config/app_nav_pill_style.dart';
 import '../../../core/config/app_spectrum_background.dart';
+import '../../../core/config/ios_release.dart';
 import '../../../core/utils/bubble_radius.dart';
 import '../../../core/utils/debouncer.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
-import '../../widgets/liquid_glass.dart';
 import '../../widgets/settings_card.dart';
-import '../../widgets/bottom_navigation_style_card.dart';
+import '../../widgets/message_actions_style_card.dart';
 import '../../../core/config/app_shape.dart';
 import '../../../core/utils/seed_scheme.dart';
 
@@ -114,6 +110,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                 children: [
+                  const _VisualStyleCard(),
+                  const SizedBox(height: 12),
                   _ColorPickerCard(
                     color: _color,
                     isSystem: _isSystem,
@@ -126,18 +124,10 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                   _BubbleShapeCard(onChanged: _onStyleChanged),
                   const SizedBox(height: 12),
                   _BubbleBehaviorCard(onChanged: _onBehaviorChanged),
-                  const SizedBox(height: 12),
-                  const _VisualStyleCard(),
-                  const SizedBox(height: 12),
-                  const _ChatChromeCard(),
-                  const SizedBox(height: 12),
-                  const _ComposerBarCard(),
-                  const SizedBox(height: 12),
-                  const BottomNavigationStyleCard(),
-                  const SizedBox(height: 12),
-                  const _NavPillStyleCard(),
-                  const SizedBox(height: 12),
-                  const _GradientToggleCard(),
+                  if (IosRelease.messageActionsStyleChoice) ...[
+                    const SizedBox(height: 12),
+                    const MessageActionsStyleCard(),
+                  ],
                   const SizedBox(height: 12),
                   const _SpectrumToggleCard(),
                 ],
@@ -150,27 +140,6 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   }
 }
 
-void _applyVisualStyle(VisualStyle style) {
-  AppVisualStyle.save(style);
-  if (style == VisualStyle.liquidGlass) {
-    if (AppNavPillStyle.current.value != NavPillStyle.auto) {
-      AppNavPillStyle.save(NavPillStyle.liquidGlass);
-    }
-    AppComposerBackground.save(ComposerBackground.liquidGlass);
-    AppChatChrome.save(ChatChromeStyle.liquidGlass);
-    return;
-  }
-  if (AppNavPillStyle.current.value == NavPillStyle.liquidGlass) {
-    AppNavPillStyle.save(NavPillStyle.frostBlur);
-  }
-  if (AppComposerBackground.current.value == ComposerBackground.liquidGlass) {
-    AppComposerBackground.save(ComposerBackground.frostBlur);
-  }
-  if (AppChatChrome.current.value == ChatChromeStyle.liquidGlass) {
-    AppChatChrome.save(ChatChromeStyle.transparent);
-  }
-}
-
 class _VisualStyleCard extends StatelessWidget {
   const _VisualStyleCard();
 
@@ -179,356 +148,148 @@ class _VisualStyleCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     return SettingsPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.appearanceVisualStyleTitle,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            l10n.appearanceVisualStyleSubtitle,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder<VisualStyle>(
-            valueListenable: AppVisualStyle.current,
-            builder: (context, current, _) {
-              final selectable =
-                  current == VisualStyle.liquidGlass && !LiquidGlass.isSupported
-                  ? VisualStyle.glossy
-                  : current;
-              return SegmentedButton<VisualStyle>(
-                showSelectedIcon: false,
-                segments: [
-                  ButtonSegment(
-                    value: VisualStyle.materialYou,
-                    label: Text(l10n.appearanceVisualStyleMaterialYou),
-                  ),
-                  ButtonSegment(
-                    value: VisualStyle.glossy,
-                    label: Text(l10n.appearanceVisualStyleGlossy),
-                  ),
-                  if (LiquidGlass.isSupported)
-                    ButtonSegment(
-                      value: VisualStyle.liquidGlass,
-                      label: Text(l10n.appearanceVisualStyleLiquidGlass),
-                    ),
-                ],
-                selected: {selectable},
-                onSelectionChanged: (set) {
-                  if (set.isNotEmpty) {
-                    Haptics.selection();
-                    _applyVisualStyle(set.first);
-                  }
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChatChromeCard extends StatelessWidget {
-  const _ChatChromeCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    return SettingsPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.appearanceChatChromeTitle,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            l10n.appearanceChatChromeSubtitle,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder<ChatChromeStyle>(
-            valueListenable: AppChatChrome.current,
-            builder: (context, current, _) {
-              final selectable =
-                  current == ChatChromeStyle.liquidGlass &&
-                      !LiquidGlass.isSupported
-                  ? ChatChromeStyle.transparent
-                  : current;
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SegmentedButton<ChatChromeStyle>(
-                  showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment(
-                      value: ChatChromeStyle.color,
-                      label: Text(l10n.appearanceChatChromeColor),
-                    ),
-                    ButtonSegment(
-                      value: ChatChromeStyle.blur,
-                      label: Text(l10n.appearanceChatChromeBlur),
-                    ),
-                    ButtonSegment(
-                      value: ChatChromeStyle.none,
-                      label: Text(l10n.appearanceChatChromeNone),
-                    ),
-                    ButtonSegment(
-                      value: ChatChromeStyle.transparent,
-                      label: Text(l10n.appearanceChatChromeTransparent),
-                    ),
-                    if (LiquidGlass.isSupported)
-                      ButtonSegment(
-                        value: ChatChromeStyle.liquidGlass,
-                        label: Text(l10n.appearanceGlassMaterial),
+      padding: EdgeInsets.zero,
+      child: ValueListenableBuilder<VisualStyle>(
+        valueListenable: AppVisualStyle.current,
+        builder: (context, current, _) {
+          final glossy = current.glossyChrome;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.appearanceVisualStyleTitle,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
                       ),
-                  ],
-                  selected: {selectable},
-                  onSelectionChanged: (set) {
-                    if (set.isNotEmpty) {
-                      Haptics.selection();
-                      AppChatChrome.save(set.first);
-                    }
-                  },
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ComposerBarCard extends StatelessWidget {
-  const _ComposerBarCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    return SettingsPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.appearanceComposerTitle,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            l10n.appearanceComposerSubtitle,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder<ComposerStyle>(
-            valueListenable: AppComposerStyle.current,
-            builder: (context, current, _) {
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SegmentedButton<ComposerStyle>(
-                  showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment(
-                      value: ComposerStyle.auto,
-                      label: Text(l10n.appearanceStyleAuto),
                     ),
-                    ButtonSegment(
-                      value: ComposerStyle.glossy,
-                      label: Text(l10n.appearanceVisualStyleGlossy),
-                    ),
-                    ButtonSegment(
-                      value: ComposerStyle.materialYou,
-                      label: Text(l10n.appearanceVisualStyleMaterialYou),
-                    ),
-                  ],
-                  selected: {current},
-                  onSelectionChanged: (set) {
-                    if (set.isNotEmpty) {
-                      Haptics.selection();
-                      AppComposerStyle.save(set.first);
-                    }
-                  },
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 10),
-          ValueListenableBuilder<ComposerBackground>(
-            valueListenable: AppComposerBackground.current,
-            builder: (context, current, _) {
-              final selectable =
-                  current == ComposerBackground.liquidGlass &&
-                      !LiquidGlass.isSupported
-                  ? ComposerBackground.frostBlur
-                  : current;
-              return SegmentedButton<ComposerBackground>(
-                showSelectedIcon: false,
-                segments: [
-                  ButtonSegment(
-                    value: ComposerBackground.standard,
-                    label: Text(l10n.appearanceComposerBackgroundStandard),
-                  ),
-                  ButtonSegment(
-                    value: ComposerBackground.frostBlur,
-                    label: Text(l10n.appearanceComposerBackgroundFrost),
-                  ),
-                  if (LiquidGlass.isSupported)
-                    ButtonSegment(
-                      value: ComposerBackground.liquidGlass,
-                      label: Text(l10n.appearanceGlassMaterial),
-                    ),
-                ],
-                selected: {selectable},
-                onSelectionChanged: (set) {
-                  if (set.isNotEmpty) {
-                    Haptics.selection();
-                    AppComposerBackground.save(set.first);
-                  }
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavPillStyleCard extends StatelessWidget {
-  const _NavPillStyleCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    return SettingsPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.appearanceNavPillTitle,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            l10n.appearanceNavPillSubtitle,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          ValueListenableBuilder<NavPillStyle>(
-            valueListenable: AppNavPillStyle.current,
-            builder: (context, current, _) {
-              final selectable =
-                  current == NavPillStyle.liquidGlass &&
-                      !LiquidGlass.isSupported
-                  ? NavPillStyle.frostBlur
-                  : current;
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SegmentedButton<NavPillStyle>(
-                  showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment(
-                      value: NavPillStyle.auto,
-                      label: Text(l10n.appearanceStyleAuto),
-                    ),
-                    ButtonSegment(
-                      value: NavPillStyle.glossy,
-                      label: Text(l10n.appearanceNavPillGlossy),
-                    ),
-                    ButtonSegment(
-                      value: NavPillStyle.frostBlur,
-                      label: Text(l10n.appearanceNavPillFrost),
-                    ),
-                    if (LiquidGlass.isSupported)
-                      ButtonSegment(
-                        value: NavPillStyle.liquidGlass,
-                        label: Text(l10n.appearanceGlassMaterial),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.appearanceVisualStyleSubtitle,
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 13,
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    SegmentedButton<bool>(
+                      showSelectedIcon: false,
+                      segments: [
+                        ButtonSegment(
+                          value: true,
+                          label: Text(l10n.appearanceVisualStyleGlossy),
+                        ),
+                        ButtonSegment(
+                          value: false,
+                          label: Text(l10n.appearanceVisualStyleMaterialYou),
+                        ),
+                      ],
+                      selected: {glossy},
+                      onSelectionChanged: (set) {
+                        Haptics.selection();
+                        AppVisualStyle.save(
+                          set.first
+                              ? VisualStyle.glossy
+                              : VisualStyle.materialYou,
+                        );
+                      },
+                    ),
                   ],
-                  selected: {selectable},
-                  onSelectionChanged: (set) {
-                    if (set.isNotEmpty) {
-                      Haptics.selection();
-                      AppNavPillStyle.save(set.first);
-                    }
-                  },
                 ),
-              );
-            },
-          ),
-        ],
+              ),
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: cs.outlineVariant.withValues(alpha: 0.35),
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topCenter,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: glossy
+                      ? const _GlossyOptions(key: ValueKey('glossy'))
+                      : const _MaterialYouOptions(key: ValueKey('materialYou')),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-class _GradientToggleCard extends StatelessWidget {
-  const _GradientToggleCard();
+class _GlossyOptions extends StatelessWidget {
+  const _GlossyOptions({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      children: [
+        _toggle(
+          AppPillGradient.current,
+          AppPillGradient.save,
+          Symbols.gradient,
+          l10n.appearanceGradientTitle,
+          l10n.appearanceGradientSubtitle,
+        ),
+        _toggle(
+          AppElementsBlur.current,
+          AppElementsBlur.save,
+          Symbols.blur_on,
+          l10n.appearanceElementsBlurTitle,
+          l10n.appearanceElementsBlurSubtitle,
+        ),
+      ],
+    );
+  }
+
+  Widget _toggle(
+    ValueNotifier<bool> notifier,
+    Future<void> Function(bool value) save,
+    IconData icon,
+    String label,
+    String subtitle,
+  ) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: notifier,
+      builder: (context, value, _) => SettingsToggleTile(
+        icon: icon,
+        label: label,
+        subtitle: subtitle,
+        value: value,
+        onChanged: (next) {
+          Haptics.selection();
+          save(next);
+        },
+      ),
+    );
+  }
+}
+
+class _MaterialYouOptions extends StatelessWidget {
+  const _MaterialYouOptions({super.key});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    return SettingsPanel(
-      padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
-      child: Row(
-        children: [
-          Icon(Symbols.blur_on, color: cs.onSurface, size: 24, weight: 500),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.appearanceGradientTitle,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l10n.appearanceGradientSubtitle,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-          ValueListenableBuilder<bool>(
-            valueListenable: AppPillGradient.current,
-            builder: (context, value, _) => Switch(
-              value: value,
-              onChanged: (v) {
-                Haptics.selection();
-                AppPillGradient.save(v);
-              },
-            ),
-          ),
-        ],
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        child: Text(
+          AppLocalizations.of(context)!.appearanceMaterialYouEmpty,
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+        ),
       ),
     );
   }
@@ -784,61 +545,65 @@ class _ColorPickerCard extends StatelessWidget {
     final swatchColor = sys ? cs.primary : col;
 
     return SettingsPanel(
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
-          InkWell(
-            onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
-              child: Row(
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: swatchColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: cs.outlineVariant.withValues(alpha: 0.5),
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onToggle,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: swatchColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: cs.outlineVariant.withValues(alpha: 0.5),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.appearanceAccentColorTitle,
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.appearanceAccentColorTitle,
+                            style: TextStyle(
+                              color: cs.onSurface,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          sys
-                              ? l10n.appearanceAccentColorSystem
-                              : l10n.appearanceAccentColorSubtitle,
-                          style: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 13,
+                          const SizedBox(height: 2),
+                          Text(
+                            sys
+                                ? l10n.appearanceAccentColorSystem
+                                : l10n.appearanceAccentColorSubtitle,
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: 13,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  AnimatedRotation(
-                    duration: const Duration(milliseconds: 200),
-                    turns: expanded ? 0.5 : 0,
-                    child: Icon(
-                      Symbols.expand_more,
-                      color: cs.onSurfaceVariant,
-                      size: 24,
+                    AnimatedRotation(
+                      duration: const Duration(milliseconds: 200),
+                      turns: expanded ? 0.5 : 0,
+                      child: Icon(
+                        Symbols.expand_more,
+                        color: cs.onSurfaceVariant,
+                        size: 24,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

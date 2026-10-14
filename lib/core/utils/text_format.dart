@@ -8,6 +8,7 @@ enum TextFormat {
   underline,
   strikethrough,
   monospaced,
+  code,
   quote,
   link,
   animoji,
@@ -22,6 +23,7 @@ const Map<TextFormat, String> _formatToServer = {
   TextFormat.underline: 'UNDERLINE',
   TextFormat.strikethrough: 'STRIKETHROUGH',
   TextFormat.monospaced: 'MONOSPACED',
+  TextFormat.code: 'CODE',
   TextFormat.quote: 'QUOTE',
   TextFormat.link: 'LINK',
   TextFormat.animoji: 'ANIMOJI',
@@ -242,6 +244,8 @@ List<FormatSegment> segmentizeFormats(String text, List<FormatRange> ranges) {
   return segments;
 }
 
+const Color codeTextColor = Color(0xFFFF3B30);
+
 // #***! форматы в TextStyle
 TextStyle applyTextFormats(
   TextStyle base,
@@ -266,6 +270,7 @@ TextStyle applyTextFormats(
   final isQuote = formats.contains(TextFormat.quote);
   final isMention = formats.contains(TextFormat.userMention);
   final isHeading = formats.contains(TextFormat.heading);
+  final isCode = formats.contains(TextFormat.code);
 
   return base.copyWith(
     fontSize: isHeading ? (base.fontSize ?? 16) * 1.08 : null,
@@ -275,7 +280,9 @@ TextStyle applyTextFormats(
     fontStyle: isItalic ? FontStyle.italic : null,
     fontFamily: formats.contains(TextFormat.monospaced) ? 'monospace' : null,
     background: isQuote ? quoteBackground : null,
-    color: isMention ? mentionColor : (isQuote ? quoteColor : null),
+    color: isMention
+        ? mentionColor
+        : (isCode ? codeTextColor : (isQuote ? quoteColor : null)),
     decoration: decorations.isEmpty
         ? null
         : TextDecoration.combine(decorations),

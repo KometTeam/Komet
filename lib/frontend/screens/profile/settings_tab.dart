@@ -24,6 +24,7 @@ import '../../widgets/animated_slash_icon.dart';
 import 'media_devices_screen.dart';
 import '../../widgets/attachment/photo_hero.dart';
 import '../../widgets/avatar_gallery.dart';
+import '../../widgets/badged_icon.dart';
 import '../../widgets/photo_viewer.dart';
 import '../../widgets/avatar_photo_actions.dart';
 import '../../widgets/connection_status.dart';
@@ -35,6 +36,7 @@ import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
+import '../../widgets/spoiler.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/update_dialog.dart';
 import '../chats/chat_list_screen.dart' show activeNavTab;
@@ -712,7 +714,13 @@ class _SettingsTabState extends State<SettingsTab>
                       context,
                       items: [
                         _SettingsItem(
-                          icon: Symbols.chat,
+                          leading: BadgedIcon(
+                            icon: Symbols.chat,
+                            badge: Symbols.folder,
+                            size: 22,
+                            weight: 400,
+                            color: cs.onSurfaceVariant,
+                          ),
                           label: l10n.chatSettingsTitle,
                           onTap: () {
                             Navigator.push(
@@ -1203,14 +1211,17 @@ class _SettingsTabState extends State<SettingsTab>
                                   ),
                                   child: MouseRegion(
                                     cursor: SystemMouseCursors.click,
-                                    child: _PhoneSpoiler(
-                                      text: phone,
-                                      isVisible: _isPhoneVisible,
-                                      style: TextStyle(
-                                        color: subColor,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w400,
-                                        letterSpacing: 0.5,
+                                    child: Spoiler(
+                                      revealed: _isPhoneVisible,
+                                      color: subColor,
+                                      child: Text(
+                                        phone,
+                                        style: TextStyle(
+                                          color: subColor,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w400,
+                                          letterSpacing: 0.5,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1552,105 +1563,4 @@ class _SettingsItem {
     this.onTap,
     this.tintColor,
   });
-}
-
-class _PhoneSpoiler extends StatefulWidget {
-  final String text;
-  final bool isVisible;
-  final TextStyle style;
-
-  const _PhoneSpoiler({
-    required this.text,
-    required this.isVisible,
-    required this.style,
-  });
-
-  @override
-  State<_PhoneSpoiler> createState() => _PhoneSpoilerState();
-}
-
-class _PhoneSpoilerState extends State<_PhoneSpoiler>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    );
-    if (!widget.isVisible) {
-      _controller.repeat();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _PhoneSpoiler oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isVisible == oldWidget.isVisible) return;
-    if (widget.isVisible) {
-      _controller.stop();
-    } else if (!_controller.isAnimating) {
-      _controller.repeat();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedCrossFade(
-      duration: const Duration(milliseconds: 200),
-      crossFadeState: widget.isVisible
-          ? CrossFadeState.showSecond
-          : CrossFadeState.showFirst,
-      firstChild: SizedBox(
-        child: CustomPaint(
-          size: const Size(110, 16),
-          painter: _SpoilerPainter(_controller, widget.style.color!),
-        ),
-      ),
-      secondChild: Text(widget.text, style: widget.style),
-    );
-  }
-}
-
-class _SpoilerPainter extends CustomPainter {
-  final Animation<double> animation;
-  final Color color;
-
-  _SpoilerPainter(this.animation, this.color) : super(repaint: animation);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withValues(alpha: 0.15)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, size.width, size.height),
-        const Radius.circular(4),
-      ),
-      paint,
-    );
-
-    final particlePaint = Paint()..style = PaintingStyle.fill;
-
-    for (int i = 0; i < 60; i++) {
-      double dx = (i * 17.5 + animation.value * 20) % size.width;
-      double dy = (i * 13.7 + animation.value * 15) % size.height;
-      double opacity = (0.2 + 0.3 * (i % 5) / 5.0).clamp(0.0, 1.0);
-      particlePaint.color = color.withValues(alpha: opacity);
-      canvas.drawCircle(Offset(dx, dy), 1.2, particlePaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_SpoilerPainter oldDelegate) => true;
 }

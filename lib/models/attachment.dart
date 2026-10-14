@@ -92,6 +92,9 @@ class PhotoAttachment extends MessageAttachment {
   final int? height;
   final int? size;
   final String? localPath;
+  final bool isGif;
+  final String? previewUrl;
+  final String? mp4Url;
 
   const PhotoAttachment({
     super.previewData,
@@ -103,6 +106,9 @@ class PhotoAttachment extends MessageAttachment {
     this.height,
     this.size,
     this.localPath,
+    this.isGif = false,
+    this.previewUrl,
+    this.mp4Url,
   }) : super(type: AttachmentType.photo);
 
   // #***! url то baseUrl то url, берём оба
@@ -116,6 +122,9 @@ class PhotoAttachment extends MessageAttachment {
       height: map['height'] as int?,
       size: map['size'] as int?,
       localPath: map['localPath'] as String?,
+      isGif: map['gif'] == true,
+      previewUrl: map['previewUrl'] as String?,
+      mp4Url: map['mp4Url'] as String?,
     );
   }
 
@@ -130,6 +139,9 @@ class PhotoAttachment extends MessageAttachment {
     'height': height,
     'size': size,
     'localPath': localPath,
+    if (isGif) 'gif': true,
+    'previewUrl': previewUrl,
+    'mp4Url': mp4Url,
   };
 }
 

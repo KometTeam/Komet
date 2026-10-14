@@ -15,6 +15,7 @@ import '../../../../core/media/auto_download_gate.dart';
 import '../../photo_viewer.dart';
 import '../../text_with_meta.dart';
 import 'bubble_context.dart';
+import 'media_autoplay.dart';
 import 'video_note_bubble.dart';
 
 class VideoBubble extends StatelessWidget {
@@ -163,71 +164,106 @@ class VideoBubble extends StatelessWidget {
 
     final preview = ClipRRect(
       borderRadius: BorderRadius.circular(BubbleContext.photoBorderRadius),
-      child: Stack(
-        children: [
-          previewImage(),
-          if (uploading != null)
-            Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.35),
+      child: MediaAutoplay(
+        clip: AutoplayClip.video(
+          video,
+          messageId: ctx.sourceMessageId,
+          chatId: ctx.sourceChatId,
+        ),
+        manualLoadKey: previewUrl.isEmpty || previewUrl.startsWith('data:')
+            ? null
+            : previewUrl,
+        suspended: uploading != null,
+        builder: (context, surface, playing) => Stack(
+          children: [
+            previewImage(),
+            Positioned.fill(child: surface),
+            if (uploading != null)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  child: Center(
+                    child: UploadProgressRing(
+                      progress: uploading,
+                      color: Colors.white,
+                      trackColor: Colors.white24,
+                      onCancel: ctx.onCancelUpload,
+                    ),
+                  ),
+                ),
+              )
+            else
+              Positioned.fill(
                 child: Center(
-                  child: UploadProgressRing(
-                    progress: uploading,
-                    color: Colors.white,
-                    trackColor: Colors.white24,
-                    onCancel: ctx.onCancelUpload,
+                  child: AnimatedOpacity(
+                    opacity: playing ? 0 : 1,
+                    duration: const Duration(milliseconds: 200),
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Symbols.play_arrow,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            )
-          else
-            Positioned.fill(
-              child: Center(
+            if (durationMs != null && durationMs > 0)
+              Positioned(
+                left: 6,
+                bottom: 6,
                 child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
                     color: Colors.black54,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Icon(
-                    Symbols.play_arrow,
-                    color: Colors.white,
-                    size: 30,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatSecondsMmSs((durationMs / 1000).round()),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (playing) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Symbols.volume_off,
+                          color: Colors.white,
+                          size: 13,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
-            ),
-          if (durationMs != null && durationMs > 0)
-            Positioned(
-              left: 6,
-              bottom: 6,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  formatSecondsMmSs((durationMs / 1000).round()),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+            if (uploading == null)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (awaitsPreviewLoad) {
+                      AutoDownloadGate.loadManually(previewUrl);
+                      return;
+                    }
+                    _playVideo(ctx.context, video);
+                  },
                 ),
               ),
-            ),
-          if (uploading == null)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (awaitsPreviewLoad) {
-                    AutoDownloadGate.loadManually(previewUrl);
-                    return;
-                  }
-                  _playVideo(ctx.context, video);
-                },
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
 

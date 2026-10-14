@@ -5,7 +5,6 @@ import '../../../main.dart' show accountModule;
 import '../../../backend/modules/account.dart'
     show PrivacyConfig, BlockedContact;
 import '../../../core/storage/app_database.dart';
-import '../../../core/config/app_colors.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/format.dart';
 import '../../../l10n/app_localizations.dart';
@@ -13,6 +12,7 @@ import '../../widgets/confirm_dialog.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/reload_on_reconnect.dart';
+import '../../widgets/section_header.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/hint_bubble.dart';
 import '../../widgets/info_action_sheet.dart';
@@ -242,7 +242,11 @@ class _SecurityScreenState extends State<SecurityScreen>
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-                      child: _buildInfoLabel(cs),
+                      child: SectionHeader(
+                        AppLocalizations.of(context)!
+                            .securityConfidentialityHeader,
+                        padding: const EdgeInsets.only(left: 4),
+                      ),
                     ),
                   ),
                   SliverToBoxAdapter(
@@ -816,21 +820,6 @@ class _SecurityScreenState extends State<SecurityScreen>
         );
         if (confirmed) _updateSetting('HIDDEN', true);
       },
-    );
-  }
-
-  Widget _buildInfoLabel(ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 0),
-      child: Text(
-        AppLocalizations.of(context)!.securityConfidentialityHeader,
-        style: TextStyle(
-          color: cs.mutedText,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.8,
-        ),
-      ),
     );
   }
 

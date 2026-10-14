@@ -66,8 +66,10 @@ import '../../../core/utils/logger.dart';
 import '../../../core/utils/route_settle.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
+import '../../../core/config/app_unchecked_links.dart';
 import 'chat/chat_prank_controller.dart';
 import 'chat/chat_controller.dart';
+import 'chat/message_flight.dart';
 import 'chat/read_marker_gate.dart';
 import 'chat/chat_scroll_navigator.dart';
 import 'chat/view/anchored_message_list.dart';
@@ -86,6 +88,7 @@ import 'chat/chat_text_send_controller.dart';
 import '../../../backend/modules/forward_sender.dart';
 import 'chat/view/greeting_sticker_card.dart';
 import 'chat/view/message_list_decorations.dart';
+import 'chat/view/message_enter.dart';
 import 'chat/view/message_row_widgets.dart';
 import 'chat/view/scroll_down_button.dart';
 import 'chat/view/throttled_message_scrollbar.dart';
@@ -104,6 +107,8 @@ import '../../../models/contact_info.dart';
 import '../../commands/commands.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/rich_message_controller.dart';
+import '../../widgets/link_text.dart';
+import '../../widgets/prompt_dialog.dart';
 import '../../../core/utils/text_format.dart';
 import '../../widgets/call_link_handler.dart';
 import '../../widgets/direct_call.dart';
@@ -360,7 +365,11 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  void _reactToMessage(CachedMessage message, String emoji) {
+  void _reactToMessage(
+    CachedMessage message,
+    String emoji, {
+    bool emphasize = false,
+  }) {
     if (message.isControl || message.id.startsWith('temp_')) return;
     final notifier = _reactionNotifierFor(message);
     final previous = notifier.value;
@@ -375,15 +384,24 @@ class _ChatScreenState extends State<ChatScreen>
     final applied = _applyLocalReaction(previous, emoji);
     notifier.value = applied;
     final isToggleOff = applied == null || applied['yourReaction'] == null;
-    unawaited(_sendReaction(message, emoji, isToggleOff, previous));
+    unawaited(
+      _sendReaction(
+        message,
+        emoji,
+        isToggleOff,
+        previous,
+        emphasize: emphasize,
+      ),
+    );
   }
 
   Future<void> _sendReaction(
     CachedMessage message,
     String emoji,
     bool isToggleOff,
-    Map<String, dynamic>? previous,
-  ) async {
+    Map<String, dynamic>? previous, {
+    required bool emphasize,
+  }) async {
     ({bool ok, Map<String, dynamic>? info}) result;
     try {
       result = isToggleOff
@@ -415,6 +433,7 @@ class _ChatScreenState extends State<ChatScreen>
         messageId: message.id,
         emoji: appliedReaction,
         token: ++_reactionAnimationToken,
+        emphasized: emphasize,
       );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _reactionAnimation.value = event;
@@ -620,7 +639,8 @@ class _ChatScreenState extends State<ChatScreen>
   late final CurvedAnimation _scrollDownCurved;
   final Set<String> _deferredIds = <String>{};
   final Map<int, GlobalKey> _separatorKeys = {};
-  String? _lastSentId;
+  final ValueNotifier<MessageFlight?> _flight = ValueNotifier(null);
+  final Set<String> _enteringIds = {};
   final ValueNotifier<int> _otherUnread = ValueNotifier(0);
   final ValueNotifier<bool> _animojiHold = ValueNotifier(true);
 
@@ -660,7 +680,7 @@ class _ChatScreenState extends State<ChatScreen>
       uploadStatus: _uploadStatus,
       bumpMessages: _bumpMessages,
       scrollToBottom: () => _scrollNav.scrollToBottom(),
-      setLastSentId: (id) => _lastSentId = id,
+      setLastSentId: (id) => _noteSent(id, fly: false),
       notify: (msg) {
         if (mounted) showCustomNotification(context, msg);
       },
@@ -686,6 +706,7 @@ class _ChatScreenState extends State<ChatScreen>
           })
           .catchError((_) {}),
     );
+    stickersModule.ensureFavoritesLoaded().ignore();
     WidgetsBinding.instance.addObserver(this);
     _uploadEventSub = UploadService.instance.events.listen(
       _mediaSend.onUploadEvent,
@@ -754,7 +775,7 @@ class _ChatScreenState extends State<ChatScreen>
       bumpMessages: _bumpMessages,
       scrollToBottom: () => _scrollNav.scrollToBottom(),
       focusComposer: _messageFocusNode.requestFocus,
-      setLastSentId: (id) => _lastSentId = id,
+      setLastSentId: (id) => _noteSent(id, fly: true),
       notify: (msg) {
         if (mounted) showCustomNotification(context, msg);
       },
@@ -974,28 +995,14 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
-    final firstRows = await AppDatabase.loadMessages(
-      _myId,
-      widget.chatId,
-      limit: 20,
-      onlyVisible: !KometSettings.viewDeleted.value,
-    );
-    final ranges = await AppDatabase.loadMessageRanges(_myId, widget.chatId);
-    if (!mounted) return;
-    final first = ranges.clipLatest(
-      firstRows.reversed.map((r) => CachedMessage.fromDbRow(r)).toList(),
-      (m) => m.time,
-    );
-    if (first.isNotEmpty) {
-      setState(() {
-        _messages = first;
-        _deferredIds.clear();
-        _messagesRev.value++;
-      });
-      _mediaSend.mergePendingMedia();
-      _requestCommentCounts();
-      _revealOrHoldInitial();
+    try {
+      await _readLocalHistory();
+    } catch (_) {
+      return;
     }
+    if (!mounted || _messages.isEmpty) return;
+    _mediaSend.mergePendingMedia();
+    _revealOrHoldInitial();
   }
 
   void _resolveUnreadAnchor() {
@@ -2328,6 +2335,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   void dispose() {
+    _flight.value?.dispose();
+    _flight.dispose();
     ChatScreen._open.remove(this);
     if (!_commentsMode && !widget.preview) {
       unawaited(NotificationBridge.instance.popActiveChat(widget.chatId));
@@ -2642,6 +2651,53 @@ class _ChatScreenState extends State<ChatScreen>
   void _bumpMessages() {
     _combinedItemsCache = null;
     _messagesRev.value++;
+  }
+
+  MessageFlight? _flightFor(String messageId) {
+    final flight = _flight.value;
+    return flight != null && flight.messageId == messageId ? flight : null;
+  }
+
+  void _markEntering(String messageId) {
+    final cleanupPending = _enteringIds.isNotEmpty;
+    _enteringIds.add(messageId);
+    if (cleanupPending) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _enteringIds.clear());
+  }
+
+  void _noteSent(String? messageId, {required bool fly}) {
+    if (messageId == null) return;
+    final from = fly && _scrollNav.isNearBottom()
+        ? ComposerSnapshot.capture(
+            _messageFocusNode,
+            fieldColor: _composerFieldColor(),
+          )
+        : null;
+    _flight.value?.complete();
+    final flight = MessageFlight(messageId: messageId, from: from, vsync: this);
+    flight.addListener(() => _onFlightChanged(flight));
+    _flight.value = flight;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(_flight.value, flight)) flight.start();
+    });
+  }
+
+  Color _composerFieldColor() {
+    final cs = Theme.of(context).colorScheme;
+    return Color.alphaBlend(
+      cs.surfaceContainerHighest.withValues(alpha: 0.92),
+      cs.surface,
+    );
+  }
+
+  void _onFlightChanged(MessageFlight flight) {
+    if (!flight.done) {
+      if (!flight.carriesBubble) _bumpMessages();
+      return;
+    }
+    if (identical(_flight.value, flight)) _flight.value = null;
+    _bumpMessages();
+    WidgetsBinding.instance.addPostFrameCallback((_) => flight.dispose());
   }
 
   void _enterSelection(CachedMessage message) {
@@ -2973,7 +3029,7 @@ class _ChatScreenState extends State<ChatScreen>
     final wireText = await _encryptOutgoing(newText);
     if (wireText == null || !mounted) return;
     final editEncrypted = wireText != newText;
-    final ok = await messagesModule.editMessage(
+    final accepted = await messagesModule.editMessage(
       widget.chatId,
       message.id,
       text: wireText,
@@ -2981,7 +3037,7 @@ class _ChatScreenState extends State<ChatScreen>
       encryptedPayload: editEncrypted,
     );
     if (!mounted) return;
-    if (!ok) {
+    if (accepted == null) {
       Haptics.error();
       showCustomNotification(
         context,
@@ -2990,6 +3046,9 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
+    final editedText = editEncrypted
+        ? wireText
+        : (accepted.text ?? wireText);
     final idx = _chatController.indexOfId(message.id);
     if (idx != -1) {
       final old = _messages[idx];
@@ -3008,12 +3067,14 @@ class _ChatScreenState extends State<ChatScreen>
         accountId: old.accountId,
         chatId: old.chatId,
         senderId: old.senderId,
-        text: wireText.isEmpty ? null : wireText,
+        text: editedText.isEmpty ? null : editedText,
         time: old.time,
         status: 'EDITED',
         payload: {
           ...?old.payload,
-          'elements': editEncrypted ? const <Map<String, dynamic>>[] : elements,
+          'elements': editEncrypted
+              ? const <Map<String, dynamic>>[]
+              : (accepted.elements ?? elements),
         },
         attachments: old.attachments,
         isControl: old.isControl,
@@ -3214,7 +3275,6 @@ class _ChatScreenState extends State<ChatScreen>
           return;
         }
         if (_chatController.containsId(message.id)) return;
-        _lastSentId = message.id;
         _notePeerReadThrough(message);
         _clearTyping(message.senderId);
         Haptics.tap();
@@ -3224,7 +3284,11 @@ class _ChatScreenState extends State<ChatScreen>
           return;
         }
         final nearBottom = _scrollNav.isNearBottom();
-        if (!nearBottom) _deferredIds.add(message.id);
+        if (nearBottom) {
+          _markEntering(message.id);
+        } else {
+          _deferredIds.add(message.id);
+        }
         _chatController.addMessage(message);
         _bumpMessages();
         if (nearBottom) {
@@ -3242,7 +3306,7 @@ class _ChatScreenState extends State<ChatScreen>
       case MessageSentEvent(:final tempId, :final message):
         final idx = _chatController.indexOfId(tempId);
         if (idx == -1) return;
-        _lastSentId = message.id;
+        _flight.value?.retarget(tempId, message.id);
         _chatController.setMessageAt(idx, message);
         _bumpMessages();
       case MessageRemovedEvent(:final messageId):
@@ -3832,10 +3896,12 @@ class _ChatScreenState extends State<ChatScreen>
         return l10n.chatScreenFormatStrikethrough;
       case TextFormat.monospaced:
         return l10n.chatScreenFormatMonospace;
+      case TextFormat.code:
+        return l10n.chatScreenFormatRed;
       case TextFormat.quote:
         return l10n.chatScreenFormatQuote;
       case TextFormat.link:
-        return l10n.contactProfileInfoLink;
+        return l10n.chatScreenFormatLink;
       case TextFormat.animoji:
         return 'Animoji';
       case TextFormat.userMention:
@@ -3859,8 +3925,14 @@ class _ChatScreenState extends State<ChatScreen>
           ContextMenuButtonItem(
             label: '${active ? '✓ ' : ''}${_formatLabel(l10n, format)}',
             onPressed: () {
-              controller.toggleFormat(format);
               editableState.hideToolbar();
+              if (format != TextFormat.link) {
+                controller.toggleFormat(format);
+              } else if (active) {
+                controller.setLink(selection, null);
+              } else {
+                unawaited(_askFormatLink(controller, selection));
+              }
             },
           ),
         );
@@ -3881,6 +3953,26 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  Future<void> _askFormatLink(
+    RichMessageController controller,
+    TextRange range,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final raw = await showTextInputDialog(
+      context,
+      title: l10n.chatScreenFormatLinkTitle,
+      hint: l10n.chatScreenFormatLinkHint,
+      keyboardType: TextInputType.url,
+    );
+    if (raw == null || !mounted) return;
+    final url = AppUncheckedLinks.current.value ? raw : linkFromInput(raw);
+    if (url == null) {
+      showCustomNotification(context, l10n.chatScreenFormatLinkInvalid);
+      return;
+    }
+    controller.setLink(range, url);
+  }
+
   static bool _sameElements(
     List<Map<String, dynamic>> a,
     List<Map<String, dynamic>> b,
@@ -3893,7 +3985,11 @@ class _ChatScreenState extends State<ChatScreen>
           return t != 0 ? t : (x['from'] as int).compareTo(y['from'] as int);
         });
       return copy
-          .map((e) => '${e['type']}:${e['from']}:${e['length']}')
+          .map(
+            (e) =>
+                '${e['type']}:${e['from']}:${e['length']}:'
+                '${(e['attributes'] as Map?)?['url'] ?? ''}',
+          )
           .join(',');
     }
 
@@ -4537,38 +4633,24 @@ class _ChatScreenState extends State<ChatScreen>
 
     final List<Object> items = [];
     final Set<int> usedDates = {};
+    DateTime? prevDate;
 
     for (int i = 0; i < visible; i++) {
       final msg = _messages[i];
       final msgDate = DateTime.fromMillisecondsSinceEpoch(msg.time);
-      final dayMillis = DateTime(
-        msgDate.year,
-        msgDate.month,
-        msgDate.day,
-      ).millisecondsSinceEpoch;
-
-      bool needSeparator = i == 0;
-      if (!needSeparator) {
-        final prevDate = DateTime.fromMillisecondsSinceEpoch(
-          _messages[i - 1].time,
-        );
-        final prevDayMillis = DateTime(
-          prevDate.year,
-          prevDate.month,
-          prevDate.day,
-        ).millisecondsSinceEpoch;
-        needSeparator = dayMillis != prevDayMillis;
-      }
+      final needSeparator =
+          prevDate == null ||
+          msgDate.day != prevDate.day ||
+          msgDate.month != prevDate.month ||
+          msgDate.year != prevDate.year;
+      prevDate = msgDate;
 
       if (needSeparator) {
+        final day = DateTime(msgDate.year, msgDate.month, msgDate.day);
+        final dayMillis = day.millisecondsSinceEpoch;
         _separatorKeys.putIfAbsent(dayMillis, () => GlobalKey());
         usedDates.add(dayMillis);
-        items.add(
-          _DateSeparatorItem(
-            DateTime.fromMillisecondsSinceEpoch(dayMillis),
-            _separatorKeys[dayMillis]!,
-          ),
-        );
+        items.add(_DateSeparatorItem(day, _separatorKeys[dayMillis]!));
       }
 
       if (i == unreadIndex) {
@@ -4693,7 +4775,9 @@ class _ChatScreenState extends State<ChatScreen>
                 animation: _searchAnim,
                 child: LottieHoldScope(
                   isHeld: _animojiHold,
-                  child: ChatBodyLayout(
+                  child: MessageFlightLayer(
+                    flight: _flight,
+                    child: ChatBodyLayout(
                     underlap: underlap,
                     cs: cs,
                     chat: chat,
@@ -4725,6 +4809,7 @@ class _ChatScreenState extends State<ChatScreen>
                     pinnedBannerTop: _pinnedBannerTop(),
                     defaultEdgeVignetteHeight: _defaultEdgeVignetteHeight(),
                     wallpaper: _wallpaper,
+                  ),
                   ),
                 ),
                 builder: (context, body) => Scaffold(
@@ -4982,6 +5067,7 @@ class _ChatScreenState extends State<ChatScreen>
                               final msgItem = item as _MessageItem;
                               final message = msgItem.message;
                               final msgIndex = msgItem.index;
+                              final flight = _flightFor(message.id);
                               final isMe = message.senderId == _myId;
                               final prevMessage = msgIndex > 0
                                   ? _messages[msgIndex - 1]
@@ -5055,6 +5141,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 onCommentsTap: isChannelPost
                                     ? () => _openComments(message)
                                     : null,
+                                geometry: flight?.geometry,
                               );
 
                               final canReport = !isMe && !message.isControl;
@@ -5124,6 +5211,13 @@ class _ChatScreenState extends State<ChatScreen>
                                     ? null
                                     : (emoji) =>
                                           _reactToMessage(message, emoji),
+                                onDoubleTapReact: message.isControl
+                                    ? null
+                                    : (emoji) => _reactToMessage(
+                                        message,
+                                        emoji,
+                                        emphasize: true,
+                                      ),
                                 reactions: _reactionNotifierFor(message),
                                 reactionSettings: _reactionSettings,
                                 child: bubble,
@@ -5148,17 +5242,6 @@ class _ChatScreenState extends State<ChatScreen>
                                   onComplete: () => _finalizeDelete(message.id),
                                   child: IgnorePointer(child: swipeable),
                                 );
-                              } else if (message.id == _lastSentId) {
-                                child = SentMessageAnimation(
-                                  key: ValueKey('anim_${message.id}'),
-                                  onComplete: () {
-                                    if (mounted) {
-                                      _lastSentId = null;
-                                      _bumpMessages();
-                                    }
-                                  },
-                                  child: swipeable,
-                                );
                               } else {
                                 child = swipeable;
                               }
@@ -5182,11 +5265,18 @@ class _ChatScreenState extends State<ChatScreen>
                                     child: child,
                                   );
 
-                              final builtItem = RepaintBoundary(
+                              final builtItem = MessageEnter(
                                 key: ValueKey('msg_${message.id}'),
-                                child: KeyedSubtree(
-                                  key: _keyForMessage(message.id),
-                                  child: highlightable,
+                                entering:
+                                    flight != null ||
+                                    _enteringIds.contains(message.id),
+                                progress: flight?.controller,
+                                hidden: flight?.carriesBubble ?? false,
+                                child: RepaintBoundary(
+                                  child: KeyedSubtree(
+                                    key: _keyForMessage(message.id),
+                                    child: highlightable,
+                                  ),
                                 ),
                               );
                               if (widget.preview) {

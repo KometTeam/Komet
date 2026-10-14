@@ -186,7 +186,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                     SectionHeader(
                       l10n.notificationsFkmSectionTitle,
                       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                      fontSize: 14,
                     ),
                     SettingsCard(
                       children: [
@@ -221,7 +220,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   SectionHeader(
                     l10n.notificationsMainSectionTitle,
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    fontSize: 14,
                   ),
                   SettingsCard(
                     children: [
@@ -241,7 +239,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   SectionHeader(
                     l10n.notificationsNewSectionTitle,
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    fontSize: 14,
                   ),
                   SettingsCard(
                     children: [
@@ -274,7 +271,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   SectionHeader(
                     l10n.notificationsAdditionalSectionTitle,
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    fontSize: 14,
                   ),
                   SettingsCard(
                     children: [
@@ -304,7 +300,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   SectionHeader(
                     l10n.notificationsHapticsSectionTitle,
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    fontSize: 14,
                   ),
                   SettingsCard(
                     children: [
@@ -340,7 +335,6 @@ class _LauncherBadgeSection extends StatelessWidget {
             SectionHeader(
               l10n.notificationsBadgeSectionTitle,
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
             ),
             ListenableBuilder(
               listenable: Listenable.merge([

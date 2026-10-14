@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+
 import '../../api.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
@@ -11,6 +15,32 @@ class PrivacyModule extends AccountApiBase {
   PrivacyModule(super.api);
 
   static const String _defaultPushSound = 'oki.aiff';
+
+  final ValueNotifier<String?> doubleTapReaction = ValueNotifier(
+    PrivacyConfig.defaultDoubleTapReaction,
+  );
+  int _configRevision = 0;
+
+  Future<void> restoreDoubleTapReaction() async {
+    final revision = _configRevision;
+    final config = await getPrivacyConfig();
+    if (revision == _configRevision) {
+      doubleTapReaction.value = config.doubleTapReaction;
+    }
+  }
+
+  Future<void> storeLoginConfig(
+    int accountId,
+    Map<dynamic, dynamic> user,
+  ) async {
+    await AppDatabase.savePrivacyConfig(accountId, jsonEncode(user));
+    _publish(PrivacyConfig.fromMap(user));
+  }
+
+  void _publish(PrivacyConfig config) {
+    _configRevision++;
+    doubleTapReaction.value = config.doubleTapReaction;
+  }
 
   // #***! приватность из базы, приходит в login и живёт локально
   Future<PrivacyConfig> getPrivacyConfig() async {
@@ -58,8 +88,19 @@ class PrivacyModule extends AccountApiBase {
     if (accountId != null) {
       await AppDatabase.savePrivacyConfig(accountId, config.toJson());
     }
+    _publish(config);
     return config;
   }
+
+  Future<PrivacyConfig> setDoubleTapReaction(String? emoji) =>
+      updatePrivacyConfig(
+        emoji == null
+            ? {'DOUBLE_TAP_REACTION_DISABLED': true}
+            : {
+                'DOUBLE_TAP_REACTION_DISABLED': false,
+                'DOUBLE_TAP_REACTION_VALUE': emoji,
+              },
+      );
 
   // #***! безопасный режим это пачка настроек разом
   Future<PrivacyConfig> setSafeMode(bool value) => updatePrivacyConfig(

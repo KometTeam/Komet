@@ -32,6 +32,7 @@ class CloudStorageModule {
   // #***! группа зовётся CLST<число>, по нему и опознаём
   static const _prefix = 'CLST';
   static const _tempName = 'Облачное хранилище';
+  static const sampleTitle = '${_prefix}8456';
 
   // Key: "$accountId:$fileId" — scoped per account
   static final Map<String, ({String url, int expires})> _linkCache = {};
@@ -48,6 +49,9 @@ class CloudStorageModule {
     final last = int.parse(s.substring(len - 4));
     return first + last;
   }
+
+  static String titleFor(int groupId) =>
+      '$_prefix${_computeSpecialNumber(groupId)}';
 
   // #***! группа, префикс на месте, число сходится
   static bool isCloudStorageGroup(CachedChat chat) {
@@ -111,8 +115,11 @@ class CloudStorageModule {
       userIds: [],
     );
     if (temp == null) return null;
-    final name = '$_prefix${_computeSpecialNumber(temp.id)}';
-    final ok = await chats.setChatTitle(api, chatId: temp.id, title: name);
+    final ok = await chats.setChatTitle(
+      api,
+      chatId: temp.id,
+      title: titleFor(temp.id),
+    );
     if (!ok) return null;
     await _configurePrivacy(api, temp.id);
     return temp;
@@ -121,8 +128,11 @@ class CloudStorageModule {
   // Turns an orphan "Облачное хранилище" group into a valid env group
   // #***! доделываем группу застрявшую на временном имени
   static Future<CachedChat?> repairOrphan(Api api, CachedChat orphan) async {
-    final name = '$_prefix${_computeSpecialNumber(orphan.id)}';
-    final ok = await chats.setChatTitle(api, chatId: orphan.id, title: name);
+    final ok = await chats.setChatTitle(
+      api,
+      chatId: orphan.id,
+      title: titleFor(orphan.id),
+    );
     if (!ok) return null;
     await _configurePrivacy(api, orphan.id);
     return orphan;

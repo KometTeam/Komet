@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import 'quote_glyph_box.dart';
+
 class TextWithMeta extends MultiChildRenderObjectWidget {
   final bool fillWidth;
 
@@ -26,6 +28,11 @@ class TextWithMeta extends MultiChildRenderObjectWidget {
   }
 }
 
+bool isPlainParagraph(RenderParagraph paragraph) =>
+    paragraph.firstChild == null &&
+    paragraph.maxLines == null &&
+    paragraph.textWidthBasis == TextWidthBasis.parent;
+
 class TextWithMetaParentData extends ContainerBoxParentData<RenderBox> {}
 
 class RenderTextWithMeta extends RenderBox
@@ -47,6 +54,12 @@ class RenderTextWithMeta extends RenderBox
   RenderBox get _text => firstChild!;
   RenderBox get _meta => lastChild!;
 
+  InlineSpan? _measuredSpan;
+  int _measuredLength = 0;
+  double? _layoutIntrinsicWidth;
+
+  double? get layoutIntrinsicWidth => _layoutIntrinsicWidth;
+
   @override
   void setupParentData(RenderBox child) {
     if (child.parentData is! TextWithMetaParentData) {
@@ -55,23 +68,43 @@ class RenderTextWithMeta extends RenderBox
   }
 
   RenderParagraph? _soleParagraph() {
+    final text = _text;
+    if (text is RenderParagraph) return text;
     RenderParagraph? found;
     var seen = 0;
     void visit(RenderObject node) {
+      if (seen > 1) return;
       if (node is RenderParagraph) {
         found = node;
         seen++;
         return;
       }
+      if (node is RenderQuoteGlyphBox) seen++;
       node.visitChildren(visit);
     }
 
-    _text.visitChildren(visit);
-    if (_text is RenderParagraph) {
-      found = _text as RenderParagraph;
-      seen = 1;
-    }
+    text.visitChildren(visit);
     return seen == 1 ? found : null;
+  }
+
+  int _plainLength(RenderParagraph paragraph) {
+    final span = paragraph.text;
+    if (!identical(span, _measuredSpan)) {
+      _measuredSpan = span;
+      _measuredLength = span.toPlainText().length;
+    }
+    return _measuredLength;
+  }
+
+  double? _intrinsicWidthFromLayout(double textWidth) {
+    final text = _text;
+    if (constraints.minWidth > 0 ||
+        text is! RenderParagraph ||
+        !isPlainParagraph(text)) {
+      return null;
+    }
+    if (textWidth >= constraints.maxWidth) return double.infinity;
+    return textWidth + _gap + _meta.getMaxIntrinsicWidth(double.infinity);
   }
 
   @override
@@ -115,7 +148,7 @@ class RenderTextWithMeta extends RenderBox
     var metaOnOwnLine = false;
 
     if (paragraph != null) {
-      final length = paragraph.text.toPlainText().length;
+      final length = _plainLength(paragraph);
       final caret = paragraph.getOffsetForCaret(
         TextPosition(offset: length),
         Rect.zero,
@@ -140,6 +173,7 @@ class RenderTextWithMeta extends RenderBox
     }
 
     size = constraints.constrain(Size(width, height));
+    _layoutIntrinsicWidth = _intrinsicWidthFromLayout(textSize.width);
 
     (_text.parentData! as TextWithMetaParentData).offset = Offset.zero;
     (_meta.parentData! as TextWithMetaParentData).offset = Offset(

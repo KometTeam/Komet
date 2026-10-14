@@ -15,23 +15,11 @@ class ComposerChrome {
   };
 }
 
-// #***! настройка стиля поля ввода
 class AppComposerStyle {
-  static const prefKey = 'app_composer_style';
-
-  static final _setting = PersistedEnum<ComposerStyle>(
-    prefKey: prefKey,
-    defaultValue: ComposerStyle.glossy,
-    encode: (value) => value.name,
-    decode: _parse,
+  static final ValueListenable<ComposerStyle> current = DerivedSetting(
+    [AppVisualStyle.current],
+    () => AppVisualStyle.current.value.glossyChrome
+        ? ComposerStyle.glossy
+        : ComposerStyle.materialYou,
   );
-
-  static ValueNotifier<ComposerStyle> get current => _setting.current;
-
-  static Future<ComposerStyle> load() => _setting.load();
-
-  static Future<void> save(ComposerStyle value) => _setting.save(value);
-
-  static ComposerStyle _parse(String? val) =>
-      enumFromName(ComposerStyle.values, val, ComposerStyle.glossy);
 }
