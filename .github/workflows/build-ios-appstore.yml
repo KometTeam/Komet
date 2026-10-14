@@ -1,0 +1,221 @@
+name: Build iOS (App Store)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'lib/**'
+      - 'scripts/build_ios_share.sh'
+      - 'scripts/sign_ios_appstore.py'
+      - 'native/komet_share/**'
+      - 'native/komet_tlottie/**'
+      - 'native/crypto-core'
+      - 'native/crypto-core/**'
+      - 'ios/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.gitmodules'
+      - '.github/workflows/build-ios-appstore.yml'
+      - '.github/actions/setup-rust/**'
+      - '.github/actions/pin-kolibri-crates/**'
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'scripts/build_ios_share.sh'
+      - 'scripts/sign_ios_appstore.py'
+      - 'native/komet_share/**'
+      - 'native/komet_tlottie/**'
+      - 'native/crypto-core'
+      - 'native/crypto-core/**'
+      - 'ios/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.gitmodules'
+      - '.github/workflows/build-ios-appstore.yml'
+      - '.github/actions/setup-rust/**'
+      - '.github/actions/pin-kolibri-crates/**'
+
+env:
+  FLUTTER_VERSION: '3.47.0'
+
+jobs:
+  build-ios-appstore:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Check signing secrets
+        id: signing
+        env:
+          APPSTORE_CERTIFICATE_BASE64: ${{ secrets.APPSTORE_CERTIFICATE_BASE64 }}
+        run: |
+          if [ -n "$APPSTORE_CERTIFICATE_BASE64" ] && [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::App Store signing secrets are not set, building an unsigned IPA only"
+          fi
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Pin kolibri crates
+        uses: ./.github/actions/pin-kolibri-crates
+
+      # Схема max:// принадлежит официальному приложению MAX, App Store-сборка её не заявляет
+      - name: Drop the max URL scheme
+        run: |
+          set -euo pipefail
+          PLIST="ios/Runner/Info.plist"
+          SCHEMES=":CFBundleURLTypes:0:CFBundleURLSchemes"
+          COUNT=$(/usr/libexec/PlistBuddy -c "Print $SCHEMES" "$PLIST" | grep -c '^ ')
+          for ((i = COUNT - 1; i >= 0; i--)); do
+            if [ "$(/usr/libexec/PlistBuddy -c "Print $SCHEMES:$i" "$PLIST")" = "max" ]; then
+              /usr/libexec/PlistBuddy -c "Delete $SCHEMES:$i" "$PLIST"
+            fi
+          done
+          /usr/libexec/PlistBuddy -c "Print $SCHEMES" "$PLIST"
+
+      - name: Build App Store variant (no codesign)
+        env:
+          KOMET_APPSTORE_BUILD: 'true'
+          KOMET_REVIEW_PHONE: ${{ secrets.KOMET_REVIEW_PHONE }}
+          KOMET_REVIEW_PAYLOAD: ${{ secrets.KOMET_REVIEW_PAYLOAD }}
+        run: |
+          flutter config --no-enable-swift-package-manager
+          flutter build ios --release --no-codesign -v \
+            --dart-define=is_appstore_build=true \
+            --dart-define=KOMET_REVIEW_PHONE="$KOMET_REVIEW_PHONE" \
+            --dart-define=KOMET_REVIEW_PAYLOAD="$KOMET_REVIEW_PAYLOAD" \
+            > ios-build.log 2>&1 || {
+            tail -n 180 ios-build.log
+            exit 1
+          }
+
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-appstore-build-diagnostics
+          path: ios-build.log
+          retention-days: 7
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p dist build/ios/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/Payload/
+          (cd build/ios && zip -qr ../../dist/Komet-ios-appstore-unsigned.ipa Payload)
+          rm -rf build/ios/Payload
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-ios-appstore-unsigned
+          path: dist/Komet-ios-appstore-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Import certificate and provisioning profile
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.APPSTORE_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATE_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.APPSTORE_PROVISION_PROFILE_BASE64 }}
+          SHARE_PROVISION_PROFILE_BASE64: ${{ secrets.APPSTORE_SHARE_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPSTORE_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH=$RUNNER_TEMP/appstore_cert.p12
+          PP_PATH=$RUNNER_TEMP/appstore.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/appstore-signing.keychain-db
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/appstore.mobileprovision
+          rm -f "$RUNNER_TEMP/appstore-share.mobileprovision"
+          if [ -n "$SHARE_PROVISION_PROFILE_BASE64" ]; then
+            printf '%s' "$SHARE_PROVISION_PROFILE_BASE64" | base64 --decode -o "$RUNNER_TEMP/appstore-share.mobileprovision"
+          fi
+
+      - name: Find signing identity
+        if: steps.signing.outputs.enabled == 'true'
+        id: identity
+        env:
+          KEYCHAIN_PATH: ${{ runner.temp }}/appstore-signing.keychain-db
+        run: |
+          set -euo pipefail
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | grep -Eo '"(Apple Distribution|iOS Distribution|iPhone Distribution)[^"]*"' \
+            | head -1 | tr -d '"')
+          if [ -z "$IDENTITY" ]; then
+            echo "No distribution identity found in keychain"
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+            exit 1
+          fi
+          echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
+
+      - name: Sign app bundle for App Store
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          KEYCHAIN_PATH: ${{ runner.temp }}/appstore-signing.keychain-db
+          IDENTITY: ${{ steps.identity.outputs.identity }}
+        run: |
+          set -euo pipefail
+          args=(
+            build/ios/iphoneos/Runner.app
+            --app-profile "$RUNNER_TEMP/appstore.mobileprovision"
+            --identity "$IDENTITY"
+            --keychain "$KEYCHAIN_PATH"
+          )
+          if [ -f "$RUNNER_TEMP/appstore-share.mobileprovision" ]; then
+            args+=(--share-profile "$RUNNER_TEMP/appstore-share.mobileprovision")
+          fi
+          python3 scripts/sign_ios_appstore.py "${args[@]}"
+
+      - name: Package signed IPA
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          mkdir -p dist build/ios/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/Payload/
+          (cd build/ios && zip -qr ../../dist/Komet-ios-appstore.ipa Payload)
+
+      - name: Upload signed IPA
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: komet-ios-appstore
+          path: dist/Komet-ios-appstore.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove temporary keychain
+        if: always() && steps.signing.outputs.enabled == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/appstore-signing.keychain-db" || true

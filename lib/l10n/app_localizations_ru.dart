@@ -6779,4 +6779,21 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get temporaryPasswordRecoveryInstructions =>
       'Снимите или смените этот пароль в MAX перед удалением Komet. Не отправляйте его на скриншотах или в логах.';
+
+  @override
+  String get settingsTabCloudStorage => 'Облачное хранилище';
+
+  @override
+  String get settingsTabPrivacyPolicy => 'Политика конфиденциальности';
+
+  @override
+  String get settingsTabTermsOfUse => 'Условия использования';
+
+  @override
+  String get appIconScreenHintIos =>
+      'Иконка сменится сразу, iOS подтвердит это системным диалогом.';
+
+  @override
+  String get webPushIntroAppStore =>
+      'Обычные пуши сервер MAX шлёт только официальному приложению MAX, поэтому Комет получает их через веб-приложение на экране «Домой». Уведомления шлёт сам сервер MAX через Apple, а показывает их отдельная иконка.\n\nДля этого нужна веб-сессия. Комет создаст её и подтвердит сам, с этого же устройства — вводить номер и код не придётся.';
 }

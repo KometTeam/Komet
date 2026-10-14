@@ -34,14 +34,20 @@ bool linkStaysInApp(String url) {
 }
 
 // #***! открытие ссылки, сначала наша схема потом max потом браузер
-Future<void> openExternalUrl(BuildContext context, String url) async {
+Future<void> openExternalUrl(
+  BuildContext context,
+  String url, {
+  bool fromWebContent = false,
+}) async {
   final appUri = Uri.tryParse(url.trim());
   if (appUri != null && _appSchemes.contains(appUri.scheme.toLowerCase())) {
-    DeepLinkService.instance.handle(appUri);
+    if (!fromWebContent) DeepLinkService.instance.handle(appUri);
     return;
   }
 
-  if (await tryHandleMaxLink(context, url)) return;
+  if (await tryHandleMaxLink(context, url, allowAppRoutes: !fromWebContent)) {
+    return;
+  }
   if (!context.mounted) return;
 
   final uri = Uri.tryParse(url);
