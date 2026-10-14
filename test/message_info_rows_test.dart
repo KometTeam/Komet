@@ -2,8 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/modules/message_info.dart';
 import 'package:komet/backend/modules/messages.dart';
 
-const int _accountId = 270546051;
-const int _chatId = -78807406861784;
+const int _accountId = 1001;
+const int _chatId = -2002;
+const int _peerId = 3003;
 
 CachedMessage _fromServer(Map<String, dynamic> payload) =>
     CachedMessage.fromPushPayload(_accountId, _chatId, payload);
@@ -21,23 +22,23 @@ void main() {
     test('простое сообщение отдаёт id, cid и отправителя', () {
       final rows = _map(
         _fromServer({
-          'id': '117241017304569410',
-          'time': 1788955952523,
+          'id': '900000000000000001',
+          'time': 1700000001000,
           'type': 'USER',
           'sender': _accountId,
-          'cid': -1788955952374,
+          'cid': -1700000000901,
           'text': '1',
           'attaches': <dynamic>[],
           'reactionInfo': <String, dynamic>{},
         }),
       );
 
-      expect(rows['id'], '117241017304569410');
-      expect(rows['cid'], '-1788955952374');
+      expect(rows['id'], '900000000000000001');
+      expect(rows['cid'], '-1700000000901');
       expect(rows['chatId'], '$_chatId');
       expect(rows['sender'], '$_accountId');
       expect(rows['type'], 'USER');
-      expect(rows['time'], startsWith('1788955952523 · '));
+      expect(rows['time'], startsWith('1700000001000 · '));
       expect(rows['text.length'], '1');
       expect(rows.containsKey('attaches'), isFalse);
       expect(rows.containsKey('reactionInfo'), isFalse);
@@ -47,18 +48,18 @@ void main() {
     test('правленое сообщение со ссылкой описывает вложения и разметку', () {
       final rows = _map(
         _fromServer({
-          'id': '117241017682102228',
-          'time': 1788955958284,
+          'id': '900000000000000002',
+          'time': 1700000002000,
           'type': 'USER',
-          'updateTime': 1788955958318,
+          'updateTime': 1700000002050,
           'sender': _accountId,
-          'cid': -1788955958052,
+          'cid': -1700000001901,
           'text': 'https://example.test/joincall/abc',
           'attaches': [
             {
               '_type': 'SHARE',
-              'shareId': 6421452419,
-              'title': 'Групповой звонок',
+              'shareId': 4004,
+              'title': 'Synthetic call',
             },
           ],
           'elements': [
@@ -68,7 +69,7 @@ void main() {
         }),
       );
 
-      expect(rows['updateTime'], startsWith('1788955958318 · '));
+      expect(rows['updateTime'], startsWith('1700000002050 · '));
       expect(rows['attaches'], 'SHARE');
       expect(rows['elements'], 'LINK');
     });
@@ -76,17 +77,17 @@ void main() {
     test('пересылка разворачивается в источник', () {
       final rows = _map(
         _fromServer({
-          'id': '117251783665282870',
-          'time': 1789120234150,
+          'id': '900000000000000003',
+          'time': 1700000003000,
           'type': 'USER',
-          'sender': 67779544,
+          'sender': _peerId,
           'text': '',
           'attaches': <dynamic>[],
           'link': {
             'type': 'FORWARD',
-            'message': {'id': '117251783278678900', 'text': 'jkj'},
-            'chatId': -78807406861784,
-            'chatName': 'test',
+            'message': {'id': '900000000000000004', 'text': 'synthetic'},
+            'chatId': _chatId,
+            'chatName': 'synthetic chat',
             'chatAccessType': 'PRIVATE',
           },
           'reactionInfo': <String, dynamic>{},
@@ -95,7 +96,7 @@ void main() {
 
       expect(
         rows['link'],
-        'FORWARD · test (-78807406861784) · 117251783278678900',
+        'FORWARD · synthetic chat ($_chatId) · 900000000000000004',
       );
     });
 
@@ -103,8 +104,8 @@ void main() {
       final rows = _map(
         _fromServer({
           'id': '1',
-          'time': 1789120234150,
-          'sender': 67779544,
+          'time': 1700000003000,
+          'sender': _peerId,
           'attaches': [
             {'_type': 'PHOTO'},
             {'_type': 'PHOTO'},
@@ -120,8 +121,8 @@ void main() {
       final rows = _map(
         _fromServer({
           'id': '1',
-          'time': 1789120234150,
-          'sender': 67779544,
+          'time': 1700000003000,
+          'sender': _peerId,
           'attaches': <dynamic>[],
           'reactionInfo': {
             'counters': [
@@ -141,8 +142,8 @@ void main() {
       final labels = _labels(
         _fromServer({
           'id': '1',
-          'time': 1789120234150,
-          'sender': 67779544,
+          'time': 1700000003000,
+          'sender': _peerId,
           'attaches': <dynamic>[],
           'views': 512,
           'options': 2,

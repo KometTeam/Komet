@@ -12,6 +12,7 @@ import '../../../core/config/app_microphone.dart';
 import '../../../core/config/app_video_note_quality.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/choice_sheet.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
@@ -57,6 +58,38 @@ class _MediaDevicesScreenState extends State<MediaDevicesScreen> {
   void _pickCamera(String id) {
     Haptics.selection();
     unawaited(AppCamera.save(id));
+  }
+
+  static String _resolutionLabel(int size) => '$size×$size';
+
+  Future<void> _pickResolution() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showChoiceSheet<int>(
+      context,
+      title: l10n.mediaDevicesVideoNoteResolution,
+      hint: l10n.mediaDevicesVideoNoteResolutionHint,
+      options: AppVideoNoteResolution.presets,
+      selected: AppVideoNoteResolution.current.value,
+      labelOf: _resolutionLabel,
+    );
+    if (picked == null) return;
+    Haptics.selection();
+    await AppVideoNoteResolution.save(picked);
+  }
+
+  Future<void> _pickFps() async {
+    final l10n = AppLocalizations.of(context)!;
+    final picked = await showChoiceSheet<int>(
+      context,
+      title: l10n.mediaDevicesVideoNoteFps,
+      hint: l10n.mediaDevicesVideoNoteFpsHint,
+      options: AppVideoNoteFps.presets,
+      selected: AppVideoNoteFps.current.value,
+      labelOf: l10n.mediaDevicesVideoNoteFpsValue,
+    );
+    if (picked == null) return;
+    Haptics.selection();
+    await AppVideoNoteFps.save(picked);
   }
 
   static IconData _cameraIcon(CameraFacing facing) => switch (facing) {
@@ -187,6 +220,25 @@ class _MediaDevicesScreenState extends State<MediaDevicesScreen> {
                           onChanged: AppVideoNoteRearCamera.save,
                         ),
                       ),
+                    ValueListenableBuilder<int>(
+                      valueListenable: AppVideoNoteResolution.current,
+                      builder: (context, size, _) => SettingsNavTile(
+                        icon: Symbols.high_quality,
+                        label: l10n.mediaDevicesVideoNoteResolution,
+                        value: _resolutionLabel(size),
+                        onTap: _pickResolution,
+                      ),
+                    ),
+                    ValueListenableBuilder<int>(
+                      valueListenable: AppVideoNoteFps.current,
+                      builder: (context, fps, _) => SettingsNavTile(
+                        icon: Symbols.animated_images,
+                        label: l10n.mediaDevicesVideoNoteFps,
+                        value: l10n.mediaDevicesVideoNoteFpsValue(fps),
+                        onTap: _pickFps,
+                        isLast: true,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -212,7 +264,7 @@ class _Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeader(title, padding: EdgeInsets.zero, fontSize: 14),
+          SectionHeader(title, padding: EdgeInsets.zero),
           if (hint != null) ...[
             const SizedBox(height: 2),
             Text(

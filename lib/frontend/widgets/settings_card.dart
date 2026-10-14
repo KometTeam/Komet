@@ -140,6 +140,7 @@ class SettingsNavTile extends StatelessWidget {
   final Widget? leading;
   final String label;
   final String? value;
+  final Widget? trailing;
   final Color? tintColor;
   final VoidCallback? onTap;
   final bool isLast;
@@ -150,6 +151,7 @@ class SettingsNavTile extends StatelessWidget {
     this.leading,
     required this.label,
     this.value,
+    this.trailing,
     this.tintColor,
     this.onTap,
     this.isLast = false,
@@ -189,7 +191,11 @@ class SettingsNavTile extends StatelessWidget {
                   ),
                 ),
               ),
-              if (value != null) ...[
+              if (trailing != null) ...[
+                const SizedBox(width: 12),
+                trailing!,
+                const SizedBox(width: 4),
+              ] else if (value != null) ...[
                 const SizedBox(width: 12),
                 Text(
                   value!,

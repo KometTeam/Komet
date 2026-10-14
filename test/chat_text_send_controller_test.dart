@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart' show Locale;
+import 'package:flutter/widgets.dart' show Locale, TextRange;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/api.dart';
 import 'package:komet/backend/modules/chats.dart';
@@ -61,9 +61,10 @@ class _DelayedApi extends Api {
 }
 
 class _Harness {
-  _Harness({this.commentsMode = false});
+  _Harness({this.commentsMode = false, this.encrypt = true});
 
   final bool commentsMode;
+  final bool encrypt;
   final api = _DelayedApi();
   late final comments = CommentsModule(api);
   final chat = ChatController()
@@ -99,7 +100,8 @@ class _Harness {
     isMounted: () => mounted,
     l10nOf: () => lookupAppLocalizations(const Locale('ru')),
     chatOf: () => null,
-    encryptOutgoing: (text, {notify = true}) async => 'Synthetic ciphertext',
+    encryptOutgoing: (text, {notify = true}) async =>
+        encrypt ? 'Synthetic ciphertext' : text,
     executeCommand: (_, _) async {},
     checkPrankTrigger: (_) {},
     confirmSend: () async => true,
@@ -308,6 +310,64 @@ void main() {
       'pending',
     );
     expect((await chats.getChat(101, 303)).single.lastMsgStatus, 'pending');
+  });
+
+  Future<CachedMessage> sendLinkAndAnswer(
+    List<Map<String, dynamic>> acceptedElements,
+  ) async {
+    final harness = _Harness(encrypt: false);
+    addTearDown(harness.dispose);
+    harness.composer
+      ..text = 'Synthetic link'
+      ..setLink(const TextRange(start: 0, end: 9), 'synthetic');
+    final sending = harness.sender.sendTextMessage();
+    await harness.api.started.future;
+    final request = harness.api.requests.single['message'] as Map;
+    expect((request['elements'] as List).single['type'], 'LINK');
+    expect(harness.chat.messages.single.payload?['elements'], isNotEmpty);
+
+    harness.api.response.complete(
+      Packet(
+        cmd: CmdType.ok,
+        payload: {
+          'chatId': 303,
+          'message': {
+            'id': 'synthetic-sent',
+            'time': 1000,
+            'text': 'Synthetic link',
+            'elements': acceptedElements,
+          },
+        },
+      ),
+    );
+    await sending;
+
+    final sent = harness.chat.messages.single;
+    expect(sent.id, 'synthetic-sent');
+    final row = (await AppDatabase.loadMessages(101, 303)).single;
+    expect(
+      CachedMessage.fromDbRow(row).payload?['elements'],
+      sent.payload?['elements'],
+    );
+    await pumpEventQueue();
+    return sent;
+  }
+
+  test('formatting the server dropped leaves the sent message', () async {
+    final sent = await sendLinkAndAnswer(const []);
+    expect(sent.payload?['elements'], isNull);
+  });
+
+  test('the sent message keeps the formatting the server accepted', () async {
+    const accepted = [
+      {
+        'type': 'LINK',
+        'length': 9,
+        'attributes': {'checkResult': 2, 'url': 'https://example.com'},
+      },
+    ];
+    final sent = await sendLinkAndAnswer(accepted);
+    expect(sent.payload?['elements'], accepted);
   });
 
   test('a failed initial write prevents network dispatch', () async {

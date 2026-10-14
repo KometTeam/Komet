@@ -3,16 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../core/config/app_fonts.dart';
 import '../../../core/security/app_lock.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/choice_sheet.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/settings_card.dart';
-import '../../widgets/sheet_helpers.dart';
-import '../lock/lock_glyph.dart';
+import '../lock/lock_hero.dart';
 import '../lock/passcode_setup_screen.dart';
 
 class PasscodeSettingsScreen extends StatefulWidget {
@@ -40,7 +39,12 @@ class _PasscodeSettingsScreenState extends State<PasscodeSettingsScreen> {
   Future<void> _setUp({required bool changing}) async {
     final l10n = AppLocalizations.of(context)!;
     final done = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const PasscodeSetupScreen()),
+      MaterialPageRoute(
+        builder: (_) => PasscodeSetupScreen(
+          title: l10n.passcodeTitle,
+          onSave: _lock.setPin,
+        ),
+      ),
     );
     if (done != true || !mounted) return;
     showCustomNotification(
@@ -62,54 +66,13 @@ class _PasscodeSettingsScreenState extends State<PasscodeSettingsScreen> {
 
   Future<void> _pickIdle() async {
     final l10n = AppLocalizations.of(context)!;
-    final picked = await showModalBottomSheet<int>(
-      context: context,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-      shape: kSheetShape,
-      builder: (sheetContext) {
-        final cs = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                  child: Text(
-                    l10n.passcodeAutoLock,
-                    style: TextStyle(
-                      fontFamily: displayFontOf(sheetContext),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text(
-                    l10n.passcodeAutoLockHint,
-                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-                  ),
-                ),
-                for (final minutes in AppLock.idleOptions)
-                  ListTile(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    title: Text(_idleLabel(l10n, minutes)),
-                    trailing: minutes == _lock.idleMinutes.value
-                        ? Icon(Symbols.check, color: cs.primary)
-                        : null,
-                    onTap: () => Navigator.pop(sheetContext, minutes),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
+    final picked = await showChoiceSheet<int>(
+      context,
+      title: l10n.passcodeAutoLock,
+      hint: l10n.passcodeAutoLockHint,
+      options: AppLock.idleOptions,
+      selected: _lock.idleMinutes.value,
+      labelOf: (minutes) => _idleLabel(l10n, minutes),
     );
     if (picked == null) return;
     Haptics.selection();
@@ -153,7 +116,13 @@ class _PasscodeSettingsScreenState extends State<PasscodeSettingsScreen> {
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
             children: [
-              _Hero(enabled: enabled),
+              LockHero(
+                enabled: enabled,
+                title: l10n.passcodeTitle,
+                description: enabled
+                    ? l10n.passcodeOnDescription
+                    : l10n.passcodeOffDescription,
+              ),
               const SizedBox(height: 16),
               if (!enabled)
                 SizedBox(
@@ -221,77 +190,6 @@ class _PasscodeSettingsScreenState extends State<PasscodeSettingsScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Hero extends StatelessWidget {
-  final bool enabled;
-
-  const _Hero({required this.enabled});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    return SettingsPanel(
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
-      child: Column(
-        children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween(end: enabled ? 1 : 0),
-            duration: const Duration(milliseconds: 460),
-            curve: Curves.easeOutBack,
-            builder: (context, closed, _) => Container(
-              width: 96,
-              height: 96,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color.lerp(
-                  cs.surfaceContainerHighest,
-                  cs.primaryContainer,
-                  closed.clamp(0.0, 1.0),
-                ),
-              ),
-              child: LockGlyph(
-                closed: closed,
-                size: 52,
-                color: Color.lerp(
-                  cs.onSurfaceVariant,
-                  cs.onPrimaryContainer,
-                  closed.clamp(0.0, 1.0),
-                )!,
-                holeColor: Color.lerp(
-                  cs.surfaceContainerHighest,
-                  cs.primaryContainer,
-                  closed.clamp(0.0, 1.0),
-                )!,
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            l10n.passcodeTitle,
-            style: TextStyle(
-              fontFamily: displayFontOf(context),
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: cs.onSurface,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            enabled ? l10n.passcodeOnDescription : l10n.passcodeOffDescription,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              height: 1.4,
-              color: cs.onSurfaceVariant,
-            ),
-          ),
-        ],
       ),
     );
   }

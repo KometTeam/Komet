@@ -269,7 +269,6 @@ class _WebPushScreenState extends State<WebPushScreen> {
       SectionHeader(
         _linked ? l10n.webPushLinkedTitle : l10n.webPushInstallTitle,
         padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        fontSize: 14,
       ),
       _explainer(cs, _linked ? l10n.webPushLinkedBody : l10n.webPushInstallBody),
       if (_link != null) ...[

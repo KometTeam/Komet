@@ -19,6 +19,7 @@ import '../../core/utils/text_format.dart';
 import '../../models/attachment.dart';
 import 'chats.dart' show chats;
 import 'message_copy.dart';
+import 'sent_message.dart';
 
 // #***! быстрый кэш id -> имя аватарка телефон, из него подписи в пузырях
 class ContactCache {
@@ -549,6 +550,11 @@ class CachedMessage {
   ForwardedMessageAttachment? get forwardedAttachment =>
       attachments?.whereType<ForwardedMessageAttachment>().firstOrNull;
 
+  StickerAttachment? get stickerAttachment =>
+      (forwardedAttachment?.originalAttachments ?? attachments)
+          ?.whereType<StickerAttachment>()
+          .firstOrNull;
+
   String? get selectableText {
     final own = text;
     if (own != null && own.isNotEmpty) return own;
@@ -1068,7 +1074,7 @@ class MessagesModule {
     return text is String ? text : '';
   }
 
-  Future<String> sendMessage(
+  Future<SentMessage> sendMessage(
     int accountId,
     int chatId,
     String text, {
@@ -1102,7 +1108,7 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    return _sendAndExtractMessageId(
+    return _sendAndExtract(
       payload,
       'Ошибка отправки',
       beforeSend: beforeSend,
@@ -1151,7 +1157,7 @@ class MessagesModule {
   }
 
   // #***! разбор ответа отправки, достаём id от сервера
-  Future<String> _sendAndExtractMessageId(
+  Future<SentMessage> _sendAndExtract(
     Map<String, dynamic> payload,
     String defaultError, {
     void Function()? beforeSend,
@@ -1169,15 +1175,7 @@ class MessagesModule {
     if (!response.isOk) {
       _throwSendError(response.payload, defaultError);
     }
-    final data = response.payload;
-    if (data is Map) {
-      final msgMap = data['message'];
-      if (msgMap is Map) {
-        final id = msgMap['id'];
-        if (id != null) return id.toString();
-      }
-    }
-    return '';
+    return SentMessage.fromResponse(response.payload);
   }
 
   Never _throwSendError(dynamic payload, String fallback) {
@@ -1253,11 +1251,12 @@ class MessagesModule {
       'notify': notify,
     };
 
-    return _sendAndExtractMessageId(
+    final sent = await _sendAndExtract(
       payload,
       'Ошибка пересылки',
       beforeSend: beforeSend,
     );
+    return sent.id;
   }
 
   Future<Map<String, dynamic>> sendMessageCopy(
@@ -1451,7 +1450,7 @@ class MessagesModule {
   }
 
   // #***! редактирование
-  Future<bool> editMessage(
+  Future<SentMessage?> editMessage(
     int chatId,
     String messageId, {
     required String text,
@@ -1461,7 +1460,7 @@ class MessagesModule {
     bool sendAttachments = false,
   }) async {
     final id = int.tryParse(messageId);
-    if (id == null) return false;
+    if (id == null) return null;
 
     final payload = <String, dynamic>{
       'messageId': id,
@@ -1477,7 +1476,7 @@ class MessagesModule {
       encryptedPayload: encryptedPayload,
       encryptionControl: encryptionControl,
     );
-    return response.isOk;
+    return response.isOk ? SentMessage.fromResponse(response.payload) : null;
   }
 
   Future<bool> editScheduledMessage(
@@ -2278,6 +2277,34 @@ class MessagesModule {
       videoId: videoId,
     );
     return sources.values.isEmpty ? null : sources.values.first;
+  }
+
+  static const List<String> _previewQualities = [
+    '480p',
+    '360p',
+    '720p',
+    '240p',
+    '144p',
+    '1080p',
+  ];
+
+  Future<String?> getVideoPreviewUrl({
+    required String messageId,
+    required int chatId,
+    required String token,
+    required int videoId,
+  }) async {
+    final sources = await getVideoSources(
+      messageId: messageId,
+      chatId: chatId,
+      token: token,
+      videoId: videoId,
+    );
+    for (final quality in _previewQualities) {
+      final url = sources[quality];
+      if (url != null) return url;
+    }
+    return null;
   }
 
   Future<Uint8List?> downloadVideo(String baseUrl, String videoToken) async {

@@ -5,13 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../backend/modules/messages.dart' show ContactCache;
-import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_entities.dart';
 import '../../core/utils/text_format.dart';
 import '../../l10n/app_localizations.dart';
 import '../screens/contacts/open_contact_profile.dart';
+import 'link_confirm_sheet.dart';
 import 'link_text.dart';
-import 'lottie_image.dart';
+import 'message_animoji.dart';
+import 'quote_glyph_box.dart';
 import 'text_entity_actions.dart';
 
 Color mentionTextColor(ColorScheme cs) => cs.primary;
@@ -78,7 +79,7 @@ class FormattedMessageText extends StatefulWidget {
             child: SizedBox(
               width: box,
               height: box,
-              child: LottieImage(
+              child: MessageAnimoji(
                 lottieUrl: animojiUrl,
                 size: box,
                 memCacheWidth: 96,
@@ -113,14 +114,25 @@ class FormattedMessageText extends StatefulWidget {
 }
 
 class _ParsedText {
-  const _ParsedText({required this.entities, required this.segments});
+  const _ParsedText({
+    required this.entities,
+    required this.segments,
+    required this.hiddenLinks,
+  });
 
   final List<TextEntity> entities;
   final List<FormatSegment> segments;
+  final List<TextSpanRange> hiddenLinks;
+
+  bool hidesLink(FormatSegment segment) => hiddenLinks.any(
+    (link) => link.start <= segment.start && link.end >= segment.end,
+  );
 }
 
 class _FormattedMessageTextState extends State<FormattedMessageText> {
   final List<GestureRecognizer> _recognizers = [];
+  Widget? _built;
+  Object? _builtFor;
 
   // #***! разбор текста стоит четырёх регулярок, а пузырь перестраивается на
   // каждое входящее сообщение и реакцию — держим результат до смены текста
@@ -148,7 +160,24 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
     return _ParsedText(
       entities: detectTextEntities(widget.text, skip: _claimedRanges(ranges)),
       segments: segmentizeFormats(widget.text, ranges),
+      hiddenLinks: _hiddenLinks(ranges),
     );
+  }
+
+  List<TextSpanRange> _hiddenLinks(List<FormatRange> ranges) {
+    final text = widget.text;
+    final hidden = <TextSpanRange>[];
+    for (final range in ranges) {
+      final url = range.url;
+      if (range.format != TextFormat.link || url == null) continue;
+      final start = range.start.clamp(0, text.length);
+      final end = range.end.clamp(0, text.length);
+      if (end <= start) continue;
+      if (!linkShowsItsTarget(text.substring(start, end), url)) {
+        hidden.add((start: start, end: end));
+      }
+    }
+    return hidden;
   }
 
   @override
@@ -287,14 +316,35 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
   }
 
   @override
+  void reassemble() {
+    super.reassemble();
+    _built = null;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final inputs = (
+      parsed: _parsed,
+      style: widget.style,
+      textAlign: widget.textAlign,
+      maxLines: widget.maxLines,
+      overflow: widget.overflow,
+      entityMode: widget.entityMode,
+      baseColor: widget.style.color ?? cs.onSurface,
+      mentionColor: mentionTextColor(cs),
+    );
+    final built = _built;
+    if (built != null && inputs == _builtFor) return built;
     _disposeRecognizers();
+    _builtFor = inputs;
+    return _built = _buildText(inputs.baseColor, inputs.mentionColor);
+  }
+
+  Widget _buildText(Color baseColor, Color mentionColor) {
     final entities = _parsed.entities;
     final segments = _parsed.segments;
-    final cs = Theme.of(context).colorScheme;
-    final baseColor = widget.style.color ?? cs.onSurface;
     final quoteColor = baseColor.withValues(alpha: 0.85);
-    final mentionColor = mentionTextColor(cs);
 
     final blocks = <_TextBlock>[];
     var spans = <InlineSpan>[];
@@ -322,7 +372,8 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
         mentionColor: mentionColor,
       );
       final content = widget.text.substring(segment.start, segment.end);
-      if (segment.animojiUrl != null) {
+      final animojiUrl = segment.animojiUrl;
+      if (animojiUrl != null) {
         final fontSize = widget.style.fontSize ?? 16;
         final box = fontSize * 1.5;
         spans.add(
@@ -331,8 +382,8 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
             child: SizedBox(
               width: box,
               height: box,
-              child: LottieImage(
-                lottieUrl: segment.animojiUrl,
+              child: MessageAnimoji(
+                lottieUrl: animojiUrl,
                 size: box,
                 memCacheWidth: 120,
                 shimmer: false,
@@ -379,13 +430,14 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
 
       if (segment.url != null) {
         final url = segment.url!;
+        final hidden = _parsed.hidesLink(segment);
         spans.add(
           TextSpan(
             text: content,
             style: style,
             recognizer: _track(
               TapGestureRecognizer()
-                ..onTap = () => openExternalUrl(context, url),
+                ..onTap = () => openMessageLink(context, url, hidden: hidden),
             ),
           ),
         );
@@ -437,29 +489,22 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
 
   Widget _quoteBlock(List<InlineSpan> spans, Color baseColor) {
     final glyphSize = (widget.style.fontSize ?? 16) * 0.85;
-    return Container(
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: baseColor.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
       ),
-      padding: const EdgeInsets.fromLTRB(9, 5, 9, 6),
-      child: Stack(
-        children: [
-          Padding(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(9, 5, 9, 6),
+        child: QuoteGlyphBox(
+          icon: Symbols.format_quote,
+          size: glyphSize,
+          color: baseColor.withValues(alpha: 0.55),
+          child: Padding(
             padding: EdgeInsets.only(right: glyphSize + 2),
             child: _paragraph(spans),
           ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: Icon(
-              Symbols.format_quote,
-              size: glyphSize,
-              fill: 1,
-              color: baseColor.withValues(alpha: 0.55),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

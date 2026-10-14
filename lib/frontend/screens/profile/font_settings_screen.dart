@@ -14,6 +14,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
 import '../../../core/security/app_lock.dart';
 
@@ -168,9 +169,9 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
           children: [
             _PreviewCard(fontId: currentId),
             const SizedBox(height: 28),
-            _SectionLabel(
-              icon: Symbols.text_fields,
-              text: l10n.fontSettingsSectionFont,
+            SectionHeader(
+              l10n.fontSettingsSectionFont,
+              padding: const EdgeInsets.only(left: 6),
             ),
             const SizedBox(height: 14),
             for (final font in AppFonts.builtIn) ...[
@@ -206,9 +207,9 @@ class _FontSettingsScreenState extends State<FontSettingsScreen> {
               ),
             ),
             const SizedBox(height: 30),
-            _SectionLabel(
-              icon: Symbols.format_size,
-              text: l10n.fontSettingsSectionFontSize,
+            SectionHeader(
+              l10n.fontSettingsSectionFontSize,
+              padding: const EdgeInsets.only(left: 6),
             ),
             const SizedBox(height: 6),
             if (app != null)
@@ -277,36 +278,6 @@ class _PreviewCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _SectionLabel({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(left: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: cs.onSurfaceVariant, weight: 500),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              color: cs.onSurfaceVariant,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -35,7 +35,6 @@ class KometSettingsScreen extends StatelessWidget {
             SectionHeader(
               l10n.authLimitsSignupMessagesTitle,
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
             ),
             SettingsCard(
               children: [
@@ -106,7 +105,6 @@ class KometSettingsScreen extends StatelessWidget {
             SectionHeader(
               l10n.kometSettingsFoldersHeader,
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
             ),
             SettingsCard(
               children: [
@@ -137,7 +135,6 @@ class KometSettingsScreen extends StatelessWidget {
             const SectionHeader(
               BuildProfile.stealthPresence ? 'Ghost Mode' : 'Presence',
               padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
             ),
             SettingsCard(
               children: [
@@ -179,7 +176,6 @@ class KometSettingsScreen extends StatelessWidget {
             SectionHeader(
               l10n.kometSettingsDebugHeader,
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
             ),
             SettingsCard(
               children: [

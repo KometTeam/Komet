@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../links/deep_link_service.dart';
+import '../links/max_link.dart';
 
 import '../../frontend/widgets/custom_notification.dart';
 import '../../frontend/widgets/max_link_handler.dart';
@@ -26,6 +27,11 @@ bool leavesWebView(String? scheme) {
 
 // #***! свои схемы ловим внутри, системе не отдаём
 const Set<String> _appSchemes = {'komet', 'max'};
+
+bool linkStaysInApp(String url) {
+  final scheme = Uri.tryParse(url.trim())?.scheme.toLowerCase() ?? '';
+  return _appSchemes.contains(scheme) || MaxLink.isMaxLink(url);
+}
 
 // #***! открытие ссылки, сначала наша схема потом max потом браузер
 Future<void> openExternalUrl(

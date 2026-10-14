@@ -177,6 +177,8 @@ abstract class SyncKey {
   static const serverConfigSeen = 'server_config_seen';
   static const profileInviteLink = 'profile_invite_link';
   static const welcomeStickerIds = 'welcome_sticker_ids';
+  static const channelsFolderSuggested = 'channels_folder_suggested';
+  static const folderFiltersEnabled = 'folder_filters_enabled';
 }
 
 // #***! вся локальная база, профили чаты контакты сообщения

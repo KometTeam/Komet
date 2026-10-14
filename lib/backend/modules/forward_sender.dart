@@ -342,24 +342,24 @@ class ForwardSender {
       sender,
       expectedSessionEpoch,
     );
-    final id = await sender.sendMessage(
+    final accepted = await sender.sendMessage(
       accountId,
       chatId,
       caption.text,
       elements: caption.elements,
       beforeSend: beforeSend,
     );
+    final text = accepted.text ?? caption.text;
+    final elements = accepted.elements ?? caption.elements;
     return CachedMessage(
-      id: id,
+      id: accepted.id,
       accountId: accountId,
       chatId: chatId,
       senderId: accountId,
-      text: caption.text,
+      text: text,
       time: DateTime.now().millisecondsSinceEpoch,
       status: 'sent',
-      payload: caption.elements.isEmpty
-          ? null
-          : {'text': caption.text, 'elements': caption.elements},
+      payload: elements.isEmpty ? null : {'text': text, 'elements': elements},
     );
   }
 }

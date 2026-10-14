@@ -321,7 +321,7 @@ class ShareSender {
           OutgoingMessagePolicy.requireSupported(accountId, chatId);
         },
       );
-      if (sent.isNotEmpty) realId = sent;
+      if (sent.id.isNotEmpty) realId = sent.id;
     } catch (e) {
       logger.w('Поделиться: текст в $chatId не ушёл: $e');
       status = 'error';

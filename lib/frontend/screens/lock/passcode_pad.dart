@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -81,7 +83,7 @@ class _Dot extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 11),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: const Duration(milliseconds: 110),
         curve: Curves.easeOutBack,
         width: filled ? 16 : 14,
         height: filled ? 16 : 14,
@@ -117,9 +119,11 @@ class PasscodeKeypad extends StatelessWidget {
 
   static const double maxKeySize = 76;
   static const double minKeySize = 52;
+  static const double _gapX = 26;
+  static const double _gapY = 14;
 
   static double keySizeFor(double availableHeight) =>
-      (availableHeight / 4 - 14).clamp(minKeySize, maxKeySize);
+      (availableHeight / 4 - _gapY).clamp(minKeySize, maxKeySize);
 
   static int? digitOf(KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return null;
@@ -135,8 +139,10 @@ class PasscodeKeypad extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final scale = keySize / maxKeySize;
+    final cell = Size(keySize + _gapX, keySize + _gapY);
     Widget digit(int value) => _PadKey(
       size: keySize,
+      cell: cell,
       enabled: enabled,
       onTap: () => onDigit(value),
       background: cs.surfaceContainerHigh,
@@ -162,13 +168,18 @@ class PasscodeKeypad extends StatelessWidget {
             [4, 5, 6],
             [7, 8, 9],
           ])
-            _PadRow(children: [for (final v in row) digit(v)]),
-          _PadRow(
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [for (final v in row) digit(v)],
+            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               onBiometric == null
-                  ? SizedBox.square(dimension: keySize)
+                  ? SizedBox.fromSize(size: cell)
                   : _PadKey(
                       size: keySize,
+                      cell: cell,
                       enabled: true,
                       onTap: onBiometric!,
                       child: Icon(
@@ -180,8 +191,12 @@ class PasscodeKeypad extends StatelessWidget {
               digit(0),
               _PadKey(
                 size: keySize,
+                cell: cell,
                 enabled: enabled && canErase,
                 onTap: onBackspace,
+                semanticLabel: MaterialLocalizations.of(
+                  context,
+                ).deleteButtonTooltip,
                 child: Icon(
                   Symbols.backspace,
                   size: 28 * scale,
@@ -196,87 +211,155 @@ class PasscodeKeypad extends StatelessWidget {
   }
 }
 
-class _PadRow extends StatelessWidget {
-  final List<Widget> children;
-
-  const _PadRow({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) const SizedBox(width: 26),
-            children[i],
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _PadKey extends StatefulWidget {
   final double size;
+  final Size cell;
   final VoidCallback onTap;
   final Widget child;
   final Color? background;
   final bool enabled;
+  final String? semanticLabel;
 
   const _PadKey({
     required this.size,
+    required this.cell,
     required this.onTap,
     required this.child,
     required this.enabled,
     this.background,
+    this.semanticLabel,
   });
 
   @override
   State<_PadKey> createState() => _PadKeyState();
 }
 
-class _PadKeyState extends State<_PadKey> {
-  bool _pressed = false;
+class _PadKeyState extends State<_PadKey> with SingleTickerProviderStateMixin {
+  static const double _pressDepth = 0.16;
 
-  void _setPressed(bool value) {
-    if (_pressed != value) setState(() => _pressed = value);
+  late final AnimationController _press = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 60),
+    reverseDuration: const Duration(milliseconds: 280),
+  );
+  late final CurvedAnimation _depth = CurvedAnimation(
+    parent: _press,
+    curve: Curves.easeOut,
+    reverseCurve: Curves.easeInBack,
+  );
+  int? _pointer;
+  Offset _downAt = Offset.zero;
+  bool _confirmOnRelease = false;
+
+  @override
+  void dispose() {
+    _depth.dispose();
+    _press.dispose();
+    super.dispose();
+  }
+
+  bool get _inScrolledLayout {
+    final position = context
+        .findAncestorStateOfType<ScrollableState>()
+        ?.position;
+    return position != null &&
+        position.hasContentDimensions &&
+        position.maxScrollExtent > position.minScrollExtent;
+  }
+
+  void _onDown(PointerDownEvent event) {
+    if (!widget.enabled || _pointer != null) return;
+    if (event.buttons & kPrimaryButton == 0) return;
+    _pointer = event.pointer;
+    _downAt = event.position;
+    _confirmOnRelease = _inScrolledLayout;
+    unawaited(Haptics.tap());
+    _pressIn();
+    if (!_confirmOnRelease) widget.onTap();
+  }
+
+  void _onMove(PointerMoveEvent event) {
+    if (event.pointer != _pointer) return;
+    if ((event.position - _downAt).distance > kTouchSlop) _letGo();
+  }
+
+  void _onUp(PointerUpEvent event) {
+    if (event.pointer != _pointer) return;
+    final confirm = _confirmOnRelease;
+    _letGo();
+    if (confirm && widget.enabled) widget.onTap();
+  }
+
+  void _onCancel(PointerCancelEvent event) {
+    if (event.pointer == _pointer) _letGo();
+  }
+
+  void _pressIn() {
+    _press.forward().whenCompleteOrCancel(() {
+      if (_pointer == null && mounted) _press.reverse();
+    });
+  }
+
+  void _letGo() {
+    _pointer = null;
+    _confirmOnRelease = false;
+    if (!_press.isAnimating || _press.status != AnimationStatus.forward) {
+      _press.reverse();
+    }
+  }
+
+  void _activateFromSemantics() {
+    if (!widget.enabled) return;
+    unawaited(Haptics.tap());
+    widget.onTap();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: widget.enabled ? (_) => _setPressed(true) : null,
-      onTapCancel: () => _setPressed(false),
-      onTapUp: (_) => _setPressed(false),
-      onTap: widget.enabled
-          ? () {
-              Haptics.selection();
-              widget.onTap();
-            }
-          : null,
-      child: AnimatedScale(
-        scale: _pressed ? 0.9 : 1,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          width: widget.size,
-          height: widget.size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _pressed && widget.background != null
-                ? Color.alphaBlend(
-                    cs.primary.withValues(alpha: 0.18),
-                    widget.background!,
-                  )
-                : widget.background,
+    final background = widget.background;
+    final rest = background ?? cs.primary.withValues(alpha: 0);
+    final pressed = background == null
+        ? cs.primary.withValues(alpha: 0.16)
+        : Color.alphaBlend(cs.primary.withValues(alpha: 0.34), background);
+
+    return Semantics(
+      button: true,
+      enabled: widget.enabled,
+      label: widget.semanticLabel,
+      onTap: widget.enabled ? _activateFromSemantics : null,
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: _onDown,
+        onPointerMove: _onMove,
+        onPointerUp: _onUp,
+        onPointerCancel: _onCancel,
+        child: SizedBox.fromSize(
+          size: widget.cell,
+          child: Center(
+            child: RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: _depth,
+                child: Center(child: widget.child),
+                builder: (context, child) {
+                  final depth = _depth.value;
+                  return Transform.scale(
+                    scale: 1 - depth * _pressDepth,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color.lerp(rest, pressed, depth.clamp(0, 1)),
+                      ),
+                      child: SizedBox.square(
+                        dimension: widget.size,
+                        child: child,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
-          child: widget.child,
         ),
       ),
     );

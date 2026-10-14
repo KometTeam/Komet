@@ -14,7 +14,7 @@ import 'package:komet/main.dart';
 import '../../../../core/media/media_playback.dart';
 import '../../../../core/media/video_note_frame.dart';
 import '../../../../core/config/komet_settings.dart';
-import '../../../../core/media/video_note_preloader.dart';
+import '../../../../core/media/video_preloader.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
@@ -131,13 +131,14 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     _adoptCachedTranscription();
     WidgetsBinding.instance.addObserver(this);
     MediaPlayback.instance.videoNote.addListener(_onActiveNoteChanged);
+    KometSettings.autoplayVideoNote.addListener(_onAutoplayChanged);
     final local = _localPath;
     if (local != null) {
       unawaited(_openLocalPreview(File(local)));
       return;
     }
     if (KometSettings.autoDownloadVideoNote.value &&
-        VideoNotePreloader.autoLoads(widget.attachment.duration)) {
+        VideoPreloader.autoLoads(widget.attachment.duration)) {
       unawaited(_warmCache());
     }
   }
@@ -156,6 +157,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     TranscriptionCache.unlisten(_sourceMessageId, _onTranscriptionPush);
     WidgetsBinding.instance.removeObserver(this);
     MediaPlayback.instance.videoNote.removeListener(_onActiveNoteChanged);
+    KometSettings.autoplayVideoNote.removeListener(_onAutoplayChanged);
     if (_playingNote == this) _playingNote = null;
     _PreviewPool.unregister(this);
     _expand.dispose();
@@ -270,7 +272,7 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     final videoId = _videoId;
     final token = widget.attachment.videoToken;
     if (videoId == null || token == null) return Future.value(null);
-    return VideoNotePreloader.load(
+    return VideoPreloader.load(
       _cacheName,
       () => messagesModule.getVideoUrl(
         messageId: widget.sourceMessageId ?? widget.messageId,
@@ -395,8 +397,18 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     unawaited(visible ? _startMuted() : _stopMuted());
   }
 
+  void _onAutoplayChanged() {
+    if (!mounted) return;
+    if (!KometSettings.autoplayVideoNote.value) {
+      unawaited(_stopMuted());
+    } else if (_visible) {
+      unawaited(_startMuted());
+    }
+  }
+
   Future<void> _startMuted() async {
-    if (_videoId == null ||
+    if (!KometSettings.autoplayVideoNote.value ||
+        _videoId == null ||
         widget.uploadProgress != null ||
         _local != null ||
         _error ||
@@ -406,7 +418,12 @@ class _VideoNoteBubbleState extends State<VideoNoteBubble>
     final existing = _controller;
     if (existing != null && existing.value.isPlaying) return;
     final controller = existing ?? await _openController();
-    if (controller == null || !mounted || !_visible) return;
+    if (controller == null ||
+        !mounted ||
+        !_visible ||
+        !KometSettings.autoplayVideoNote.value) {
+      return;
+    }
     if (controller.value.isPlaying ||
         MediaPlayback.instance.isActiveVideoNote(controller)) {
       return;
