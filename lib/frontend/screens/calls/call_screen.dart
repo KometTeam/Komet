@@ -1378,6 +1378,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           foreground: _isMuted ? cs.onPrimary : cs.onSurface,
           onTap: _toggleMute,
           onLongPress: _showMicrophones,
+          micLevels: _session?.micLevels,
         ),
         CallButton(
           icon: Symbols.call_end,

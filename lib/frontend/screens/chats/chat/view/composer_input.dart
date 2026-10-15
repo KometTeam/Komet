@@ -591,24 +591,24 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
+  Color _solidPillColor(ColorScheme cs) => Color.alphaBlend(
+    cs.surfaceContainerHighest.withValues(alpha: 0.92),
+    cs.surface,
+  );
+
+  BorderSide _pillBorder(ColorScheme cs) =>
+      BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5), width: 0.5);
+
   Widget _fieldSurface(ColorScheme cs, Widget child) {
     if (_flat) return child;
     return GlossyPill(
-      color: _translucent
-          ? AppFrost.glassTint(cs)
-          : Color.alphaBlend(
-              cs.surfaceContainerHighest.withValues(alpha: 0.92),
-              cs.surface,
-            ),
+      color: _translucent ? AppFrost.glassTint(cs) : _solidPillColor(cs),
       blurSigma: _frost ? AppFrost.sigma : null,
       liquid: _liquid,
       backdropKey: backdropKey,
       borderRadius: BorderRadius.circular(28),
       depth: 8,
-      borderSide: BorderSide(
-        color: cs.outlineVariant.withValues(alpha: 0.5),
-        width: 0.5,
-      ),
+      borderSide: _pillBorder(cs),
       child: child,
     );
   }
@@ -720,7 +720,7 @@ class ComposerInputBar extends StatelessWidget {
         ? cs.onSurfaceVariant
         : cs.onSurfaceVariant.withValues(alpha: 0.38);
     final row = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
+      padding: _previewPadding,
       child: Row(
         children: [
           Icon(Symbols.forward, size: 20, color: cs.primary),
@@ -790,7 +790,7 @@ class ComposerInputBar extends StatelessWidget {
           attachments: reply.attachments,
         );
         final row = Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
+          padding: _previewPadding,
           child: Row(
             children: [
               _replyIconButton(cs),
@@ -878,7 +878,31 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
+  bool get _previewFloats =>
+      !_flat && !_translucent && chrome != ChatChromeStyle.transparent;
+
+  EdgeInsets get _previewPadding => _previewFloats
+      ? const EdgeInsets.fromLTRB(16, 4, 6, 4)
+      : const EdgeInsets.fromLTRB(16, 6, 8, 2);
+
   Widget _previewSurface(ColorScheme cs, Widget child) {
+    if (_previewFloats) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          _barSideInset,
+          _barVerticalInset,
+          _barSideInset,
+          0,
+        ),
+        child: GlossyPill(
+          color: _solidPillColor(cs),
+          borderRadius: BorderRadius.circular(28),
+          depth: 8,
+          borderSide: _pillBorder(cs),
+          child: child,
+        ),
+      );
+    }
     if (_flat && _translucent) return child;
     if (!_translucent && chrome != ChatChromeStyle.transparent) return child;
     return GlassSurface(

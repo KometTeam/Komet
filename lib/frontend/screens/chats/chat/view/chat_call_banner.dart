@@ -32,11 +32,7 @@ class ChatCallBanner extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final content = Material(
-      color: frosted
-          ? AppFrost.glassTint(cs)
-          : floating
-          ? cs.surfaceContainerHigh.withValues(alpha: 0.92)
-          : cs.surfaceContainerHigh,
+      color: frosted ? AppFrost.glassTint(cs) : cs.surfaceContainerHigh,
       borderRadius: floating ? BorderRadius.circular(16) : null,
       clipBehavior: Clip.antiAlias,
       child: Padding(

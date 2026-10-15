@@ -972,7 +972,7 @@ class _ChatScreenState extends State<ChatScreen>
         });
         unawaited(_loadMyRights());
         _bumpMessages();
-        _seedPresenceFromChat();
+        _syncOtherPresence();
         _recomputeHeaderStatus();
         _syncOtherReadTime();
       }
@@ -3327,10 +3327,12 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _loadOtherPresence() async {
-    if (_myId == 0) return;
-    final otherId = widget.chatId ^ _myId;
-    if (otherId <= 0) return;
-    if (PresenceFetch.live(otherId) != null) return;
+    final otherId = _resolveOtherId();
+    if (otherId == null) return;
+    if (_syncOtherPresence()) {
+      _recomputeHeaderStatus();
+      return;
+    }
     try {
       final entry = await PresenceFetch.get(otherId);
       if (!mounted || entry == null) return;
@@ -3338,15 +3340,19 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (_) {}
   }
 
-  void _onPresenceChanged() {
-    if (!mounted) return;
+  bool _syncOtherPresence() {
     final otherId = _resolveOtherId();
-    if (otherId == null) return;
+    if (otherId == null) return false;
     final p = PresenceFetch.live(otherId);
-    if (p == null) return;
+    if (p == null) return false;
     _otherStatus = (p['status'] as int?) ?? 0;
     _otherSeenTime = p['seen'] as int?;
-    _recomputeHeaderStatus();
+    return true;
+  }
+
+  void _onPresenceChanged() {
+    if (!mounted) return;
+    if (_syncOtherPresence()) _recomputeHeaderStatus();
   }
 
   void _onVisualStyleChanged() {
@@ -3790,16 +3796,6 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (e) {
       logger.w('Обновление после звонка не удалось: $e');
     }
-  }
-
-  void _seedPresenceFromChat() {
-    if (_otherStatus != 0 || _otherSeenTime != null) return;
-    final otherId = _resolveOtherId();
-    if (otherId == null) return;
-    final p = PresenceFetch.live(otherId);
-    if (p == null) return;
-    _otherStatus = (p['status'] as int?) ?? 0;
-    _otherSeenTime = p['seen'] as int?;
   }
 
   void _recomputeHeaderStatus() {
