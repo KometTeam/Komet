@@ -149,6 +149,15 @@ class CallSession {
   bool get isReconnecting => _reconnecting;
 
   Timer? _levelTimer;
+  Timer? _micLevelTimer;
+  bool _micLevelPending = false;
+  double _micLevel = 0;
+  static const Duration _micLevelEvery = Duration(milliseconds: 100);
+  late final StreamController<double> _micLevels =
+      StreamController<double>.broadcast(
+        onListen: _startMicLevels,
+        onCancel: _stopMicLevels,
+      );
   // #***! говорящего ловим по уровню звука с удержанием, иначе мигает
   final Map<int, int> _speakHold = {};
 
@@ -257,6 +266,8 @@ class CallSession {
   MediaStream? get remoteStream => _remoteStreamRef;
 
   Stream<void> get infoUpdates => _info.stream;
+
+  Stream<double> get micLevels => _micLevels.stream;
 
   Stream<void> get peerKometDetected => _kometDetected.stream;
   bool get peerIsKomet => _peerIsKomet;
@@ -527,6 +538,47 @@ class CallSession {
       _speaking = next;
       _notifyInfo();
     }
+  }
+
+  void _startMicLevels() {
+    _micLevel = 0;
+    _micLevelTimer ??= Timer.periodic(
+      _micLevelEvery,
+      (_) => unawaited(_sampleMicLevel()),
+    );
+  }
+
+  void _stopMicLevels() {
+    _micLevelTimer?.cancel();
+    _micLevelTimer = null;
+  }
+
+  Future<void> _sampleMicLevel() async {
+    if (_micLevelPending || _micLevels.isClosed) return;
+    final sender = _audioSender;
+    if (sender == null || !audioTransmitting) {
+      _emitMicLevel(0);
+      return;
+    }
+    _micLevelPending = true;
+    try {
+      var level = 0.0;
+      for (final r in await sender.getStats()) {
+        if (r.type != 'media-source') continue;
+        final value = r.values['audioLevel'];
+        if (value is num && value > level) level = value.toDouble();
+      }
+      _emitMicLevel(level);
+    } catch (_) {
+    } finally {
+      _micLevelPending = false;
+    }
+  }
+
+  void _emitMicLevel(double level) {
+    if (level == _micLevel || _micLevels.isClosed) return;
+    _micLevel = level;
+    _micLevels.add(level);
   }
 
   // #***! уведомления строго по очереди
@@ -2820,6 +2872,7 @@ class CallSession {
   // #***! освобождаем всё, соединение дорожки подписки стримы
   Future<void> _dispose() async {
     _levelTimer?.cancel();
+    _stopMicLevels();
     _collectDebounce?.cancel();
     _slotProbeTimer?.cancel();
     _videoStatsTimer?.cancel();
@@ -2855,6 +2908,7 @@ class CallSession {
     if (!_remoteStream.isClosed) await _remoteStream.close();
     if (!_info.isClosed) await _info.close();
     if (!_kometDetected.isClosed) await _kometDetected.close();
+    if (!_micLevels.isClosed) await _micLevels.close();
     if (!_chatController.isClosed) await _chatController.close();
     if (!_gameController.isClosed) await _gameController.close();
   }

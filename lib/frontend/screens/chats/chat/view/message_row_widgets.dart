@@ -64,11 +64,7 @@ class PinnedMessageBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final content = Material(
-      color: frosted
-          ? AppFrost.glassTint(cs)
-          : floating
-          ? cs.surfaceContainerHigh.withValues(alpha: 0.92)
-          : cs.surfaceContainerHigh,
+      color: frosted ? AppFrost.glassTint(cs) : cs.surfaceContainerHigh,
       borderRadius: floating ? _radius : null,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
