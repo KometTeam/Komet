@@ -3,6 +3,11 @@ name: Build Android (Google Play)
 on:
   workflow_dispatch:
 
+env:
+  GIT_CONFIG_COUNT: '1'
+  GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.KOMET_DEPS_TOKEN }}@github.com/KometTeam/flutter-webrtc.insteadOf
+  GIT_CONFIG_VALUE_0: https://github.com/KometTeam/flutter-webrtc
+
 jobs:
   build-play:
     runs-on: ubuntu-latest

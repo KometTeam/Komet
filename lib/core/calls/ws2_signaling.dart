@@ -22,8 +22,8 @@ class Ws2Config {
   const Ws2Config({required this.uri, required this.userId});
 
   // #***! capabilities и версия SDK, сервер сверяет и отказывает незнакомым
-  static const defaultCapabilities = '3c02f';
-  static const _appVersion = 'sdk-0.2.1.3';
+  static const defaultCapabilities = '3c03f';
+  static const _appVersion = 'sdk-0.3.6';
   static const defaultDevice = 'Android/Unknown';
   static const defaultOsVersion = '34';
 
@@ -262,6 +262,14 @@ class Ws2Signaling {
 
   Future<void> requestRealloc() => sendCommand('request-realloc');
 
+  // #***! та же раскладка, что по producerCommand, но JSON через сигналку
+  Future<Map<String, dynamic>> updateDisplayLayout(
+    Map<String, String> layouts,
+  ) => sendCommand(
+    'update-display-layout',
+    extra: {'layouts': layouts, 'snapshot': true},
+  );
+
   // #***! принятие входящего
   /// Принять входящий звонок (сторона вызываемого).
   Future<void> acceptCall({
@@ -301,6 +309,8 @@ class Ws2Signaling {
         'singleSession': true,
         'unifiedPlan': true,
         'fastScreenShare': true,
+        'producerScreenDataChannelVersion': 1,
+        'consumerScreenDataChannelVersion': 1,
         'consumerFastScreenShareQualityOnDemand': true,
         'red': true,
         'videoTracksCount': 10,

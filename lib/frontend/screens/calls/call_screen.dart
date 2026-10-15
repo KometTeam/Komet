@@ -14,6 +14,7 @@ import '../../../core/calls/active_call.dart';
 import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
+import '../../../core/calls/remote_screens.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/launch_flags.dart';
 import '../../../core/utils/format.dart';
@@ -28,6 +29,7 @@ import 'call_controls.dart';
 import 'call_mic_sheet.dart';
 import 'call_participants_sheet.dart';
 import 'komet_hub.dart';
+import 'remote_screen_view.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/utils/seed_scheme.dart';
 
@@ -76,7 +78,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   StreamSubscription<int>? _tileStreamSub;
   bool _rendererReady = false;
   bool _localRendererReady = false;
-  bool _videoAttached = false;
+  String? _attachedVideoTrackId;
   MediaStream? _pendingStream;
 
   Color? _seedKey;
@@ -204,16 +206,16 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       _pendingStream = stream;
       return;
     }
-    final hasVideo = stream.getVideoTracks().isNotEmpty;
+    final videoTrackId = stream.getVideoTracks().firstOrNull?.id;
     if (!identical(_remoteRenderer.srcObject, stream)) {
       _remoteRenderer.srcObject = stream;
-    } else if (hasVideo && !_videoAttached) {
+    } else if (videoTrackId != _attachedVideoTrackId) {
       _remoteRenderer.srcObject = null;
       _remoteRenderer.srcObject = stream;
     } else {
       return;
     }
-    if (hasVideo) _videoAttached = true;
+    _attachedVideoTrackId = videoTrackId;
     if (mounted) setState(() {});
   }
 
@@ -692,6 +694,21 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   }
 
   Widget _participantTile(ColorScheme cs, CallParticipant p) {
+    final screen = !p.isSelf && p.screenSharing
+        ? _session?.remoteScreenOf(p.id)
+        : null;
+    if (screen == null) return _participantTileWith(cs, p, null);
+    return ValueListenableBuilder<RemoteScreen?>(
+      valueListenable: screen,
+      builder: (context, value, _) => _participantTileWith(cs, p, value),
+    );
+  }
+
+  Widget _participantTileWith(
+    ColorScheme cs,
+    CallParticipant p,
+    RemoteScreen? remoteScreen,
+  ) {
     final l10n = AppLocalizations.of(context)!;
     final ext = p.externalId;
     final info = ext != null ? _peerInfo[ext] : null;
@@ -704,8 +721,15 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     final muted = p.isSelf ? _isMuted : !p.audioEnabled;
     final speaking = !muted && _session?.isSpeaking(p.id) == true;
     final renderer = _tileRenderer(p);
-    final showVideo =
-        !p.isSelf && (p.videoEnabled || p.screenSharing) && renderer != null;
+    final Widget? media = remoteScreen != null
+        ? RemoteScreenContent(screen: remoteScreen)
+        : (!p.isSelf && (p.videoEnabled || p.screenSharing) && renderer != null)
+        ? CallVideoView(
+            renderer: renderer,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+            placeholder: ColoredBox(color: cs.surfaceContainerHighest),
+          )
+        : null;
 
     return GlossyPill(
       color: cs.surfaceContainerHigh,
@@ -714,9 +738,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       borderSide: speaking
           ? const BorderSide(color: kSuccessGreen, width: 2.5)
           : null,
-      padding: EdgeInsets.all(showVideo ? 0 : 12),
-      child: showVideo
-          ? _videoTile(cs, renderer, name, muted, p.handRaised, p.screenSharing)
+      padding: EdgeInsets.all(media != null ? 0 : 12),
+      child: media != null
+          ? _videoTile(cs, media, name, muted, p.handRaised, p.screenSharing)
           : _avatarTile(cs, name, url, muted, p.handRaised, p.screenSharing),
     );
   }
@@ -801,7 +825,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   Widget _videoTile(
     ColorScheme cs,
-    RTCVideoRenderer renderer,
+    Widget media,
     String name,
     bool muted,
     bool hand,
@@ -812,11 +836,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          CallVideoView(
-            renderer: renderer,
-            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-            placeholder: ColoredBox(color: cs.surfaceContainerHighest),
-          ),
+          media,
           Positioned(
             left: 8,
             right: 8,
@@ -888,6 +908,16 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _peerScreenOr(Widget video) {
+    final session = _session;
+    final peer = session?.peerUserId;
+    if (session == null || peer == null || !session.peerScreen) return video;
+    return RemoteScreenView(
+      screen: session.remoteScreenOf(peer),
+      fallback: video,
+    );
+  }
+
   Widget _buildBody(
     ColorScheme cs, {
     required Widget avatar,
@@ -911,25 +941,27 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                 heightFactor: 0.46 + 0.54 * t,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24 * (1 - t)),
-                  child: ValueListenableBuilder<RTCVideoValue>(
-                    valueListenable: _remoteRenderer,
-                    builder: (context, value, _) {
-                      final ar = value.aspectRatio > 0
-                          ? value.aspectRatio
-                          : 16 / 9;
-                      return Center(
-                        child: AspectRatio(
-                          aspectRatio: ar,
-                          child: RepaintBoundary(
-                            child: CallVideoView(
-                              renderer: _remoteRenderer,
-                              objectFit: RTCVideoViewObjectFit
-                                  .RTCVideoViewObjectFitCover,
+                  child: _peerScreenOr(
+                    ValueListenableBuilder<RTCVideoValue>(
+                      valueListenable: _remoteRenderer,
+                      builder: (context, value, _) {
+                        final ar = value.aspectRatio > 0
+                            ? value.aspectRatio
+                            : 16 / 9;
+                        return Center(
+                          child: AspectRatio(
+                            aspectRatio: ar,
+                            child: RepaintBoundary(
+                              child: CallVideoView(
+                                renderer: _remoteRenderer,
+                                objectFit: RTCVideoViewObjectFit
+                                    .RTCVideoViewObjectFitCover,
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),

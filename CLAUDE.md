@@ -43,6 +43,7 @@ as `Флаги запуска: …` and warns about unknown arguments. Add a new
 |-----------------------|-----------------------------|-------------------------------------------------------------------------|
 | `--debug`             | `KOMET_DEBUG=true`          | every log level passes; every wire packet is logged with its JSON       |
 | `--dw19p-im-crazy`    | `KOMET_DW19P_IM_CRAZY=true` | same, plus the payload of opcode 19 (`LOGIN`)                           |
+| `--calldebug`         | `KOMET_CALL_DEBUG=true`     | only call logs (`[call…`, `[media]`, `CallBridge.`) at every level, no wire packets; `--debug` wins |
 | `--debug-test`        | `DEBUG_TEST=true`           | fake-data mode: skips login, opens the shell as account `-424242`       |
 | `--contacts N`        | `DEBUG_CONTACTS=N`          | implies `--debug-test` and generates N fake contacts                    |
 | `--berserk`           | `BERSERK=true`              | drops the profile on login to exercise profile recovery                 |
@@ -88,6 +89,26 @@ exact git `rev`, and the vendored cargokit compiles it during the Flutter build 
 toolchain as `kolibri`; bump it by changing the `rev` and running `cargo update -p tlottie`.
 `lib/core/media/tlottie/` renders frames in a pool of worker isolates and caches them in RAM and
 on disk. Web has no native path and falls back to the pure-Dart `lottie` package.
+
+## WebRTC plugin fork
+
+`flutter_webrtc` is overridden with the private fork `KometTeam/flutter-webrtc` (upstream v1.5.2 +
+patches), pinned by commit in `dependency_overrides` in `pubspec.yaml`. To change the plugin, commit
+in the fork, push, and bump the `ref`. The patches:
+
+- desktop camera open/close and `getStats` run on background threads — libwebrtc does both through
+  `Thread::BlockingCall` on its worker thread, and on Linux the window is drawn on the platform
+  thread, so the UI froze for the 1–2 s a V4L2 camera takes to start;
+- `VideoFrameTap` hands the frames of a video track to Dart: raw I420 on Linux/Windows, VP8 encoded
+  with MediaCodec on Android.
+
+CI fetches the fork with the repo secret `KOMET_DEPS_TOKEN` (read access to the fork): every Flutter
+workflow rewrites the fork URL through workflow-level `GIT_CONFIG_*` env.
+
+Call screen sharing follows MAX: in SERVER topology frames travel as VP8/VP9 over SFU data channels,
+not as an RTP track — `consumerScreenShare` to send (`ScreenSharePipeline`, libvpx encoder in an
+isolate on desktop), `producerScreenShare` to receive (`RemoteScreens`: libvpx → `ui.Image` on
+desktop, MediaCodec → Flutter texture on Android). libvpx is loaded from the system on desktop.
 
 ## Build Flavors
 

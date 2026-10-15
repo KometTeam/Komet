@@ -208,6 +208,10 @@ void main(List<String> args) async {
       'Запуск с ${LaunchFlags.activeDebugFlag}: в лог идёт весь трафик с данными'
       '${LaunchFlags.revealLoginPayload ? ', включая payload LOGIN (19)' : ''}',
     );
+  } else if (LaunchFlags.callDebug) {
+    logger.i(
+      '[call] запуск с ${LaunchFlags.callDebugFlag}: в лог идут только звонки',
+    );
   }
   MediaKitVideoPlatform.registerOnDesktop();
   if (AppInstance.isNamed) {

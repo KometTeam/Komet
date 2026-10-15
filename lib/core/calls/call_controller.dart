@@ -5,6 +5,7 @@ import '../../backend/modules/calls.dart';
 import '../protocol/opcode_map.dart';
 import '../push/fkm_controller.dart';
 import '../protocol/packet.dart';
+import '../utils/logger.dart';
 import '../utils/parse.dart';
 import 'call_bridge.dart';
 import 'call_session.dart';
@@ -89,20 +90,33 @@ class CallController {
     final payload = packet.payload;
     if (payload is! Map) return;
 
-    final vcp = payload['vcp'] as String?;
-    final conversationId = payload['conversationId'] as String?;
-    final callerId = payload['callerId'] as int?;
-    if (vcp == null || conversationId == null || callerId == null) return;
+    final vcp = payload['vcp'];
+    final conversationId = payload['conversationId']?.toString();
+    final callerId = parseIntOrNull(payload['callerId']);
+    if (vcp is! String || conversationId == null || callerId == null) {
+      logger.w(
+        '[call] incoming push skipped: '
+        '${payload.map((k, v) => MapEntry(k, v.runtimeType))}',
+      );
+      return;
+    }
+    logger.i(
+      '[call] incoming push conversation=$conversationId caller=$callerId '
+      'resumed=$appResumed',
+    );
 
     // Приложение свёрнуто — звонок показывает FKM отдельным уведомлением,
     // приём оттуда вернётся через injectFromNative.
-    if (!appResumed) {
+    if (!appResumed && FkmController.instance.isSupported) {
       unawaited(FkmController.instance.showIncomingCall(payload));
       return;
     }
 
     final params = ConversationParams.decode(vcp);
-    if (params == null) return;
+    if (params == null) {
+      logger.w('[call] incoming push: vcp не разобран');
+      return;
+    }
 
     _emitIncoming(
       IncomingCall(
@@ -232,14 +246,10 @@ class CallController {
       params: call.params,
       role: CallRole.callee,
     );
-    return _launch(
-      session,
-      () async {
-        await session.start();
-        await session.accept();
-      },
-      caller: call.callerName,
-    );
+    return _launch(session, () async {
+      await session.start();
+      await session.accept();
+    }, caller: call.callerName);
   }
 
   // #***! отклонение
