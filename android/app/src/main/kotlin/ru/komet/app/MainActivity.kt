@@ -457,6 +457,10 @@ class MainActivity : AudioServiceFragmentActivity() {
                 "notifiedChats" -> {
                     result.success(KometNotifier(applicationContext).notifiedChats())
                 }
+                "openSystemSettings" -> {
+                    openNotificationSettings()
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -568,6 +572,23 @@ class MainActivity : AudioServiceFragmentActivity() {
             sink.success(chatId)
         } else {
             pendingChat = chatId
+        }
+    }
+
+    private fun openNotificationSettings() {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        } else {
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", packageName, null),
+            )
+        }
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w("Notifications", "system settings failed: ${e.message}")
         }
     }
 

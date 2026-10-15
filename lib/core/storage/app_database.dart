@@ -179,6 +179,7 @@ abstract class SyncKey {
   static const welcomeStickerIds = 'welcome_sticker_ids';
   static const channelsFolderSuggested = 'channels_folder_suggested';
   static const folderFiltersEnabled = 'folder_filters_enabled';
+  static const privacyOverrides = 'privacy_overrides';
 }
 
 // #***! вся локальная база, профили чаты контакты сообщения
