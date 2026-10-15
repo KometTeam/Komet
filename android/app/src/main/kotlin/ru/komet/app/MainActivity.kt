@@ -67,6 +67,7 @@ class MainActivity : AudioServiceFragmentActivity() {
     private val nfcReaderCallback = NfcAdapter.ReaderCallback { tag -> onNfcTagDiscovered(tag) }
 
     private var noteRecorder: VideoNoteRecorder? = null
+    private var screenShareDecoders: ScreenShareDecoders? = null
     private var ble: BleContactExchange? = null
     private var pendingSelfId = 0L
     private var pendingSelfPhone = 0L
@@ -118,10 +119,23 @@ class MainActivity : AudioServiceFragmentActivity() {
         }, 250L)
     }
 
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        screenShareDecoders?.releaseAll()
+        screenShareDecoders = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+
+        val decoders = ScreenShareDecoders(flutterEngine.renderer)
+        screenShareDecoders = decoders
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/screen_decoder",
+        ).setMethodCallHandler(decoders)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,

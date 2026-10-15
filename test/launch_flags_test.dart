@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kolibri/kolibri.dart' show WireLogEvent;
+import 'package:logger/logger.dart';
 import 'package:komet/core/config/launch_flags.dart';
 import 'package:komet/core/protocol/opcode_map.dart';
 import 'package:komet/core/transport/wire_debug_log.dart';
@@ -53,6 +54,28 @@ void main() {
       '--berserk',
       '--no-mute',
     ]);
+  });
+
+  test('--calldebug пропускает в лог только звонки', () {
+    LaunchFlags.parse(const ['--calldebug']);
+    expect(LaunchFlags.callDebug, isTrue);
+    expect(LaunchFlags.debug, isFalse);
+    expect(LaunchFlags.summary, ['--calldebug']);
+
+    final filter = LaunchDebugFilter(ProductionFilter());
+    bool passes(Level level, Object message) =>
+        filter.shouldLog(LogEvent(level, message));
+    expect(passes(Level.trace, '[call] our offer video: recvonly'), isTrue);
+    expect(passes(Level.info, '[call][sfu] slots: {}'), isTrue);
+    expect(passes(Level.warning, 'CallBridge.init: stream error'), isTrue);
+    expect(passes(Level.error, 'Сессия: disconnected'), isFalse);
+    expect(passes(Level.info, const {'chatId': 1}), isFalse);
+  });
+
+  test('--debug перекрывает --calldebug', () {
+    LaunchFlags.parse(const ['--calldebug', '--debug']);
+    final filter = LaunchDebugFilter(ProductionFilter());
+    expect(filter.shouldLog(LogEvent(Level.trace, 'Сессия онлайн')), isTrue);
   });
 
   test('--contacts=N тоже включает тестовый режим', () {

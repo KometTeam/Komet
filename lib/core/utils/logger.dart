@@ -56,8 +56,20 @@ class LaunchDebugFilter extends LogFilter {
   Future<void> init() => _base.init();
 
   @override
-  bool shouldLog(LogEvent event) =>
-      LaunchFlags.debug || _base.shouldLog(event);
+  bool shouldLog(LogEvent event) {
+    if (LaunchFlags.debug) return true;
+    if (LaunchFlags.callDebug) return _isCallLog(event.message);
+    return _base.shouldLog(event);
+  }
+
+  static const List<String> _callLogPrefixes = [
+    '[call',
+    '[media]',
+    'CallBridge.',
+  ];
+
+  static bool _isCallLog(Object? message) =>
+      message is String && _callLogPrefixes.any(message.startsWith);
 
   @override
   Future<void> destroy() => _base.destroy();

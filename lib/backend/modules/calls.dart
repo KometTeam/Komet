@@ -252,13 +252,13 @@ class CallsModule {
   // #***! представляемся официальным SDK, свои значения не принимает
   String _internalParams() => jsonEncode({
     'platform': 'ANDROID',
-    'sdkVersion': '0.2.1.3',
+    'sdkVersion': '0.3.6',
     'clientAppKey': 'CGPGAGLGDIHBABABA',
     'deviceId': _api.deviceId ?? '',
     'protocolVersion': 5,
     'onlyAdminCanRecord': false,
-    'isWaitForAdminEnabled': false,
-    'hexCapability': Ws2Config.defaultCapabilities,
+    'waitForAdmin': false,
+    'capabilities': Ws2Config.defaultCapabilities,
   });
 
   // #***! разбор ссылки до входа, имя и сколько внутри

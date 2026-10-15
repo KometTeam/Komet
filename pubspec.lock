@@ -725,10 +725,11 @@ packages:
   flutter_webrtc:
     dependency: "direct main"
     description:
-      name: flutter_webrtc
-      sha256: "0f89dee7f4c35dab5611f351c3897a3bfe9f7057720cc7da209b52455af4316e"
-      url: "https://pub.dev"
-    source: hosted
+      path: "."
+      ref: fddd76a999c6181813d9b1fddfe65a835ea2e7b2
+      resolved-ref: fddd76a999c6181813d9b1fddfe65a835ea2e7b2
+      url: "https://github.com/KometTeam/flutter-webrtc.git"
+    source: git
     version: "1.5.2"
   freezed_annotation:
     dependency: transitive

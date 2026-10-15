@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 abstract final class LaunchFlags {
   static const String debugFlag = '--debug';
+  static const String callDebugFlag = '--calldebug';
   static const String loginPayloadFlag = '--dw19p-im-crazy';
   static const String debugTestFlag = '--debug-test';
   static const String contactsFlag = '--contacts';
@@ -9,6 +10,7 @@ abstract final class LaunchFlags {
   static const String noMuteFlag = '--no-mute';
 
   static const bool _envDebug = bool.fromEnvironment('KOMET_DEBUG');
+  static const bool _envCallDebug = bool.fromEnvironment('KOMET_CALL_DEBUG');
   static const bool _envLoginPayload = bool.fromEnvironment(
     'KOMET_DW19P_IM_CRAZY',
   );
@@ -37,6 +39,7 @@ abstract final class LaunchFlags {
   static const int debugTestAccountId = -424242;
 
   static bool debug = _envDebug || _envLoginPayload;
+  static bool callDebug = _envCallDebug;
   static bool revealLoginPayload = _envLoginPayload;
   static bool debugTest = _envDebugTest || _envContacts >= 0;
   static int contactCount = _envContacts >= 0 ? _envContacts : 0;
@@ -51,6 +54,8 @@ abstract final class LaunchFlags {
       switch (arg) {
         case debugFlag:
           debug = true;
+        case callDebugFlag:
+          callDebug = true;
         case loginPayloadFlag:
           debug = true;
           revealLoginPayload = true;
@@ -81,6 +86,7 @@ abstract final class LaunchFlags {
 
   static List<String> get summary => [
     if (debug) activeDebugFlag,
+    if (callDebug) callDebugFlag,
     if (debugTest) debugTestFlag,
     if (debugTest && contactCount > 0) '$contactsFlag=$contactCount',
     if (berserk) berserkFlag,
@@ -94,6 +100,7 @@ abstract final class LaunchFlags {
   @visibleForTesting
   static void reset() {
     debug = _envDebug || _envLoginPayload;
+    callDebug = _envCallDebug;
     revealLoginPayload = _envLoginPayload;
     debugTest = _envDebugTest || _envContacts >= 0;
     contactCount = _envContacts >= 0 ? _envContacts : 0;

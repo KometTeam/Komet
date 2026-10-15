@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform;
+    show TargetPlatform, ValueListenable, defaultTargetPlatform, mapEquals;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../config/app_camera.dart';
@@ -18,7 +18,12 @@ import 'call_bridge.dart';
 import 'call_info.dart';
 import 'conversation_params.dart';
 import 'pulse_audio.dart';
+import 'remote_screens.dart';
+import 'screen_frame_probe.dart';
 import 'sfu_data_channel.dart';
+import 'screen_share_pipeline.dart';
+import 'sfu_screen_channel.dart';
+import 'sfu_screen_sender.dart';
 import 'ws2_signaling.dart';
 
 // #***! кто мы в звонке
@@ -111,6 +116,7 @@ class CallSession {
   final _participantStreamUpdates = StreamController<int>.broadcast();
 
   String? _topology;
+  Completer<void>? _serverTopologyWaiter;
   List _iceServers = const [];
   Object? _sfuSessionId;
   Set<int> _speaking = const {};
@@ -123,6 +129,8 @@ class CallSession {
   RTCRtpSender? _audioSender;
   RTCRtpSender? _videoSender;
   RTCRtpSender? _screenSender;
+  SfuScreenSender? _screenOut;
+  ScreenSharePipeline? _screenPipeline;
   String? _micDeviceId = AppMicrophone.deviceId;
   String? _pulseSource = AppPulseSource.name;
   bool _monitorCapture = false;
@@ -153,11 +161,25 @@ class CallSession {
 
   // #***! каналы SFU, раскладка слоты и уровни
   final List<RTCDataChannel> _sfuChannels = [];
-  SfuCommandChannel? _sfuCommands;
-  StreamSubscription<Map<String, int>>? _sfuSlotSub;
+  SfuNotificationChannel? _sfuNotifications;
   StreamSubscription<Map<String, int>>? _sfuLevelSub;
+  SfuScreenChannel? _sfuScreen;
+  ScreenFrameProbe? _screenProbe;
+  StreamSubscription<ScreenFrame>? _sfuScreenFrameSub;
+  StreamSubscription<int>? _sfuScreenEndSub;
+  final RemoteScreens _remoteScreens = RemoteScreens();
   final Map<int, int> _slotParticipant = {};
+  final Map<int, int> _slotBytes = {};
+  final Map<int, int> _slotIdle = {};
+  List<int> _layoutCameras = const [];
+  Timer? _slotProbeTimer;
+  bool _refreshingSlots = false;
+  bool _cameraOpening = false;
+  static const Duration _slotProbeEvery = Duration(seconds: 1);
+  static const int _slotIdleLimit = 3;
+  Map<String, String> _offerSsrcByMid = const {};
   Timer? _layoutDebounce;
+  Timer? _collectDebounce;
   Timer? _videoStatsTimer;
   List<String> _lastLayout = const [];
   bool _layoutSent = false;
@@ -167,6 +189,8 @@ class CallSession {
   static const int _sfuSpeakLevel = 50;
   static const Duration _levelTtl = Duration(seconds: 6);
   final Map<int, ({int level, DateTime at})> _levelState = {};
+
+  static const int _autoAssignedStreamId = -1;
 
   static const List<String> _sfuChannelLabels = [
     'producerCommand',
@@ -244,6 +268,7 @@ class CallSession {
   bool get isSpeaker => _speakerOn;
   bool get peerMuted => _peerMuted;
   bool get peerVideo => _peerVideo || _peerScreen;
+  bool get peerScreen => _peerScreen;
   bool get peerCamera => _peerVideo;
   bool get mediaConnected => _mediaConnected;
 
@@ -331,7 +356,7 @@ class CallSession {
           'mediaSettings': {
             'isVideoEnabled': _localVideo,
             'isAudioEnabled': !_muted,
-            'isScreenSharingEnabled': _localScreen,
+            'isScreenSharingEnabled': _screenAnnounced,
             'isAnimojiEnabled': false,
           },
         },
@@ -452,6 +477,7 @@ class CallSession {
     _localStream = null;
     await _disposeMicStream();
 
+    await _stopScreenPipeline();
     await _disposeStream(_cameraStream);
     await _disposeStream(_screenStream);
     _cameraStream = null;
@@ -852,11 +878,7 @@ class CallSession {
     final pc = await _createPc(ice);
     _pc = pc;
     await _addLocalMedia(pc);
-
-    await pc.addTransceiver(
-      kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
-      init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
-    );
+    if (role != CallRole.callee) await _addVideoTransceiver(pc);
 
     await _setupKometProbe(pc);
 
@@ -891,6 +913,16 @@ class CallSession {
     };
     pc.onTrack = (event) => unawaited(_onRemoteTrack(event));
     pc.onDataChannel = (channel) {
+      if (_topology == 'SERVER') {
+        logger.i(
+          '[call][sfu] server opened data channel ${channel.label} '
+          'id=${channel.id}',
+        );
+        if (channel.label == SfuScreenChannel.receiveLabel) {
+          _sfuScreen?.bind(channel);
+        }
+        return;
+      }
       if (!_kometProbeEnabled) return;
       _bindProbeChannel(channel, ask: false);
     };
@@ -916,6 +948,7 @@ class CallSession {
         _notifyInfo();
         if (connected) {
           _iceRestarts = 0;
+          if (_topology != 'SERVER') _startP2pStats(pc);
           if (role == CallRole.joiner || _topology == 'SERVER') {
             _setState(CallSessionState.active);
           }
@@ -1134,29 +1167,81 @@ class CallSession {
   // #***! служебные каналы SFU
   Future<void> _openSfuChannels(RTCPeerConnection pc) async {
     await _closeSfuChannels();
-    final commands = SfuCommandChannel();
-    _sfuCommands = commands;
-    _sfuSlotSub = commands.slotUpdates.listen(_onSfuSlots);
-    _sfuLevelSub = commands.audioLevels.listen(_onSfuLevels);
+    final notifications = SfuNotificationChannel();
+    _sfuNotifications = notifications;
+    _sfuLevelSub = notifications.audioLevels.listen(_onSfuLevels);
     for (final label in _sfuChannelLabels) {
-      try {
-        final channel = await pc.createDataChannel(
-          label,
-          RTCDataChannelInit()
-            ..ordered = true
-            ..maxRetransmitTime = 10000000,
-        );
-        channel.onDataChannelState = (state) {
-          logger.i('[call][sfu] data channel $label $state');
-          if (state == RTCDataChannelState.RTCDataChannelOpen) {
-            _scheduleDisplayLayout();
-          }
-        };
-        commands.bind(channel);
-        _sfuChannels.add(channel);
-      } catch (e) {
-        logger.w('[call][sfu] data channel $label failed: $e');
-      }
+      final channel = await _createSfuChannel(pc, label);
+      if (channel != null) notifications.bind(channel);
+    }
+
+    final screen = SfuScreenChannel();
+    final probe = ScreenFrameProbe(dump: LaunchFlags.callDebug);
+    _sfuScreen = screen;
+    _screenProbe = probe;
+    _sfuScreenFrameSub = screen.frames.listen((frame) {
+      final owner = notifications.aliasOf(frame.source);
+      probe.onFrame(frame, owner);
+      _onScreenFrame(frame, owner);
+    });
+    _sfuScreenEndSub = screen.ended.listen((source) {
+      probe.onEnded(source);
+      _onScreenEnded(source);
+    });
+    final channel = await _createSfuChannel(pc, SfuScreenChannel.receiveLabel);
+    if (channel != null) screen.bind(channel);
+
+    final out = await _createSfuChannel(pc, ScreenPacketizer.sendLabel);
+    if (out != null) {
+      _screenOut = SfuScreenSender(
+        out,
+        onKeyFrameRequest: () => _screenPipeline?.requestKeyFrame(),
+      );
+      final logState = out.onDataChannelState;
+      out.onDataChannelState = (state) {
+        logState?.call(state);
+        if (state == RTCDataChannelState.RTCDataChannelOpen) {
+          _screenPipeline?.requestKeyFrame();
+        }
+      };
+    }
+  }
+
+  ValueListenable<RemoteScreen?> remoteScreenOf(int participantId) =>
+      _remoteScreens.of(participantId);
+
+  void _onScreenFrame(ScreenFrame frame, String? owner) {
+    final id = owner == null
+        ? null
+        : _participantIdFrom(owner.split(':').first);
+    if (id != null) _remoteScreens.push(frame, id);
+  }
+
+  void _onScreenEnded(int source) => _remoteScreens.end(source);
+
+  Future<RTCDataChannel?> _createSfuChannel(
+    RTCPeerConnection pc,
+    String label,
+  ) async {
+    try {
+      final channel = await pc.createDataChannel(
+        label,
+        RTCDataChannelInit()
+          ..ordered = true
+          ..maxRetransmitTime = 10000000
+          ..id = _autoAssignedStreamId,
+      );
+      channel.onDataChannelState = (state) {
+        logger.i('[call][sfu] data channel $label $state');
+        if (state == RTCDataChannelState.RTCDataChannelOpen) {
+          _scheduleDisplayLayout();
+        }
+      };
+      _sfuChannels.add(channel);
+      return channel;
+    } catch (e) {
+      logger.w('[call][sfu] data channel $label failed: $e');
+      return null;
     }
   }
 
@@ -1179,20 +1264,9 @@ class CallSession {
     _notifyInfo();
   }
 
-  // #***! слот -> участник, сервер шлёт видео слотами а не по id
-  void _onSfuSlots(Map<String, int> slots) {
-    if (slots.isEmpty) return;
-    _slotParticipant.clear();
-    slots.forEach((key, slot) {
-      if (slot < 0) return;
-      final id = _participantIdFrom(key.split(':').first);
-      if (id != null) _slotParticipant[slot] = id;
-    });
-    unawaited(_rebindSlotTracks());
-  }
-
   Future<void> _rebindSlotTracks() async {
     await _clearParticipantStreams();
+    if (_topology == 'SERVER') await _resetRemoteStream();
     await _collectReceivers();
     _notifyInfo();
   }
@@ -1207,18 +1281,17 @@ class CallSession {
 
   // #***! говорим серверу чьи видео и в каком размере нужны
   Future<void> _publishDisplayLayout({bool force = false}) async {
-    final commands = _sfuCommands;
-    if (commands == null || _topology != 'SERVER' || _ended) return;
-    final items = <SfuLayoutItem>[];
-    for (final p in _participants.values) {
-      if (p.isSelf || items.length >= _maxVideoSlots) continue;
-      if (!p.videoEnabled && !p.screenSharing) continue;
-      items.add(
-        SfuLayoutItem(
-          trackKey: 'u${p.id}:${p.screenSharing ? 'sSCREEN' : 'sCAMERA'}',
-        ),
-      );
-    }
+    if (_sfuNotifications == null || _topology != 'SERVER' || _ended) return;
+    final others = _participants.values.where((p) => !p.isSelf);
+    final cameras = others
+        .where((p) => p.videoEnabled)
+        .take(_maxVideoSlots)
+        .toList(growable: false);
+    final items = [
+      for (final p in cameras) SfuLayoutItem(trackKey: 'u${p.id}:sCAMERA'),
+      for (final p in others.where((p) => p.screenSharing))
+        SfuLayoutItem(trackKey: 'u${p.id}:sSCREEN'),
+    ];
     final keys = items.map((i) => i.trackKey).toList(growable: false);
     if (!force &&
         _layoutSent &&
@@ -1226,20 +1299,121 @@ class CallSession {
         keys.every(_lastLayout.contains)) {
       return;
     }
-    if (!await commands.sendDisplayLayout(items)) return;
+    if (!await _sendLayoutOverSignaling(items)) return;
     _lastLayout = keys;
     _layoutSent = true;
+    _assignVideoSlots([for (final p in cameras) p.id]);
   }
 
-  Set<String> _videoSlotMids(String sdp) {
-    final mids = <String>{};
+  // #***! сервер закрепляет слоты за дорожками сам и не говорит какими, слот камеры узнаём по тому, куда пошли байты
+  void _assignVideoSlots(List<int> cameraOwners) {
+    _layoutCameras = cameraOwners;
+    unawaited(_refreshVideoSlots());
+  }
+
+  Future<void> _refreshVideoSlots() async {
+    if (_refreshingSlots) return;
+    _refreshingSlots = true;
+    try {
+      await _refreshVideoSlotsOnce();
+    } finally {
+      _refreshingSlots = false;
+    }
+  }
+
+  Future<void> _refreshVideoSlotsOnce() async {
+    final pc = _pc;
+    if (pc == null || _topology != 'SERVER' || _ended) return;
+    final Map<int, int> bytes;
+    try {
+      bytes = await _videoSlotBytes(pc);
+    } catch (_) {
+      return;
+    }
+    if (_pc != pc) return;
+
+    final active = <int>[];
+    bytes.forEach((slot, received) {
+      final grew = received > (_slotBytes[slot] ?? 0);
+      _slotBytes[slot] = received;
+      _slotIdle[slot] = grew ? 0 : (_slotIdle[slot] ?? 0) + 1;
+      if (grew) active.add(slot);
+    });
+
+    final wanted = _layoutCameras.toSet();
+    final slots = Map<int, int>.of(_slotParticipant)
+      ..removeWhere(
+        (slot, id) =>
+            !wanted.contains(id) || (_slotIdle[slot] ?? 0) >= _slotIdleLimit,
+      );
+    final unbound = _layoutCameras
+        .where((id) => !slots.containsValue(id))
+        .toList(growable: false);
+    final free = (active.where((slot) => !slots.containsKey(slot)).toList()
+      ..sort());
+    for (var i = 0; i < unbound.length && i < free.length; i++) {
+      slots[free[i]] = unbound[i];
+    }
+
+    if (mapEquals(slots, _slotParticipant)) return;
+    _slotParticipant
+      ..clear()
+      ..addAll(slots);
+    logger.i('[call][sfu] video slots: $slots');
+    await _rebindSlotTracks();
+  }
+
+  Future<Map<int, int>> _videoSlotBytes(RTCPeerConnection pc) async {
+    final slotBySsrc = <String, int>{};
+    for (final tr in await pc.getTransceivers()) {
+      final ssrc = _offerSsrcByMid[tr.mid];
+      final trackId = tr.receiver.track?.id;
+      final slot = trackId == null
+          ? null
+          : RegExp(r'^video-pat-(\d+)$').firstMatch(trackId)?.group(1);
+      if (ssrc != null && slot != null) slotBySsrc[ssrc] = int.parse(slot);
+    }
+    final bytes = <int, int>{};
+    for (final report in await pc.getStats()) {
+      if (report.type != 'inbound-rtp') continue;
+      final slot = slotBySsrc['${report.values['ssrc']}'];
+      final received = report.values['bytesReceived'];
+      if (slot != null && received is num) bytes[slot] = received.toInt();
+    }
+    return bytes;
+  }
+
+  Future<bool> _sendLayoutOverSignaling(List<SfuLayoutItem> items) async {
+    final signaling = _signaling;
+    if (signaling == null) return false;
+    try {
+      final reply = await signaling.updateDisplayLayout({
+        for (final item in items) item.trackKey: item.signalingLayout,
+      });
+      logger.i('[call][sfu] ws2 update-display-layout reply: $reply');
+      return true;
+    } catch (e) {
+      logger.w('[call][sfu] ws2 update-display-layout failed: $e');
+      return false;
+    }
+  }
+
+  // #***! сервер сам выделяет слоты под нашу камеру и экран, экранный узнаём по s в mid
+  ({String? camera, String? screen}) _sendSlotMids(String sdp) {
+    String? camera;
+    String? screen;
     String? kind;
     String? mid;
     var recvOnly = false;
 
     void flush() {
       final id = mid;
-      if (kind == 'video' && recvOnly && id != null) mids.add(id);
+      if (kind != 'video' || id == null) return;
+      if (id.contains('s')) {
+        screen ??= id;
+      } else if (recvOnly) {
+        camera ??= id;
+      }
     }
 
     for (var line in sdp.split('\n')) {
@@ -1256,47 +1430,71 @@ class CallSession {
       }
     }
     flush();
-    return mids;
+    return (camera: camera, screen: screen);
   }
 
-  // #***! перед чужим видео надо завести под него слот в SDP
-  Future<void> _prepareVideoSlot(RTCPeerConnection pc, String offerSdp) async {
-    final mids = _videoSlotMids(offerSdp);
-    if (mids.isEmpty) return;
+  Future<void> _prepareSendSlots(RTCPeerConnection pc, String offerSdp) async {
+    final slots = _sendSlotMids(offerSdp);
+    logger.i(
+      '[call][sfu] send slots camera=${slots.camera} screen=${slots.screen}',
+    );
+    if (slots.camera == null && slots.screen == null) return;
     for (final transceiver in await pc.getTransceivers()) {
       final mid = transceiver.mid;
-      if (!mids.contains(mid)) continue;
-      final tracks =
-          _cameraStream?.getVideoTracks() ?? const <MediaStreamTrack>[];
-      if (tracks.isNotEmpty) {
-        try {
-          await transceiver.sender.replaceTrack(tracks.first);
-        } catch (e) {
-          logger.w('[call][sfu] video slot $mid replaceTrack failed: $e');
-        }
+      if (mid == slots.camera) {
+        _videoSender =
+            await _claimSendSlot(transceiver, _cameraStream) ?? _videoSender;
+      } else if (mid == slots.screen) {
+        _screenSender =
+            await _claimSendSlot(transceiver, _screenStream) ?? _screenSender;
       }
-      try {
-        await transceiver.setDirection(TransceiverDirection.SendOnly);
-      } catch (e) {
-        logger.w('[call][sfu] video slot $mid setDirection failed: $e');
-        continue;
-      }
-      _videoSender = transceiver.sender;
-      logger.i('[call][sfu] video slot mid=$mid -> sendonly');
-      return;
     }
+  }
+
+  Future<RTCRtpSender?> _claimSendSlot(
+    RTCRtpTransceiver transceiver,
+    MediaStream? source,
+  ) async {
+    final mid = transceiver.mid;
+    final tracks = source?.getVideoTracks() ?? const <MediaStreamTrack>[];
+    if (tracks.isNotEmpty) {
+      try {
+        await transceiver.sender.replaceTrack(tracks.first);
+      } catch (e) {
+        logger.w('[call][sfu] video slot $mid replaceTrack failed: $e');
+      }
+    }
+    try {
+      await transceiver.setDirection(TransceiverDirection.SendOnly);
+    } catch (e) {
+      logger.w('[call][sfu] video slot $mid setDirection failed: $e');
+      return null;
+    }
+    logger.i('[call][sfu] video slot mid=$mid -> sendonly');
+    return transceiver.sender;
   }
 
   Future<void> _closeSfuChannels() async {
     _layoutDebounce?.cancel();
     _layoutDebounce = null;
-    await _sfuSlotSub?.cancel();
-    _sfuSlotSub = null;
     await _sfuLevelSub?.cancel();
     _sfuLevelSub = null;
-    await _sfuCommands?.dispose();
-    _sfuCommands = null;
+    await _sfuNotifications?.dispose();
+    _sfuNotifications = null;
+    await _sfuScreenFrameSub?.cancel();
+    _sfuScreenFrameSub = null;
+    await _sfuScreenEndSub?.cancel();
+    _sfuScreenEndSub = null;
+    await _sfuScreen?.dispose();
+    _sfuScreen = null;
+    _screenOut = null;
+    _remoteScreens.reset();
+    _screenProbe?.close();
+    _screenProbe = null;
     _slotParticipant.clear();
+    _slotBytes.clear();
+    _slotIdle.clear();
+    _layoutCameras = const [];
     _lastLayout = const [];
     _layoutSent = false;
     final channels = List<RTCDataChannel>.from(_sfuChannels);
@@ -1411,6 +1609,7 @@ class CallSession {
 
   // #***! переход в SFU, пересобираем соединение под сервер микшер
   Future<void> _setupSfu() async {
+    await _resetRemoteStream();
     if (_pc != null) {
       await _closeSfuChannels();
       await _pc!.close();
@@ -1484,13 +1683,6 @@ class CallSession {
         _videoSender = await pc.addTrack(tracks.first, camera);
       }
     }
-    final screen = _screenStream;
-    if (screen != null) {
-      final tracks = screen.getVideoTracks();
-      if (tracks.isNotEmpty) {
-        _screenSender = await pc.addTrack(tracks.first, screen);
-      }
-    }
   }
 
   // #***! сервер сменил топологию
@@ -1503,6 +1695,11 @@ class CallSession {
     _topology = topo;
     _notifyInfo();
     if (switchingToSfu) await _setupSfu();
+    if (topo == 'SERVER') {
+      final waiter = _serverTopologyWaiter;
+      _serverTopologyWaiter = null;
+      if (waiter != null && !waiter.isCompleted) waiter.complete();
+    }
   }
 
   // #***! сервер сказал про новый чужой поток
@@ -1539,6 +1736,7 @@ class CallSession {
     }
 
     final ssrcs = _extractSsrcs(sdp);
+    _offerSsrcByMid = _firstSsrcByMid(sdp);
     logger.i(
       '[call][sfu] producer offer: ${_mLines(sdp)} m-lines, '
       'ssrcs=${ssrcs.length}, candidates=${_countCandidates(sdp)} '
@@ -1550,7 +1748,7 @@ class CallSession {
     _remoteDescSet = true;
     await _flushCandidates();
     await _addRemoteCandidatesFromSdp(pc, sdp);
-    await _prepareVideoSlot(pc, sdp);
+    await _prepareSendSlots(pc, sdp);
 
     final answer = await pc.createAnswer({});
     if (_pc != pc) return;
@@ -1611,6 +1809,17 @@ class CallSession {
       }
       unawaited(_dumpVideoStats(pc));
     });
+    _slotProbeTimer?.cancel();
+    _slotProbeTimer = Timer.periodic(_slotProbeEvery, (t) {
+      if (_pc != pc || _ended) {
+        t.cancel();
+        return;
+      }
+      if (_cameraOpening) return;
+      if (_layoutCameras.isNotEmpty || _slotParticipant.isNotEmpty) {
+        unawaited(_refreshVideoSlots());
+      }
+    });
 
     if (_accepted) await _sendMediaSettings();
     unawaited(_collectReceivers());
@@ -1662,36 +1871,55 @@ class CallSession {
 
   Future<void> _dumpVideoStats(RTCPeerConnection pc) async {
     try {
-      final rows = <String>[];
-      for (final r in await pc.getStats()) {
-        if (r.type != 'inbound-rtp') continue;
-        final v = r.values;
-        if (v['kind'] != 'video' && v['mediaType'] != 'video') continue;
-        rows.add(
-          '[ssrc=${v['ssrc']} bytes=${v['bytesReceived']} '
-          'packets=${v['packetsReceived']} decoded=${v['framesDecoded']} '
-          '${v['frameWidth']}x${v['frameHeight']}]',
-        );
+      final slotBySsrc = <String, String>{};
+      for (final tr in await pc.getTransceivers()) {
+        final ssrc = _offerSsrcByMid[tr.mid];
+        final trackId = tr.receiver.track?.id;
+        if (ssrc != null && trackId != null) slotBySsrc[ssrc] = trackId;
       }
+      final reports = await pc.getStats();
+      final codecs = <String, String>{
+        for (final r in reports)
+          if (r.type == 'codec') r.id: '${r.values['mimeType']}',
+      };
+      final inbound = <String>[];
+      final outbound = <String>[];
       var transportBytes = 0;
       var audioBytes = 0;
-      for (final r in await pc.getStats()) {
+      for (final r in reports) {
         final v = r.values;
+        final isVideo = v['kind'] == 'video' || v['mediaType'] == 'video';
+        final codec = codecs[v['codecId']] ?? '-';
         if (r.type == 'transport') {
           final b = v['bytesReceived'];
           if (b is num) transportBytes += b.toInt();
-        } else if (r.type == 'inbound-rtp' &&
-            (v['kind'] == 'audio' || v['mediaType'] == 'audio')) {
+        } else if (r.type == 'inbound-rtp' && !isVideo) {
           final b = v['bytesReceived'];
           if (b is num) audioBytes += b.toInt();
+        } else if (r.type == 'inbound-rtp') {
+          inbound.add(
+            '[${slotBySsrc['${v['ssrc']}'] ?? '?'} '
+            'ssrc=${v['ssrc']} $codec bytes=${v['bytesReceived']} '
+            'packets=${v['packetsReceived']} decoded=${v['framesDecoded']} '
+            '${v['frameWidth']}x${v['frameHeight']}]',
+          );
+        } else if (r.type == 'outbound-rtp' && isVideo) {
+          outbound.add(
+            '[ssrc=${v['ssrc']} $codec bytes=${v['bytesSent']} '
+            'encoded=${v['framesEncoded']} '
+            '${v['frameWidth']}x${v['frameHeight']} '
+            'limit=${v['qualityLimitationReason']}]',
+          );
         }
       }
+      final tag = _topology == 'SERVER' ? '[call][sfu]' : '[call][p2p]';
       logger.i(
-        '[call][sfu] inbound video: ${rows.join(' ')} '
+        '$tag inbound video: ${inbound.join(' ')} '
+        '| outbound video: ${outbound.join(' ')} '
         '| transport=$transportBytes audio=$audioBytes',
       );
     } catch (e) {
-      logger.w('[call][sfu] video stats failed: $e');
+      logger.w('[call] video stats failed: $e');
     }
   }
 
@@ -1832,6 +2060,23 @@ class CallSession {
     return rows.join(' ');
   }
 
+  Map<String, String> _firstSsrcByMid(String sdp) {
+    final result = <String, String>{};
+    String? mid;
+    for (var line in sdp.split('\n')) {
+      line = line.trim();
+      if (line.startsWith('m=')) {
+        mid = null;
+      } else if (line.startsWith('a=mid:')) {
+        mid = line.substring(6);
+      } else if (mid != null && !result.containsKey(mid)) {
+        final ssrc = RegExp(r'^a=ssrc:(\d+)').firstMatch(line)?.group(1);
+        if (ssrc != null) result[mid] = ssrc;
+      }
+    }
+    return result;
+  }
+
   List<String> _extractSsrcs(String sdp) {
     final set = <String>{};
     for (final m in RegExp(r'a=ssrc:(\d+)', multiLine: true).allMatches(sdp)) {
@@ -1890,19 +2135,41 @@ class CallSession {
     return mline == null ? 'НЕТ m=video' : '$mline -> $dir';
   }
 
-  // #***! пришла чужая дорожка
+  // #***! чужие дорожки всегда в своём потоке: рендерер на десктопе ищет поток по id и может взять наш локальный
   Future<void> _onRemoteTrack(RTCTrackEvent event) async {
     logger.t(
       '[call] remote track: ${event.track.kind} id=${event.track.id} '
-      'streams=${event.streams.length}',
+      'streams=${event.streams.map((s) => s.id).toList()} '
+      'local=${_localStream?.id}',
     );
     await _bindParticipantTrack(event.track);
-    if (event.streams.isNotEmpty) {
-      _remoteStreamRef = event.streams.first;
-      _remoteStream.add(event.streams.first);
-    } else {
-      await _collectReceivers();
-    }
+    _scheduleCollectReceivers();
+  }
+
+  // #***! SFU отдаёт сразу пачку дорожек, обходим приёмники один раз на пачку
+  void _scheduleCollectReceivers() {
+    _collectDebounce?.cancel();
+    _collectDebounce = Timer(
+      const Duration(milliseconds: 50),
+      () => unawaited(_collectReceivers()),
+    );
+  }
+
+  // #***! в SFU приёмных видеослотов десять, в общий поток кладём только привязанные к участникам
+  bool _belongsToRemoteStream(MediaStreamTrack track) =>
+      _topology != 'SERVER' ||
+      track.kind == 'audio' ||
+      _participantFromTrackId(track.id) != null;
+
+  Future<void> _resetRemoteStream() async {
+    final stream = _remoteStreamRef;
+    final own = _ownRemoteStream;
+    _remoteStreamRef = null;
+    _ownRemoteStream = false;
+    if (!own || stream == null) return;
+    try {
+      await stream.dispose();
+    } catch (_) {}
   }
 
   int? _participantFromTrackId(String? trackId) {
@@ -1983,7 +2250,7 @@ class CallSession {
         if (track != null) {
           logger.t('[call] receiver track: ${track.kind} id=${track.id}');
           await _bindParticipantTrack(track);
-          await _pushRemoteTrack(track);
+          if (_belongsToRemoteStream(track)) await _pushRemoteTrack(track);
         }
       }
     } catch (_) {}
@@ -1998,7 +2265,9 @@ class CallSession {
     final offer = await pc.createOffer(iceRestart ? {'iceRestart': true} : {});
     final sdp = offer.sdp ?? '';
     await pc.setLocalDescription(RTCSessionDescription(sdp, offer.type));
-    logger.t('[call] our offer video: ${_videoDir(sdp)}');
+    logger.t(
+      '[call] our offer video: ${_videoDir(sdp)} codecs=[${_videoCodecs(sdp)}]',
+    );
     await _signaling?.transmitSdp(
       participantId: peerId,
       participantType: _peerType,
@@ -2014,6 +2283,24 @@ class CallSession {
       defaultTargetPlatform == TargetPlatform.macOS;
 
   // #***! на десктопе форсим VP8, аппаратный H.264 там часто битый
+  String _iceUfrag(String sdp) =>
+      RegExp(
+        r'^a=ice-ufrag:(\S+)',
+        multiLine: true,
+      ).firstMatch(sdp)?.group(1) ??
+      '-';
+
+  void _startP2pStats(RTCPeerConnection pc) {
+    _videoStatsTimer?.cancel();
+    _videoStatsTimer = Timer.periodic(const Duration(seconds: 5), (t) {
+      if (_pc != pc || _ended || _topology == 'SERVER') {
+        t.cancel();
+        return;
+      }
+      unawaited(_dumpVideoStats(pc));
+    });
+  }
+
   Future<void> _preferVp8Codecs(RTCPeerConnection pc) async {
     try {
       final caps = await getRtpSenderCapabilities('video');
@@ -2050,12 +2337,21 @@ class CallSession {
       if (type == null || desc == null) return;
 
       _applyRemoteSdp(desc);
-      logger.t('[call] remote $type video: ${_videoDir(desc)}');
+      logger.t(
+        '[call] remote $type video: ${_videoDir(desc)} '
+        'codecs=[${_videoCodecs(desc)}] ufrag=${_iceUfrag(desc)}',
+      );
 
       if (type == 'answer' &&
           pc.signalingState !=
               RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
-        logger.t('[call] extra answer ignored (state=${pc.signalingState})');
+        final applied = await pc.getRemoteDescription();
+        logger.i(
+          '[call][p2p] extra answer ignored (state=${pc.signalingState}) '
+          'device=${data['deviceIdx'] ?? msg['deviceIdx']} '
+          'ufrag=${_iceUfrag(desc)} applied=${_iceUfrag(applied?.sdp ?? '')} '
+          'video=[${_videoCodecs(desc)}] m=[${_mLineDetails(desc)}]',
+        );
         return;
       }
 
@@ -2071,6 +2367,7 @@ class CallSession {
       await _flushCandidates();
 
       if (type == 'offer') {
+        await _adoptOfferedVideo(pc);
         final answer = await pc.createAnswer({});
         await pc.setLocalDescription(answer);
         logger.t('[call] our answer video: ${_videoDir(answer.sdp ?? '')}');
@@ -2172,7 +2469,7 @@ class CallSession {
     await _signaling?.acceptCall(
       isAudioEnabled: !_muted,
       isVideoEnabled: _localVideo,
-      isScreenSharingEnabled: _localScreen,
+      isScreenSharingEnabled: _screenAnnounced,
     );
     if (activate) _setState(CallSessionState.active);
   }
@@ -2194,11 +2491,13 @@ class CallSession {
     if (announce) await _sendMediaSettings();
   }
 
+  bool get _screenAnnounced => _localScreen && _topology == 'SERVER';
+
   Future<void> _sendMediaSettings() async {
     await _signaling?.changeMediaSettings(
       isAudioEnabled: !_muted,
       isVideoEnabled: _localVideo,
-      isScreenSharingEnabled: _localScreen,
+      isScreenSharingEnabled: _screenAnnounced,
     );
   }
 
@@ -2218,25 +2517,102 @@ class CallSession {
     }
   }
 
+  // #***! видео в P2P сразу sendrecv, как у оригинала: камера потом только подменяет кадры, на повторный offer он отвечает новыми ICE и звонок глохнет
+  Future<void> _addVideoTransceiver(RTCPeerConnection pc) async {
+    final existing = await _negotiableVideoSender(pc);
+    if (existing != null) {
+      _videoSender = existing;
+      return;
+    }
+    final local = _localStream;
+    final transceiver = await pc.addTransceiver(
+      kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+      init: RTCRtpTransceiverInit(
+        direction: TransceiverDirection.SendRecv,
+        streams: [?local],
+      ),
+    );
+    _videoSender = transceiver.sender;
+  }
+
+  Future<void> _adoptOfferedVideo(RTCPeerConnection pc) async {
+    if (_topology == 'SERVER') return;
+    if (await _negotiableVideoSender(pc) != null) return;
+    final transceivers = await pc.getTransceivers();
+    final offered = transceivers
+        .where((t) => t.mid.isNotEmpty && t.receiver.track?.kind == 'video')
+        .firstOrNull;
+    if (offered == null) return;
+    await offered.setDirection(TransceiverDirection.SendRecv);
+    final local = _localStream;
+    if (local != null) await offered.sender.setStreams([local]);
+    final camera = _cameraStream?.getVideoTracks().firstOrNull;
+    if (camera != null) await offered.sender.replaceTrack(camera);
+    _videoSender = offered.sender;
+  }
+
+  Future<RTCRtpSender?> _negotiableVideoSender(RTCPeerConnection pc) async {
+    final known = _videoSender?.senderId;
+    for (final t in await pc.getTransceivers()) {
+      final sender = t.sender;
+      if (known != null
+          ? sender.senderId == known
+          : sender.track?.kind == 'video') {
+        return sender;
+      }
+    }
+    return null;
+  }
+
+  Future<bool> _videoNegotiatedForSending(RTCPeerConnection pc) async {
+    final sender = _videoSender;
+    if (sender == null) return false;
+    for (final t in await pc.getTransceivers()) {
+      if (t.sender.senderId != sender.senderId) continue;
+      final direction = await t.getCurrentDirection();
+      return direction == TransceiverDirection.SendRecv ||
+          direction == TransceiverDirection.SendOnly;
+    }
+    return false;
+  }
+
   // #***! включение камеры
   Future<void> switchCamera() async {
     if (!_localVideo || _pc == null) return;
     final cameras = await CameraDevices.cameras();
     if (cameras.length < 2) return;
-    final currentId = _cameraStream?.getVideoTracks().firstOrNull?.getSettings()['deviceId'];
+    final currentId = _cameraStream
+        ?.getVideoTracks()
+        .firstOrNull
+        ?.getSettings()['deviceId'];
     final current = cameras.where((c) => c.id == currentId).firstOrNull;
-    final next = cameras.where((c) => c.id != currentId && c.facing != current?.facing).firstOrNull ??
-        cameras.firstWhere((c) => c.id != currentId, orElse: () => cameras.first);
+    final next =
+        cameras
+            .where((c) => c.id != currentId && c.facing != current?.facing)
+            .firstOrNull ??
+        cameras.firstWhere(
+          (c) => c.id != currentId,
+          orElse: () => cameras.first,
+        );
     await _startCamera(deviceId: next.id);
   }
+
   Future<void> _startCamera({String? deviceId}) async {
     final pc = _pc;
     if (pc == null) return;
 
-    final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
-      'video': CameraDevices.constraints(deviceId ?? AppCamera.deviceId),
-      'audio': false,
-    });
+    final opening = Stopwatch()..start();
+    _cameraOpening = true;
+    final MediaStream stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+        'video': CameraDevices.constraints(deviceId ?? AppCamera.deviceId),
+        'audio': false,
+      });
+    } finally {
+      _cameraOpening = false;
+    }
+    logger.i('[call] camera opened in ${opening.elapsedMilliseconds} ms');
 
     await _disposeStream(_cameraStream);
     _cameraStream = stream;
@@ -2252,7 +2628,11 @@ class CallSession {
     }
 
     _localVideo = true;
-    await _renegotiate();
+    if (await _videoNegotiatedForSending(pc)) {
+      logger.i('[call] camera on without renegotiation');
+    } else {
+      await _renegotiate();
+    }
     await _sendMediaSettings();
     _notifyInfo();
   }
@@ -2268,52 +2648,79 @@ class CallSession {
     _notifyInfo();
   }
 
-  // #***! демонстрация экрана, на мобилках нужно своё разрешение
+  // #***! демонстрация экрана, как у оригинала только в серверной топологии, в слот сервера
   Future<void> _startScreenShare() async {
     if (_pc == null) return;
 
-    await CallBridge.instance.setScreenShare(true);
-
-    _localScreen = true;
-    await _sendMediaSettings();
-    _notifyInfo();
-
-    final MediaStream stream;
+    final MediaStream? stream;
     try {
       stream = await _captureScreen();
     } catch (e) {
-      _localScreen = false;
       await CallBridge.instance.setScreenShare(false);
-      await _sendMediaSettings();
-      _notifyInfo();
       rethrow;
     }
+    if (stream == null) return;
     logger.i('[call] screen captured, topology=$_topology');
 
     await _disposeStream(_screenStream);
     _screenStream = stream;
+    _localScreen = true;
+    _notifyInfo();
 
-    final pc = _pc;
-    if (pc == null) return;
-
-    final tracks = stream.getVideoTracks();
-    final track = tracks.isEmpty ? null : tracks.first;
-    if (track != null) {
-      if (_screenSender == null) {
-        _screenSender = await pc.addTrack(track, stream);
-      } else {
-        await _screenSender!.replaceTrack(track);
+    if (_topology != 'SERVER') {
+      try {
+        await _awaitServerTopology();
+      } catch (e) {
+        logger.w('[call] screen share: server topology refused: $e');
+        await _stopScreenShare();
+        throw StateError('сервер не перевёл звонок в режим демонстрации');
       }
     }
 
+    if (!await _startScreenPipeline()) {
+      await _stopScreenShare();
+      throw StateError('отправка экрана на этом устройстве недоступна');
+    }
+
     logger.i('[call] screen share published, topology=$_topology');
-    await _renegotiate();
     await _sendMediaSettings();
     _notifyInfo();
   }
 
-  Future<MediaStream> _captureScreen() async {
+  Future<bool> _startScreenPipeline() async {
+    final track = _screenStream?.getVideoTracks().firstOrNull;
+    if (track == null) return false;
+    if (_screenPipeline != null) return true;
+    final pipeline = await ScreenSharePipeline.start(track, () => _screenOut);
+    if (pipeline == null) return false;
+    if (!_localScreen ||
+        _screenStream?.getVideoTracks().firstOrNull?.id != track.id) {
+      await pipeline.stop();
+      return true;
+    }
+    _screenPipeline = pipeline;
+    return true;
+  }
+
+  Future<void> _stopScreenPipeline() async {
+    final pipeline = _screenPipeline;
+    _screenPipeline = null;
+    await pipeline?.stop();
+  }
+
+  Future<void> _awaitServerTopology() async {
+    final waiter = _serverTopologyWaiter ??= Completer<void>();
+    await _signaling?.switchTopology();
+    await waiter.future.timeout(const Duration(seconds: 10));
+  }
+
+  // #***! на Android 14+ foreground с типом mediaProjection можно поднять только после согласия
+  Future<MediaStream?> _captureScreen() async {
     if (!_isDesktop) {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        if (!await Helper.requestCapturePermission()) return null;
+        await CallBridge.instance.setScreenShare(true);
+      }
       return navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
         'video': true,
         'audio': false,
@@ -2335,6 +2742,7 @@ class CallSession {
   }
 
   Future<void> _stopScreenShare() async {
+    await _stopScreenPipeline();
     try {
       await _screenSender?.replaceTrack(null);
     } catch (_) {}
@@ -2412,18 +2820,22 @@ class CallSession {
   // #***! освобождаем всё, соединение дорожки подписки стримы
   Future<void> _dispose() async {
     _levelTimer?.cancel();
+    _collectDebounce?.cancel();
+    _slotProbeTimer?.cancel();
     _videoStatsTimer?.cancel();
     try {
       await _probeChannel?.close();
     } catch (_) {}
     _probeChannel = null;
     await _closeSfuChannels();
+    await _remoteScreens.dispose();
     for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
       await track.stop();
     }
     await _localStream?.dispose();
     await _disposeMicStream();
     await PulseAudio.closeBridge();
+    await _stopScreenPipeline();
     await _disposeStream(_cameraStream);
     await _disposeStream(_screenStream);
     _cameraStream = null;
@@ -2493,7 +2905,7 @@ class CallSession {
   void _applyPeerMedia(Map<String, dynamic> msg) {
     final ms = msg['mediaSettings'];
     if (ms is! Map) return;
-    final pid = msg['participantId'];
+    final pid = _participantIdFrom(msg['participantId']);
     if (_peerId != null && pid != null && pid != _peerId) return;
 
     final muted = ms['isAudioEnabled'] != true;
