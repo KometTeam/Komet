@@ -7,6 +7,7 @@ import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/utils/logger.dart';
 import 'account_base.dart';
 import 'account_models.dart';
 
@@ -14,12 +15,11 @@ import 'account_models.dart';
 class PrivacyModule extends AccountApiBase {
   PrivacyModule(super.api);
 
-  static const String _defaultPushSound = 'oki.aiff';
-
   final ValueNotifier<String?> doubleTapReaction = ValueNotifier(
     PrivacyConfig.defaultDoubleTapReaction,
   );
   int _configRevision = 0;
+  Future<void> _localQueue = Future.value();
 
   Future<void> restoreDoubleTapReaction() async {
     final revision = _configRevision;
@@ -33,8 +33,42 @@ class PrivacyModule extends AccountApiBase {
     int accountId,
     Map<dynamic, dynamic> user,
   ) async {
-    await AppDatabase.savePrivacyConfig(accountId, jsonEncode(user));
-    _publish(PrivacyConfig.fromMap(user));
+    _publish(await _mergeAndSave(accountId, user));
+  }
+
+  Future<PrivacyConfig> _mergeAndSave(
+    int accountId,
+    Map<dynamic, dynamic> user,
+  ) async {
+    final merged = <String, dynamic>{
+      ..._decodeStored(await AppDatabase.getPrivacyConfig(accountId)),
+      for (final entry in user.entries) entry.key.toString(): entry.value,
+      ...await _loadOverrides(accountId),
+    };
+    await AppDatabase.savePrivacyConfig(accountId, jsonEncode(merged));
+    return PrivacyConfig.fromMap(merged);
+  }
+
+  Future<Map<String, dynamic>> _loadOverrides(int accountId) async =>
+      _decodeStored(
+        await AppDatabase.getSyncValue(accountId, SyncKey.privacyOverrides),
+      );
+
+  Future<void> _saveOverrides(int accountId, Map<String, dynamic> overrides) =>
+      AppDatabase.setSyncValue(
+        accountId,
+        SyncKey.privacyOverrides,
+        jsonEncode(overrides),
+      );
+
+  Map<String, dynamic> _decodeStored(String? json) {
+    if (json == null) return const {};
+    try {
+      final decoded = jsonDecode(json);
+      return decoded is Map<String, dynamic> ? decoded : const {};
+    } catch (_) {
+      return const {};
+    }
   }
 
   void _publish(PrivacyConfig config) {
@@ -73,21 +107,68 @@ class PrivacyModule extends AccountApiBase {
   Future<PrivacyConfig> updatePrivacyConfig(
     Map<String, dynamic> settings,
   ) async {
+    final user = await _sendSettings(settings);
+    final accountId = await TokenStorage.getActiveAccountId();
+    final config = accountId == null
+        ? PrivacyConfig.fromMap(user)
+        : await _mergeAndSave(accountId, user);
+    _publish(config);
+    return config;
+  }
+
+  Future<Map<dynamic, dynamic>> _sendSettings(
+    Map<String, dynamic> settings, {
+    bool silent = false,
+  }) async {
     ensureOnline();
-    final payload = <dynamic, dynamic>{
+    final packet = await api.sendRequest(Opcode.config, <dynamic, dynamic>{
       'settings': {'user': settings},
-    };
-    final packet = await api.sendRequest(Opcode.config, payload);
+    }, silent: silent);
     final data = requireMapPayload(packet, 'updatePrivacyConfig');
     final user = data['user'];
     if (user is! Map) {
       throw Exception('updatePrivacyConfig: отсутствует user в payload');
     }
-    final config = PrivacyConfig.fromMap(user.cast<dynamic, dynamic>());
+    return user;
+  }
+
+  Future<PrivacyConfig> _applyLocally(Map<String, dynamic> settings) {
+    final run = _localQueue.then((_) => _applyLocallyNow(settings));
+    _localQueue = run.then((_) {}, onError: (_) {});
+    return run;
+  }
+
+  Future<PrivacyConfig> _applyLocallyNow(Map<String, dynamic> settings) async {
     final accountId = await TokenStorage.getActiveAccountId();
-    if (accountId != null) {
-      await AppDatabase.savePrivacyConfig(accountId, config.toJson());
+    if (accountId == null) return PrivacyConfig.empty();
+
+    await _saveOverrides(accountId, {
+      ...await _loadOverrides(accountId),
+      ...settings,
+    });
+    var config = await _mergeAndSave(accountId, const {});
+    _publish(config);
+
+    final Map<dynamic, dynamic> user;
+    try {
+      user = await _sendSettings(settings, silent: true);
+    } catch (e) {
+      final reason = e is PacketError ? e.errorKey ?? e.message : e;
+      logger.w(
+        'Настройки ${settings.keys.join(', ')} остались локальными: $reason',
+      );
+      return config;
     }
+
+    final overrides = await _loadOverrides(accountId);
+    overrides.removeWhere(
+      (key, value) =>
+          settings.containsKey(key) &&
+          value == settings[key] &&
+          user[key] == value,
+    );
+    await _saveOverrides(accountId, overrides);
+    config = await _mergeAndSave(accountId, user);
     _publish(config);
     return config;
   }
@@ -117,23 +198,23 @@ class PrivacyModule extends AccountApiBase {
   );
 
   // #***! дальше по методу на каждый переключатель
-  Future<PrivacyConfig> setChatsPushNotification(bool value) =>
-      updatePrivacyConfig({'CHATS_PUSH_NOTIFICATION': value ? 'ON' : 'OFF'});
+  Future<PrivacyConfig> setDialogsPushNotification(String mode) =>
+      _applyLocally({'DIALOGS_PUSH_NOTIFICATION': mode});
+
+  Future<PrivacyConfig> setChatsPushNotification(String mode) =>
+      _applyLocally({'CHATS_PUSH_NOTIFICATION': mode});
 
   Future<PrivacyConfig> setMessagePreview(bool value) =>
-      updatePrivacyConfig({'PUSH_DETAILS': value});
+      _applyLocally({'PUSH_DETAILS': value});
 
-  Future<PrivacyConfig> setNotificationSound(bool value) =>
-      updatePrivacyConfig({
-        'PUSH_SOUND': value ? _defaultPushSound : '',
-        'CHATS_PUSH_SOUND': value ? _defaultPushSound : '',
-      });
-
-  Future<PrivacyConfig> setCallNotifications(bool value) =>
-      updatePrivacyConfig({'M_CALL_PUSH_NOTIFICATION': value ? 'ON' : 'OFF'});
+  Future<PrivacyConfig> setCallNotifications(bool value) => _applyLocally({
+    'M_CALL_PUSH_NOTIFICATION': value
+        ? PrivacyConfig.pushOn
+        : PrivacyConfig.pushOff,
+  });
 
   Future<PrivacyConfig> setNewContacts(bool value) =>
-      updatePrivacyConfig({'PUSH_NEW_CONTACTS': value});
+      _applyLocally({'PUSH_NEW_CONTACTS': value});
 
   // #***! регистрация push токена, ловим протухший FCM
   Future<void> registerPushToken(String pushToken) async {

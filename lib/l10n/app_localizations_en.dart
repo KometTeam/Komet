@@ -729,18 +729,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Push notifications are not available on iOS yet.';
 
   @override
-  String get notificationsTitle => 'Notifications';
-
-  @override
-  String get notificationsFkmSectionTitle =>
-      'Notifications without Google (FKM)';
+  String get notificationsTitle => 'Notifications and sound';
 
   @override
   String get notificationsFkmEnableLabel => 'Enable notifications';
-
-  @override
-  String get notificationsFkmEnableSubtitle =>
-      'Komet keeps its own connection to the server and shows notifications itself. A service notification will stay in the shade while this is on.';
 
   @override
   String get notificationsFkmUnsupported => 'FKM is Android-only';
@@ -767,28 +759,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Notifications will arrive over the app’s own background connection, and a permanent service notification will stay in the shade. You can turn FKM off right from it.';
 
   @override
-  String get notificationsMainSectionTitle => 'Notifications';
+  String get notificationsAllLabel => 'Enable all notifications';
 
   @override
-  String get notificationsAllLabel => 'All notifications';
-
-  @override
-  String get notificationsNewSectionTitle => 'New notifications';
-
-  @override
-  String get notificationsPreviewLabel => 'Message preview';
-
-  @override
-  String get notificationsSoundLabel => 'Sound';
-
-  @override
-  String get notificationsAdditionalSectionTitle => 'Additional';
+  String get notificationsPreviewLabel =>
+      'Show content in system notifications';
 
   @override
   String get notificationsCallsLabel => 'Call notifications';
 
   @override
-  String get notificationsNewContactsLabel => 'Notifications from new contacts';
+  String get notificationsNewContactsLabel => 'Notify when contacts sign up';
 
   @override
   String get notificationsHapticsSectionTitle => 'Haptic feedback';
@@ -799,6 +780,50 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationsHapticsSubtitle =>
       'Vibration feedback for actions in the app';
+
+  @override
+  String get notificationsNetworkSectionTitle =>
+      'When the network is restricted';
+
+  @override
+  String get notificationsBackgroundLabel => 'Run in background';
+
+  @override
+  String get notificationsBackgroundSubtitle =>
+      'Stay connected when the internet is unreliable';
+
+  @override
+  String get notificationsBatteryLabel => 'Battery saving';
+
+  @override
+  String get notificationsBatterySubtitle => 'May block notifications';
+
+  @override
+  String get notificationsDialogsLabel => 'Private chats';
+
+  @override
+  String get notificationsGroupsLabel => 'Groups';
+
+  @override
+  String get notificationsOtherLabel => 'Other notifications';
+
+  @override
+  String get notificationsSystemLabel => 'Settings';
+
+  @override
+  String get notificationsSystemSubtitle => 'Sounds, vibration, importance';
+
+  @override
+  String get notificationsModeOn => 'On';
+
+  @override
+  String get notificationsModeOff => 'Off';
+
+  @override
+  String get notificationsModeReplies => 'Replies and mentions';
+
+  @override
+  String get notificationsAndroidOnly => 'Available on Android only';
 
   @override
   String devicesLoadFailed(String error) {
@@ -3509,10 +3534,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get linkQrUnavailable => 'Couldn\'t get the link';
-
-  @override
-  String get notificationsDesktopNote =>
-      'Notifications aren\'t shown on the computer yet. The settings below are your account\'s push settings for phones.';
 
   @override
   String get fileNoAppToOpen =>

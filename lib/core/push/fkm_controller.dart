@@ -220,10 +220,8 @@ class FkmController {
     if (accountId == null) return;
 
     final rawConfig = await AppDatabase.getPrivacyConfig(accountId);
-    if (rawConfig != null) {
-      final config = PrivacyConfig.fromJson(rawConfig);
-      if (config.chatsPushNotification != 'ON') return;
-      if (!config.pushDetails) return;
+    if (rawConfig != null && !PrivacyConfig.fromJson(rawConfig).pushDetails) {
+      return;
     }
 
     final text = _previewText(msg);
@@ -247,17 +245,18 @@ class FkmController {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null || senderId == accountId) return null;
 
-    final rawConfig = await AppDatabase.getPrivacyConfig(accountId);
-    var showPreview = true;
-    if (rawConfig != null) {
-      final config = PrivacyConfig.fromJson(rawConfig);
-      if (config.chatsPushNotification != 'ON') return null;
-      showPreview = config.pushDetails;
-    }
-
     final rows = await AppDatabase.loadChat(accountId, chatId);
     final chat = rows.isEmpty ? null : CachedChat.fromDbRow(rows.first);
     if (chat != null && chat.isMuted) return null;
+
+    final rawConfig = await AppDatabase.getPrivacyConfig(accountId);
+    final config = rawConfig == null
+        ? null
+        : PrivacyConfig.fromJson(rawConfig);
+    if (config != null && !_pushAllowed(config, chat, msg, accountId)) {
+      return null;
+    }
+    final showPreview = config?.pushDetails ?? true;
 
     final senderName =
         ContactCache.get(senderId) ?? chat?.title ?? _fallbackSender;
@@ -282,6 +281,30 @@ class FkmController {
       'ctime': '${time is int ? time : DateTime.now().millisecondsSinceEpoch}',
       if (msgId != null) 'msgid': '$msgId',
     };
+  }
+
+  bool _pushAllowed(
+    PrivacyConfig config,
+    CachedChat? chat,
+    Map<dynamic, dynamic> msg,
+    int accountId,
+  ) {
+    if (chat == null || chat.type == 'DIALOG') {
+      return config.dialogsPushNotification != PrivacyConfig.pushOff;
+    }
+    return switch (config.chatsPushNotification) {
+      PrivacyConfig.pushOff => false,
+      PrivacyConfig.pushReplies =>
+        _repliesTo(msg, accountId) || messageMentionsUser(msg, accountId),
+      _ => true,
+    };
+  }
+
+  bool _repliesTo(Map<dynamic, dynamic> msg, int accountId) {
+    final link = msg['link'];
+    if (link is! Map || link['type']?.toString() != 'REPLY') return false;
+    final replied = link['message'];
+    return replied is Map && replied['sender'] == accountId;
   }
 
   // #***! текст превью, для вложений их описание

@@ -110,14 +110,14 @@ class AccountModule {
   Future<PrivacyConfig> setDoubleTapReaction(String? emoji) =>
       _privacy.setDoubleTapReaction(emoji);
 
-  Future<PrivacyConfig> setChatsPushNotification(bool value) =>
-      _privacy.setChatsPushNotification(value);
+  Future<PrivacyConfig> setDialogsPushNotification(String mode) =>
+      _privacy.setDialogsPushNotification(mode);
+
+  Future<PrivacyConfig> setChatsPushNotification(String mode) =>
+      _privacy.setChatsPushNotification(mode);
 
   Future<PrivacyConfig> setMessagePreview(bool value) =>
       _privacy.setMessagePreview(value);
-
-  Future<PrivacyConfig> setNotificationSound(bool value) =>
-      _privacy.setNotificationSound(value);
 
   Future<PrivacyConfig> setCallNotifications(bool value) =>
       _privacy.setCallNotifications(value);

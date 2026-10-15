@@ -75,11 +75,16 @@ class KometNotifier(private val ctx: Context) {
     private data class ChatMeta(val title: String, val account: Int, val group: Boolean)
 
     fun handle(data: Map<String, String>) {
-        when (data["type"]) {
-            "InboundCall" -> CallNotifier.showIncoming(ctx, data)
-            "CallFinished" -> CallNotifier.finishCall(ctx, data)
-            else -> showMessage(data)
+        val type = data["type"]
+        if (type == "CallFinished") {
+            CallNotifier.finishCall(ctx, data)
+            return
         }
+        if (!ChatNotifications.enabled(ctx)) {
+            Log.d("KometFcm", "push dropped: notifications disabled in settings")
+            return
+        }
+        if (type == "InboundCall") CallNotifier.showIncoming(ctx, data) else showMessage(data)
     }
 
     private fun manager(): NotificationManager =

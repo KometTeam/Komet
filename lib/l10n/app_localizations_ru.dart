@@ -732,17 +732,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'На iOS пуш-уведомления пока недоступны';
 
   @override
-  String get notificationsTitle => 'Уведомления';
-
-  @override
-  String get notificationsFkmSectionTitle => 'Уведомления без Google (FKM)';
+  String get notificationsTitle => 'Уведомления и звук';
 
   @override
   String get notificationsFkmEnableLabel => 'Включить уведомления';
-
-  @override
-  String get notificationsFkmEnableSubtitle =>
-      'Komet сам держит соединение с сервером и показывает уведомления. Пока это включено, в шторке висит служебное уведомление.';
 
   @override
   String get notificationsFkmUnsupported => 'FKM работает только на Android';
@@ -769,28 +762,18 @@ class AppLocalizationsRu extends AppLocalizations {
       'Уведомления начнут приходить через собственное фоновое соединение, а в шторке будет постоянно висеть уведомление сервиса. Выключить FKM можно прямо в нём.';
 
   @override
-  String get notificationsMainSectionTitle => 'Уведомления';
+  String get notificationsAllLabel => 'Включить все уведомления';
 
   @override
-  String get notificationsAllLabel => 'Все уведомления';
-
-  @override
-  String get notificationsNewSectionTitle => 'Все новые уведомления';
-
-  @override
-  String get notificationsPreviewLabel => 'Предпросмотр сообщений';
-
-  @override
-  String get notificationsSoundLabel => 'Звук';
-
-  @override
-  String get notificationsAdditionalSectionTitle => 'Дополнительно';
+  String get notificationsPreviewLabel =>
+      'Показывать содержимое в системных уведомлениях';
 
   @override
   String get notificationsCallsLabel => 'Уведомления о звонках';
 
   @override
-  String get notificationsNewContactsLabel => 'Уведомления от новых контактов';
+  String get notificationsNewContactsLabel =>
+      'Уведомление о регистрации контактов';
 
   @override
   String get notificationsHapticsSectionTitle => 'Тактильная отдача';
@@ -801,6 +784,50 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get notificationsHapticsSubtitle =>
       'Виброотклик при действиях в приложении';
+
+  @override
+  String get notificationsNetworkSectionTitle =>
+      'Настройки при ограничениях сети';
+
+  @override
+  String get notificationsBackgroundLabel => 'Работа в фоне';
+
+  @override
+  String get notificationsBackgroundSubtitle =>
+      'Оставайтесь на связи при перебоях интернета';
+
+  @override
+  String get notificationsBatteryLabel => 'Энергосбережение';
+
+  @override
+  String get notificationsBatterySubtitle => 'Может блокировать уведомления';
+
+  @override
+  String get notificationsDialogsLabel => 'Личные чаты';
+
+  @override
+  String get notificationsGroupsLabel => 'Группы';
+
+  @override
+  String get notificationsOtherLabel => 'Прочие уведомления';
+
+  @override
+  String get notificationsSystemLabel => 'Настройки';
+
+  @override
+  String get notificationsSystemSubtitle => 'Звуки, вибрация, важность';
+
+  @override
+  String get notificationsModeOn => 'Включено';
+
+  @override
+  String get notificationsModeOff => 'Выключено';
+
+  @override
+  String get notificationsModeReplies => 'Ответы и упоминания';
+
+  @override
+  String get notificationsAndroidOnly => 'Доступно только на Android';
 
   @override
   String devicesLoadFailed(String error) {
@@ -3527,10 +3554,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get linkQrUnavailable => 'Не удалось получить ссылку';
-
-  @override
-  String get notificationsDesktopNote =>
-      'На компьютере уведомления пока не показываются. Ниже — push-настройки аккаунта для телефонов.';
 
   @override
   String get fileNoAppToOpen =>

@@ -107,6 +107,17 @@ object FkmChannel {
                     result.success(null)
                 }
 
+                "openBatteryOptimizationSettings" -> {
+                    try {
+                        activity.startActivity(
+                            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+                        )
+                    } catch (e: Exception) {
+                        Log.w("Fkm", "battery list failed: ${e.message}")
+                    }
+                    result.success(null)
+                }
+
                 else -> result.notImplemented()
             }
         }

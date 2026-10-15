@@ -31,6 +31,7 @@ import 'core/config/app_accent.dart';
 import 'core/config/app_language.dart';
 import 'core/config/app_amoled.dart';
 import 'core/config/app_badge.dart';
+import 'core/config/app_notifications.dart';
 import 'core/config/app_show_extra_info.dart';
 import 'core/config/app_spectrum_background.dart';
 import 'core/config/app_bubble_behavior.dart';
@@ -268,6 +269,7 @@ void main(List<String> args) async {
   final showExtraInfoFuture = AppShowExtraInfo.load();
   final spectrumBackgroundFuture = AppSpectrumBackground.load();
   final badgeFuture = AppBadge.load();
+  final notificationsFuture = AppNotifications.load();
   final trafficCaptureFuture = TrafficMonitor.instance.load();
   final debugLogFuture = DebugSessionLog.instance.init();
 
@@ -284,6 +286,7 @@ void main(List<String> args) async {
   await ArchivedChatsStore.instance.load();
   await LocalContactAvatars.instance.load();
   await badgeFuture;
+  await notificationsFuture;
   await ChatEncryptionStore.instance.load();
   E2eeService.instance.attach(messagesModule);
   await KometSettings.load();

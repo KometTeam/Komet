@@ -102,6 +102,15 @@ class NotificationBridge {
     }
   }
 
+  Future<void> openSystemSettings() async {
+    if (!_android) return;
+    try {
+      await _method.invokeMethod<void>('openSystemSettings');
+    } catch (e) {
+      logger.w('NotificationBridge.openSystemSettings: $e');
+    }
+  }
+
   Future<void> dismissReadChats() async {
     if (!_android) return;
     final List<int> notified;

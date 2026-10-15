@@ -1469,26 +1469,14 @@ abstract class AppLocalizations {
   /// No description provided for @notificationsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Notifications'**
+  /// **'Notifications and sound'**
   String get notificationsTitle;
-
-  /// No description provided for @notificationsFkmSectionTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Notifications without Google (FKM)'**
-  String get notificationsFkmSectionTitle;
 
   /// No description provided for @notificationsFkmEnableLabel.
   ///
   /// In en, this message translates to:
   /// **'Enable notifications'**
   String get notificationsFkmEnableLabel;
-
-  /// No description provided for @notificationsFkmEnableSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Komet keeps its own connection to the server and shows notifications itself. A service notification will stay in the shade while this is on.'**
-  String get notificationsFkmEnableSubtitle;
 
   /// No description provided for @notificationsFkmUnsupported.
   ///
@@ -1532,41 +1520,17 @@ abstract class AppLocalizations {
   /// **'Notifications will arrive over the app’s own background connection, and a permanent service notification will stay in the shade. You can turn FKM off right from it.'**
   String get notificationsFkmConfirmMessage;
 
-  /// No description provided for @notificationsMainSectionTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Notifications'**
-  String get notificationsMainSectionTitle;
-
   /// No description provided for @notificationsAllLabel.
   ///
   /// In en, this message translates to:
-  /// **'All notifications'**
+  /// **'Enable all notifications'**
   String get notificationsAllLabel;
-
-  /// No description provided for @notificationsNewSectionTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'New notifications'**
-  String get notificationsNewSectionTitle;
 
   /// No description provided for @notificationsPreviewLabel.
   ///
   /// In en, this message translates to:
-  /// **'Message preview'**
+  /// **'Show content in system notifications'**
   String get notificationsPreviewLabel;
-
-  /// No description provided for @notificationsSoundLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Sound'**
-  String get notificationsSoundLabel;
-
-  /// No description provided for @notificationsAdditionalSectionTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Additional'**
-  String get notificationsAdditionalSectionTitle;
 
   /// No description provided for @notificationsCallsLabel.
   ///
@@ -1577,7 +1541,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationsNewContactsLabel.
   ///
   /// In en, this message translates to:
-  /// **'Notifications from new contacts'**
+  /// **'Notify when contacts sign up'**
   String get notificationsNewContactsLabel;
 
   /// No description provided for @notificationsHapticsSectionTitle.
@@ -1597,6 +1561,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Vibration feedback for actions in the app'**
   String get notificationsHapticsSubtitle;
+
+  /// No description provided for @notificationsNetworkSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'When the network is restricted'**
+  String get notificationsNetworkSectionTitle;
+
+  /// No description provided for @notificationsBackgroundLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Run in background'**
+  String get notificationsBackgroundLabel;
+
+  /// No description provided for @notificationsBackgroundSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stay connected when the internet is unreliable'**
+  String get notificationsBackgroundSubtitle;
+
+  /// No description provided for @notificationsBatteryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Battery saving'**
+  String get notificationsBatteryLabel;
+
+  /// No description provided for @notificationsBatterySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'May block notifications'**
+  String get notificationsBatterySubtitle;
+
+  /// No description provided for @notificationsDialogsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Private chats'**
+  String get notificationsDialogsLabel;
+
+  /// No description provided for @notificationsGroupsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get notificationsGroupsLabel;
+
+  /// No description provided for @notificationsOtherLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Other notifications'**
+  String get notificationsOtherLabel;
+
+  /// No description provided for @notificationsSystemLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get notificationsSystemLabel;
+
+  /// No description provided for @notificationsSystemSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sounds, vibration, importance'**
+  String get notificationsSystemSubtitle;
+
+  /// No description provided for @notificationsModeOn.
+  ///
+  /// In en, this message translates to:
+  /// **'On'**
+  String get notificationsModeOn;
+
+  /// No description provided for @notificationsModeOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get notificationsModeOff;
+
+  /// No description provided for @notificationsModeReplies.
+  ///
+  /// In en, this message translates to:
+  /// **'Replies and mentions'**
+  String get notificationsModeReplies;
+
+  /// No description provided for @notificationsAndroidOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Available on Android only'**
+  String get notificationsAndroidOnly;
 
   /// No description provided for @devicesLoadFailed.
   ///
@@ -6529,12 +6577,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t get the link'**
   String get linkQrUnavailable;
-
-  /// No description provided for @notificationsDesktopNote.
-  ///
-  /// In en, this message translates to:
-  /// **'Notifications aren\'t shown on the computer yet. The settings below are your account\'s push settings for phones.'**
-  String get notificationsDesktopNote;
 
   /// No description provided for @fileNoAppToOpen.
   ///

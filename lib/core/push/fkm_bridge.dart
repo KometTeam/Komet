@@ -79,6 +79,9 @@ class FkmBridge {
   Future<void> requestIgnoreBatteryOptimizations() =>
       _invoke<void>('requestIgnoreBatteryOptimizations');
 
+  Future<void> openBatteryOptimizationSettings() =>
+      _invoke<void>('openBatteryOptimizationSettings');
+
   // #***! ошибки канала не пробрасываем, без FKM просто не будет пушей
   Future<T?> _invoke<T>(String method, [Map<String, dynamic>? args]) async {
     if (!isSupported) return null;
