@@ -1101,6 +1101,8 @@
   "pasteAttachSend": "Отправить",
   "pasteAttachCancel": "Отмена",
   "pasteAttachFailed": "В буфере обмена нечего вставить",
+  "chatDropHint": "Отпустите, чтобы отправить",
+  "chatDropFoldersUnsupported": "Папку отправить нельзя, перетащите сами файлы",
   "profileQrTitle": "Мой QR-код",
   "profileQrHint": "Отсканируйте код, чтобы открыть профиль",
   "profileQrUnavailable": "Не удалось получить ссылку на профиль",

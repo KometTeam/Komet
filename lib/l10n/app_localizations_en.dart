@@ -3225,6 +3225,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pasteAttachFailed => 'Nothing to paste from the clipboard';
 
   @override
+  String get chatDropHint => 'Drop to send';
+
+  @override
+  String get chatDropFoldersUnsupported =>
+      'Folders can\'t be sent, drop the files themselves';
+
+  @override
   String get profileQrTitle => 'My QR code';
 
   @override

@@ -31,6 +31,7 @@ import '../contacts/find_user_sheet.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/route_probe.dart';
 import '../../widgets/toast_placement.dart';
 import '../../widgets/sliding_pill_nav.dart';
 import '../../widgets/compact_bottom_navigation_bar.dart';
@@ -1384,13 +1385,11 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final route = ModalRoute.of(context);
-    if (route is PageRoute) {
-      appRouteObserver.subscribe(this, route);
-    }
+  ModalRoute<Object?>? _route;
+
+  void _onRoute(ModalRoute<Object?> route) {
+    _route = route;
+    if (route is PageRoute) appRouteObserver.subscribe(this, route);
   }
 
   @override
@@ -2193,7 +2192,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (widget.forwardMode || widget.archiveMode || _currentNavIndex != 0) {
       return;
     }
-    final route = ModalRoute.of(context);
+    final route = _route;
     if (route != null && !route.isCurrent) return;
     if (_presentedInformerId == banner.id) return;
     if (bannersModule.activeBanner.value?.id != banner.id) return;
@@ -3017,12 +3016,17 @@ class _ChatListScreenState extends State<ChatListScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    if (widget.archiveMode) {
-      return _buildArchiveScaffold(cs);
-    }
-    return ValueListenableBuilder<BottomNavigationStyle>(
-      valueListenable: AppBottomNavigationStyle.current,
-      builder: (context, style, _) => _buildMainScaffold(cs, style),
+    return RouteProbe(
+      onRoute: _onRoute,
+      child: HeroMode(
+        enabled: false,
+        child: widget.archiveMode
+            ? _buildArchiveScaffold(cs)
+            : ValueListenableBuilder<BottomNavigationStyle>(
+                valueListenable: AppBottomNavigationStyle.current,
+                builder: (context, style, _) => _buildMainScaffold(cs, style),
+              ),
+      ),
     );
   }
 

@@ -98,23 +98,31 @@ class TokenStorage {
 
   static Future<void> deleteToken(int accountId) => _tokens.delete(accountId);
 
+  static int? _knownActiveAccountId;
+
+  static int? get knownActiveAccountId => _knownActiveAccountId;
+
   // #***! активный аккаунт в обычных prefs, это не секрет
   static Future<void> setActiveAccount(int accountId) async {
     _accountEpoch++;
     final prefs = await SharedPreferences.getInstance();
+    _knownActiveAccountId = accountId;
     await prefs.setString(_activeAccountKey, accountId.toString());
   }
 
   static Future<void> clearActiveAccount() async {
     _accountEpoch++;
     final prefs = await SharedPreferences.getInstance();
+    _knownActiveAccountId = null;
     await prefs.remove(_activeAccountKey);
   }
 
   static Future<int?> getActiveAccountId() async {
     final prefs = await SharedPreferences.getInstance();
     final val = prefs.getString(_activeAccountKey);
-    return val != null ? int.tryParse(val) : null;
+    final id = val != null ? int.tryParse(val) : null;
+    _knownActiveAccountId = id;
+    return id;
   }
 
   static Future<String?> readActiveToken() async {
@@ -129,6 +137,7 @@ class TokenStorage {
     final activeId = await getActiveAccountId();
     if (activeId == accountId) {
       final prefs = await SharedPreferences.getInstance();
+      _knownActiveAccountId = null;
       await prefs.remove(_activeAccountKey);
     }
   }

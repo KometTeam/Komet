@@ -90,6 +90,20 @@ toolchain as `kolibri`; bump it by changing the `rev` and running `cargo update 
 `lib/core/media/tlottie/` renders frames in a pool of worker isolates and caches them in RAM and
 on disk. Web has no native path and falls back to the pure-Dart `lottie` package.
 
+The UI isolate never touches pixels. A clip is packed into atlas pages of 16 frames
+(`AtlasLayout`, one texture per page instead of one per frame, with a transparent 2px gap so
+filtering never samples the neighbouring frame), and the workers read and write the disk cache
+(`TlottieCodec`) themselves. `TlottieEngine` hands a worker one job at a time, disk loads before
+renders, cancels the job of a clip released before it finished (prewarm excepted) and respawns a
+worker that died. A finished page reaches the UI isolate as a temp file under
+`tlottie_pages/`, opened with `ImmutableBuffer.fromFilePath`, so the engine loads it off the UI
+thread. `LottiePlayer` paints the current cell with a `CustomPainter`, so playback repaints without
+rebuilding. Before this, one sticker meant ~90 `decodeImageFromPixels` calls and setStates on the UI
+thread, and opening the sticker panel froze the app for up to 300 ms.
+
+To run the engine test on the host, build the library with `cargo build --release` in
+`native/komet_tlottie/rust` and pass it as `TLOTTIE_LIB`.
+
 ## WebRTC plugin fork
 
 `flutter_webrtc` is overridden with the private fork `KometTeam/flutter-webrtc` (upstream v1.5.2 +
@@ -221,6 +235,17 @@ rather than introducing a different approach.
   it lets Flutter skip rebuilding that subtree entirely.
 - **Keep `build()` pure and cheap** — no network/IO calls, no heavy computation inline; extract
   reusable pieces into their own `StatelessWidget`s instead of nesting logic in one big builder.
+- **Opening a screen: pay in the first frame, not during the slide.** Routes with the
+  `FirstFrameClock` mixin (`SwipeRoute`, and `FirstFramePageRoute` for Material transitions) start
+  their clock at the first presented frame and absorb the stalls of the first three frames of a
+  push, so a heavy first build only delays the transition, while a `setState` that lands
+  mid-transition rebuilds the whole screen and drops visible frames. Put data that is already in
+  memory (`chats.cachedChat`, `MessageSessionCache`) into `initState`; defer the rest — server
+  responses included — with `RouteSettle.run`. A page that needs its route takes it from
+  `RouteProbe` and hands it to `RouteSettle.bind` — `ModalRoute.of(context)` subscribes the caller
+  to `isCurrent`, so a whole screen rebuilds whenever anything is pushed over it or popped. Subtrees
+  without a `Hero` sit under `HeroMode(enabled: false)`, so `HeroController` does not walk them on
+  each transition.
 
 ## Animated icons
 
@@ -248,6 +273,7 @@ script in `tool/`, so the source art lives in exactly one place:
 | `make_minimal_android.dart` / `make_minimal_adaptive.dart` / `make_minimal_ios.dart` | the `Minimal` launcher + adaptive layers                                    |
 | `make_monochrome_android.dart`                                                       | `ic_launcher[_minimal]_monochrome.png` — alpha silhouettes for themed icons |
 | `make_appearances_ios.dart`                                                          | `Icon-App-{Dark,Tinted}-1024x1024@1x.png` + their `Contents.json` entries   |
+| `make_shortcut_icons.py`                                                             | `ic_shortcut_*` — launcher shortcut icons, glyphs from Material Symbols     |
 
 **Themed icons.** Both adaptive icons carry a `<monochrome>` layer, so Android 13+
 launchers with *Themed icons* enabled recolour the icon from the wallpaper. The
@@ -255,6 +281,14 @@ layer is only the alpha channel of the artwork filled black — the system suppl
 both colours, and the same 16% inset as the foreground keeps it aligned with the
 normal icon. The iOS 18 counterpart is the dark/tinted appearance pair on the
 primary `AppIcon`; alternate icons cannot carry appearance variants.
+
+**Launcher shortcuts.** Long-pressing the Android icon shows *Saved Messages* and
+*Search*: `LauncherShortcuts.kt` publishes them as dynamic shortcuts on every
+`MainActivity` start (the package differs per flavor, so a static `shortcuts.xml`
+cannot name it). Each opens `komet://max.ru/<route>`, which `DeepLinkService` hands
+to `openMaxRoute` as soon as the shell is up — these routes have `needsSession`
+false and do not wait for login. They rank ahead of the conversation shortcuts
+from `KometFcmService`, so the limit evicts old chats, never the actions.
 
 `flutter_launcher_icons` (configured in `pubspec.yaml`) only generates the default
 icon and rewrites `mipmap-anydpi-v26/*.xml` without the insets or the monochrome

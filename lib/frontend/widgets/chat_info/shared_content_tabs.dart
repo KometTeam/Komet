@@ -18,6 +18,7 @@ import '../../../core/utils/format.dart';
 import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/media_saver.dart';
+import '../../../core/utils/route_settle.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/attachment.dart';
 import '../../screens/chats/chat_screen.dart';
@@ -25,6 +26,7 @@ import '../custom_notification.dart';
 import '../komet_avatar.dart';
 import '../photo_viewer.dart';
 import '../reload_on_reconnect.dart';
+import '../route_probe.dart';
 import '../share_unopenable_file.dart';
 import '../small_spinner.dart';
 import '../swipe_route.dart';
@@ -103,10 +105,14 @@ Widget _emptyState(ColorScheme cs, String label, IconData icon) {
   );
 }
 
-Widget _loadingState(ColorScheme cs) {
+Widget _loadingState(ColorScheme cs, {bool spinner = true}) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 56),
-    child: Center(child: SmallSpinner(size: 26, color: cs.primary)),
+    child: Center(
+      child: spinner
+          ? SmallSpinner(size: 26, color: cs.primary)
+          : const SizedBox.square(dimension: 26),
+    ),
   );
 }
 
@@ -535,16 +541,21 @@ class _SharedMediaTabState extends State<SharedMediaTab>
   int _total = 0;
   final List<SharedMediaItem> _items = [];
   final Set<String> _seen = {};
+  late final RouteSettle _routeSettle = RouteSettle(isMounted: () => mounted);
 
   @override
   void initState() {
     super.initState();
     widget.scrollController?.addListener(_onScroll);
+    _routeSettle.run(() {
+      if (mounted && _loading) setState(() {});
+    });
     _load(widget.anchorMessageId, initial: true);
   }
 
   @override
   void dispose() {
+    _routeSettle.dispose();
     widget.scrollController?.removeListener(_onScroll);
     super.dispose();
   }
@@ -571,7 +582,15 @@ class _SharedMediaTabState extends State<SharedMediaTab>
       backward: _pageSize,
     );
     if (!mounted) return;
+    if (_loading) {
+      _routeSettle.run(() => _apply(page));
+    } else {
+      _apply(page);
+    }
+  }
 
+  void _apply(SharedMediaPage page) {
+    if (!mounted) return;
     var added = 0;
     for (final item in page.items) {
       if (_seen.add(item.dedupKey)) {
@@ -620,8 +639,12 @@ class _SharedMediaTabState extends State<SharedMediaTab>
 
   @override
   Widget build(BuildContext context) {
+    return RouteProbe(onRoute: _routeSettle.bind, child: _buildTab(context));
+  }
+
+  Widget _buildTab(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    if (_loading) return _loadingState(cs);
+    if (_loading) return _loadingState(cs, spinner: _routeSettle.settled);
     if (_items.isEmpty) {
       return _emptyState(cs, widget.emptyLabel, widget.emptyIcon);
     }

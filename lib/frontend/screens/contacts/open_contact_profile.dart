@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../chats/chat_info_screen.dart';
+import '../../widgets/first_frame_clock.dart';
 
 Future<void> openContactDialogProfile(
   BuildContext context, {
@@ -18,7 +19,7 @@ Future<void> openContactDialogProfile(
   if (!context.mounted) return;
   Navigator.push(
     context,
-    MaterialPageRoute(
+    FirstFramePageRoute(
       builder: (_) => ChatInfoScreen(
         chatId: chatId,
         name: name,

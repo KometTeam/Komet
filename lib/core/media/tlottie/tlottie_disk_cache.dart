@@ -1,45 +1,25 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../utils/logger.dart';
 
-// #***! распакованные кадры стикера с диска
-class DiskClip {
-  DiskClip({
-    required this.px,
-    required this.frameCount,
-    required this.frameRate,
-    required this.durationMs,
-    required this.frames,
-  });
-
-  final int px;
-  final int frameCount;
-  final double frameRate;
-  final int durationMs;
-  final List<Uint8List> frames;
-}
-
 // #***! кадры кэшируем на диск, рендерить заново слишком дорого
 class TlottieDiskCache {
   TlottieDiskCache._();
   static final TlottieDiskCache instance = TlottieDiskCache._();
 
-  // #***! magic и версия формата, сменил версию старые файлы игнорятся
-  static const _magic = 0x4b544c46;
-  static const _version = 2;
   static const _extension = '.ktlf';
   static const _legacyDirName = 'rlottie_frames';
   // #***! под кадры отдаём 256 МБ
   static const int _maxBytes = 256 * 1024 * 1024;
+  static const Duration _evictDelay = Duration(seconds: 2);
 
   Directory? _dir;
   Future<Directory>? _dirFuture;
+  Timer? _evictTimer;
 
   Future<Directory> _directory() {
     return _dirFuture ??= () async {
@@ -67,115 +47,16 @@ class TlottieDiskCache {
     return '${digest}_$px$_extension';
   }
 
-  Future<File> _file(String url, int px) async {
+  Future<String> pathFor(String url, int px) async {
     final dir = await _directory();
-    return File('${dir.path}/${_key(url, px)}');
+    return '${dir.path}/${_key(url, px)}';
   }
 
-  // #***! битый файл кэша игнорим и рендерим заново
-  Future<DiskClip?> load(String url, int px) async {
-    try {
-      final file = await _file(url, px);
-      if (!await file.exists()) return null;
-      final bytes = await file.readAsBytes();
-      final clip = await _decode(bytes);
-      if (clip != null) {
-        unawaited(file.setLastModified(DateTime.now()).catchError((_) {}));
-      }
-      return clip;
-    } catch (e) {
-      logger.w('TlottieDiskCache.load failed: $e');
-      return null;
-    }
-  }
-
-  Future<void> store({
-    required String url,
-    required int px,
-    required int frameCount,
-    required double frameRate,
-    required int durationMs,
-    required List<Uint8List> frames,
-  }) async {
-    if (frames.isEmpty || frames.length != frameCount) return;
-    try {
-      final bytes = await _encode(px, frameCount, frameRate, durationMs, frames);
-      final file = await _file(url, px);
-      await file.writeAsBytes(bytes, flush: false);
+  void noteWritten() {
+    _evictTimer?.cancel();
+    _evictTimer = Timer(_evictDelay, () {
+      _evictTimer = null;
       unawaited(_evict());
-    } catch (e) {
-      logger.w('TlottieDiskCache.store failed: $e');
-    }
-  }
-
-  // #***! кодируем и декодируем в изоляте, файлы большие
-  static Future<Uint8List> _encode(
-    int px,
-    int frameCount,
-    double frameRate,
-    int durationMs,
-    List<Uint8List> frames,
-  ) {
-    return Isolate.run(() {
-      final frameBytes = px * px * 4;
-      final payload = Uint8List(frameBytes * frameCount);
-      for (var i = 0; i < frameCount; i++) {
-        payload.setRange(i * frameBytes, (i + 1) * frameBytes, frames[i]);
-      }
-      for (var i = frameCount - 1; i >= 1; i--) {
-        final cur = i * frameBytes;
-        final prev = (i - 1) * frameBytes;
-        for (var b = 0; b < frameBytes; b++) {
-          payload[cur + b] ^= payload[prev + b];
-        }
-      }
-      final compressed = GZipCodec(level: 1).encode(payload);
-      final header = ByteData(28);
-      header.setUint32(0, _magic);
-      header.setUint8(4, _version);
-      header.setUint32(8, px);
-      header.setUint32(12, frameCount);
-      header.setFloat64(16, frameRate);
-      header.setUint32(24, durationMs);
-      final out = BytesBuilder();
-      out.add(header.buffer.asUint8List());
-      out.add(compressed);
-      return out.toBytes();
-    });
-  }
-
-  static Future<DiskClip?> _decode(Uint8List bytes) {
-    return Isolate.run(() {
-      if (bytes.length < 28) return null;
-      final header = ByteData.sublistView(bytes, 0, 28);
-      if (header.getUint32(0) != _magic) return null;
-      if (header.getUint8(4) != _version) return null;
-      final px = header.getUint32(8);
-      final frameCount = header.getUint32(12);
-      final frameRate = header.getFloat64(16);
-      final durationMs = header.getUint32(24);
-      final frameBytes = px * px * 4;
-      final payload = Uint8List.fromList(gzip.decode(bytes.sublist(28)));
-      if (payload.length != frameBytes * frameCount) return null;
-      for (var i = 1; i < frameCount; i++) {
-        final cur = i * frameBytes;
-        final prev = (i - 1) * frameBytes;
-        for (var b = 0; b < frameBytes; b++) {
-          payload[cur + b] ^= payload[prev + b];
-        }
-      }
-      final frames = <Uint8List>[];
-      for (var i = 0; i < frameCount; i++) {
-        frames.add(Uint8List.sublistView(
-            payload, i * frameBytes, (i + 1) * frameBytes));
-      }
-      return DiskClip(
-        px: px,
-        frameCount: frameCount,
-        frameRate: frameRate,
-        durationMs: durationMs,
-        frames: frames,
-      );
     });
   }
 

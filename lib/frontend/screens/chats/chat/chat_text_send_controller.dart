@@ -421,10 +421,7 @@ class ChatTextSendController {
     hasText.value = false;
     setLastSentId(tempId);
     chatController.addMessage(composed);
-    messageController.clear();
-    if (!commentsMode && DraftStore.instance.get(accountId, chatId) != null) {
-      unawaited(DraftStore.instance.clear(accountId, chatId));
-    }
+    clearComposer(accountId, chatId);
     bumpMessages();
 
     // Instant tactile "whoosh" the moment the message leaves the composer,
@@ -737,6 +734,14 @@ class ChatTextSendController {
         text: outgoing.wireText,
         encryptedPayload: outgoing.encrypted,
       );
+    }
+  }
+
+  void clearComposer(int accountId, int chatId) {
+    hasText.value = false;
+    messageController.clear();
+    if (!commentsMode && DraftStore.instance.get(accountId, chatId) != null) {
+      unawaited(DraftStore.instance.clear(accountId, chatId));
     }
   }
 }

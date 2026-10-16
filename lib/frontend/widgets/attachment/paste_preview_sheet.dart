@@ -11,6 +11,7 @@ import 'package:komet/l10n/app_localizations.dart';
 Future<String?> showPastePreviewSheet(
   BuildContext context, {
   required List<PastedAttachment> items,
+  String initialCaption = '',
 }) {
   final cs = Theme.of(context).colorScheme;
   return showModalBottomSheet<String>(
@@ -18,21 +19,25 @@ Future<String?> showPastePreviewSheet(
     isScrollControlled: true,
     backgroundColor: cs.surfaceContainerHigh,
     shape: kSheetShape,
-    builder: (_) => _PastePreviewSheet(items: items),
+    builder: (_) =>
+        _PastePreviewSheet(items: items, initialCaption: initialCaption),
   );
 }
 
 class _PastePreviewSheet extends StatefulWidget {
-  const _PastePreviewSheet({required this.items});
+  const _PastePreviewSheet({required this.items, required this.initialCaption});
 
   final List<PastedAttachment> items;
+  final String initialCaption;
 
   @override
   State<_PastePreviewSheet> createState() => _PastePreviewSheetState();
 }
 
 class _PastePreviewSheetState extends State<_PastePreviewSheet> {
-  final TextEditingController _caption = TextEditingController();
+  late final TextEditingController _caption = TextEditingController(
+    text: widget.initialCaption,
+  );
 
   @override
   void dispose() {

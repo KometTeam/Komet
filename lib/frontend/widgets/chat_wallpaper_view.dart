@@ -9,18 +9,69 @@ import 'package:komet/core/config/chat_wallpaper_themes.dart';
 import 'package:komet/core/storage/chat_wallpaper_store.dart';
 import 'package:komet/frontend/widgets/mesh_gradient_background.dart';
 
+class WallpaperImages {
+  WallpaperImages._();
+
+  static const int _recentCapacity = 2;
+
+  static _HeldImage? _global;
+  static final List<_HeldImage> _recent = [];
+
+  static ImageProvider providerFor(String path) => FileImage(File(path));
+
+  static void holdGlobal(ChatWallpaper? wallpaper) {
+    final path = wallpaper?.imagePath;
+    if (_global?.path == path) return;
+    _global?.release();
+    _global = path == null ? null : _HeldImage(path);
+  }
+
+  static void holdRecent(String path) {
+    if (_global?.path == path) return;
+    final index = _recent.indexWhere((held) => held.path == path);
+    if (index >= 0) {
+      _recent.add(_recent.removeAt(index));
+      return;
+    }
+    _recent.add(_HeldImage(path));
+    while (_recent.length > _recentCapacity) {
+      _recent.removeAt(0).release();
+    }
+  }
+}
+
+class _HeldImage {
+  final String path;
+  final ImageStream _stream;
+  final ImageStreamListener _listener = ImageStreamListener(
+    (_, _) {},
+    onError: (_, _) {},
+  );
+
+  _HeldImage(this.path)
+    : _stream = WallpaperImages.providerFor(
+        path,
+      ).resolve(ImageConfiguration.empty) {
+    _stream.addListener(_listener);
+  }
+
+  void release() => _stream.removeListener(_listener);
+}
+
 class ChatWallpaperView extends StatelessWidget {
   final ChatWallpaper wallpaper;
 
   const ChatWallpaperView({super.key, required this.wallpaper});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => RepaintBoundary(child: _buildLayer());
+
+  Widget _buildLayer() {
     if (wallpaper.isImage) {
       final path = wallpaper.imagePath;
       if (path == null) return const SizedBox.shrink();
       return WallpaperImageLayer(
-        image: FileImage(File(path)),
+        image: WallpaperImages.providerFor(path),
         dim: wallpaper.dim,
         blur: wallpaper.blur,
         motion: wallpaper.motion,

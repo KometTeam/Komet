@@ -109,6 +109,7 @@ import 'frontend/debug/fps_overlay_layer.dart';
 import 'frontend/debug/performance_monitor.dart';
 import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/widgets/adaptive_shell.dart';
+import 'frontend/widgets/chat_wallpaper_view.dart' show WallpaperImages;
 import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/hint_bubble.dart';
 import 'frontend/widgets/liquid_glass.dart';
@@ -459,11 +460,11 @@ class KometAppState extends State<KometApp>
     AppThemeModeConfig.current.addListener(_onThemeModeChanged);
     AppAmoled.current.addListener(_onAmoledChanged);
     AppThemeSchedule.current.addListener(_onScheduleChanged);
-    AppWallpaperTint.current.addListener(_onWallpaperTintChanged);
-    ChatWallpaperStore.instance.revision.addListener(_onWallpaperTintChanged);
+    AppWallpaperTint.current.addListener(_onGlobalWallpaperChanged);
+    ChatWallpaperStore.instance.revision.addListener(_onGlobalWallpaperChanged);
     _lastAppliedThemeMode = _effectiveThemeMode;
     _rescheduleSwitch();
-    unawaited(_refreshWallpaperSeed());
+    unawaited(_refreshGlobalWallpaper());
 
     api.setReconnectCallback(() async {
       try {
@@ -485,7 +486,7 @@ class KometAppState extends State<KometApp>
         NotificationBridge.instance.markReady();
         unawaited(NotificationBridge.instance.dismissReadChats());
         ShareIntentBridge.instance.markReady();
-        unawaited(_refreshWallpaperSeed());
+        unawaited(_refreshGlobalWallpaper());
         CallController.instance.init(api);
         OutboxService.instance.init(api, messagesModule);
         SelfCheckService.instance.init(api);
@@ -605,7 +606,8 @@ class KometAppState extends State<KometApp>
     _presentIncomingCall();
   }
 
-  void markShellReady() {
+  void markShellReady({bool signedIn = true}) {
+    if (signedIn) DeepLinkService.instance.markShellReady();
     if (_shellReady) return;
     _shellReady = true;
     _presentIncomingCall();
@@ -654,9 +656,9 @@ class KometAppState extends State<KometApp>
     AppThemeModeConfig.current.removeListener(_onThemeModeChanged);
     AppAmoled.current.removeListener(_onAmoledChanged);
     AppThemeSchedule.current.removeListener(_onScheduleChanged);
-    AppWallpaperTint.current.removeListener(_onWallpaperTintChanged);
+    AppWallpaperTint.current.removeListener(_onGlobalWallpaperChanged);
     ChatWallpaperStore.instance.revision.removeListener(
-      _onWallpaperTintChanged,
+      _onGlobalWallpaperChanged,
     );
     WidgetsBinding.instance.removeObserver(this);
     HardwareKeyboard.instance.removeHandler(_noteKeyInteraction);
@@ -924,26 +926,21 @@ class KometAppState extends State<KometApp>
     accentSeed.value = seed;
   }
 
-  void _onWallpaperTintChanged() => unawaited(_refreshWallpaperSeed());
+  void _onGlobalWallpaperChanged() => unawaited(_refreshGlobalWallpaper());
 
-  Future<void> _refreshWallpaperSeed() async {
-    if (!AppWallpaperTint.current.value) {
-      _globalWallpaper = null;
-      wallpaperSeed.value = null;
-      return;
-    }
+  Future<void> _refreshGlobalWallpaper() async {
     final profile = await AppDatabase.loadActiveProfile();
     final accountId = profile?.id ?? 0;
-    if (accountId == 0) {
+    await ChatWallpaperStore.instance.load();
+    final wallpaper = accountId == 0
+        ? null
+        : ChatWallpaperStore.instance.get(accountId, kGlobalWallpaperChatId);
+    WallpaperImages.holdGlobal(wallpaper);
+    if (!AppWallpaperTint.current.value || wallpaper == null) {
       _globalWallpaper = null;
       wallpaperSeed.value = null;
       return;
     }
-    await ChatWallpaperStore.instance.load();
-    final wallpaper = ChatWallpaperStore.instance.get(
-      accountId,
-      kGlobalWallpaperChatId,
-    );
     final seed = await computeWallpaperSeed(wallpaper);
     if (!mounted) return;
     _globalWallpaper = wallpaper;
@@ -1308,7 +1305,7 @@ class _StartupScreenState extends State<_StartupScreen> {
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
-      KometApp.stateOf(context)?.markShellReady();
+      KometApp.stateOf(context)?.markShellReady(signedIn: false);
     }
   }
 

@@ -472,9 +472,11 @@ class ChatMediaSendController {
     String caption, {
     bool waitForUpload = false,
     bool separate = false,
+    VoidCallback? onConfirmed,
   }) async {
     if (_myId == 0) return;
     if (!await confirmSend() || !isMounted()) return;
+    onConfirmed?.call();
     if (encryptionEnabled()) return sendEncryptedPhotos(picked, caption);
     final videos = picked.where((ph) => ph.item.isVideo).toList();
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
@@ -651,6 +653,7 @@ class ChatMediaSendController {
     String caption,
     int scheduledTime, {
     bool separate = false,
+    VoidCallback? onConfirmed,
   }) async {
     if (_myId == 0) return;
     if (encryptionEnabled()) {
@@ -658,6 +661,7 @@ class ChatMediaSendController {
       return;
     }
     if (!await confirmSend() || !isMounted()) return;
+    onConfirmed?.call();
     final videos = picked.where((ph) => ph.item.isVideo).toList();
     final photos = picked.where((ph) => !ph.item.isVideo).toList();
     if (photos.isEmpty && videos.isEmpty) return;

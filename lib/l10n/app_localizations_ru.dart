@@ -3242,6 +3242,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get pasteAttachFailed => 'В буфере обмена нечего вставить';
 
   @override
+  String get chatDropHint => 'Отпустите, чтобы отправить';
+
+  @override
+  String get chatDropFoldersUnsupported =>
+      'Папку отправить нельзя, перетащите сами файлы';
+
+  @override
   String get profileQrTitle => 'Мой QR-код';
 
   @override

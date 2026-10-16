@@ -177,4 +177,45 @@ void main() {
     expect(h.topOf(newest), closeTo(before, 0.01));
     expect(h.controller.position.minScrollExtent, 0);
   });
+
+  testWidgets('the cache only grows once growth is allowed', (tester) async {
+    final controller = ScrollController();
+    final allowed = ValueNotifier(false);
+    addTearDown(controller.dispose);
+    addTearDown(allowed.dispose);
+    final built = <int>{};
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: _viewport,
+            child: AnchoredMessageList(
+              controller: controller,
+              cacheExtent: 3000,
+              cacheGrowthAllowed: allowed,
+              padding: _padding,
+              epoch: 0,
+              itemCount: 400,
+              anchorIndex: null,
+              bottomSpacer: const SizedBox(height: _spacer),
+              itemBuilder: (context, index) {
+                built.add(index);
+                return SizedBox(height: 50, child: Text('m$index'));
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final gated = built.length;
+    expect(gated * 50, lessThan(_viewport + 2 * 600));
+
+    allowed.value = true;
+    expect(tester.binding.hasScheduledFrame, isTrue);
+    await tester.pumpAndSettle();
+    expect(built.length * 50, greaterThanOrEqualTo(_viewport + 3000));
+  });
 }

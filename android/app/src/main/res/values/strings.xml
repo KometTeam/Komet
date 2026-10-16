@@ -12,4 +12,6 @@
     <string name="fkm_disable">Turn off</string>
     <string name="notif_deleted_prefix">Deleted:</string>
     <string name="share_target_label">Send to a chat</string>
+    <string name="shortcut_saved_messages">Saved Messages</string>
+    <string name="shortcut_search">Search</string>
 </resources>
