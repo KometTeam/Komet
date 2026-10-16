@@ -25,6 +25,7 @@ import 'open_contact_profile.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../widgets/verified_mark.dart';
+import '../../widgets/first_frame_clock.dart';
 
 class ContactsTab extends StatefulWidget {
   const ContactsTab({super.key, this.bottomPadding = 120});
@@ -101,7 +102,7 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
     );
     if (found == null || !mounted) return;
     Navigator.of(context).push(
-      MaterialPageRoute(
+      FirstFramePageRoute(
         builder: (_) => ChatInfoScreen(
           chatId: found.chatId,
           name: found.name,

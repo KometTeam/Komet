@@ -4,8 +4,9 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 
 import 'directional_drag_recognizer.dart';
+import 'first_frame_clock.dart';
 
-class SwipeRoute<T> extends PageRoute<T> {
+class SwipeRoute<T> extends PageRoute<T> with FirstFrameClock<T> {
   SwipeRoute({
     required this.builder,
     super.settings,

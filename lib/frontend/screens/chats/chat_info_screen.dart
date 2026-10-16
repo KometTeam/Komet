@@ -46,6 +46,7 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/profile_header_scroll.dart';
 import '../../widgets/profile_hero.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/route_probe.dart';
 import '../../widgets/local_avatar_builder.dart';
 import '../../../backend/modules/chats.dart';
 import '../contacts/open_contact_profile.dart';
@@ -178,11 +179,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     _load();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _routeSettle.bind(context);
-  }
 
   int? get _memberCount => ChatMembersStore.instance.count(widget.chatId);
 
@@ -466,6 +462,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   @override
   Widget build(BuildContext context) {
+    return RouteProbe(onRoute: _routeSettle.bind, child: _buildScreen(context));
+  }
+
+  Widget _buildScreen(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(

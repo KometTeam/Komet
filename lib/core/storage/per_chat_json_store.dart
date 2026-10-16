@@ -46,6 +46,8 @@ abstract class PerChatJsonStore<T> {
   void onBeforeWrite(String key, T? previous, T? next) {}
 
   // #***! читаем один раз, битый джейсон молча игнорим чтоб не блокировать старт
+  bool get isLoaded => _loaded;
+
   Future<void> load() {
     if (_loaded) return Future.value();
     return _loading ??= _load().whenComplete(() => _loading = null);

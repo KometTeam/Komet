@@ -119,12 +119,6 @@ class MainActivity : AudioServiceFragmentActivity() {
         }, 250L)
     }
 
-    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        screenShareDecoders?.releaseAll()
-        screenShareDecoders = null
-        super.cleanUpFlutterEngine(flutterEngine)
-    }
-
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -561,6 +555,7 @@ class MainActivity : AudioServiceFragmentActivity() {
         intent?.let { if (it.hasExtra(CallConst.EXTRA_CALL)) stashCall(it, emit = false) }
         stashChatOpen(intent, emit = false)
         stashShare(intent, emit = false)
+        Thread({ LauncherShortcuts.publish(applicationContext) }, "LauncherShortcuts").start()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -1025,6 +1020,8 @@ class MainActivity : AudioServiceFragmentActivity() {
     override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        screenShareDecoders?.releaseAll()
+        screenShareDecoders = null
         if (!keepEngineAlive()) {
             FkmChannel.detach()
             LauncherBadge.detach()

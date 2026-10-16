@@ -9,6 +9,8 @@ sealed class MaxLink {
   // #***! needsConnection значит надо дождаться сессии
   bool get needsConnection => false;
 
+  bool get needsSession => true;
+
   // #***! принимаем и без схемы, max.ru/name тоже ссылка
   static final RegExp _schemeless = RegExp(
     r'^(?:www\.)?max\.ru(?:[/?#]|$)',
@@ -261,6 +263,20 @@ class MaxRouteLink extends MaxLink {
   final Map<String, String> params;
 
   const MaxRouteLink(this.route, this.params);
+
+  static const Set<String> _shellRoutes = {
+    ':chat-list',
+    ':settings/folder-list',
+    ':calls-history',
+    ':call-list',
+    ':contact-list',
+    ':settings',
+    ':chats-search',
+    ':saved-messages',
+  };
+
+  @override
+  bool get needsSession => !_shellRoutes.contains(route);
 }
 
 class MaxContactIdLink extends MaxLink {

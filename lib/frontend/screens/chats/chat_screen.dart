@@ -53,7 +53,9 @@ import '../../../core/crypto/message_decryption_cache.dart';
 import '../../../core/crypto/outgoing_message_policy.dart';
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/chat_wallpaper_store.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/draft_store.dart';
+import '../../../core/utils/desktop_platform.dart';
 import '../../../core/storage/archived_chats_store.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/links/message_link_token.dart';
@@ -96,6 +98,7 @@ import 'chat/view/chat_app_bar.dart';
 import 'chat/view/composer_area.dart';
 import 'chat/view/composer_input.dart' show BotStartPrompt;
 import 'chat/view/chat_body_layout.dart';
+import 'chat/view/chat_drop_zone.dart';
 import 'chat/view/shimmer_loading.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_chat_chrome.dart';
@@ -123,11 +126,13 @@ import '../../widgets/attachment/paste_preview_sheet.dart';
 import '../../widgets/sticker_pack_sheet.dart';
 import '../../widgets/swipe_to_pop.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/route_probe.dart';
 import '../../widgets/swipe_to_reply.dart';
 import '../../widgets/scroll_keyboard_dismiss.dart';
 import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/schedule_time_picker.dart';
 import '../../widgets/chat_wallpaper_sheet.dart';
+import '../../widgets/chat_wallpaper_view.dart' show WallpaperImages;
 import 'scheduled_messages_screen.dart';
 import 'chat_encryption_screen.dart';
 import 'e2ee_screen.dart';
@@ -136,6 +141,7 @@ import 'profile_action_sheets.dart';
 import '../../../core/media/media_playback.dart';
 import '../../../core/config/app_shape.dart';
 import '../../../core/security/app_lock.dart';
+import '../../widgets/first_frame_clock.dart';
 
 class _DateSeparatorItem {
   final DateTime date;
@@ -529,6 +535,8 @@ class _ChatScreenState extends State<ChatScreen>
   late final ChatTextSendController _textSend;
 
   late final RouteSettle _routeSettle = RouteSettle(isMounted: () => mounted);
+  final ValueNotifier<bool> _routeSettled = ValueNotifier(false);
+  ModalRoute<Object?>? _route;
 
   late final ChatSearchController _search;
   late final AnimationController _searchAnim;
@@ -877,6 +885,8 @@ class _ChatScreenState extends State<ChatScreen>
     );
     _scrollController.addListener(_scrollNav.updateScrollDownVisible);
 
+    _wallpaper = _knownWallpaper();
+    _primeFromMemory();
     unawaited(_fastPreloadCache());
     unawaited(_loadParticipantsCount());
     WidgetsBinding.instance.addPostFrameCallback(_onFirstFrameRendered);
@@ -915,6 +925,10 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _applyPeerInfo(int peerId, ContactInfo info) {
     if (!mounted) return;
+    if (_takePeerInfo(peerId, info)) setState(() {});
+  }
+
+  bool _takePeerInfo(int peerId, ContactInfo info) {
     final avatar = info.avatarUrl;
     final avatarIsNew =
         avatar != null &&
@@ -927,13 +941,47 @@ class _ChatScreenState extends State<ChatScreen>
         _peerIsBot == info.isBot &&
         _peerOfficial == official &&
         !avatarIsNew) {
-      return;
+      return false;
     }
-    setState(() {
-      _peerKindKnown = true;
-      _peerIsBot = info.isBot;
-      _peerOfficial = official;
-    });
+    _peerKindKnown = true;
+    _peerIsBot = info.isBot;
+    _peerOfficial = official;
+    return true;
+  }
+
+  bool _primedChat = false;
+  bool _primedMessages = false;
+
+  void _primeFromMemory() {
+    if (_commentsMode) return;
+    final accountId = TokenStorage.knownActiveAccountId;
+    if (accountId == null || accountId == 0) return;
+    final cached = chats.cachedChat(accountId, widget.chatId);
+    if (cached == null) return;
+    _primedChat = true;
+    _myId = accountId;
+    chat = cached.chat;
+    if (widget.chatType == 'CHANNEL') _previewChat = !cached.inList;
+    if (widget.chatType == 'DIALOG') {
+      final peerId = widget.chatId ^ accountId;
+      final peer = peerId > 0 ? ContactInfoFetch.peek(peerId) : null;
+      if (peer != null) _takePeerInfo(peerId, peer);
+    }
+    _syncOtherPresence();
+    _syncOtherReadTime();
+    _resolveUnreadAnchor();
+
+    final session = MessageSessionCache.get(accountId, widget.chatId);
+    if (session == null || session.messages.isEmpty) return;
+    _primedMessages = true;
+    _messages = List<CachedMessage>.of(session.messages);
+    _hasMoreHistory = !session.reachedStart;
+    _mediaSend.mergePendingMedia();
+    _syncReactionNotifiersFromMessages();
+    _requestCommentCounts();
+    if (_awaitingPosition && !_canPositionNow()) return;
+    _isLoading = false;
+    _onLoadingFinished();
   }
 
   Future<void> _fastPreloadCache() async {
@@ -957,28 +1005,35 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(_loadEncryption());
     unawaited(_refreshBadge());
 
-    try {
-      final chatRows = await chats.getChat(_myId, widget.chatId);
-      if (!mounted) return;
-      final inList = await AppDatabase.isChatInList(_myId, widget.chatId);
-      if (!mounted) return;
-      if (widget.chatType == 'CHANNEL') {
-        final preview = !inList;
-        if (preview != _previewChat) setState(() => _previewChat = preview);
-      }
-      if (chatRows.isNotEmpty) {
-        setState(() {
-          chat = chatRows.first;
-        });
-        unawaited(_loadMyRights());
-        _bumpMessages();
-        _syncOtherPresence();
-        _recomputeHeaderStatus();
-        _syncOtherReadTime();
-      }
-    } catch (_) {}
+    if (_primedChat) {
+      unawaited(_loadMyRights());
+      _recomputeHeaderStatus();
+    } else {
+      try {
+        final chatRows = await chats.getChat(_myId, widget.chatId);
+        if (!mounted) return;
+        final inList = await AppDatabase.isChatInList(_myId, widget.chatId);
+        if (!mounted) return;
+        if (widget.chatType == 'CHANNEL') {
+          final preview = !inList;
+          if (preview != _previewChat) setState(() => _previewChat = preview);
+        }
+        if (chatRows.isNotEmpty) {
+          setState(() {
+            chat = chatRows.first;
+          });
+          unawaited(_loadMyRights());
+          _bumpMessages();
+          _syncOtherPresence();
+          _recomputeHeaderStatus();
+          _syncOtherReadTime();
+        }
+      } catch (_) {}
 
-    _resolveUnreadAnchor();
+      _resolveUnreadAnchor();
+    }
+
+    if (_primedMessages) return;
 
     final cached = MessageSessionCache.get(_myId, widget.chatId);
     if (cached != null && cached.messages.isNotEmpty) {
@@ -1058,9 +1113,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (widget.embedded) {
       _routeSettle.settleNow();
     } else {
-      _routeSettle.bind(context);
+      _routeSettle.bind(_route);
     }
     _routeSettle.run(_kickoffHistory);
+    _routeSettle.run(() => _routeSettled.value = true);
   }
 
   Future<List<CachedMessage>>? _localHistoryLoad;
@@ -1112,7 +1168,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   bool get _isRouteCurrent {
     if (!mounted) return false;
-    final route = ModalRoute.of(context);
+    final route = _route;
     return route == null || route.isCurrent;
   }
 
@@ -1282,9 +1338,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _openChatInfo({ChatInfoTab? initialTab}) {
     final navigator = Navigator.of(context);
-    final chatRoute = ModalRoute.of(context);
+    final chatRoute = _route;
     navigator.push(
-      MaterialPageRoute(
+      FirstFramePageRoute(
         builder: (_) => ChatInfoScreen(
           chatId: widget.chatId,
           name: _headerName(),
@@ -1462,7 +1518,7 @@ class _ChatScreenState extends State<ChatScreen>
       widget.onClose?.call();
       return;
     }
-    final route = ModalRoute.of(context);
+    final route = _route;
     if (route == null || !route.isActive) return;
     final navigator = Navigator.of(context);
     if (route.isCurrent) {
@@ -2435,6 +2491,7 @@ class _ChatScreenState extends State<ChatScreen>
     _reactionSettings.dispose();
     _scrollNav.dispose();
     _routeSettle.dispose();
+    _routeSettled.dispose();
     _messageKeys.clear();
     super.dispose();
   }
@@ -3609,12 +3666,26 @@ class _ChatScreenState extends State<ChatScreen>
     _applyEffectiveWallpaper();
   }
 
+  ChatWallpaper? _knownWallpaper() {
+    if (_commentsMode || !ChatWallpaperStore.instance.isLoaded) return null;
+    final accountId = TokenStorage.knownActiveAccountId;
+    if (accountId == null) return null;
+    return _effectiveWallpaper(accountId);
+  }
+
+  ChatWallpaper? _effectiveWallpaper(int accountId) {
+    final store = ChatWallpaperStore.instance;
+    final wallpaper =
+        store.get(accountId, widget.chatId) ??
+        store.get(accountId, kGlobalWallpaperChatId);
+    final path = wallpaper?.imagePath;
+    if (path != null) WallpaperImages.holdRecent(path);
+    return wallpaper;
+  }
+
   void _applyEffectiveWallpaper() {
     if (!mounted) return;
-    final store = ChatWallpaperStore.instance;
-    final wp =
-        store.get(_myId, widget.chatId) ??
-        store.get(_myId, kGlobalWallpaperChatId);
+    final wp = _effectiveWallpaper(_myId);
     if (!identical(wp, _wallpaper)) setState(() => _wallpaper = wp);
   }
 
@@ -4713,6 +4784,13 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   Widget build(BuildContext context) {
+    return RouteProbe(
+      onRoute: (route) => _route = route,
+      child: _buildScreen(context),
+    );
+  }
+
+  Widget _buildScreen(BuildContext context) {
     final theme = _prank.active
         ? _prank.pinkTheme(Theme.of(context))
         : Theme.of(context);
@@ -4769,7 +4847,9 @@ class _ChatScreenState extends State<ChatScreen>
               ),
               child: AnimatedBuilder(
                 animation: _searchAnim,
-                child: LottieHoldScope(
+                child: HeroMode(
+                  enabled: false,
+                  child: LottieHoldScope(
                   isHeld: _animojiHold,
                   child: MessageFlightLayer(
                     flight: _flight,
@@ -4807,8 +4887,12 @@ class _ChatScreenState extends State<ChatScreen>
                     wallpaper: _wallpaper,
                   ),
                   ),
+                  ),
                 ),
-                builder: (context, body) => Scaffold(
+                builder: (context, body) => ChatDropZone(
+                  enabled: !widget.preview && _canReply && _myId != 0,
+                  onDrop: (paths) => unawaited(_dropFiles(paths)),
+                  child: Scaffold(
                   backgroundColor: cs.surface,
                   extendBodyBehindAppBar: underlap,
                   appBar: _previewSafeBar(ChatAppBar(
@@ -4858,6 +4942,7 @@ class _ChatScreenState extends State<ChatScreen>
                     onCloseSearch: _closeSearch,
                   )),
                   body: body,
+                ),
                 ),
               ),
             ),
@@ -5029,6 +5114,7 @@ class _ChatScreenState extends State<ChatScreen>
                     child: AnchoredMessageList(
                     controller: _scrollController,
                     cacheExtent: cacheExtent,
+                    cacheGrowthAllowed: _routeSettled,
                     padding: _messagesListPadding(context),
                     epoch: _scrollNav.listEpoch,
                     itemCount: items.length,
@@ -5355,28 +5441,44 @@ class _ChatScreenState extends State<ChatScreen>
       setState(() => _keyboardReserve = keyboard);
     }
     FocusManager.instance.primaryFocus?.unfocus();
+    final draft = _composerCaptionDraft();
+    void sendPhotos(
+      List<PickedPhoto> picked,
+      String caption, {
+      bool separate = false,
+    }) {
+      final onConfirmed = draft.isEmpty ? null : _consumeComposerText;
+      unawaited(
+        scheduledTime == null
+            ? _mediaSend.sendPhotos(
+                picked,
+                caption,
+                separate: separate,
+                onConfirmed: onConfirmed,
+              )
+            : _mediaSend.sendScheduledPhotos(
+                picked,
+                caption,
+                scheduledTime,
+                separate: separate,
+                onConfirmed: onConfirmed,
+              ),
+      );
+    }
+
     await showAttachmentSheet(
       context,
       title: _chatName,
-      onSend: scheduledTime == null
-          ? _mediaSend.sendPhotos
-          : (picked, caption) =>
-                _mediaSend.sendScheduledPhotos(picked, caption, scheduledTime),
+      initialCaption: draft,
+      onSend: sendPhotos,
       videoNote: scheduledTime == null
           ? VideoNoteSend(
               limit: const Duration(milliseconds: VideoNoteController.maxMs),
               send: _mediaSend.sendVideoNote,
             )
           : null,
-      onSendSeparately: scheduledTime == null
-          ? (picked, caption) =>
-                _mediaSend.sendPhotos(picked, caption, separate: true)
-          : (picked, caption) => _mediaSend.sendScheduledPhotos(
-              picked,
-              caption,
-              scheduledTime,
-              separate: true,
-            ),
+      onSendSeparately: (picked, caption) =>
+          sendPhotos(picked, caption, separate: true),
       onPickFile: _encryptionEnabled
           ? () => _refuseUnencrypted((l) => l.chatScreenNoEncryptFiles)
           : (scheduledTime == null
@@ -5513,9 +5615,11 @@ class _ChatScreenState extends State<ChatScreen>
       documents.clear();
     }
 
+    final draft = documents.isEmpty ? _composerCaptionDraft() : '';
     final caption = await showPastePreviewSheet(
       context,
       items: [...media, ...documents],
+      initialCaption: draft,
     );
     if (caption == null || !mounted) return;
 
@@ -5525,6 +5629,7 @@ class _ChatScreenState extends State<ChatScreen>
             .map((it) => PickedPhoto(item: GalleryItem.fromFile(it.file)))
             .toList(),
         caption,
+        onConfirmed: draft.isEmpty ? null : _consumeComposerText,
       );
     }
     for (final document in documents) {
@@ -5537,8 +5642,42 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  Future<void> _dropFiles(List<String> paths) async {
+    if (_pastePending) return;
+    _pastePending = true;
+    try {
+      final items = await materializeDroppedFiles(paths);
+      if (!mounted || items.isEmpty) return;
+      await _offerPastedAttachments(items);
+    } finally {
+      _pastePending = false;
+    }
+  }
+
+  String _composerCaptionDraft() {
+    if (_selectedCommand != null) return '';
+    final content = _messageController.buildTrimmedContent();
+    return content.elements.isEmpty ? content.text : '';
+  }
+
+  void _consumeComposerText() {
+    _textSend.clearComposer(_myId, widget.chatId);
+  }
+
+  Future<String?> _filePickerStartDirectory() async {
+    if (!isDesktopPlatform) return null;
+    try {
+      return (await getDownloadsDirectory())?.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _pickAndUploadFile({int? scheduledTime}) async {
-    final result = await AppLock.instance.external(() => FilePicker.platform.pickFiles());
+    final initialDirectory = await _filePickerStartDirectory();
+    final result = await AppLock.instance.external(
+      () => FilePicker.platform.pickFiles(initialDirectory: initialDirectory),
+    );
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.first;
     if (picked.path == null) return;

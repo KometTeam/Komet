@@ -1,6 +1,6 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/foundation.dart';
+
+import 'tlottie_frame.dart';
 
 // #***! заглушка для платформ без нативки
 class TlottieClip {
@@ -12,7 +12,7 @@ class TlottieClip {
   double frameRate = 60;
   final ValueNotifier<int> ready = ValueNotifier(0);
 
-  ui.Image? frameAt(int index) => null;
+  TlottieFrame? frameAt(int index) => null;
 }
 
 class TlottieEngine {
@@ -23,8 +23,11 @@ class TlottieEngine {
 
   bool get available => false;
 
-  Future<TlottieClip?> acquire(String url, int px, {String? inlineJson}) async =>
-      null;
+  Future<TlottieClip?> acquire(
+    String url,
+    int px, {
+    String? inlineJson,
+  }) async => null;
 
   Future<void> prewarm(String url, int px) async {}
 

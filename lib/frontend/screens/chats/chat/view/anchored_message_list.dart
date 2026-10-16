@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
@@ -24,6 +25,7 @@ class AnchoredMessageList extends StatefulWidget {
     this.loadingOlder = false,
     this.loadingNewer = false,
     this.physics,
+    this.cacheGrowthAllowed,
   });
 
   final ScrollController controller;
@@ -37,6 +39,7 @@ class AnchoredMessageList extends StatefulWidget {
   final bool loadingOlder;
   final bool loadingNewer;
   final ScrollPhysics? physics;
+  final ValueListenable<bool>? cacheGrowthAllowed;
 
   static double anchoredPixels({
     required double alignment,
@@ -58,22 +61,37 @@ class _AnchoredMessageListState extends State<AnchoredMessageList> {
   @override
   void initState() {
     super.initState();
+    widget.cacheGrowthAllowed?.addListener(_scheduleGrowth);
     _scheduleGrowth();
   }
 
   @override
   void didUpdateWidget(AnchoredMessageList oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.cacheGrowthAllowed != widget.cacheGrowthAllowed) {
+      oldWidget.cacheGrowthAllowed?.removeListener(_scheduleGrowth);
+      widget.cacheGrowthAllowed?.addListener(_scheduleGrowth);
+    }
     if (widget.cacheExtent < _cacheExtent) _cacheExtent = widget.cacheExtent;
     _scheduleGrowth();
   }
 
+  @override
+  void dispose() {
+    widget.cacheGrowthAllowed?.removeListener(_scheduleGrowth);
+    super.dispose();
+  }
+
+  bool get _canGrow =>
+      _cacheExtent < widget.cacheExtent &&
+      (widget.cacheGrowthAllowed?.value ?? true);
+
   void _scheduleGrowth() {
-    if (_growthScheduled || _cacheExtent >= widget.cacheExtent) return;
+    if (_growthScheduled || !_canGrow) return;
     _growthScheduled = true;
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _growthScheduled = false;
-      if (!mounted || _cacheExtent >= widget.cacheExtent) return;
+      if (!mounted || !_canGrow) return;
       setState(() {
         _cacheExtent = math.min(
           widget.cacheExtent,
@@ -82,6 +100,7 @@ class _AnchoredMessageListState extends State<AnchoredMessageList> {
       });
       _scheduleGrowth();
     });
+    SchedulerBinding.instance.ensureVisualUpdate();
   }
 
   @override

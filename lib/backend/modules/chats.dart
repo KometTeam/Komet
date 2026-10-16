@@ -819,6 +819,16 @@ class ChatsModule {
 
   bool get chatsLoaded => _readyAccounts.isNotEmpty;
 
+  ({CachedChat chat, bool inList})? cachedChat(int accountId, int chatId) {
+    if (!_readyAccounts.contains(accountId)) return null;
+    final chat = _chatsById[chatId];
+    if (chat == null || chat.accountId != accountId) return null;
+    return (
+      chat: chat.copyWith(participants: Map.of(chat.participants)),
+      inList: _inListById[chatId] != ChatListState.notInList,
+    );
+  }
+
   // #***! разовая подгрузка кэша чатов аккаунта из базы
   Future<void> ensureLoaded(int accountId) async {
     if (!_loadedAccounts.add(accountId)) return;

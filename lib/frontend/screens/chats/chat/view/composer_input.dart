@@ -313,7 +313,6 @@ class ComposerInputBar extends StatelessWidget {
                                     ),
                                     if (showAttachButton)
                                       _AttachButton(
-                                        hasText: hasText,
                                         onOpen: onOpenAttach,
                                         onLongOpen: onOpenAttachScheduled,
                                         uploadStatus: uploadStatus,
@@ -1157,7 +1156,6 @@ ContentInsertionConfiguration? _insertionConfig(
 }
 
 class _AttachButton extends StatelessWidget {
-  final ValueListenable<bool> hasText;
   final VoidCallback onOpen;
   final VoidCallback onLongOpen;
   final ValueListenable<UploadStatus> uploadStatus;
@@ -1167,7 +1165,6 @@ class _AttachButton extends StatelessWidget {
   final double leading;
 
   const _AttachButton({
-    required this.hasText,
     required this.onOpen,
     required this.onLongOpen,
     required this.uploadStatus,
@@ -1179,56 +1176,45 @@ class _AttachButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([hasText, uploadStatus]),
-      builder: (context, _) {
-        final isText = hasText.value;
-        final status = uploadStatus.value;
+    return ValueListenableBuilder<UploadStatus>(
+      valueListenable: uploadStatus,
+      builder: (context, status, _) {
         final iconColor = status.awaitingResponse
             ? cs.primary
             : (status.active
                   ? cs.onSurfaceVariant.withValues(alpha: 0.5)
                   : mutedIcon);
-        final disabled = isText || status.active;
-        final onTap = disabled ? null : onOpen;
-        final onLongPress = disabled ? null : onLongOpen;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: isText ? 0 : slot,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity: isText ? 0 : 1,
-            child: isText
-                ? const SizedBox.shrink()
-                : GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onTap,
-                    onLongPress: onLongPress,
-                    child: Padding(
-                      padding: EdgeInsets.only(left: leading),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          if (status.active)
-                            SizedBox(
-                              width: 30,
-                              height: 30,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                value: status.progressValue,
-                                color: cs.primary,
-                              ),
-                            ),
-                          Icon(
-                            Symbols.attachment,
-                            color: iconColor,
-                            size: 22,
-                            weight: 400,
-                          ),
-                        ],
+        final disabled = status.active;
+        return SizedBox(
+          width: slot,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: disabled ? null : onOpen,
+            onLongPress: disabled ? null : onLongOpen,
+            child: Padding(
+              padding: EdgeInsets.only(left: leading),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (status.active)
+                    SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        value: status.progressValue,
+                        color: cs.primary,
                       ),
                     ),
+                  Icon(
+                    Symbols.attachment,
+                    color: iconColor,
+                    size: 22,
+                    weight: 400,
                   ),
+                ],
+              ),
+            ),
           ),
         );
       },

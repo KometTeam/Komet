@@ -6068,6 +6068,18 @@ abstract class AppLocalizations {
   /// **'Nothing to paste from the clipboard'**
   String get pasteAttachFailed;
 
+  /// No description provided for @chatDropHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop to send'**
+  String get chatDropHint;
+
+  /// No description provided for @chatDropFoldersUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Folders can\'t be sent, drop the files themselves'**
+  String get chatDropFoldersUnsupported;
+
   /// No description provided for @profileQrTitle.
   ///
   /// In en, this message translates to:

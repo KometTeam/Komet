@@ -413,6 +413,7 @@ class KometNotifier(private val ctx: Context) {
             val intent = chatIntent(chatId).setAction(Intent.ACTION_VIEW)
             val shortcut = ShortcutInfoCompat.Builder(ctx, id)
                 .setShortLabel(title)
+                .setRank(LauncherShortcuts.conversationRank)
                 .setLongLived(true)
                 .setIntent(intent)
                 .setPerson(person)

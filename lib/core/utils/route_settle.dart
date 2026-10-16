@@ -20,7 +20,7 @@ class RouteSettle {
   bool get settled => _settled;
 
   // #***! цепляемся к анимации после первого кадра
-  void bind(BuildContext context) {
+  void bind(ModalRoute<Object?>? route) {
     if (_disposed || _settled || _bindScheduled || _animation != null) return;
     _bindScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -30,7 +30,7 @@ class RouteSettle {
         settleNow();
         return;
       }
-      _attach(context);
+      _attach(route);
     });
   }
 
@@ -62,8 +62,7 @@ class RouteSettle {
     _queued.clear();
   }
 
-  void _attach(BuildContext context) {
-    final route = ModalRoute.of(context);
+  void _attach(ModalRoute<Object?>? route) {
     final animation = route?.animation;
     if (animation == null || animation.status == AnimationStatus.completed) {
       settleNow();

@@ -71,6 +71,7 @@ Future<void> showAttachmentSheet(
   VoidCallback? onCreatePoll,
   ValueChanged<CachedContact>? onSendContact,
   PhotoPickCallback? onPickPhoto,
+  String initialCaption = '',
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -88,6 +89,7 @@ Future<void> showAttachmentSheet(
       onCreatePoll: onCreatePoll,
       onSendContact: onSendContact,
       onPickPhoto: onPickPhoto,
+      initialCaption: initialCaption,
     ),
   );
 }
@@ -102,6 +104,7 @@ class AttachmentSheet extends StatefulWidget {
   final VoidCallback? onCreatePoll;
   final ValueChanged<CachedContact>? onSendContact;
   final PhotoPickCallback? onPickPhoto;
+  final String initialCaption;
 
   const AttachmentSheet({
     super.key,
@@ -114,6 +117,7 @@ class AttachmentSheet extends StatefulWidget {
     this.onCreatePoll,
     this.onSendContact,
     this.onPickPhoto,
+    this.initialCaption = '',
   });
 
   @override
@@ -140,7 +144,9 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   bool _exporting = false;
   final Set<String> _tempFiles = {};
   final Set<String> _sentFiles = {};
-  final TextEditingController _captionCtrl = TextEditingController();
+  late final TextEditingController _captionCtrl = TextEditingController(
+    text: widget.initialCaption,
+  );
   final PageController _pageController = PageController();
 
   bool _navDragging = false;
