@@ -6412,6 +6412,62 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stickerPanelClearRecentFailed => 'Couldn\'t clear recent stickers';
 
   @override
+  String get stickerSettingsTitle => 'Sticker settings';
+
+  @override
+  String get stickerSettingsRecent => 'Recent';
+
+  @override
+  String get stickerSettingsFavorites => 'Favorites';
+
+  @override
+  String get stickerRecentTitle => 'Recent stickers';
+
+  @override
+  String get stickerFavoritesTitle => 'Favorite stickers';
+
+  @override
+  String get stickerListEdit => 'Edit';
+
+  @override
+  String stickerListSelected(int count) {
+    return 'Selected: $count';
+  }
+
+  @override
+  String stickerListDeleteTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Delete $count stickers?',
+      one: 'Delete $count sticker?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stickerListDeleteBody =>
+      'They will disappear from this list on all your devices.';
+
+  @override
+  String get stickerListDelete => 'Delete';
+
+  @override
+  String get stickerListDeleteFailed => 'Couldn\'t delete stickers';
+
+  @override
+  String get stickerSetsTitle => 'Sticker sets';
+
+  @override
+  String get stickerSetsAdd => 'Add';
+
+  @override
+  String get stickerSetsSearchHint => 'Search sets';
+
+  @override
+  String get chatSettingsStickers => 'Recent and favorites';
+
+  @override
   String get stickerPinned => 'Sticker pinned';
 
   @override

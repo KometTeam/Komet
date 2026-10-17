@@ -105,6 +105,7 @@ class ChatController extends ChangeNotifier {
   bool isLoadingNewer = false;
   int _newerStalledAt = -1;
   bool latestCovered = false;
+  final Set<String> _revalidated = {};
 
   bool Function() isMounted = () => true;
 
@@ -216,7 +217,7 @@ class ChatController extends ChangeNotifier {
     int count = historyPageSize,
   }) async {
     try {
-      final fetched = await messagesModule.fetchHistory(
+      await messagesModule.fetchHistory(
         myId,
         chatId,
         fromTime: fromTime,
@@ -224,12 +225,27 @@ class ChatController extends ChangeNotifier {
         backward: backward,
         count: count,
       );
-      if (fetched.isNotEmpty && KometSettings.viewDeleted.value) {
-        await chats.reconcileDeletedFromFetch(myId, chatId, fetched);
-      }
     } catch (e) {
       logger.w('Error fetching history page: $e');
     }
+  }
+
+  void _revalidateQuietly(
+    int fromTime, {
+    int forward = 0,
+    int? backward,
+    int count = historyPageSize,
+  }) {
+    final key = '$fromTime:$forward:${backward ?? count}';
+    if (!_revalidated.add(key)) return;
+    unawaited(
+      _fetchQuietly(
+        fromTime,
+        forward: forward,
+        backward: backward,
+        count: count,
+      ),
+    );
   }
 
   bool pruneUncovered(MessageRanges ranges) {
@@ -325,6 +341,12 @@ class ChatController extends ChangeNotifier {
       window = await loadWindowFromDb(targetTime, onlyVisible);
       ranges = await AppDatabase.loadMessageRanges(myId, chatId);
       if (!wanted()) return WindowLoad.missing;
+    } else {
+      _revalidateQuietly(
+        targetTime + 1,
+        forward: jumpWindowAfter,
+        backward: jumpWindowBefore + 1,
+      );
     }
     window = ranges.clipAround(window, targetTime, _timeOf);
 
@@ -388,6 +410,8 @@ class ChatController extends ChangeNotifier {
         newer = await loadNewerFromDb(edge.time, onlyVisible);
         ranges = await AppDatabase.loadMessageRanges(myId, chatId);
         if (!isMounted()) return 0;
+      } else {
+        _revalidateQuietly(edge.time, forward: newerPageSize, backward: 0);
       }
 
       final range = ranges.at(edge.time);
@@ -483,6 +507,8 @@ class ChatController extends ChangeNotifier {
         if (!isMounted()) return;
         older = await loadOlderFromDb(edge, onlyVisible, limit: size);
         ranges = await AppDatabase.loadMessageRanges(myId, chatId);
+      } else {
+        _revalidateQuietly(edge, count: size);
       }
 
       if (!isMounted()) return;
@@ -550,11 +576,8 @@ class ChatController extends ChangeNotifier {
     }
 
     try {
-      final serverMessages = await messagesModule.fetchHistory(myId, chatId);
+      await messagesModule.fetchHistory(myId, chatId);
       chats.markHistoryFetched(chatId);
-      if (KometSettings.viewDeleted.value) {
-        await chats.reconcileDeletedFromFetch(myId, chatId, serverMessages);
-      }
       final updatedDecoded = await loadInitialFromDb(onlyVisible: onlyVisible);
       final ranges = await AppDatabase.loadMessageRanges(myId, chatId);
       if (isMounted()) {

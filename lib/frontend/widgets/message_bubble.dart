@@ -2340,10 +2340,12 @@ class MessageBubble extends StatelessWidget {
     final forwarded = message.forwardedAttachment;
     final isForwarded = forwarded != null && !isForwardedContact;
 
-    final reactionChips = _buildReactionChipsFor(
-      ctx.cs,
-      ReactionInfo.fromMap(ctx.reactionInfo),
-    );
+    final reactionChips = ctx.metaInFooter
+        ? const <Widget>[]
+        : _buildReactionChipsFor(
+            ctx.cs,
+            ReactionInfo.fromMap(ctx.reactionInfo),
+          );
     final hasReactions = reactionChips.isNotEmpty;
 
     final activeFontFamily = Theme.of(
@@ -2431,6 +2433,7 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
+    if (ctx.metaInFooter) return textWidget;
     return TextWithMeta(text: textWidget, meta: metaRow);
   }
 
@@ -2811,6 +2814,7 @@ class MessageBubble extends StatelessWidget {
       status: overrideStatus ?? message.status,
       otherReadTime: otherReadTime,
       time: message.time,
+      showMeta: !ctx.metaInFooter,
       likelyForwarded: ctx.likelyForwarded,
       cs: ctx.cs,
       waveData: audio?.waveform,

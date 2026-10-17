@@ -27,6 +27,7 @@ class VoiceMessageBubble extends StatefulWidget {
   final String? status;
   final ValueListenable<int>? otherReadTime;
   final int time;
+  final bool showMeta;
   final bool likelyForwarded;
   final ColorScheme cs;
   final String? waveData;
@@ -49,6 +50,7 @@ class VoiceMessageBubble extends StatefulWidget {
     this.status,
     this.otherReadTime,
     required this.time,
+    this.showMeta = true,
     this.likelyForwarded = false,
     required this.cs,
     this.waveData,
@@ -176,6 +178,25 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
           AppLocalizations.of(context)!.voiceBubblePlaybackError,
         );
     }
+  }
+
+  List<Widget> _buildMeta() {
+    final dim = widget.textColor.withValues(alpha: 0.6);
+    return [
+      if (widget.likelyForwarded) LikelyForwardedMark(color: dim),
+      Text(
+        formatClock(
+          DateTime.fromMillisecondsSinceEpoch(widget.time),
+          withSeconds: KometSettings.fullTimestamp.value,
+        ),
+        style: TextStyle(color: dim, fontSize: 10),
+      ),
+      if (widget.isMe) ...[const SizedBox(width: 2), _buildStatusIcon()],
+      if (widget.deleted) ...[
+        const SizedBox(width: 2),
+        Icon(Symbols.delete, size: 13, color: dim),
+      ],
+    ];
   }
 
   Widget _buildStatusIcon() {
@@ -413,69 +434,14 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                       : const SizedBox.shrink(),
                 ),
               ),
-              if (!_transcriptionVisible) ...[
-                if (widget.likelyForwarded)
-                  LikelyForwardedMark(
-                    color: widget.textColor.withValues(alpha: 0.6),
-                  ),
-                Text(
-                  formatClock(
-                    DateTime.fromMillisecondsSinceEpoch(widget.time),
-                    withSeconds: KometSettings.fullTimestamp.value,
-                  ),
-                  style: TextStyle(
-                    color: widget.textColor.withValues(alpha: 0.6),
-                    fontSize: 10,
-                  ),
-                ),
-                if (widget.isMe) ...[
-                  const SizedBox(width: 2),
-                  _buildStatusIcon(),
-                ],
-                if (widget.deleted) ...[
-                  const SizedBox(width: 2),
-                  Icon(
-                    Symbols.delete,
-                    size: 13,
-                    color: widget.textColor.withValues(alpha: 0.6),
-                  ),
-                ],
-              ],
+              if (!_transcriptionVisible && widget.showMeta) ..._buildMeta(),
             ],
           ),
-          if (_transcriptionVisible) ...[
+          if (_transcriptionVisible && widget.showMeta)
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (widget.likelyForwarded)
-                  LikelyForwardedMark(
-                    color: widget.textColor.withValues(alpha: 0.6),
-                  ),
-                Text(
-                  formatClock(
-                    DateTime.fromMillisecondsSinceEpoch(widget.time),
-                    withSeconds: KometSettings.fullTimestamp.value,
-                  ),
-                  style: TextStyle(
-                    color: widget.textColor.withValues(alpha: 0.6),
-                    fontSize: 10,
-                  ),
-                ),
-                if (widget.isMe) ...[
-                  const SizedBox(width: 2),
-                  _buildStatusIcon(),
-                ],
-                if (widget.deleted) ...[
-                  const SizedBox(width: 2),
-                  Icon(
-                    Symbols.delete,
-                    size: 13,
-                    color: widget.textColor.withValues(alpha: 0.6),
-                  ),
-                ],
-              ],
+              children: _buildMeta(),
             ),
-          ],
         ],
       ),
     );

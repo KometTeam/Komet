@@ -18,6 +18,7 @@ import '../../upload_progress_ring.dart';
 import 'edge_stretch_fill.dart';
 import 'bubble_context.dart';
 import 'media_autoplay.dart';
+import 'network_photo.dart';
 import 'video_bubble.dart';
 import '../../../../core/config/komet_settings.dart';
 import '../../../../core/media/auto_download_gate.dart';
@@ -430,42 +431,65 @@ class PhotoBubble extends StatelessWidget {
             frame != null || synchronouslyLoaded
             ? child
             : _buildPreviewImage(ctx, photo, width, height),
-        errorBuilder: (_, _, _) =>
-            _buildPreviewImage(ctx, photo, width, height),
+        errorBuilder: (_, _, _) => _buildNetworkPhoto(
+          ctx,
+          photo,
+          width,
+          height,
+          memWidth: memWidth,
+          memHeight: memHeight,
+        ),
       );
     }
+    return _buildNetworkPhoto(
+      ctx,
+      photo,
+      width,
+      height,
+      memWidth: memWidth,
+      memHeight: memHeight,
+    );
+  }
+
+  Widget _buildNetworkPhoto(
+    BubbleContext ctx,
+    MessageAttachment photo,
+    double width,
+    double height, {
+    required int memWidth,
+    required int memHeight,
+  }) {
     final imageUrl = _previewUrlOf(photo);
-    if (imageUrl.isNotEmpty && !imageUrl.startsWith('data:')) {
-      return ListenableBuilder(
-        listenable: Listenable.merge([
-          AutoDownloadGate.listen(imageUrl),
-          KometSettings.autoDownloadPhoto,
-        ]),
-        builder: (context, _) {
-          if (!AutoDownloadGate.allows(
-            KometSettings.autoDownloadPhoto.value,
-            imageUrl,
-          )) {
-            return _manualLoadTile(ctx, photo, imageUrl, width, height);
-          }
-          return CachedNetworkImage(
-            imageUrl: imageUrl,
-            width: width,
-            height: height,
-            fit: BoxFit.cover,
-            memCacheWidth: memWidth,
-            memCacheHeight: memHeight,
-            fadeInDuration: Duration.zero,
-            placeholderFadeInDuration: Duration.zero,
-            placeholder: (_, _) =>
-                _buildPreviewImage(ctx, photo, width, height),
-            errorWidget: (_, _, _) =>
-                _buildPreviewImage(ctx, photo, width, height),
-          );
-        },
-      );
+    if (imageUrl.isEmpty || imageUrl.startsWith('data:')) {
+      return _buildPreviewImage(ctx, photo, width, height);
     }
-    return _buildPreviewImage(ctx, photo, width, height);
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        AutoDownloadGate.listen(imageUrl),
+        KometSettings.autoDownloadPhoto,
+      ]),
+      builder: (context, _) {
+        if (!AutoDownloadGate.allows(
+          KometSettings.autoDownloadPhoto.value,
+          imageUrl,
+        )) {
+          return _manualLoadTile(ctx, photo, imageUrl, width, height);
+        }
+        return NetworkPhoto(
+          url: imageUrl,
+          width: width,
+          height: height,
+          memWidth: memWidth,
+          memHeight: memHeight,
+          logId: switch (photo) {
+            PhotoAttachment(:final photoId) => photoId,
+            VideoAttachment(:final videoId) => videoId,
+            _ => null,
+          },
+          fallback: (_) => _buildPreviewImage(ctx, photo, width, height),
+        );
+      },
+    );
   }
 
   Widget _manualLoadTile(

@@ -6462,6 +6462,64 @@ class AppLocalizationsRu extends AppLocalizations {
   String get stickerPanelClearRecentFailed => 'Не удалось очистить недавние';
 
   @override
+  String get stickerSettingsTitle => 'Настройки стикеров';
+
+  @override
+  String get stickerSettingsRecent => 'Недавние';
+
+  @override
+  String get stickerSettingsFavorites => 'Избранные';
+
+  @override
+  String get stickerRecentTitle => 'Недавние стикеры';
+
+  @override
+  String get stickerFavoritesTitle => 'Избранные стикеры';
+
+  @override
+  String get stickerListEdit => 'Изменить';
+
+  @override
+  String stickerListSelected(int count) {
+    return 'Выбрано: $count';
+  }
+
+  @override
+  String stickerListDeleteTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Удалить $count стикера?',
+      many: 'Удалить $count стикеров?',
+      few: 'Удалить $count стикера?',
+      one: 'Удалить $count стикер?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stickerListDeleteBody =>
+      'Они пропадут из этого списка на всех ваших устройствах.';
+
+  @override
+  String get stickerListDelete => 'Удалить';
+
+  @override
+  String get stickerListDeleteFailed => 'Не удалось удалить стикеры';
+
+  @override
+  String get stickerSetsTitle => 'Наборы стикеров';
+
+  @override
+  String get stickerSetsAdd => 'Добавить';
+
+  @override
+  String get stickerSetsSearchHint => 'Поиск наборов';
+
+  @override
+  String get chatSettingsStickers => 'Недавние и избранные';
+
+  @override
   String get stickerPinned => 'Стикер закреплён';
 
   @override
