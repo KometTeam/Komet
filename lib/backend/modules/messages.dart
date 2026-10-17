@@ -18,6 +18,7 @@ import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
 import '../../models/attachment.dart';
 import 'chats.dart' show chats;
+import 'history_reconcile.dart';
 import 'message_copy.dart';
 import 'sent_message.dart';
 
@@ -820,6 +821,14 @@ class MessagesModule {
       'getMessages': true,
     };
 
+    final reachesNow = fromTime == null && forward <= 0;
+    final settledBefore = DateTime.now()
+        .subtract(historySettleWindow)
+        .millisecondsSinceEpoch;
+    final latestBefore = reachesNow
+        ? await _latestLocalRows(accountId, chatId, backward ?? count)
+        : const <Map<String, dynamic>>[];
+
     final response = await _api.sendRequest(Opcode.chatHistory, payload);
 
     if (!response.isOk) return [];
@@ -872,7 +881,59 @@ class MessagesModule {
       backward: backward ?? count,
       messagesData: messagesData,
     );
+    await _dropDeletedOnServer(
+      accountId,
+      chatId,
+      messagesData,
+      latestBefore: latestBefore,
+      reachesNow: reachesNow,
+      settledBefore: settledBefore,
+    );
     return toSave;
+  }
+
+  Future<List<Map<String, dynamic>>> _latestLocalRows(
+    int accountId,
+    int chatId,
+    int limit,
+  ) async {
+    try {
+      return await AppDatabase.loadMessages(accountId, chatId, limit: limit);
+    } catch (e) {
+      logger.w('Сверка истории $chatId: база не прочиталась: $e');
+      return const [];
+    }
+  }
+
+  Future<void> _dropDeletedOnServer(
+    int accountId,
+    int chatId,
+    List<dynamic> messagesData, {
+    required List<Map<String, dynamic>> latestBefore,
+    required bool reachesNow,
+    required int settledBefore,
+  }) async {
+    final page = HistoryPage.of(messagesData);
+    if (page == null) return;
+    try {
+      final span = await AppDatabase.loadMessagesBetween(
+        accountId,
+        chatId,
+        afterTime: page.oldest - 1,
+        beforeTime: page.newest + 1,
+        limit: messagesData.length * 2 + 100,
+      );
+      final missing = page.missingFrom(
+        [...span, ...latestBefore],
+        reachesNow: reachesNow,
+        settledBefore: settledBefore,
+      );
+      if (missing.isEmpty) return;
+      logger.i('Чат $chatId: ${missing.length} сообщ. удалены на сервере');
+      await chats.dropDeletedOnServer(accountId, chatId, missing);
+    } catch (e) {
+      logger.w('Сверка истории $chatId не удалась: $e');
+    }
   }
 
   Future<void> _recordCoverage(

@@ -21,6 +21,9 @@ import 'small_spinner.dart';
 import 'lottie_image.dart';
 import 'sticker_peek.dart';
 import 'sticker_pin.dart';
+import 'swipe_route.dart';
+import '../screens/stickers/sticker_sets_screen.dart';
+import '../screens/stickers/sticker_settings_screen.dart';
 import '../../core/config/app_frost.dart';
 import 'liquid_glass.dart';
 
@@ -119,6 +122,8 @@ class _StickerPanelState extends State<StickerPanel>
     )..repeat(reverse: true);
     _scroll.addListener(_onScroll);
     stickersModule.favoriteStickerIds.addListener(_onPinnedChanged);
+    stickersModule.setsChanged.addListener(_onPinnedChanged);
+    stickersModule.recentStickerIds.addListener(_onRecentsChanged);
     EmojiKeywordIndex.instance.ensureLoaded();
     _load();
   }
@@ -126,6 +131,8 @@ class _StickerPanelState extends State<StickerPanel>
   @override
   void dispose() {
     stickersModule.favoriteStickerIds.removeListener(_onPinnedChanged);
+    stickersModule.setsChanged.removeListener(_onPinnedChanged);
+    stickersModule.recentStickerIds.removeListener(_onRecentsChanged);
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
     _scrolling.dispose();
@@ -243,6 +250,18 @@ class _StickerPanelState extends State<StickerPanel>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _scroll.hasClients) _onScroll();
     });
+  }
+
+  void _onRecentsChanged() {
+    if (!mounted || _loading || _error != null) return;
+    final current = stickersModule.recentStickerIds.value.toSet();
+    final kept = [
+      for (final id in _recents)
+        if (current.contains(id)) id,
+    ];
+    if (kept.length == _recents.length) return;
+    _recents = kept;
+    _onPinnedChanged();
   }
 
   Future<void> _confirmClearRecents() async {
@@ -465,15 +484,68 @@ class _StickerPanelState extends State<StickerPanel>
         ),
         SizedBox(
           height: _toggleBarHeight,
-          child: Center(
-            child: SegmentedPillToggle(
-              labels: [l10n.stickerPanelEmojiTab, l10n.stickerPanelStickersTab],
-              selected: _mode,
-              onChanged: _setMode,
-            ),
+          child: Row(
+            children: [
+              _buildBarAction(
+                cs,
+                key: const ValueKey('sticker-panel-settings'),
+                icon: Symbols.settings,
+                tooltip: l10n.stickerSettingsTitle,
+                onTap: () => pushSwipeable(
+                  context,
+                  (_) => const StickerSettingsScreen(),
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: SegmentedPillToggle(
+                    labels: [
+                      l10n.stickerPanelEmojiTab,
+                      l10n.stickerPanelStickersTab,
+                    ],
+                    selected: _mode,
+                    onChanged: _setMode,
+                  ),
+                ),
+              ),
+              _buildBarAction(
+                cs,
+                key: const ValueKey('sticker-panel-sets'),
+                icon: Symbols.add,
+                tooltip: l10n.stickerSetsTitle,
+                onTap: () =>
+                    pushSwipeable(context, (_) => const StickerSetsScreen()),
+              ),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBarAction(
+    ColorScheme cs, {
+    required Key key,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    final visible = _mode == _modeStickers;
+    return SizedBox(
+      width: _toggleBarHeight + 8,
+      child: AnimatedOpacity(
+        opacity: visible ? 1 : 0,
+        duration: const Duration(milliseconds: 160),
+        child: IgnorePointer(
+          ignoring: !visible,
+          child: IconButton(
+            key: key,
+            icon: Icon(icon, color: cs.onSurfaceVariant, size: 24),
+            tooltip: tooltip,
+            onPressed: onTap,
+          ),
+        ),
+      ),
     );
   }
 

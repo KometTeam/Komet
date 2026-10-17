@@ -15,7 +15,9 @@ import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/underline_tab_bar.dart';
+import '../../widgets/swipe_route.dart';
 import '../lock/archive_gate.dart';
+import '../stickers/sticker_settings_screen.dart';
 import 'archive_lock_settings_screen.dart';
 import 'folders_settings_section.dart';
 
@@ -127,6 +129,23 @@ class _ChatsSettingsSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
         ),
         const SettingsCard(children: [_DoubleTapReactionTile()]),
+        const SizedBox(height: 20),
+        SectionHeader(
+          l10n.stickerPanelStickersTab,
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        ),
+        SettingsCard(
+          children: [
+            SettingsNavTile(
+              key: const ValueKey('chat-settings-stickers'),
+              icon: Symbols.sticky_note_2,
+              label: l10n.chatSettingsStickers,
+              isLast: true,
+              onTap: () =>
+                  pushSwipeable(context, (_) => const StickerSettingsScreen()),
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
         SectionHeader(
           l10n.chatSettingsAutoDownloadTitle,

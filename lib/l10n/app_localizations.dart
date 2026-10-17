@@ -11492,6 +11492,96 @@ abstract class AppLocalizations {
   /// **'Couldn\'t clear recent stickers'**
   String get stickerPanelClearRecentFailed;
 
+  /// No description provided for @stickerSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sticker settings'**
+  String get stickerSettingsTitle;
+
+  /// No description provided for @stickerSettingsRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get stickerSettingsRecent;
+
+  /// No description provided for @stickerSettingsFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorites'**
+  String get stickerSettingsFavorites;
+
+  /// No description provided for @stickerRecentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent stickers'**
+  String get stickerRecentTitle;
+
+  /// No description provided for @stickerFavoritesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite stickers'**
+  String get stickerFavoritesTitle;
+
+  /// No description provided for @stickerListEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get stickerListEdit;
+
+  /// No description provided for @stickerListSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected: {count}'**
+  String stickerListSelected(int count);
+
+  /// No description provided for @stickerListDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Delete {count} sticker?} other{Delete {count} stickers?}}'**
+  String stickerListDeleteTitle(int count);
+
+  /// No description provided for @stickerListDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'They will disappear from this list on all your devices.'**
+  String get stickerListDeleteBody;
+
+  /// No description provided for @stickerListDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get stickerListDelete;
+
+  /// No description provided for @stickerListDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t delete stickers'**
+  String get stickerListDeleteFailed;
+
+  /// No description provided for @stickerSetsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sticker sets'**
+  String get stickerSetsTitle;
+
+  /// No description provided for @stickerSetsAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get stickerSetsAdd;
+
+  /// No description provided for @stickerSetsSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search sets'**
+  String get stickerSetsSearchHint;
+
+  /// No description provided for @chatSettingsStickers.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent and favorites'**
+  String get chatSettingsStickers;
+
   /// No description provided for @stickerPinned.
   ///
   /// In en, this message translates to:

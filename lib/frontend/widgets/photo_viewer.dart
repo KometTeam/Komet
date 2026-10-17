@@ -219,6 +219,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen>
 
   late PageController _controller;
   late List<_ViewerMedia> _items;
+  late final List<_ViewerMedia> _ownMedia;
   late int _index;
   late final String _heroId;
   late final String _initialMediaId;
@@ -259,6 +260,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen>
     _heroTransform.addListener(_syncHero);
     _heroTransform.addListener(_syncZoom);
     _items = _localItems();
+    _ownMedia = _items;
     _index = switch (_avatarFeed) {
       final avatars? => avatars.initialIndex.clamp(0, _items.length - 1),
       null when widget.video == null =>
@@ -525,6 +527,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen>
     final feed = await sharedContentModule.mediaFeedFor(
       chatId: chatId,
       mediaKey: key,
+      mediaTime: widget.message?.time,
       resolveAnchor: () => _resolveAnchor(chatId),
     );
     if (!mounted) return;
@@ -533,14 +536,32 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen>
       return;
     }
 
-    final items = _feedItems(feed.items);
+    final (:items, :total) = _withOwnMedia(feed);
     final at = items.indexWhere((i) => i.id == key);
     if (at == -1) {
       setState(() => _feedFailed = true);
       return;
     }
 
-    _adoptFeed(items, at, total: feed.total, reachedEnd: feed.reachedEnd);
+    _adoptFeed(items, at, total: total, reachedEnd: feed.reachedEnd);
+  }
+
+  ({List<_ViewerMedia> items, int total}) _withOwnMedia(ChatMediaFeed feed) {
+    final items = _feedItems(feed.items);
+    final own = _ownMedia;
+    if (own.isEmpty || items.any((i) => i.id == own.first.id)) {
+      return (items: items, total: feed.total);
+    }
+    final time = own.first.time;
+    final older = items.indexWhere((i) => i.time < time);
+    if (older == -1 && !feed.reachedEnd) {
+      return (items: items, total: feed.total);
+    }
+    final at = older == -1 ? items.length : older;
+    return (
+      items: [...items.sublist(0, at), ...own, ...items.sublist(at)],
+      total: feed.total + own.length,
+    );
   }
 
   Future<void> _syncAvatars(Future<void> Function() fetch) async {
@@ -616,16 +637,16 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen>
       );
       if (!mounted) return;
 
-      final items = _feedItems(feed.items);
+      final (:items, :total) = _withOwnMedia(feed);
       final at = items.indexWhere((i) => i.id == _current.id);
       if (at == -1) {
         setState(() {
-          _total = feed.total;
+          _total = total;
           _reachedEnd = feed.reachedEnd;
         });
         return;
       }
-      _adoptFeed(items, at, total: feed.total, reachedEnd: feed.reachedEnd);
+      _adoptFeed(items, at, total: total, reachedEnd: feed.reachedEnd);
     } finally {
       _loadingMore = false;
     }

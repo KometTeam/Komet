@@ -1177,7 +1177,6 @@ class ChatsModule {
     }
     if (chatId == null) return;
 
-    final keepDeleted = KometSettings.viewDeleted.value;
     final ids = payload['messageIds'];
     if (ids is List) {
       final messageIds = ids
@@ -1185,21 +1184,7 @@ class ChatsModule {
           .whereType<String>()
           .where((id) => id.isNotEmpty)
           .toList();
-      if (messageIds.isNotEmpty) {
-        if (keepDeleted) {
-          await AppDatabase.markMessagesDeleted(accountId, chatId, messageIds);
-          unawaited(keepDeletedMedia(accountId, chatId, messageIds));
-        } else {
-          await AppDatabase.deleteMessages(accountId, chatId, messageIds);
-        }
-        for (final id in messageIds) {
-          _messageEventsController.add(
-            keepDeleted
-                ? MessageMarkedDeletedEvent(chatId, id)
-                : MessageRemovedEvent(chatId, id),
-          );
-        }
-      }
+      await applyServerDeletions(accountId, chatId, messageIds);
     }
     await _notifyChatFromDb(accountId, chatId);
   }
@@ -1517,54 +1502,51 @@ class ChatsModule {
     );
   }
 
-  // #***! сверяем что удалили на сервере
-  Future<List<String>> reconcileDeletedFromFetch(
+  Future<void> dropDeletedOnServer(
     int accountId,
     int chatId,
-    List<CachedMessage> serverMessages,
+    List<String> messageIds,
   ) async {
-    if (serverMessages.isEmpty) return const [];
+    if (messageIds.isEmpty) return;
+    await applyServerDeletions(accountId, chatId, messageIds);
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final lastId = CachedChat.fromDbRow(rows.first).lastMsgId;
+    if (lastId == null || !messageIds.contains('$lastId')) return;
+    await _reconcileLastMessage(accountId, chatId, rows.first);
+    await _notifyChatFromDb(accountId, chatId);
+  }
 
-    final serverIds = <String>{};
-    var minTime = serverMessages.first.time;
-    var maxTime = serverMessages.first.time;
-    for (final m in serverMessages) {
-      serverIds.add(m.id);
-      if (m.time < minTime) minTime = m.time;
-      if (m.time > maxTime) maxTime = m.time;
+  Future<void> applyServerDeletions(
+    int accountId,
+    int chatId,
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) return;
+    final keepDeleted = KometSettings.viewDeleted.value;
+    if (keepDeleted) {
+      await AppDatabase.markMessagesDeleted(accountId, chatId, messageIds);
+      unawaited(keepDeletedMedia(accountId, chatId, messageIds));
+    } else {
+      await AppDatabase.deleteMessages(accountId, chatId, messageIds);
     }
-
-    final cached = await AppDatabase.loadMessages(
-      accountId,
-      chatId,
-      limit: 300,
-      onlyVisible: true,
-    );
-
-    final newlyDeleted = <String>[];
-    for (final row in cached) {
-      final id = row['id']?.toString();
-      if (id == null || id.isEmpty || id.startsWith('temp_')) continue;
-      if (serverIds.contains(id)) continue;
-
-      final status = row['status']?.toString();
-      if (status == 'pending' || status == 'sending' || status == 'error') {
-        continue;
+    for (final id in messageIds) {
+      if (keepDeleted) {
+        MessageSessionCache.replace(
+          accountId,
+          chatId,
+          id,
+          (message) => message.copyWith(deleted: true),
+        );
+      } else {
+        MessageSessionCache.removeMessage(accountId, chatId, id);
       }
-
-      final time = row['time'] is int
-          ? row['time'] as int
-          : int.tryParse(row['time']?.toString() ?? '') ?? 0;
-      if (time < minTime || time > maxTime) continue;
-
-      newlyDeleted.add(id);
+      _messageEventsController.add(
+        keepDeleted
+            ? MessageMarkedDeletedEvent(chatId, id)
+            : MessageRemovedEvent(chatId, id),
+      );
     }
-
-    if (newlyDeleted.isNotEmpty) {
-      await AppDatabase.markMessagesDeleted(accountId, chatId, newlyDeleted);
-      unawaited(keepDeletedMedia(accountId, chatId, newlyDeleted));
-    }
-    return newlyDeleted;
   }
 
   // #***! пуш про реакции

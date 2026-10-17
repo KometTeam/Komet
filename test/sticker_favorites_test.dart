@@ -24,6 +24,7 @@ class _AssetsApi extends Api {
   List<int> favoriteNextPage = const [];
   bool accept = true;
   Completer<void>? catalogGate;
+  List<int> catalogSets = const [];
 
   @override
   Stream<Packet> get pushStream => pushes.stream;
@@ -78,6 +79,12 @@ class _AssetsApi extends Api {
               {'type': 'GIF', 'id': 2},
             ],
           },
+          if (catalogSets.isNotEmpty)
+            {
+              'type': 'STICKER_SETS',
+              'id': 'NEW_STICKER_SETS',
+              'stickerSets': catalogSets,
+            },
         ],
       };
     }
@@ -90,6 +97,20 @@ class _AssetsApi extends Api {
         payload['sectionId'] == 'FAVORITE_STICKERS' &&
         payload['from'] == favoriteMarker) {
       return {'stickers': favoriteNextPage};
+    }
+    if (opcode == Opcode.assetsGetByIds &&
+        payload['type'] == 'STICKER_SET' &&
+        catalogSets.isNotEmpty) {
+      return {
+        'stickerSets': [
+          for (final id in payload['ids'] as List)
+            {
+              'id': id,
+              'name': 'Set $id',
+              'stickers': [(id as int) * 10],
+            },
+        ],
+      };
     }
     if (opcode == Opcode.assetsGetByIds) return {'stickerSets': const []};
     return null;
@@ -364,5 +385,73 @@ void main() {
     gate.complete();
     await loading;
     expect(stickers.recentStickerIds.value, [_recent]);
+  });
+
+  test('favorites are replaced with the list that stays', () async {
+    api.favoriteStickers = const [_pinnedA, _pinnedB, _pinnedC];
+    await stickers.ensureFavoritesLoaded();
+
+    expect(await stickers.setFavoriteStickers([_pinnedA, _pinnedC]), isTrue);
+
+    expect(api.sent(Opcode.assetsListModify).single, {
+      'type': 'FAVORITE_STICKER',
+      'ids': [_pinnedA, _pinnedC],
+    });
+    expect(api.sentSilently(Opcode.assetsListModify), isTrue);
+    expect(stickers.favoriteStickerIds.value, [_pinnedA, _pinnedC]);
+  });
+
+  test('a rejected replacement keeps the stickers', () async {
+    api.favoriteStickers = const [_pinnedA, _pinnedB];
+    await stickers.ensureFavoritesLoaded();
+    api.accept = false;
+
+    expect(await stickers.setFavoriteStickers(const [_pinnedB]), isFalse);
+    expect(stickers.favoriteStickerIds.value, [_pinnedA, _pinnedB]);
+  });
+
+  test('selected recents are removed by id, the rest stay', () async {
+    await stickers.ensureLoaded();
+    api.pushes.add(
+      _push({
+        'type': 'RECENT',
+        'updateType': 'LIST_UPDATED',
+        'recentsList': [_recentItem(_recent), _recentItem(_recentB)],
+      }),
+    );
+    await pumpEventQueue();
+
+    expect(await stickers.removeRecentStickers(const [_recent]), isTrue);
+
+    expect(api.sent(Opcode.assetsRemove).single, {
+      'type': 'RECENT',
+      'ids': [_recent],
+    });
+    expect(api.sent(Opcode.assetsListModify), isEmpty);
+    expect(stickers.recentStickerIds.value, [_recentB]);
+  });
+
+  test('a rejected recent removal keeps the stickers', () async {
+    await stickers.ensureLoaded();
+    api.accept = false;
+
+    expect(await stickers.removeRecentStickers(const [_recent]), isFalse);
+    expect(stickers.recentStickerIds.value, [_recent]);
+  });
+
+  test('adding a set moves it to the top and announces it', () async {
+    api.catalogSets = const [8101, 8102, 8103];
+    await stickers.ensureLoaded();
+    expect(stickers.sets.map((s) => s.id), [_pinnedSet, 8101, 8102, 8103]);
+    var announced = 0;
+    stickers.setsChanged.addListener(() => announced++);
+
+    expect(await stickers.favoriteSet(8103), isTrue);
+    expect(stickers.sets.map((s) => s.id), [8103, _pinnedSet, 8101, 8102]);
+    expect(stickers.isFavorite(8103), isTrue);
+
+    expect(await stickers.unfavoriteSet(_pinnedSet), isTrue);
+    expect(stickers.sets.map((s) => s.id), [8103, 8101, 8102, _pinnedSet]);
+    expect(announced, 2);
   });
 }

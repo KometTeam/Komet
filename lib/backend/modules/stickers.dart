@@ -22,11 +22,13 @@ class StickersModule {
 
   static const String _favoriteSetType = 'FAVORITE_STICKER_SET';
   static const String _favoriteStickerType = 'FAVORITE_STICKER';
+  static const String _recentType = 'RECENT';
 
   // #***! всё в памяти, между запусками перезапрашиваем
   final Map<int, StickerSet> _sets = {};
   final Map<int, StickerItem> _stickers = {};
   List<int> _orderedSetIds = [];
+  List<int> _catalogSetIds = [];
   List<int> _favoriteSetIds = [];
   final ValueNotifier<List<int>> _favoriteStickerIds = ValueNotifier(
     const <int>[],
@@ -34,6 +36,7 @@ class StickersModule {
   final ValueNotifier<List<int>> _recentStickerIds = ValueNotifier(
     const <int>[],
   );
+  final ValueNotifier<int> _setsChanged = ValueNotifier(0);
   int _accountEpoch = TokenStorage.accountEpoch;
 
   Future<void>? _loading;
@@ -46,6 +49,7 @@ class StickersModule {
   List<int> get favoriteSetIds => _favoriteSetIds;
   ValueListenable<List<int>> get favoriteStickerIds => _favoriteStickerIds;
   ValueListenable<List<int>> get recentStickerIds => _recentStickerIds;
+  ValueListenable<int> get setsChanged => _setsChanged;
   StickerItem? cachedSticker(int id) => _stickers[id];
   StickerSet? cachedSet(int id) => _sets[id];
   bool isFavorite(int setId) => _favoriteSetIds.contains(setId);
@@ -76,6 +80,7 @@ class StickersModule {
     _loading = null;
     _favoritesLoading = null;
     _orderedSetIds = [];
+    _catalogSetIds = [];
     _favoriteSetIds = [];
     _assign(_favoriteStickerIds, const <int>[]);
     _assign(_recentStickerIds, const <int>[]);
@@ -130,6 +135,7 @@ class StickersModule {
     final favorites = ensureFavoritesLoaded();
     await Future.wait<void>([catalog, favorites]);
     final newSetIds = await catalog;
+    _catalogSetIds = newSetIds;
 
     // #***! сперва избранные потом остальные, без дублей
     final ordered = <int>[];
@@ -138,6 +144,7 @@ class StickersModule {
       if (seen.add(id)) ordered.add(id);
     }
     _orderedSetIds = ordered;
+    _setsChanged.value++;
     logger.i(
       'Стикеры: ${ordered.length} паков, '
       '${_favoriteStickerIds.value.length} закреплённых, '
@@ -352,12 +359,35 @@ class StickersModule {
     return ok;
   }
 
-  Future<bool> clearRecentStickers() async {
-    final ok = await _modify(Opcode.assetsListModify, {
-      'type': 'RECENT',
-      'ids': <int>[],
+  Future<bool> clearRecentStickers() =>
+      _replaceList(_recentType, _recentStickerIds, const <int>[]);
+
+  Future<bool> removeRecentStickers(Iterable<int> ids) async {
+    final removed = ids.toSet().toList();
+    if (removed.isEmpty) return true;
+    final ok = await _modify(Opcode.assetsRemove, {
+      'type': _recentType,
+      'ids': removed,
     });
-    if (ok) _assign(_recentStickerIds, const <int>[]);
+    if (!ok) return false;
+    _assign(_recentStickerIds, _without(_recentStickerIds.value, removed));
+    return true;
+  }
+
+  Future<bool> setFavoriteStickers(List<int> ids) =>
+      _replaceList(_favoriteStickerType, _favoriteStickerIds, ids);
+
+  Future<bool> _replaceList(
+    String type,
+    ValueNotifier<List<int>> target,
+    List<int> ids,
+  ) async {
+    final next = List<int>.unmodifiable(ids);
+    final ok = await _modify(Opcode.assetsListModify, {
+      'type': type,
+      'ids': next,
+    });
+    if (ok) _assign(target, next);
     return ok;
   }
 
@@ -372,16 +402,33 @@ class StickersModule {
     final payload = push.payload;
     if (payload is! Map) return;
     switch (payload['type']) {
-      case 'RECENT':
+      case _recentType:
         _applyRecentsUpdate(payload);
       case _favoriteSetType:
-        _favoriteSetIds = _applyListUpdate(_favoriteSetIds, payload);
+        _setFavoriteSets(_applyListUpdate(_favoriteSetIds, payload));
       case _favoriteStickerType:
         _assign(
           _favoriteStickerIds,
           _applyListUpdate(_favoriteStickerIds.value, payload),
         );
     }
+  }
+
+  void _setFavoriteSets(List<int> ids) {
+    if (listEquals(ids, _favoriteSetIds)) return;
+    _favoriteSetIds = ids;
+    if (_orderedSetIds.isEmpty) return;
+    final ordered = <int>[];
+    final seen = <int>{};
+    for (final id in [
+      ...ids.where(_sets.containsKey),
+      ..._catalogSetIds,
+      ..._orderedSetIds,
+    ]) {
+      if (seen.add(id)) ordered.add(id);
+    }
+    _orderedSetIds = ordered;
+    _setsChanged.value++;
   }
 
   void _applyRecentsUpdate(Map payload) {
@@ -420,9 +467,11 @@ class StickersModule {
   void _applyFavorite(String type, int id, bool favorite) {
     switch (type) {
       case _favoriteSetType:
-        _favoriteSetIds = favorite
-            ? _prepended(_favoriteSetIds, [id])
-            : _without(_favoriteSetIds, [id]);
+        _setFavoriteSets(
+          favorite
+              ? _prepended(_favoriteSetIds, [id])
+              : _without(_favoriteSetIds, [id]),
+        );
       case _favoriteStickerType:
         final current = _favoriteStickerIds.value;
         _assign(

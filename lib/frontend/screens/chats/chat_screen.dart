@@ -3845,17 +3845,7 @@ class _ChatScreenState extends State<ChatScreen>
     await Future.delayed(const Duration(milliseconds: 700));
     if (!mounted || _myId == 0) return;
     try {
-      final serverMessages = await messagesModule.fetchHistory(
-        _myId,
-        widget.chatId,
-      );
-      if (KometSettings.viewDeleted.value) {
-        await chats.reconcileDeletedFromFetch(
-          _myId,
-          widget.chatId,
-          serverMessages,
-        );
-      }
+      await messagesModule.fetchHistory(_myId, widget.chatId);
       final rows = await AppDatabase.loadMessages(
         _myId,
         widget.chatId,
