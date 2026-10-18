@@ -217,9 +217,7 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
       openContactDialogProfile(
         context,
         contactId: userId,
-        name:
-            ContactCache.get(userId) ??
-            AppLocalizations.of(context)!.userFallbackName(userId),
+        name: ContactCache.get(userId),
         avatarUrl: ContactCache.getAvatar(userId),
       ),
     );

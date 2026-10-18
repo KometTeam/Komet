@@ -341,6 +341,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           _contactData = contact;
           _isBot = _contactData!.options.contains('BOT');
           ContactCache.putOptions(otherId, contact.options.toSet());
+          ContactsModule.primeContactCache(contact.raw);
         }
         if (presence != null) {
           _seenTime = presence['seen'] as int?;
@@ -404,9 +405,34 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
   }
 
-  String get _chatName => _chatAdmin?.name ?? widget.name;
+  int? get _dialogPeerId =>
+      widget.chatType == 'DIALOG' ? _otherId ?? widget.dialogPeerId : null;
 
-  String get _chatImageUrl => _chatAdmin?.imageUrl ?? widget.imageUrl;
+  // #***! человека открыли не видя (упоминание, отправитель) — имя и аву
+  // берём из карточки с сервера, заглушка только если её так и не дали
+  String get _chatName {
+    final admin = _chatAdmin;
+    if (admin != null) return admin.name;
+    if (widget.name.isNotEmpty) return widget.name;
+    final peer = _dialogPeerId;
+    if (peer == null) return '';
+    final known =
+        (_contactData ?? ContactInfoFetch.peek(peer))?.fullName ??
+        ContactCache.get(peer);
+    if (known != null && known.isNotEmpty) return known;
+    return _isLoading ? '' : l10n.userFallbackName(peer);
+  }
+
+  String get _chatImageUrl {
+    final admin = _chatAdmin;
+    if (admin != null) return admin.imageUrl;
+    if (widget.imageUrl.isNotEmpty) return widget.imageUrl;
+    final peer = _dialogPeerId;
+    if (peer == null) return '';
+    return (_contactData ?? ContactInfoFetch.peek(peer))?.avatarUrl ??
+        ContactCache.getAvatar(peer) ??
+        '';
+  }
 
   Future<void> _loadBlockedState(int peerId) async {
     final blocked = await ContactsModule.isBlocked(api, peerId);

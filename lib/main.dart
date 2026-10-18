@@ -13,6 +13,7 @@ import 'package:m3e_collection/m3e_collection.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
+import 'core/cache/chat_scroll_memory.dart';
 import 'core/cache/info_cache.dart';
 import 'core/plugins/plugin_store.dart';
 import 'core/config/build_profile.dart';
@@ -227,6 +228,7 @@ void main(List<String> args) async {
   final activeAccountId = await TokenStorage.getActiveAccountId();
   if (activeAccountId != null) {
     await ContactsModule.primeCacheFromDb(activeAccountId);
+    await ChatScrollMemory.prime(activeAccountId);
   }
   attachInfoCacheApi(api);
   chats.attachGlobalPushHandlers(api);
@@ -1293,6 +1295,7 @@ class _StartupScreenState extends State<_StartupScreen> {
         await TokenStorage.setActiveAccount(profile.id);
         await AppDatabase.setActiveAccount(profile.id);
         await ContactsModule.primeCacheFromDb(profile.id);
+        await ChatScrollMemory.prime(profile.id);
         return profile.id;
       }
     }

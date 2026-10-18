@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/modules/messages.dart';
+import 'package:komet/core/cache/chat_scroll_memory.dart';
 import 'package:komet/frontend/screens/chats/chat/chat_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/chat_scroll_navigator.dart';
 import 'package:komet/frontend/screens/chats/chat/read_marker_gate.dart';
@@ -31,7 +32,7 @@ class _Harness {
   final WidgetTester tester;
   final List<int> all;
   final ChatController controller = ChatController();
-  final ScrollController scroll = ScrollController();
+  final ChatScrollController scroll = ChatScrollController();
   final GlobalKey listKey = GlobalKey();
   final Map<String, GlobalKey> keys = {};
   final List<String> notifications = [];
@@ -43,7 +44,7 @@ class _Harness {
 
   GlobalKey keyFor(String id) => keys.putIfAbsent(id, GlobalKey.new);
 
-  Future<void> mount() async {
+  Future<void> mount({ChatScrollPoint? restore}) async {
     shimmer = AnimationController(
       vsync: const TestVSync(),
       duration: const Duration(seconds: 1),
@@ -84,6 +85,7 @@ class _Harness {
       scrollDown.dispose();
       scroll.dispose();
     });
+    if (restore != null) expect(nav.anchorBeforeLayout(restore), isTrue);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -313,5 +315,109 @@ void main() {
     expect(h.scroll.position.pixels, 0);
 
     await h.drainTimers();
+  });
+
+  testWidgets('a captured spot reopens in place on the first frame', (
+    tester,
+  ) async {
+    final before = _Harness(tester, loaded: _range(0, 300));
+    await before.mount();
+    before.scroll.jumpTo(1700);
+    await tester.pump();
+    final point = before.nav.captureScrollPoint()!;
+    final top = before.topOf(point.id)!;
+    expect(top, lessThan(_viewport));
+    expect(top + _heightOf(point.id), greaterThan(0));
+    final neighbour = 'm${int.parse(point.id.substring(1)) - 1}';
+    final neighbourTop = before.topOf(neighbour)!;
+
+    final after = _Harness(tester, loaded: _range(0, 300));
+    await after.mount(restore: point);
+
+    expect(after.scroll.position.pixels, point.pixels);
+    expect(after.topOf(point.id), closeTo(top, 0.5));
+    expect(after.topOf(neighbour), closeTo(neighbourTop, 0.5));
+  });
+
+  testWidgets('the captured message is the lowest one on screen', (
+    tester,
+  ) async {
+    final h = _Harness(tester, loaded: _range(0, 300));
+    await h.mount();
+    h.scroll.jumpTo(900);
+    await tester.pump();
+
+    final point = h.nav.captureScrollPoint()!;
+    final bottom = h.topOf(point.id)! + _heightOf(point.id);
+    expect(point.pixels, closeTo(bottom - _viewport, 0.01));
+    final below = 'm${int.parse(point.id.substring(1)) + 1}';
+    expect(h.topOf(below), anyOf(isNull, greaterThanOrEqualTo(_viewport)));
+  });
+
+  testWidgets('a spot outside memory loads a window and lands on it', (
+    tester,
+  ) async {
+    final before = _Harness(tester, loaded: _range(0, 1000));
+    await before.mount();
+    await before.run(() => before.nav.goTo('m300', highlight: false));
+    final point = before.nav.captureScrollPoint()!;
+    final top = before.topOf(point.id)!;
+
+    final after = _Harness(
+      tester,
+      loaded: _range(950, 1000),
+      all: _range(0, 1000),
+    );
+    await after.mount();
+    late bool restored;
+    await after.run(() async => restored = await after.nav.restore(point));
+
+    expect(restored, isTrue);
+    expect(after.windowLoads, 1);
+    expect(after.controller.hasNewer, isTrue);
+    expect(after.topOf(point.id), closeTo(top, 0.5));
+    expect(after.nav.busy, isFalse);
+    expect(after.notifications, isEmpty);
+  });
+
+  testWidgets('a spot whose message is gone stays at the bottom quietly', (
+    tester,
+  ) async {
+    final h = _Harness(tester, loaded: _range(950, 1000), all: _range(0, 1000));
+    await h.mount();
+    late bool restored;
+    await h.run(
+      () async => restored = await h.nav.restore((
+        id: 'm5000',
+        time: 99999,
+        pixels: -120,
+      )),
+    );
+
+    expect(restored, isFalse);
+    expect(h.nav.anchorId, isNull);
+    expect(h.scroll.position.pixels, 0);
+    expect(h.notifications, isEmpty);
+  });
+
+  testWidgets('the start offset only applies to the first position', (
+    tester,
+  ) async {
+    final scroll = ChatScrollController();
+    addTearDown(scroll.dispose);
+    Widget list() => MaterialApp(
+      home: ListView(
+        controller: scroll,
+        children: [for (var i = 0; i < 100; i++) SizedBox(height: 50)],
+      ),
+    );
+
+    scroll.startAt(400);
+    await tester.pumpWidget(list());
+    expect(scroll.position.pixels, 400);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(list());
+    expect(scroll.position.pixels, 0);
   });
 }
