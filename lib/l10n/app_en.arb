@@ -1858,6 +1858,8 @@
   "chatScreenDeleteAlsoFor": "Also delete for {name}",
   "@chatScreenDeleteAlsoFor": {"placeholders": {"name": {"type": "String"}}},
   "chatScreenMenuMute": "Disable notifications",
+  "chatScreenMenuSendMoney": "Send money",
+  "moneyTransferAppTitle": "Money",
   "chatScreenMenuChangeWallpaper": "Change wallpaper",
   "chatScreenMenuEncryption": "Message encryption",
   "chatScreenChatLinkUnavailable": "Couldn't get the chat link",

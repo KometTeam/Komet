@@ -15,6 +15,8 @@ import 'package:komet/backend/modules/comments.dart';
 import 'package:komet/backend/modules/upload_service.dart';
 import 'package:komet/backend/modules/webapp.dart';
 import 'package:komet/frontend/screens/webapp/open_mini_app.dart';
+import 'package:komet/frontend/screens/webapp/web_app_bridge.dart'
+    show WebAppEntryPoint;
 import 'package:komet/core/media/clipboard/clipboard_media.dart';
 import 'package:komet/core/media/clipboard/pasted_attachment.dart';
 import 'package:komet/frontend/widgets/paste_media_toolbar.dart';
@@ -1002,6 +1004,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (_commentsMode) return;
     _restoreDraft();
     unawaited(_loadPeerKind());
+    unawaited(_loadMoneyBot());
     unawaited(_loadWallpaper());
     unawaited(_loadReactionSettings());
     _forwardedSub = ForwardSender.delivered.listen(_onForwardedHere);
@@ -3545,6 +3548,29 @@ class _ChatScreenState extends State<ChatScreen>
     return hasMiniAppOption(chat?.options);
   }
 
+  int _moneyBotId = 0;
+
+  Future<void> _loadMoneyBot() async {
+    final botId = await webAppModule.moneyTransferBotId();
+    if (mounted) _moneyBotId = botId;
+  }
+
+  // #***! как в MAX: диалог с человеком, не ботом и не собой, и чат уже есть
+  // на сервере — мини аппа узнаёт получателя по chatId из подписанных данных
+  bool get _canSendMoney {
+    if (_moneyBotId == 0 || !_isPersonDialog || _peerIsBot) return false;
+    final peerId = _resolveOtherId();
+    return chat != null && peerId != null && peerId != _myId;
+  }
+
+  Future<void> _sendMoney() => openMiniApp(
+    context,
+    botId: _moneyBotId,
+    chatId: widget.chatId,
+    title: AppLocalizations.of(context)!.moneyTransferAppTitle,
+    entryPoint: WebAppEntryPoint.moneyButtonMore,
+  );
+
   Future<void> _openMiniApp() async {
     final peerId = _resolveOtherId();
     if (peerId == null) return;
@@ -3580,6 +3606,12 @@ class _ChatScreenState extends State<ChatScreen>
           label: l10n.chatInfoMembersSearchHint,
           onTap: _openSearch,
         ),
+        if (_canSendMoney)
+          ChatMenuItem(
+            icon: Symbols.currency_ruble,
+            label: l10n.chatScreenMenuSendMoney,
+            onTap: () => unawaited(_sendMoney()),
+          ),
         ChatMenuItem(
           icon: Symbols.wallpaper,
           label: l10n.chatScreenMenuChangeWallpaper,

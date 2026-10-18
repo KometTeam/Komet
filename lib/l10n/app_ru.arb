@@ -1487,6 +1487,8 @@
   "chatScreenDeleteMessageConfirm": "Вы точно хотите удалить это сообщение?",
   "chatScreenDeleteAlsoFor": "Также удалить для {name}",
   "chatScreenMenuMute": "Отключить уведомления",
+  "chatScreenMenuSendMoney": "Перевести деньги",
+  "moneyTransferAppTitle": "Деньги",
   "chatScreenMenuChangeWallpaper": "Изменить обои",
   "chatScreenMenuEncryption": "Шифрование сообщений",
   "chatScreenChatLinkUnavailable": "Не удалось получить ссылку чата",

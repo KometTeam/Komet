@@ -4520,6 +4520,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatScreenMenuMute => 'Disable notifications';
 
   @override
+  String get chatScreenMenuSendMoney => 'Send money';
+
+  @override
+  String get moneyTransferAppTitle => 'Money';
+
+  @override
   String get chatScreenMenuChangeWallpaper => 'Change wallpaper';
 
   @override

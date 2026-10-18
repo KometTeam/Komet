@@ -32,6 +32,7 @@ abstract class WebAppEntryPoint {
   static const String externalCallback = 'external_callback';
   static const String settings = 'settings';
   static const String fromSearch = 'from_search';
+  static const String moneyButtonMore = 'money_button_more';
 }
 
 typedef WebAppMobileIdVerifier =
