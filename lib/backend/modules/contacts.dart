@@ -454,6 +454,21 @@ class ContactsModule {
     int accountId,
   ) => _applyContacts(data, accountId, complete: true);
 
+  // #***! карточка сервера как она ляжет в базу, без записи
+  static CachedContact? contactFromServer(
+    Map<dynamic, dynamic> contact,
+    int accountId,
+  ) {
+    final row = _parseContact(contact, accountId);
+    return row == null ? null : CachedContact.fromDbRow(row);
+  }
+
+  // #***! кусок списка, остальные контакты не трогаем
+  static Future<void> applyPartialContactList(
+    Map<dynamic, dynamic> data,
+    int accountId,
+  ) => _applyContacts(data, accountId, complete: false);
+
   static Future<void> _applyContacts(
     Map<dynamic, dynamic> data,
     int accountId, {

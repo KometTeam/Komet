@@ -37,6 +37,7 @@ import 'complaints.dart';
 import 'contacts.dart';
 import 'folders.dart';
 import 'messages.dart';
+import 'phonebook_sync.dart';
 import 'webapp.dart';
 
 import 'account/account_models.dart';
@@ -69,6 +70,7 @@ class AccountModule {
   late final ProfileModule _profile = ProfileModule(_api);
   late final TwoFactorModule _twoFactor = TwoFactorModule(_api, _profile);
   late final BannersModule banners = BannersModule(_api);
+  late final PhonebookSync phonebook = PhonebookSync(_api);
   final _loginStatusController = StreamController<LoginStatus>.broadcast();
   final _noticeController = StreamController<AccountNotice>.broadcast();
   bool _loggedIn = false;
@@ -909,6 +911,7 @@ class AccountModule {
       }
     }
     _loggedIn = false;
+    phonebook.stop();
     try {
       await _api.disconnect();
     } catch (_) {}
@@ -1107,6 +1110,7 @@ class AccountModule {
     } catch (e) {
       logger.w('Контакты: $e');
     }
+    phonebook.start(profile.id);
 
     final config = data['config'];
     if (config is Map) {
