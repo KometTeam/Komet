@@ -27,6 +27,7 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'call_controls.dart';
+import 'call_fullscreen.dart';
 import 'call_glyphs.dart';
 import 'call_mic_sheet.dart';
 import 'call_participant_tile.dart';
@@ -682,6 +683,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       title: _name.isEmpty ? l10n.callGroupTitle : _name,
       resolve: _participantView,
       mediaOf: _tileMedia,
+      videoOf: _tileRenderer,
       muted: _isMuted,
       speakerOn: _isSpeaker,
       videoBusy: _videoBusy,
@@ -715,39 +717,53 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       if (screen && session.peerCamera) 'peer',
       if (session.localVideo || session.localScreen) 'self',
     ];
-    return SafeArea(
-      child: Column(
-        children: [
-          _buildTopBar(cs, 1, stage: true),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-              child: CallStage(
-                key: ValueKey(screen),
-                media: _peerScreenOr(camera),
-                label: screen ? l10n.callScreenOf(_displayName) : _displayName,
-                labelIcon: screen ? Symbols.screen_share : Symbols.videocam,
-                collapseTooltip: l10n.callExitFocus,
-                onCollapse: () => setState(() => _stageOpen = false),
+    final peer = session.peerUserId;
+    Widget stage(VoidCallback toggle, {bool fullscreen = false}) => CallStage(
+      key: ValueKey(screen),
+      media: _peerScreenOr(camera),
+      label: screen ? l10n.callScreenOf(_displayName) : _displayName,
+      labelIcon: screen ? Symbols.screen_share : Symbols.videocam,
+      collapseTooltip: l10n.callExitFocus,
+      onCollapse: () => setState(() => _stageOpen = false),
+      fullscreenTooltip: fullscreen
+          ? l10n.callExitFullscreen
+          : l10n.callEnterFullscreen,
+      onToggleFullscreen: toggle,
+      fullscreen: fullscreen,
+    );
+    return CallFullscreenScope(
+      stage: screen,
+      screen: screen && peer != null ? session.remoteScreenOf(peer) : null,
+      video: _remoteRenderer,
+      builder: (context, fullscreen, toggle) => fullscreen
+          ? stage(toggle, fullscreen: true)
+          : SafeArea(
+              child: Column(
+                children: [
+                  _buildTopBar(cs, 1, stage: true),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                      child: stage(toggle),
+                    ),
+                  ),
+                  if (strip.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: CallStrip<String>(
+                        ids: strip,
+                        height: wide ? 120 : 92,
+                        tileBuilder: (context, id, size) => id == 'peer'
+                            ? _peerStripTile(session)
+                            : _selfStripTile(session),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  _buildControls(cs),
+                  const SizedBox(height: 24),
+                ],
               ),
             ),
-          ),
-          if (strip.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: CallStrip<String>(
-                ids: strip,
-                height: wide ? 120 : 92,
-                tileBuilder: (context, id, size) => id == 'peer'
-                    ? _peerStripTile(session)
-                    : _selfStripTile(session),
-              ),
-            ),
-          const SizedBox(height: 16),
-          _buildControls(cs),
-          const SizedBox(height: 24),
-        ],
-      ),
     );
   }
 

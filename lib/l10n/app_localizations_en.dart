@@ -1074,6 +1074,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callExitFocus => 'Normal view';
 
   @override
+  String get callEnterFullscreen => 'Full screen';
+
+  @override
+  String get callExitFullscreen => 'Exit full screen';
+
+  @override
   String callScreenOf(String name) {
     return '$name\'s screen';
   }
