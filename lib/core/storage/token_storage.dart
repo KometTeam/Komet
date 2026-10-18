@@ -2,6 +2,7 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/logger.dart';
 import '../share/native_share_account_channel.dart';
 import 'account_token_store.dart';
 
@@ -23,12 +24,13 @@ class TokenStorage {
 
   // #***! иос иногда даёт дубликат вместо перезаписи, удаляем и пишем заново
   static const int _duplicateKeychainItem = -25299;
+  static const int _errSecParam = -50;
   static final _tokens = AccountTokenStore(
     readStored: _readStoredToken,
     writeStored: (accountId, token) => _write('$_tokenPrefix$accountId', token),
     deleteStored: (accountId) async {
       final key = '$_tokenPrefix$accountId';
-      await _secure.delete(key: key);
+      await _deleteKey(key);
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(key);
     },
@@ -57,8 +59,22 @@ class TokenStorage {
     return _secure.read(key: key);
   }
 
-  static Future<void> deleteSecure(String key) async {
-    await _secure.delete(key: key);
+  static Future<void> deleteSecure(String key) => _deleteKey(key);
+
+  // #***! с этим плагином SecItemDelete на мачке даёт errSecParam (-50) для
+  // несуществующего ключа вместо item-not-found — тогда ключа нет и это
+  // успех; если ключ остался, это настоящий сбой
+  static Future<void> _deleteKey(String key) async {
+    try {
+      await _secure.delete(key: key);
+    } on PlatformException catch (e) {
+      final isParamError =
+          e.details == _errSecParam ||
+          (e.message?.contains('Code: -50') ?? false);
+      if (!isParamError) rethrow;
+      final stillThere = await _secure.read(key: key) != null;
+      if (stillThere) rethrow;
+    }
   }
 
   // #***! чтоб найти все аккаунты или все ключи по префиксу
@@ -125,11 +141,13 @@ class TokenStorage {
 
   static Future<void> deleteAccount(int accountId) async {
     _accountEpoch++;
-    await deleteToken(accountId);
-    final activeId = await getActiveAccountId();
-    if (activeId == accountId) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_activeAccountKey);
+    // #***! активный указатель сбрасываем до токена: даже когда keychain
+    // отказывается удалять ключ (-50), автологин не найдёт аккаунт
+    await clearActiveAccount();
+    try {
+      await deleteToken(accountId);
+    } on PlatformException catch (e) {
+      logger.w('deleteAccount: токен $accountId остался в keychain: $e');
     }
   }
 }

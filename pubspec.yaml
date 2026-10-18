@@ -85,7 +85,7 @@ dependencies:
   package_info_plus: ^9.0.1
   mobile_scanner: ^7.2.0
   qr: ^4.0.0
-  flutter_contacts: ^1.1.9+2
+  flutter_contacts: ^2.3.1
   cached_network_image: ^3.4.1
   flutter_cache_manager: ^3.4.1
   lottie: ^3.3.1
@@ -121,6 +121,7 @@ dependencies:
   cryptography: ^2.7.0
   local_auth: ^3.0.2
   visibility_detector: ^0.4.0+2
+  liquid_glass_widgets: ^1.12.0
 
 dev_dependencies:
   flutter_test:
@@ -139,9 +140,6 @@ dev_dependencies:
 flutter_launcher_icons:
   image_path: "assets/komet_icon.png"
   android: "ic_launcher"
-  ios: true
-  remove_alpha_ios: true
-  background_color_ios: "#000000"
   adaptive_icon_background: "#000000"
   adaptive_icon_foreground: "assets/komet.png"
   windows:
@@ -160,7 +158,6 @@ flutter:
   generate: true
 
   shaders:
-    - shaders/liquid_glass.frag
     - shaders/mesh_gradient.frag
 
   # The following line ensures that the Material Icons font is
@@ -171,6 +168,7 @@ flutter:
     - assets/komet.png
     - assets/komet_icon.png
     - assets/meteor_icon.png
+    - assets/not_skam.png
     - assets/emoji_keywords.json
     - assets/lottie/
     - assets/wallpapers/patterns/
@@ -178,6 +176,7 @@ flutter:
     - assets/plugins/nekos/
     - assets/plugins/info/
     - assets/plugins/weather/
+    - assets/ca_purple_tree_services.pem
 
   fonts:
     - family: Inter

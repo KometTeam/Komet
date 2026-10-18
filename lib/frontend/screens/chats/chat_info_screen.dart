@@ -15,6 +15,7 @@ import '../../../backend/modules/complaints.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
+import '../../../core/calls/call_actions.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../core/protocol/packet.dart';
@@ -122,6 +123,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   late final ChatMembersController _membersController;
   ChatAdminState? _chatAdmin;
+
+  int? get _peerPhone {
+    final raw = _contactData?.raw['phone'];
+    if (raw is int) return raw;
+    if (raw is String) return int.tryParse(raw);
+    final local = _localContact?.phone;
+    if (local != null && local > 0) return local;
+    final other = _otherId;
+    if (other != null) return ContactCache.phoneFor(other);
+    return null;
+  }
 
   int _mediaChatId = 0;
   String? _anchorMsgId;
@@ -1155,6 +1167,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           label: l10n.editContactMenu,
           destructive: false,
           onTap: _openEdit,
+        ));
+      }
+      final phone = _peerPhone;
+      if (phone != null && phone > 0 && !_isBot) {
+        entries.add((
+          icon: Symbols.call,
+          label: l10n.chatInfoMenuCallViaPhone,
+          destructive: false,
+          onTap: () => unawaited(callContactViaPhone(context, phone)),
         ));
       }
       if (!_isBot && _otherId != null && _otherId != _myId) {

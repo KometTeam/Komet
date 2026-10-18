@@ -44,6 +44,38 @@ PODS:
   - file_picker (0.0.1):
     - DKImagePickerController/PhotoGallery
     - Flutter
+  - Firebase/CoreOnly (12.15.0):
+    - FirebaseCore (~> 12.15.0)
+  - Firebase/Messaging (12.15.0):
+    - Firebase/CoreOnly
+    - FirebaseMessaging (~> 12.15.0)
+  - firebase_core (4.11.0):
+    - Firebase/CoreOnly (= 12.15.0)
+    - Flutter
+  - firebase_messaging (16.4.1):
+    - Firebase/Messaging (= 12.15.0)
+    - firebase_core
+    - Flutter
+  - FirebaseCore (12.15.0):
+    - FirebaseCoreInternal (~> 12.15.0)
+    - GoogleUtilities/Environment (~> 8.1)
+    - GoogleUtilities/Logger (~> 8.1)
+  - FirebaseCoreInternal (12.15.0):
+    - "GoogleUtilities/NSData+zlib (~> 8.1)"
+  - FirebaseInstallations (12.15.0):
+    - FirebaseCore (~> 12.15.0)
+    - GoogleUtilities/Environment (~> 8.1)
+    - GoogleUtilities/UserDefaults (~> 8.1)
+    - PromisesObjC (~> 2.4)
+  - FirebaseMessaging (12.15.0):
+    - FirebaseCore (~> 12.15.0)
+    - FirebaseInstallations (~> 12.15.0)
+    - GoogleDataTransport (~> 10.1)
+    - GoogleUtilities/AppDelegateSwizzler (~> 8.1)
+    - GoogleUtilities/Environment (~> 8.1)
+    - GoogleUtilities/Reachability (~> 8.1)
+    - GoogleUtilities/UserDefaults (~> 8.1)
+    - nanopb (~> 3.30910.0)
   - fjs (3.3.0):
     - Flutter
     - FlutterMacOS
@@ -53,10 +85,10 @@ PODS:
   - flutter_inappwebview_ios (0.0.1):
     - Flutter
     - flutter_inappwebview_ios/Core (= 0.0.1)
-    - OrderedSet (~> 6.0.3)
+    - swift-collections (~> 1.1.1)
   - flutter_inappwebview_ios/Core (0.0.1):
     - Flutter
-    - OrderedSet (~> 6.0.3)
+    - swift-collections (~> 1.1.1)
   - flutter_local_notifications (0.0.1):
     - Flutter
   - flutter_secure_storage_darwin (10.0.0):
@@ -70,8 +102,36 @@ PODS:
   - geolocator_apple (1.2.0):
     - Flutter
     - FlutterMacOS
+  - GoogleDataTransport (10.1.1):
+    - nanopb (~> 3.30910.0)
+    - PromisesObjC (~> 2.4)
+  - GoogleUtilities/AppDelegateSwizzler (8.1.3):
+    - GoogleUtilities/Environment
+    - GoogleUtilities/Logger
+    - GoogleUtilities/Network
+    - GoogleUtilities/Privacy
+  - GoogleUtilities/Environment (8.1.3):
+    - GoogleUtilities/Privacy
+  - GoogleUtilities/Logger (8.1.3):
+    - GoogleUtilities/Environment
+    - GoogleUtilities/Privacy
+  - GoogleUtilities/Network (8.1.3):
+    - GoogleUtilities/Logger
+    - "GoogleUtilities/NSData+zlib"
+    - GoogleUtilities/Privacy
+    - GoogleUtilities/Reachability
+  - "GoogleUtilities/NSData+zlib (8.1.3)":
+    - GoogleUtilities/Privacy
+  - GoogleUtilities/Privacy (8.1.3)
+  - GoogleUtilities/Reachability (8.1.3):
+    - GoogleUtilities/Logger
+    - GoogleUtilities/Privacy
+  - GoogleUtilities/UserDefaults (8.1.3):
+    - GoogleUtilities/Logger
+    - GoogleUtilities/Privacy
   - image_picker_ios (0.0.1):
     - Flutter
+  - InternalCollectionsUtilities (1.1.1)
   - just_audio (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -79,17 +139,28 @@ PODS:
     - Flutter
   - komet_crypto (0.2.0):
     - Flutter
+  - komet_tlottie (0.1.0):
+    - Flutter
+  - liquid_glass_widgets (0.0.1):
+    - Flutter
+  - local_auth_darwin (0.0.1):
+    - Flutter
+    - FlutterMacOS
   - media_kit_video (0.0.1):
     - Flutter
   - mobile_scanner (7.0.0):
     - Flutter
     - FlutterMacOS
+  - nanopb (3.30910.0):
+    - nanopb/decode (= 3.30910.0)
+    - nanopb/encode (= 3.30910.0)
+  - nanopb/decode (3.30910.0)
+  - nanopb/encode (3.30910.0)
   - ogg_opus_player (0.0.1):
     - Flutter
     - FlutterMacOS
   - open_filex (0.0.2):
     - Flutter
-  - OrderedSet (6.0.3)
   - package_info_plus (0.4.5):
     - Flutter
   - permission_handler_apple (9.4.8):
@@ -97,6 +168,7 @@ PODS:
   - photo_manager (3.9.0):
     - Flutter
     - FlutterMacOS
+  - PromisesObjC (2.4.1)
   - record_ios (1.2.1):
     - Flutter
   - SDWebImage (5.21.7):
@@ -112,6 +184,22 @@ PODS:
   - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
+  - swift-collections (1.1.1):
+    - swift-collections/BitCollections (= 1.1.1)
+    - swift-collections/DequeModule (= 1.1.1)
+    - swift-collections/HashTreeCollections (= 1.1.1)
+    - swift-collections/HeapModule (= 1.1.1)
+    - swift-collections/OrderedCollections (= 1.1.1)
+  - swift-collections/BitCollections (1.1.1):
+    - InternalCollectionsUtilities (= 1.1.1)
+  - swift-collections/DequeModule (1.1.1):
+    - InternalCollectionsUtilities (= 1.1.1)
+  - swift-collections/HashTreeCollections (1.1.1):
+    - InternalCollectionsUtilities (= 1.1.1)
+  - swift-collections/HeapModule (1.1.1):
+    - InternalCollectionsUtilities (= 1.1.1)
+  - swift-collections/OrderedCollections (1.1.1):
+    - InternalCollectionsUtilities (= 1.1.1)
   - SwiftyGif (5.4.5)
   - url_launcher_ios (0.0.1):
     - Flutter
@@ -129,6 +217,8 @@ DEPENDENCIES:
   - camera_avfoundation (from `.symlinks/plugins/camera_avfoundation/ios`)
   - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - file_picker (from `.symlinks/plugins/file_picker/ios`)
+  - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
+  - firebase_messaging (from `.symlinks/plugins/firebase_messaging/ios`)
   - fjs (from `.symlinks/plugins/fjs/darwin`)
   - Flutter (from `Flutter`)
   - flutter_contacts (from `.symlinks/plugins/flutter_contacts/ios`)
@@ -142,6 +232,9 @@ DEPENDENCIES:
   - just_audio (from `.symlinks/plugins/just_audio/darwin`)
   - kolibri (from `.symlinks/plugins/kolibri/ios`)
   - komet_crypto (from `.symlinks/plugins/komet_crypto/ios`)
+  - komet_tlottie (from `.symlinks/plugins/komet_tlottie/ios`)
+  - liquid_glass_widgets (from `.symlinks/plugins/liquid_glass_widgets/ios`)
+  - local_auth_darwin (from `.symlinks/plugins/local_auth_darwin/darwin`)
   - media_kit_video (from `.symlinks/plugins/media_kit_video/ios`)
   - mobile_scanner (from `.symlinks/plugins/mobile_scanner/darwin`)
   - ogg_opus_player (from `.symlinks/plugins/ogg_opus_player/darwin`)
@@ -162,8 +255,18 @@ SPEC REPOS:
   trunk:
     - DKImagePickerController
     - DKPhotoGallery
-    - OrderedSet
+    - Firebase
+    - FirebaseCore
+    - FirebaseCoreInternal
+    - FirebaseInstallations
+    - FirebaseMessaging
+    - GoogleDataTransport
+    - GoogleUtilities
+    - InternalCollectionsUtilities
+    - nanopb
+    - PromisesObjC
     - SDWebImage
+    - swift-collections
     - SwiftyGif
     - WebRTC-SDK
 
@@ -180,6 +283,10 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/device_info_plus/ios"
   file_picker:
     :path: ".symlinks/plugins/file_picker/ios"
+  firebase_core:
+    :path: ".symlinks/plugins/firebase_core/ios"
+  firebase_messaging:
+    :path: ".symlinks/plugins/firebase_messaging/ios"
   fjs:
     :path: ".symlinks/plugins/fjs/darwin"
   Flutter:
@@ -206,6 +313,12 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/kolibri/ios"
   komet_crypto:
     :path: ".symlinks/plugins/komet_crypto/ios"
+  komet_tlottie:
+    :path: ".symlinks/plugins/komet_tlottie/ios"
+  liquid_glass_widgets:
+    :path: ".symlinks/plugins/liquid_glass_widgets/ios"
+  local_auth_darwin:
+    :path: ".symlinks/plugins/local_auth_darwin/darwin"
   media_kit_video:
     :path: ".symlinks/plugins/media_kit_video/ios"
   mobile_scanner:
@@ -246,39 +359,54 @@ SPEC CHECKSUMS:
   DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
   DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
   file_picker: a0560bc09d61de87f12d246fc47d2119e6ef37be
+  Firebase: a8539b633d474fbeb654c7043f9c1649e274045b
+  firebase_core: fc23178af8ea070194d09031ae4198a9608a3d22
+  firebase_messaging: 870b2939a7f7cc52bc38ca0250127c45b42f4bad
+  FirebaseCore: 2e86a4ea1684d4381707069e4a6d89ac808e901e
+  FirebaseCoreInternal: 6ab6a02c94446c026d2cf35cf5383842ebaa4992
+  FirebaseInstallations: eb29ccbf64eaedf86fd5b2ccc7fabde567660b52
+  FirebaseMessaging: 40017d7bc8457ee295b0f41d480a80fdabc9994e
   fjs: d716489ab0d8e581c40075a32a6652f6fd696f1a
-  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-  flutter_contacts: 5383945387e7ca37cf963d4be57c21f2fc15ca9f
-  flutter_inappwebview_ios: b89ba3482b96fb25e00c967aae065701b66e9b99
+  Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
+  flutter_contacts: 2ec1d6b62ca2869c3bbb3871bd74d4e3ef157135
+  flutter_inappwebview_ios: 9cde7869829d54b4110df350f3eedd192c5a4aea
   flutter_local_notifications: 643a3eda1ce1c0599413ca31672536d423dee214
   flutter_secure_storage_darwin: acdb3f316ed05a3e68f856e0353b133eec373a23
   flutter_timezone: 7c838e17ffd4645d261e87037e5bebf6d38fe544
   flutter_webrtc: 3ee86aa10e0313c38c93fdb215dd86e77014f96a
   geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e
+  GoogleDataTransport: a24e58982ab3ba2f64d79613e027fe7f57e88539
+  GoogleUtilities: 4e0c2ad9fa0d0d18b5c4df8bf57b461cba35b0bb
   image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
+  InternalCollectionsUtilities: af3f471602c4a67cbcb0bee0a80f6f55a33ae453
   just_audio: 4e391f57b79cad2b0674030a00453ca5ce817eed
   kolibri: b354af8a95c7e38dbfa8f5aeab5a6ebefbe46f38
-  komet_crypto: 8a18912908935b704e3902f19c6dab6190c43b6a
+  komet_crypto: 89dbf254365bb00fc5d171ff97ec1aba5048eaa7
+  komet_tlottie: 7d69b3783f1ec1dd40681d357bc05ddd6457ebde
+  liquid_glass_widgets: b18ae3ebb4ddb3c58b0b8552566362fcc9791e22
+  local_auth_darwin: c3ee6cce0a8d56be34c8ccb66ba31f7f180aaebb
   media_kit_video: f3b0d035d89def15cfbbcf7dc2ae278f201e2f83
   mobile_scanner: 9157936403f5a0644ca3779a38ff8404c5434a93
+  nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   ogg_opus_player: 954784304f4e2722780018c4abf284e4f93cddf5
   open_filex: 432f3cd11432da3e39f47fcc0df2b1603854eff1
-  OrderedSet: e539b66b644ff081c73a262d24ad552a69be3a94
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   permission_handler_apple: 92d754bbaa7361d436db2d6c3c1c2a0fdcec462e
   photo_manager: 25fd77df14f4f0ba5ef99e2c61814dde77e2bceb
+  PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
   record_ios: 980fd386a97a35987d0fce3dfda4b26a38c90f4c
   SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
   sensors_plus: b70a93b69dafdabd26ce4ac3f4d0529ab9acc4ca
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
+  swift-collections: ba248ecaf44ef500b27d5cf94d304218c89892ff
   SwiftyGif: 706c60cf65fa2bc5ee0313beece843c8eb8194d4
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
   video_player_avfoundation: 3453f792138786248960ca029747fcd9f318ef52
   wakelock_plus: e29112ab3ef0b318e58cfa5c32326458be66b556
   WebRTC-SDK: e6006119cd730d6315d875e4a421b6cc8bb88833
 
-PODFILE CHECKSUM: c862eaa263a897310473433b9f171964a10360d6
+PODFILE CHECKSUM: c9347ed6cfded4e4cedefa52e5263ac0eab4d064
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.17.0

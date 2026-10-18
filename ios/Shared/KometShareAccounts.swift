@@ -7,6 +7,8 @@ struct KometShareChat: Codable {
   let title: String
   let type: String
   let disabledReason: String?
+  let avatar: String?
+  let avatarUrl: String?
 }
 
 struct KometShareAccount: Codable {
@@ -15,6 +17,7 @@ struct KometShareAccount: Codable {
   let chats: [KometShareChat]
   var policyEpoch: String? = nil
   var updatedAtMillis: Int64? = nil
+  var accountAvatarUrl: String? = nil
 }
 
 protocol KometShareCredentialStorage {
@@ -114,7 +117,12 @@ final class KometShareAccounts {
         guard let chatID = raw["id"] as? String, Int64(chatID) != nil,
               let title = raw["title"] as? String, !title.isEmpty,
               let type = raw["type"] as? String else { throw KometShareError.invalidRequest }
-        return KometShareChat(id: chatID, title: title, type: type, disabledReason: raw["disabledReason"] as? String)
+        return KometShareChat(
+          id: chatID, title: title, type: type,
+          disabledReason: raw["disabledReason"] as? String,
+          avatar: raw["avatar"] as? String,
+          avatarUrl: raw["avatarUrl"] as? String
+        )
       }
       let existing = try? readCredentials(accountID: id)
       let activeToken = existing?["sourceToken"] as? String == token ? existing?["token"] as? String ?? token : token
@@ -131,7 +139,14 @@ final class KometShareAccounts {
       let epoch = permissions == oldPermissions && sameCredentials ? previous?.policyEpoch ?? UUID().uuidString : UUID().uuidString
       var saved = accounts.filter { $0.id != id }
       let name = arguments["accountName"] as? String ?? "Komet"
-      saved.insert(KometShareAccount(id: id, name: name, chats: chats, policyEpoch: epoch, updatedAtMillis: Int64(Date().timeIntervalSince1970 * 1000)), at: 0)
+      saved.insert(
+        KometShareAccount(
+          id: id, name: name, chats: chats, policyEpoch: epoch,
+          updatedAtMillis: Int64(Date().timeIntervalSince1970 * 1000),
+          accountAvatarUrl: arguments["accountAvatarUrl"] as? String
+        ),
+        at: 0
+      )
       try writeAccounts(saved)
     }
   }

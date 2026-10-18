@@ -41,14 +41,21 @@ class PushLinkStatus {
   final String status;
   final int? accountId;
   final String? hint;
+  final String? loginToken;
 
-  const PushLinkStatus({required this.status, this.accountId, this.hint});
+  const PushLinkStatus({
+    required this.status,
+    this.accountId,
+    this.hint,
+    this.loginToken,
+  });
 
   factory PushLinkStatus.fromJson(Map<String, dynamic> json) {
     return PushLinkStatus(
       status: json['status'] as String? ?? PushLinkStatus.expired,
       accountId: json['account_id'] as int?,
       hint: json['hint'] as String?,
+      loginToken: json['login_token'] as String?,
     );
   }
 
@@ -80,12 +87,14 @@ class PushLinkService {
     required String apnsToken,
     required String voipToken,
     required String deviceId,
+    required int accountId,
     required bool isDev,
   }) async {
     final response = await PushProxyClient.instance.post('/link/start', {
       'apns_token': apnsToken,
       'voip_token': voipToken,
       'device_id': deviceId,
+      'account_id': accountId,
       'is_development': isDev,
     });
     final body = await _decode(response, 'link/start');

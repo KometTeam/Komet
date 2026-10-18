@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:kolibri/kolibri.dart';
@@ -100,6 +101,8 @@ class Api {
   // #***! поколение попытки конекта
   int _connectGen = 0;
   int _reconnectAttempts = 0;
+  int _autoLoginUnansweredStreak = 0;
+  bool _autoLoginAttempted = false;
   bool _autoReconnect = false;
   int _sessionEpoch = 0;
   bool? _lastInteractive;
@@ -167,6 +170,7 @@ class Api {
     _autoReconnect = true;
     // #***! номер поколения
     final gen = ++_connectGen;
+    _autoLoginAttempted = false;
     _loginGate.close();
     _setSessionState(SessionState.connecting);
     logger.i('connect: старт (поколение $gen)');
@@ -276,23 +280,13 @@ class Api {
           logger.w('Авто-логин при хэндшейке не удался: $e');
         }
       }
+      _autoLoginAttempted = autoLogin;
       if (gen != _connectGen) return;
       if (_loginGate.loginUnanswered || _loginGate.loginRejected) {
-        logger.d(
-          '[$debugTag] автологин провален: '
-          'без ответа=${_loginGate.loginUnanswered} '
-          'отклонён=${_loginGate.loginRejected}',
-        );
-        await _handleConnectFailure(
-          StateError(
-            _loginGate.loginRejected
-                ? 'сервер отклонил вход'
-                : 'сервер не ответил на вход',
-          ),
-          phase: 'Авто-логин',
-        );
+        await _noteAutoLoginFailure();
         return;
       }
+      _autoLoginUnansweredStreak = 0;
       _loginGate.open();
       if (_sessionState == SessionState.online) {
         _stateController.add(SessionState.online);
@@ -344,12 +338,51 @@ class Api {
     required String phase,
   }) async {
     logger.e('$phase: $error');
+    _errorController.add('$phase: $error');
     _cancelConnectWatchdog();
     if (_sessionState != SessionState.disconnected) {
       _cleanup();
       _setSessionState(SessionState.disconnected);
       _scheduleReconnect();
     }
+  }
+
+  // #***! сервер ответил отказом на токен: реконнект с тем же токеном
+  // даёт бесконечный цикл — выходим на повторную авторизацию, как при
+  // FAIL_LOGIN_TOKEN. Молчание тоже заканчивается циклом, поэтому после
+  // N попыток подряд без ответа признаём токен мёртвым
+  static const int _autoLoginUnansweredLimit = 3;
+
+  Future<void> _noteAutoLoginFailure() async {
+    final rejected = _loginGate.loginRejected;
+    logger.d(
+      '[$debugTag] автологин провален: без ответа=${_loginGate.loginUnanswered} '
+      'отклонён=$rejected',
+    );
+    if (rejected) {
+      _autoLoginUnansweredStreak = 0;
+      _sessionExpiredController.add(
+        SessionExpiredException('сервер отклонил вход'),
+      );
+    } else {
+      _autoLoginUnansweredStreak++;
+      if (_autoLoginUnansweredStreak >= _autoLoginUnansweredLimit) {
+        logger.e(
+          'автологин $_autoLoginUnansweredStreak раз подряд без ответа '
+          '— выхожу на повторную авторизацию',
+        );
+        _autoLoginUnansweredStreak = 0;
+        _sessionExpiredController.add(
+          SessionExpiredException('сервер не ответил на вход'),
+        );
+      }
+    }
+    await _handleConnectFailure(
+      StateError(
+        rejected ? 'сервер отклонил вход' : 'сервер не ответил на вход',
+      ),
+      phase: 'Авто-логин',
+    );
   }
 
   // #***! ручное отключение
@@ -430,7 +463,14 @@ class Api {
         throw ex;
       }
       final text = _serverErrorText(packet.payload);
-      if (text != null && !silent) _errorController.add(text);
+      if (!silent) {
+        var detail = text ?? 'error';
+        final key = resp.errorKey;
+        if (key != null && key.isNotEmpty) {
+          detail = '$detail [key=$key]';
+        }
+        _errorController.add('$detail | payload=${packet.payload}');
+      }
       final err = PacketError(
         messageFromErrorPayload(packet.payload),
         errorKey: resp.errorKey,
@@ -497,7 +537,9 @@ class Api {
   ) async {
     final device = await DeviceProfile.load();
 
-    String deviceType = 'ANDROID';
+    // #***! мак представляется десктопом, мобильные — андроид-профилем;
+    // протокол понимает DESKTOP (шлёт и наш push-сервер)
+    String deviceType = Platform.isMacOS ? 'DESKTOP' : 'ANDROID';
     String osVersion = device.osVersion;
     String deviceName = device.deviceName;
     String architecture = SpoofingService.defaultArchitecture;
@@ -574,11 +616,13 @@ class Api {
     final serverLanguage = AppLanguage.serverLanguageCode;
     if (serverLanguage != null) locale = serverLanguage;
 
-    // #***! до логина (сокет без токена) прикидываемся прошлой версией целиком,
-    // перекрывая и дефолт, и спуф-профиль; при входе с токеном версию не трогаем
+    // #***! до логина сокет без токена перекрывает и дефолт, и спуф-профиль,
+    // всегда представляясь актуальной версией: сервер стал отклонять
+    // устаревшие клиенты (client.unsupported-version); при входе с токеном
+    // версию не трогаем
     if (!_willAuthenticate) {
-      appVersion = SpoofingService.preLoginAppVersion;
-      buildNumber = SpoofingService.preLoginBuildNumber;
+      appVersion = SpoofingService.hardcodedAppVersion;
+      buildNumber = SpoofingService.hardcodedBuildNumber;
     }
 
     // #***! веб-режим поверх всего: браузер вместо телефона. Устройство
@@ -665,10 +709,7 @@ class Api {
       'header_user_agent': headerUserAgent,
       'fingerprint_digests': _webHandshake
           ? null
-          : ChatCacheFingerprint.exportDigests(
-              arch: architecture,
-              preLogin: !_willAuthenticate,
-            ),
+          : ChatCacheFingerprint.exportDigests(arch: architecture),
     });
 
     // #***! тут реально открывается сокет в расте. Ядро само опускает arch при
@@ -848,8 +889,15 @@ class Api {
   // #***! разрыв, чистимся и планируем реконнект
   void _onDisconnected() {
     _connectGen++;
+    final autoLoginRejected = _autoLoginAttempted && _loginGate.loginRejected;
     _cleanup();
     _setSessionState(SessionState.disconnected);
+    if (autoLoginRejected) {
+      _autoLoginUnansweredStreak = 0;
+      _sessionExpiredController.add(
+        SessionExpiredException('сервер отклонил вход'),
+      );
+    }
     if (_autoReconnect) _scheduleReconnect();
   }
 

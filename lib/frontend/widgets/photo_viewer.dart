@@ -1886,7 +1886,6 @@ class _ViewerGlassSurface extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             frostTint: Colors.black.withValues(alpha: 0.28),
             frostSigma: AppFrost.panelSigma,
-            liquidTint: Colors.black.withValues(alpha: 0.28),
             border: Border.all(
               color: Colors.white.withValues(alpha: 0.12),
               width: 0.5,

@@ -159,6 +159,9 @@ class _HintLayerState extends State<_HintLayer>
   late final Timer _lifetime;
 
   @override
+  bool get coversGlass => false;
+
+  @override
   Duration get overlayForwardDuration => const Duration(milliseconds: 140);
 
   @override

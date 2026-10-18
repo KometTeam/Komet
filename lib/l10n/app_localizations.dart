@@ -5579,8 +5579,56 @@ abstract class AppLocalizations {
   /// No description provided for @pushLinkIntro.
   ///
   /// In en, this message translates to:
-  /// **'MAX on iOS has no regular push channel: its servers cannot deliver notifications via APNs. Komet solves this with its own push server: it keeps a lightweight notification session and relays messages to Apple.\n\nTo enable it, confirm a QR code — a separate session will be created, which you can revoke at any time in MAX settings.'**
+  /// **'MAX on iOS has no regular push channel: its servers cannot deliver notifications via APNs. Komet solves this with its own push server: it keeps a separate lightweight notification session and relays messages to Apple.\n\nThe session is created via QR and belongs to the push server itself — your main login is never duplicated. The token is stored strictly encrypted, and any device with this account can decrypt it: the key is derived from account data, so a single socket can be woken by all your iOS devices.'**
   String get pushLinkIntro;
+
+  /// No description provided for @pushLinkApproveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to confirm the session registration'**
+  String get pushLinkApproveFailed;
+
+  /// No description provided for @pushProxyTile.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet push server'**
+  String get pushProxyTile;
+
+  /// No description provided for @webPushTile.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications via PWA'**
+  String get webPushTile;
+
+  /// No description provided for @pushLinkAccountsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Accounts'**
+  String get pushLinkAccountsTitle;
+
+  /// No description provided for @pushLinkAccountActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Session active, notifications enabled'**
+  String get pushLinkAccountActive;
+
+  /// No description provided for @pushLinkAccountInactive.
+  ///
+  /// In en, this message translates to:
+  /// **'Session inactive — raised when Komet launches'**
+  String get pushLinkAccountInactive;
+
+  /// No description provided for @pushLinkUnlinkedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications disabled'**
+  String get pushLinkUnlinkedSubtitle;
+
+  /// No description provided for @pushLinkActiveAccountBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'current'**
+  String get pushLinkActiveAccountBadge;
 
   /// No description provided for @pushLinkConnect.
   ///
@@ -5624,23 +5672,11 @@ abstract class AppLocalizations {
   /// **'Notifications unlinked'**
   String get pushLinkUnlinkedDone;
 
-  /// No description provided for @pushLinkScan.
-  ///
-  /// In en, this message translates to:
-  /// **'Scan the QR code with the MAX app on another device, or open the link on a device where MAX is installed.'**
-  String get pushLinkScan;
-
   /// No description provided for @pushLinkWaiting.
   ///
   /// In en, this message translates to:
   /// **'Waiting for confirmation…'**
   String get pushLinkWaiting;
-
-  /// No description provided for @pushLinkOpenMax.
-  ///
-  /// In en, this message translates to:
-  /// **'Open MAX'**
-  String get pushLinkOpenMax;
 
   /// No description provided for @pushLinkApnsMissing.
   ///
@@ -5671,6 +5707,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm'**
   String get pushLinkConfirm;
+
+  /// No description provided for @pushLinkBindFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to seal the session — linking was not completed'**
+  String get pushLinkBindFailed;
+
+  /// No description provided for @pushLinkAttachFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to attach the device to the notification session'**
+  String get pushLinkAttachFailed;
 
   /// No description provided for @webPushIntro.
   ///

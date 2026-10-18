@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../core/config/app_glass_cover.dart';
+
+// #***! по умолчанию любой попап-оверлей перекрывает стеклянный док;
+// hint_bubble и прочие «нефуллскрин» переопределяют coversGlass = false
 mixin AnimatedOverlayPopup<T extends StatefulWidget>
     on State<T>, TickerProvider {
+  bool get coversGlass => true;
+
   Duration get overlayForwardDuration;
   Duration get overlayReverseDuration;
   VoidCallback get onOverlayDismiss;
@@ -25,6 +31,7 @@ mixin AnimatedOverlayPopup<T extends StatefulWidget>
       reverseCurve: Curves.easeInCubic,
     );
     _overlayController.forward();
+    if (coversGlass) AppGlassCover.open();
   }
 
   Future<void> closeOverlay() async {
@@ -39,6 +46,7 @@ mixin AnimatedOverlayPopup<T extends StatefulWidget>
 
   @override
   void dispose() {
+    if (coversGlass) AppGlassCover.close();
     _overlayController.dispose();
     super.dispose();
   }

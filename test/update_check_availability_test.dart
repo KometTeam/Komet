@@ -6,11 +6,17 @@ import 'package:komet/core/config/update_config.dart';
 void main() {
   tearDown(() => debugDefaultTargetPlatformOverride = null);
 
-  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
-    test('${platform.name} keeps the update check outside store builds', () {
-      debugDefaultTargetPlatformOverride = platform;
-      expect(BuildProfile.selfUpdate, !BuildProfile.isStore);
-      expect(UpdateConfig.isConfigured, UpdateConfig.baseUrl.trim().isNotEmpty);
-    });
-  }
+  test('android keeps the update check outside store builds', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    expect(BuildProfile.selfUpdate, !BuildProfile.isStore);
+    expect(UpdateConfig.isConfigured, UpdateConfig.baseUrl.trim().isNotEmpty);
+  });
+
+  test('ios leaves out the update check without the store flavor', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    expect(BuildProfile.selfUpdate, isFalse);
+    expect(BuildProfile.isStore, isFalse);
+    expect(BuildProfile.isAppStoreBuild, isFalse);
+    expect(UpdateConfig.isConfigured, UpdateConfig.baseUrl.trim().isNotEmpty);
+  });
 }

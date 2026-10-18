@@ -65,7 +65,7 @@ class AppBadgeService {
         map[c.id.toString()] = c.unreadCount;
       }
     }
-    unawaited(PushProxyClient.instance.syncUnread(map));
+    unawaited(PushProxyClient.instance.syncUnread(map, accountId));
   }
 
   void _setBadge(int n) {

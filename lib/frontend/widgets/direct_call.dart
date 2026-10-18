@@ -11,6 +11,7 @@ Future<bool> startDirectCall(
   required int peerId,
   required String name,
   String? avatarUrl,
+  bool video = false,
 }) async {
   final l10n = AppLocalizations.of(context)!;
   final navigator = Navigator.of(context);
@@ -33,7 +34,7 @@ Future<bool> startDirectCall(
   }
 
   try {
-    final session = await controller.startOutgoing(peerId);
+    final session = await controller.startOutgoing(peerId, isVideo: video);
     if (!context.mounted) return false;
     await navigator.push(
       MaterialPageRoute(

@@ -45,6 +45,7 @@ class ChatHeaderRow extends StatelessWidget {
   final VoidCallback onOpenInfo;
   final VoidCallback onOpenScheduled;
   final VoidCallback onCall;
+  final VoidCallback? onVideoCall;
   final void Function(BuildContext) onMenu;
 
   const ChatHeaderRow({
@@ -73,6 +74,7 @@ class ChatHeaderRow extends StatelessWidget {
     required this.onOpenInfo,
     required this.onOpenScheduled,
     required this.onCall,
+    this.onVideoCall,
     required this.onMenu,
   });
 
@@ -260,6 +262,7 @@ class ChatHeaderRow extends StatelessWidget {
                         color: cs.onSurface,
                       ),
                       onPressed: onCall,
+                      onLongPress: onVideoCall,
                     ),
                   Builder(
                     builder: (btnContext) => IconButton(
@@ -417,6 +420,7 @@ class ChatHeaderRow extends StatelessWidget {
           IconButton(
             icon: Icon(Symbols.call, weight: 400, color: cs.onSurface),
             onPressed: onCall,
+            onLongPress: onVideoCall,
           ),
         Builder(
           builder: (btnContext) => IconButton(

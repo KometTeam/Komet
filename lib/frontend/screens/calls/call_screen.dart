@@ -78,6 +78,14 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   bool _localRendererReady = false;
   bool _videoAttached = false;
   MediaStream? _pendingStream;
+  String? _remoteTrackId;
+  String? _aliveTrackId;
+  String? _bindingKey;
+  int _bindingIndex = 0;
+  Timer? _bindingProbe;
+  Timer? _cameraKick;
+  String? _kickStreamId;
+  int _kickAttempts = 0;
 
   Color? _seedKey;
   ColorScheme? _scheme;
@@ -99,6 +107,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     }
     if (stream == null) return;
     unawaited(_createTileRenderer(id, stream));
+    if (_session?.topology == 'SERVER') _syncSfuRemoteBinding();
   }
 
   Future<void> _createTileRenderer(int id, MediaStream stream) async {
@@ -144,6 +153,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 420),
     );
+    _remoteRenderer.addListener(_onRendererValueChanged);
     _initRenderer();
 
     _incomingPending = widget.session == null && widget.incoming != null;
@@ -192,8 +202,13 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _rendererReady = true;
     _localRendererReady = true;
     if (_pendingStream != null) {
-      _remoteRenderer.srcObject = _pendingStream;
+      final pending = _pendingStream;
       _pendingStream = null;
+      if (_session?.topology == 'SERVER') {
+        _syncSfuRemoteBinding();
+      } else {
+        _remoteRenderer.srcObject = pending;
+      }
     }
     _syncLocalPreview();
     setState(() {});
@@ -202,6 +217,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   void _attachStream(MediaStream stream) {
     if (!_rendererReady) {
       _pendingStream = stream;
+      return;
+    }
+    if (_session?.topology == 'SERVER') {
+      _syncSfuRemoteBinding();
       return;
     }
     final hasVideo = stream.getVideoTracks().isNotEmpty;
@@ -217,8 +236,104 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     if (mounted) setState(() {});
   }
 
+  // SFU шлёт видео слотами video-pat-N, в общем стрине первым окажется
+  // случайной слот — поэтому биндимся на дорожку собеседника явно; если
+  // привязанный слот так и не ожил — пробуем следующего кандидата
+  void _syncSfuRemoteBinding() {
+    if (!_rendererReady) return;
+    final session = _session;
+    if (session == null) return;
+    final peerId = session.peerUserId;
+    var stream = peerId != null ? session.streamOf(peerId) : null;
+    var candidates =
+        stream
+            ?.getVideoTracks()
+            .map((t) => t.id)
+            .whereType<String>()
+            .toList() ??
+        const <String>[];
+    if (candidates.isEmpty) {
+      stream = session.remoteStream;
+      candidates =
+          stream
+              ?.getVideoTracks()
+              .map((t) => t.id)
+              .whereType<String>()
+              .toList() ??
+          const <String>[];
+    }
+    if (stream == null || candidates.isEmpty) return;
+
+    final key = '${stream.id}|${candidates.join(',')}';
+    if (key != _bindingKey) {
+      _bindingKey = key;
+      final alive = _aliveTrackId;
+      _bindingIndex = alive != null && candidates.contains(alive)
+          ? candidates.indexOf(alive)
+          : 0;
+    }
+    if (_bindingIndex >= candidates.length) _bindingIndex = 0;
+    final trackId = candidates[_bindingIndex];
+    if (identical(_remoteRenderer.srcObject, stream) &&
+        _remoteTrackId == trackId) {
+      _armBindingProbe(candidates);
+      return;
+    }
+    _bindRemoteTrack(stream, trackId, candidates);
+  }
+
+  void _bindRemoteTrack(
+    MediaStream stream,
+    String trackId,
+    List<String> candidates,
+  ) {
+    final trackChanged = _remoteTrackId != null && _remoteTrackId != trackId;
+    _remoteTrackId = trackId;
+    _videoAttached = true;
+    if (trackChanged) {
+      _remoteRenderer.srcObject = null;
+    }
+    unawaited(_remoteRenderer.setSrcObject(stream: stream, trackId: trackId));
+    if (mounted) setState(() {});
+    _armBindingProbe(candidates);
+  }
+
+  void _armBindingProbe(List<String> candidates) {
+    _bindingProbe?.cancel();
+    if (candidates.length <= 1) return;
+    _bindingProbe = Timer(const Duration(milliseconds: 4000), () {
+      _bindingProbe = null;
+      if (!mounted) return;
+      if (_remoteRenderer.value.width > 0) {
+        _aliveTrackId = _remoteTrackId;
+        return;
+      }
+      if (_session?.topology != 'SERVER') return;
+      _bindingIndex = (_bindingIndex + 1) % candidates.length;
+      _syncSfuRemoteBinding();
+    });
+  }
+
+  void _onRendererValueChanged() {
+    if (!mounted) return;
+    if (_remoteRenderer.value.width > 0) {
+      _aliveTrackId = _remoteTrackId;
+    }
+    _syncVideo();
+    setState(() {});
+  }
+
   void _syncVideo() {
-    if (_session?.peerVideo == true) {
+    final hasFrames =
+        _rendererReady &&
+        _remoteRenderer.srcObject != null &&
+        _remoteRenderer.value.width > 0;
+    // Приоритет: реально идущие кадры (stats) > флаг собеседника > кадры
+    // до первого анонса флагов
+    final flowing = _session?.remoteVideoFlowing == true;
+    final peerOn = _session?.peerVideo == true;
+    final peerAnnounced = _session?.peerMediaAnnounced ?? false;
+    if (flowing || peerOn || (hasFrames && !peerAnnounced)) {
       _videoController.forward();
     } else {
       _videoController.reverse();
@@ -242,6 +357,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       if (!mounted) return;
       _isMuted = session.isMuted;
       _resolveParticipants();
+      if (session.topology == 'SERVER') _syncSfuRemoteBinding();
       _syncVideo();
       _syncLocalPreview();
       _isSpeaker = session.isSpeaker;
@@ -434,7 +550,45 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   void _syncLocalPreview() {
     if (!_localRendererReady) return;
-    _localRenderer.srcObject = _session?.localVideoStream;
+    final next = _session?.localVideoStream;
+    final current = _localRenderer.srcObject;
+    if (!identical(current, next)) {
+      _localRenderer.srcObject = null;
+      _localRenderer.srcObject = next;
+    }
+    _armCameraKick();
+  }
+
+  // #***! на iOS капчер иногда стартует без кадров до первого пинка —
+  // перезапускаем тот же капчер (без смены камеры), если превью не ожило
+  void _armCameraKick() {
+    final stream = _session?.localVideoStream;
+    if (stream == null) {
+      _kickStreamId = null;
+      _kickAttempts = 0;
+      _cameraKick?.cancel();
+      _cameraKick = null;
+      return;
+    }
+    final id = stream.id;
+    if (id == _kickStreamId) return;
+    _kickStreamId = id;
+    _cameraKick?.cancel();
+    _cameraKick = null;
+    if (_localRenderer.value.width > 0) return;
+    _cameraKick = Timer(const Duration(milliseconds: 4000), () {
+      _cameraKick = null;
+      if (!mounted) return;
+      if (_localRenderer.value.width > 0) return;
+      final session = _session;
+      if (session == null || !session.localVideo) return;
+      if (_kickAttempts >= 2) return;
+      _kickAttempts++;
+      unawaited(session.restartCamera());
+      // после перезапуска перевзводим пинок
+      _kickStreamId = null;
+      _syncLocalPreview();
+    });
   }
 
   @override
@@ -455,6 +609,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _tileRenderers.clear();
     _dotsController.dispose();
     _videoController.dispose();
+    _cameraKick?.cancel();
+    _bindingProbe?.cancel();
+    _remoteRenderer.removeListener(_onRendererValueChanged);
     if (_rendererReady) _remoteRenderer.srcObject = null;
     _remoteRenderer.dispose();
     if (_localRendererReady) _localRenderer.srcObject = null;

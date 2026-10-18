@@ -83,6 +83,8 @@ class AccountModule {
 
   Stream<LoginStatus> get loginStatusStream => _loginStatusController.stream;
 
+  Api get api => _api;
+
   Stream<AccountNotice> get noticeStream => _noticeController.stream;
 
   /// `true`, только когда сервер считает сессию ONLINE — после успешного
@@ -837,20 +839,70 @@ class AccountModule {
 
   // #***! удаляем локально, база токен спуф и заявка
   Future<void> removeAccount(int accountId) async {
-    await NativeShareAccountChannel.instance.remove(accountId);
-    await PluginStorage.eraseAccount(accountId);
+    await _removeStep(
+      accountId,
+      'шаринг',
+      () => NativeShareAccountChannel.instance.remove(accountId),
+    );
+    await _removeStep(
+      accountId,
+      'плагины',
+      () => PluginStorage.eraseAccount(accountId),
+    );
     ChatCryptoService.instance.clearKeys();
     MessageDecryptionCache.instance.clear();
     EncryptedPhotoCache.instance.clear();
-    await DecryptedPhotoStore.clear();
-    await ChatEncryptionStore.instance.eraseAccount(accountId);
-    await WebAppStorage.eraseAccount(accountId);
-    await E2eeService.instance.eraseAccount(accountId);
-    await AppDatabase.deleteAccount(accountId);
-    await TokenStorage.deleteAccount(accountId);
-    await SpoofingService.clearAccountSpoof(accountId);
-    await ProfileDeletionStore.clear(accountId);
+    await _removeStep(accountId, 'фото-кэш', DecryptedPhotoStore.clear);
+    await _removeStep(
+      accountId,
+      'ключи чатов',
+      () => ChatEncryptionStore.instance.eraseAccount(accountId),
+    );
+    await _removeStep(
+      accountId,
+      'вебаппы',
+      () => WebAppStorage.eraseAccount(accountId),
+    );
+    await _removeStep(
+      accountId,
+      'e2ee',
+      () => E2eeService.instance.eraseAccount(accountId),
+    );
+    await _removeStep(
+      accountId,
+      'база',
+      () => AppDatabase.deleteAccount(accountId),
+    );
+    await _removeStep(
+      accountId,
+      'токен',
+      () => TokenStorage.deleteAccount(accountId),
+    );
+    await _removeStep(
+      accountId,
+      'спуф',
+      () => SpoofingService.clearAccountSpoof(accountId),
+    );
+    await _removeStep(
+      accountId,
+      'заявка на удаление',
+      () => ProfileDeletionStore.clear(accountId),
+    );
     logger.i('Аккаунт $accountId удалён локально');
+  }
+
+  // #***! keychain на маке падает -50 и убивает остальные шаги, а без
+  // удаления токена автологин мёртвым токеном крутится бесконечно
+  static Future<void> _removeStep(
+    int accountId,
+    String what,
+    Future<void> Function() step,
+  ) async {
+    try {
+      await step();
+    } catch (e) {
+      logger.w('removeAccount($accountId): $what: $e');
+    }
   }
 
   Future<DateTime?> profileDeletionScheduledAt() async {
@@ -1032,7 +1084,6 @@ class AccountModule {
         callsSeed,
         deviceId,
         arch: _api.architecture,
-        preLogin: !_api.isAuthenticatedHandshake,
       );
     }
 
@@ -1258,7 +1309,6 @@ class AccountModule {
         callsSeed,
         deviceId,
         arch: _api.architecture,
-        preLogin: !_api.isAuthenticatedHandshake,
       );
     }
 

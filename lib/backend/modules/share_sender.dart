@@ -5,6 +5,7 @@ import '../../core/media/gallery_source.dart';
 import '../../core/crypto/outgoing_message_policy.dart';
 import '../../core/media/share_thumbnail.dart';
 import '../../core/media/video_transcoder.dart';
+import '../../core/share/native_share_account_channel.dart';
 import '../../core/share/shared_file_usage.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/token_storage.dart';
@@ -169,6 +170,39 @@ class ShareSender {
     );
   }
 
+  // #***! подсказка шарингу iOS в каком чате юзер реально отправляет
+  static Future<void> _donate(int accountId, int chatId) async {
+    try {
+      await NativeShareAccountChannel.instance.donateShareContact(
+        accountId: accountId,
+        chatId: chatId,
+        title: _chatTitle(chatId),
+      );
+    } catch (_) {}
+  }
+
+  static String _chatTitle(int chatId) {
+    CachedChat? chat;
+    for (final candidate in chats.chatsSnapshot()) {
+      if (candidate.id == chatId) {
+        chat = candidate;
+        break;
+      }
+    }
+    if (chat == null) return 'Чат';
+    if (chat.id == 0) return 'Избранное';
+    var title = chat.title?.trim() ?? '';
+    if (chat.type == 'DIALOG') {
+      for (final participant in chat.participants.keys) {
+        if (participant != chat.accountId) {
+          title = ContactCache.get(participant) ?? title;
+          break;
+        }
+      }
+    }
+    return title.isEmpty ? 'Чат' : title;
+  }
+
   // #***! по очереди во все выбранные чаты
   static Future<ShareSendResult> send({
     required int accountId,
@@ -195,15 +229,19 @@ class ShareSender {
       () async {
         var messages = 0;
         for (final chatId in chatIds) {
-          if (!identical(api.session, session) || api.sessionEpoch != epoch || TokenStorage.accountEpoch != accountEpoch) {
+          if (!identical(api.session, session) ||
+              api.sessionEpoch != epoch ||
+              TokenStorage.accountEpoch != accountEpoch) {
             throw StateError('Account changed during sharing');
           }
-          messages += await _sendToChat(
+          final sent = await _sendToChat(
             accountId: accountId,
             chatId: chatId,
             share: share,
             caption: caption,
           );
+          messages += sent;
+          if (sent > 0) unawaited(_donate(accountId, chatId));
         }
         logger.i(
           'Поделиться: отправлено $messages сообщений в ${chatIds.length} чатов',

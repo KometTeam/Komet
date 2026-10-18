@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_camera.dart';
 import '../config/app_microphone.dart';
@@ -73,11 +74,15 @@ class CallSession {
   final CallRole role;
   final bool isGroup;
 
+  /// Явный видео-интент исходящего звонка (params для исходящих не приходит)
+  final bool outgoingVideo;
+
   CallSession({
     required this.ws2Config,
     required this.role,
     this.params,
     this.isGroup = false,
+    this.outgoingVideo = false,
   });
 
   Ws2Signaling? _signaling;
@@ -98,6 +103,9 @@ class CallSession {
   bool _peerMuted = false;
   bool _peerVideo = false;
   bool _peerScreen = false;
+  // #***! собеседник уже объявлял свои mediaSettings — до этого ориентируемся
+  // на факт идущих кадров, после — на флаги
+  bool _peerMediaAnnounced = false;
   bool _mediaConnected = false;
   bool _remoteDescSet = false;
   bool _ownRemoteStream = false;
@@ -116,6 +124,10 @@ class CallSession {
   Set<int> _speaking = const {};
 
   bool _localVideo = false;
+  // #***! текущая камера для десктопного цикла (на мобилках выбор в движке)
+  bool _switchingCamera = false;
+  String? _cameraFacing;
+  bool _facingLoaded = false;
   bool _localScreen = false;
   MediaStream? _cameraStream;
   MediaStream? _screenStream;
@@ -192,8 +204,13 @@ class CallSession {
   bool get localVideo => _localVideo;
   bool get localScreen => _localScreen;
   MediaStream? get localVideoStream =>
-      _localScreen ? _screenStream : _cameraStream;
-  MediaStream? get localCameraStream => _cameraStream;
+      _localScreen ? _screenStream : localCameraStream;
+  MediaStream? get localCameraStream {
+    final camera = _cameraStream;
+    if (camera != null) return camera;
+    return _localVideo ? _localStream : null;
+  }
+
   MediaStream? get localScreenStream => _screenStream;
 
   CallAdmin? get admin {
@@ -218,7 +235,7 @@ class CallSession {
 
   String? get topology => _topology;
 
-  bool get _wantVideo => params?.isVideo == true;
+  bool get _wantVideo => (params?.isVideo ?? false) || outgoingVideo;
 
   final CallInfo info = CallInfo();
 
@@ -245,6 +262,7 @@ class CallSession {
   bool get peerMuted => _peerMuted;
   bool get peerVideo => _peerVideo || _peerScreen;
   bool get peerCamera => _peerVideo;
+  bool get peerMediaAnnounced => _peerMediaAnnounced;
   bool get mediaConnected => _mediaConnected;
 
   CallSessionState _current = CallSessionState.connecting;
@@ -766,6 +784,9 @@ class CallSession {
       handRaised: _handFrom(p['participantState']),
       roles: p['roles'],
     );
+    if (isGroup || _participants.length > 2) {
+      unawaited(CallBridge.instance.clearPiPTracks());
+    }
     _maybeAdoptPeer(id, p);
     _notifyInfo();
   }
@@ -842,6 +863,13 @@ class CallSession {
         (conversation is Map ? conversation['topology']?.toString() : null) ??
         _topology;
     logger.i('[call] connection role=$role peer=$_peerId topology=$_topology');
+
+    // #***! входящий видео-звонок: у звонившего камера включена с самого
+    // начала — считаем так, пока не придут его реальные mediaSettings
+    if (role == CallRole.callee && _wantVideo && !_peerVideo) {
+      _peerVideo = true;
+      _peerMediaAnnounced = false;
+    }
 
     if (_topology == 'SERVER') {
       await accept(activate: role != CallRole.caller);
@@ -949,19 +977,73 @@ class CallSession {
       await _resetMicRoute();
     }
     await _selectMicInsideEngine();
+    if (_topology == 'SERVER') {
+      // SFU: камера публикуется в выделенный слот (_prepareVideoSlot);
+      // прямой addTrack видео создаёт лишний m-line и ломает переоговаривание
+      _localStream = await navigator.mediaDevices.getUserMedia({
+        'audio': AudioDevices.micConstraints(
+          _micDeviceId,
+          monitorCapture: _monitorCapture,
+        ),
+      });
+      for (final track in _localStream!.getTracks()) {
+        final sender = await pc.addTrack(track, _localStream!);
+        if (track.kind == 'audio') _audioSender = sender;
+      }
+      _applyAudioTracks();
+      await applyAudioRoute();
+      if (_wantVideo) await _captureCamera();
+      return;
+    }
     _localStream = await navigator.mediaDevices.getUserMedia({
       'audio': AudioDevices.micConstraints(
         _micDeviceId,
         monitorCapture: _monitorCapture,
       ),
-      'video': _wantVideo,
+      'video': _wantVideo ? await _startupVideoConstraints() : false,
     });
+    if (_wantVideo && _localStream!.getVideoTracks().isNotEmpty) {
+      await _rememberFacing(_activeFacing);
+    }
     for (final track in _localStream!.getTracks()) {
       final sender = await pc.addTrack(track, _localStream!);
-      if (track.kind == 'audio') _audioSender = sender;
+      if (track.kind == 'audio') {
+        _audioSender = sender;
+      } else {
+        _videoSender = sender;
+        _localVideo = true;
+      }
     }
     _applyAudioTracks();
     await applyAudioRoute();
+  }
+
+  // #***! отдельный захват камеры (SFU публикует её в слот, не через addTrack).
+  // Producer-offer может прийти раньше, чем закончится холодный getUserMedia —
+  // тогда слот остаётся пустым, поэтому после захвата досылаем камеру в слот
+  Future<void> _captureCamera() async {
+    try {
+      await _ensureFacingLoaded();
+      final stream = await navigator.mediaDevices.getUserMedia(
+        <String, dynamic>{'video': _videoConstraints(), 'audio': false},
+      );
+      await _disposeStream(_cameraStream);
+      _cameraStream = stream;
+      _localVideo = true;
+      await _rememberFacing(_activeFacing);
+      final sender = _videoSender;
+      final tracks = stream.getVideoTracks();
+      if (sender != null && tracks.isNotEmpty) {
+        try {
+          await sender.replaceTrack(tracks.first);
+        } catch (e) {
+          logger.w('[call][sfu] публикация камеры в слот не удалась: $e');
+        }
+      }
+      _notifyInfo();
+    } catch (e) {
+      logger.w('[call][sfu] камера недоступна: $e');
+    }
   }
 
   // #***! на мобилках микрофон выбирает движок
@@ -1212,12 +1294,24 @@ class CallSession {
     final items = <SfuLayoutItem>[];
     for (final p in _participants.values) {
       if (p.isSelf || items.length >= _maxVideoSlots) continue;
-      if (!p.videoEnabled && !p.screenSharing) continue;
+      final wants =
+          p.videoEnabled ||
+          p.screenSharing ||
+          (_peerId == p.id && (_peerVideo || _peerScreen));
+      if (!wants) continue;
       items.add(
         SfuLayoutItem(
           trackKey: 'u${p.id}:${p.screenSharing ? 'sSCREEN' : 'sCAMERA'}',
         ),
       );
+    }
+    // #***! в 1-1 таблица участников может не успеть наполниться — просим
+    // камеру собеседника по флагу напрямую
+    if (items.isEmpty &&
+        !isGroup &&
+        _peerId != null &&
+        (_peerVideo || _peerScreen)) {
+      items.add(SfuLayoutItem(trackKey: 'u$_peerId:sCAMERA'));
     }
     final keys = items.map((i) => i.trackKey).toList(growable: false);
     if (!force &&
@@ -1477,6 +1571,10 @@ class CallSession {
 
   // #***! после пересборки видео надо опубликовать заново
   Future<void> _republishVideo(RTCPeerConnection pc) async {
+    if (_topology == 'SERVER') {
+      // В SFU камера уходит в слот через _prepareVideoSlot по producer-offer
+      return;
+    }
     final camera = _cameraStream;
     if (camera != null) {
       final tracks = camera.getVideoTracks();
@@ -1660,19 +1758,37 @@ class CallSession {
     );
   }
 
+  int _lastVideoBytes = -1;
+  DateTime? _videoFlowingAt;
+
+  // #***! видео собеседника реально идёт — по приросту inbound-байтов,
+  // это правда поверх любых сигнальных флагов
+  bool get remoteVideoFlowing =>
+      _videoFlowingAt != null &&
+      DateTime.now().difference(_videoFlowingAt!) < const Duration(seconds: 12);
+
   Future<void> _dumpVideoStats(RTCPeerConnection pc) async {
     try {
       final rows = <String>[];
+      var videoBytes = 0;
       for (final r in await pc.getStats()) {
         if (r.type != 'inbound-rtp') continue;
         final v = r.values;
         if (v['kind'] != 'video' && v['mediaType'] != 'video') continue;
+        final b = v['bytesReceived'];
+        if (b is num) videoBytes += b.toInt();
         rows.add(
           '[ssrc=${v['ssrc']} bytes=${v['bytesReceived']} '
           'packets=${v['packetsReceived']} decoded=${v['framesDecoded']} '
           '${v['frameWidth']}x${v['frameHeight']}]',
         );
       }
+      final wasFlowing = remoteVideoFlowing;
+      if (videoBytes > _lastVideoBytes && _lastVideoBytes >= 0) {
+        _videoFlowingAt = DateTime.now();
+      }
+      _lastVideoBytes = videoBytes;
+      if (wasFlowing != remoteVideoFlowing) _notifyInfo();
       var transportBytes = 0;
       var audioBytes = 0;
       for (final r in await pc.getStats()) {
@@ -1688,7 +1804,7 @@ class CallSession {
       }
       logger.i(
         '[call][sfu] inbound video: ${rows.join(' ')} '
-        '| transport=$transportBytes audio=$audioBytes',
+        '| transport=$transportBytes audio=$audioBytes flowing=$remoteVideoFlowing',
       );
     } catch (e) {
       logger.w('[call][sfu] video stats failed: $e');
@@ -1896,6 +2012,9 @@ class CallSession {
       '[call] remote track: ${event.track.kind} id=${event.track.id} '
       'streams=${event.streams.length}',
     );
+    if (event.track.kind == 'video') {
+      _notifyPiPTrack(event.track);
+    }
     await _bindParticipantTrack(event.track);
     if (event.streams.isNotEmpty) {
       _remoteStreamRef = event.streams.first;
@@ -1974,6 +2093,13 @@ class CallSession {
     }
   }
 
+  // PiP показывается только в 1-1, кадры сами решают что выводить
+  void _notifyPiPTrack(MediaStreamTrack track) {
+    if (track.kind != 'video' || track.id == null) return;
+    if (isGroup || _participants.length > 2) return;
+    unawaited(CallBridge.instance.setPiPTrack(track.id!));
+  }
+
   Future<void> _collectReceivers() async {
     final pc = _pc;
     if (pc == null) return;
@@ -1982,6 +2108,7 @@ class CallSession {
         final track = tr.receiver.track;
         if (track != null) {
           logger.t('[call] receiver track: ${track.kind} id=${track.id}');
+          _notifyPiPTrack(track);
           await _bindParticipantTrack(track);
           await _pushRemoteTrack(track);
         }
@@ -2171,7 +2298,7 @@ class CallSession {
     logger.i('[call] accept-call sent (activate=$activate)');
     await _signaling?.acceptCall(
       isAudioEnabled: !_muted,
-      isVideoEnabled: _localVideo,
+      isVideoEnabled: _localVideo || _wantVideo,
       isScreenSharingEnabled: _localScreen,
     );
     if (activate) _setState(CallSessionState.active);
@@ -2202,8 +2329,93 @@ class CallSession {
     );
   }
 
+  // #***! камера по умолчанию фронталка, дальше последняя использованная
+  static const _facingKey = 'komet_camera_facing';
+
+  Future<void> _ensureFacingLoaded() async {
+    if (_facingLoaded) return;
+    _facingLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _cameraFacing = prefs.getString(_facingKey);
+    } catch (_) {}
+  }
+
+  String get _activeFacing => _cameraFacing ?? 'user';
+
+  Future<void> _rememberFacing(String facing) async {
+    _cameraFacing = facing;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_facingKey, facing);
+    } catch (_) {}
+  }
+
+  Object _videoConstraints() {
+    final mobile =
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.android;
+    if (!mobile) return true;
+    return <String, dynamic>{
+      'facingMode': _activeFacing,
+      'width': 1280,
+      'height': 720,
+      'frameRate': 30,
+    };
+  }
+
+  Future<Object> _startupVideoConstraints() async {
+    await _ensureFacingLoaded();
+    return _videoConstraints();
+  }
+
   // #***! камера и демонстрация экрана
   Future<void> setVideoEnabled(bool on) => on ? _startCamera() : _stopCamera();
+
+  // #***! перезапуск капчера без смены камеры — iOS иногда стартует
+  // захват без кадров. Двойной флип перезапускает капчер на той же камере:
+  // трек и SSRC не меняются, публикация в SFU не дёргается
+  Future<void> restartCamera() async {
+    final stream = _cameraStream;
+    if (stream == null || _switchingCamera) return;
+    final tracks = stream.getVideoTracks();
+    if (tracks.isEmpty) return;
+    final mobile =
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.android;
+    if (mobile) {
+      _switchingCamera = true;
+      try {
+        await Helper.switchCamera(tracks.first);
+        await Helper.switchCamera(tracks.first);
+      } catch (e) {
+        logger.w('[call] перезапуск камеры не удался: $e');
+      } finally {
+        _switchingCamera = false;
+      }
+      _notifyInfo();
+      return;
+    }
+    _switchingCamera = true;
+    try {
+      final fresh = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+        'video': _videoConstraints(),
+        'audio': false,
+      });
+      await _disposeStream(stream);
+      _cameraStream = fresh;
+      final track = fresh.getVideoTracks().isEmpty
+          ? null
+          : fresh.getVideoTracks().first;
+      final sender = _videoSender;
+      if (track != null && sender != null) {
+        await sender.replaceTrack(track);
+      }
+      _notifyInfo();
+    } finally {
+      _switchingCamera = false;
+    }
+  }
 
   Future<void> setScreenSharing(bool on) =>
       on ? _startScreenShare() : _stopScreenShare();
@@ -2218,40 +2430,81 @@ class CallSession {
     }
   }
 
-  // #***! включение камеры
   Future<void> switchCamera() async {
     if (!_localVideo || _pc == null) return;
     final cameras = await CameraDevices.cameras();
     if (cameras.length < 2) return;
-    final currentId = _cameraStream?.getVideoTracks().firstOrNull?.getSettings()['deviceId'];
+    final currentId = _cameraStream
+        ?.getVideoTracks()
+        .firstOrNull
+        ?.getSettings()['deviceId'];
     final current = cameras.where((c) => c.id == currentId).firstOrNull;
-    final next = cameras.where((c) => c.id != currentId && c.facing != current?.facing).firstOrNull ??
-        cameras.firstWhere((c) => c.id != currentId, orElse: () => cameras.first);
+    final next =
+        cameras
+            .where((c) => c.id != currentId && c.facing != current?.facing)
+            .firstOrNull ??
+        cameras.firstWhere(
+          (c) => c.id != currentId,
+          orElse: () => cameras.first,
+        );
     await _startCamera(deviceId: next.id);
+    if (next.facing != CameraFacing.external) {
+      unawaited(
+        _rememberFacing(
+          next.facing == CameraFacing.front ? 'user' : 'environment',
+        ),
+      );
+    }
   }
+
   Future<void> _startCamera({String? deviceId}) async {
     final pc = _pc;
     if (pc == null) return;
 
+    await _ensureFacingLoaded();
+    final effective = deviceId ?? AppCamera.deviceId;
     final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
-      'video': CameraDevices.constraints(deviceId ?? AppCamera.deviceId),
+      'video': effective == null
+          ? _videoConstraints()
+          : CameraDevices.constraints(effective),
       'audio': false,
     });
 
     await _disposeStream(_cameraStream);
     _cameraStream = stream;
+    _localVideo = true;
+    await _rememberFacing(_activeFacing);
 
     final tracks = stream.getVideoTracks();
     final track = tracks.isEmpty ? null : tracks.first;
     if (track != null) {
-      if (_videoSender == null) {
+      if (_topology == 'SERVER') {
+        // SFU: публикация в выделенный слот; слота ещё нет — камера уйдёт при
+        // следующем producer-offer (_prepareVideoSlot), прямой addTrack ломает
+        // переоговаривание
+        final sender = _videoSender;
+        if (sender != null) {
+          final previous = sender.track;
+          await sender.replaceTrack(track);
+          if (previous != null && previous.id != track.id) {
+            try {
+              await previous.stop();
+            } catch (_) {}
+          }
+        }
+      } else if (_videoSender == null) {
         _videoSender = await pc.addTrack(track, stream);
       } else {
+        final previous = _videoSender!.track;
         await _videoSender!.replaceTrack(track);
+        if (previous != null && previous.id != track.id) {
+          try {
+            await previous.stop();
+          } catch (_) {}
+        }
       }
     }
 
-    _localVideo = true;
     await _renegotiate();
     await _sendMediaSettings();
     _notifyInfo();
@@ -2264,6 +2517,11 @@ class CallSession {
     await _disposeStream(_cameraStream);
     _cameraStream = null;
     _localVideo = false;
+    for (final track in _localStream?.getVideoTracks() ?? const []) {
+      try {
+        await track.stop();
+      } catch (_) {}
+    }
     await _sendMediaSettings();
     _notifyInfo();
   }
@@ -2464,6 +2722,7 @@ class CallSession {
               _peerMuted = ms['isAudioEnabled'] != true;
               _peerVideo = ms['isVideoEnabled'] == true;
               _peerScreen = ms['isScreenSharingEnabled'] == true;
+              _peerMediaAnnounced = true;
             }
           }
         }
@@ -2499,12 +2758,24 @@ class CallSession {
     final muted = ms['isAudioEnabled'] != true;
     final video = ms['isVideoEnabled'] == true;
     final screen = ms['isScreenSharingEnabled'] == true;
+    _peerMediaAnnounced = true;
+    if (pid != null) {
+      _upsertParticipant(pid, mediaSettings: ms);
+    }
     if (muted != _peerMuted || video != _peerVideo || screen != _peerScreen) {
+      final videoOff =
+          video == false && screen == false && (_peerVideo || _peerScreen);
       _peerMuted = muted;
       _peerVideo = video;
       _peerScreen = screen;
       _notifyInfo();
-      if (video || screen) unawaited(_collectReceivers());
+      if (video || screen) {
+        unawaited(_collectReceivers());
+      } else if (videoOff) {
+        // PiP и клиент не должны держать последний кадр, когда чужая камера
+        // выключена — гасим
+        unawaited(CallBridge.instance.clearPiPTracks());
+      }
     }
   }
 

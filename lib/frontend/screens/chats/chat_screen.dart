@@ -429,7 +429,10 @@ class _ChatScreenState extends State<ChatScreen>
     } else {
       payload['reactionInfo'] = info;
     }
-    _chatController.setMessageAt(idx, _messages[idx].copyWith(payload: payload));
+    _chatController.setMessageAt(
+      idx,
+      _messages[idx].copyWith(payload: payload),
+    );
   }
 
   Map<String, dynamic>? _applyLocalReaction(
@@ -764,8 +767,7 @@ class _ChatScreenState extends State<ChatScreen>
     final incomingReply = widget.replyRequest;
     if (incomingReply != null) {
       _replyTo.value = incomingReply.message;
-      _textSend.replySourceChatId =
-          incomingReply.sourceChatId == widget.chatId
+      _textSend.replySourceChatId = incomingReply.sourceChatId == widget.chatId
           ? null
           : incomingReply.sourceChatId;
     }
@@ -1963,8 +1965,7 @@ class _ChatScreenState extends State<ChatScreen>
   ) async {
     if (targetTime <= 0) {
       await _walkHistoryBack(
-        reached: () =>
-            _chatController.containsId(messageId) || !stillWanted(),
+        reached: () => _chatController.containsId(messageId) || !stillWanted(),
         maxPages: 10,
       );
       return;
@@ -2812,8 +2813,7 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  PreferredSizeWidget _previewSafeBar(PreferredSizeWidget bar) =>
-      widget.preview
+  PreferredSizeWidget _previewSafeBar(PreferredSizeWidget bar) => widget.preview
       ? PreferredSize(
           preferredSize: bar.preferredSize,
           child: GestureDetector(
@@ -3249,7 +3249,10 @@ class _ChatScreenState extends State<ChatScreen>
         final idx = _chatController.indexOfId(messageId);
         if (idx == -1) return;
         if (_messages[idx].deleted) return;
-        _chatController.setMessageAt(idx, _messages[idx].copyWith(deleted: true));
+        _chatController.setMessageAt(
+          idx,
+          _messages[idx].copyWith(deleted: true),
+        );
         _bumpMessages();
       case MessageReactionsChangedEvent(:final messageId, :final reactionInfo):
         _reactionNotifiers[messageId]?.value = reactionInfo;
@@ -3671,7 +3674,7 @@ class _ChatScreenState extends State<ChatScreen>
     _leaveChat();
   }
 
-  Future<void> _startCall() async {
+  Future<void> _startCall({bool video = false}) async {
     if (widget.chatType != 'DIALOG') {
       showCustomNotification(
         context,
@@ -3684,6 +3687,7 @@ class _ChatScreenState extends State<ChatScreen>
       peerId: widget.chatId ^ _myId,
       name: widget.name,
       avatarUrl: widget.imageUrl.isNotEmpty ? widget.imageUrl : null,
+      video: video,
     );
     if (shown) _onCallScreenClosed();
   }
@@ -3954,7 +3958,9 @@ class _ChatScreenState extends State<ChatScreen>
     if (_e2eeActive) {
       final l10n = AppLocalizations.of(context)!;
       if (!E2eeService.instance.fitsTransport(utf8.encode(text).length)) {
-        if (mounted && notify) showCustomNotification(context, l10n.e2eeTooLong);
+        if (mounted && notify) {
+          showCustomNotification(context, l10n.e2eeTooLong);
+        }
         return null;
       }
       final String? wire;
@@ -4020,22 +4026,22 @@ class _ChatScreenState extends State<ChatScreen>
     final accountId = _myId;
     final sessionEpoch = api.sessionEpoch;
     return PluginCommandContext(
-    accountId: accountId,
-    args: args,
-    arguments: arguments ?? parseCommandArguments(args, command.arguments),
-    replyMessage: _pluginReplyMessage(),
-    onlineCheck: () => api.state == SessionState.online,
-    activeCheck: () =>
-        mounted && _myId == accountId && api.sessionEpoch == sessionEpoch,
-    sendTextCallback: _textSend.postCommandMessage,
-    editTextCallback: _textSend.updateCommandMessage,
-    sendPhotoCallback: _sendPluginPhoto,
-    sendFileCallback: _sendPluginFile,
-    notifyCallback: (message) async {
-      if (mounted) showCustomNotification(context, message);
-    },
-    getPeerCallback: _pluginPeer,
-  );
+      accountId: accountId,
+      args: args,
+      arguments: arguments ?? parseCommandArguments(args, command.arguments),
+      replyMessage: _pluginReplyMessage(),
+      onlineCheck: () => api.state == SessionState.online,
+      activeCheck: () =>
+          mounted && _myId == accountId && api.sessionEpoch == sessionEpoch,
+      sendTextCallback: _textSend.postCommandMessage,
+      editTextCallback: _textSend.updateCommandMessage,
+      sendPhotoCallback: _sendPluginPhoto,
+      sendFileCallback: _sendPluginFile,
+      notifyCallback: (message) async {
+        if (mounted) showCustomNotification(context, message);
+      },
+      getPeerCallback: _pluginPeer,
+    );
   }
 
   Map<String, dynamic>? _pluginReplyMessage() {
@@ -4316,7 +4322,6 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-
   Future<void> _pickReplyChat() async {
     final reply = _replyTo.value;
     if (reply == null) return;
@@ -4333,7 +4338,9 @@ class _ChatScreenState extends State<ChatScreen>
     if (target == null || !mounted) return;
 
     if (target.chatId == widget.chatId) {
-      _textSend.replySourceChatId = sourceChatId == widget.chatId ? null : sourceChatId;
+      _textSend.replySourceChatId = sourceChatId == widget.chatId
+          ? null
+          : sourceChatId;
       _messageFocusNode.requestFocus();
       return;
     }
@@ -4401,10 +4408,7 @@ class _ChatScreenState extends State<ChatScreen>
     final sourceMessageId = forwarded.originalMessageId;
     if (sourceChatId == widget.chatId) {
       if (sourceMessageId == null) return;
-      await _scrollNav.goTo(
-        sourceMessageId,
-        time: forwarded.originalTime ?? 0,
-      );
+      await _scrollNav.goTo(sourceMessageId, time: forwarded.originalTime ?? 0);
       return;
     }
 
@@ -4488,7 +4492,6 @@ class _ChatScreenState extends State<ChatScreen>
     _closeSearch();
     await _scrollNav.goTo(result.id, time: result.time);
   }
-
 
   String _searchSenderName(int senderId) {
     final l10n = AppLocalizations.of(context)!;
@@ -4665,13 +4668,10 @@ class _ChatScreenState extends State<ChatScreen>
         child: child!,
       ),
       child: MediaQuery(
-        data:
-            context
-                .getInheritedWidgetOfExactType<MediaQuery>()!
-                .data
-                .copyWith(
-                  viewInsets: viewInsets.copyWith(bottom: bottomInset),
-                ),
+        data: context
+            .getInheritedWidgetOfExactType<MediaQuery>()!
+            .data
+            .copyWith(viewInsets: viewInsets.copyWith(bottom: bottomInset)),
         child: Theme(
           data: theme,
           child: RepaintBoundary(
@@ -4724,52 +4724,55 @@ class _ChatScreenState extends State<ChatScreen>
                 builder: (context, body) => Scaffold(
                   backgroundColor: cs.surface,
                   extendBodyBehindAppBar: underlap,
-                  appBar: _previewSafeBar(ChatAppBar(
-                    cs: cs,
-                    searchAnim: _searchAnim,
-                    selectionAnim: _selectionAnim,
-                    chrome: _effectiveChrome,
-                    chromeVignette: _chromeVignette,
-                    liquidChrome: _liquidChrome,
-                    barBackdrop: _barBackdrop,
-                    pillBackdrop: _pillBackdrop,
-                    glossyChrome: AppVisualStyle.current.value.glossyChrome,
-                    embedded: widget.embedded,
-                    chatId: widget.chatId,
-                    heroTag: _profileHeroTag,
-                    name: _headerName(),
-                    imageUrl: _headerAvatarUrl(),
-                    chatType: widget.chatType,
-                    isOfficial: widget.chatType == 'DIALOG'
-                        ? _peerOfficial
-                        : (chat?.isOfficial ?? false),
-                    encrypted: _encryptionEnabled,
-                    verified: _e2eeVerified,
-                    myId: _myId,
-                    headerStatus: _headerStatusNotifier,
-                    scheduledCount: _scheduledCount,
-                    otherUnread: _otherUnread,
-                    showCall:
-                        !_commentsMode &&
-                        widget.chatType == 'DIALOG' &&
-                        widget.chatId != 0 &&
-                        !_peerIsBot,
-                    onClose: widget.onClose,
-                    onOpenInfo: _commentsMode ? () {} : _openChatInfo,
-                    onOpenScheduled: _openScheduledMessages,
-                    onCall: _startCall,
-                    onMenu: _commentsMode ? (_) {} : _openChatMenu,
-                    selectedIds: _selectedIds,
-                    copyableSelection: _copyableSelection,
-                    singleEditable: _singleEditable,
-                    onClearSelection: _clearSelection,
-                    onCopySelected: _copySelected,
-                    onEditSelected: _editSelected,
-                    onDeleteSelected: _deleteSelected,
-                    search: _search,
-                    searchFocusNode: _searchFocusNode,
-                    onCloseSearch: _closeSearch,
-                  )),
+                  appBar: _previewSafeBar(
+                    ChatAppBar(
+                      cs: cs,
+                      searchAnim: _searchAnim,
+                      selectionAnim: _selectionAnim,
+                      chrome: _effectiveChrome,
+                      chromeVignette: _chromeVignette,
+                      liquidChrome: _liquidChrome,
+                      barBackdrop: _barBackdrop,
+                      pillBackdrop: _pillBackdrop,
+                      glossyChrome: AppVisualStyle.current.value.glossyChrome,
+                      embedded: widget.embedded,
+                      chatId: widget.chatId,
+                      heroTag: _profileHeroTag,
+                      name: _headerName(),
+                      imageUrl: _headerAvatarUrl(),
+                      chatType: widget.chatType,
+                      isOfficial: widget.chatType == 'DIALOG'
+                          ? _peerOfficial
+                          : (chat?.isOfficial ?? false),
+                      encrypted: _encryptionEnabled,
+                      verified: _e2eeVerified,
+                      myId: _myId,
+                      headerStatus: _headerStatusNotifier,
+                      scheduledCount: _scheduledCount,
+                      otherUnread: _otherUnread,
+                      showCall:
+                          !_commentsMode &&
+                          widget.chatType == 'DIALOG' &&
+                          widget.chatId != 0 &&
+                          !_peerIsBot,
+                      onClose: widget.onClose,
+                      onOpenInfo: _commentsMode ? () {} : _openChatInfo,
+                      onOpenScheduled: _openScheduledMessages,
+                      onCall: _startCall,
+                      onVideoCall: () => unawaited(_startCall(video: true)),
+                      onMenu: _commentsMode ? (_) {} : _openChatMenu,
+                      selectedIds: _selectedIds,
+                      copyableSelection: _copyableSelection,
+                      singleEditable: _singleEditable,
+                      onClearSelection: _clearSelection,
+                      onCopySelected: _copySelected,
+                      onEditSelected: _editSelected,
+                      onDeleteSelected: _deleteSelected,
+                      search: _search,
+                      searchFocusNode: _searchFocusNode,
+                      onCloseSearch: _closeSearch,
+                    ),
+                  ),
                   body: body,
                 ),
               ),
@@ -4896,14 +4899,12 @@ class _ChatScreenState extends State<ChatScreen>
       final glossy = AppVisualStyle.current.value.glossyChrome;
       return glossy ? 2 : 4;
     }
-    final hasBanner =
-        chat?.hasPinnedMessage == true || _showsCallBanner;
+    final hasBanner = chat?.hasPinnedMessage == true || _showsCallBanner;
     if (hasBanner && pinnedHeight > 0) {
       return _pinnedBannerTop() + pinnedHeight + 2;
     }
     return _pinnedBannerTop() + 2;
   }
-
 
   Widget _buildMessagesListContent() {
     if (_messages.isEmpty) return const SizedBox.shrink();
@@ -4940,256 +4941,237 @@ class _ChatScreenState extends State<ChatScreen>
                       context,
                     ).copyWith(scrollbars: false),
                     child: AnchoredMessageList(
-                    controller: _scrollController,
-                    cacheExtent: cacheExtent,
-                    padding: _messagesListPadding(context),
-                    epoch: _scrollNav.listEpoch,
-                    itemCount: items.length,
-                    anchorIndex: _scrollNav.anchorIndexIn(
-                      items,
-                      _messageIdOfItem,
-                    ),
-                    loadingOlder: _isLoadingMore,
-                    loadingNewer: _chatController.isLoadingNewer,
-                    bottomSpacer: ValueListenableBuilder<double>(
-                      valueListenable: _composerHeight,
-                      builder: (context, height, _) => SizedBox(
-                        height: _composerUnderlap ? height : 0,
+                      controller: _scrollController,
+                      cacheExtent: cacheExtent,
+                      padding: _messagesListPadding(context),
+                      epoch: _scrollNav.listEpoch,
+                      itemCount: items.length,
+                      anchorIndex: _scrollNav.anchorIndexIn(
+                        items,
+                        _messageIdOfItem,
                       ),
-                    ),
-                    itemBuilder: (context, itemIndex) {
-                              final item = items[itemIndex];
+                      loadingOlder: _isLoadingMore,
+                      loadingNewer: _chatController.isLoadingNewer,
+                      bottomSpacer: ValueListenableBuilder<double>(
+                        valueListenable: _composerHeight,
+                        builder: (context, height, _) =>
+                            SizedBox(height: _composerUnderlap ? height : 0),
+                      ),
+                      itemBuilder: (context, itemIndex) {
+                        final item = items[itemIndex];
 
-                              if (item is _DateSeparatorItem) {
-                                return DateSeparatorLabel(
-                                  key: item.key,
-                                  date: item.date,
-                                );
-                              }
+                        if (item is _DateSeparatorItem) {
+                          return DateSeparatorLabel(
+                            key: item.key,
+                            date: item.date,
+                          );
+                        }
 
-                              if (item is _UnreadSeparatorItem) {
-                                return UnreadSeparatorBar(
-                                  key: _unreadSeparatorKey,
-                                );
-                              }
+                        if (item is _UnreadSeparatorItem) {
+                          return UnreadSeparatorBar(key: _unreadSeparatorKey);
+                        }
 
-                              final msgItem = item as _MessageItem;
-                              final message = msgItem.message;
-                              final msgIndex = msgItem.index;
-                              final isMe = message.senderId == _myId;
-                              final prevMessage = msgIndex > 0
-                                  ? _messages[msgIndex - 1]
-                                  : null;
-                              final nextMessage = msgIndex < visibleCount - 1
-                                  ? _messages[msgIndex + 1]
-                                  : null;
+                        final msgItem = item as _MessageItem;
+                        final message = msgItem.message;
+                        final msgIndex = msgItem.index;
+                        final isMe = message.senderId == _myId;
+                        final prevMessage = msgIndex > 0
+                            ? _messages[msgIndex - 1]
+                            : null;
+                        final nextMessage = msgIndex < visibleCount - 1
+                            ? _messages[msgIndex + 1]
+                            : null;
 
-                              final bool isChannelPost =
-                                  !_commentsMode &&
-                                  _commentsEnabled &&
-                                  (chat?.type ?? widget.chatType) ==
-                                      'CHANNEL' &&
-                                  !message.isControl;
-                              final bool isCommentedPost =
-                                  _commentsMode &&
-                                  message.id == widget.commentPostId;
+                        final bool isChannelPost =
+                            !_commentsMode &&
+                            _commentsEnabled &&
+                            (chat?.type ?? widget.chatType) == 'CHANNEL' &&
+                            !message.isControl;
+                        final bool isCommentedPost =
+                            _commentsMode && message.id == widget.commentPostId;
 
-                              final bubble = MessageBubble(
-                                message: message,
-                                isMe: isMe,
-                                myId: _myId,
-                                prevMessage: prevMessage,
-                                nextMessage: nextMessage,
-                                chatType: _commentsMode
-                                    ? 'CHAT'
-                                    : (chat?.type ?? 'CHAT'),
-                                chatId: widget.chatId,
-                                photoActions: _photoActions,
-                                overrideStatus: _effectiveStatus(message),
-                                otherReadTime: _otherReadTime,
-                                reactionsListenable: _reactionNotifierFor(
+                        final bubble = MessageBubble(
+                          message: message,
+                          isMe: isMe,
+                          myId: _myId,
+                          prevMessage: prevMessage,
+                          nextMessage: nextMessage,
+                          chatType: _commentsMode
+                              ? 'CHAT'
+                              : (chat?.type ?? 'CHAT'),
+                          chatId: widget.chatId,
+                          photoActions: _photoActions,
+                          overrideStatus: _effectiveStatus(message),
+                          otherReadTime: _otherReadTime,
+                          reactionsListenable: _reactionNotifierFor(message),
+                          reactionAnimation: _reactionAnimation,
+                          uploadProgress: _photoProgressFor(message),
+                          onCancelUpload: _cancelUploadFor(message),
+                          onReplyTap: (id) => unawaited(
+                            _scrollNav.goTo(
+                              id,
+                              time: message.replyInfo?.time ?? 0,
+                              fromId: message.id,
+                            ),
+                          ),
+                          resolveLocalMessage: _chatController.byId,
+                          listWidth: listWidth,
+                          onAvatarTap: _openSenderProfile,
+                          onForwardedSourceTap: _openForwardedSource,
+                          onStickerTap: _openStickerPack,
+                          onReactionTap: message.isControl
+                              ? null
+                              : (emoji) => _reactToMessage(message, emoji),
+                          peerName: widget.name,
+                          peerAvatarUrl: widget.imageUrl,
+                          senderNameOverride: isCommentedPost
+                              ? _chatName
+                              : null,
+                          senderAvatarOverride: isCommentedPost
+                              ? _chatImageUrl
+                              : null,
+                          textSelection: _textSelection,
+                          textSelectionDrag: _textSelectionDrag,
+                          onExitTextSelection: _exitTextSelection,
+                          commentsLabel: isChannelPost
+                              ? _commentsLabelFor(message.id)
+                              : null,
+                          onCommentsTap: isChannelPost
+                              ? () => _openComments(message)
+                              : null,
+                        );
+
+                        final canReport = !isMe && !message.isControl;
+                        final reportTypeId = _complaintTypeId(
+                          chat?.type ?? widget.chatType,
+                        );
+
+                        final pressable = SelectableMessageRow(
+                          message: message,
+                          isMe: isMe,
+                          composerHeight: _composerHeight,
+                          selectedIds: _selectedIds,
+                          selectionAnim: _selectionAnim,
+                          isSelectionActive: () => _selectionMode,
+                          onToggleSelection: () => _toggleSelection(message),
+                          onEnterSelection: () => _enterSelection(message),
+                          onStartTextSelection: (pos) =>
+                              _startTextSelection(message, pos),
+                          onDragTextSelection: (pos) =>
+                              _textSelectionDrag.value = pos,
+                          onDelete: () =>
+                              _confirmDeleteMessage(message.id, isMe),
+                          allowDelete:
+                              !message.isControl &&
+                              (isMe || !_isChannel || _canDeleteOthers),
+                          onEdit: _canEditMessage(message)
+                              ? () => _startEditMessage(message)
+                              : null,
+                          onReply: message.isControl || !_canReply
+                              ? null
+                              : () => _textSend.startReply(message),
+                          onForward:
+                              message.isControl ||
+                                  (chat?.forwardDisabled ?? false)
+                              ? null
+                              : () => _forwardMessages([message]),
+                          allowCopy: !(chat?.copyDisabled ?? false),
+                          onMarkUnread: message.isControl
+                              ? null
+                              : () => _markMessageUnread(message),
+                          onPin: _canPinMessage(message)
+                              ? () => _togglePinMessage(message)
+                              : null,
+                          onCopyLink: _canLinkMessage(message)
+                              ? () => _copyMessageLink(message)
+                              : null,
+                          isPinned: () =>
+                              chat?.pinnedMsgId == int.tryParse(message.id),
+                          loadReadBy: _canShowReadBy(message)
+                              ? () => _loadReadBy(message)
+                              : null,
+                          onReaderTap: _openSenderProfile,
+                          loadReportReasons: canReport
+                              ? () => _loadReportReasons(reportTypeId)
+                              : null,
+                          onReport: canReport
+                              ? (reasonId) => _reportMessage(
                                   message,
-                                ),
-                                reactionAnimation: _reactionAnimation,
-                                uploadProgress: _photoProgressFor(message),
-                                onCancelUpload: _cancelUploadFor(message),
-                                onReplyTap: (id) => unawaited(
-                                  _scrollNav.goTo(
-                                    id,
-                                    time: message.replyInfo?.time ?? 0,
-                                    fromId: message.id,
-                                  ),
-                                ),
-                                resolveLocalMessage: _chatController.byId,
-                                listWidth: listWidth,
-                                onAvatarTap: _openSenderProfile,
-                                onForwardedSourceTap: _openForwardedSource,
-                                onStickerTap: _openStickerPack,
-                                onReactionTap: message.isControl
-                                    ? null
-                                    : (emoji) =>
-                                          _reactToMessage(message, emoji),
-                                peerName: widget.name,
-                                peerAvatarUrl: widget.imageUrl,
-                                senderNameOverride: isCommentedPost
-                                    ? _chatName
-                                    : null,
-                                senderAvatarOverride: isCommentedPost
-                                    ? _chatImageUrl
-                                    : null,
-                                textSelection: _textSelection,
-                                textSelectionDrag: _textSelectionDrag,
-                                onExitTextSelection: _exitTextSelection,
-                                commentsLabel: isChannelPost
-                                    ? _commentsLabelFor(message.id)
-                                    : null,
-                                onCommentsTap: isChannelPost
-                                    ? () => _openComments(message)
-                                    : null,
+                                  reportTypeId,
+                                  reasonId,
+                                )
+                              : null,
+                          onReact: message.isControl
+                              ? null
+                              : (emoji) => _reactToMessage(message, emoji),
+                          reactions: _reactionNotifierFor(message),
+                          reactionSettings: _reactionSettings,
+                          child: bubble,
+                        );
+
+                        final isChannel =
+                            (chat?.type ?? widget.chatType) == 'CHANNEL';
+                        final swipeable =
+                            (message.isControl || isChannel || !_canReply)
+                            ? pressable
+                            : SwipeToReply(
+                                onReply: () => _textSend.startReply(message),
+                                child: pressable,
                               );
 
-                              final canReport = !isMe && !message.isControl;
-                              final reportTypeId = _complaintTypeId(
-                                chat?.type ?? widget.chatType,
-                              );
-
-                              final pressable = SelectableMessageRow(
-                                message: message,
-                                isMe: isMe,
-                                composerHeight: _composerHeight,
-                                selectedIds: _selectedIds,
-                                selectionAnim: _selectionAnim,
-                                isSelectionActive: () => _selectionMode,
-                                onToggleSelection: () =>
-                                    _toggleSelection(message),
-                                onEnterSelection: () =>
-                                    _enterSelection(message),
-                                onStartTextSelection: (pos) =>
-                                    _startTextSelection(message, pos),
-                                onDragTextSelection: (pos) =>
-                                    _textSelectionDrag.value = pos,
-                                onDelete: () =>
-                                    _confirmDeleteMessage(message.id, isMe),
-                                allowDelete:
-                                    !message.isControl &&
-                                    (isMe || !_isChannel || _canDeleteOthers),
-                                onEdit: _canEditMessage(message)
-                                    ? () => _startEditMessage(message)
-                                    : null,
-                                onReply: message.isControl || !_canReply
-                                    ? null
-                                    : () => _textSend.startReply(message),
-                                onForward:
-                                    message.isControl ||
-                                        (chat?.forwardDisabled ?? false)
-                                    ? null
-                                    : () => _forwardMessages([message]),
-                                allowCopy: !(chat?.copyDisabled ?? false),
-                                onMarkUnread: message.isControl
-                                    ? null
-                                    : () => _markMessageUnread(message),
-                                onPin: _canPinMessage(message)
-                                    ? () => _togglePinMessage(message)
-                                    : null,
-                                onCopyLink: _canLinkMessage(message)
-                                    ? () => _copyMessageLink(message)
-                                    : null,
-                                isPinned: () =>
-                                    chat?.pinnedMsgId ==
-                                    int.tryParse(message.id),
-                                loadReadBy: _canShowReadBy(message)
-                                    ? () => _loadReadBy(message)
-                                    : null,
-                                onReaderTap: _openSenderProfile,
-                                loadReportReasons: canReport
-                                    ? () => _loadReportReasons(reportTypeId)
-                                    : null,
-                                onReport: canReport
-                                    ? (reasonId) => _reportMessage(
-                                        message,
-                                        reportTypeId,
-                                        reasonId,
-                                      )
-                                    : null,
-                                onReact: message.isControl
-                                    ? null
-                                    : (emoji) =>
-                                          _reactToMessage(message, emoji),
-                                reactions: _reactionNotifierFor(message),
-                                reactionSettings: _reactionSettings,
-                                child: bubble,
-                              );
-
-                              final isChannel =
-                                  (chat?.type ?? widget.chatType) == 'CHANNEL';
-                              final swipeable =
-                                  (message.isControl ||
-                                      isChannel ||
-                                      !_canReply)
-                                  ? pressable
-                                  : SwipeToReply(
-                                      onReply: () => _textSend.startReply(message),
-                                      child: pressable,
-                                    );
-
-                              final Widget child;
-                              if (_deletingIds.contains(message.id)) {
-                                child = DeletingMessageAnimation(
-                                  key: ValueKey('del_${message.id}'),
-                                  onComplete: () => _finalizeDelete(message.id),
-                                  child: IgnorePointer(child: swipeable),
-                                );
-                              } else if (message.id == _lastSentId) {
-                                child = SentMessageAnimation(
-                                  key: ValueKey('anim_${message.id}'),
-                                  onComplete: () {
-                                    if (mounted) {
-                                      _lastSentId = null;
-                                      _bumpMessages();
-                                    }
-                                  },
-                                  child: swipeable,
-                                );
-                              } else {
-                                child = swipeable;
+                        final Widget child;
+                        if (_deletingIds.contains(message.id)) {
+                          child = DeletingMessageAnimation(
+                            key: ValueKey('del_${message.id}'),
+                            onComplete: () => _finalizeDelete(message.id),
+                            child: IgnorePointer(child: swipeable),
+                          );
+                        } else if (message.id == _lastSentId) {
+                          child = SentMessageAnimation(
+                            key: ValueKey('anim_${message.id}'),
+                            onComplete: () {
+                              if (mounted) {
+                                _lastSentId = null;
+                                _bumpMessages();
                               }
-
-                              final highlightable =
-                                  ValueListenableBuilder<String?>(
-                                    valueListenable: _scrollNav.highlightMessageId,
-                                    builder: (context, hl, c) =>
-                                        AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 250,
-                                          ),
-                                          color: hl == message.id
-                                              ? Theme.of(context)
-                                                    .colorScheme
-                                                    .primary
-                                                    .withValues(alpha: 0.12)
-                                              : Colors.transparent,
-                                          child: c,
-                                        ),
-                                    child: child,
-                                  );
-
-                              final builtItem = RepaintBoundary(
-                                key: ValueKey('msg_${message.id}'),
-                                child: KeyedSubtree(
-                                  key: _keyForMessage(message.id),
-                                  child: highlightable,
-                                ),
-                              );
-                              if (widget.preview) {
-                                return IgnorePointer(child: builtItem);
-                              }
-                              return message.id == _prank.bubbleId
-                                  ? KeyedSubtree(
-                                      key: _prank.bubbleKey,
-                                      child: builtItem,
-                                    )
-                                  : builtItem;
                             },
+                            child: swipeable,
+                          );
+                        } else {
+                          child = swipeable;
+                        }
+
+                        final highlightable = ValueListenableBuilder<String?>(
+                          valueListenable: _scrollNav.highlightMessageId,
+                          builder: (context, hl, c) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            color: hl == message.id
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.12)
+                                : Colors.transparent,
+                            child: c,
+                          ),
+                          child: child,
+                        );
+
+                        final builtItem = RepaintBoundary(
+                          key: ValueKey('msg_${message.id}'),
+                          child: KeyedSubtree(
+                            key: _keyForMessage(message.id),
+                            child: highlightable,
+                          ),
+                        );
+                        if (widget.preview) {
+                          return IgnorePointer(child: builtItem);
+                        }
+                        return message.id == _prank.bubbleId
+                            ? KeyedSubtree(
+                                key: _prank.bubbleKey,
+                                child: builtItem,
+                              )
+                            : builtItem;
+                      },
                     ),
                   );
                 },
@@ -5245,7 +5227,6 @@ class _ChatScreenState extends State<ChatScreen>
       ],
     );
   }
-
 
   Future<void> _openAttachmentSheetScheduled() async {
     final when = await _pickScheduleTime();
@@ -5443,7 +5424,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _pickAndUploadFile({int? scheduledTime}) async {
-    final result = await AppLock.instance.external(() => FilePicker.platform.pickFiles());
+    final result = await AppLock.instance.external(
+      () => FilePicker.platform.pickFiles(),
+    );
     if (result == null || result.files.isEmpty) return;
     final picked = result.files.first;
     if (picked.path == null) return;
@@ -5473,4 +5456,3 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     );
   }
 }
-

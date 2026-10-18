@@ -84,6 +84,30 @@ final class KometShareBridge {
       perform(result) { _ in
         try KometShareAccounts().refreshedToken(accountID: id, knownToken: knownToken)
       }
+    case "shareDirectory":
+      perform(result) { _ in
+        let group = Bundle.main.object(forInfoDictionaryKey: "KometShareAppGroup") as? String ?? "group.ru.komet.app"
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) else {
+          return nil
+        }
+        return container.appendingPathComponent("KometShare", isDirectory: true).path
+      }
+    case "donateShareContact":
+      guard let arguments = call.arguments as? [String: Any],
+            let accountID = arguments["accountId"] as? String,
+            let chatID = arguments["chatId"] as? String,
+            let title = arguments["title"] as? String else {
+        result(FlutterError(code: "INVALID_SHARE_ACCOUNT", message: "Missing donation arguments", details: nil))
+        return
+      }
+      DispatchQueue.main.async {
+        KometShareSuggestions.donate(
+          accountID: accountID,
+          chatID: chatID,
+          chatTitle: title
+        )
+        result(nil)
+      }
     case "clearCache":
       result(nil)
     default:

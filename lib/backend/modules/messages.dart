@@ -33,7 +33,9 @@ class ContactCache {
   static Timer? _saveTimer;
   static bool _loaded = false;
 
-  // #***! поднимается из prefs на старте чтоб имена были сразу
+  static void Function(Map<int, String> names, Map<int, int> phones)?
+  onNativeSync;
+
   static Future<void> load() async {
     if (_loaded) return;
     _loaded = true;
@@ -49,9 +51,11 @@ class ContactCache {
         final name = value['n'];
         final avatar = value['a'];
         final opts = value['o'];
+        final phone = value['p'];
         if (name is String) _nameCache[id] = name;
         if (avatar is String) _avatarCache[id] = avatar;
         if (opts is List) _optionsCache[id] = opts.whereType<String>().toSet();
+        if (phone is int && phone > 0) _phoneCache[id] = phone;
       });
     } catch (_) {}
   }
@@ -80,10 +84,14 @@ class ContactCache {
   }
 
   static void putPhone(int id, int phone) {
-    if (phone > 0) _phoneCache[id] = phone;
+    if (phone > 0) {
+      _phoneCache[id] = phone;
+      _scheduleSave();
+    }
   }
 
-  // #***! номер есть в телефонной книге, имя оттуда важнее
+  static int? phoneFor(int id) => _phoneCache[id];
+
   static String? get(int id) {
     final phone = _phoneCache[id];
     if (phone != null) {
@@ -97,6 +105,9 @@ class ContactCache {
   static Set<String>? getOptions(int id) => _optionsCache[id];
   static bool isOfficial(int id) =>
       _optionsCache[id]?.contains('OFFICIAL') ?? false;
+
+  static Map<int, String> get allNames => Map<int, String>.from(_nameCache);
+  static Map<int, int> get allPhones => Map<int, int>.from(_phoneCache);
 
   static void remove(int id) {
     _nameCache.remove(id);
@@ -127,6 +138,7 @@ class ContactCache {
       ..._nameCache.keys,
       ..._avatarCache.keys,
       ..._optionsCache.keys,
+      ..._phoneCache.keys,
     };
     final map = <String, dynamic>{};
     for (final id in ids) {
@@ -134,13 +146,19 @@ class ContactCache {
       final name = _nameCache[id];
       final avatar = _avatarCache[id];
       final opts = _optionsCache[id];
+      final phone = _phoneCache[id];
       if (name != null) entry['n'] = name;
       if (avatar != null) entry['a'] = avatar;
       if (opts != null && opts.isNotEmpty) entry['o'] = opts.toList();
+      if (phone != null && phone > 0) entry['p'] = phone;
       if (entry.isNotEmpty) map['$id'] = entry;
     }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsKey, jsonEncode(map));
+    onNativeSync?.call(
+      Map<int, String>.from(_nameCache),
+      Map<int, int>.from(_phoneCache),
+    );
   }
 
   static Future<void> _wipePersisted() async {

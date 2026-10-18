@@ -89,7 +89,7 @@ class _AppIconScreenState extends State<AppIconScreen> {
                     builder: (context, current, _) {
                       return Column(
                         children: [
-                          for (final icon in AppIcon.values)
+                          for (final icon in AppIconConfig.available)
                             SettingsRadioTile(
                               leading: ClipRRect(
                                 borderRadius: BorderRadius.circular(14),

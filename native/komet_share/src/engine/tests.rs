@@ -45,10 +45,22 @@ fn file(directory: &Path, name: &str, mime: &str, size: usize) -> SharedFile {
     }
 }
 
+fn story_input(directory: &Path, files: Vec<SharedFile>) -> Input {
+    let mut input = input(directory, files);
+    input.request.target = ShareTarget::Story;
+    input.request.chat_id = "-1".into();
+    let snapshot = Path::new(&input.authorization.as_ref().unwrap().snapshot_path);
+    let mut accounts: Value = serde_json::from_slice(&fs::read(snapshot).unwrap()).unwrap();
+    accounts[0]["chats"] = json!([{"id": "456"}, {"id": "-1"}]);
+    fs::write(snapshot, serde_json::to_vec(&accounts).unwrap()).unwrap();
+    input
+}
+
 #[derive(Default)]
 struct FakeTransport {
     uploaded: Vec<String>,
     sent: Vec<Value>,
+    opcodes: Vec<u16>,
     replies: VecDeque<Result<String, SendError>>,
     state_path: Option<String>,
     upload_failure: bool,
@@ -80,13 +92,20 @@ impl Transport for FakeTransport {
         Ok(json!({"_type": if file.is_photo() { "PHOTO" } else { "FILE" }, "token": file.name}))
     }
 
-    async fn send(&mut self, payload: &Value) -> Result<String, SendError> {
+    async fn send(&mut self, opcode: u16, payload: &Value) -> Result<String, SendError> {
         if let Some(path) = &self.state_path {
             let state: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
-            assert!(state["entries"].as_array().unwrap().iter().any(|entry| {
-                entry["cid"] == payload["message"]["cid"] && entry["status"] == "sending"
-            }));
+            let cid = payload
+                .get("message")
+                .and_then(|message| message.get("cid"))
+                .unwrap_or_else(|| payload.pointer("/stories/0/cid").unwrap());
+            assert!(state["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| { entry["cid"] == *cid && entry["status"] == "sending" }));
         }
+        self.opcodes.push(opcode);
         self.sent.push(payload.clone());
         self.replies
             .pop_front()
@@ -437,4 +456,94 @@ async fn policy_revocation_cancels_an_active_upload() {
     assert_eq!(outcome.status, "failed");
     assert!(!transport.completed_upload);
     assert!(transport.sent.is_empty());
+}
+
+#[test]
+fn story_journal_keeps_all_photos_in_one_entry_with_stable_positive_cid() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = story_input(
+        directory.path(),
+        vec![
+            file(directory.path(), "first.jpg", "image/jpeg", 100),
+            file(directory.path(), "second.jpg", "image/jpeg", 200),
+        ],
+    );
+    assert!(input.authorize().is_ok());
+    let journal = Journal::open(&input).unwrap();
+    assert_eq!(journal.state.entries.len(), 1);
+    assert_eq!(journal.state.entries[0].files, vec![0, 1]);
+    assert!(journal.state.entries[0].cid > 0);
+    let cid = journal.state.entries[0].cid;
+    drop(journal);
+    let reopened = Journal::open(&input).unwrap();
+    assert_eq!(reopened.state.entries[0].cid, cid);
+    let persisted: Value =
+        serde_json::from_slice(&fs::read(&input.request.state_path).unwrap()).unwrap();
+    assert_eq!(persisted["entries"][0]["cid"], cid);
+}
+
+#[tokio::test]
+async fn story_deliver_builds_stories_payload_for_stories_send() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = story_input(
+        directory.path(),
+        vec![
+            file(directory.path(), "first.jpg", "image/jpeg", 100),
+            file(directory.path(), "second.jpg", "image/jpeg", 200),
+        ],
+    );
+    let mut journal = Journal::open(&input).unwrap();
+    let mut transport = FakeTransport {
+        state_path: Some(input.request.state_path.clone()),
+        ..Default::default()
+    };
+    let outcome = deliver(&input, &mut journal, &mut transport, events().0).await;
+    assert_eq!(outcome.status, "sent");
+    assert_eq!(outcome.sent_count, 1);
+    assert_eq!(outcome.total_count, 1);
+    assert_eq!(outcome.message_ids, vec!["synthetic-message-1"]);
+    assert_eq!(transport.uploaded, vec!["first.jpg", "second.jpg"]);
+    assert_eq!(transport.opcodes, vec![kolibri_net::opcodes::STORIES_SEND]);
+    assert!(transport.sent[0].get("message").is_none());
+    assert!(transport.sent[0].get("chatId").is_none());
+    let stories = transport.sent[0]["stories"].as_array().unwrap();
+    assert_eq!(stories.len(), 2);
+    for (index, story) in stories.iter().enumerate() {
+        assert_eq!(story["cid"], journal.state.entries[0].cid);
+        assert_eq!(story["settings"], 1);
+        assert_eq!(story["expiration"], 86400000);
+        assert_eq!(story["media"]["_type"], "PHOTO");
+        assert_eq!(story["media"]["token"], transport.uploaded[index].as_str());
+    }
+    assert!(journal.state.entries[0].status == EntryStatus::Sent);
+    let persisted: Value =
+        serde_json::from_slice(&fs::read(&input.request.state_path).unwrap()).unwrap();
+    assert_eq!(persisted["entries"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn story_target_rejects_non_photos_empty_files_and_wrong_chat() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = story_input(
+        directory.path(),
+        vec![file(directory.path(), "clip.mp4", "video/mp4", 100)],
+    );
+    let outcome = Journal::open(&input).err().unwrap();
+    assert_eq!(outcome.status, "failed");
+    assert_eq!(
+        outcome.message,
+        "В сторис можно отправить только фотографии"
+    );
+    let input = story_input(directory.path(), vec![]);
+    let outcome = Journal::open(&input).err().unwrap();
+    assert_eq!(outcome.status, "failed");
+    assert_eq!(outcome.message, "Недостаточно данных для отправки");
+    let mut input = story_input(
+        directory.path(),
+        vec![file(directory.path(), "shot.jpg", "image/jpeg", 100)],
+    );
+    input.request.chat_id = "456".into();
+    let outcome = Journal::open(&input).err().unwrap();
+    assert_eq!(outcome.status, "failed");
+    assert_eq!(outcome.message, "Недостаточно данных для отправки");
 }

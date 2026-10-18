@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../api.dart';
+import '../../core/config/build_profile.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
@@ -241,6 +242,7 @@ class BannersModule {
 
   // #***! фильтр, лимит показов срок жизни и пауза
   bool _canShow(InformerBanner banner, int now) {
+    if (banner.isUpdate && !BuildProfile.selfUpdate) return false;
     final state = stateOf(banner.id);
     if (state.showCounter > 0 && state.showCounter >= banner.repeat) {
       return false;

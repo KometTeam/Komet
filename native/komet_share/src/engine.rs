@@ -38,6 +38,14 @@ pub struct Input {
     pub authorization: Option<crate::authorization::ShareAuthorization>,
 }
 
+#[derive(Clone, Copy, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShareTarget {
+    #[default]
+    Chat,
+    Story,
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct ShareRequest {
     pub id: String,
@@ -46,6 +54,8 @@ pub struct ShareRequest {
     pub files: Vec<SharedFile>,
     #[serde(default)]
     pub text: String,
+    #[serde(default)]
+    pub target: ShareTarget,
     pub state_path: String,
 }
 
@@ -163,6 +173,16 @@ impl Journal {
         {
             return Err(Outcome::failed("Недостаточно данных для отправки"));
         }
+        if request.target == ShareTarget::Story {
+            if request.chat_id != "-1" || request.files.is_empty() {
+                return Err(Outcome::failed("Недостаточно данных для отправки"));
+            }
+            if request.files.iter().any(|file| !file.is_photo()) {
+                return Err(Outcome::failed(
+                    "В сторис можно отправить только фотографии",
+                ));
+            }
+        }
         let lock = OpenOptions::new()
             .read(true)
             .write(true)
@@ -179,69 +199,80 @@ impl Journal {
             })
             .to_string(),
         ));
-        let state = match fs::read(&request.state_path) {
-            Ok(bytes) => {
-                let state: SavedState = serde_json::from_slice(&bytes).map_err(|_| {
-                    Outcome::unknown("Состояние отправки повреждено. Проверьте чат")
-                })?;
-                if state.version != 1 || state.identity != identity {
-                    return Err(Outcome::unknown(
-                        "Данные отправки изменены. Проверьте чат перед повтором",
-                    ));
-                }
-                state
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                let photos: Vec<usize> = request
-                    .files
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, file)| file.is_photo().then_some(index))
-                    .collect();
-                let mut groups = Vec::new();
-                if !photos.is_empty() {
-                    groups.push(photos);
-                }
-                groups.extend(
-                    request
-                        .files
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(index, file)| (!file.is_photo()).then_some(vec![index])),
-                );
-                if groups.is_empty() {
-                    groups.push(vec![]);
-                }
-                let entries = groups
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, files)| {
-                        let digest = Sha256::digest(format!(
-                            "{}:{}:{}",
-                            input.account_id, request.id, index
+        let state =
+            match fs::read(&request.state_path) {
+                Ok(bytes) => {
+                    let state: SavedState = serde_json::from_slice(&bytes).map_err(|_| {
+                        Outcome::unknown("Состояние отправки повреждено. Проверьте чат")
+                    })?;
+                    if state.version != 1 || state.identity != identity {
+                        return Err(Outcome::unknown(
+                            "Данные отправки изменены. Проверьте чат перед повтором",
                         ));
-                        let raw = i64::from_be_bytes(digest[..8].try_into().unwrap());
-                        Entry {
-                            files,
-                            cid: -(raw & i64::MAX).max(1),
-                            status: EntryStatus::Pending,
-                            payload: None,
-                            message_id: None,
-                        }
-                    })
-                    .collect();
-                SavedState {
-                    version: 1,
-                    identity,
-                    entries,
+                    }
+                    state
                 }
-            }
-            Err(_) => {
-                return Err(Outcome::unknown(
-                    "Не удалось прочитать состояние отправки. Проверьте чат",
-                ))
-            }
-        };
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    let groups: Vec<Vec<usize>> =
+                        if request.target == ShareTarget::Story {
+                            vec![(0..request.files.len()).collect()]
+                        } else {
+                            let photos: Vec<usize> = request
+                                .files
+                                .iter()
+                                .enumerate()
+                                .filter_map(|(index, file)| file.is_photo().then_some(index))
+                                .collect();
+                            let mut groups: Vec<Vec<usize>> = Vec::new();
+                            if !photos.is_empty() {
+                                groups.push(photos);
+                            }
+                            groups.extend(request.files.iter().enumerate().filter_map(
+                                |(index, file)| (!file.is_photo()).then_some(vec![index]),
+                            ));
+                            if groups.is_empty() {
+                                groups.push(vec![]);
+                            }
+                            groups
+                        };
+                    let entries = groups
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, files)| {
+                            let cid = if request.target == ShareTarget::Story {
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_millis() as i64
+                            } else {
+                                let digest = Sha256::digest(format!(
+                                    "{}:{}:{}",
+                                    input.account_id, request.id, index
+                                ));
+                                let raw = i64::from_be_bytes(digest[..8].try_into().unwrap());
+                                -(raw & i64::MAX).max(1)
+                            };
+                            Entry {
+                                files,
+                                cid,
+                                status: EntryStatus::Pending,
+                                payload: None,
+                                message_id: None,
+                            }
+                        })
+                        .collect();
+                    SavedState {
+                        version: 1,
+                        identity,
+                        entries,
+                    }
+                }
+                Err(_) => {
+                    return Err(Outcome::unknown(
+                        "Не удалось прочитать состояние отправки. Проверьте чат",
+                    ))
+                }
+            };
         let journal = Self {
             path: request.state_path.clone(),
             state,
@@ -319,7 +350,7 @@ pub trait Transport {
         file: &SharedFile,
         progress: UploadProgress,
     ) -> Result<Value, String>;
-    async fn send(&mut self, payload: &Value) -> Result<String, SendError>;
+    async fn send(&mut self, opcode: u16, payload: &Value) -> Result<String, SendError>;
 }
 
 pub async fn deliver(
@@ -400,21 +431,36 @@ pub async fn deliver(
                     Err(message) => return journal.outcome("failed", &message),
                 }
             }
-            let mut message = json!({
-                "cid": journal.state.entries[index].cid,
-                "attaches": attachments,
-                "isLive": false,
-                "detectShare": false,
-                "elements": [],
-            });
-            if index == 0 && !input.request.text.trim().is_empty() {
-                message["text"] = json!(input.request.text);
-            }
-            journal.state.entries[index].payload = Some(json!({
-                "chatId": input.request.chat_id.parse::<i64>().unwrap(),
-                "message": message,
-                "notify": true,
-            }));
+            let payload = if input.request.target == ShareTarget::Story {
+                json!({
+                    "stories": attachments
+                        .iter()
+                        .map(|media| json!({
+                            "cid": journal.state.entries[index].cid,
+                            "settings": 1,
+                            "media": media,
+                            "expiration": 86400000_i64,
+                        }))
+                        .collect::<Vec<Value>>(),
+                })
+            } else {
+                let mut message = json!({
+                    "cid": journal.state.entries[index].cid,
+                    "attaches": attachments,
+                    "isLive": false,
+                    "detectShare": false,
+                    "elements": [],
+                });
+                if index == 0 && !input.request.text.trim().is_empty() {
+                    message["text"] = json!(input.request.text);
+                }
+                json!({
+                    "chatId": input.request.chat_id.parse::<i64>().unwrap(),
+                    "message": message,
+                    "notify": true,
+                })
+            };
+            journal.state.entries[index].payload = Some(payload);
             if journal.persist().is_err() {
                 return journal.outcome(
                     "failed",
@@ -452,7 +498,12 @@ pub async fn deliver(
             return journal.outcome("failed", &message);
         }
         let payload = journal.state.entries[index].payload.as_ref().unwrap();
-        match transport.send(payload).await {
+        let opcode = if input.request.target == ShareTarget::Story {
+            kolibri_net::opcodes::STORIES_SEND
+        } else {
+            kolibri_net::opcodes::MSG_SEND
+        };
+        match transport.send(opcode, payload).await {
             Ok(message_id) => {
                 journal.state.entries[index].status = EntryStatus::Sent;
                 journal.state.entries[index].message_id = Some(message_id);

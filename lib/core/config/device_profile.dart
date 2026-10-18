@@ -51,6 +51,14 @@ class DeviceProfile {
         deviceName: info.utsname.machine,
       );
     }
+    if (Platform.isMacOS) {
+      final info = await deviceInfo.macOsInfo;
+      return DeviceProfile(
+        osVersion: 'macOS ${info.majorVersion}.${info.minorVersion}',
+        deviceName: info.modelName.isNotEmpty ? info.modelName : info.model,
+        model: info.model,
+      );
+    }
     if (Platform.isLinux) {
       final info = await deviceInfo.linuxInfo;
       return DeviceProfile(osVersion: info.name);

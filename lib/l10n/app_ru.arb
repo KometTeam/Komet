@@ -984,7 +984,15 @@
   "videoEditorFrameFailed": "Не удалось получить кадр",
   "videoEditorQualityTooltip": "Качество",
   "webPushTitle": "Уведомления на iOS",
-  "pushLinkIntro": "У MAX на iOS нет обычного push-канала: серверы не могут доставлять уведомления через APNs. Komet решает это собственным push-сервером: он держит лёгкую сессию уведомлений и пересылает сообщения в Apple.\n\nЧтобы включить, подтвердите QR-код — будет создана отдельная сессия, которую можно отозвать в любой момент в настройках MAX.",
+  "pushLinkIntro": "У MAX на iOS нет обычного push-канала: серверы не могут доставлять уведомления через APNs. Komet решает это собственным push-сервером: он держит отдельную лёгкую сессию уведомлений и пересылает сообщения в Apple.\n\nСессия создаётся по QR и принадлежит самому push-серверу — ваш основной вход не дублируется. Токен хранится на сервере строго зашифрованным, а расшифровать его может любое устройство с этим аккаунтом: ключ выводится из данных аккаунта, и один сокет могут будить все ваши устройства с iOS.",
+  "pushLinkApproveFailed": "Не удалось подтвердить регистрацию сессии",
+  "pushProxyTile": "Push-сервер Komet",
+  "webPushTile": "Уведомления через PWA",
+  "pushLinkAccountsTitle": "Аккаунты",
+  "pushLinkAccountActive": "Сессия активна, уведомления включены",
+  "pushLinkAccountInactive": "Сессия не активна — поднимется при запуске Komet",
+  "pushLinkUnlinkedSubtitle": "Уведомления отключены",
+  "pushLinkActiveAccountBadge": "текущий",
   "pushLinkConnect": "Привязать",
   "pushLinkLinked": "Уведомления привязаны",
   "pushLinkLinkedBody": "Push-сессия активна на этом устройстве.",
@@ -992,14 +1000,14 @@
   "pushLinkUnlink": "Отключить",
   "pushLinkUnlinkConfirm": "Push-сессия будет завершена. Привязать снова можно в любой момент.",
   "pushLinkUnlinkedDone": "Уведомления отключены",
-  "pushLinkScan": "Отсканируйте QR приложением MAX на другом устройстве или откройте ссылку там, где установлен MAX.",
   "pushLinkWaiting": "Ожидаю подтверждение…",
-  "pushLinkOpenMax": "Открыть MAX",
   "pushLinkApnsMissing": "Перезапустите приложение, чтобы получить токен уведомлений",
   "pushLinkPasswordBody": "На аккаунте включена двухфакторная защита. Введите пароль.",
   "pushLinkPasswordInvalid": "Введите пароль",
   "pushLinkPasswordWrong": "Неверный пароль",
   "pushLinkConfirm": "Подтвердить",
+  "pushLinkBindFailed": "Не удалось зашифровать сессию — привязка не завершена",
+  "pushLinkAttachFailed": "Не удалось привязать устройство к сессии уведомлений",
   "webPushIntro": "На iOS у Комета нет обычных пушей: Apple выдаёт токен уведомлений только приложениям, подписанным сертификатом разработчика, а sideload-сборка такого не получает.\n\nОбход — веб-приложение на экране «Домой». Уведомления шлёт сам сервер MAX через Apple, а показывает их отдельная иконка.\n\nДля этого нужна веб-сессия. Комет создаст её и подтвердит сам, с этого же устройства — вводить номер и код не придётся.",
   "webPushConfirm": "Продолжить",
   "webPushPasswordExplainer": "На аккаунте включена двухфакторная защита.",
@@ -1107,12 +1115,30 @@
   "e2eeTitle": "Сквозное шифрование",
   "e2eeStatusNone": "Выключено",
   "e2eeStatusOffered": "Ждём, пока {name} примет запрос",
-  "@e2eeStatusOffered": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeStatusOffered": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeStatusPending": "{name} предлагает включить шифрование",
-  "@e2eeStatusPending": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeStatusPending": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeStatusEstablished": "Включено",
   "e2eeStatusKeyChanged": "Ключ шифрования {name} изменился",
-  "@e2eeStatusKeyChanged": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeStatusKeyChanged": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeEnable": "Включить",
   "e2eeAccept": "Принять",
   "e2eeDecline": "Отклонить",
@@ -1121,18 +1147,42 @@
   "e2eeResetConfirm": "Сбросить зашифрованную сессию? Обеим сторонам придётся включить шифрование заново.",
   "e2eeFingerprint": "Код безопасности",
   "e2eeFingerprintHint": "Сравните эти 60 цифр с {name} вне MAX — при встрече или по другому каналу. Совпадают — значит, сервер не подменил ключи.",
-  "@e2eeFingerprintHint": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeFingerprintHint": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeVerified": "Проверено лично",
   "e2eeCeiling": "Шифруется только текст сообщений и фото. Сервер по-прежнему видит, кто с кем и когда переписывается, видит, что переписка зашифрована, и может не доставлять сообщения. Скрыть это нельзя.",
   "e2eeNeedsKomet": "Чтобы это работало, {name} должен пользоваться Komet.",
-  "@e2eeNeedsKomet": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeNeedsKomet": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeOfferSent": "Запрос отправлен",
   "e2eeOfferFailed": "Не удалось отправить запрос",
   "e2eeAcceptFailed": "Не удалось принять запрос",
   "e2eeBannerPending": "{name} предлагает включить сквозное шифрование",
-  "@e2eeBannerPending": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeBannerPending": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeBannerKeyChanged": "Ключ шифрования {name} изменился. Проверьте код безопасности, прежде чем принять.",
-  "@e2eeBannerKeyChanged": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeBannerKeyChanged": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeTransferTitle": "Перенос на другое устройство",
   "e2eeTransferHint": "Файл переноса содержит ваш ключ и сессии. После импорта на новом устройстве перестаньте пользоваться этим для зашифрованных чатов.",
   "e2eeExport": "Экспортировать",
@@ -1140,7 +1190,13 @@
   "e2eeTransferPassword": "Пароль переноса",
   "e2eeExportFailed": "Не удалось экспортировать",
   "e2eeImported": "Перенесено сессий: {count}",
-  "@e2eeImported": {"placeholders": {"count": {"type": "int"}}},
+  "@e2eeImported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "e2eeImportFailed": "Не удалось импортировать — неверный пароль или повреждённый файл",
   "e2eeLegacyNote": "Парольный режим для групп: без forward secrecy, любой, кто знает пароль, читает всю историю.",
   "e2eeTooLong": "Сообщение слишком длинное для зашифрованного чата. Разделите его.",
@@ -1155,7 +1211,13 @@
   "e2eeSearchBlocked": "В зашифрованном чате поиск недоступен: запрос ушёл бы на сервер, а сервер видит только шифртекст.",
   "e2eeAwaitingPeer": "Сессия перенесена с другого устройства. Дождитесь одного сообщения от собеседника, иначе оба устройства выведут одинаковый ключ.",
   "e2eeBannerRehandshake": "{name} заново включает шифрование. Принимайте, только если этого ждали — иначе сервер повторяет старый запрос, чтобы сбросить вашу сессию.",
-  "@e2eeBannerRehandshake": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeBannerRehandshake": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeExportedAndDisabled": "Перенос создан. На этом устройстве шифрование выключено: импортируйте файл на новом и включите там.",
   "chatNoAccessMessage": "У вас нет доступа к этому чату",
   "chatNoAccessOk": "Ок",

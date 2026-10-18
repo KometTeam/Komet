@@ -2948,7 +2948,33 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get pushLinkIntro =>
-      'У MAX на iOS нет обычного push-канала: серверы не могут доставлять уведомления через APNs. Komet решает это собственным push-сервером: он держит лёгкую сессию уведомлений и пересылает сообщения в Apple.\n\nЧтобы включить, подтвердите QR-код — будет создана отдельная сессия, которую можно отозвать в любой момент в настройках MAX.';
+      'У MAX на iOS нет обычного push-канала: серверы не могут доставлять уведомления через APNs. Komet решает это собственным push-сервером: он держит отдельную лёгкую сессию уведомлений и пересылает сообщения в Apple.\n\nСессия создаётся по QR и принадлежит самому push-серверу — ваш основной вход не дублируется. Токен хранится на сервере строго зашифрованным, а расшифровать его может любое устройство с этим аккаунтом: ключ выводится из данных аккаунта, и один сокет могут будить все ваши устройства с iOS.';
+
+  @override
+  String get pushLinkApproveFailed =>
+      'Не удалось подтвердить регистрацию сессии';
+
+  @override
+  String get pushProxyTile => 'Push-сервер Komet';
+
+  @override
+  String get webPushTile => 'Уведомления через PWA';
+
+  @override
+  String get pushLinkAccountsTitle => 'Аккаунты';
+
+  @override
+  String get pushLinkAccountActive => 'Сессия активна, уведомления включены';
+
+  @override
+  String get pushLinkAccountInactive =>
+      'Сессия не активна — поднимется при запуске Komet';
+
+  @override
+  String get pushLinkUnlinkedSubtitle => 'Уведомления отключены';
+
+  @override
+  String get pushLinkActiveAccountBadge => 'текущий';
 
   @override
   String get pushLinkConnect => 'Привязать';
@@ -2973,14 +2999,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get pushLinkUnlinkedDone => 'Уведомления отключены';
 
   @override
-  String get pushLinkScan =>
-      'Отсканируйте QR приложением MAX на другом устройстве или откройте ссылку там, где установлен MAX.';
-
-  @override
   String get pushLinkWaiting => 'Ожидаю подтверждение…';
-
-  @override
-  String get pushLinkOpenMax => 'Открыть MAX';
 
   @override
   String get pushLinkApnsMissing =>
@@ -2998,6 +3017,14 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get pushLinkConfirm => 'Подтвердить';
+
+  @override
+  String get pushLinkBindFailed =>
+      'Не удалось зашифровать сессию — привязка не завершена';
+
+  @override
+  String get pushLinkAttachFailed =>
+      'Не удалось привязать устройство к сессии уведомлений';
 
   @override
   String get webPushIntro =>

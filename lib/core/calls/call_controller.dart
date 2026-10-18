@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import '../../backend/api.dart';
 import '../../backend/modules/calls.dart';
+import '../../backend/modules/messages.dart' show ContactCache;
 import '../protocol/opcode_map.dart';
 import '../push/fkm_controller.dart';
 import '../protocol/packet.dart';
+import '../utils/logger.dart';
 import '../utils/parse.dart';
 import 'call_bridge.dart';
 import 'call_session.dart';
@@ -94,10 +97,17 @@ class CallController {
     final callerId = payload['callerId'] as int?;
     if (vcp == null || conversationId == null || callerId == null) return;
 
-    // Приложение свёрнуто — звонок показывает FKM отдельным уведомлением,
-    // приём оттуда вернётся через injectFromNative.
     if (!appResumed) {
-      unawaited(FkmController.instance.showIncomingCall(payload));
+      if (Platform.isIOS) {
+        unawaited(_reportIncomingCallToCallKit(payload));
+      } else {
+        unawaited(FkmController.instance.showIncomingCall(payload));
+      }
+      return;
+    }
+
+    if (Platform.isIOS) {
+      unawaited(_reportIncomingCallToCallKit(payload));
       return;
     }
 
@@ -116,7 +126,27 @@ class CallController {
     );
   }
 
-  // #***! звонок с натива, autoAccept значит там уже нажали принять
+  Future<void> _reportIncomingCallToCallKit(
+    Map<dynamic, dynamic> payload,
+  ) async {
+    final vcp = payload['vcp'] as String?;
+    final conversationId = payload['conversationId'] as String?;
+    final callerId = payload['callerId'] as int?;
+    if (vcp == null || conversationId == null || callerId == null) return;
+
+    final params = ConversationParams.decode(vcp);
+    final isVideo = payload['type'] == 'VIDEO' || (params?.isVideo ?? false);
+    final callerName = ContactCache.get(callerId);
+
+    await CallBridge.instance.reportIncomingCall(
+      conversationId: conversationId,
+      callerName: callerName,
+      isVideo: isVideo,
+      vcp: vcp,
+      callerId: callerId,
+    );
+  }
+
   void injectFromNative(Map<dynamic, dynamic> data, {bool autoAccept = false}) {
     final vcp = data['vcp']?.toString();
     if (vcp == null || vcp.isEmpty) return;
@@ -167,13 +197,27 @@ class CallController {
   Future<CallSession> startOutgoing(int calleeId, {bool isVideo = false}) =>
       _startExclusive(() async {
         final out = await _calls!.initiateCall(calleeId, isVideo: isVideo);
+        if (Platform.isIOS) {
+          unawaited(
+            CallBridge.instance.reportOutgoingCall(
+              conversationId: calleeId.toString(),
+              callerName: ContactCache.get(calleeId),
+              callerId: calleeId,
+              isVideo: isVideo,
+            ),
+          );
+        }
         final config = Ws2Config.fromEndpoint(
           out.endpoint,
           userId: out.callsUserId,
           device: _api?.callsDevice,
           osVersion: _api?.callsOsVersion,
         );
-        final session = CallSession(ws2Config: config, role: CallRole.caller);
+        final session = CallSession(
+          ws2Config: config,
+          role: CallRole.caller,
+          outgoingVideo: isVideo,
+        );
         return _launch(session, session.start);
       });
 
@@ -232,34 +276,70 @@ class CallController {
       params: call.params,
       role: CallRole.callee,
     );
-    return _launch(
-      session,
-      () async {
-        await session.start();
-        await session.accept();
-      },
-      caller: call.callerName,
-    );
+    return _launch(session, () async {
+      await session.start();
+      await session.accept();
+    }, caller: call.callerName);
   }
 
   // #***! отклонение
   Future<void> rejectIncoming(IncomingCall call) async {
     _pending = null;
     CallBridge.instance.notifyEnded();
+    await _rejectWithVcp(call.params, call.conversationId);
+  }
+
+  Future<void> rejectFromNative(Map<dynamic, dynamic> data) async {
+    final vcp = data['vcp']?.toString();
+    final conversationId = data['conversationId']?.toString();
+    if (vcp == null || conversationId == null || conversationId.isEmpty) {
+      dismissIncoming();
+      return;
+    }
+    final params = ConversationParams.decode(vcp);
+    if (params == null) {
+      dismissIncoming();
+      return;
+    }
+    dismissIncoming();
+    CallBridge.instance.notifyEnded();
+    await _rejectWithVcp(params, conversationId);
+  }
+
+  Future<void> _rejectWithVcp(
+    ConversationParams params,
+    String conversationId,
+  ) async {
     final config = Ws2Config.fromVcp(
-      call.params,
-      conversationId: call.conversationId,
+      params,
+      conversationId: conversationId,
       device: _api?.callsDevice,
       osVersion: _api?.callsOsVersion,
     );
-    final signaling = Ws2Signaling(config);
-    try {
-      await signaling.connect();
-      await signaling.hangup(reason: 'REJECTED');
-    } catch (_) {
-    } finally {
-      await signaling.close();
+    // #***! сброс должен дойти до звонящего, иначе он продолжает звонить
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      final signaling = Ws2Signaling(config);
+      try {
+        await signaling.connect().timeout(const Duration(seconds: 8));
+        await signaling
+            .hangup(reason: 'REJECTED')
+            .timeout(const Duration(seconds: 8));
+        logger.i('CallController: decline $conversationId доставлен');
+        return;
+      } catch (e) {
+        logger.w(
+          'CallController: decline $conversationId попытка $attempt: $e',
+        );
+        if (attempt < 3) {
+          await Future<void>.delayed(const Duration(milliseconds: 600));
+        }
+      } finally {
+        await signaling.close();
+      }
     }
+    logger.w(
+      'CallController: decline $conversationId не доставлен после 3 попыток',
+    );
   }
 
   Future<void> endActive() => _active?.hangup() ?? Future.value();

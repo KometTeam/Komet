@@ -40,6 +40,8 @@ class LocalContactAvatars {
 
   bool has(int userId) => _paths.containsKey(userId);
 
+  String? pathFor(int userId) => _paths[userId];
+
   ImageProvider? imageFor(int userId) {
     final path = _paths[userId];
     return path == null ? null : FileImage(File(path));

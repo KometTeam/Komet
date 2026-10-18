@@ -50,6 +50,8 @@ analysis_benchmark.json
 .pub-preload-cache/
 .pub/
 build/
+artifacts/
+**/target/
 dist/
 flutter_*.png
 linked_*.ds
@@ -130,6 +132,7 @@ app.*.symbols
 
 # AI / Agents
 agents.md
+!AGENTS.md
 .claude/
 
 # Environment variables
@@ -141,13 +144,38 @@ original_app.txt
 fingerprint.py
 PCAPdroid_*.txt
 
+# Apple signing secrets & push certs (никогда не коммитить)
+*.cer
+*.key
+*.p12
+*.p8
+*.pem
+!tool/mincifry_ca.pem
+!assets/ca_purple_tree_services.pem
+*.mobileprovision
+*.provisionprofile
+
+# Build artifacts
+*.ipa
+*.apk
+*.aab
+*.xcarchive
+*.dSYM
+**/*.xcodeproj/-Xcc/
+
 # Локальные рабочие файлы и эксперименты (не для репозитория)
 PR_FullStack.md
-docs/
-maxmint/
-maxtun/
-turnprobe/
-test/live_server_probe_test.dart
+/docs/
+/lgt_probe/
+/launch_console.sh
+/logs/
+/maxmint/
+/maxtun/
+/patch_app.py
+/push_server/
+/scripts/
+/test/live_server_probe_test.dart
+/turnprobe/
 
 # local kolibri development: point the plugin at third_party/kolibri and the
 # Rust core at third_party/kolibri/kolibri-net instead of the published ones

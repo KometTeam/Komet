@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart'
+    show DefaultCacheManager;
 import 'package:flutter/widgets.dart';
 
 import '../../backend/api.dart';
@@ -8,16 +12,21 @@ import '../../backend/modules/account.dart';
 import '../../backend/modules/chats.dart';
 import '../../backend/modules/contacts.dart';
 import '../../backend/modules/messages.dart';
+import '../config/app_stories.dart';
 import '../config/komet_settings.dart';
 import '../crypto/e2ee_service.dart';
 import '../crypto/outgoing_message_policy.dart';
 import '../storage/app_database.dart';
 import '../storage/chat_encryption_store.dart';
+import '../storage/local_contact_avatars.dart';
 import '../storage/token_storage.dart';
 import '../utils/logger.dart';
+import '../utils/media_cache.dart';
 import 'native_share_account_channel.dart';
 import 'share_account_snapshot.dart';
+import 'share_avatar_export.dart';
 import 'share_recipient_eligibility.dart';
+import 'share_theme_export.dart';
 
 class NativeShareAccountSync with WidgetsBindingObserver {
   NativeShareAccountSync._();
@@ -41,6 +50,7 @@ class NativeShareAccountSync with WidgetsBindingObserver {
     });
     chats.chatsChanged.addListener(_schedule);
     ContactsModule.revision.addListener(_schedule);
+    AppStories.current.addListener(_schedule);
     ChatEncryptionStore.instance.revision.addListener(_refreshPrivacy);
     E2eeService.instance.revision.addListener(_refreshPrivacy);
     KometSettings.ghostMode.addListener(_schedule);
@@ -133,14 +143,17 @@ class NativeShareAccountSync with WidgetsBindingObserver {
       _refreshRequested = true;
       return;
     }
+    final avatarNames = <String>{};
     final recipients = <ShareRecipientSnapshot>[];
     for (final chat in cachedChats) {
       var title = chat.title?.trim() ?? '';
+      var peerId = 0;
       if (chat.id == 0) {
         title = 'Избранное';
       } else if (chat.type == 'DIALOG') {
         for (final participant in chat.participants.keys) {
           if (participant != accountId) {
+            peerId = participant;
             title = ContactCache.get(participant) ?? title;
             break;
           }
@@ -154,16 +167,34 @@ class NativeShareAccountSync with WidgetsBindingObserver {
         isChannel: chat.type == 'CHANNEL',
         canPostToChannel: chat.iAmAdmin(accountId),
       );
+      String? avatar;
+      if (chat.id != 0) {
+        avatar = await _exportCachedAvatar(
+          accountId,
+          chatId: chat.id,
+          chat: chat,
+          peerId: peerId,
+        );
+        if (avatar != null) avatarNames.add(avatar);
+      }
       recipients.add(
         ShareRecipientSnapshot(
           id: chat.id,
           title: title.isEmpty ? 'Чат' : title,
           type: chat.type,
           disabledReason: disabledReason,
+          avatar: avatar,
+          avatarUrl: _avatarUrl(chat.type, peerId, chat.iconUrl),
         ),
       );
     }
+    await ShareThemeExport.export();
     final name = '${profile.firstName} ${profile.lastName ?? ''}'.trim();
+    // #***! своя аватарка для ячейки «В сторис» и шапки шаринга
+    final ownBytes = await _cachedUrlAvatarBytes(profile.baseUrl);
+    if (ownBytes != null && ownBytes.isNotEmpty) {
+      await ShareAvatarExport.exportOwn(accountId: accountId, bytes: ownBytes);
+    }
     await channel.publish(
       ShareAccountSnapshot(
         accountId: accountId,
@@ -174,10 +205,89 @@ class NativeShareAccountSync with WidgetsBindingObserver {
           'ping_interactive': !KometSettings.ghostMode.value,
         },
         login: account.buildLoginPayload(token),
-        chats: recipients,
+        accountAvatarUrl: _httpUrl((profile.baseUrl ?? '').trim()),
+        chats: withStoryRecipient(
+          recipients: recipients,
+          storiesEnabled: AppStories.current.value,
+        ),
       ),
       generation,
     );
+    await ShareAvatarExport.prune(accountId: accountId, keep: avatarNames);
+  }
+
+  // #***! в снапшот уходит только кеш: сетевую докачку аватарок делает расширение
+  Future<String?> _exportCachedAvatar(
+    int accountId, {
+    required int chatId,
+    required CachedChat chat,
+    required int peerId,
+  }) async {
+    try {
+      final bytes = await _cachedChatAvatarBytes(chat, peerId);
+      if (bytes == null || bytes.isEmpty) return null;
+      return await ShareAvatarExport.export(
+        accountId: accountId,
+        chatId: chatId,
+        bytes: bytes,
+        key: md5.convert(bytes).toString().substring(0, 16),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _cachedChatAvatarBytes(CachedChat chat, int peerId) async {
+    if (chat.type == 'DIALOG' && peerId > 0) {
+      final localPath = LocalContactAvatars.instance.pathFor(peerId);
+      if (localPath != null) {
+        try {
+          final bytes = await File(localPath).readAsBytes();
+          if (bytes.isNotEmpty) return bytes;
+        } on FileSystemException catch (_) {
+          return _cachedUrlAvatarBytes(ContactCache.getAvatar(peerId));
+        }
+      }
+      return _cachedUrlAvatarBytes(ContactCache.getAvatar(peerId));
+    }
+    return _cachedUrlAvatarBytes(chat.iconUrl);
+  }
+
+  Future<Uint8List?> _cachedUrlAvatarBytes(String? url) async {
+    final source = (url ?? '').trim();
+    if (source.isEmpty) return null;
+    try {
+      // #***! первый источник — кэш аватарок приложения (cached_network_image):
+      // они уже скачаны для чат-листа, из MediaCache их не достать
+      final inAppCache = await DefaultCacheManager().getFileFromCache(source);
+      if (inAppCache != null) {
+        final bytes = await inAppCache.file.readAsBytes();
+        if (bytes.isNotEmpty) return bytes;
+      }
+    } catch (_) {}
+    final name = 'avatar_${source.hashCode & 0x7fffffff}.jpg';
+    try {
+      final cached = await MediaCache.existing(name);
+      return cached == null ? null : await cached.readAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? _avatarUrl(String type, int peerId, String? iconUrl) {
+    if (type == 'DIALOG' && peerId > 0) {
+      return _httpUrl(ContactCache.getAvatar(peerId));
+    }
+    return _httpUrl(iconUrl);
+  }
+
+  static String? _httpUrl(String? value) {
+    final url = value?.trim() ?? '';
+    if (url.isEmpty) return null;
+    if (!url.startsWith('https://') && !url.startsWith('http://')) {
+      return null;
+    }
+    return url;
   }
 
   void dispose() {
@@ -187,6 +297,7 @@ class NativeShareAccountSync with WidgetsBindingObserver {
     _loginSubscription = null;
     _chats?.chatsChanged.removeListener(_schedule);
     ContactsModule.revision.removeListener(_schedule);
+    AppStories.current.removeListener(_schedule);
     ChatEncryptionStore.instance.revision.removeListener(_refreshPrivacy);
     E2eeService.instance.revision.removeListener(_refreshPrivacy);
     KometSettings.ghostMode.removeListener(_schedule);

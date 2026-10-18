@@ -2936,7 +2936,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pushLinkIntro =>
-      'MAX on iOS has no regular push channel: its servers cannot deliver notifications via APNs. Komet solves this with its own push server: it keeps a lightweight notification session and relays messages to Apple.\n\nTo enable it, confirm a QR code — a separate session will be created, which you can revoke at any time in MAX settings.';
+      'MAX on iOS has no regular push channel: its servers cannot deliver notifications via APNs. Komet solves this with its own push server: it keeps a separate lightweight notification session and relays messages to Apple.\n\nThe session is created via QR and belongs to the push server itself — your main login is never duplicated. The token is stored strictly encrypted, and any device with this account can decrypt it: the key is derived from account data, so a single socket can be woken by all your iOS devices.';
+
+  @override
+  String get pushLinkApproveFailed =>
+      'Failed to confirm the session registration';
+
+  @override
+  String get pushProxyTile => 'Komet push server';
+
+  @override
+  String get webPushTile => 'Notifications via PWA';
+
+  @override
+  String get pushLinkAccountsTitle => 'Accounts';
+
+  @override
+  String get pushLinkAccountActive => 'Session active, notifications enabled';
+
+  @override
+  String get pushLinkAccountInactive =>
+      'Session inactive — raised when Komet launches';
+
+  @override
+  String get pushLinkUnlinkedSubtitle => 'Notifications disabled';
+
+  @override
+  String get pushLinkActiveAccountBadge => 'current';
 
   @override
   String get pushLinkConnect => 'Link';
@@ -2961,14 +2987,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pushLinkUnlinkedDone => 'Notifications unlinked';
 
   @override
-  String get pushLinkScan =>
-      'Scan the QR code with the MAX app on another device, or open the link on a device where MAX is installed.';
-
-  @override
   String get pushLinkWaiting => 'Waiting for confirmation…';
-
-  @override
-  String get pushLinkOpenMax => 'Open MAX';
 
   @override
   String get pushLinkApnsMissing =>
@@ -2986,6 +3005,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pushLinkConfirm => 'Confirm';
+
+  @override
+  String get pushLinkBindFailed =>
+      'Failed to seal the session — linking was not completed';
+
+  @override
+  String get pushLinkAttachFailed =>
+      'Failed to attach the device to the notification session';
 
   @override
   String get webPushIntro =>

@@ -271,6 +271,14 @@ fn photo_token(body: &[u8]) -> Option<String> {
         .map(str::to_owned)
 }
 
+fn json_id(value: &Value) -> Option<String> {
+    match value {
+        Value::String(value) => Some(value.clone()),
+        Value::Number(value) => Some(value.to_string()),
+        _ => None,
+    }
+}
+
 fn send_attempts(payload: &Value) -> usize {
     let has_video = payload
         .get("message")
@@ -301,8 +309,16 @@ impl Transport for Connection {
         let ua = self.session.http_user_agent();
         let filename = upload_filename(&file.name);
         if file.is_photo() {
+            // #***! сторис-загрузка флага type: 1 — как в композере историй приложения
             let info = self
-                .upload_info(opcodes::PHOTO_UPLOAD, json!({"count": 1}))
+                .upload_info(
+                    opcodes::PHOTO_UPLOAD,
+                    if self.chat_id == "-1" {
+                        json!({"count": 1, "type": 1})
+                    } else {
+                        json!({"count": 1})
+                    },
+                )
                 .await?;
             let url = required_string(&info, "url")?;
             let response = media::upload_photo_path(
@@ -382,26 +398,30 @@ impl Transport for Connection {
         }
     }
 
-    async fn send(&mut self, payload: &Value) -> Result<String, SendError> {
+    async fn send(&mut self, opcode: u16, payload: &Value) -> Result<String, SendError> {
         let max_attempts = send_attempts(payload);
         for attempt in 0..max_attempts {
             self.authorization
                 .check(&self.account_id, &self.chat_id)
                 .map_err(SendError::Rejected)?;
             let response = self
-                .request(opcodes::MSG_SEND, payload)
+                .request(opcode, payload)
                 .await
                 .map_err(|_| SendError::Unknown)?;
             if response.ok {
+                if opcode == opcodes::STORIES_SEND {
+                    let id = response
+                        .body
+                        .pointer("/stories/0/id")
+                        .and_then(json_id)
+                        .unwrap_or_else(|| "story".into());
+                    return Ok(id);
+                }
                 let id = response
                     .body
                     .get("message")
                     .and_then(|message| message.get("id"))
-                    .and_then(|id| match id {
-                        Value::String(value) => Some(value.clone()),
-                        Value::Number(value) => Some(value.to_string()),
-                        _ => None,
-                    })
+                    .and_then(json_id)
                     .filter(|id| !id.is_empty())
                     .ok_or(SendError::Unknown)?;
                 return Ok(id);

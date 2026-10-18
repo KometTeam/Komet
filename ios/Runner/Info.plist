@@ -10,23 +10,59 @@
 	<string>Komet</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleIcons</key>
 	<dict>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
-			<key>MinimalIcon</key>
+			<key>meteor_icon</key>
 			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>MinimalIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
+				<key>CFBundleIconName</key>
+				<string>meteor_icon</string>
+			</dict>
+			<key>not_skam</key>
+			<dict>
+				<key>CFBundleIconName</key>
+				<string>not_skam</string>
 			</dict>
 		</dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>komet_icon60x60</string>
+			</array>
+			<key>CFBundleIconName</key>
+			<string>komet_icon</string>
+		</dict>
 	</dict>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleIcons~ipad</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>meteor_icon</key>
+			<dict>
+				<key>CFBundleIconName</key>
+				<string>meteor_icon</string>
+			</dict>
+			<key>not_skam</key>
+			<dict>
+				<key>CFBundleIconName</key>
+				<string>not_skam</string>
+			</dict>
+		</dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>komet_icon60x60</string>
+				<string>komet_icon76x76</string>
+			</array>
+			<key>CFBundleIconName</key>
+			<string>komet_icon</string>
+		</dict>
+	</dict>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleLocalizations</key>
@@ -57,9 +93,14 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<string>2</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>IntentsSupported</key>
+	<array>
+		<string>INSendMessageIntent</string>
+		<string>INStartCallIntent</string>
+	</array>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>tel</string>
@@ -81,6 +122,8 @@
 	<string>Доступ к контактам нужен, чтобы показывать имена собеседников так, как они записаны в вашей телефонной книге.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face ID разблокирует Komet вместо кода-пароля.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Геолокация нужна, чтобы вы могли отправить своё местоположение в чат.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Геолокация нужна, чтобы вы могли отправить своё местоположение в чат.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -89,15 +132,42 @@
 	<string>Доступ к галерее нужен, чтобы сохранять полученные фото и видео.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Доступ к галерее нужен, чтобы отправлять фото и видео в чатах.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Геолокация нужна, чтобы вы могли отправить своё местоположение в чат.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Распознавание речи нужно, чтобы превращать голосовые сообщения в текст.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+		<string>INStartCallIntent</string>
+	</array>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>UIWindowScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>flutter</string>
+					<key>UISceneDelegateClassName</key>
+					<string>FlutterSceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>voip</string>
+		<string>remote-notification</string>
+		<string>fetch</string>
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>

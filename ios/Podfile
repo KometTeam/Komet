@@ -1,40 +1,8 @@
 # Uncomment this line to define a global platform for your project
-platform :ios, '13.0'
+platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
-
-require 'json'
-
-# Firebase is Android-only: FCM is used solely by the `oneme` flavor, and on
-# iOS there is a single `ru.komet.app` bundle that never initialises push.
-# Keep the Firebase SDK out of the iOS build entirely so iOS is not forced up
-# to the iOS 15 deployment target that firebase_core's podspec requires.
-FIREBASE_IOS_PLUGINS = %w[firebase_core firebase_messaging].freeze
-
-deps_file = File.expand_path('../.flutter-plugins-dependencies', __dir__)
-if File.exist?(deps_file)
-  deps = JSON.parse(File.read(deps_file))
-  ios_plugins = deps.dig('plugins', 'ios')
-  if ios_plugins
-    ios_plugins.reject! { |p| FIREBASE_IOS_PLUGINS.include?(p['name']) }
-    File.write(deps_file, JSON.generate(deps))
-  end
-end
-
-registrant = File.expand_path('Runner/GeneratedPluginRegistrant.m', __dir__)
-if File.exist?(registrant)
-  src = File.read(registrant)
-  FIREBASE_IOS_PLUGINS.each do |mod|
-    cls = "FLT#{mod.split('_').map(&:capitalize).join}Plugin"
-    m = Regexp.escape(mod)
-    src = src.gsub(/#if __has_include\(<#{m}\/[^>]+>\).*?#endif\n/m, '')
-    src = src.gsub(/^\s*#import <#{m}\/[^>]+>\n/, '')
-    src = src.gsub(/^\s*@import #{m};\n/, '')
-    src = src.gsub(/^\s*\[#{cls} registerWithRegistrar:.*\n/, '')
-  end
-  File.write(registrant, src)
-end
 
 project 'Runner', {
   'Debug' => :debug,
@@ -125,6 +93,22 @@ PERMISSION_MACROS = %w[
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    # #***! PrivacyInfo.xcprivacy из source_files подов (photo_manager и т.п.)
+    # попадает в Compile Sources: warning «no rule to process» и манифест
+    # не попадает в бандл. Переносим в Resources фреймворка.
+    target.build_phases.each do |phase|
+      next unless phase.is_a?(Xcodeproj::Project::Object::PBXSourcesBuildPhase)
+
+      phase.files.dup.each do |build_file|
+        next unless build_file.display_name.end_with?('PrivacyInfo.xcprivacy')
+
+        ref = build_file.file_ref
+        phase.remove_build_file(build_file)
+        target.resources_build_phase.add_file_reference(ref, true)
+        Pod::UI.puts "pod install: #{target.name}: PrivacyInfo.xcprivacy перенесён в Resources"
+      end
+    end
 
     next unless target.name == 'permission_handler_apple'
 

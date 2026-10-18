@@ -7,18 +7,24 @@ class ShareRecipientSnapshot {
     required this.title,
     required this.type,
     this.disabledReason,
+    this.avatar,
+    this.avatarUrl,
   });
 
   final int id;
   final String title;
   final String type;
   final String? disabledReason;
+  final String? avatar;
+  final String? avatarUrl;
 
   Map<String, Object?> toMap() => {
     'id': id.toString(),
     'title': title,
     'type': type,
     if (disabledReason != null) 'disabledReason': disabledReason,
+    if (avatar != null) 'avatar': avatar,
+    if (avatarUrl != null) 'avatarUrl': avatarUrl,
   };
 }
 
@@ -30,6 +36,7 @@ class ShareAccountSnapshot {
     required this.session,
     required this.login,
     required this.chats,
+    this.accountAvatarUrl,
   });
 
   final int accountId;
@@ -38,6 +45,7 @@ class ShareAccountSnapshot {
   final Map<String, Object?> session;
   final Map<dynamic, dynamic> login;
   final List<ShareRecipientSnapshot> chats;
+  final String? accountAvatarUrl;
 
   Map<String, Object?> toMap() {
     final loginOptions = Map<dynamic, dynamic>.from(login)
@@ -46,6 +54,7 @@ class ShareAccountSnapshot {
     return {
       'accountId': accountId.toString(),
       'accountName': accountName,
+      if (accountAvatarUrl != null) 'accountAvatarUrl': accountAvatarUrl,
       'token': token,
       'session': session,
       'login': _encode(loginOptions),

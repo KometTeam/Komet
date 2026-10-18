@@ -19,6 +19,7 @@ import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/small_spinner.dart';
 import 'push_link_screen.dart';
+import 'web_push_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -99,6 +100,12 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     ).push(MaterialPageRoute(builder: (context) => const PushLinkScreen()));
   }
 
+  void _openWebPush() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const WebPushScreen()));
+  }
+
   Future<void> _onFkmChanged(bool value) async {
     final l10n = AppLocalizations.of(context)!;
     if (!FkmController.instance.isSupported) {
@@ -169,15 +176,22 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                 children: [
-                  if (Platform.isIOS) ...[
+                  if (Platform.isIOS || Platform.isMacOS) ...[
                     SettingsCard(
                       children: [
                         SettingsNavTile(
                           icon: Symbols.install_mobile,
-                          label: l10n.webPushTitle,
+                          label: l10n.pushProxyTile,
                           onTap: _openPushLink,
-                          isLast: true,
+                          isLast: !Platform.isIOS,
                         ),
+                        if (Platform.isIOS)
+                          SettingsNavTile(
+                            icon: Symbols.web,
+                            label: l10n.webPushTile,
+                            onTap: _openWebPush,
+                            isLast: true,
+                          ),
                       ],
                     ),
                     const SizedBox(height: 20),

@@ -1,24 +1,45 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:qr/qr.dart';
 
+import '../../../backend/api.dart';
+import '../../../backend/modules/account.dart';
+import '../../../backend/modules/account/sessions_module.dart';
 import '../../../core/push/push_link_service.dart';
 import '../../../core/push/push_proxy_client.dart';
+import '../../../core/protocol/opcode_map.dart';
+import '../../../core/storage/app_database.dart';
 import '../../../core/storage/device_identity.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../core/utils/haptics.dart';
-import '../../../core/utils/link_opener.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../main.dart' show accountModule;
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/small_spinner.dart';
 
-enum _Stage { loading, idle, qr, password }
+class _AccountRow {
+  final int accountId;
+  final String name;
+  final bool isActive;
+  bool bound;
+  bool active;
+
+  _AccountRow({
+    required this.accountId,
+    required this.name,
+    required this.isActive,
+    required this.bound,
+    required this.active,
+  });
+}
+
+enum _FlowStage { idle, waiting, password }
 
 class PushLinkScreen extends StatefulWidget {
   const PushLinkScreen({super.key});
@@ -30,10 +51,12 @@ class PushLinkScreen extends StatefulWidget {
 class _PushLinkScreenState extends State<PushLinkScreen> {
   final _passwordController = TextEditingController();
 
-  _Stage _stage = _Stage.loading;
+  bool _loading = true;
   bool _busy = false;
-  bool _linked = false;
-  PushLinkSession? _session;
+  final List<_AccountRow> _rows = [];
+  _AccountRow? _pending;
+  _FlowStage _flow = _FlowStage.idle;
+  PushLinkSession? _linkSession;
   Timer? _pollTimer;
   String? _passwordHint;
 
@@ -47,51 +70,194 @@ class _PushLinkScreenState extends State<PushLinkScreen> {
   void dispose() {
     _pollTimer?.cancel();
     _passwordController.dispose();
-    final linkId = _session?.linkId;
+    final linkId = _linkSession?.linkId;
     if (linkId != null) {
-      PushLinkService.instance.cancel(linkId);
+      unawaited(PushLinkService.instance.cancel(linkId));
     }
     PushLinkService.instance.clear();
     super.dispose();
   }
 
   Future<void> _reload() async {
-    final linked = await PushProxyClient.instance.isLinked();
+    final profiles = await AppDatabase.loadAllProfiles();
+    final activeId = await TokenStorage.getActiveAccountId();
     if (!mounted) return;
+    setState(() => _loading = true);
+    final rows = <_AccountRow>[];
+    for (final profile in profiles) {
+      final state = await PushProxyClient.instance.prepareAccount(profile.id);
+      if (!mounted) return;
+      final name = [
+        profile.firstName,
+        profile.lastName,
+      ].whereType<String>().join(' ').trim();
+      rows.add(
+        _AccountRow(
+          accountId: profile.id,
+          name: name.isEmpty ? 'ID ${profile.id}' : name,
+          isActive: profile.id == activeId,
+          bound: state?.bound ?? false,
+          active: state?.active ?? false,
+        ),
+      );
+    }
     setState(() {
-      _linked = linked;
-      _stage = _Stage.idle;
-      _session = null;
-      _passwordHint = null;
+      _rows
+        ..clear()
+        ..addAll(rows);
+      _loading = false;
     });
-    _pollTimer?.cancel();
   }
 
-  Future<void> _startLink() async {
+  Future<void> _onToggle(_AccountRow row, bool value) async {
+    if (_busy || _flow != _FlowStage.idle) return;
+    if (row.bound == value) return;
+    if (value) {
+      await _enableAccount(row);
+    } else {
+      await _disableAccount(row);
+    }
+  }
+
+  Future<void> _enableAccount(_AccountRow row) async {
     final l10n = AppLocalizations.of(context)!;
     final apnsToken = PushProxyClient.instance.apnsToken;
     if (apnsToken == null || apnsToken.isEmpty) {
       showCustomNotification(context, l10n.pushLinkApnsMissing);
       return;
     }
+    final state = await PushProxyClient.instance.prepareAccount(row.accountId);
+    if (state != null && state.bound) {
+      // #***! устройство уже привязано — QR-перерегистрация не нужна,
+      // сокет будится активацией
+      await _reload();
+      return;
+    }
+    if (state != null && !state.bound) {
+      setState(() => _busy = true);
+      try {
+        final ok = await PushProxyClient.instance.attachAccount(row.accountId);
+        if (!mounted) return;
+        if (!ok) {
+          showCustomNotification(context, l10n.pushLinkAttachFailed);
+          return;
+        }
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      await _reload();
+      return;
+    }
+    await _startRegistration(row);
+  }
+
+  Future<void> _disableAccount(_AccountRow row) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.pushLinkUnlink,
+      message: l10n.pushLinkUnlinkConfirm,
+      confirmLabel: l10n.pushLinkUnlink,
+    );
+    if (!confirmed) return;
     setState(() => _busy = true);
     try {
+      await PushProxyClient.instance.unregisterAccount(row.accountId);
+      if (!mounted) return;
+      showCustomNotification(context, l10n.pushLinkUnlinkedDone);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    await _reload();
+  }
+
+  Future<void> _startRegistration(_AccountRow row) async {
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _busy = true);
+    try {
+      unawaited(PushProxyClient.instance.requestVoipRegistration());
+      final voipToken = await PushProxyClient.instance.waitForVoipToken(
+        const Duration(seconds: 10),
+      );
       final session = await PushLinkService.instance.start(
-        apnsToken: apnsToken,
-        voipToken: PushProxyClient.instance.voipToken ?? '',
+        apnsToken: PushProxyClient.instance.apnsToken!,
+        voipToken: voipToken ?? '',
         deviceId: await DeviceIdentity.deviceId(),
+        accountId: row.accountId,
         isDev: kDebugMode,
       );
-      if (!mounted) return;
-      setState(() {
-        _session = session;
-        _stage = _Stage.qr;
-      });
+      _linkSession = session;
+      _pending = row;
+      setState(() => _flow = _FlowStage.waiting);
+      final approved = await _approveQr(row.accountId, session.qrLink);
+      if (!approved) {
+        await _abortRegistration();
+        if (mounted) {
+          showCustomNotification(context, l10n.pushLinkApproveFailed);
+        }
+        return;
+      }
       _schedulePolling(session.pollEvery);
     } catch (e) {
+      await _abortRegistration();
       if (mounted) showCustomNotification(context, e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _abortRegistration() async {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    final linkId = _linkSession?.linkId;
+    _linkSession = null;
+    _pending = null;
+    if (linkId != null) {
+      unawaited(PushLinkService.instance.cancel(linkId));
+    }
+    if (mounted) {
+      setState(() {
+        _flow = _FlowStage.idle;
+        _busy = false;
+      });
+    }
+  }
+
+  Future<bool> _approveQr(int accountId, String qrLink) async {
+    final activeId = await TokenStorage.getActiveAccountId();
+    try {
+      if (accountId == activeId) {
+        await accountModule.authorizeWebQrLogin(qrLink);
+        return true;
+      }
+      return await _approveViaTempSession(accountId, qrLink);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _approveViaTempSession(int accountId, String qrLink) async {
+    final token = await TokenStorage.readToken(accountId);
+    if (token == null || token.isEmpty) return false;
+    final tempApi = Api()..spoofScope = '$accountId';
+    try {
+      await tempApi.connect();
+      if (tempApi.state != SessionState.online) {
+        await tempApi.stateStream
+            .firstWhere((s) => s == SessionState.online)
+            .timeout(const Duration(seconds: 20));
+      }
+      final login = await tempApi.sendRequest(
+        Opcode.login,
+        AccountModule(tempApi).buildLoginPayload(token, interactive: false),
+      );
+      if (!login.isOk) return false;
+      await SessionsModule(tempApi).authorizeWebQrLogin(qrLink);
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      unawaited(tempApi.disconnect());
     }
   }
 
@@ -100,36 +266,51 @@ class _PushLinkScreenState extends State<PushLinkScreen> {
     _pollTimer = Timer.periodic(interval, (_) => _poll());
   }
 
+  bool _polling = false;
+
   Future<void> _poll() async {
-    final session = _session;
-    if (session == null || _busy) return;
+    final session = _linkSession;
+    final row = _pending;
+    if (session == null || row == null || _polling) return;
+    if (_flow != _FlowStage.waiting) return;
+    _polling = true;
     try {
       final status = await PushLinkService.instance.status(session.linkId);
       if (!mounted) return;
       if (status.isPassword) {
         _pollTimer?.cancel();
         setState(() {
-          _stage = _Stage.password;
+          _flow = _FlowStage.password;
           _passwordHint = status.hint;
+          _busy = false;
         });
         return;
       }
       if (status.isDone) {
         _pollTimer?.cancel();
-        await _finishLink();
+        await _finishRegistration(row, status.loginToken);
+      } else if (status.isExpired) {
+        await _abortRegistration();
+        if (mounted) {
+          showCustomNotification(
+            context,
+            AppLocalizations.of(context)!.pushLinkBindFailed,
+          );
+        }
       }
     } catch (e) {
-      _pollTimer?.cancel();
-      if (mounted) {
-        setState(() => _stage = _Stage.idle);
-        showCustomNotification(context, e.toString());
-      }
+      await _abortRegistration();
+      if (mounted) showCustomNotification(context, e.toString());
+    } finally {
+      _polling = false;
     }
   }
 
   Future<void> _submitPassword() async {
-    final session = _session;
-    if (session == null || _busy) return;
+    final session = _linkSession;
+    final row = _pending;
+    if (session == null || row == null || _busy) return;
+    if (_flow != _FlowStage.password) return;
     final password = _passwordController.text;
     if (password.isEmpty) {
       if (mounted) {
@@ -148,7 +329,15 @@ class _PushLinkScreenState extends State<PushLinkScreen> {
       );
       if (status.isDone) {
         _pollTimer?.cancel();
-        await _finishLink();
+        await _finishRegistration(row, status.loginToken);
+      } else if (status.isExpired) {
+        await _abortRegistration();
+        if (mounted) {
+          showCustomNotification(
+            context,
+            AppLocalizations.of(context)!.pushLinkBindFailed,
+          );
+        }
       } else if (mounted) {
         showCustomNotification(
           context,
@@ -162,38 +351,25 @@ class _PushLinkScreenState extends State<PushLinkScreen> {
     }
   }
 
-  Future<void> _finishLink() async {
-    PushProxyClient.instance.setLinked(true);
-    unawaited(PushProxyClient.instance.verifyAndSync());
-    Haptics.success();
-    if (!mounted) return;
-    showCustomNotification(
-      context,
-      AppLocalizations.of(context)!.pushLinkLinkedDone,
-    );
-    setState(() {
-      _linked = true;
-      _stage = _Stage.idle;
-      _session = null;
-      _passwordHint = null;
-    });
-  }
-
-  Future<void> _unlink() async {
+  Future<void> _finishRegistration(_AccountRow row, String? loginToken) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showConfirmDialog(
-      context,
-      title: l10n.pushLinkUnlink,
-      message: l10n.pushLinkUnlinkConfirm,
-      confirmLabel: l10n.pushLinkUnlink,
+    if (loginToken == null || loginToken.isEmpty) {
+      await _abortRegistration();
+      if (mounted) showCustomNotification(context, l10n.pushLinkBindFailed);
+      return;
+    }
+    final ok = await PushProxyClient.instance.registerAccountToken(
+      row.accountId,
+      loginToken,
     );
-    if (!confirmed) return;
-    await PushProxyClient.instance.unregister();
+    await _abortRegistration();
     if (!mounted) return;
-    showCustomNotification(
-      context,
-      AppLocalizations.of(context)!.pushLinkUnlinkedDone,
-    );
+    if (!ok) {
+      showCustomNotification(context, l10n.pushLinkBindFailed);
+      return;
+    }
+    Haptics.success();
+    showCustomNotification(context, l10n.pushLinkLinkedDone);
     await _reload();
   }
 
@@ -205,260 +381,137 @@ class _PushLinkScreenState extends State<PushLinkScreen> {
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: ConnectionTitleBar(
-        titleText: l10n.webPushTitle,
+        titleText: l10n.pushProxyTile,
         backgroundColor: cs.surface,
       ),
       body: SafeArea(
         top: false,
-        child: switch (_stage) {
-          _Stage.loading => const Center(child: SmallSpinner(size: 36)),
-          _Stage.idle => _idleView(cs, l10n),
-          _Stage.qr => _qrView(cs, l10n),
-          _Stage.password => _passwordView(cs, l10n),
-        },
-      ),
-    );
-  }
-
-  Widget _idleView(ColorScheme cs, AppLocalizations l10n) {
-    return ListView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      children: [
-        SettingsCard(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: _loading
+            ? const Center(child: SmallSpinner(size: 36))
+            : ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                 children: [
-                  if (_linked) ...[
-                    Row(
+                  SettingsCard(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          l10n.pushLinkIntro,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_rows.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    SectionHeader(
+                      l10n.pushLinkAccountsTitle,
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                      fontSize: 14,
+                    ),
+                    SettingsCard(
                       children: [
-                        Icon(Symbols.check_circle, color: cs.primary),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            l10n.pushLinkLinked,
-                            style: Theme.of(context).textTheme.titleMedium,
+                        for (final row in _rows) _accountTile(cs, l10n, row),
+                      ],
+                    ),
+                  ],
+                  if (_flow == _FlowStage.waiting) ...[
+                    const SizedBox(height: 20),
+                    SettingsCard(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: SmallSpinner(size: 24),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  l10n.pushLinkWaiting,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.pushLinkLinkedBody,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.tonal(
-                      onPressed: _busy ? null : _unlink,
-                      child: Text(l10n.pushLinkUnlink),
-                    ),
-                  ] else ...[
-                    Text(
-                      l10n.pushLinkIntro,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: _busy ? null : _startLink,
-                      icon: _busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: SmallSpinner(size: 18),
-                            )
-                          : const Icon(Symbols.qr_code_2),
-                      label: Text(l10n.pushLinkConnect),
+                  ],
+                  if (_flow == _FlowStage.password) ...[
+                    const SizedBox(height: 20),
+                    SettingsCard(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                l10n.pushLinkPasswordBody,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              if (_passwordHint != null &&
+                                  _passwordHint!.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  _passwordHint!,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              TextField(
+                                controller: _passwordController,
+                                obscureText: true,
+                                autofocus: true,
+                                onSubmitted: (_) =>
+                                    unawaited(_submitPassword()),
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              FilledButton.icon(
+                                onPressed: _busy
+                                    ? null
+                                    : () => unawaited(_submitPassword()),
+                                icon: const Icon(Symbols.lock),
+                                label: Text(l10n.pushLinkConfirm),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ],
               ),
-            ),
-          ],
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _qrView(ColorScheme cs, AppLocalizations l10n) {
-    final session = _session;
-    if (session == null) {
-      return const Center(child: SmallSpinner(size: 36));
+  Widget _accountTile(ColorScheme cs, AppLocalizations l10n, _AccountRow row) {
+    String subtitle;
+    if (!row.bound) {
+      subtitle = l10n.pushLinkUnlinkedSubtitle;
+    } else if (row.active) {
+      subtitle = l10n.pushLinkAccountActive;
+    } else {
+      subtitle = l10n.pushLinkAccountInactive;
     }
-    return ListView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      children: [
-        SettingsCard(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Text(
-                    l10n.pushLinkScan,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: PushQrView(data: session.qrLink, size: 220),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: SmallSpinner(size: 16),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        l10n.pushLinkWaiting,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () => openExternalUrl(context, session.qrLink),
-                    icon: const Icon(Symbols.open_in_new),
-                    label: Text(l10n.pushLinkOpenMax),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
+    return SettingsToggleTile(
+      icon: Symbols.person,
+      label: row.isActive
+          ? '${row.name} · ${l10n.pushLinkActiveAccountBadge}'
+          : row.name,
+      subtitle: subtitle,
+      value: row.bound,
+      enabled: !_busy && _flow == _FlowStage.idle,
+      onChanged: (v) => unawaited(_onToggle(row, v)),
     );
   }
-
-  Widget _passwordView(ColorScheme cs, AppLocalizations l10n) {
-    return ListView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      children: [
-        SettingsCard(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    l10n.pushLinkPasswordBody,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  if (_passwordHint != null && _passwordHint!.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _passwordHint!,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    autofocus: true,
-                    onSubmitted: (_) => _submitPassword(),
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      suffixIcon: _busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: SmallSpinner(size: 18),
-                            )
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: _busy
-                        ? null
-                        : () {
-                            unawaited(_submitPassword());
-                          },
-                    icon: const Icon(Symbols.lock),
-                    label: Text(l10n.pushLinkConfirm),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class PushQrView extends StatelessWidget {
-  final String data;
-  final double size;
-
-  const PushQrView({super.key, required this.data, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    QrImage? image;
-    try {
-      final code = QrCode(
-        payload: QrPayload.fromString(data),
-        errorCorrectLevel: QrErrorCorrectLevel.medium,
-      );
-      image = QrImage(code);
-    } catch (_) {
-      image = null;
-    }
-
-    if (image == null) {
-      return SizedBox(
-        width: size,
-        height: size,
-        child: const Center(child: SmallSpinner(size: 28)),
-      );
-    }
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(painter: _QrPainter(image)),
-    );
-  }
-}
-
-class _QrPainter extends CustomPainter {
-  final QrImage image;
-
-  const _QrPainter(this.image);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final modules = image.moduleCount;
-    final cell = size.width / max(1, modules);
-    final dark = Paint()..color = Colors.black;
-    for (var row = 0; row < modules; row++) {
-      for (var col = 0; col < modules; col++) {
-        if (!image.isDark(row, col)) continue;
-        canvas.drawRect(
-          Rect.fromLTWH(col * cell, row * cell, cell + 0.5, cell + 0.5),
-          dark,
-        );
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _QrPainter oldDelegate) =>
-      oldDelegate.image != image;
 }

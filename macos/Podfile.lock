@@ -1,11 +1,18 @@
 PODS:
   - app_links (6.4.1):
     - FlutterMacOS
+  - audio_service (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - audio_session (0.0.1):
+    - FlutterMacOS
   - device_info_plus (0.0.1):
     - FlutterMacOS
   - dynamic_color (0.0.2):
     - FlutterMacOS
   - file_picker (0.0.1):
+    - FlutterMacOS
+  - file_selector_macos (0.0.1):
     - FlutterMacOS
   - Firebase/CoreOnly (12.15.0):
     - FirebaseCore (~> 12.15.0)
@@ -40,6 +47,11 @@ PODS:
     - GoogleUtilities/Reachability (~> 8.1)
     - GoogleUtilities/UserDefaults (~> 8.1)
     - nanopb (~> 3.30910.0)
+  - fjs (3.3.0):
+    - Flutter
+    - FlutterMacOS
+  - flutter_contacts (0.0.1):
+    - FlutterMacOS
   - flutter_inappwebview_macos (0.0.1):
     - FlutterMacOS
     - OrderedSet (~> 6.0.3)
@@ -84,9 +96,17 @@ PODS:
   - GoogleUtilities/UserDefaults (8.1.1):
     - GoogleUtilities/Logger
     - GoogleUtilities/Privacy
+  - just_audio (0.0.1):
+    - Flutter
+    - FlutterMacOS
   - kolibri (0.0.1):
     - FlutterMacOS
-  - komet_crypto (0.0.1):
+  - komet_crypto (0.2.0):
+    - FlutterMacOS
+  - komet_tlottie (0.1.0):
+    - FlutterMacOS
+  - local_auth_darwin (0.0.1):
+    - Flutter
     - FlutterMacOS
   - media_kit_libs_macos_video (1.0.4):
     - FlutterMacOS
@@ -131,11 +151,16 @@ PODS:
 
 DEPENDENCIES:
   - app_links (from `Flutter/ephemeral/.symlinks/plugins/app_links/macos`)
+  - audio_service (from `Flutter/ephemeral/.symlinks/plugins/audio_service/darwin`)
+  - audio_session (from `Flutter/ephemeral/.symlinks/plugins/audio_session/macos`)
   - device_info_plus (from `Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos`)
   - dynamic_color (from `Flutter/ephemeral/.symlinks/plugins/dynamic_color/macos`)
   - file_picker (from `Flutter/ephemeral/.symlinks/plugins/file_picker/macos`)
+  - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
   - firebase_core (from `Flutter/ephemeral/.symlinks/plugins/firebase_core/macos`)
   - firebase_messaging (from `Flutter/ephemeral/.symlinks/plugins/firebase_messaging/macos`)
+  - fjs (from `Flutter/ephemeral/.symlinks/plugins/fjs/darwin`)
+  - flutter_contacts (from `Flutter/ephemeral/.symlinks/plugins/flutter_contacts/macos`)
   - flutter_inappwebview_macos (from `Flutter/ephemeral/.symlinks/plugins/flutter_inappwebview_macos/macos`)
   - flutter_local_notifications (from `Flutter/ephemeral/.symlinks/plugins/flutter_local_notifications/macos`)
   - flutter_secure_storage_darwin (from `Flutter/ephemeral/.symlinks/plugins/flutter_secure_storage_darwin/darwin`)
@@ -143,8 +168,11 @@ DEPENDENCIES:
   - flutter_webrtc (from `Flutter/ephemeral/.symlinks/plugins/flutter_webrtc/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - geolocator_apple (from `Flutter/ephemeral/.symlinks/plugins/geolocator_apple/darwin`)
+  - just_audio (from `Flutter/ephemeral/.symlinks/plugins/just_audio/darwin`)
   - kolibri (from `Flutter/ephemeral/.symlinks/plugins/kolibri/macos`)
   - komet_crypto (from `Flutter/ephemeral/.symlinks/plugins/komet_crypto/macos`)
+  - komet_tlottie (from `Flutter/ephemeral/.symlinks/plugins/komet_tlottie/macos`)
+  - local_auth_darwin (from `Flutter/ephemeral/.symlinks/plugins/local_auth_darwin/darwin`)
   - media_kit_libs_macos_video (from `Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_video/macos`)
   - media_kit_video (from `Flutter/ephemeral/.symlinks/plugins/media_kit_video/macos`)
   - mobile_scanner (from `Flutter/ephemeral/.symlinks/plugins/mobile_scanner/darwin`)
@@ -176,16 +204,26 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   app_links:
     :path: Flutter/ephemeral/.symlinks/plugins/app_links/macos
+  audio_service:
+    :path: Flutter/ephemeral/.symlinks/plugins/audio_service/darwin
+  audio_session:
+    :path: Flutter/ephemeral/.symlinks/plugins/audio_session/macos
   device_info_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos
   dynamic_color:
     :path: Flutter/ephemeral/.symlinks/plugins/dynamic_color/macos
   file_picker:
     :path: Flutter/ephemeral/.symlinks/plugins/file_picker/macos
+  file_selector_macos:
+    :path: Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos
   firebase_core:
     :path: Flutter/ephemeral/.symlinks/plugins/firebase_core/macos
   firebase_messaging:
     :path: Flutter/ephemeral/.symlinks/plugins/firebase_messaging/macos
+  fjs:
+    :path: Flutter/ephemeral/.symlinks/plugins/fjs/darwin
+  flutter_contacts:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_contacts/macos
   flutter_inappwebview_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_inappwebview_macos/macos
   flutter_local_notifications:
@@ -200,10 +238,16 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral
   geolocator_apple:
     :path: Flutter/ephemeral/.symlinks/plugins/geolocator_apple/darwin
+  just_audio:
+    :path: Flutter/ephemeral/.symlinks/plugins/just_audio/darwin
   kolibri:
     :path: Flutter/ephemeral/.symlinks/plugins/kolibri/macos
   komet_crypto:
     :path: Flutter/ephemeral/.symlinks/plugins/komet_crypto/macos
+  komet_tlottie:
+    :path: Flutter/ephemeral/.symlinks/plugins/komet_tlottie/macos
+  local_auth_darwin:
+    :path: Flutter/ephemeral/.symlinks/plugins/local_auth_darwin/darwin
   media_kit_libs_macos_video:
     :path: Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_video/macos
   media_kit_video:
@@ -233,9 +277,12 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   app_links: 05a6ec2341985eb05e9f97dc63f5837c39895c3f
+  audio_service: aa99a6ba2ae7565996015322b0bb024e1d25c6fd
+  audio_session: eaca2512cf2b39212d724f35d11f46180ad3a33e
   device_info_plus: 4fb280989f669696856f8b129e4a5e3cd6c48f76
   dynamic_color: cb7c2a300ee67ed3bd96c3e852df3af0300bf610
   file_picker: 7584aae6fa07a041af2b36a2655122d42f578c1a
+  file_selector_macos: 9e9e068e90ebee155097d00e89ae91edb2374db7
   Firebase: a8539b633d474fbeb654c7043f9c1649e274045b
   firebase_core: 4922bf7ac16c97fb67008a1a00842059b345b0d9
   firebase_messaging: 6c506190a7499e67e644957961f86efe1ac1c3e3
@@ -243,17 +290,22 @@ SPEC CHECKSUMS:
   FirebaseCoreInternal: 6ab6a02c94446c026d2cf35cf5383842ebaa4992
   FirebaseInstallations: eb29ccbf64eaedf86fd5b2ccc7fabde567660b52
   FirebaseMessaging: 40017d7bc8457ee295b0f41d480a80fdabc9994e
-  flutter_inappwebview_macos: c2d68649f9f8f1831bfcd98d73fd6256366d9d1d
+  fjs: d716489ab0d8e581c40075a32a6652f6fd696f1a
+  flutter_contacts: 6f45cdf49f4fb2241793263546f823f7e812668e
+  flutter_inappwebview_macos: e69b76dd5c46a6d9471f195f3d8d36f11b3ab7a4
   flutter_local_notifications: 1fc7ffb10a83d6a2eeeeddb152d43f1944b0aad0
   flutter_secure_storage_darwin: acdb3f316ed05a3e68f856e0353b133eec373a23
   flutter_timezone: d272288c69082ad571630e0d17140b3d6b93dc0c
   flutter_webrtc: fec3dc9284a1f6d21ec2caa91c90bb4c1824eb04
-  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
   geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleUtilities: 4f2618a4a1e762a1ee134a1e2323bba9843e06da
+  just_audio: 4e391f57b79cad2b0674030a00453ca5ce817eed
   kolibri: 93062ece67f68ec0b909876b527aa15e198b4a73
-  komet_crypto: 856fa27dc180350f88a7cf6de6b512d2d221b737
+  komet_crypto: 31f035544d81a96e734157c45ab73ac79e7cee56
+  komet_tlottie: 6a6b42114f3d6bd70ac23bdf4ddc94982d2d3878
+  local_auth_darwin: c3ee6cce0a8d56be34c8ccb66ba31f7f180aaebb
   media_kit_libs_macos_video: 85a23e549b5f480e72cae3e5634b5514bc692f65
   media_kit_video: fa6564e3799a0a28bff39442334817088b7ca758
   mobile_scanner: 9157936403f5a0644ca3779a38ff8404c5434a93
@@ -272,6 +324,6 @@ SPEC CHECKSUMS:
   wakelock_plus: 917609be14d812ddd9e9528876538b2263aaa03b
   WebRTC-SDK: e6006119cd730d6315d875e4a421b6cc8bb88833
 
-PODFILE CHECKSUM: f9f028435b3eb11958579119e016406574b87759
+PODFILE CHECKSUM: 69f4b6274dbffc71b4b548147638e64f8895f9fa
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.17.0

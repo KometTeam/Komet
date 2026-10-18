@@ -1,9 +1,5 @@
 import Foundation
-#if canImport(MobileCoreServices)
-import MobileCoreServices
-#else
-import CoreServices
-#endif
+import UniformTypeIdentifiers
 
 enum KometShareError: LocalizedError {
   case unavailableContainer
@@ -193,6 +189,14 @@ final class KometShareStore {
     try? manager.removeItem(at: draft.directoryURL)
   }
 
+  func duplicateDraft(_ draft: KometShareDraft) throws -> KometShareDraft {
+    let id = UUID().uuidString
+    let destination = stagingURL.appendingPathComponent(id, isDirectory: true)
+    try? FileManager.default.removeItem(at: destination)
+    try manager.copyItem(at: draft.directoryURL, to: destination)
+    return KometShareDraft(id: id, directoryURL: destination, createdAt: draft.createdAt)
+  }
+
   func prepareOutgoing(
     _ draft: KometShareDraft, files: [KometSharedFile], text: String?,
     accountID: String, chatID: String, chatTitle: String
@@ -225,7 +229,9 @@ final class KometShareStore {
     let directory = try outgoingDirectory(id: share.id)
     try validate(Manifest(id: share.id, createdAt: share.createdAt, files: share.files, text: share.text, subject: nil), at: directory)
     return [
-      "id": share.id, "chat_id": share.chatID, "text": share.text ?? "",
+      "id": share.id, "chat_id": share.chatID,
+      "target": share.chatID == "-1" ? "story" : "chat",
+      "text": share.text ?? "",
       "state_path": directory.appendingPathComponent("send-state.json").path,
       "files": share.files.map { file -> [String: Any] in
         ["path": directory.appendingPathComponent(file.relativePath).path,
@@ -370,8 +376,7 @@ final class KometShareStore {
   private func fileMetadata(at url: URL, name: String, typeIdentifier: String) throws -> KometSharedFile {
     let attributes = try manager.attributesOfItem(atPath: url.path)
     guard let size = attributes[.size] as? NSNumber else { throw KometShareError.unreadableAttachment }
-    let mime = UTTypeCopyPreferredTagWithClass(typeIdentifier as CFString, kUTTagClassMIMEType)?
-      .takeRetainedValue() as String? ?? "application/octet-stream"
+    let mime = UTType(typeIdentifier)?.preferredMIMEType ?? "application/octet-stream"
     return KometSharedFile(
       relativePath: "attachments/\(url.lastPathComponent)", name: name, mime: mime, size: size.int64Value
     )
@@ -401,26 +406,21 @@ final class KometShareStore {
   }
 
   private static func resolvedType(_ advertised: String?, fileNames: [String?]) -> String {
-    if let advertised = advertised {
-      let mime = preferredTag(for: advertised, tagClass: kUTTagClassMIMEType)
-      let suffix = preferredTag(for: advertised, tagClass: kUTTagClassFilenameExtension)
-      if (mime != nil && mime != "application/octet-stream") || suffix != nil { return advertised }
+    if let advertised = advertised, let type = UTType(advertised) {
+      let mime = type.preferredMIMEType
+      if (mime != nil && mime != "application/octet-stream")
+        || type.preferredFilenameExtension != nil { return advertised }
     }
     let inferred = fileNames.compactMap { name -> String? in
       guard let name = name else { return nil }
       let suffix = (name as NSString).pathExtension
       guard !suffix.isEmpty else { return nil }
-      return UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, suffix as CFString, nil)?
-        .takeRetainedValue() as String?
+      return UTType(filenameExtension: suffix)?.identifier
     }
     return inferred.first {
-      let mime = preferredTag(for: $0, tagClass: kUTTagClassMIMEType)
-      return mime != nil && mime != "application/octet-stream"
+      guard let mime = UTType($0)?.preferredMIMEType else { return false }
+      return mime != "application/octet-stream"
     } ?? inferred.first ?? advertised ?? "public.data"
-  }
-
-  private static func preferredTag(for type: String, tagClass: CFString) -> String? {
-    UTTypeCopyPreferredTagWithClass(type as CFString, tagClass)?.takeRetainedValue() as String?
   }
 
   private static func fileName(_ proposed: String, typeIdentifier: String) -> String {
@@ -429,8 +429,7 @@ final class KometShareStore {
     var name = cleaned.isEmpty || cleaned == "." || cleaned == ".." ? "Вложение" : cleaned
     name = String(name.prefix(160))
     if (name as NSString).pathExtension.isEmpty,
-       let suffix = UTTypeCopyPreferredTagWithClass(typeIdentifier as CFString, kUTTagClassFilenameExtension)?
-         .takeRetainedValue() as String?, !suffix.isEmpty {
+       let suffix = UTType(typeIdentifier)?.preferredFilenameExtension, !suffix.isEmpty {
       name += ".\(suffix)"
     }
     return name

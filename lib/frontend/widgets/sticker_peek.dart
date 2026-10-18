@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/utils/haptics.dart';
 import 'lottie_image.dart';
 import '../../core/config/app_frost.dart';
+import '../../core/config/app_glass_cover.dart';
 
 class _PeekData {
   final String? url;
@@ -51,8 +52,7 @@ class StickerPeekScopeState extends State<StickerPeekScope>
   @override
   void dispose() {
     _disposed = true;
-    _entry?.remove();
-    _entry = null;
+    _removeEntry();
     _anim.dispose();
     _current.dispose();
     super.dispose();
@@ -107,11 +107,13 @@ class StickerPeekScopeState extends State<StickerPeekScope>
       builder: (_) => _PeekOverlay(anim: _anim, data: _current),
     );
     _entry = entry;
+    AppGlassCover.open();
     Overlay.of(context, rootOverlay: true).insert(entry);
   }
 
   void _removeEntry() {
     if (_disposed) return;
+    AppGlassCover.close();
     _entry?.remove();
     _entry = null;
     _currentId = null;

@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_frost.dart';
+import '../../../core/config/app_glass_cover.dart';
 
 Future<T?> showBlurredCard<T>(
   BuildContext context,
@@ -14,7 +15,7 @@ Future<T?> showBlurredCard<T>(
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: AppFrost.scrim(),
     transitionDuration: const Duration(milliseconds: 260),
-    pageBuilder: (_, _, _) => builder(context),
+    pageBuilder: (_, _, _) => GlassCoveredScope(child: builder(context)),
     transitionBuilder: (_, anim, _, child) {
       final t = Curves.easeOutCubic.transform(anim.value);
       return BackdropFilter(

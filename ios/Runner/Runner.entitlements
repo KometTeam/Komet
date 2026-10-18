@@ -2,6 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>aps-environment</key>
+	<string>production</string>
+	<key>com.apple.developer.calling-app</key>
+	<true/>
+	<key>com.apple.developer.usernotifications.communication</key>
+	<true/>
+	<key>com.apple.developer.usernotifications.time-sensitive</key>
+	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>$(KOMET_SHARE_APP_GROUP)</string>
@@ -9,6 +17,7 @@
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+		<string>$(AppIdentifierPrefix)pw.komet.app</string>
 	</array>
 </dict>
 </plist>

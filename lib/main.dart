@@ -7,6 +7,7 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:kolibri/kolibri.dart' show initKolibri;
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:komet/l10n/app_localizations.dart';
@@ -29,6 +30,7 @@ import 'core/storage/local_contact_avatars.dart';
 import 'core/crypto/e2ee_service.dart';
 import 'core/crypto/encrypted_photo_cache.dart';
 import 'core/storage/chat_encryption_store.dart';
+import 'core/window/window_frame.dart';
 import 'core/crypto/decrypted_photo_store.dart';
 import 'core/config/app_accent.dart';
 import 'core/config/app_language.dart';
@@ -116,13 +118,13 @@ import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/widgets/adaptive_shell.dart';
 import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/hint_bubble.dart';
-import 'frontend/widgets/liquid_glass.dart';
 import 'frontend/widgets/mesh_gradient_background.dart';
 import 'frontend/widgets/small_spinner.dart';
 import 'frontend/widgets/theme_reveal.dart';
 import 'frontend/widgets/floating_call_badge.dart';
 import 'frontend/widgets/floating_video_note.dart';
 import 'frontend/widgets/keyboard_dismissal.dart';
+import 'frontend/widgets/window_title_strip.dart';
 
 final api = Api();
 final accountModule = AccountModule(api);
@@ -195,6 +197,8 @@ void _installLogCapture() {
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LiquidGlassWidgets.initialize();
+  if (WindowFrame.isChromeless) unawaited(WindowFrame.loadInset());
   LaunchFlags.parse(args);
   trackHintBubblePresses();
   debugPrint('KOMET-STARTUP: binding ready');
@@ -250,7 +254,6 @@ void main(List<String> args) async {
   final amoledFuture = AppAmoled.load();
   final pillGradientFuture = AppPillGradient.load();
   final visualStyleFuture = AppVisualStyle.load();
-  final liquidGlassFuture = LiquidGlass.load();
   final meshGradientFuture = MeshGradient.load();
   final chatChromeFuture = AppChatChrome.load();
   final composerStyleFuture = AppComposerStyle.load();
@@ -327,7 +330,6 @@ void main(List<String> args) async {
     amoledFuture,
     pillGradientFuture,
     visualStyleFuture,
-    liquidGlassFuture,
     meshGradientFuture,
     chatChromeFuture,
     composerStyleFuture,
@@ -501,7 +503,7 @@ class KometAppState extends State<KometApp>
           await PushService.instance.init(api: api, account: accountModule);
           await PushService.instance.onLoginSuccess();
           await _ensureFullScreenIntentPermission();
-        } else if (Platform.isIOS) {
+        } else if (Platform.isIOS || Platform.isMacOS) {
           await PushService.instance.onLoginSuccess();
           unawaited(PushProxyClient.instance.verifyAndSync());
         }
@@ -524,36 +526,9 @@ class KometAppState extends State<KometApp>
       unawaited(ShareIntentBridge.instance.checkInitialShare());
     });
 
-    _sessionExpiredSub = api.sessionExpiredStream.listen((
-      SessionExpiredException e,
-    ) async {
-      if (_isLoggingOut) return;
-      _isLoggingOut = true;
-
-      await PushService.instance.unregister();
-      if (Platform.isIOS) {
-        await PushProxyClient.instance.unregister();
-      }
-
-      final accountId = await TokenStorage.getActiveAccountId();
-      if (accountId != null) {
-        await accountModule.removeAccount(accountId);
-      }
-
-      final navState = KometApp.navigatorKey.currentState;
-      if (navState != null) {
-        final overlay = navState.overlay;
-        if (overlay != null) {
-          showCustomNotificationOnOverlay(overlay, e.message);
-        }
-
-        await navState.pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
-        );
-      }
-      _isLoggingOut = false;
-    });
+    _sessionExpiredSub = api.sessionExpiredStream.listen(
+      (SessionExpiredException e) => unawaited(_onSessionExpired(e)),
+    );
 
     _vpnBypassSub = VpnBypassService.instance.events.listen((r) {
       final msg = r.bound
@@ -653,6 +628,58 @@ class KometAppState extends State<KometApp>
         });
   }
 
+  // #***! выход по протухшей сессии: ни один шаг не должен застрять или
+  // оставить флаг висеть — иначе следующие события молча игнорируются
+  // и приложение остаётся в бесконечном реконнекте с мёртвым токеном
+  Future<void> _onSessionExpired(SessionExpiredException e) async {
+    if (_isLoggingOut) return;
+    _isLoggingOut = true;
+    try {
+      try {
+        await PushService.instance.unregister();
+        if (Platform.isIOS || Platform.isMacOS) {
+          await PushProxyClient.instance.unregisterActiveAccount();
+        }
+      } catch (err) {
+        logger.w('протухшая сессия: не снял пуш-подписки: $err');
+      }
+
+      // #***! без разрыва автоконнекта логин-экран крутит фоновые reconnect'ы
+      // с мёртвым токеном — глушим, LoginScreen поднимет соединение сам;
+      // рвём до удаления аккаунта, чтобы автологин не успел перезайти
+      await api.disconnect();
+
+      final accountId = await TokenStorage.getActiveAccountId();
+      if (accountId != null) {
+        try {
+          await accountModule.removeAccount(accountId);
+        } catch (err) {
+          logger.w('протухшая сессия: не удалил аккаунт локально: $err');
+        }
+      }
+
+      final navState = KometApp.navigatorKey.currentState;
+      if (navState != null) {
+        final overlay = navState.overlay;
+        if (overlay != null) {
+          showCustomNotificationOnOverlay(overlay, e.message);
+        }
+
+        // #***! future завершится только когда маршрут попнут — ждать его
+        // нельзя, иначе флаг висит всё время на экране входа и события
+        // протухания молча игнорируются
+        unawaited(
+          navState.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+          ),
+        );
+      }
+    } finally {
+      _isLoggingOut = false;
+    }
+  }
+
   @override
   void dispose() {
     NativeShareAccountSync.instance.dispose();
@@ -713,10 +740,12 @@ class KometAppState extends State<KometApp>
         state == AppLifecycleState.hidden) {
       unawaited(PerChatJsonStore.flushAll());
     }
+    // #***! закрытое окно macos не фоновый режим — процесс продолжает работу
     final background =
-        state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden ||
-        state == AppLifecycleState.detached;
+        state == AppLifecycleState.detached ||
+        ((state == AppLifecycleState.paused ||
+                state == AppLifecycleState.hidden) &&
+            !Platform.isMacOS);
     AppForeground.update(foreground: !background);
     CallController.instance.appResumed = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.inactive && CallController.instance.isBusy) {
@@ -726,16 +755,23 @@ class KometAppState extends State<KometApp>
       DebugSessionLog.instance.flushNow();
       SelfCheckService.instance.pause();
       E2eeService.instance.lock();
-      if (Platform.isIOS) {
+      if (Platform.isIOS || Platform.isMacOS) {
         unawaited(PushProxyClient.instance.setForeground(false));
         unawaited(AppBadgeService.instance.syncToServer());
       }
       EncryptedPhotoCache.instance.clear();
     }
-    if (state != AppLifecycleState.resumed) return;
+    if (state != AppLifecycleState.resumed) {
+      // #***! закрытое окно мак: процесс жив, но окно не видно — прокси
+      // может слать пуши, как свернувшемуся телефону
+      if (Platform.isMacOS && state == AppLifecycleState.hidden) {
+        unawaited(PushProxyClient.instance.setForeground(false));
+      }
+      return;
+    }
     api.wakeUp();
     SelfCheckService.instance.resume();
-    if (Platform.isIOS) {
+    if (Platform.isIOS || Platform.isMacOS) {
       unawaited(PushProxyClient.instance.setForeground(true));
     }
     if (!CallController.instance.isBusy) {
@@ -1250,49 +1286,52 @@ class KometAppState extends State<KometApp>
                                             gradientWallpaper.gradientRotation,
                                       ),
                                     ),
-                                  RepaintBoundary(
-                                    key: _captureBoundaryKey,
-                                    child:
-                                        NotificationListener<
-                                          ScrollNotification
-                                        >(
-                                          onNotification: (notification) {
-                                            if (notification
-                                                is ScrollEndNotification) {
-                                              PerformanceMonitor.instance
-                                                  .markActivityEnd();
-                                            } else {
-                                              PerformanceMonitor.instance.mark(
-                                                'scroll',
-                                              );
-                                            }
-                                            return false;
-                                          },
-                                          child: sChild!,
-                                        ),
-                                  ),
-                                  RepaintBoundary(
-                                    key: _captureBoundaryKey,
-                                    child:
-                                        NotificationListener<
-                                          ScrollNotification
-                                        >(
-                                          onNotification: (notification) {
-                                            if (notification
-                                                is ScrollEndNotification) {
-                                              PerformanceMonitor.instance
-                                                  .markActivityEnd();
-                                            } else {
-                                              PerformanceMonitor.instance.mark(
-                                                'scroll',
-                                              );
-                                            }
-                                            return false;
-                                          },
-                                          child: KeyboardDismissal(
-                                            child: sChild!,
+                                  ListenableBuilder(
+                                    listenable: WindowFrame.inset,
+                                    child: RepaintBoundary(
+                                      key: _captureBoundaryKey,
+                                      child:
+                                          NotificationListener<
+                                            ScrollNotification
+                                          >(
+                                            onNotification: (notification) {
+                                              if (notification
+                                                  is ScrollEndNotification) {
+                                                PerformanceMonitor.instance
+                                                    .markActivityEnd();
+                                              } else {
+                                                PerformanceMonitor.instance
+                                                    .mark('scroll');
+                                              }
+                                              return false;
+                                            },
+                                            child: KeyboardDismissal(
+                                              child: sChild!,
+                                            ),
                                           ),
-                                        ),
+                                    ),
+                                    builder: (context, appContent) {
+                                      final stripInset =
+                                          WindowFrame.inset.value;
+                                      if (stripInset <= 0) return appContent!;
+                                      final mq = MediaQuery.of(context);
+                                      return Stack(
+                                        children: [
+                                          MediaQuery(
+                                            data: mq.copyWith(
+                                              padding: mq.padding.copyWith(
+                                                top: math.max(
+                                                  mq.padding.top,
+                                                  stripInset,
+                                                ),
+                                              ),
+                                            ),
+                                            child: appContent!,
+                                          ),
+                                          const WindowTitleStrip(),
+                                        ],
+                                      );
+                                    },
                                   ),
                                   const Positioned.fill(
                                     child: FloatingVideoNoteLayer(),

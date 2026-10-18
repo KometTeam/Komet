@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
@@ -13,6 +14,8 @@ import '../../../core/config/build_profile.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../core/config/app_show_extra_info.dart';
+import '../../../core/push/push_proxy_client.dart';
+import '../../../core/push/push_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/logger.dart';
@@ -313,7 +316,8 @@ class _SettingsTabState extends State<SettingsTab>
 
   AvatarPhoto? get _currentAvatar {
     if (_avatarPhotos.isEmpty) return null;
-    return _avatarPhotos[_avatarIndex.clamp(0, _avatarPhotos.length - 1)
+    return _avatarPhotos[_avatarIndex
+        .clamp(0, _avatarPhotos.length - 1)
         .toInt()];
   }
 
@@ -561,6 +565,10 @@ class _SettingsTabState extends State<SettingsTab>
 
   Future<void> _doLogout() async {
     final navState = KometApp.navigatorKey.currentState;
+    await PushService.instance.unregister();
+    if (Platform.isIOS) {
+      await PushProxyClient.instance.unregisterActiveAccount();
+    }
     try {
       await accountModule.logout();
     } catch (e) {
@@ -788,8 +796,9 @@ class _SettingsTabState extends State<SettingsTab>
                         if (BuildProfile.spoofUi)
                           _SettingsItem(
                             icon: Symbols.shield_lock,
-                            label: AppLocalizations.of(context)!
-                                .profileMenuSpoof,
+                            label: AppLocalizations.of(
+                              context,
+                            )!.profileMenuSpoof,
                             onTap: () {
                               Navigator.push(
                                 context,

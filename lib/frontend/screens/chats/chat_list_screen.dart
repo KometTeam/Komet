@@ -292,6 +292,10 @@ class _ChatListScreenState extends State<ChatListScreen>
   set _shouldCollapseSearch(bool v) => _storiesUi.shouldCollapseSearch = v;
 
   bool _navDragging = false;
+  bool _navHoldMode = false;
+  bool _navTapDown = false;
+  double _navHoldBaseX = 0;
+  final ValueNotifier<double> _navFollowP = ValueNotifier(0);
   bool _isFabOpen = false;
   bool _storiesAnimClosing = false;
   Timer? _contactRebuildTimer;
@@ -1214,6 +1218,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   void _onChatsChanged() {
     _requestReload();
   }
+
   void _prefetchPeerOptions(List<CachedChat> items, int myId) {
     final peers = <int>[];
     for (final chat in items) {
@@ -1843,6 +1848,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     _contactRebuildTimer?.cancel();
     _storiesUi.dispose();
     _navDragDx.dispose();
+    _navFollowP.dispose();
     super.dispose();
   }
 
@@ -1865,6 +1871,12 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   void _onNavTabSelected(int index) {
+    if (_navHoldMode) {
+      setState(() {
+        _navHoldMode = false;
+        _navTapDown = false;
+      });
+    }
     if (index == _currentNavIndex && !_navPageAnimController.isAnimating) {
       return;
     }
@@ -2606,6 +2618,24 @@ class _ChatListScreenState extends State<ChatListScreen>
       return best;
     }
 
+    // координата пальца в единицах позиций селектора: линза центрируется под палец
+    double fingerP(double localDx) =>
+        ((localDx - 4 - bubbleW / 2) / inactiveWidth).clamp(0.0, 3.0);
+
+    void finishHold() {
+      if (!_navHoldMode) return;
+      final left = (_navFollowP.value * inactiveWidth + 4).clamp(
+        minBubbleLeft,
+        maxBubbleLeft,
+      );
+      final next = indexForBubbleLeft(left);
+      setState(() {
+        _navHoldMode = false;
+        _navTapDown = false;
+      });
+      if (next != _currentNavIndex) _onNavTabSelected(next);
+    }
+
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic,
@@ -2615,21 +2645,53 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: RepaintBoundary(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onHorizontalDragStart: (_) {
+          onTapDown: (details) {
             if (_isSelectionMode) return;
+            final selectorLeft = bubbleLeftForIndex(_currentNavIndex);
+            final overSelector =
+                details.localPosition.dx >= selectorLeft &&
+                details.localPosition.dx <= selectorLeft + bubbleW;
+            setState(() {
+              _navTapDown = true;
+              // зажали вне селектора: он в расширенном состоянии летит под
+              // палец, страница переключится на отпускании
+              _navHoldMode = !overSelector && !(_navDragging || _navHoldMode);
+              if (_navHoldMode) {
+                _navFollowP.value = fingerP(details.localPosition.dx);
+              }
+            });
+          },
+          onTapUp: (_) => finishHold(),
+          onTapCancel: () => finishHold(),
+          onHorizontalDragStart: (details) {
+            if (_isSelectionMode) return;
+            if (_navHoldMode) {
+              _navHoldBaseX = details.localPosition.dx;
+              return;
+            }
             _navPageAnimController.stop();
             _navPageAnimController.value = 1.0;
             _navDragDx.value = 0;
             setState(() {
               _navDragging = true;
+              _navTapDown = false;
               _navDragBaseLeft = bubbleLeftForIndex(_currentNavIndex);
             });
           },
           onHorizontalDragUpdate: (details) {
+            if (_navHoldMode) {
+              _navHoldBaseX += details.delta.dx;
+              _navFollowP.value = fingerP(_navHoldBaseX);
+              return;
+            }
             if (!_navDragging) return;
             _navDragDx.value += details.delta.dx;
           },
           onHorizontalDragEnd: (_) {
+            if (_navHoldMode) {
+              finishHold();
+              return;
+            }
             if (!_navDragging) return;
             final left = (_navDragBaseLeft + _navDragDx.value).clamp(
               minBubbleLeft,
@@ -2640,22 +2702,30 @@ class _ChatListScreenState extends State<ChatListScreen>
             setState(() {
               _currentNavIndex = next;
               _navDragging = false;
+              _navTapDown = false;
             });
             activeNavTab.value = next;
             if (next == 0) _scheduleInformerPresentation();
           },
           onHorizontalDragCancel: () {
+            if (_navHoldMode) {
+              finishHold();
+              return;
+            }
             if (!_navDragging) return;
             _navDragDx.value = 0;
             setState(() {
               _navDragging = false;
+              _navTapDown = false;
             });
           },
-          child: ValueListenableBuilder<double>(
-            valueListenable: _navDragDx,
-            builder: (context, navDragDx, _) {
-              final position = _navDragging
-                  ? ((_navDragBaseLeft + navDragDx).clamp(
+          child: AnimatedBuilder(
+            animation: Listenable.merge([_navDragDx, _navFollowP]),
+            builder: (context, _) {
+              final position = _navHoldMode
+                  ? _navFollowP.value
+                  : _navDragging
+                  ? ((_navDragBaseLeft + _navDragDx.value).clamp(
                               minBubbleLeft,
                               maxBubbleLeft,
                             ) -
@@ -2666,14 +2736,19 @@ class _ChatListScreenState extends State<ChatListScreen>
                 child: SlidingPillNav(
                   items: _chatsNavItems(AppLocalizations.of(context)!),
                   position: position,
-                  animationDuration: _navDragging
+                  animationDuration: _navDragging || _navHoldMode
                       ? Duration.zero
                       : const Duration(milliseconds: 350),
                   geometry: geometry,
                   iconSize: 20,
                   labelGap: 4,
                   backdropKey: _frostBackdrop,
-                  onTap: _onNavTabSelected,
+                  pressed: _navTapDown || _navDragging || _navHoldMode,
+                  onTap: (index) {
+                    // в hold-режиме коммитит finishHold, двойного щелчка не надо
+                    if (_navHoldMode) return;
+                    _onNavTabSelected(index);
+                  },
                   onItemLongPress: (index, pos) {
                     if (index == 3) _openAccountSwitcher(pos);
                   },
@@ -2735,7 +2810,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 bottomInset + (compactNav ? compactHeight + 12 : 90);
             final pageW = constraints.maxWidth;
             final pageH = constraints.maxHeight;
-            final navInnerW = pageW - 20;
+            final navInnerW = pageW - 16;
             final totalWeight = 5.2;
             final unitWidth = navInnerW / totalWeight;
             final inactiveWidth = unitWidth * 1.0;

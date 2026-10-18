@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import PushKit
 
 final class KometStreamHandler: NSObject, FlutterStreamHandler {
   private let onSink: (FlutterEventSink?) -> Void
@@ -23,39 +24,34 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
 }
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var channels: [FlutterMethodChannel] = []
   private var eventChannels: [FlutterEventChannel] = []
   private var streamHandlers: [KometStreamHandler] = []
   private var videoNote: KometVideoNote?
   private let shareBridge = KometShareBridge()
+  private var flutterMessenger: FlutterBinaryMessenger?
+  private var voipRegistry: PKPushRegistry?
+  private var pendingVoipToken: String?
+  private var channelsRegistered = false
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
     KometNotifications.shared.start()
 
     if let controller = window?.rootViewController as? FlutterViewController {
       let messenger = controller.binaryMessenger
-      registerAppIcon(messenger)
-      registerVideo(messenger)
-      registerVideoNote(messenger)
-      registerNotifications(messenger)
-      registerScreen(messenger)
-      registerShare(messenger)
-      registerClipboard(messenger)
+      registerAllChannels(
+        messenger,
+        textures: nil,
+        includeClipboard: true
+      )
     }
 
+    setupVoipRegistry()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-
-  private func method(_ name: String, _ messenger: FlutterBinaryMessenger,
-                      _ handler: @escaping FlutterMethodCallHandler) {
-    let channel = FlutterMethodChannel(name: name, binaryMessenger: messenger)
-    channel.setMethodCallHandler(handler)
-    channels.append(channel)
   }
 
   override func application(
@@ -78,13 +74,64 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
     return true
   }
 
-  private func registerShare(_ messenger: FlutterBinaryMessenger) {
-    method("ru.komet.app/share", messenger) { [weak self] call, result in
-      self?.shareBridge.handle(call, result: result)
+  private func setupVoipRegistry() {
+    let registry = PKPushRegistry(queue: .main)
+    registry.delegate = self
+    registry.desiredPushTypes = [.voIP]
+    voipRegistry = registry
+    print("KometCallKit: PushKit registered, desiredTypes=[.voIP]")
+  }
+
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let messenger = engineBridge.applicationRegistrar.messenger()
+    registerAllChannels(
+      messenger,
+      textures: engineBridge.applicationRegistrar.textures(),
+      includeClipboard: false
+    )
+    flutterMessenger = messenger
+  }
+
+  private func registerAllChannels(
+    _ messenger: FlutterBinaryMessenger,
+    textures: FlutterTextureRegistry? = nil,
+    includeClipboard: Bool = true
+  ) {
+    guard !channelsRegistered else { return }
+    channelsRegistered = true
+    registerAppIcon(messenger)
+    registerVideo(messenger)
+    registerVideoNote(messenger, textures: textures)
+    registerNotifications(messenger)
+    registerScreen(messenger)
+    registerShare(messenger)
+    registerCalls(messenger)
+    if includeClipboard {
+      registerClipboard(messenger)
     }
-    events("ru.komet.app/share_events", messenger) { [weak self] sink in
-      self?.shareBridge.attach(sink)
-    }
+  }
+
+@objc override func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+    KometNotifications.shared.didReceivePushToken(deviceToken)
+  }
+
+  @objc override func application(
+    _ application: UIApplication,
+    didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    KometNotifications.shared.didFailToRegister(error)
+  }
+
+  private func method(_ name: String, _ messenger: FlutterBinaryMessenger,
+                      _ handler: @escaping FlutterMethodCallHandler) {
+    let channel = FlutterMethodChannel(name: name, binaryMessenger: messenger)
+    channel.setMethodCallHandler(handler)
+    channels.append(channel)
   }
 
   private func events(_ name: String, _ messenger: FlutterBinaryMessenger,
@@ -137,8 +184,13 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
     }
   }
 
-  private func registerVideoNote(_ messenger: FlutterBinaryMessenger) {
-    guard let textures = registrar(forPlugin: "KometVideoNote")?.textures() else { return }
+  private func registerVideoNote(
+    _ messenger: FlutterBinaryMessenger,
+    textures: FlutterTextureRegistry? = nil
+  ) {
+    guard
+      let textures = textures ?? registrar(forPlugin: "KometVideoNote")?.textures()
+    else { return }
 
     method("ru.komet.app/video_note", messenger) { [weak self] call, result in
       guard let self = self else { return }
@@ -199,18 +251,198 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
     }
   }
 
+  private func registerShare(_ messenger: FlutterBinaryMessenger) {
+    method("ru.komet.app/share", messenger) { [weak self] call, result in
+      self?.shareBridge.handle(call, result: result)
+    }
+    events("ru.komet.app/share_events", messenger) { [weak self] sink in
+      self?.shareBridge.attach(sink)
+    }
+  }
+
   private func registerClipboard(_ messenger: FlutterBinaryMessenger) {
     method("ru.komet.app/clipboard", messenger) { call, result in
       KometClipboard.handle(call, result: result)
     }
   }
 
+  private func registerCalls(_ messenger: FlutterBinaryMessenger) {
+    method("ru.komet.app/calls", messenger) { call, result in
+      let args = call.arguments as? [String: Any] ?? [:]
+      switch call.method {
+      case "reportIncomingCall":
+        let conversationId = args["conversationId"] as? String ?? ""
+        let callerName = args["callerName"] as? String ?? "Неизвестный номер"
+        let isVideo = args["isVideo"] as? Bool ?? false
+        let vcp = args["vcp"] as? String
+        let callerId = (args["callerId"] as? NSNumber)?.intValue
+        KometCallKit.shared.reportIncomingCall(
+          conversationId: conversationId,
+          callerName: callerName,
+          isVideo: isVideo,
+          vcp: vcp,
+          callerId: callerId
+        )
+        result(nil)
+      case "reportOutgoingCall":
+        let conversationId = args["conversationId"] as? String ?? ""
+        let callerName = args["callerName"] as? String ?? "Неизвестный номер"
+        let callerId = (args["callerId"] as? NSNumber)?.intValue
+        let isVideo = args["isVideo"] as? Bool ?? false
+        KometCallKit.shared.reportOutgoingCall(
+          conversationId: conversationId,
+          callerName: callerName,
+          callerId: callerId,
+          isVideo: isVideo
+        )
+        result(nil)
+      case "endCall":
+        let conversationId = args["conversationId"] as? String ?? ""
+        KometCallKit.shared.endCall(conversationId: conversationId)
+        KometPiP.shared.stop()
+        result(nil)
+      case "notifyAccepted":
+        result(nil)
+      case "notifyEnded":
+        KometCallKit.shared.endAllCalls()
+        KometPiP.shared.stop()
+        result(nil)
+      case "cancelIncoming":
+        KometCallKit.shared.cancelIncoming()
+        result(nil)
+      case "ensureOngoing":
+        result(nil)
+      case "dropOngoing":
+        KometCallKit.shared.endAllCalls()
+        KometPiP.shared.stop()
+        result(nil)
+      case "consumeInitialCall":
+        result(nil)
+      case "setPiPTrack":
+        if let trackId = args["trackId"] as? String {
+          KometPiP.shared.attachTrack(trackId)
+        }
+        result(nil)
+      case "clearPiPTracks":
+        KometPiP.shared.stop()
+        result(nil)
+      case "setScreenShare":
+        result(nil)
+      case "syncCallerNames":
+        let namesRaw = args["names"] as? [String: Any] ?? [:]
+        let phonesRaw = args["phones"] as? [String: Any] ?? [:]
+        var names = [Int: String]()
+        for (k, v) in namesRaw {
+          if let id = Int(k), let s = v as? String { names[id] = s }
+        }
+        var phones = [Int: Int]()
+        for (k, v) in phonesRaw {
+          if let id = Int(k), let n = (v as? NSNumber)?.intValue { phones[id] = n }
+        }
+        KometCallKit.shared.syncCallerNames(names, phones: phones)
+        result(nil)
+      case "callViaPhone":
+        let phone = (args["phone"] as? NSNumber)?.intValue ?? 0
+        if phone > 0,
+           let url = URL(string: "tel:+\(phone)"),
+           UIApplication.shared.canOpenURL(url) {
+          DispatchQueue.main.async {
+            UIApplication.shared.open(url) { ok in result(ok) }
+          }
+        } else {
+          result(false)
+        }
+      case "canUseFullScreenIntent":
+        result(true)
+      case "openFullScreenIntentSettings":
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    events("ru.komet.app/calls_events", messenger) { sink in
+      KometCallKit.shared.attach(sink)
+    }
+  }
+
   private func registerNotifications(_ messenger: FlutterBinaryMessenger) {
-    method("ru.komet.app/notifications", messenger) { call, result in
+    let channel = FlutterMethodChannel(name: "ru.komet.app/notifications", binaryMessenger: messenger)
+    KometNotifications.shared.setChannel(channel)
+    channel.setMethodCallHandler { call, result in
+      if call.method == "consumeVoipToken" {
+        result(self.pendingVoipToken)
+        self.pendingVoipToken = nil
+        return
+      }
+      if call.method == "requestVoipRegistration" {
+        self.voipRegistry?.desiredPushTypes = [.voIP]
+        result(nil)
+        return
+      }
+      if call.method == "reregisterApns" {
+        KometNotifications.shared.reregister()
+        result(nil)
+        return
+      }
       KometNotifications.shared.handle(call, result: result)
     }
+    channels.append(channel)
     events("ru.komet.app/notification_events", messenger) { sink in
       KometNotifications.shared.attach(sink)
     }
+  }
+}
+
+extension AppDelegate: PKPushRegistryDelegate {
+  func pushRegistry(
+    _ registry: PKPushRegistry,
+    didReceiveIncomingPushWith payload: PKPushPayload,
+    for type: PKPushType,
+    completion: @escaping () -> Void
+  ) {
+    let dict = payload.dictionaryPayload
+    let conversationId = dict["conversationId"] as? String ?? ""
+    if dict["ended"] as? Bool == true {
+      // #***! звонящий сбросил: гасим висящий CallKit-экран
+      KometCallKit.shared.endCall(conversationId: conversationId)
+      completion()
+      return
+    }
+    let callerName = dict["callerName"] as? String ?? "Неизвестный номер"
+    let isVideo = dict["isVideo"] as? Bool ?? false
+    let vcp = dict["vcp"] as? String
+    let callerId = (dict["callerId"] as? NSNumber)?.intValue
+    KometCallKit.shared.reportIncomingCall(
+      conversationId: conversationId,
+      callerName: callerName,
+      isVideo: isVideo,
+      vcp: vcp,
+      callerId: callerId
+    )
+    completion()
+  }
+
+  func pushRegistry(
+    _ registry: PKPushRegistry,
+    didUpdate credentials: PKPushCredentials,
+    for type: PKPushType
+  ) {
+    let token = credentials.token.map { String(format: "%02x", $0) }.joined()
+    print("KometCallKit: VoIP token received: \(token.prefix(16))...")
+    pendingVoipToken = token
+    guard let messenger = flutterMessenger else {
+      print("KometCallKit: messenger nil, stored pendingVoipToken")
+      return
+    }
+    let channel = FlutterMethodChannel(name: "ru.komet.app/notifications", binaryMessenger: messenger)
+    channel.invokeMethod("onVoipToken", arguments: token)
+    print("KometCallKit: VoIP token sent to Flutter")
+  }
+
+  func pushRegistry(
+    _ registry: PKPushRegistry,
+    didInvalidatePushTokenFor type: PKPushType
+  ) {
+    print("KometCallKit: VoIP token invalidated")
   }
 }

@@ -11,13 +11,11 @@ import '../utils/logger.dart';
 
 // #***! подмена устройства, профиль свой у каждого аккаунта
 class SpoofingService {
-  // #***! версия которой представляемся, от неё зависит функционал
+  // #***! версия которой представляемся, от неё зависит функционал.
+  // Актуальная и для pre-login сокета: сервер стал отклонять устаревшие
+  // клиенты для запроса кода (client.unsupported-version)
   static const String hardcodedAppVersion = '26.31.0';
   static const int hardcodedBuildNumber = 6822;
-  // #***! до логина (сокет без токена) прикидываемся прошлой версией целиком —
-  // версия, сборка и отпечаток от неё должны совпадать, иначе сервер спалит рассинхрон
-  static const String preLoginAppVersion = '26.23.2';
-  static const int preLoginBuildNumber = 6779;
   // #***! незалогиненный профиль живёт под pending пока не узнаем id
   static const String pendingScope = 'pending';
   static const String androidDeviceType = 'ANDROID';

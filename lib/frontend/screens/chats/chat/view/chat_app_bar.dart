@@ -46,6 +46,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onOpenInfo;
   final VoidCallback onOpenScheduled;
   final VoidCallback onCall;
+  final VoidCallback? onVideoCall;
   final void Function(BuildContext) onMenu;
 
   final ValueListenable<Set<String>> selectedIds;
@@ -89,6 +90,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onOpenInfo,
     required this.onOpenScheduled,
     required this.onCall,
+    this.onVideoCall,
     required this.onMenu,
     required this.selectedIds,
     required this.copyableSelection,
@@ -216,6 +218,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                             onOpenInfo: onOpenInfo,
                             onOpenScheduled: onOpenScheduled,
                             onCall: onCall,
+                            onVideoCall: onVideoCall,
                             onMenu: onMenu,
                           ),
                         ),

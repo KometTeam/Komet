@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart';
 import '../../backend/api.dart';
 import '../../frontend/widgets/max_link_nav.dart';
@@ -15,6 +14,9 @@ import 'push_proxy_client.dart';
 class NotificationBridge {
   NotificationBridge._();
   static final NotificationBridge instance = NotificationBridge._();
+
+  static String _shortToken(String token) =>
+      token.length <= 16 ? token : '${token.substring(0, 16)}…';
 
   static const _method = MethodChannel('ru.komet.app/notifications');
   static const _events = EventChannel('ru.komet.app/notification_events');
@@ -36,7 +38,7 @@ class NotificationBridge {
 
   bool get _native {
     try {
-      return Platform.isAndroid || Platform.isIOS;
+      return Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
     } catch (_) {
       return false;
     }
@@ -50,14 +52,16 @@ class NotificationBridge {
     }
   }
 
-  bool get _iosPush => _native && Platform.isIOS;
+  bool get _apnsPush => _native && (Platform.isIOS || Platform.isMacOS);
+  bool get _voipPush => _native && Platform.isIOS;
+
   void init() {
     if (_started || !_native) return;
     _started = true;
-    if (_iosPush) {
+    if (_apnsPush) {
       _method.setMethodCallHandler(_handleMethodCall);
       unawaited(_consumePushToken());
-      unawaited(_consumeVoipToken());
+      if (_voipPush) unawaited(_consumeVoipToken());
     }
     _events.receiveBroadcastStream().listen(
       _onEvent,
@@ -171,9 +175,9 @@ class NotificationBridge {
         final token = call.arguments as String?;
         if (token != null && token.isNotEmpty) {
           PushProxyClient.instance.setApnsToken(token);
-          if (kDebugMode) {
-            logger.i('NotificationBridge: APNs device token: $token');
-          }
+          logger.i(
+            'NotificationBridge: APNs device token: ${_shortToken(token)}',
+          );
         }
         break;
       case 'onPushTokenError':
@@ -183,9 +187,7 @@ class NotificationBridge {
         final token = call.arguments as String?;
         if (token != null && token.isNotEmpty) {
           PushProxyClient.instance.setVoipToken(token);
-          if (kDebugMode) {
-            logger.i('NotificationBridge: VoIP token: $token');
-          }
+          logger.i('NotificationBridge: VoIP token: ${_shortToken(token)}');
         }
         break;
       default:
@@ -198,26 +200,36 @@ class NotificationBridge {
       final token = await _method.invokeMethod<String>('consumePushToken');
       if (token != null && token.isNotEmpty) {
         PushProxyClient.instance.setApnsToken(token);
-        if (kDebugMode) {
-          logger.i('NotificationBridge: APNs device token (consumed): $token');
-        }
+        logger.i(
+          'NotificationBridge: APNs device token (consumed): ${_shortToken(token)}',
+        );
       }
     } catch (e) {
       logger.w('NotificationBridge.consumePushToken: $e');
     }
   }
 
+  // #***! consume может уйти раньше чем PushKit отдаст токен: до 15 попыток,
+  // каждая дёргает нативный форс-запрос регистрации
   Future<void> _consumeVoipToken() async {
-    try {
-      final token = await _method.invokeMethod<String>('consumeVoipToken');
-      if (token != null && token.isNotEmpty) {
-        PushProxyClient.instance.setVoipToken(token);
-        if (kDebugMode) {
-          logger.i('NotificationBridge: VoIP token (consumed): $token');
+    for (var attempt = 0; attempt < 15; attempt++) {
+      try {
+        final token = await _method.invokeMethod<String>('consumeVoipToken');
+        if (token != null && token.isNotEmpty) {
+          PushProxyClient.instance.setVoipToken(token);
+          logger.i(
+            'NotificationBridge: VoIP token (consumed): ${_shortToken(token)}',
+          );
+          return;
         }
+        await _method.invokeMethod<void>('requestVoipRegistration');
+        if (attempt < 14) {
+          await Future<void>.delayed(const Duration(seconds: 1));
+        }
+      } catch (e) {
+        logger.w('NotificationBridge.consumeVoipToken: $e');
+        return;
       }
-    } catch (e) {
-      logger.w('NotificationBridge.consumeVoipToken: $e');
     }
   }
 

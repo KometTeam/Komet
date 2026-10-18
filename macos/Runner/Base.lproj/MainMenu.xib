@@ -66,6 +66,23 @@
                         </items>
                     </menu>
                 </menuItem>
+                <menuItem title="Файл" id="KmF-menu">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="Файл" id="KmF-sub">
+                        <items>
+                            <menuItem title="Закрыть окно" keyEquivalent="w" id="KmF-close">
+                                <connections>
+                                    <action selector="performClose:" target="-1" id="KmF-close-act"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Свернуть" keyEquivalent="m" id="KmF-mini">
+                                <connections>
+                                    <action selector="performMiniaturize:" target="-1" id="KmF-mini-act"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
                 <menuItem title="Edit" id="5QF-Oa-p0T">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <menu key="submenu" title="Edit" id="W48-6f-4Dl">

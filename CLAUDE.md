@@ -216,28 +216,36 @@ A slash spec takes the plain and slashed codepoints; the generator lays both gly
 
 ## App icons
 
-Two launcher icons ship: the default comet and the `Minimal` meteor, switched at
-runtime by `AppIconConfig` (Android activity-alias, iOS alternate icon). Every
-launcher resource is *derived* from `assets/komet.png` / `assets/meteor.png` by a
-script in `tool/`, so the source art lives in exactly one place:
+Three launcher icons ship: the default comet (`komet_icon`), the `Minimal` meteor
+and `Not Skam` (`not_skam`), switched at runtime by `AppIconConfig`
+(Android activity-alias, iOS `setAlternateIconName`). Every launcher resource is
+*derived* from `assets/komet.png` / `assets/meteor.png` by a script in `tool/`,
+so the source art lives in exactly one place:
 
-| Script                                                                               | Produces                                                                    |
-|--------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
-| `make_icon_bg.dart`                                                                  | `*_icon.png` — the same art flattened on black                              |
-| `make_minimal_android.dart` / `make_minimal_adaptive.dart` / `make_minimal_ios.dart` | the `Minimal` launcher + adaptive layers                                    |
-| `make_monochrome_android.dart`                                                       | `ic_launcher[_minimal]_monochrome.png` — alpha silhouettes for themed icons |
-| `make_appearances_ios.dart`                                                          | `Icon-App-{Dark,Tinted}-1024x1024@1x.png` + their `Contents.json` entries   |
+| Script                                                                      | Produces                                                                    |
+|-----------------------------------------------------------------------------|-----------------------------------------------------------------------------|
+| `make_icon_bg.dart`                                                         | `*_icon.png` — the same art flattened on black                              |
+| `make_minimal_android.dart` / `make_minimal_adaptive.dart`                  | the `Minimal` launcher + adaptive layers                                    |
+| `make_monochrome_android.dart`                                              | `ic_launcher[_minimal]_monochrome.png` — alpha silhouettes for themed icons |
+
+**iOS.** Launcher icons are Icon Composer projects in `assets/ios_icons/*.icon`
+(multi-layer glass, dark/tinted appearances inside one file). `tool/compile_ios_icons.sh`
+publishes them to `ios/Runner/AppIcons`, and the Runner build phase
+"[AppIcons] Compile Icon Composer icons" compiles the catalog together with the
+`.icon` packages straight into the app's `Assets.car` — the only car the system
+reads. From there iOS renders glass/dark/tinted variants and every size itself,
+including @3x for iPhone. `CFBundleIcons` in `Runner/Info.plist` must repeat the
+icon names; there are no loose icon PNGs in the bundle. The same command builds
+`KometIcons.car` + `.icns` for macOS (`compile_ios_icons.sh macos`).
 
 **Themed icons.** Both adaptive icons carry a `<monochrome>` layer, so Android 13+
 launchers with *Themed icons* enabled recolour the icon from the wallpaper. The
 layer is only the alpha channel of the artwork filled black — the system supplies
 both colours, and the same 16% inset as the foreground keeps it aligned with the
-normal icon. The iOS 18 counterpart is the dark/tinted appearance pair on the
-primary `AppIcon`; alternate icons cannot carry appearance variants.
+normal icon.
 
-`flutter_launcher_icons` (configured in `pubspec.yaml`) only generates the default
-icon and rewrites `mipmap-anydpi-v26/*.xml` without the insets or the monochrome
-layer, so re-run the `tool/` scripts and restore those XMLs after invoking it.
+`flutter_launcher_icons` (configured in `pubspec.yaml`) generates Android,
+Windows and macOS icons only — running it must not touch iOS
 
 ## Localization
 

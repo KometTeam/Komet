@@ -13,15 +13,6 @@ class ChatCacheFingerprint {
   static final Uint8List _dexDigest = _hex(
     '9affa687874d88ea80b298949f826bcf8c1bba36f24d48c44b8f54cdbf01c96f',
   );
-  // #***! отпечаток прошлой версии (26.23.2) — уходит в pre-login запросах без
-  // токена, когда в хэндшейке мы представляемся preLoginAppVersion. Тогда была
-  // одна so на все архитектуры, поэтому arch тут не учитываем.
-  static final Uint8List _preLoginDexDigest = _hex(
-    '38cff46f392dc1734c308be011c2f0d8da152a390b41063dbb2c913e3032f4b3',
-  );
-  static final Uint8List _preLoginSoDigest = _hex(
-    '634ecc42b246784d975f180b4fecf903df235cdf0476da47163a85630eb1a6a8',
-  );
   // #***! so своя на каждую архитектуру, берём ту что уехала в хэндшейк
   static final Map<String, Uint8List> _soDigests = {
     'arm64-v8a': _hex(
@@ -43,11 +34,10 @@ class ChatCacheFingerprint {
     int callsSeed,
     String deviceId, {
     String arch = defaultArch,
-    bool preLogin = false,
   }) {
     final seed = _int64BigEndian(callsSeed);
     final device = Uint8List.fromList(utf8.encode(deviceId));
-    final digests = _digests(arch, preLogin);
+    final digests = _digests(arch);
     final result = BytesBuilder();
     result.add(_sha256(_signatureDigest, seed, device));
     result.add(_sha256(digests.dex, seed, device));
@@ -55,11 +45,8 @@ class ChatCacheFingerprint {
     return result.toBytes();
   }
 
-  static Map<String, String> exportDigests({
-    String arch = defaultArch,
-    bool preLogin = false,
-  }) {
-    final digests = _digests(arch, preLogin);
+  static Map<String, String> exportDigests({String arch = defaultArch}) {
+    final digests = _digests(arch);
     return {
       'signature': _encodeHex(_signatureDigest),
       'dex': _encodeHex(digests.dex),
@@ -67,13 +54,8 @@ class ChatCacheFingerprint {
     };
   }
 
-  static ({Uint8List dex, Uint8List so}) _digests(String arch, bool preLogin) =>
-      (
-        dex: preLogin ? _preLoginDexDigest : _dexDigest,
-        so: preLogin
-            ? _preLoginSoDigest
-            : (_soDigests[arch] ?? _soDigests[defaultArch]!),
-      );
+  static ({Uint8List dex, Uint8List so}) _digests(String arch) =>
+      (dex: _dexDigest, so: _soDigests[arch] ?? _soDigests[defaultArch]!);
 
   static String _encodeHex(Uint8List bytes) =>
       bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();

@@ -4,8 +4,8 @@ import 'build_profile.dart';
 
 /// What every iOS build leaves out or does differently.
 ///
-/// Plugins, the update check and device spoofing depend on the App Store
-/// build flag instead, see [BuildProfile.isAppStoreBuild].
+/// Plugins and device spoofing depend on the App Store build flag instead,
+/// see [BuildProfile.isAppStoreBuild].
 ///
 /// Runtime checks on [defaultTargetPlatform] so Android and desktop keep
 /// their behavior and tests can switch platforms with
@@ -13,6 +13,11 @@ import 'build_profile.dart';
 abstract final class IosRelease {
   static bool get isIOS =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  /// macOS ставит иконку/обновляется сам: обновления — App Store и
+  /// переустановка бинаря, самообновлятор не собирается ни в одном виде.
+  static bool get isMacOS =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
   /// Contact exchange by tapping phones runs on Android host card
   /// emulation; iOS has no counterpart, so the entry point is hidden.

@@ -1240,7 +1240,15 @@
   "videoEditorFrameFailed": "Failed to grab a frame",
   "videoEditorQualityTooltip": "Quality",
   "webPushTitle": "Notifications on iOS",
-  "pushLinkIntro": "MAX on iOS has no regular push channel: its servers cannot deliver notifications via APNs. Komet solves this with its own push server: it keeps a lightweight notification session and relays messages to Apple.\n\nTo enable it, confirm a QR code — a separate session will be created, which you can revoke at any time in MAX settings.",
+  "pushLinkIntro": "MAX on iOS has no regular push channel: its servers cannot deliver notifications via APNs. Komet solves this with its own push server: it keeps a separate lightweight notification session and relays messages to Apple.\n\nThe session is created via QR and belongs to the push server itself — your main login is never duplicated. The token is stored strictly encrypted, and any device with this account can decrypt it: the key is derived from account data, so a single socket can be woken by all your iOS devices.",
+  "pushLinkApproveFailed": "Failed to confirm the session registration",
+  "pushProxyTile": "Komet push server",
+  "webPushTile": "Notifications via PWA",
+  "pushLinkAccountsTitle": "Accounts",
+  "pushLinkAccountActive": "Session active, notifications enabled",
+  "pushLinkAccountInactive": "Session inactive — raised when Komet launches",
+  "pushLinkUnlinkedSubtitle": "Notifications disabled",
+  "pushLinkActiveAccountBadge": "current",
   "pushLinkConnect": "Link",
   "pushLinkLinked": "Notifications linked",
   "pushLinkLinkedBody": "The push session is active on this device.",
@@ -1248,14 +1256,14 @@
   "pushLinkUnlink": "Unlink",
   "pushLinkUnlinkConfirm": "The push session will be terminated. You can link again at any time.",
   "pushLinkUnlinkedDone": "Notifications unlinked",
-  "pushLinkScan": "Scan the QR code with the MAX app on another device, or open the link on a device where MAX is installed.",
   "pushLinkWaiting": "Waiting for confirmation…",
-  "pushLinkOpenMax": "Open MAX",
   "pushLinkApnsMissing": "Restart Komet so the notification token gets registered",
   "pushLinkPasswordBody": "Two-factor protection is enabled on this account. Enter the password.",
   "pushLinkPasswordInvalid": "Enter the password",
   "pushLinkPasswordWrong": "Wrong password",
   "pushLinkConfirm": "Confirm",
+  "pushLinkBindFailed": "Failed to seal the session — linking was not completed",
+  "pushLinkAttachFailed": "Failed to attach the device to the notification session",
   "webPushIntro": "Komet has no ordinary push on iOS: Apple issues a notification token only to apps signed with a developer certificate, and a sideloaded build never gets one.\n\nThe way around it is a web app on the Home Screen. MAX's own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.",
   "webPushConfirm": "Continue",
   "webPushPasswordExplainer": "Two-factor protection is enabled on this account.",
@@ -1363,12 +1371,30 @@
   "e2eeTitle": "End-to-end encryption",
   "e2eeStatusNone": "Off",
   "e2eeStatusOffered": "Waiting for {name} to accept",
-  "@e2eeStatusOffered": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeStatusOffered": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeStatusPending": "{name} wants to turn on encryption",
-  "@e2eeStatusPending": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeStatusPending": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeStatusEstablished": "On",
   "e2eeStatusKeyChanged": "{name}'s encryption key has changed",
-  "@e2eeStatusKeyChanged": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeStatusKeyChanged": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeEnable": "Turn on",
   "e2eeAccept": "Accept",
   "e2eeDecline": "Decline",
@@ -1377,18 +1403,42 @@
   "e2eeResetConfirm": "Reset the encrypted session? Both sides will need to set it up again.",
   "e2eeFingerprint": "Safety number",
   "e2eeFingerprintHint": "Compare these 60 digits with {name} outside MAX — in person or over another channel. If they match, the server did not substitute the keys.",
-  "@e2eeFingerprintHint": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeFingerprintHint": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeVerified": "Verified in person",
   "e2eeCeiling": "Only message text and photos are encrypted. The server still sees who talks to whom and when, sees that the chat is encrypted, and can withhold messages. Nothing here hides that.",
   "e2eeNeedsKomet": "{name} needs Komet for this to work.",
-  "@e2eeNeedsKomet": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeNeedsKomet": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeOfferSent": "Request sent",
   "e2eeOfferFailed": "Could not send the request",
   "e2eeAcceptFailed": "Could not accept the request",
   "e2eeBannerPending": "{name} wants to turn on end-to-end encryption",
-  "@e2eeBannerPending": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeBannerPending": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeBannerKeyChanged": "{name}'s encryption key has changed. Check the safety number before accepting.",
-  "@e2eeBannerKeyChanged": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeBannerKeyChanged": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeTransferTitle": "Move to another device",
   "e2eeTransferHint": "The transfer file holds your key and sessions. After importing it on the new device, stop using this one for encrypted chats.",
   "e2eeExport": "Export",
@@ -1396,7 +1446,13 @@
   "e2eeTransferPassword": "Transfer password",
   "e2eeExportFailed": "Could not export",
   "e2eeImported": "Sessions moved: {count}",
-  "@e2eeImported": {"placeholders": {"count": {"type": "int"}}},
+  "@e2eeImported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "e2eeImportFailed": "Could not import — wrong password or damaged file",
   "e2eeLegacyNote": "Passphrase mode for groups: no forward secrecy, anyone who knows the passphrase can read the whole history.",
   "e2eeTooLong": "The message is too long for an encrypted chat. Split it up.",
@@ -1411,7 +1467,13 @@
   "e2eeSearchBlocked": "Search is off in an encrypted chat: the query would go to the server, and the server only sees ciphertext.",
   "e2eeAwaitingPeer": "This session was moved from another device. Wait for one message from your contact before sending — otherwise both devices would use the same key.",
   "e2eeBannerRehandshake": "{name} is turning encryption on again. Accept only if you expected this — otherwise the server is replaying an old request to reset your session.",
-  "@e2eeBannerRehandshake": {"placeholders": {"name": {"type": "String"}}},
+  "@e2eeBannerRehandshake": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "e2eeExportedAndDisabled": "Transfer created. Encryption is now off on this device: import the file on the new one and turn it on there.",
   "chatNoAccessMessage": "You don't have access to this chat",
   "chatNoAccessOk": "OK",

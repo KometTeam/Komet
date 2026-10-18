@@ -39,11 +39,13 @@ class ShareIntentBridge {
 
   bool get _native {
     try {
-      return Platform.isAndroid || Platform.isIOS;
+      return Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
     } catch (_) {
       return false;
     }
   }
+
+  bool get _inboxDriven => Platform.isIOS || Platform.isMacOS;
 
   // #***! подписка на шаринг и состояние сессии
   void init() {
@@ -68,7 +70,7 @@ class ShareIntentBridge {
   Future<void> checkInitialShare() async {
     if (!_native) return;
     try {
-      if (Platform.isIOS) {
+      if (_inboxDriven) {
         await _inbox.check();
       } else {
         _onEvent(await _method.invokeMethod<dynamic>('consumeInitialShare'));
@@ -89,7 +91,7 @@ class ShareIntentBridge {
 
   // #***! полученное откладываем и пробуем показать
   void _onEvent(Object? event) {
-    if (Platform.isIOS) {
+    if (_inboxDriven) {
       unawaited(checkInitialShare());
       return;
     }
@@ -115,10 +117,10 @@ class ShareIntentBridge {
 
     final context = KometApp.overlayContext;
     if (!_ready || context == null || api.state != SessionState.online) {
-      if (Platform.isIOS && (!_ready || api.state != SessionState.online)) {
+      if (_inboxDriven && (!_ready || api.state != SessionState.online)) {
         return;
       }
-      if (!Platform.isIOS && _retriesLeft <= 0) {
+      if (!_inboxDriven && _retriesLeft <= 0) {
         _pending = null;
         return;
       }
@@ -148,7 +150,7 @@ class ShareIntentBridge {
       payload.files.map((file) => file.path),
     );
     try {
-      if (Platform.isIOS) {
+      if (_inboxDriven) {
         await _inbox.complete(waitForRelease: waitForFiles);
       } else {
         await waitForFiles();

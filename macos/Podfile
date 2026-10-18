@@ -1,4 +1,4 @@
-platform :osx, '10.15'
+platform :osx, '12.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -38,5 +38,22 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+
+    # #***! photo_manager и подобные поды тянут PrivacyInfo.xcprivacy в
+    # Compile Sources через source_files: Xcode манифест «компилировать» не
+    # умеет (warning no rule to process), манифест не попадает в бандл.
+    # Переносим файл в Resources фреймворка.
+    target.build_phases.each do |phase|
+      next unless phase.is_a?(Xcodeproj::Project::Object::PBXSourcesBuildPhase)
+
+      phase.files.dup.each do |build_file|
+        next unless build_file.display_name.end_with?('PrivacyInfo.xcprivacy')
+
+        ref = build_file.file_ref
+        phase.remove_build_file(build_file)
+        target.resources_build_phase.add_file_reference(ref, true)
+        Pod::UI.puts "pod install: #{target.name}: PrivacyInfo.xcprivacy перенесён в Resources"
+      end
+    end
   end
 end
