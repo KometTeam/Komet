@@ -71,7 +71,10 @@ class CallParticipantRef {
 
   const CallParticipantRef(this.id, {this.deviceIdx = 0, this.isGroup = false});
 
-  String get wire => '${isGroup ? 'g' : 'u'}$id:d$deviceIdx';
+  String get wire {
+    final base = '${isGroup ? 'g' : 'u'}$id';
+    return deviceIdx == 0 ? base : '$base:d$deviceIdx';
+  }
 }
 
 // #***! админские команды, мьют роли запись комната ожидания
@@ -98,7 +101,7 @@ class CallAdmin {
 
   // #***! принудительный мьют
   Future<void> setMuteStates(
-    Map<CallMedia, CallMuteState?> states, {
+    Map<CallMedia, CallMuteState> states, {
     CallParticipantRef? participant,
     String? roomId,
   }) {
@@ -107,7 +110,7 @@ class CallAdmin {
       extra: {
         'participantId': ?participant?.wire,
         'muteStates': {
-          for (final media in CallMedia.values) media.wire: states[media]?.wire,
+          for (final entry in states.entries) entry.key.wire: entry.value.wire,
         },
         'roomId': ?roomId,
       },
@@ -157,10 +160,18 @@ class CallAdmin {
   }
 
   // #***! выкинуть из звонка
-  Future<void> removeParticipant(CallParticipantRef participant) {
+  Future<void> removeParticipant(
+    CallParticipantRef participant, {
+    bool ban = false,
+  }) {
     return _signaling.sendCommand(
       'remove-participant',
-      extra: {'participantId': participant.wire},
+      extra: {
+        'participantId': participant.id,
+        'participantType': participant.isGroup ? 'GROUP' : 'USER',
+        if (participant.deviceIdx != 0) 'deviceIdx': participant.deviceIdx,
+        'ban': ban,
+      },
     );
   }
 
@@ -261,7 +272,7 @@ class CallAdmin {
     int? movieId,
     String? name,
     String? description,
-    String? privacy,
+    String privacy = 'DIRECT_LINK',
     int? groupId,
     String? albumId,
     bool streamMovie = false,

@@ -1071,6 +1071,141 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callTooltipExpand => 'Expand';
 
   @override
+  String get callExitFocus => 'Normal view';
+
+  @override
+  String callScreenOf(String name) {
+    return '$name\'s screen';
+  }
+
+  @override
+  String get callInfoTooltip => 'Technical info';
+
+  @override
+  String get callInfoHide => 'Hide info';
+
+  @override
+  String get callInfoAccount => 'MAX account';
+
+  @override
+  String get callInfoCallId => 'Call ID';
+
+  @override
+  String get callInfoDeviceIndex => 'Device index';
+
+  @override
+  String get callInfoTransport => 'Transport';
+
+  @override
+  String get callInfoGuess => 'Looks like';
+
+  @override
+  String get callGuessBrowser => 'browser';
+
+  @override
+  String get callGuessChromium => 'Chrome, Chromium or Safari';
+
+  @override
+  String get callGuessAndroidApp => 'Android app';
+
+  @override
+  String get callGuessIosApp => 'iOS app';
+
+  @override
+  String get callGuessNativeWebrtc => 'native libwebrtc';
+
+  @override
+  String get callInfoRole => 'Role';
+
+  @override
+  String get callInfoRoleCreator => 'Creator';
+
+  @override
+  String get callInfoRoleAdmin => 'Admin';
+
+  @override
+  String get callInfoRoleMember => 'Member';
+
+  @override
+  String get callInfoJoined => 'Joined at';
+
+  @override
+  String get callInfoMedia => 'Media';
+
+  @override
+  String get callInfoMediaMic => 'microphone';
+
+  @override
+  String get callInfoMediaCamera => 'camera';
+
+  @override
+  String get callInfoMediaScreen => 'screen';
+
+  @override
+  String get callInfoMediaNone => 'all off';
+
+  @override
+  String get callInfoMediaConnected => 'Media connected';
+
+  @override
+  String get callInfoYes => 'yes';
+
+  @override
+  String get callInfoNo => 'no';
+
+  @override
+  String get callInfoNetwork => 'Network';
+
+  @override
+  String callInfoNetworkValue(int percent, String quality) {
+    return '$percent% · $quality';
+  }
+
+  @override
+  String get callInfoNetworkGood => 'good';
+
+  @override
+  String get callInfoNetworkMedium => 'fair';
+
+  @override
+  String get callInfoNetworkBad => 'poor';
+
+  @override
+  String get callInfoNetworkNoIssues =>
+      'good, no issues reported by the server';
+
+  @override
+  String get callInfoUnknown => 'no data';
+
+  @override
+  String get callInfoVideo => 'Video';
+
+  @override
+  String get callInfoVideoStalled => 'frozen';
+
+  @override
+  String get callInfoHand => 'Hand';
+
+  @override
+  String callInfoHandRaisedAt(String time) {
+    return 'raised at $time';
+  }
+
+  @override
+  String get callInfoModel => 'Model';
+
+  @override
+  String get callInfoOs => 'OS version';
+
+  @override
+  String get callInfoSdk => 'SDK version';
+
+  @override
+  String callNetworkTooltip(int percent) {
+    return 'Connection $percent%';
+  }
+
+  @override
   String get callTooltipKometHub => 'Komet';
 
   @override
@@ -6832,4 +6967,121 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get webPushIntroAppStore =>
       'MAX\'s server sends ordinary push notifications only to the official MAX app, so Komet receives them through a web app on the Home Screen. MAX\'s own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.';
+
+  @override
+  String get callGroupTitle => 'Group call';
+
+  @override
+  String get callInviteTitle => 'Invite other participants';
+
+  @override
+  String get callInviteCopyLink => 'Copy link';
+
+  @override
+  String get callInviteAdd => 'Add participants';
+
+  @override
+  String get callLinkLabel => 'Link';
+
+  @override
+  String get callLinkUnavailable => 'Couldn\'t get the call link';
+
+  @override
+  String get callInvited => 'Invitations sent';
+
+  @override
+  String get callInviteFailed => 'Couldn\'t invite participants';
+
+  @override
+  String get callHandLoweredByAdmin => 'An admin lowered your hand';
+
+  @override
+  String get callAllHandsLoweredByAdmin => 'An admin lowered everyone\'s hands';
+
+  @override
+  String get callMicMutedByAdmin => 'An admin turned off your microphone';
+
+  @override
+  String get callCameraMutedByAdmin => 'An admin turned off your camera';
+
+  @override
+  String get callScreenMutedByAdmin => 'An admin stopped your screen sharing';
+
+  @override
+  String get callMediaLocked => 'An admin has disabled this in the call';
+
+  @override
+  String callRecordingBy(String name) {
+    return '$name is recording the call';
+  }
+
+  @override
+  String get callRecordingSelf => 'You\'re recording the call';
+
+  @override
+  String get callRecordingSomeone => 'The call is being recorded';
+
+  @override
+  String callRecordName(String date) {
+    return 'Call recording $date';
+  }
+
+  @override
+  String get callChat => 'Chat';
+
+  @override
+  String get callMore => 'More';
+
+  @override
+  String get callSettingsTitle => 'Call settings';
+
+  @override
+  String get callSettingsMicrophone => 'Microphone';
+
+  @override
+  String get callSettingsParticipantsCan => 'Participants can';
+
+  @override
+  String get callSettingsAllowMic => 'Turn on the microphone';
+
+  @override
+  String get callSettingsAllowCamera => 'Turn on the camera';
+
+  @override
+  String get callSettingsAllowScreen => 'Share their screen';
+
+  @override
+  String get callSettingsAllowRecord => 'Record the call';
+
+  @override
+  String get callMuteAllMics => 'Turn off all microphones';
+
+  @override
+  String get callMuteAllCameras => 'Turn off all cameras';
+
+  @override
+  String get callParticipantMessage => 'Message';
+
+  @override
+  String get callParticipantStopScreen => 'Stop screen sharing';
+
+  @override
+  String get callParticipantMuteCamera => 'Turn off camera';
+
+  @override
+  String callParticipantRemoveConfirm(String name) {
+    return 'Remove $name from the call?';
+  }
+
+  @override
+  String get callParticipantsSearchHint => 'Search participants';
+
+  @override
+  String get callShareScreen => 'Share screen';
+
+  @override
+  String get callYouLoweredAllHands => 'You lowered everyone\'s hands';
+
+  @override
+  String get callYouLoweredHand => 'You lowered the participant\'s hand';
 }

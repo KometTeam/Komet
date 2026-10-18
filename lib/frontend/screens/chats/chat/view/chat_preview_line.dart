@@ -143,6 +143,7 @@ class ChatPreviewLine extends StatelessWidget {
           chatPreviewSnippet(text),
           ranges,
           bodyStyle,
+          mentionColor: mentionTextColor(cs),
         ),
       );
     }

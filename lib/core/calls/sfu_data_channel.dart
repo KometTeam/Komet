@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../utils/logger.dart';
@@ -97,28 +98,37 @@ class SfuLayoutItem {
   final String trackKey;
   final int width;
   final int height;
+  final bool cover;
 
   const SfuLayoutItem({
     required this.trackKey,
     this.width = 640,
     this.height = 360,
+    this.cover = true,
   });
 
-  String get signalingLayout => 'sz=${width}x$height:fit=cv';
+  String get signalingLayout =>
+      'sz=${width}x$height:fit=${cover ? 'cv' : 'cn'}';
 }
 
-// #***! уведомления SFU: алиасы ключей дорожек и уровни звука для подсветки говорящего
+// #***! уведомления SFU: алиасы ключей дорожек, кто говорит, чьё видео зависло и сеть участников
 class SfuNotificationChannel {
   static const String label = 'producerNotification';
 
   static const int _notifyAliases = 1;
-  static const int _notifyAudioLevels = 6;
+  static const int _notifyAudioActivity = 2;
+  static const int _notifyStalled = 4;
+  static const int _notifyNetworkStatus = 6;
 
   // #***! сервер шлёт короткие алиасы вместо ключей треков, держим таблицу
   final Map<int, String> _aliases = {};
-  final _levels = StreamController<Map<String, int>>.broadcast();
+  final _activity = StreamController<Set<String>>.broadcast();
+  final _stalled = StreamController<Set<String>>.broadcast();
+  final _network = StreamController<Map<String, double>>.broadcast();
 
-  Stream<Map<String, int>> get audioLevels => _levels.stream;
+  Stream<Set<String>> get audioActivity => _activity.stream;
+  Stream<Set<String>> get stalledVideo => _stalled.stream;
+  Stream<Map<String, double>> get networkStatus => _network.stream;
 
   void bind(RTCDataChannel channel) {
     if (channel.label != label) return;
@@ -126,6 +136,9 @@ class SfuNotificationChannel {
   }
 
   String? aliasOf(int alias) => _aliases[alias];
+
+  @visibleForTesting
+  void debugHandle(RTCDataChannelMessage message) => _onNotification(message);
 
   void _onNotification(RTCDataChannelMessage message) {
     if (!message.isBinary) return;
@@ -142,15 +155,21 @@ class SfuNotificationChannel {
             _aliases[reader.readInt()] = key;
           }
           break;
-        case _notifyAudioLevels:
+        case _notifyAudioActivity:
+          _emit(_activity, _readKeys(reader));
+          break;
+        case _notifyStalled:
+          _emit(_stalled, _readKeys(reader));
+          break;
+        case _notifyNetworkStatus:
           final count = reader.readMapHeader();
-          final levels = <String, int>{};
+          final statuses = <String, double>{};
           for (var i = 0; i < count; i++) {
             final key = _aliases[reader.readInt()];
-            final level = reader.readInt();
-            if (key != null) levels[key] = level;
+            final rating = reader.readInt() / 100;
+            if (key != null) statuses[key] = rating;
           }
-          if (!_levels.isClosed) _levels.add(levels);
+          _emit(_network, statuses);
           break;
       }
     } catch (e) {
@@ -158,8 +177,19 @@ class SfuNotificationChannel {
     }
   }
 
+  Set<String> _readKeys(MsgpackReader reader) {
+    final count = reader.readArrayHeader();
+    return {for (var i = 0; i < count; i++) ?_aliases[reader.readInt()]};
+  }
+
+  void _emit<T>(StreamController<T> controller, T value) {
+    if (!controller.isClosed) controller.add(value);
+  }
+
   Future<void> dispose() async {
     _aliases.clear();
-    if (!_levels.isClosed) await _levels.close();
+    for (final controller in [_activity, _stalled, _network]) {
+      if (!controller.isClosed) await controller.close();
+    }
   }
 }

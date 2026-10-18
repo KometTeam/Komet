@@ -1075,6 +1075,141 @@ class AppLocalizationsRu extends AppLocalizations {
   String get callTooltipExpand => 'Развернуть';
 
   @override
+  String get callExitFocus => 'Обычный вид';
+
+  @override
+  String callScreenOf(String name) {
+    return 'Экран $name';
+  }
+
+  @override
+  String get callInfoTooltip => 'Техническая информация';
+
+  @override
+  String get callInfoHide => 'Скрыть информацию';
+
+  @override
+  String get callInfoAccount => 'Аккаунт MAX';
+
+  @override
+  String get callInfoCallId => 'ID в звонке';
+
+  @override
+  String get callInfoDeviceIndex => 'Номер устройства';
+
+  @override
+  String get callInfoTransport => 'Транспорт';
+
+  @override
+  String get callInfoGuess => 'Похоже на';
+
+  @override
+  String get callGuessBrowser => 'браузер';
+
+  @override
+  String get callGuessChromium => 'Chrome, Chromium или Safari';
+
+  @override
+  String get callGuessAndroidApp => 'приложение для Android';
+
+  @override
+  String get callGuessIosApp => 'приложение для iOS';
+
+  @override
+  String get callGuessNativeWebrtc => 'нативный libwebrtc';
+
+  @override
+  String get callInfoRole => 'Роль';
+
+  @override
+  String get callInfoRoleCreator => 'Создатель';
+
+  @override
+  String get callInfoRoleAdmin => 'Администратор';
+
+  @override
+  String get callInfoRoleMember => 'Участник';
+
+  @override
+  String get callInfoJoined => 'В звонке с';
+
+  @override
+  String get callInfoMedia => 'Медиа';
+
+  @override
+  String get callInfoMediaMic => 'микрофон';
+
+  @override
+  String get callInfoMediaCamera => 'камера';
+
+  @override
+  String get callInfoMediaScreen => 'экран';
+
+  @override
+  String get callInfoMediaNone => 'всё выключено';
+
+  @override
+  String get callInfoMediaConnected => 'Медиа подключено';
+
+  @override
+  String get callInfoYes => 'да';
+
+  @override
+  String get callInfoNo => 'нет';
+
+  @override
+  String get callInfoNetwork => 'Сеть';
+
+  @override
+  String callInfoNetworkValue(int percent, String quality) {
+    return '$percent% · $quality';
+  }
+
+  @override
+  String get callInfoNetworkGood => 'хорошая';
+
+  @override
+  String get callInfoNetworkMedium => 'средняя';
+
+  @override
+  String get callInfoNetworkBad => 'плохая';
+
+  @override
+  String get callInfoNetworkNoIssues =>
+      'хорошая, сервер не сообщал о проблемах';
+
+  @override
+  String get callInfoUnknown => 'нет данных';
+
+  @override
+  String get callInfoVideo => 'Видео';
+
+  @override
+  String get callInfoVideoStalled => 'зависло';
+
+  @override
+  String get callInfoHand => 'Рука';
+
+  @override
+  String callInfoHandRaisedAt(String time) {
+    return 'поднята в $time';
+  }
+
+  @override
+  String get callInfoModel => 'Модель';
+
+  @override
+  String get callInfoOs => 'Версия ОС';
+
+  @override
+  String get callInfoSdk => 'Версия SDK';
+
+  @override
+  String callNetworkTooltip(int percent) {
+    return 'Соединение $percent%';
+  }
+
+  @override
   String get callTooltipKometHub => 'Komet';
 
   @override
@@ -6884,4 +7019,122 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get webPushIntroAppStore =>
       'Обычные пуши сервер MAX шлёт только официальному приложению MAX, поэтому Комет получает их через веб-приложение на экране «Домой». Уведомления шлёт сам сервер MAX через Apple, а показывает их отдельная иконка.\n\nДля этого нужна веб-сессия. Комет создаст её и подтвердит сам, с этого же устройства — вводить номер и код не придётся.';
+
+  @override
+  String get callGroupTitle => 'Групповой звонок';
+
+  @override
+  String get callInviteTitle => 'Пригласите других участников';
+
+  @override
+  String get callInviteCopyLink => 'Скопировать ссылку';
+
+  @override
+  String get callInviteAdd => 'Добавить участников';
+
+  @override
+  String get callLinkLabel => 'Ссылка';
+
+  @override
+  String get callLinkUnavailable => 'Не удалось получить ссылку на звонок';
+
+  @override
+  String get callInvited => 'Приглашения отправлены';
+
+  @override
+  String get callInviteFailed => 'Не удалось пригласить участников';
+
+  @override
+  String get callHandLoweredByAdmin => 'Администратор опустил вашу руку';
+
+  @override
+  String get callAllHandsLoweredByAdmin => 'Администратор опустил всем руки';
+
+  @override
+  String get callMicMutedByAdmin => 'Администратор выключил ваш микрофон';
+
+  @override
+  String get callCameraMutedByAdmin => 'Администратор выключил вашу камеру';
+
+  @override
+  String get callScreenMutedByAdmin =>
+      'Администратор остановил вашу демонстрацию экрана';
+
+  @override
+  String get callMediaLocked => 'Администратор запретил это в звонке';
+
+  @override
+  String callRecordingBy(String name) {
+    return '$name записывает звонок';
+  }
+
+  @override
+  String get callRecordingSelf => 'Вы записываете звонок';
+
+  @override
+  String get callRecordingSomeone => 'Идёт запись звонка';
+
+  @override
+  String callRecordName(String date) {
+    return 'Запись звонка $date';
+  }
+
+  @override
+  String get callChat => 'Чат';
+
+  @override
+  String get callMore => 'Ещё';
+
+  @override
+  String get callSettingsTitle => 'Настройки звонка';
+
+  @override
+  String get callSettingsMicrophone => 'Микрофон';
+
+  @override
+  String get callSettingsParticipantsCan => 'Участники звонка могут';
+
+  @override
+  String get callSettingsAllowMic => 'Включать микрофон';
+
+  @override
+  String get callSettingsAllowCamera => 'Включать камеру';
+
+  @override
+  String get callSettingsAllowScreen => 'Показывать экран';
+
+  @override
+  String get callSettingsAllowRecord => 'Записывать звонок';
+
+  @override
+  String get callMuteAllMics => 'Выключить все микрофоны';
+
+  @override
+  String get callMuteAllCameras => 'Выключить все камеры';
+
+  @override
+  String get callParticipantMessage => 'Написать';
+
+  @override
+  String get callParticipantStopScreen => 'Остановить демонстрацию';
+
+  @override
+  String get callParticipantMuteCamera => 'Выключить камеру';
+
+  @override
+  String callParticipantRemoveConfirm(String name) {
+    return 'Удалить $name из звонка?';
+  }
+
+  @override
+  String get callParticipantsSearchHint => 'Поиск участников';
+
+  @override
+  String get callShareScreen => 'Показать экран';
+
+  @override
+  String get callYouLoweredAllHands => 'Вы опустили всем руки';
+
+  @override
+  String get callYouLoweredHand => 'Вы опустили руку участнику';
 }

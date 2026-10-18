@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+enum CallEngine { firefox, gstreamer, libwebrtc }
+
 // #***! техсводка о звонке для отладочной панели
 class CallInfo {
   String? conversationId;
@@ -62,18 +64,25 @@ class CallParse {
   }
 
   // #***! движок собеседника по строке o= в SDP
-  static String engine(String sdp) {
+  static CallEngine? engineKind(String sdp) {
     for (final line in const LineSplitter().convert(sdp)) {
       if (!line.startsWith('o=')) continue;
       final l = line.toLowerCase();
       if (l.contains('mozilla') || l.contains('sdparta')) {
-        return 'Firefox (web)';
+        return CallEngine.firefox;
       }
-      if (l.contains('gstreamer')) return 'GStreamer';
-      return 'нативный libwebrtc';
+      if (l.contains('gstreamer')) return CallEngine.gstreamer;
+      return CallEngine.libwebrtc;
     }
-    return 'неизвестно';
+    return null;
   }
+
+  static String engineLabel(CallEngine? kind) => switch (kind) {
+    CallEngine.firefox => 'Firefox (web)',
+    CallEngine.gstreamer => 'GStreamer',
+    CallEngine.libwebrtc => 'нативный libwebrtc',
+    null => 'неизвестно',
+  };
 
   static String? audioCodec(String sdp) {
     for (final line in const LineSplitter().convert(sdp)) {

@@ -2102,6 +2102,258 @@ abstract class AppLocalizations {
   /// **'Expand'**
   String get callTooltipExpand;
 
+  /// No description provided for @callExitFocus.
+  ///
+  /// In en, this message translates to:
+  /// **'Normal view'**
+  String get callExitFocus;
+
+  /// No description provided for @callScreenOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\'s screen'**
+  String callScreenOf(String name);
+
+  /// No description provided for @callInfoTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Technical info'**
+  String get callInfoTooltip;
+
+  /// No description provided for @callInfoHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide info'**
+  String get callInfoHide;
+
+  /// No description provided for @callInfoAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'MAX account'**
+  String get callInfoAccount;
+
+  /// No description provided for @callInfoCallId.
+  ///
+  /// In en, this message translates to:
+  /// **'Call ID'**
+  String get callInfoCallId;
+
+  /// No description provided for @callInfoDeviceIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Device index'**
+  String get callInfoDeviceIndex;
+
+  /// No description provided for @callInfoTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport'**
+  String get callInfoTransport;
+
+  /// No description provided for @callInfoGuess.
+  ///
+  /// In en, this message translates to:
+  /// **'Looks like'**
+  String get callInfoGuess;
+
+  /// No description provided for @callGuessBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'browser'**
+  String get callGuessBrowser;
+
+  /// No description provided for @callGuessChromium.
+  ///
+  /// In en, this message translates to:
+  /// **'Chrome, Chromium or Safari'**
+  String get callGuessChromium;
+
+  /// No description provided for @callGuessAndroidApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Android app'**
+  String get callGuessAndroidApp;
+
+  /// No description provided for @callGuessIosApp.
+  ///
+  /// In en, this message translates to:
+  /// **'iOS app'**
+  String get callGuessIosApp;
+
+  /// No description provided for @callGuessNativeWebrtc.
+  ///
+  /// In en, this message translates to:
+  /// **'native libwebrtc'**
+  String get callGuessNativeWebrtc;
+
+  /// No description provided for @callInfoRole.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get callInfoRole;
+
+  /// No description provided for @callInfoRoleCreator.
+  ///
+  /// In en, this message translates to:
+  /// **'Creator'**
+  String get callInfoRoleCreator;
+
+  /// No description provided for @callInfoRoleAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin'**
+  String get callInfoRoleAdmin;
+
+  /// No description provided for @callInfoRoleMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Member'**
+  String get callInfoRoleMember;
+
+  /// No description provided for @callInfoJoined.
+  ///
+  /// In en, this message translates to:
+  /// **'Joined at'**
+  String get callInfoJoined;
+
+  /// No description provided for @callInfoMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Media'**
+  String get callInfoMedia;
+
+  /// No description provided for @callInfoMediaMic.
+  ///
+  /// In en, this message translates to:
+  /// **'microphone'**
+  String get callInfoMediaMic;
+
+  /// No description provided for @callInfoMediaCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'camera'**
+  String get callInfoMediaCamera;
+
+  /// No description provided for @callInfoMediaScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'screen'**
+  String get callInfoMediaScreen;
+
+  /// No description provided for @callInfoMediaNone.
+  ///
+  /// In en, this message translates to:
+  /// **'all off'**
+  String get callInfoMediaNone;
+
+  /// No description provided for @callInfoMediaConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Media connected'**
+  String get callInfoMediaConnected;
+
+  /// No description provided for @callInfoYes.
+  ///
+  /// In en, this message translates to:
+  /// **'yes'**
+  String get callInfoYes;
+
+  /// No description provided for @callInfoNo.
+  ///
+  /// In en, this message translates to:
+  /// **'no'**
+  String get callInfoNo;
+
+  /// No description provided for @callInfoNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get callInfoNetwork;
+
+  /// No description provided for @callInfoNetworkValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% · {quality}'**
+  String callInfoNetworkValue(int percent, String quality);
+
+  /// No description provided for @callInfoNetworkGood.
+  ///
+  /// In en, this message translates to:
+  /// **'good'**
+  String get callInfoNetworkGood;
+
+  /// No description provided for @callInfoNetworkMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'fair'**
+  String get callInfoNetworkMedium;
+
+  /// No description provided for @callInfoNetworkBad.
+  ///
+  /// In en, this message translates to:
+  /// **'poor'**
+  String get callInfoNetworkBad;
+
+  /// No description provided for @callInfoNetworkNoIssues.
+  ///
+  /// In en, this message translates to:
+  /// **'good, no issues reported by the server'**
+  String get callInfoNetworkNoIssues;
+
+  /// No description provided for @callInfoUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'no data'**
+  String get callInfoUnknown;
+
+  /// No description provided for @callInfoVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get callInfoVideo;
+
+  /// No description provided for @callInfoVideoStalled.
+  ///
+  /// In en, this message translates to:
+  /// **'frozen'**
+  String get callInfoVideoStalled;
+
+  /// No description provided for @callInfoHand.
+  ///
+  /// In en, this message translates to:
+  /// **'Hand'**
+  String get callInfoHand;
+
+  /// No description provided for @callInfoHandRaisedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'raised at {time}'**
+  String callInfoHandRaisedAt(String time);
+
+  /// No description provided for @callInfoModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get callInfoModel;
+
+  /// No description provided for @callInfoOs.
+  ///
+  /// In en, this message translates to:
+  /// **'OS version'**
+  String get callInfoOs;
+
+  /// No description provided for @callInfoSdk.
+  ///
+  /// In en, this message translates to:
+  /// **'SDK version'**
+  String get callInfoSdk;
+
+  /// No description provided for @callNetworkTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection {percent}%'**
+  String callNetworkTooltip(int percent);
+
   /// No description provided for @callTooltipKometHub.
   ///
   /// In en, this message translates to:
@@ -12139,6 +12391,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'MAX\'s server sends ordinary push notifications only to the official MAX app, so Komet receives them through a web app on the Home Screen. MAX\'s own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.'**
   String get webPushIntroAppStore;
+
+  /// No description provided for @callGroupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Group call'**
+  String get callGroupTitle;
+
+  /// No description provided for @callInviteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite other participants'**
+  String get callInviteTitle;
+
+  /// No description provided for @callInviteCopyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get callInviteCopyLink;
+
+  /// No description provided for @callInviteAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add participants'**
+  String get callInviteAdd;
+
+  /// No description provided for @callLinkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Link'**
+  String get callLinkLabel;
+
+  /// No description provided for @callLinkUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t get the call link'**
+  String get callLinkUnavailable;
+
+  /// No description provided for @callInvited.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitations sent'**
+  String get callInvited;
+
+  /// No description provided for @callInviteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t invite participants'**
+  String get callInviteFailed;
+
+  /// No description provided for @callHandLoweredByAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'An admin lowered your hand'**
+  String get callHandLoweredByAdmin;
+
+  /// No description provided for @callAllHandsLoweredByAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'An admin lowered everyone\'s hands'**
+  String get callAllHandsLoweredByAdmin;
+
+  /// No description provided for @callMicMutedByAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'An admin turned off your microphone'**
+  String get callMicMutedByAdmin;
+
+  /// No description provided for @callCameraMutedByAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'An admin turned off your camera'**
+  String get callCameraMutedByAdmin;
+
+  /// No description provided for @callScreenMutedByAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'An admin stopped your screen sharing'**
+  String get callScreenMutedByAdmin;
+
+  /// No description provided for @callMediaLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'An admin has disabled this in the call'**
+  String get callMediaLocked;
+
+  /// No description provided for @callRecordingBy.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is recording the call'**
+  String callRecordingBy(String name);
+
+  /// No description provided for @callRecordingSelf.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re recording the call'**
+  String get callRecordingSelf;
+
+  /// No description provided for @callRecordingSomeone.
+  ///
+  /// In en, this message translates to:
+  /// **'The call is being recorded'**
+  String get callRecordingSomeone;
+
+  /// No description provided for @callRecordName.
+  ///
+  /// In en, this message translates to:
+  /// **'Call recording {date}'**
+  String callRecordName(String date);
+
+  /// No description provided for @callChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat'**
+  String get callChat;
+
+  /// No description provided for @callMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get callMore;
+
+  /// No description provided for @callSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Call settings'**
+  String get callSettingsTitle;
+
+  /// No description provided for @callSettingsMicrophone.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get callSettingsMicrophone;
+
+  /// No description provided for @callSettingsParticipantsCan.
+  ///
+  /// In en, this message translates to:
+  /// **'Participants can'**
+  String get callSettingsParticipantsCan;
+
+  /// No description provided for @callSettingsAllowMic.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on the microphone'**
+  String get callSettingsAllowMic;
+
+  /// No description provided for @callSettingsAllowCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on the camera'**
+  String get callSettingsAllowCamera;
+
+  /// No description provided for @callSettingsAllowScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Share their screen'**
+  String get callSettingsAllowScreen;
+
+  /// No description provided for @callSettingsAllowRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Record the call'**
+  String get callSettingsAllowRecord;
+
+  /// No description provided for @callMuteAllMics.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off all microphones'**
+  String get callMuteAllMics;
+
+  /// No description provided for @callMuteAllCameras.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off all cameras'**
+  String get callMuteAllCameras;
+
+  /// No description provided for @callParticipantMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get callParticipantMessage;
+
+  /// No description provided for @callParticipantStopScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop screen sharing'**
+  String get callParticipantStopScreen;
+
+  /// No description provided for @callParticipantMuteCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off camera'**
+  String get callParticipantMuteCamera;
+
+  /// No description provided for @callParticipantRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove {name} from the call?'**
+  String callParticipantRemoveConfirm(String name);
+
+  /// No description provided for @callParticipantsSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search participants'**
+  String get callParticipantsSearchHint;
+
+  /// No description provided for @callShareScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Share screen'**
+  String get callShareScreen;
+
+  /// No description provided for @callYouLoweredAllHands.
+  ///
+  /// In en, this message translates to:
+  /// **'You lowered everyone\'s hands'**
+  String get callYouLoweredAllHands;
+
+  /// No description provided for @callYouLoweredHand.
+  ///
+  /// In en, this message translates to:
+  /// **'You lowered the participant\'s hand'**
+  String get callYouLoweredHand;
 }
 
 class _AppLocalizationsDelegate

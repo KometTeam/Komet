@@ -8,6 +8,7 @@ import '../protocol/packet.dart';
 import '../utils/logger.dart';
 import '../utils/parse.dart';
 import 'call_bridge.dart';
+import 'call_link.dart';
 import 'call_session.dart';
 import 'conversation_params.dart';
 import 'ws2_signaling.dart';
@@ -67,6 +68,19 @@ class CallController {
 
   String? _activeJoinLink;
   String? get activeJoinLink => _active == null ? null : _activeJoinLink;
+
+  Future<String?> ensureJoinLink() async {
+    final session = _active;
+    if (session == null) return null;
+    final known = _activeJoinLink;
+    if (known != null) return known;
+    final conversationId = session.info.conversationId;
+    if (conversationId == null) return null;
+    final raw = await _calls!.createJoinLink(conversationId);
+    final token = raw == null ? null : CallLink.normalizeToken(raw);
+    if (token != null && identical(_active, session)) _activeJoinLink = token;
+    return token;
+  }
 
   IncomingCall? _pending;
   IncomingCall? get pendingIncoming => _pending;

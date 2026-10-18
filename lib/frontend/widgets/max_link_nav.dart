@@ -103,6 +103,28 @@ Future<bool> openChatAtMessage(
   return true;
 }
 
+Future<void> openDialogWith(
+  BuildContext context,
+  int userId, {
+  required String name,
+  String? avatarUrl,
+}) async {
+  final myId = await currentAccountId();
+  if (myId == 0) return;
+  final existing = await AppDatabase.findDialogChatByParticipant(myId, userId);
+  final chatId = existing ?? (myId ^ userId);
+  if (ChatScreen.revealOpenChat(chatId) || !context.mounted) return;
+  await pushSwipeable(
+    context,
+    (_) => ChatScreen(
+      chatId: chatId,
+      name: name,
+      imageUrl: avatarUrl ?? ContactCache.getAvatar(userId) ?? '',
+      chatType: 'DIALOG',
+    ),
+  );
+}
+
 Future<bool> openContactById(BuildContext context, int userId) async {
   final info = await ContactInfoFetch.get(userId);
   if (!context.mounted) return false;
