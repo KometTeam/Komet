@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:komet/core/contacts/phonebook_entry.dart';
 import 'package:komet/core/storage/app_instance.dart';
 import 'package:komet/core/storage/message_ranges.dart';
 import 'package:komet/core/utils/logger.dart';
@@ -295,7 +296,7 @@ class AppDatabase {
     final opened = await openDatabase(
       target,
       // #***! каждый if oldVersion < N это шаг миграции, идут по порядку
-      version: 29,
+      version: 30,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -460,6 +461,9 @@ class AppDatabase {
         if (oldVersion < 29) {
           await _addColumnIfMissing(db, 'messages', 'typing_ms', 'INTEGER');
         }
+        if (oldVersion < 30) {
+          await db.execute(_phonebookSyncSchema);
+        }
       },
     );
     await _dropLegacyExposedDb();
@@ -494,6 +498,7 @@ class AppDatabase {
     await db.execute(_webAppBiometrySchema);
     await db.execute(_e2eeSessionsSchema);
     await db.execute(_messageRangesSchema);
+    await db.execute(_phonebookSyncSchema);
     await _createIndexes(db);
     await _createChatParticipantsIndex(db);
   }
@@ -588,6 +593,17 @@ class AppDatabase {
       update_time  INTEGER NOT NULL DEFAULT 0,
       options      TEXT,
       account_status INTEGER NOT NULL DEFAULT 0
+    )
+  ''';
+
+  // #***! что из телефонной книги уже ушло в SYNC, с тем именем что ушло
+  static const _phonebookSyncSchema = '''
+    CREATE TABLE phonebook_sync (
+      account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      phone      TEXT    NOT NULL,
+      first_name TEXT    NOT NULL,
+      last_name  TEXT,
+      PRIMARY KEY (account_id, phone)
     )
   ''';
 
@@ -1375,6 +1391,60 @@ class AppDatabase {
       where: 'account_id = ? AND id IN ($placeholders)',
       whereArgs: [accountId, ...ids],
     );
+  }
+
+  static Future<Map<String, PhonebookEntry>> loadSyncedPhonebook(
+    int accountId,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'phonebook_sync',
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+    );
+    return {
+      for (final r in rows)
+        r['phone'] as String: PhonebookEntry(
+          phone: r['phone'] as String,
+          firstName: r['first_name'] as String,
+          lastName: r['last_name'] as String?,
+        ),
+    };
+  }
+
+  static Future<void> markPhonebookSynced(
+    int accountId,
+    List<PhonebookEntry> entries,
+  ) async {
+    final db = await _instance;
+    final batch = db.batch();
+    for (final entry in entries) {
+      batch.insert('phonebook_sync', {
+        'account_id': accountId,
+        'phone': entry.phone,
+        'first_name': entry.firstName,
+        'last_name': entry.lastName,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  // #***! по одному, IN на тысячи номеров упрётся в лимит переменных sqlite
+  static Future<void> forgetPhonebookPhones(
+    int accountId,
+    List<String> phones,
+  ) async {
+    if (phones.isEmpty) return;
+    final db = await _instance;
+    final batch = db.batch();
+    for (final phone in phones) {
+      batch.delete(
+        'phonebook_sync',
+        where: 'account_id = ? AND phone = ?',
+        whereArgs: [accountId, phone],
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   // #***! сообщения пачкой

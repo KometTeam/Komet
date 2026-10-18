@@ -22,7 +22,7 @@ abstract class Opcode {
   static const int auth = 18; // Проверка OTP-кода
   static const int login = 19; // Вход (загрузка чатов/контактов)
   static const int logout = 20; // Выход из аккаунта
-  static const int sync = 21; // Синхронизация данных
+  static const int sync = 21; // Синк телефонной книги (contactList)
   static const int config = 22; // Настройки приватности / конфиг
   static const int authConfirm = 23; // Завершение регистрации
 
