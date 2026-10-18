@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/core/calls/call_session.dart';
 import 'package:komet/core/calls/ws2_signaling.dart';
@@ -53,6 +54,7 @@ Widget _app(CallSession session, {CallMediaBuilder? mediaOf}) => MaterialApp(
         contactId: p.externalId,
       ),
       mediaOf: mediaOf ?? (p, avatar, {source, stage = false}) => null,
+      videoOf: (p) => null,
       muted: false,
       speakerOn: false,
       videoBusy: false,
@@ -241,6 +243,39 @@ void main() {
       session.debugDisplayLayout().layouts['u4:sSCREEN'],
       isNot('sz=1280x720:fit=cn'),
     );
+  });
+
+  testWidgets('«на весь экран» оставляет только трансляцию', (tester) async {
+    final session = _session();
+    await _join(session, _selfId);
+    await _join(session, 2, video: true);
+    await _join(session, 4, screen: true);
+
+    await _pumpAt(tester, const Size(1280, 800), session);
+    final screenTile = find.ancestor(
+      of: find.text('Участник 4'),
+      matching: find.byType(CallParticipantTile),
+    );
+    await tester.tap(
+      find.descendant(of: screenTile, matching: find.byType(CallExpandButton)),
+    );
+    await _settle(tester);
+    expect(find.byType(CallParticipantTile), findsWidgets);
+    expect(find.text('Тестовый звонок'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('На весь экран'));
+    await _settle(tester);
+    expect(find.byType(CallStage), findsOneWidget);
+    expect(find.text('Экран Участник 4'), findsOneWidget);
+    expect(find.byType(CallParticipantTile), findsNothing);
+    expect(find.text('Тестовый звонок'), findsNothing);
+    expect(find.byTooltip('Обычный вид'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await _settle(tester);
+    expect(find.byType(CallStage), findsOneWidget);
+    expect(find.byType(CallParticipantTile), findsWidgets);
+    expect(find.text('Тестовый звонок'), findsOneWidget);
   });
 
   testWidgets('сцена закрывается, когда трансляция заканчивается', (

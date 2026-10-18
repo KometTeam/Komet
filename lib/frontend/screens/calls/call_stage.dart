@@ -88,6 +88,9 @@ class CallStage extends StatefulWidget {
   final bool speaking;
   final String collapseTooltip;
   final VoidCallback onCollapse;
+  final bool fullscreen;
+  final String fullscreenTooltip;
+  final VoidCallback onToggleFullscreen;
 
   const CallStage({
     super.key,
@@ -96,7 +99,10 @@ class CallStage extends StatefulWidget {
     required this.labelIcon,
     required this.collapseTooltip,
     required this.onCollapse,
+    required this.fullscreenTooltip,
+    required this.onToggleFullscreen,
     this.speaking = false,
+    this.fullscreen = false,
   });
 
   @override
@@ -148,8 +154,12 @@ class _CallStageState extends State<CallStage>
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 720;
+    final radius = widget.fullscreen ? 0.0 : CallStage._radius;
+    final inset = widget.fullscreen
+        ? MediaQuery.paddingOf(context)
+        : EdgeInsets.zero;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(CallStage._radius),
+      borderRadius: BorderRadius.circular(radius),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -164,28 +174,43 @@ class _CallStageState extends State<CallStage>
             ),
           ),
           Positioned(
-            left: wide ? 14 : 10,
-            bottom: wide ? 14 : 10,
-            right: 64,
+            left: (wide ? 14 : 10) + inset.left,
+            bottom: (wide ? 14 : 10) + inset.bottom,
+            right: 64 + inset.right,
             child: Align(
               alignment: Alignment.centerLeft,
               child: _StageLabel(icon: widget.labelIcon, text: widget.label),
             ),
           ),
           Positioned(
-            top: wide ? 12 : 8,
-            right: wide ? 12 : 8,
-            child: CallExpandButton(
-              expanded: true,
-              tooltip: widget.collapseTooltip,
-              onTap: widget.onCollapse,
+            top: (wide ? 12 : 8) + inset.top,
+            right: (wide ? 12 : 8) + inset.right,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CallTileButton(
+                  icon: widget.fullscreen
+                      ? Symbols.fullscreen_exit
+                      : Symbols.fullscreen,
+                  tooltip: widget.fullscreenTooltip,
+                  onTap: widget.onToggleFullscreen,
+                ),
+                if (!widget.fullscreen) ...[
+                  const SizedBox(width: 8),
+                  CallExpandButton(
+                    expanded: true,
+                    tooltip: widget.collapseTooltip,
+                    onTap: widget.onCollapse,
+                  ),
+                ],
+              ],
             ),
           ),
           IgnorePointer(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(CallStage._radius),
+                borderRadius: BorderRadius.circular(radius),
                 border: Border.all(
                   color: widget.speaking ? kSuccessGreen : Colors.transparent,
                   width: 2.5,

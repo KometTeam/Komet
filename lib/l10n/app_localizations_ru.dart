@@ -1078,6 +1078,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get callExitFocus => 'Обычный вид';
 
   @override
+  String get callEnterFullscreen => 'На весь экран';
+
+  @override
+  String get callExitFullscreen => 'Выйти из полноэкранного режима';
+
+  @override
   String callScreenOf(String name) {
     return 'Экран $name';
   }

@@ -392,6 +392,8 @@
   "callTooltipMinimize": "Minimize",
   "callTooltipExpand": "Expand",
   "callExitFocus": "Normal view",
+  "callEnterFullscreen": "Full screen",
+  "callExitFullscreen": "Exit full screen",
   "callScreenOf": "{name}'s screen",
   "@callScreenOf": {"placeholders": {"name": {"type": "String"}}},
   "callInfoTooltip": "Technical info",

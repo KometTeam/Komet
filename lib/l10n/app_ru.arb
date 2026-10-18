@@ -350,6 +350,8 @@
   "callTooltipMinimize": "Свернуть",
   "callTooltipExpand": "Развернуть",
   "callExitFocus": "Обычный вид",
+  "callEnterFullscreen": "На весь экран",
+  "callExitFullscreen": "Выйти из полноэкранного режима",
   "callScreenOf": "Экран {name}",
   "callInfoTooltip": "Техническая информация",
   "callInfoHide": "Скрыть информацию",

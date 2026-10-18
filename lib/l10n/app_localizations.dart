@@ -2108,6 +2108,18 @@ abstract class AppLocalizations {
   /// **'Normal view'**
   String get callExitFocus;
 
+  /// No description provided for @callEnterFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Full screen'**
+  String get callEnterFullscreen;
+
+  /// No description provided for @callExitFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit full screen'**
+  String get callExitFullscreen;
+
   /// No description provided for @callScreenOf.
   ///
   /// In en, this message translates to:

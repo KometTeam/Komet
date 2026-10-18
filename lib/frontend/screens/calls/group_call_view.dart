@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' show RTCVideoValue;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/calls/call_admin.dart';
@@ -22,6 +24,7 @@ import '../../widgets/max_link_nav.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../chats/group_invite_sheets.dart';
 import 'call_controls.dart';
+import 'call_fullscreen.dart';
 import 'call_glyphs.dart';
 import 'call_grid.dart';
 import 'call_participant_info.dart';
@@ -39,6 +42,9 @@ typedef CallMediaBuilder =
       bool stage,
     });
 
+typedef CallVideoLookup =
+    ValueListenable<RTCVideoValue>? Function(CallParticipant participant);
+
 class GroupCallView extends StatefulWidget {
   static const double wideBreakpoint = 720;
 
@@ -46,6 +52,7 @@ class GroupCallView extends StatefulWidget {
   final String title;
   final CallParticipantResolver resolve;
   final CallMediaBuilder mediaOf;
+  final CallVideoLookup videoOf;
   final bool muted;
   final bool speakerOn;
   final bool videoBusy;
@@ -65,6 +72,7 @@ class GroupCallView extends StatefulWidget {
     required this.title,
     required this.resolve,
     required this.mediaOf,
+    required this.videoOf,
     required this.muted,
     required this.speakerOn,
     required this.videoBusy,
@@ -552,11 +560,26 @@ class _GroupCallViewState extends State<GroupCallView> {
 
   @override
   Widget build(BuildContext context) {
+    final focus = _focusedOrNull();
+    final peer = focus == null ? null : _participant(focus.$1);
+    final remote = peer != null && !peer.isSelf ? peer : null;
+    return CallFullscreenScope(
+      stage: focus,
+      screen: remote != null && focus?.$2 == CallVideoSource.screen
+          ? _session.remoteScreenOf(remote.id)
+          : null,
+      video: remote == null ? null : widget.videoOf(remote),
+      builder: (context, fullscreen, toggle) => fullscreen && focus != null
+          ? _stageView(focus, toggle, fullscreen: true)
+          : _layout(focus, toggle),
+    );
+  }
+
+  Widget _layout(CallVideoKey? focus, VoidCallback toggleFullscreen) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= GroupCallView.wideBreakpoint;
         final record = _session.record;
-        final focus = _focusedOrNull();
         return SafeArea(
           child: Column(
             children: [
@@ -600,7 +623,7 @@ class _GroupCallViewState extends State<GroupCallView> {
                         )
                       : KeyedSubtree(
                           key: const ValueKey('stage'),
-                          child: _stage(wide, focus),
+                          child: _stage(wide, focus, toggleFullscreen),
                         ),
                 ),
               ),
@@ -836,7 +859,11 @@ class _GroupCallViewState extends State<GroupCallView> {
     return focus != null && _isLive(focus) ? focus : null;
   }
 
-  Widget _stage(bool wide, CallVideoKey focus) {
+  Widget _stageView(
+    CallVideoKey focus,
+    VoidCallback toggleFullscreen, {
+    bool fullscreen = false,
+  }) {
     final l10n = AppLocalizations.of(context)!;
     final p = _participant(focus.$1)!;
     final view = widget.resolve(p);
@@ -850,6 +877,24 @@ class _GroupCallViewState extends State<GroupCallView> {
         size: 144,
       ),
     );
+    return CallStage(
+      key: ValueKey(focus),
+      media:
+          widget.mediaOf(p, avatar, source: focus.$2, stage: true) ?? avatar,
+      label: screen ? l10n.callScreenOf(view.name) : view.name,
+      labelIcon: screen ? Symbols.screen_share : Symbols.videocam,
+      speaking: !screen && !muted && _session.isSpeaking(p.id),
+      collapseTooltip: l10n.callExitFocus,
+      onCollapse: () => _setFocus(null),
+      fullscreenTooltip: fullscreen
+          ? l10n.callExitFullscreen
+          : l10n.callEnterFullscreen,
+      onToggleFullscreen: toggleFullscreen,
+      fullscreen: fullscreen,
+    );
+  }
+
+  Widget _stage(bool wide, CallVideoKey focus, VoidCallback toggleFullscreen) {
     final handPositions = _session.handPositions;
     final strip = _stripIds(focus);
     final gap = wide ? 10.0 : 8.0;
@@ -857,19 +902,7 @@ class _GroupCallViewState extends State<GroupCallView> {
       padding: EdgeInsets.fromLTRB(8, 12, 8, wide ? 12 : 8),
       child: Column(
         children: [
-          Expanded(
-            child: CallStage(
-              key: ValueKey(focus),
-              media:
-                  widget.mediaOf(p, avatar, source: focus.$2, stage: true) ??
-                  avatar,
-              label: screen ? l10n.callScreenOf(view.name) : view.name,
-              labelIcon: screen ? Symbols.screen_share : Symbols.videocam,
-              speaking: !screen && !muted && _session.isSpeaking(p.id),
-              collapseTooltip: l10n.callExitFocus,
-              onCollapse: () => _setFocus(null),
-            ),
-          ),
+          Expanded(child: _stageView(focus, toggleFullscreen)),
           if (strip.isNotEmpty) ...[
             SizedBox(height: gap),
             CallStrip<int>(
