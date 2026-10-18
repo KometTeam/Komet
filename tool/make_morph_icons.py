@@ -667,6 +667,11 @@ FLASH_ON = 0xE3E7
 FLASH_OFF = 0xE3E6
 PERSON = 0xF0D3
 PERSON_OFF = 0xE510
+SCREEN_SHARE = 0xE0E2
+STOP_SCREEN_SHARE = 0xE0E3
+RECORD = 0xE837
+STOP_CIRCLE = 0xEF71
+VOLUME_DOWN = 0xE04D
 
 POINTS = 56
 FPS = 60
@@ -980,6 +985,44 @@ SPECS = [
         rotation=[(0, 0), (10, -11), (DUR, 0)],
         scale=[(0, 100), (10, 90), (DUR, 100)],
         offset_x=[(0, 0), (10, 24), (19, -8), (DUR, 0)],
+    ),
+    dict(
+        name='ic_screen_share_to_stop',
+        from_cp=SCREEN_SHARE, to_cp=STOP_SCREEN_SHARE,
+        fill=1.0,
+        scale=[(0, 100), (10, 88), (DUR, 100)],
+    ),
+    dict(
+        name='ic_stop_to_screen_share',
+        from_cp=STOP_SCREEN_SHARE, to_cp=SCREEN_SHARE,
+        fill=1.0,
+        scale=[(0, 100), (10, 88), (DUR, 100)],
+    ),
+    dict(
+        name='ic_record_to_stop',
+        from_cp=RECORD, to_cp=STOP_CIRCLE,
+        fill=1.0,
+        rotation=[(0, 0), (10, 90), (DUR, 90)],
+        scale=[(0, 100), (10, 86), (DUR, 100)],
+    ),
+    dict(
+        name='ic_stop_to_record',
+        from_cp=STOP_CIRCLE, to_cp=RECORD,
+        fill=1.0,
+        rotation=[(0, 0), (10, -90), (DUR, -90)],
+        scale=[(0, 100), (10, 86), (DUR, 100)],
+    ),
+    dict(
+        name='ic_volume_down_to_up',
+        from_cp=VOLUME_DOWN, to_cp=VOLUME_UP,
+        fill=1.0,
+        scale=[(0, 100), (10, 112), (DUR, 100)],
+    ),
+    dict(
+        name='ic_volume_up_to_down',
+        from_cp=VOLUME_UP, to_cp=VOLUME_DOWN,
+        fill=1.0,
+        scale=[(0, 100), (10, 90), (DUR, 100)],
     ),
 ]
 

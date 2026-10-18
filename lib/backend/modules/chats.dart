@@ -141,9 +141,12 @@ class CachedChat {
 
   late final ChatCall? activeCall = ChatCall.decode(activeCallData);
 
-  // #***! форматирование последнего сообщения строкой джейсона
-  List<FormatRange> get lastMsgFormatRanges {
-    final raw = lastMsgElements;
+  // #***! форматирование последнего сообщения строкой джейсона, разбираем один раз
+  late final List<FormatRange> lastMsgFormatRanges = _decodeRanges(
+    lastMsgElements,
+  );
+
+  static List<FormatRange> _decodeRanges(String? raw) {
     if (raw == null || raw.isEmpty) return const [];
     try {
       return parseFormatElements(jsonDecode(raw));
@@ -819,6 +822,13 @@ class ChatsModule {
 
   bool get chatsLoaded => _readyAccounts.isNotEmpty;
 
+  int? cachedUnreadCount(int accountId, int chatId) {
+    if (!_readyAccounts.contains(accountId)) return null;
+    final chat = _chatsById[chatId];
+    if (chat == null || chat.accountId != accountId) return null;
+    return chat.unreadCount;
+  }
+
   ({CachedChat chat, bool inList})? cachedChat(int accountId, int chatId) {
     if (!_readyAccounts.contains(accountId)) return null;
     final chat = _chatsById[chatId];
@@ -920,6 +930,7 @@ class ChatsModule {
     ChatInfoFetch.invalidate(chatId);
     unawaited(ChatInfoFetch.get(chatId));
   }
+
   Future<void> _rememberGhostRead(
     int accountId,
     int chatId,
@@ -935,6 +946,7 @@ class ChatsModule {
       ownMark: cached.participants[accountId] ?? 0,
     );
   }
+
   Future<void> restoreGhostReads() async {
     final entries = GhostReadStore.instance.snapshot();
     for (final entry in entries) {

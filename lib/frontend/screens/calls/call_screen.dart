@@ -14,10 +14,11 @@ import '../../../core/calls/active_call.dart';
 import '../../../core/calls/call_controller.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
-import '../../../core/calls/remote_screens.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/launch_flags.dart';
+import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/logger.dart';
 import '../../../core/utils/screen_wake.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/official_name.dart';
@@ -26,8 +27,12 @@ import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import 'call_controls.dart';
+import 'call_glyphs.dart';
 import 'call_mic_sheet.dart';
+import 'call_participant_tile.dart';
 import 'call_participants_sheet.dart';
+import 'call_stage.dart';
+import 'group_call_view.dart';
 import 'komet_hub.dart';
 import 'remote_screen_view.dart';
 import '../../../core/config/app_fonts.dart';
@@ -64,6 +69,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   StreamSubscription<CallChatMessage>? _chatSub;
   StreamSubscription<MediaStream>? _remoteStreamSub;
   bool _chatOpen = false;
+  bool _stageOpen = false;
   CallSessionState _state = CallSessionState.connecting;
   bool _incomingPending = false;
 
@@ -88,6 +94,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   late String? _avatarUrl = widget.avatarUrl;
 
   final Map<int, _PeerInfo> _peerInfo = {};
+  ProfileData? _selfProfile;
 
   bool get _isGroup => widget.isGroup || (_session?.participantCount ?? 0) > 2;
 
@@ -148,6 +155,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     );
     _initRenderer();
 
+    unawaited(_loadSelfProfile());
     _incomingPending = widget.session == null && widget.incoming != null;
     if (widget.session != null) _bind(widget.session!);
 
@@ -164,6 +172,15 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _incomingPending) _accept();
       });
+    }
+  }
+
+  Future<void> _loadSelfProfile() async {
+    try {
+      final profile = await AppDatabase.loadActiveProfile();
+      if (mounted && profile != null) setState(() => _selfProfile = profile);
+    } catch (e) {
+      logger.w('[call] own profile lookup failed: $e');
     }
   }
 
@@ -223,6 +240,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     if (_session?.peerVideo == true) {
       _videoController.forward();
     } else {
+      _stageOpen = false;
       _videoController.reverse();
     }
   }
@@ -464,32 +482,70 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  void _showParticipants() {
-    final session = _session;
-    if (session == null) return;
+  CallParticipantView _participantView(CallParticipant p) {
     final l10n = AppLocalizations.of(context)!;
-    showCallParticipantsSheet(
-      context,
-      session: session,
-      scheme: _darkScheme(context),
-      resolve: (p) {
-        if (p.isSelf) {
-          return CallParticipantView(
-            name: l10n.callParticipantYou,
-            avatarUrl: _avatarUrl,
-          );
-        }
-        final ext = p.externalId;
-        final info = ext != null ? _peerInfo[ext] : null;
-        return CallParticipantView(
-          name: info?.name?.isNotEmpty == true
-              ? info!.name!
-              : l10n.callParticipantFallback,
-          avatarUrl: info?.avatar,
-          contactId: ext,
-        );
-      },
+    if (p.isSelf) {
+      final profile = _selfProfile;
+      return CallParticipantView(
+        name: l10n.callParticipantYou,
+        avatarUrl: profile?.baseUrl,
+        contactId: profile?.id,
+      );
+    }
+    final ext = p.externalId;
+    final info = ext != null ? _peerInfo[ext] : null;
+    return CallParticipantView(
+      name: info?.name?.isNotEmpty == true
+          ? info!.name!
+          : l10n.callParticipantFallback,
+      avatarUrl: info?.avatar,
+      contactId: ext,
     );
+  }
+
+  Widget? _tileMedia(
+    CallParticipant p,
+    Widget avatar, {
+    CallVideoSource? source,
+    bool stage = false,
+  }) {
+    final session = _session;
+    if (session == null) return null;
+    final fit = stage
+        ? RTCVideoViewObjectFit.RTCVideoViewObjectFitContain
+        : RTCVideoViewObjectFit.RTCVideoViewObjectFitCover;
+    if (p.isSelf) {
+      final local = switch (source) {
+        CallVideoSource.camera => session.localVideo,
+        CallVideoSource.screen => session.localScreen,
+        null => session.localVideo || session.localScreen,
+      };
+      if (!local || !_localRendererReady || _localRenderer.srcObject == null) {
+        return null;
+      }
+      return CallVideoView(
+        renderer: _localRenderer,
+        mirror: !session.localScreen,
+        objectFit: session.localScreen
+            ? RTCVideoViewObjectFit.RTCVideoViewObjectFitContain
+            : fit,
+        placeholder: avatar,
+      );
+    }
+    final renderer = _tileRenderer(p);
+    Widget? video(bool live) => live && renderer != null
+        ? CallVideoView(renderer: renderer, objectFit: fit, placeholder: avatar)
+        : null;
+    Widget screen(Widget fallback) => RemoteScreenView(
+      screen: session.remoteScreenOf(p.id),
+      fallback: fallback,
+    );
+    return switch (source) {
+      CallVideoSource.camera => video(p.videoEnabled),
+      CallVideoSource.screen => screen(video(p.screenSharing) ?? avatar),
+      null when p.screenSharing => screen(video(true) ?? avatar),
+      null => video(p.videoEnabled),
+    };
   }
 
   void _showMicrophones() {
@@ -526,19 +582,31 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final cs = _darkScheme(context);
     final group = _isGroup && !_incomingPending;
+    final stage = !group && _stageOpen && _session?.peerVideo == true;
 
     final Widget body = group
         ? _buildGroupBody(cs)
-        : AnimatedBuilder(
-            animation: _videoController,
-            builder: (context, _) => _buildBody(
-              cs,
-              avatar: _buildAvatar(cs),
-              name: _buildName(cs),
-              status: _buildStatus(cs),
-              peerBar: _peerStateBar(cs),
-              controls: _buildControls(cs),
-            ),
+        : AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: stage
+                ? KeyedSubtree(
+                    key: const ValueKey('stage'),
+                    child: _buildStage(cs),
+                  )
+                : AnimatedBuilder(
+                    key: const ValueKey('call'),
+                    animation: _videoController,
+                    builder: (context, _) => _buildBody(
+                      cs,
+                      avatar: _buildAvatar(cs),
+                      name: _buildName(cs),
+                      status: _buildStatus(cs),
+                      peerBar: _peerStateBar(cs),
+                      controls: _buildControls(cs),
+                    ),
+                  ),
           );
 
     return Theme(
@@ -554,7 +622,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           body: Stack(
             children: [
               body,
-              if (_session?.localVideo == true || _session?.localScreen == true)
+              if (!group &&
+                  !stage &&
+                  (_session?.localVideo == true ||
+                      _session?.localScreen == true))
                 _localPreview(cs),
             ],
           ),
@@ -600,311 +671,114 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   Widget _buildGroupBody(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
-    final participants = _session?.participants ?? const <CallParticipant>[];
+    final session = _session;
+    if (session == null) {
+      return SafeArea(
+        child: Center(child: _statusWithDots(cs, l10n.callStatusConnecting)),
+      );
+    }
+    return GroupCallView(
+      session: session,
+      title: _name.isEmpty ? l10n.callGroupTitle : _name,
+      resolve: _participantView,
+      mediaOf: _tileMedia,
+      muted: _isMuted,
+      speakerOn: _isSpeaker,
+      videoBusy: _videoBusy,
+      onToggleMute: _toggleMute,
+      onToggleSpeaker: _toggleSpeaker,
+      onToggleVideo: _toggleVideo,
+      onSwitchCamera: _switchCamera,
+      onToggleScreen: _toggleScreen,
+      onHangup: _hangup,
+      onMinimize: () => Navigator.of(context).maybePop(),
+      onShowMicrophones: _showMicrophones,
+      onShowInfo: _showInfoSheet,
+    );
+  }
+
+  Widget _buildStage(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
+    final session = _session!;
+    final screen = session.peerScreen;
+    final wide =
+        MediaQuery.sizeOf(context).width >= GroupCallView.wideBreakpoint;
+    final avatar = Center(child: _avatarCircle(144, cs));
+    final camera = _remoteRenderer.srcObject == null
+        ? avatar
+        : CallVideoView(
+            renderer: _remoteRenderer,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+            placeholder: avatar,
+          );
+    final strip = <String>[
+      if (screen && session.peerCamera) 'peer',
+      if (session.localVideo || session.localScreen) 'self',
+    ];
     return SafeArea(
       child: Column(
         children: [
-          _buildTopBar(cs, 0),
-          const SizedBox(height: 4),
-          _groupHeader(cs, participants.length),
-          const SizedBox(height: 8),
+          _buildTopBar(cs, 1, stage: true),
           Expanded(
-            child: participants.isEmpty
-                ? Center(child: _statusWithDots(cs, l10n.callStatusConnecting))
-                : _participantGrid(cs, participants),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+              child: CallStage(
+                key: ValueKey(screen),
+                media: _peerScreenOr(camera),
+                label: screen ? l10n.callScreenOf(_displayName) : _displayName,
+                labelIcon: screen ? Symbols.screen_share : Symbols.videocam,
+                collapseTooltip: l10n.callExitFocus,
+                onCollapse: () => setState(() => _stageOpen = false),
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          _activeControls(cs),
+          if (strip.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: CallStrip<String>(
+                ids: strip,
+                height: wide ? 120 : 92,
+                tileBuilder: (context, id, size) => id == 'peer'
+                    ? _peerStripTile(session)
+                    : _selfStripTile(session),
+              ),
+            ),
+          const SizedBox(height: 16),
+          _buildControls(cs),
           const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  Widget _groupHeader(ColorScheme cs, int count) {
-    final l10n = AppLocalizations.of(context)!;
-    final String subtitle;
-    if (count == 0) {
-      subtitle = l10n.callGroupConnecting;
-    } else if (count <= 1) {
-      subtitle = l10n.callGroupWaitingParticipants;
-    } else {
-      subtitle = l10n.chatCallParticipants(count);
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        children: [
-          OfficialName(
-            contactId: _session?.peerUserId ?? 0,
-            text: _displayName,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              fontFamily: displayFontOf(context),
-            ),
-          ),
-          const SizedBox(height: 2),
-          InkWell(
-            onTap: count > 0 ? _showParticipants : null,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    subtitle,
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-                  ),
-                  if (count > 0) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      Symbols.chevron_right,
-                      size: 16,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _peerStripTile(CallSession session) => CallParticipantTile(
+    name: _displayName,
+    avatarUrl: _avatarUrl,
+    muted: session.peerMuted,
+    media: (avatar) => CallVideoView(
+      renderer: _remoteRenderer,
+      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+      placeholder: avatar,
+    ),
+  );
 
-  Widget _participantGrid(ColorScheme cs, List<CallParticipant> ps) {
-    final cols = ps.length <= 1
-        ? 1
-        : ps.length <= 4
-        ? 2
-        : 3;
-    return GridView.count(
-      crossAxisCount: cols,
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-      mainAxisSpacing: 14,
-      crossAxisSpacing: 14,
-      childAspectRatio: 0.84,
-      children: [for (final p in ps) _participantTile(cs, p)],
-    );
-  }
-
-  Widget _participantTile(ColorScheme cs, CallParticipant p) {
-    final screen = !p.isSelf && p.screenSharing
-        ? _session?.remoteScreenOf(p.id)
-        : null;
-    if (screen == null) return _participantTileWith(cs, p, null);
-    return ValueListenableBuilder<RemoteScreen?>(
-      valueListenable: screen,
-      builder: (context, value, _) => _participantTileWith(cs, p, value),
-    );
-  }
-
-  Widget _participantTileWith(
-    ColorScheme cs,
-    CallParticipant p,
-    RemoteScreen? remoteScreen,
-  ) {
-    final l10n = AppLocalizations.of(context)!;
-    final ext = p.externalId;
-    final info = ext != null ? _peerInfo[ext] : null;
-    final name = p.isSelf
-        ? l10n.callParticipantYou
-        : (info?.name?.isNotEmpty == true
-              ? info!.name!
-              : l10n.callParticipantFallback);
-    final url = p.isSelf ? _avatarUrl : info?.avatar;
-    final muted = p.isSelf ? _isMuted : !p.audioEnabled;
-    final speaking = !muted && _session?.isSpeaking(p.id) == true;
-    final renderer = _tileRenderer(p);
-    final Widget? media = remoteScreen != null
-        ? RemoteScreenContent(screen: remoteScreen)
-        : (!p.isSelf && (p.videoEnabled || p.screenSharing) && renderer != null)
-        ? CallVideoView(
-            renderer: renderer,
-            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-            placeholder: ColoredBox(color: cs.surfaceContainerHighest),
-          )
-        : null;
-
-    return GlossyPill(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(20),
-      depth: 6,
-      borderSide: speaking
-          ? const BorderSide(color: kSuccessGreen, width: 2.5)
+  Widget _selfStripTile(CallSession session) {
+    final profile = _selfProfile;
+    return CallParticipantTile(
+      name: AppLocalizations.of(context)!.callParticipantYou,
+      avatarUrl: profile?.baseUrl,
+      userId: profile?.id,
+      muted: _isMuted,
+      media: (avatar) => _localRendererReady && _localRenderer.srcObject != null
+          ? CallVideoView(
+              renderer: _localRenderer,
+              mirror: !session.localScreen,
+              objectFit: session.localScreen
+                  ? RTCVideoViewObjectFit.RTCVideoViewObjectFitContain
+                  : RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+              placeholder: avatar,
+            )
           : null,
-      padding: EdgeInsets.all(media != null ? 0 : 12),
-      child: media != null
-          ? _videoTile(cs, media, name, muted, p.handRaised, p.screenSharing)
-          : _avatarTile(cs, name, url, muted, p.handRaised, p.screenSharing),
-    );
-  }
-
-  Widget _avatarTile(
-    ColorScheme cs,
-    String name,
-    String? url,
-    bool muted,
-    bool hand,
-    bool screen,
-  ) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final size = constraints.biggest.shortestSide.clamp(48.0, 96.0);
-              return Center(
-                child: SizedBox(
-                  width: size,
-                  height: size,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      _circleAvatar(size, cs, name: name, url: url),
-                      if (hand)
-                        Positioned(
-                          top: -2,
-                          right: -2,
-                          child: _tileBadge(
-                            cs,
-                            Symbols.front_hand,
-                            cs.tertiaryContainer,
-                            cs.onTertiaryContainer,
-                          ),
-                        ),
-                      if (screen)
-                        Positioned(
-                          top: -2,
-                          left: -2,
-                          child: _tileBadge(
-                            cs,
-                            Symbols.screen_share,
-                            cs.primaryContainer,
-                            cs.onPrimaryContainer,
-                          ),
-                        ),
-                      if (muted)
-                        Positioned(
-                          bottom: -2,
-                          right: -2,
-                          child: _tileBadge(
-                            cs,
-                            Symbols.mic_off,
-                            cs.surfaceContainerHighest,
-                            cs.onSurfaceVariant,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: cs.onSurface,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _videoTile(
-    ColorScheme cs,
-    Widget media,
-    String name,
-    bool muted,
-    bool hand,
-    bool screen,
-  ) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          media,
-          Positioned(
-            left: 8,
-            right: 8,
-            bottom: 8,
-            child: Row(
-              children: [
-                if (muted)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Icon(
-                      Symbols.mic_off,
-                      size: 16,
-                      color: Colors.white,
-                      fill: 1,
-                    ),
-                  ),
-                Flexible(
-                  child: Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black)],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (hand)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: _tileBadge(
-                cs,
-                Symbols.front_hand,
-                cs.tertiaryContainer,
-                cs.onTertiaryContainer,
-              ),
-            ),
-          if (screen)
-            Positioned(
-              top: 8,
-              left: 8,
-              child: _tileBadge(
-                cs,
-                Symbols.screen_share,
-                cs.primaryContainer,
-                cs.onPrimaryContainer,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _tileBadge(ColorScheme cs, IconData icon, Color bg, Color fg) {
-    return Container(
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: bg,
-        shape: BoxShape.circle,
-        border: Border.all(color: cs.surface, width: 2),
-      ),
-      child: Icon(icon, size: 14, color: fg, fill: 1),
     );
   }
 
@@ -1028,8 +902,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildTopBar(ColorScheme cs, double t) {
+  Widget _buildTopBar(ColorScheme cs, double t, {bool stage = false}) {
     final l10n = AppLocalizations.of(context)!;
+    final expandable = !stage && t > 0.5 && _session?.peerVideo == true;
     final showTimer =
         t > 0.001 &&
         _session != null &&
@@ -1058,6 +933,17 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (expandable)
+                    IconButton(
+                      onPressed: () => setState(() => _stageOpen = true),
+                      tooltip: l10n.callTooltipExpand,
+                      icon: Icon(
+                        Symbols.open_in_full,
+                        color: cs.onSurface,
+                        weight: 500,
+                        size: 24,
+                      ),
+                    ),
                   if (_session?.peerIsKomet == true)
                     IconButton(
                       onPressed: _openKometHub,
@@ -1334,7 +1220,8 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     return CallControlBar(
       children: [
         CallButton(
-          icon: _isSpeaker ? Symbols.volume_up : Symbols.volume_down,
+          icon: Symbols.volume_up,
+          glyph: CallSpeakerGlyph(loud: _isSpeaker),
           label: l10n.callSpeaker,
           background: _isSpeaker ? cs.primary : cs.surfaceContainerHighest,
           foreground: _isSpeaker ? cs.onPrimary : cs.onSurface,
@@ -1361,6 +1248,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           ),
         CallButton(
           icon: Symbols.screen_share,
+          glyph: CallScreenGlyph(sharing: screen),
           label: l10n.callScreenLabel,
           background: screen ? cs.primary : cs.surfaceContainerHighest,
           foreground: screen ? cs.onPrimary : cs.onSurface,

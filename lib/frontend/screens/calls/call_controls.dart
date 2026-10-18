@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/glossy_pill.dart';
+import '../../widgets/lottie_slash_icon.dart';
 import '../../widgets/small_spinner.dart';
 
 class CallControlBar extends StatelessWidget {
@@ -25,13 +26,94 @@ class CallControlBar extends StatelessWidget {
   }
 }
 
+class CallPressScale extends StatefulWidget {
+  final Widget child;
+  final bool enabled;
+  final double pressedScale;
+
+  const CallPressScale({
+    super.key,
+    required this.child,
+    this.enabled = true,
+    this.pressedScale = 0.88,
+  });
+
+  @override
+  State<CallPressScale> createState() => _CallPressScaleState();
+}
+
+class _CallPressScaleState extends State<CallPressScale> {
+  bool _pressed = false;
+
+  void _press(bool pressed) {
+    if (_pressed == pressed) return;
+    setState(() => _pressed = pressed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => _press(widget.enabled),
+      onPointerUp: (_) => _press(false),
+      onPointerCancel: (_) => _press(false),
+      child: AnimatedScale(
+        scale: _pressed ? widget.pressedScale : 1,
+        duration: _pressed
+            ? const Duration(milliseconds: 90)
+            : const Duration(milliseconds: 280),
+        curve: _pressed ? Curves.easeOut : Curves.easeOutBack,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class CallColorTransition extends StatelessWidget {
+  static const Duration duration = Duration(milliseconds: 220);
+
+  final Color background;
+  final Color foreground;
+  final Widget Function(
+    BuildContext context,
+    Color background,
+    Color foreground,
+  )
+  builder;
+
+  const CallColorTransition({
+    super.key,
+    required this.background,
+    required this.foreground,
+    required this.builder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: background),
+      duration: duration,
+      curve: Curves.easeOut,
+      builder: (context, bg, _) => TweenAnimationBuilder<Color?>(
+        tween: ColorTween(end: foreground),
+        duration: duration,
+        curve: Curves.easeOut,
+        builder: (context, fg, _) =>
+            builder(context, bg ?? background, fg ?? foreground),
+      ),
+    );
+  }
+}
+
 class CallButton extends StatelessWidget {
   static const double maxDiameter = 62;
   static const double _minGap = 6;
 
   final IconData icon;
   final IconData? slashedIcon;
+  final String? slashAsset;
+  final Widget? glyph;
   final bool slashed;
+  final bool badge;
   final String label;
   final Color background;
   final Color foreground;
@@ -49,32 +131,51 @@ class CallButton extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.slashedIcon,
+    this.slashAsset,
+    this.glyph,
     this.slashed = false,
+    this.badge = false,
     this.busy = false,
     this.micLevels,
   });
 
-  Widget _buildIcon() {
+  Widget _buildIcon(Color color) {
+    final custom = glyph;
+    if (custom != null) {
+      return IconTheme.merge(
+        data: IconThemeData(color: color, size: 26),
+        child: custom,
+      );
+    }
+    final asset = slashAsset;
+    if (asset != null) {
+      return LottieSlashIcon(
+        asset: asset,
+        slashed: slashed,
+        color: color,
+        size: 26,
+      );
+    }
     final crossed = slashedIcon;
     if (crossed == null) {
-      return Icon(icon, color: foreground, size: 26, fill: 1);
+      return Icon(icon, color: color, size: 26, fill: 1);
     }
     return AnimatedSlashIcon(
       icon: icon,
       slashedIcon: crossed,
       slashed: slashed,
-      color: foreground,
+      color: color,
       size: 26,
       fill: 1,
     );
   }
 
-  Widget _content(ColorScheme cs) {
-    final glyph = Center(
-      child: busy ? SmallSpinner(size: 22, color: foreground) : _buildIcon(),
+  Widget _content(ColorScheme cs, Color color) {
+    final content = Center(
+      child: busy ? SmallSpinner(size: 22, color: color) : _buildIcon(color),
     );
     final levels = micLevels;
-    if (levels == null) return glyph;
+    if (levels == null) return content;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -83,7 +184,7 @@ class CallButton extends StatelessWidget {
           active: !slashed && !busy,
           color: cs.primary,
         ),
-        glyph,
+        content,
       ],
     );
   }
@@ -100,26 +201,64 @@ class CallButton extends StatelessWidget {
             SizedBox(
               width: diameter,
               height: diameter,
-              child: GlossyPill(
-                color: background,
-                borderRadius: BorderRadius.circular(diameter / 2),
-                onTap: busy ? null : onTap,
-                onLongPress: busy ? null : onLongPress,
-                depth: 9,
-                child: _content(cs),
+              child: CallPressScale(
+                enabled: !busy,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: CallColorTransition(
+                        background: background,
+                        foreground: foreground,
+                        builder: (context, bg, fg) => GlossyPill(
+                          color: bg,
+                          borderRadius: BorderRadius.circular(diameter / 2),
+                          onTap: busy ? null : onTap,
+                          onLongPress: busy ? null : onLongPress,
+                          depth: 9,
+                          child: _content(cs, fg),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 2,
+                      right: 2,
+                      child: IgnorePointer(
+                        child: AnimatedScale(
+                          scale: badge ? 1 : 0,
+                          duration: const Duration(milliseconds: 240),
+                          curve: badge ? Curves.easeOutBack : Curves.easeIn,
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: cs.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: cs.surface, width: 2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
             FittedBox(
               fit: BoxFit.scaleDown,
-              child: Text(
-                label,
-                maxLines: 1,
-                softWrap: false,
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: Text(
+                  label,
+                  key: ValueKey((CallButton, label)),
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),

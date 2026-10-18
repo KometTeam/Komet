@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:kolibri/kolibri.dart' as kb;
 
+import '../utils/logger.dart';
 import 'conversation_params.dart';
 
 // #***! параметры подключения к сигналке
@@ -133,6 +134,7 @@ class Ws2Signaling {
     _call = call;
     _notifSub = call.notifications().listen(
       (json) {
+        logger.t('[call] ws2 <= $json');
         Object? decoded;
         try {
           decoded = jsonDecode(json);
@@ -164,13 +166,17 @@ class Ws2Signaling {
     if (call == null) {
       return Future.error(StateError('ws2 не подключён'));
     }
+    final extraJson = jsonEncode(extra);
+    logger.t('[call] ws2 => $command $extraJson');
     try {
       final response = await call
-          .sendCommand(command: command, extraJson: jsonEncode(extra))
+          .sendCommand(command: command, extraJson: extraJson)
           .timeout(timeout);
+      logger.t('[call] ws2 <= $command $response');
       final decoded = jsonDecode(response);
       return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
     } catch (e) {
+      logger.d('[call] ws2 <= $command failed: $e');
       throw Ws2CommandException(command, e);
     }
   }

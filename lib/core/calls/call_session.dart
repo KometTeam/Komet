@@ -1,8 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, ValueListenable, defaultTargetPlatform, mapEquals;
+    show
+        TargetPlatform,
+        ValueListenable,
+        defaultTargetPlatform,
+        mapEquals,
+        visibleForTesting;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../config/app_camera.dart';
@@ -32,6 +38,29 @@ enum CallRole { caller, callee, joiner }
 // #***! состояние звонка от подключения до конца
 enum CallSessionState { connecting, ringing, active, ended }
 
+enum CallNotice {
+  handLoweredByAdmin,
+  allHandsLoweredByAdmin,
+  micMutedByAdmin,
+  cameraMutedByAdmin,
+  screenMutedByAdmin,
+}
+
+class CallRecord {
+  final int? initiatorId;
+  final DateTime startedAt;
+
+  const CallRecord({required this.initiatorId, required this.startedAt});
+}
+
+typedef CallHandState = ({bool raised, int? at});
+
+enum CallVideoSource { camera, screen }
+
+typedef CallVideoKey = (int participantId, CallVideoSource source);
+
+typedef CallVideoRequest = ({Size size, bool cover});
+
 // #***! участник звонка, медиа роли и поднятая рука
 class CallParticipant {
   final int id;
@@ -42,7 +71,18 @@ class CallParticipant {
   bool videoEnabled;
   bool screenSharing;
   bool handRaised;
+  int handRaisedAt = 0;
   List<String> roles;
+  int deviceIdx = 0;
+  String? externalType;
+  String? platform;
+  String? clientType;
+  String? transport;
+  int? joinedAt;
+  bool? mediaConnected;
+  double? networkRating;
+  bool videoStalled = false;
+  CallEngine? engine;
 
   CallParticipant({
     required this.id,
@@ -55,6 +95,17 @@ class CallParticipant {
     this.handRaised = false,
     this.roles = const [],
   });
+
+  static const double badNetworkRating = 0.3;
+  static const double goodNetworkRating = 0.6;
+
+  bool get badNetwork => (networkRating ?? 1) <= badNetworkRating;
+
+  static int networkBand(double rating) => rating <= badNetworkRating
+      ? 0
+      : rating <= goodNetworkRating
+      ? 1
+      : 2;
 
   bool get isAdmin => roles.contains('ADMIN') || roles.contains('CREATOR');
   bool get isCreator => roles.contains('CREATOR');
@@ -171,7 +222,10 @@ class CallSession {
   // #***! каналы SFU, раскладка слоты и уровни
   final List<RTCDataChannel> _sfuChannels = [];
   SfuNotificationChannel? _sfuNotifications;
-  StreamSubscription<Map<String, int>>? _sfuLevelSub;
+  StreamSubscription<Set<String>>? _sfuActivitySub;
+  StreamSubscription<Set<String>>? _sfuStalledSub;
+  StreamSubscription<Map<String, double>>? _sfuNetworkSub;
+  Set<int> _sfuActive = const {};
   SfuScreenChannel? _sfuScreen;
   ScreenFrameProbe? _screenProbe;
   StreamSubscription<ScreenFrame>? _sfuScreenFrameSub;
@@ -190,14 +244,27 @@ class CallSession {
   Timer? _layoutDebounce;
   Timer? _collectDebounce;
   Timer? _videoStatsTimer;
-  List<String> _lastLayout = const [];
+  Map<String, String> _lastLayout = const {};
   bool _layoutSent = false;
+  Map<CallVideoKey, CallVideoRequest>? _videoRequests;
 
   // #***! не больше 10 видеослотов, дальше сеть не тянет
   static const int _maxVideoSlots = 10;
-  static const int _sfuSpeakLevel = 50;
-  static const Duration _levelTtl = Duration(seconds: 6);
-  final Map<int, ({int level, DateTime at})> _levelState = {};
+  static const CallVideoRequest _legacyVideoRequest = (
+    size: Size(640, 360),
+    cover: true,
+  );
+  static const CallVideoRequest stageVideoRequest = (
+    size: Size(1280, 720),
+    cover: false,
+  );
+  static const List<Size> _videoSizes = [
+    Size(320, 240),
+    Size(480, 360),
+    Size(640, 480),
+    Size(720, 480),
+    Size(1280, 720),
+  ];
 
   static const int _autoAssignedStreamId = -1;
 
@@ -214,10 +281,50 @@ class CallSession {
   final List<CallChatMessage> _chat = [];
   final _chatController = StreamController<CallChatMessage>.broadcast();
   final _gameController = StreamController<Map<String, dynamic>>.broadcast();
+  final _notices = StreamController<CallNotice>.broadcast();
+  CallRecord? _record;
+  int? _chatId;
+  Set<String> _options = const {};
+  Map<String, Set<String>> _featuresPerRole = const {};
+  final Map<String, String> _globalMuteStates = {};
+  final Map<String, String> _personalMuteStates = {};
 
   List<CallChatMessage> get chatLog => List.unmodifiable(_chat);
   Stream<CallChatMessage> get chatMessages => _chatController.stream;
   Stream<Map<String, dynamic>> get gameMessages => _gameController.stream;
+  Stream<CallNotice> get notices => _notices.stream;
+  CallRecord? get record => _record;
+  int? get chatId => _chatId;
+
+  bool hasOption(CallOption option) => _options.contains(option.wire);
+
+  Set<String> rolesAllowed(CallFeature feature) =>
+      _featuresPerRole[feature.wire] ?? const {};
+
+  CallMuteState? globalMuteState(CallMedia media) =>
+      _muteStateFrom(_globalMuteStates[media.wire]);
+
+  bool mediaLocked(CallMedia media) {
+    if (self?.isAdmin == true) return false;
+    final state =
+        _personalMuteStates[media.wire] ?? _globalMuteStates[media.wire];
+    return state == CallMuteState.mutePermanent.wire;
+  }
+
+  bool get canRecord {
+    if (!info.record) return false;
+    final allowed = rolesAllowed(CallFeature.record);
+    if (allowed.isEmpty) return true;
+    final roles = self?.roles ?? const <String>[];
+    return roles.any(allowed.contains);
+  }
+
+  static CallMuteState? _muteStateFrom(String? wire) {
+    for (final state in CallMuteState.values) {
+      if (state.wire == wire) return state;
+    }
+    return null;
+  }
 
   int get selfUserId => ws2Config.userId;
   int? get peerUserId => _peerId;
@@ -247,9 +354,69 @@ class CallSession {
 
   int get participantCount => _participants.length;
 
+  CallParticipant? get self => _participants[ws2Config.userId];
+
+  bool get handRaised => self?.handRaised ?? false;
+
+  List<CallParticipant> get raisedHands =>
+      _participants.values.where((p) => p.handRaised).toList(growable: false)
+        ..sort((a, b) => a.handRaisedAt.compareTo(b.handRaisedAt));
+
+  Map<int, int> get handPositions => {
+    for (final (index, p) in raisedHands.indexed) p.id: index + 1,
+  };
+
   bool isSpeaking(int id) => _speaking.contains(id);
 
+  ({
+    String? platform,
+    String? clientType,
+    String? device,
+    String? os,
+    String? sdk,
+  })
+  get selfClient {
+    final query = ws2Config.uri.queryParameters;
+    return (
+      platform: query['platform'],
+      clientType: query['clientType'],
+      device: query['device'],
+      os: query['osVersion'],
+      sdk: query['appVersion'],
+    );
+  }
+
+  void setVideoRequests(Map<CallVideoKey, CallVideoRequest>? requests) {
+    final next = requests == null
+        ? null
+        : {
+            for (final MapEntry(:key, :value) in requests.entries)
+              key: (size: _videoSizeFor(value.size), cover: value.cover),
+          };
+    if (next == null
+        ? _videoRequests == null
+        : mapEquals(next, _videoRequests)) {
+      return;
+    }
+    _videoRequests = next;
+    if (_topology == 'SERVER') _scheduleDisplayLayout();
+  }
+
+  static Size _videoSizeFor(Size pixels) {
+    final area = pixels.width * pixels.height;
+    return _videoSizes.reduce(
+      (best, size) =>
+          (area - size.width * size.height).abs() <
+              (area - best.width * best.height).abs()
+          ? size
+          : best,
+    );
+  }
+
   String? get topology => _topology;
+
+  @visibleForTesting
+  set debugTopology(String? value) => _topology = value;
 
   bool get _wantVideo => params?.isVideo == true;
 
@@ -500,13 +667,17 @@ class CallSession {
   // #***! замер уровней звука для подсветки говорящего
   Future<void> _sampleLevels() async {
     final pc = _pc;
-    if (pc == null || _ended || _topology == 'SERVER') return;
+    if (pc == null || _ended) return;
     if (!_mediaConnected || _current != CallSessionState.active) return;
 
+    final sfu = _topology == 'SERVER';
+    final sender = _audioSender;
+    if (sfu && sender == null) return;
     var local = 0.0;
     var remote = 0.0;
     try {
-      for (final r in await pc.getStats()) {
+      final reports = sfu ? await sender!.getStats() : await pc.getStats();
+      for (final r in reports) {
         final lvl = r.values['audioLevel'];
         if (lvl is! num) continue;
         final kind = r.values['kind'] ?? r.values['mediaType'];
@@ -525,19 +696,23 @@ class CallSession {
     final loud = <int>{};
     if (audioTransmitting && local > _speakLevelOn) loud.add(ws2Config.userId);
     final others = _participants.values.where((p) => !p.isSelf).toList();
-    if (others.length == 1 && remote > _speakLevelOn) loud.add(others.first.id);
+    if (!sfu && others.length == 1 && remote > _speakLevelOn) {
+      loud.add(others.first.id);
+    }
 
     for (final id in loud) {
       _speakHold[id] = _speakHoldTicks;
     }
     _speakHold.updateAll((id, ticks) => loud.contains(id) ? ticks : ticks - 1);
     _speakHold.removeWhere((_, ticks) => ticks <= 0);
+    _updateSpeaking();
+  }
 
-    final next = _speakHold.keys.toSet();
-    if (next.length != _speaking.length || !next.containsAll(_speaking)) {
-      _speaking = next;
-      _notifyInfo();
-    }
+  void _updateSpeaking() {
+    final next = {..._speakHold.keys, ..._sfuActive};
+    if (next.length == _speaking.length && next.containsAll(_speaking)) return;
+    _speaking = next;
+    _notifyInfo();
   }
 
   void _startMicLevels() {
@@ -581,6 +756,10 @@ class CallSession {
     _micLevels.add(level);
   }
 
+  @visibleForTesting
+  Future<void> debugHandleNotification(Map<String, dynamic> msg) =>
+      _onNotification(msg);
+
   // #***! уведомления строго по очереди
   void _enqueue(Map<String, dynamic> msg) {
     _tail = _tail.then((_) => _onNotification(msg)).catchError((
@@ -608,7 +787,19 @@ class CallSession {
         await _onTransmittedData(msg);
         break;
       case 'accepted-call':
+        _onAcceptedCall(msg);
         _setState(CallSessionState.active);
+        break;
+      case 'options-changed':
+        final options = msg['options'];
+        _options = options is List
+            ? options.whereType<String>().toSet()
+            : const {};
+        _notifyInfo();
+        break;
+      case 'features-per-role-changed':
+        _featuresPerRole = _featuresFrom(msg['featuresPerRole']);
+        _notifyInfo();
         break;
       case 'registered-peer':
         _applyRegisteredPeer(msg);
@@ -638,7 +829,7 @@ class CallSession {
         _onForcedMedia(msg);
         break;
       case 'mute-participant':
-        _onMuteParticipant(msg);
+        await _onMuteParticipant(msg);
         break;
       case 'hungup':
         _onHungup(msg);
@@ -652,10 +843,44 @@ class CallSession {
       case 'session-state':
         _onSessionState(msg);
         break;
+      case 'record-started':
+        _applyRecordInfo(msg['recordInfo']);
+        break;
+      case 'record-stopped':
+        _record = null;
+        _notifyInfo();
+        break;
+      case 'multiparty-chat-created':
+        _chatId = parseIntOrNull(msg['chatId']) ?? _chatId;
+        _notifyInfo();
+        break;
+      case 'feature-set-changed':
+        final features = msg['features'];
+        if (features is List) {
+          info.record = features.contains('RECORD');
+          _notifyInfo();
+        }
+        break;
       case 'closed-conversation':
         _end();
         break;
     }
+  }
+
+  void _applyRecordInfo(Object? recordInfo) {
+    if (recordInfo is! Map) return;
+    final started = parseIntOrNull(recordInfo['recordStartTime']);
+    _record = CallRecord(
+      initiatorId: _participantIdFrom(recordInfo['initiator']),
+      startedAt: started == null
+          ? DateTime.now()
+          : DateTime.fromMillisecondsSinceEpoch(started),
+    );
+    _notifyInfo();
+  }
+
+  void _notice(CallNotice notice) {
+    if (!_notices.isClosed) _notices.add(notice);
   }
 
   // #***! сервер вернул ошибку
@@ -701,23 +926,115 @@ class CallSession {
   }
 
   // #***! нас или другого замьютили
-  void _onMuteParticipant(Map<String, dynamic> msg) {
-    final muteStates = msg['muteStates'];
-    if (muteStates is! Map || muteStates['AUDIO'] is! String) return;
-    final audioOn = muteStates['AUDIO'] == 'UNMUTE';
+  Future<void> _onMuteParticipant(Map<String, dynamic> msg) async {
+    final raw = msg['muteStates'];
+    final states = <String, String>{
+      if (raw is Map)
+        for (final e in raw.entries)
+          if (e.key is String && e.value is String)
+            e.key as String: e.value as String,
+    };
     final target = _participantIdFrom(msg['participantId']);
     final muteAll = msg['muteAll'] == true;
 
-    if (target != null) {
+    if (target != null && target != ws2Config.userId) {
       final p = _participants[target];
       if (p != null) {
-        p.audioEnabled = audioOn;
+        _upsertParticipant(target, muteStates: states);
         _notifyInfo();
       }
+      return;
     }
-    if (muteAll || target == null || target == ws2Config.userId) {
-      _applyMuted(!audioOn);
+
+    if (msg['requestedMedia'] is! List ||
+        (msg['requestedMedia'] as List).isEmpty) {
+      if (muteAll) {
+        _globalMuteStates.addAll(states);
+      } else {
+        _personalMuteStates
+          ..clear()
+          ..addAll(states);
+      }
     }
+    _notifyInfo();
+
+    final adminId = _participantIdFrom(msg['adminId']);
+    if (adminId == ws2Config.userId || msg['unmute'] == true) return;
+    final options = msg['mediaOptions'];
+    final apply = options is List
+        ? options.whereType<String>().toSet()
+        : states.keys.toSet();
+    final exempt = muteAll && self?.isAdmin == true;
+    for (final entry in states.entries) {
+      final muting =
+          entry.value == CallMuteState.mute.wire ||
+          entry.value == CallMuteState.mutePermanent.wire;
+      if (!muting || exempt || !apply.contains(entry.key)) continue;
+      if (entry.key == CallMedia.audio.wire && !_muted) {
+        await _applyMuted(true, announce: true);
+        _notice(CallNotice.micMutedByAdmin);
+      } else if (entry.key == CallMedia.video.wire && _localVideo) {
+        await _stopCamera();
+        _notice(CallNotice.cameraMutedByAdmin);
+      } else if (entry.key == CallMedia.screenShare.wire && _localScreen) {
+        await _stopScreenShare();
+        _notice(CallNotice.screenMutedByAdmin);
+      }
+    }
+  }
+
+  void _onAcceptedCall(Map<String, dynamic> msg) {
+    final id = _participantIdFrom(msg['participantId']);
+    if (id == null || id == ws2Config.userId) return;
+    _upsertParticipant(
+      id,
+      externalId: _externalId(msg['externalId']),
+      mediaSettings: msg['mediaSettings'],
+      muteStates: msg['muteStates'],
+    );
+    _notifyInfo();
+  }
+
+  void _applyConversation(Map<dynamic, dynamic> conversation) {
+    _chatId =
+        parseIntOrNull(conversation['multichatId']) ??
+        parseIntOrNull(conversation['chatId']) ??
+        _chatId;
+    final options = conversation['options'];
+    if (options is List) _options = options.whereType<String>().toSet();
+    if (conversation.containsKey('featuresPerRole')) {
+      _featuresPerRole = _featuresFrom(conversation['featuresPerRole']);
+    }
+    final muteStates = conversation['muteStates'];
+    if (muteStates is Map) {
+      _globalMuteStates
+        ..clear()
+        ..addAll({
+          for (final e in muteStates.entries)
+            if (e.key is String && e.value is String)
+              e.key as String: e.value as String,
+        });
+    }
+    final personal = conversation['muteStatesPersonal'];
+    if (personal is Map) {
+      _personalMuteStates
+        ..clear()
+        ..addAll({
+          for (final e in personal.entries)
+            if (e.key is String && e.value is String)
+              e.key as String: e.value as String,
+        });
+    }
+    _applyRecordInfo(conversation['recordInfo']);
+  }
+
+  static Map<String, Set<String>> _featuresFrom(Object? raw) {
+    if (raw is! Map) return const {};
+    return {
+      for (final e in raw.entries)
+        if (e.key is String && e.value is List)
+          e.key as String: (e.value as List).whereType<String>().toSet(),
+    };
   }
 
   // #***! звонок завершили с той стороны
@@ -737,6 +1054,14 @@ class CallSession {
     logger.t(
       '[call][sfu] session-state id=${msg['participantId']} connected=${msg['connected']}',
     );
+    final id = _participantIdFrom(msg['participantId']);
+    final connected = msg['connected'];
+    final p = id == null ? null : _participants[id];
+    if (p == null || connected is! bool || p.mediaConnected == connected) {
+      return;
+    }
+    p.mediaConnected = connected;
+    _notifyInfo();
   }
 
   // #***! разбор состава участников
@@ -755,10 +1080,13 @@ class CallSession {
         state: p['state'] as String?,
         mediaSettings: p['mediaSettings'],
         muteStates: p['muteStates'],
+        hand: _handFrom(p['participantState']),
         roles: p['roles'],
       );
+      _applyMeta(id, p);
     }
     _participants.removeWhere((key, _) => !seen.contains(key));
+    _applyConversation(conversation);
     _notifyInfo();
   }
 
@@ -768,7 +1096,7 @@ class CallSession {
     String? state,
     Object? mediaSettings,
     Object? muteStates,
-    bool? handRaised,
+    CallHandState? hand,
     Object? roles,
   }) {
     final p = _participants.putIfAbsent(
@@ -790,7 +1118,7 @@ class CallSession {
       if (v is String && v != 'UNMUTE') p.videoEnabled = false;
       if (s is String && s != 'UNMUTE') p.screenSharing = false;
     }
-    if (handRaised != null) p.handRaised = handRaised;
+    if (hand != null) _applyHand(p, hand);
     if (roles is List) {
       p.roles = roles.whereType<String>().toList(growable: false);
     }
@@ -802,11 +1130,100 @@ class CallSession {
     return parseIntOrNull(ext['id']);
   }
 
-  bool? _handFrom(Object? participantState) {
-    if (participantState is! Map) return null;
+  void _applyMeta(int id, Map<dynamic, dynamic> source) {
+    final p = _participants[id];
+    if (p == null) return;
+    final ext = source['externalId'];
+    if (ext is Map && ext['type'] is String) p.externalType = ext['type'];
+    final device = parseIntOrNull(source['deviceIdx']);
+    if (device != null) p.deviceIdx = device;
+    final peer = source['peerId'];
+    if (peer is Map && peer['type'] is String) p.transport = peer['type'];
+    final session = source['sessionState'];
+    if (session is Map && session['connected'] is bool) {
+      p.mediaConnected = session['connected'];
+    }
+    final markers = source['markers'];
+    final grid = markers is Map ? markers['GRID'] : null;
+    p.joinedAt ??= grid is Map ? parseIntOrNull(grid['ts']) : null;
+  }
+
+  CallHandState _handFrom(Object? participantState) {
+    if (participantState is! Map) return (raised: false, at: null);
     final state = participantState['state'];
-    if (state is! Map || !state.containsKey('hand')) return null;
-    return state['hand'] == '1' || state['hand'] == true;
+    final updated = participantState['stateUpdateTs'];
+    return (
+      raised: state is Map && (state['hand'] == '1' || state['hand'] == true),
+      at: updated is Map ? parseIntOrNull(updated['hand']) : null,
+    );
+  }
+
+  void _applyHand(CallParticipant p, CallHandState hand) {
+    if (hand.raised && (!p.handRaised || hand.at != null)) {
+      p.handRaisedAt = hand.at ?? DateTime.now().millisecondsSinceEpoch;
+    }
+    p.handRaised = hand.raised;
+  }
+
+  Future<void> setHandRaised(bool raised) async {
+    final admin = this.admin;
+    if (admin == null) throw StateError('сигналка звонка не подключена');
+    final me = _upsertParticipant(ws2Config.userId);
+    final before = (raised: me.handRaised, at: me.handRaisedAt);
+    _applyHand(me, (raised: raised, at: null));
+    _notifyInfo();
+    try {
+      await admin.setHandRaised(raised);
+    } catch (_) {
+      me
+        ..handRaised = before.raised
+        ..handRaisedAt = before.at;
+      _notifyInfo();
+      rethrow;
+    }
+  }
+
+  Future<void> lowerHandOf(int participantId) async {
+    final admin = this.admin;
+    if (admin == null) throw StateError('сигналка звонка не подключена');
+    final target = _participants[participantId];
+    if (target == null || !target.handRaised) return;
+    final at = target.handRaisedAt;
+    target.handRaised = false;
+    _notifyInfo();
+    try {
+      await admin.setHandRaised(
+        false,
+        participant: CallParticipantRef(participantId),
+      );
+    } catch (_) {
+      target
+        ..handRaised = true
+        ..handRaisedAt = at;
+      _notifyInfo();
+      rethrow;
+    }
+  }
+
+  Future<void> lowerAllHands() async {
+    final admin = this.admin;
+    if (admin == null) throw StateError('сигналка звонка не подключена');
+    final lowered = {for (final p in raisedHands) p: p.handRaisedAt};
+    for (final p in lowered.keys) {
+      p.handRaised = false;
+    }
+    _notifyInfo();
+    try {
+      await admin.lowerAllHands();
+    } catch (_) {
+      lowered.forEach((p, at) {
+        p
+          ..handRaised = true
+          ..handRaisedAt = at;
+      });
+      _notifyInfo();
+      rethrow;
+    }
   }
 
   // #***! участник включил или выключил медиа
@@ -841,11 +1258,18 @@ class CallSession {
       state: p['state'] as String?,
       mediaSettings: p['mediaSettings'],
       muteStates: p['muteStates'],
-      handRaised: _handFrom(p['participantState']),
+      hand: _handFrom(p['participantState']),
       roles: p['roles'],
     );
+    _applyMeta(id, p);
+    _participants[id]!.joinedAt ??= _stampMillis(msg['stamp']);
     _maybeAdoptPeer(id, p);
     _notifyInfo();
+  }
+
+  static int? _stampMillis(Object? stamp) {
+    final nanos = parseIntOrNull(stamp);
+    return nanos == null ? null : nanos ~/ 1000000;
   }
 
   // #***! в звонке один на один второй это собеседник, запоминаем
@@ -871,15 +1295,22 @@ class CallSession {
   }
 
   void _onParticipantStateChanged(Map<String, dynamic> msg) {
-    final id = msg['participantId'];
-    if (id is! int) return;
-    _upsertParticipant(id, handRaised: _handFrom(msg['participantState']));
+    final nested = msg['participant'];
+    final id = _participantIdFrom(
+      msg['participantId'] ?? (nested is Map ? nested['id'] : null),
+    );
+    if (id == null) return;
+    final hand = _handFrom(msg['participantState']);
+    final loweredMine = id == ws2Config.userId && handRaised && !hand.raised;
+    _upsertParticipant(id, hand: hand);
+    if (loweredMine) _notice(CallNotice.handLoweredByAdmin);
     _notifyInfo();
   }
 
   void _onParticipantsStateChanged(Map<String, dynamic> msg) {
     final list = msg['participants'];
     if (list is! List) return;
+    final hadHand = handRaised;
     for (final p in list.whereType<Map>()) {
       final id = _participantIdFrom(p['participantId'] ?? p['id']);
       if (id == null) continue;
@@ -889,10 +1320,11 @@ class CallSession {
         state: p['state'] as String?,
         mediaSettings: p['mediaSettings'],
         muteStates: p['muteStates'],
-        handRaised: _handFrom(p['participantState']),
+        hand: _handFrom(p['participantState']),
         roles: p['roles'],
       );
     }
+    if (hadHand && !handRaised) _notice(CallNotice.allHandsLoweredByAdmin);
     _notifyInfo();
   }
 
@@ -1221,7 +1653,9 @@ class CallSession {
     await _closeSfuChannels();
     final notifications = SfuNotificationChannel();
     _sfuNotifications = notifications;
-    _sfuLevelSub = notifications.audioLevels.listen(_onSfuLevels);
+    _sfuActivitySub = notifications.audioActivity.listen(_onSfuActivity);
+    _sfuStalledSub = notifications.stalledVideo.listen(_onSfuStalled);
+    _sfuNetworkSub = notifications.networkStatus.listen(_onSfuNetwork);
     for (final label in _sfuChannelLabels) {
       final channel = await _createSfuChannel(pc, label);
       if (channel != null) notifications.bind(channel);
@@ -1297,23 +1731,57 @@ class CallSession {
     }
   }
 
-  // #***! уровни звука от SFU, по ним подсвечиваем говорящего
-  void _onSfuLevels(Map<String, int> levels) {
-    final now = DateTime.now();
-    levels.forEach((key, level) {
-      final id = _participantIdFrom(key.split(':').first);
-      if (id != null) _levelState[id] = (level: level, at: now);
-    });
-    _levelState.removeWhere((_, v) => now.difference(v.at) > _levelTtl);
+  @visibleForTesting
+  void debugSfuStalled(Set<String> keys) => _onSfuStalled(keys);
 
-    final loud = _levelState.entries
-        .where((e) => e.value.level >= _sfuSpeakLevel)
-        .map((e) => e.key)
-        .toSet();
-    logger.i('[call][sfu] levels: $levels speaking=$loud');
-    if (loud.length == _speaking.length && loud.containsAll(_speaking)) return;
-    _speaking = loud;
+  @visibleForTesting
+  void debugSfuNetwork(Map<String, double> statuses) => _onSfuNetwork(statuses);
+
+  void _onSfuStalled(Set<String> keys) {
+    final stalled = {
+      for (final key in keys) ?_participantIdFrom(key.split(':').first),
+    };
+    var changed = false;
+    for (final p in _participants.values) {
+      final next = stalled.contains(p.id);
+      if (p.videoStalled == next) continue;
+      p.videoStalled = next;
+      changed = true;
+    }
+    if (!changed) return;
+    logger.t('[call][sfu] stalled video: $stalled');
     _notifyInfo();
+  }
+
+  void _onSfuNetwork(Map<String, double> statuses) {
+    var changed = false;
+    statuses.forEach((key, rating) {
+      final id = _participantIdFrom(key.split(':').first);
+      final p = id == null ? null : _participants[id];
+      if (p == null) return;
+      final before = p.networkRating;
+      p.networkRating = rating;
+      if (before == null ||
+          (before * 20).round() != (rating * 20).round() ||
+          CallParticipant.networkBand(before) !=
+              CallParticipant.networkBand(rating)) {
+        changed = true;
+      }
+    });
+    if (changed) _notifyInfo();
+  }
+
+  // #***! SFU сам говорит кто сейчас звучит, свой голос меряем локально
+  void _onSfuActivity(Set<String> keys) {
+    final active = {
+      for (final key in keys) ?_participantIdFrom(key.split(':').first),
+    }..remove(ws2Config.userId);
+    if (active.length == _sfuActive.length && active.containsAll(_sfuActive)) {
+      return;
+    }
+    logger.t('[call][sfu] audio activity: $active');
+    _sfuActive = active;
+    _updateSpeaking();
   }
 
   Future<void> _rebindSlotTracks() async {
@@ -1334,27 +1802,59 @@ class CallSession {
   // #***! говорим серверу чьи видео и в каком размере нужны
   Future<void> _publishDisplayLayout({bool force = false}) async {
     if (_sfuNotifications == null || _topology != 'SERVER' || _ended) return;
-    final others = _participants.values.where((p) => !p.isSelf);
-    final cameras = others
-        .where((p) => p.videoEnabled)
-        .take(_maxVideoSlots)
-        .toList(growable: false);
-    final items = [
-      for (final p in cameras) SfuLayoutItem(trackKey: 'u${p.id}:sCAMERA'),
-      for (final p in others.where((p) => p.screenSharing))
-        SfuLayoutItem(trackKey: 'u${p.id}:sSCREEN'),
-    ];
-    final keys = items.map((i) => i.trackKey).toList(growable: false);
-    if (!force &&
-        _layoutSent &&
-        keys.length == _lastLayout.length &&
-        keys.every(_lastLayout.contains)) {
+    final (:layouts, :cameras) = _displayLayout();
+    if (!force && _layoutSent && mapEquals(layouts, _lastLayout)) return;
+    if (!await _sendLayoutOverSignaling(layouts)) return;
+    _lastLayout = layouts;
+    _layoutSent = true;
+    _assignVideoSlots(cameras);
+  }
+
+  @visibleForTesting
+  ({Map<String, String> layouts, List<int> cameras}) debugDisplayLayout() =>
+      _displayLayout();
+
+  ({Map<String, String> layouts, List<int> cameras}) _displayLayout() {
+    final cameras = <int>[];
+    final layouts = <String, String>{};
+    for (final ((id, source), request) in _wantedVideo()) {
+      if (source == CallVideoSource.camera) {
+        if (cameras.length >= _maxVideoSlots) continue;
+        cameras.add(id);
+      }
+      final item = SfuLayoutItem(
+        trackKey:
+            'u$id:s${source == CallVideoSource.camera ? 'CAMERA' : 'SCREEN'}',
+        width: request.size.width.round(),
+        height: request.size.height.round(),
+        cover: request.cover,
+      );
+      layouts[item.trackKey] = item.signalingLayout;
+    }
+    return (layouts: layouts, cameras: cameras);
+  }
+
+  Iterable<(CallVideoKey, CallVideoRequest)> _wantedVideo() sync* {
+    final requests = _videoRequests;
+    if (requests == null) {
+      final others = _participants.values.where((p) => !p.isSelf);
+      for (final p in others.where((p) => p.videoEnabled)) {
+        yield ((p.id, CallVideoSource.camera), _legacyVideoRequest);
+      }
+      for (final p in others.where((p) => p.screenSharing)) {
+        yield ((p.id, CallVideoSource.screen), _legacyVideoRequest);
+      }
       return;
     }
-    if (!await _sendLayoutOverSignaling(items)) return;
-    _lastLayout = keys;
-    _layoutSent = true;
-    _assignVideoSlots([for (final p in cameras) p.id]);
+    for (final MapEntry(:key, :value) in requests.entries) {
+      final p = _participants[key.$1];
+      if (p == null || p.isSelf) continue;
+      final live = switch (key.$2) {
+        CallVideoSource.camera => p.videoEnabled,
+        CallVideoSource.screen => p.screenSharing,
+      };
+      if (live) yield (key, value);
+    }
   }
 
   // #***! сервер закрепляет слоты за дорожками сам и не говорит какими, слот камеры узнаём по тому, куда пошли байты
@@ -1435,13 +1935,11 @@ class CallSession {
     return bytes;
   }
 
-  Future<bool> _sendLayoutOverSignaling(List<SfuLayoutItem> items) async {
+  Future<bool> _sendLayoutOverSignaling(Map<String, String> layouts) async {
     final signaling = _signaling;
     if (signaling == null) return false;
     try {
-      final reply = await signaling.updateDisplayLayout({
-        for (final item in items) item.trackKey: item.signalingLayout,
-      });
+      final reply = await signaling.updateDisplayLayout(layouts);
       logger.i('[call][sfu] ws2 update-display-layout reply: $reply');
       return true;
     } catch (e) {
@@ -1529,8 +2027,16 @@ class CallSession {
   Future<void> _closeSfuChannels() async {
     _layoutDebounce?.cancel();
     _layoutDebounce = null;
-    await _sfuLevelSub?.cancel();
-    _sfuLevelSub = null;
+    await _sfuActivitySub?.cancel();
+    _sfuActivitySub = null;
+    await _sfuStalledSub?.cancel();
+    _sfuStalledSub = null;
+    await _sfuNetworkSub?.cancel();
+    _sfuNetworkSub = null;
+    _sfuActive = const {};
+    for (final p in _participants.values) {
+      p.videoStalled = false;
+    }
     await _sfuNotifications?.dispose();
     _sfuNotifications = null;
     await _sfuScreenFrameSub?.cancel();
@@ -1547,7 +2053,7 @@ class CallSession {
     _slotBytes.clear();
     _slotIdle.clear();
     _layoutCameras = const [];
-    _lastLayout = const [];
+    _lastLayout = const {};
     _layoutSent = false;
     final channels = List<RTCDataChannel>.from(_sfuChannels);
     _sfuChannels.clear();
@@ -2388,7 +2894,7 @@ class CallSession {
       final desc = sdp['sdp'] as String?;
       if (type == null || desc == null) return;
 
-      _applyRemoteSdp(desc);
+      _applyRemoteSdp(desc, _participantIdFrom(msg['participantId']));
       logger.t(
         '[call] remote $type video: ${_videoDir(desc)} '
         'codecs=[${_videoCodecs(desc)}] ufrag=${_iceUfrag(desc)}',
@@ -2546,11 +3052,15 @@ class CallSession {
   bool get _screenAnnounced => _localScreen && _topology == 'SERVER';
 
   Future<void> _sendMediaSettings() async {
-    await _signaling?.changeMediaSettings(
-      isAudioEnabled: !_muted,
-      isVideoEnabled: _localVideo,
-      isScreenSharingEnabled: _screenAnnounced,
-    );
+    try {
+      await _signaling?.changeMediaSettings(
+        isAudioEnabled: !_muted,
+        isVideoEnabled: _localVideo,
+        isScreenSharingEnabled: _screenAnnounced,
+      );
+    } on Ws2CommandException catch (e) {
+      logger.w('[call] change-media-settings failed: $e');
+    }
   }
 
   // #***! камера и демонстрация экрана
@@ -2647,6 +3157,19 @@ class CallSession {
           orElse: () => cameras.first,
         );
     await _startCamera(deviceId: next.id);
+  }
+
+  String? get cameraDeviceId {
+    final live = _cameraStream
+        ?.getVideoTracks()
+        .firstOrNull
+        ?.getSettings()['deviceId'];
+    return live is String && live.isNotEmpty ? live : AppCamera.deviceId;
+  }
+
+  Future<void> selectCamera(String deviceId) async {
+    await AppCamera.save(deviceId);
+    if (_localVideo) await _startCamera(deviceId: deviceId);
   }
 
   Future<void> _startCamera({String? deviceId}) async {
@@ -2911,6 +3434,7 @@ class CallSession {
     if (!_micLevels.isClosed) await _micLevels.close();
     if (!_chatController.isClosed) await _chatController.close();
     if (!_gameController.isClosed) await _gameController.close();
+    if (!_notices.isClosed) await _notices.close();
   }
 
   // #***! параметры соединения в отладочную сводку
@@ -2975,6 +3499,16 @@ class CallSession {
   }
 
   void _applyRegisteredPeer(Map<String, dynamic> msg) {
+    final id = _participantIdFrom(msg['participantId']);
+    final participant = id == null ? null : _participants[id];
+    if (participant != null) {
+      if (msg['platform'] is String) participant.platform = msg['platform'];
+      if (msg['clientType'] is String) {
+        participant.clientType = msg['clientType'];
+      }
+      _applyMeta(participant.id, msg);
+      _notifyInfo();
+    }
     final peer = msg['peerId'];
     if (peer is Map && peer['type'] == 'WEB_TRANSPORT') return;
     final platform = msg['platform'];
@@ -2984,8 +3518,13 @@ class CallSession {
     }
   }
 
-  void _applyRemoteSdp(String sdp) {
-    info.peerEngine = CallParse.engine(sdp);
+  void _applyRemoteSdp(String sdp, int? participantId) {
+    final engine = CallParse.engineKind(sdp);
+    final participant = participantId == null
+        ? null
+        : _participants[participantId];
+    if (participant != null && engine != null) participant.engine = engine;
+    info.peerEngine = CallParse.engineLabel(engine);
     info.audioCodec ??= CallParse.audioCodec(sdp);
     info.dtlsFingerprint ??= CallParse.fingerprint(sdp);
     if (CallParse.hasAnimoji(sdp)) info.animoji = true;
