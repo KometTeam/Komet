@@ -4555,6 +4555,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatScreenMenuMute => 'Отключить уведомления';
 
   @override
+  String get chatScreenMenuSendMoney => 'Перевести деньги';
+
+  @override
+  String get moneyTransferAppTitle => 'Деньги';
+
+  @override
   String get chatScreenMenuChangeWallpaper => 'Изменить обои';
 
   @override

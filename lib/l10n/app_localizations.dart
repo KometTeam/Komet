@@ -8276,6 +8276,18 @@ abstract class AppLocalizations {
   /// **'Disable notifications'**
   String get chatScreenMenuMute;
 
+  /// No description provided for @chatScreenMenuSendMoney.
+  ///
+  /// In en, this message translates to:
+  /// **'Send money'**
+  String get chatScreenMenuSendMoney;
+
+  /// No description provided for @moneyTransferAppTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Money'**
+  String get moneyTransferAppTitle;
+
   /// No description provided for @chatScreenMenuChangeWallpaper.
   ///
   /// In en, this message translates to:

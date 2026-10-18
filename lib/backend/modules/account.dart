@@ -1243,6 +1243,16 @@ class AccountModule {
         serverConfig['enable-filters-for-folders'] == true ? '1' : '0',
       );
       await _persistEntryBannerApps(accountId, serverConfig);
+      final moneyBotId = parseIntOrNull(
+        serverConfig[MoneyTransferApp.configKey],
+      );
+      if (moneyBotId != null) {
+        await AppDatabase.setSyncValue(
+          accountId,
+          MoneyTransferApp.syncKey,
+          '$moneyBotId',
+        );
+      }
     }
     final info = LoginInfo.fromPayload(data);
 
