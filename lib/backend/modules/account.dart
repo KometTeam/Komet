@@ -9,6 +9,7 @@ import '../api.dart';
 import '../../core/config/app_language.dart';
 import '../../core/config/launch_flags.dart';
 import '../../core/config/komet_settings.dart';
+import '../../core/cache/chat_scroll_memory.dart';
 import '../../core/protocol/chat_cache_fingerprint.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
@@ -828,6 +829,7 @@ class AccountModule {
     banners.clear();
     chats.resetForAccountSwitch();
     await ContactsModule.primeCacheFromDb(accountId);
+    await ChatScrollMemory.prime(accountId);
 
     await _api.connect(authenticated: true);
     if (_api.state != SessionState.online) {
@@ -917,6 +919,7 @@ class AccountModule {
     } catch (_) {}
     if (accountId != null) {
       await removeAccount(accountId);
+      ChatScrollMemory.forgetAccount(accountId);
     }
     ChatCryptoService.instance.clearKeys();
     MessageDecryptionCache.instance.clear();

@@ -7,6 +7,7 @@ import '../../core/config/komet_settings.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/push/push_service.dart';
+import '../../core/cache/chat_scroll_memory.dart';
 import '../../core/cache/info_cache.dart';
 import '../../core/cache/message_session_cache.dart';
 import 'shared_content.dart';
@@ -2416,6 +2417,7 @@ class ChatsModule {
       if (accountId != null) {
         await AppDatabase.clearMessages(accountId, chatId);
         MessageSessionCache.remove(accountId, chatId);
+        ChatScrollMemory.forget(accountId, chatId);
         _historyFetched.remove(chatId);
         await reconcileLastMessage(accountId, chatId);
       }

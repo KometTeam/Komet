@@ -5,12 +5,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../../../core/cache/chat_scroll_memory.dart';
 import '../../../../l10n/app_localizations.dart';
 import 'chat_controller.dart';
 import 'read_marker_gate.dart';
 import 'view/anchored_message_list.dart';
 
 typedef ReturnPoint = ({String id, int time, double alignment});
+
+// #***! стартовое смещение можно задать уже после создания контроллера, пока
+// список ещё не строился; первая позиция его забирает, следующие начнут с нуля
+class ChatScrollController extends ScrollController {
+  double _startPixels = 0;
+
+  @override
+  double get initialScrollOffset => _startPixels;
+
+  void startAt(double pixels) {
+    assert(!hasClients);
+    _startPixels = pixels;
+  }
+
+  @override
+  void attach(ScrollPosition position) {
+    super.attach(position);
+    _startPixels = 0;
+  }
+}
 
 class ChatScrollNavigator {
   ChatScrollNavigator({
@@ -36,7 +57,7 @@ class ChatScrollNavigator {
     required this.onNavigated,
   });
 
-  final ScrollController scrollController;
+  final ChatScrollController scrollController;
   final ChatController chatController;
   final AnimationController shimmerController;
   final AnimationController scrollDownAnimController;
@@ -139,7 +160,6 @@ class ChatScrollNavigator {
     }
     return null;
   }
-
 
   void maybeRunInitialTarget() {
     final id = initialMessageIdOf();
@@ -244,6 +264,77 @@ class ChatScrollNavigator {
       _busy--;
       readMarker.release();
     }
+  }
+
+  // #***! нижнее видимое сообщение; идём от новых, невидимые снизу пропускаем
+  ChatScrollPoint? captureScrollPoint() {
+    final list = _listBox;
+    if (list == null || !scrollController.hasClients) return null;
+    final height = list.size.height;
+    final messages = chatController.messages;
+    for (var i = messages.length - 1; i >= 0; i--) {
+      final message = messages[i];
+      if (message.id.startsWith('temp_')) continue;
+      final box = _laidOutBox(message.id);
+      if (box == null) continue;
+      final top = box.localToGlobal(Offset.zero, ancestor: list).dy;
+      if (top >= height) continue;
+      final bottom = top + box.size.height;
+      if (bottom <= 0) return null;
+      return (id: message.id, time: message.time, pixels: bottom - height);
+    }
+    return null;
+  }
+
+  // #***! сообщение уже в памяти и список не строился: первый же кадр на месте
+  bool anchorBeforeLayout(ChatScrollPoint point) {
+    if (scrollController.hasClients) return false;
+    if (!chatController.containsId(point.id)) return false;
+    anchorId = point.id;
+    _anchorTime = point.time;
+    scrollController.startAt(point.pixels);
+    return true;
+  }
+
+  // #***! иначе грузим окно вокруг, как при прыжке к ответу, только без
+  // подсветки и уведомления, если сообщения больше нет
+  Future<bool> restore(ChatScrollPoint point) async {
+    if (!isMounted()) return false;
+    final token = ++_navToken;
+    final shimmering = !shimmerController.isAnimating;
+    _busy++;
+    readMarker.hold();
+    try {
+      if (!chatController.containsId(point.id)) {
+        if (shimmering) shimmerController.repeat();
+        await loadMessageWindow(point.id, point.time, () => _current(token));
+        if (!_current(token) || !chatController.containsId(point.id)) {
+          return false;
+        }
+      }
+      anchorId = point.id;
+      _anchorTime = point.time;
+      bumpMessages();
+      if (scrollController.hasClients) {
+        scrollController.jumpTo(point.pixels);
+      } else {
+        scrollController.startAt(point.pixels);
+      }
+      await WidgetsBinding.instance.endOfFrame;
+      if (_current(token)) clampIntoRange();
+      return true;
+    } finally {
+      _busy--;
+      readMarker.release();
+      if (shimmering && shimmerController.isAnimating) shimmerController.stop();
+    }
+  }
+
+  void clampIntoRange() {
+    if (!scrollController.hasClients) return;
+    final pos = scrollController.position;
+    final clamped = pos.pixels.clamp(pos.minScrollExtent, pos.maxScrollExtent);
+    if ((clamped - pos.pixels).abs() > 0.5) scrollController.jumpTo(clamped);
   }
 
   bool _current(int token) => isMounted() && token == _navToken;

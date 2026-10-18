@@ -296,7 +296,7 @@ class AppDatabase {
     final opened = await openDatabase(
       target,
       // #***! каждый if oldVersion < N это шаг миграции, идут по порядку
-      version: 30,
+      version: 31,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -464,6 +464,9 @@ class AppDatabase {
         if (oldVersion < 30) {
           await db.execute(_phonebookSyncSchema);
         }
+        if (oldVersion < 31) {
+          await db.execute(_chatScrollSchema);
+        }
       },
     );
     await _dropLegacyExposedDb();
@@ -499,6 +502,7 @@ class AppDatabase {
     await db.execute(_e2eeSessionsSchema);
     await db.execute(_messageRangesSchema);
     await db.execute(_phonebookSyncSchema);
+    await db.execute(_chatScrollSchema);
     await _createIndexes(db);
     await _createChatParticipantsIndex(db);
   }
@@ -593,6 +597,18 @@ class AppDatabase {
       update_time  INTEGER NOT NULL DEFAULT 0,
       options      TEXT,
       account_status INTEGER NOT NULL DEFAULT 0
+    )
+  ''';
+
+  // #***! докуда долистали чат: нижнее видимое сообщение и смещение его низа
+  static const _chatScrollSchema = '''
+    CREATE TABLE chat_scroll (
+      account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      chat_id    INTEGER NOT NULL,
+      message_id TEXT    NOT NULL,
+      time       INTEGER NOT NULL,
+      pixels     REAL    NOT NULL,
+      PRIMARY KEY (account_id, chat_id)
     )
   ''';
 
@@ -1390,6 +1406,43 @@ class AppDatabase {
       'contacts',
       where: 'account_id = ? AND id IN ($placeholders)',
       whereArgs: [accountId, ...ids],
+    );
+  }
+
+  static Future<List<Map<String, Object?>>> loadChatScrollPoints(
+    int accountId,
+  ) async {
+    final db = await _instance;
+    return db.query(
+      'chat_scroll',
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+    );
+  }
+
+  static Future<void> saveChatScrollPoint(
+    int accountId,
+    int chatId, {
+    required String messageId,
+    required int time,
+    required double pixels,
+  }) async {
+    final db = await _instance;
+    await db.insert('chat_scroll', {
+      'account_id': accountId,
+      'chat_id': chatId,
+      'message_id': messageId,
+      'time': time,
+      'pixels': pixels,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<void> deleteChatScrollPoint(int accountId, int chatId) async {
+    final db = await _instance;
+    await db.delete(
+      'chat_scroll',
+      where: 'account_id = ? AND chat_id = ?',
+      whereArgs: [accountId, chatId],
     );
   }
 

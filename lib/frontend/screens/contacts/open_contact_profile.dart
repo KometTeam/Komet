@@ -8,7 +8,7 @@ import '../../widgets/first_frame_clock.dart';
 Future<void> openContactDialogProfile(
   BuildContext context, {
   required int contactId,
-  required String name,
+  required String? name,
   String? avatarUrl,
 }) async {
   final accountId = await TokenStorage.getActiveAccountId();
@@ -22,7 +22,7 @@ Future<void> openContactDialogProfile(
     FirstFramePageRoute(
       builder: (_) => ChatInfoScreen(
         chatId: chatId,
-        name: name,
+        name: name ?? '',
         imageUrl: avatarUrl ?? '',
         chatType: 'DIALOG',
         dialogPeerId: contactId,

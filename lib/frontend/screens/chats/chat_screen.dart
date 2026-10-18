@@ -57,6 +57,7 @@ import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/utils/desktop_platform.dart';
 import '../../../core/storage/archived_chats_store.dart';
+import '../../../core/cache/chat_scroll_memory.dart';
 import '../../../core/cache/info_cache.dart';
 import '../../../core/links/message_link_token.dart';
 import '../../../core/cache/message_session_cache.dart';
@@ -238,9 +239,11 @@ class _ChatScreenState extends State<ChatScreen>
   double _keyboardReserve = 0;
   bool _keyboardWasOpen = false;
   bool _keyboardBeforeStickers = false;
-  final ScrollController _scrollController = ScrollController();
+  final ChatScrollController _scrollController = ChatScrollController();
   bool _userDidScroll = false;
   int? _unreadAnchorTime;
+  ChatScrollPoint? _restorePoint;
+  bool _scrollCaptureScheduled = false;
   bool _awaitingPosition = false;
   bool _initialPositionDone = false;
   bool _positioningInFlight = false;
@@ -1060,17 +1063,23 @@ class _ChatScreenState extends State<ChatScreen>
     _revealOrHoldInitial();
   }
 
+  // #***! явная цель важнее всего, потом первое непрочитанное, потом место,
+  // где остановились в прошлый раз
   void _resolveUnreadAnchor() {
     final c = chat;
     _readMarkTime = c?.participants[_myId] ?? 0;
-    if (c == null || c.unreadCount <= 0) {
+    final unread = c != null && c.unreadCount > 0;
+    if (!unread) {
       _unreadAnchorTime = null;
     } else {
       final myMark = c.participants[_myId] ?? 0;
       _unreadAnchorTime = myMark > 0 ? myMark : null;
     }
-    _awaitingPosition =
-        c != null && c.unreadCount > 0 && widget.initialMessageId == null;
+    final settled = widget.initialMessageId != null || _initialPositionDone;
+    _restorePoint = unread || settled || _commentsMode || _myId == 0
+        ? null
+        : ChatScrollMemory.of(_myId, widget.chatId);
+    _awaitingPosition = !settled && (unread || _restorePoint != null);
   }
 
   void _resolveCountBasedAnchor() {
@@ -1093,6 +1102,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   bool _canPositionNow() {
+    if (_restorePoint != null) return _messages.isNotEmpty;
     if (_unreadAnchorTime == null) _resolveCountBasedAnchor();
     final ua = _unreadAnchorTime;
     if (ua == null) return false;
@@ -1295,6 +1305,13 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
+    final point = _restorePoint;
+    if (point != null) {
+      _restorePoint = null;
+      _restoreScroll(point);
+      return;
+    }
+
     final c = chat;
     if (c != null && c.unreadCount > 0) {
       if (_unreadAnchorTime == null) _resolveCountBasedAnchor();
@@ -1334,6 +1351,59 @@ class _ChatScreenState extends State<ChatScreen>
     if (_shimmerController.isAnimating) _shimmerController.stop();
     _scheduleReadMarker();
     _scrollNav.maybeRunInitialTarget();
+  }
+
+  // #***! сообщение в памяти — якорь до первой раскладки, без шиммера;
+  // иначе окно вокруг него под шиммером, не нашлось — откроемся внизу
+  void _restoreScroll(ChatScrollPoint point) {
+    if (_scrollNav.anchorBeforeLayout(point)) {
+      _markPositioned();
+      _afterScrollRestored();
+      return;
+    }
+    _initialPositionDone = true;
+    _positioningInFlight = true;
+    unawaited(_restoreScrollAsync(point));
+  }
+
+  Future<void> _restoreScrollAsync(ChatScrollPoint point) async {
+    final restored = await _scrollNav.restore(point);
+    if (!mounted) return;
+    if (!restored) ChatScrollMemory.forget(_myId, widget.chatId);
+    setState(_markPositioned);
+    _afterScrollRestored();
+  }
+
+  void _afterScrollRestored() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollNav.clampIntoRange();
+      _scrollNav.updateScrollDownVisible();
+      _maybeLoadMoreHistory();
+    });
+  }
+
+  void _scheduleScrollCapture() {
+    if (_scrollCaptureScheduled) return;
+    _scrollCaptureScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollCaptureScheduled = false;
+      _captureScrollPoint();
+    });
+  }
+
+  // #***! пока идёт позиционирование или прыжок, раскладка промежуточная;
+  // у самого низа позицию забываем, чат откроется как обычно
+  void _captureScrollPoint() {
+    if (!mounted || _commentsMode || widget.preview || _myId == 0) return;
+    if (!_initialPositionDone || _awaitingPosition || _scrollNav.busy) return;
+    if (_messages.isEmpty || !_scrollController.hasClients) return;
+    if (_scrollNav.isNearBottom()) {
+      ChatScrollMemory.remember(_myId, widget.chatId, null);
+      return;
+    }
+    final point = _scrollNav.captureScrollPoint();
+    if (point != null) ChatScrollMemory.remember(_myId, widget.chatId, point);
   }
 
   void _openChatInfo({ChatInfoTab? initialTab}) {
@@ -2374,7 +2444,11 @@ class _ChatScreenState extends State<ChatScreen>
         unawaited(_note.stop(cancel: true));
       }
     }
-    if (state != AppLifecycleState.resumed) _saveDraft();
+    if (state != AppLifecycleState.resumed) {
+      _saveDraft();
+      _captureScrollPoint();
+      if (_myId != 0) unawaited(ChatScrollMemory.persist(_myId, widget.chatId));
+    }
     super.didChangeAppLifecycleState(state);
   }
 
@@ -2398,6 +2472,7 @@ class _ChatScreenState extends State<ChatScreen>
       unawaited(NotificationBridge.instance.popActiveChat(widget.chatId));
     }
     _chatController.persistSessionCache();
+    if (_myId != 0) unawaited(ChatScrollMemory.persist(_myId, widget.chatId));
     if (_previewChat) {
       unawaited(chats.subscribeChat(api, widget.chatId, subscribe: false));
     }
@@ -4517,9 +4592,7 @@ class _ChatScreenState extends State<ChatScreen>
       openContactDialogProfile(
         context,
         contactId: senderId,
-        name:
-            ContactCache.get(senderId) ??
-            AppLocalizations.of(context)!.userFallbackName(senderId),
+        name: ContactCache.get(senderId),
         avatarUrl: ContactCache.getAvatar(senderId),
       ),
     );
@@ -4536,10 +4609,7 @@ class _ChatScreenState extends State<ChatScreen>
       openContactDialogProfile(
         context,
         contactId: senderId,
-        name:
-            forwarded.originalSenderName ??
-            ContactCache.get(senderId) ??
-            AppLocalizations.of(context)!.userFallbackName(senderId),
+        name: forwarded.originalSenderName ?? ContactCache.get(senderId),
         avatarUrl:
             forwarded.originalSenderAvatar ?? ContactCache.getAvatar(senderId),
       ),
@@ -4805,7 +4875,10 @@ class _ChatScreenState extends State<ChatScreen>
             !_search.searchMode.value &&
             _textSelection.value == null,
         onPopInvokedWithResult: (didPop, _) {
-          if (didPop) return;
+          if (didPop) {
+            _captureScrollPoint();
+            return;
+          }
           if (_search.searchMode.value) {
             _closeSearch();
           } else if (_textSelection.value != null) {
@@ -4971,6 +5044,7 @@ class _ChatScreenState extends State<ChatScreen>
                 _scrollNav.bumpGestureEpoch();
               } else if (notification is ScrollEndNotification) {
                 _readMarker.flush();
+                if (notification.depth == 0) _scheduleScrollCapture();
               }
               return false;
             },
