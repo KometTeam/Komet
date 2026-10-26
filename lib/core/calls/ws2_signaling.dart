@@ -108,8 +108,12 @@ class Ws2CommandException implements Exception {
 class Ws2Signaling {
   final Ws2Config config;
 
+  // #***! рукопожатие TLS и WebSocket у ядра без таймаута, висеть вечно нельзя
+  static const Duration _connectLimit = Duration(seconds: 10);
+
   kb.CallSignaling? _call;
   StreamSubscription<String>? _notifSub;
+  bool _shutDown = false;
 
   // #***! уведомления стримом, ответы на команды по завершению future
   final _notifications = StreamController<Map<String, dynamic>>.broadcast();
@@ -125,12 +129,25 @@ class Ws2Signaling {
 
   bool get isConnected => _call?.isConnected() ?? false;
 
-  // #***! подключение к сигналке
+  // #***! подключение к сигналке. Сокет, открывшийся уже после таймаута или
+  // после close, сразу закрываем: иначе по нему ушёл бы accept звонка, который
+  // пользователь успел сбросить
   Future<void> connect() async {
-    final call = await kb.connectCallSignaling(
+    final pending = kb.connectCallSignaling(
       url: config.uri.toString(),
       userAgent: 'okhttp/4.12.0',
     );
+    final kb.CallSignaling call;
+    try {
+      call = await pending.timeout(_connectLimit);
+    } on TimeoutException {
+      unawaited(pending.then((late) => late.close(), onError: (_) {}));
+      rethrow;
+    }
+    if (_shutDown) {
+      call.close();
+      throw StateError('ws2 закрыт до подключения');
+    }
     _call = call;
     _notifSub = call.notifications().listen(
       (json) {
@@ -339,6 +356,7 @@ class Ws2Signaling {
   );
 
   Future<void> close() async {
+    _shutDown = true;
     await _notifSub?.cancel();
     _notifSub = null;
     _call?.close();

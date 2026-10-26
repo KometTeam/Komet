@@ -351,7 +351,7 @@ class MainActivity : AudioServiceFragmentActivity() {
                 }
                 "notifyAccepted" -> {
                     val caller = call.argument<String>("caller") ?: "Звонок"
-                    CallRinger.stop()
+                    CallRinger.stop(call.argument<String>("conversationId"))
                     NotificationManagerCompat.from(this).cancel(CallConst.NOTIF_ID)
                     CallForegroundService.start(applicationContext, caller)
                     result.success(null)
@@ -376,14 +376,14 @@ class MainActivity : AudioServiceFragmentActivity() {
                     result.success(null)
                 }
                 "notifyEnded" -> {
-                    CallRinger.stop()
+                    CallRinger.stop(call.argument<String>("conversationId"))
                     NotificationManagerCompat.from(this).cancel(CallConst.NOTIF_ID)
                     CallForegroundService.stop(applicationContext)
                     clearCallWindowFlags()
                     result.success(null)
                 }
                 "cancelIncoming" -> {
-                    CallRinger.stop()
+                    CallRinger.stop(call.argument<String>("conversationId"))
                     NotificationManagerCompat.from(this).cancel(CallConst.NOTIF_ID)
                     result.success(null)
                 }

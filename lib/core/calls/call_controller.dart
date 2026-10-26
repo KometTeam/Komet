@@ -248,7 +248,7 @@ class CallController {
   // #***! принятие входящего
   Future<CallSession> acceptIncoming(IncomingCall call) async {
     _pending = null;
-    CallBridge.instance.cancelIncoming();
+    CallBridge.instance.cancelIncoming(conversationId: call.conversationId);
     final config = Ws2Config.fromVcp(
       call.params,
       conversationId: call.conversationId,
@@ -269,7 +269,7 @@ class CallController {
   // #***! отклонение
   Future<void> rejectIncoming(IncomingCall call) async {
     _pending = null;
-    CallBridge.instance.notifyEnded();
+    CallBridge.instance.notifyEnded(conversationId: call.conversationId);
     final config = Ws2Config.fromVcp(
       call.params,
       conversationId: call.conversationId,
@@ -312,7 +312,10 @@ class CallController {
       } catch (_) {}
       rethrow;
     }
-    CallBridge.instance.notifyAccepted(caller: caller);
+    CallBridge.instance.notifyAccepted(
+      caller: caller,
+      conversationId: session.info.conversationId,
+    );
     return session;
   }
 
@@ -332,7 +335,9 @@ class CallController {
     _activeJoinLink = null;
     await _activeSub?.cancel();
     _activeSub = null;
-    CallBridge.instance.notifyEnded();
+    CallBridge.instance.notifyEnded(
+      conversationId: session.info.conversationId,
+    );
     _ended.add(null);
   }
 

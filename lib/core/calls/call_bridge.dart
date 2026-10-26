@@ -74,10 +74,13 @@ class CallBridge {
   }
 
   // #***! дальше управление нативным уведомлением
-  Future<void> notifyAccepted({String? caller}) async {
+  Future<void> notifyAccepted({String? caller, String? conversationId}) async {
     if (!_android) return;
     try {
-      await _method.invokeMethod<void>('notifyAccepted', {'caller': caller});
+      await _method.invokeMethod<void>('notifyAccepted', {
+        'caller': caller,
+        'conversationId': conversationId,
+      });
     } catch (e) {
       logger.w('CallBridge.notifyAccepted: caller=$caller $e');
     }
@@ -113,19 +116,24 @@ class CallBridge {
     }
   }
 
-  Future<void> notifyEnded() async {
+  // #***! id звонка натив запоминает, чтобы поздний пуш его не поднял снова
+  Future<void> notifyEnded({String? conversationId}) async {
     if (!_android) return;
     try {
-      await _method.invokeMethod<void>('notifyEnded');
+      await _method.invokeMethod<void>('notifyEnded', {
+        'conversationId': conversationId,
+      });
     } catch (e) {
       logger.w('CallBridge.notifyEnded: $e');
     }
   }
 
-  Future<void> cancelIncoming() async {
+  Future<void> cancelIncoming({String? conversationId}) async {
     if (!_android) return;
     try {
-      await _method.invokeMethod<void>('cancelIncoming');
+      await _method.invokeMethod<void>('cancelIncoming', {
+        'conversationId': conversationId,
+      });
     } catch (e) {
       logger.w('CallBridge.cancelIncoming: $e');
     }

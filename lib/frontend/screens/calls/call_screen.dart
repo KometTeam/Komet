@@ -371,8 +371,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _close();
   }
 
+  // #***! пока принятие ещё идёт, своей сессии у экрана нет, но контроллер её
+  // уже держит: без этого кнопка закрывала экран, а звонок соединялся дальше
   Future<void> _hangup() async {
-    final session = _session;
+    final session = _session ?? CallController.instance.activeSession;
     if (session != null) {
       await session.hangup();
     }

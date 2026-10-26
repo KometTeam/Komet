@@ -3021,7 +3021,7 @@ class CallSession {
 
   // #***! принятие входящего
   Future<void> accept({bool activate = true}) async {
-    if (_accepted) return;
+    if (_accepted || _ended) return;
     _accepted = true;
     logger.i('[call] accept-call sent (activate=$activate)');
     await _signaling?.acceptCall(
