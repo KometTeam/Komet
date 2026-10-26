@@ -1,16 +1,28 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../config/device_profile.dart';
 import 'download_history.dart';
+import 'download_progress.dart';
+import 'format.dart';
 import 'image_format.dart';
 import 'media_cache.dart';
+import 'save_file_as.dart';
 
-enum MediaSaveFailure { noLink, downloadFailed, fileNotFound, noGalleryAccess }
+enum MediaSaveFailure {
+  noLink,
+  downloadFailed,
+  fileNotFound,
+  noGalleryAccess,
+  noStorageAccess,
+}
 
 // #***! итог сохранения, в галерею или в папку
 class MediaSaveResult {
@@ -33,6 +45,7 @@ class MediaSaveResult {
     MediaSaveFailure.downloadFailed => l10n.fileBubbleDownloadFailedReason,
     MediaSaveFailure.fileNotFound => l10n.mediaSaveFileNotFound,
     MediaSaveFailure.noGalleryAccess => l10n.mediaSaveNoGalleryAccess,
+    MediaSaveFailure.noStorageAccess => l10n.mediaSaveNoStorageAccess,
     null => error ?? '',
   };
 }
@@ -61,10 +74,14 @@ Future<MediaSaveResult> saveImageFromUrl(String url) async {
   }
 }
 
-// #***! фото и видео в галерею, остальное в папку
-enum SaveMediaKind { image, video, file }
+// #***! фото и видео в галерею, аудио в медиатеку, остальное в папку
+enum SaveMediaKind { image, video, audio, file }
 
 bool get savesToGallery => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+
+bool get _isIOS => !kIsWeb && Platform.isIOS;
 
 const _scopedStorageSdk = 29;
 
@@ -75,10 +92,12 @@ Future<MediaSaveResult> saveMediaFile({
   required String saveName,
   required SaveMediaKind kind,
   DownloadMetadata? download,
+  void Function(double progress)? onProgress,
 }) async {
   try {
     var file = await MediaCache.existing(cacheName);
     if (file == null) {
+      onProgress?.call(0);
       final url = await resolveUrl();
       if (url == null || url.isEmpty) {
         return const MediaSaveResult(
@@ -86,7 +105,11 @@ Future<MediaSaveResult> saveMediaFile({
           failure: MediaSaveFailure.noLink,
         );
       }
-      file = await MediaCache.getOrDownload(cacheName, url);
+      file = await MediaCache.getOrDownload(
+        cacheName,
+        url,
+        onProgress: onProgress,
+      );
     }
     if (file == null) {
       return const MediaSaveResult(
@@ -104,6 +127,38 @@ Future<MediaSaveResult> saveMediaFile({
   } catch (e) {
     return MediaSaveResult(ok: false, error: e.toString());
   }
+}
+
+// #***! голосовое как обычный аудиофайл, докачку видно на кнопке пузыря
+Future<MediaSaveResult> saveVoiceMessage({
+  required String cacheName,
+  required String url,
+  required int messageTime,
+  DownloadMetadata? download,
+}) async {
+  final stamp = formatFileStamp(
+    DateTime.fromMillisecondsSinceEpoch(messageTime),
+  );
+  try {
+    return await saveMediaFile(
+      cacheName: cacheName,
+      resolveUrl: () async => url,
+      saveName: 'VOICE_$stamp.ogg',
+      kind: SaveMediaKind.audio,
+      download: download,
+      onProgress: (value) => MediaDownloadProgress.set(cacheName, value),
+    );
+  } finally {
+    MediaDownloadProgress.set(cacheName, null);
+  }
+}
+
+// #***! подсказываем где искать сохранённое голосовое
+String voiceSaveNotice(AppLocalizations l10n, MediaSaveResult result) {
+  if (!result.ok) return l10n.notificationsSaveFailed(result.errorText(l10n));
+  if (_isIOS) return l10n.voiceSavedToFiles;
+  final location = result.location;
+  return location == null ? l10n.voiceSaved : l10n.voiceSavedTo(location);
 }
 
 // #***! медиа уже на диске, просто копируем
@@ -168,24 +223,53 @@ Future<MediaSaveResult> _write(
     }
     return const MediaSaveResult(ok: true, toGallery: true);
   }
+  if (kind == SaveMediaKind.audio && _isAndroid) {
+    return _publishAudio(file, saveName);
+  }
 
   final dir = await _targetDirectory();
-  final target = File('${dir.path}${Platform.pathSeparator}$saveName');
+  final target = await availableSaveTarget(dir.path, p.basename(saveName));
   await file.copy(target.path);
   return MediaSaveResult(ok: true, location: target.path);
 }
 
-Future<bool> _mayWriteGallery() async {
-  if (Platform.isAndroid) {
-    final sdkInt = (await DeviceProfile.load()).sdkInt ?? 0;
-    if (sdkInt >= _scopedStorageSdk) return true;
+// #***! в MediaStore, файл видят плееры и проводник
+Future<MediaSaveResult> _publishAudio(File file, String saveName) async {
+  if (!await _mayWriteSharedStorage()) {
+    return const MediaSaveResult(
+      ok: false,
+      failure: MediaSaveFailure.noStorageAccess,
+    );
   }
+  try {
+    final folder = await mediaExportChannel.invokeMethod<String>(
+      'publishAudio',
+      {'path': file.path, 'name': saveName},
+    );
+    return MediaSaveResult(ok: true, location: folder);
+  } on PlatformException catch (e) {
+    return MediaSaveResult(ok: false, error: e.message ?? e.code);
+  }
+}
+
+Future<bool> _hasScopedStorage() async =>
+    _isAndroid &&
+    ((await DeviceProfile.load()).sdkInt ?? 0) >= _scopedStorageSdk;
+
+Future<bool> _mayWriteGallery() async {
+  if (await _hasScopedStorage()) return true;
   final state = await PhotoManager.requestPermissionExtend();
   return state.isAuth || state.hasAccess;
 }
 
-// #***! папка загрузок есть не везде, иначе документы приложения
+Future<bool> _mayWriteSharedStorage() async {
+  if (await _hasScopedStorage()) return true;
+  return (await Permission.storage.request()).isGranted;
+}
+
+// #***! на айфоне Documents виден в «Файлах», загрузок нет на всех платформах
 Future<Directory> _targetDirectory() async {
+  if (_isIOS) return getApplicationDocumentsDirectory();
   try {
     final downloads = await getDownloadsDirectory();
     if (downloads != null) return downloads;

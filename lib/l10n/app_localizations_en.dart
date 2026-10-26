@@ -646,6 +646,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgActionsCopyLink => 'Copy link';
 
   @override
+  String get msgActionsSave => 'Save';
+
+  @override
   String get msgActionsSelectAll => 'Select all';
 
   @override
@@ -5670,9 +5673,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginSuccessGreetingEasterEgg => 'You found an Easter egg!';
 
   @override
-  String get chatTextSendUnknownCommand => 'NO SUCH COMMAND🚨🚨🚨';
-
-  @override
   String get chatTextSendSaveFailed => 'Couldn\'t save the message';
 
   @override
@@ -5689,6 +5689,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceBubbleTranscriptionFailed => 'transcription failed';
+
+  @override
+  String get voiceSaved => 'Voice message saved';
+
+  @override
+  String voiceSavedTo(String folder) {
+    return 'Voice message saved to $folder';
+  }
+
+  @override
+  String get voiceSavedToFiles => 'Voice message saved to the Files app';
 
   @override
   String chatInfoStoryCount(int count) {
@@ -6927,6 +6938,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mediaSaveNoGalleryAccess => 'no access to the gallery';
+
+  @override
+  String get mediaSaveNoStorageAccess => 'no access to storage';
 
   @override
   String get commandShrugDescription => 'send a kaomoji';

@@ -134,7 +134,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         final text => text,
       };
 
-  String get _cacheName => '${widget.audioId ?? _sourceMessageId}.ogg';
+  String get _cacheName => VoiceAudioController.cacheNameFor(
+    audioId: widget.audioId,
+    messageId: _sourceMessageId,
+  );
 
   int get _sourceChatId => widget.sourceChatId ?? widget.chatId;
 

@@ -333,14 +333,10 @@ class ChatTextSendController {
     bool canUpdateChat() =>
         isMounted() && _myId == accountId && _chatId == chatId;
 
-    if (AppCommands.current.value && text.startsWith('/')) {
-      final command = CommandRegistry.instance.find(text);
-      if (command == null) {
-        messageController.clear();
-        hasText.value = false;
-        notify(l10nOf().chatTextSendUnknownCommand);
-        return;
-      }
+    final command = AppCommands.current.value && text.startsWith('/')
+        ? CommandRegistry.instance.find(text)
+        : null;
+    if (command != null) {
       final args = commandArgs(text);
       messageController.clear();
       hasText.value = false;

@@ -59,17 +59,17 @@ class _Section {
 }
 
 class StickerPanel extends StatefulWidget {
-  final double height;
   final void Function(StickerItem sticker) onStickerTap;
   final void Function(Animoji animoji)? onEmojiTap;
   final void Function(double delta)? onResize;
+  final ValueNotifier<bool>? searching;
 
   const StickerPanel({
     super.key,
-    required this.height,
     required this.onStickerTap,
     this.onEmojiTap,
     this.onResize,
+    this.searching,
   });
 
   @override
@@ -109,6 +109,7 @@ class _StickerPanelState extends State<StickerPanel>
   List<int> _recents = const [];
   String _query = '';
   bool _searchLoading = false;
+  bool _clearingSearch = false;
   List<StickerItem> _results = const [];
 
   @override
@@ -121,6 +122,8 @@ class _StickerPanelState extends State<StickerPanel>
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
     _scroll.addListener(_onScroll);
+    _searchFocus.addListener(_onSearchFocusChanged);
+    widget.searching?.addListener(_onSearchingChanged);
     stickersModule.favoriteStickerIds.addListener(_onPinnedChanged);
     stickersModule.setsChanged.addListener(_onPinnedChanged);
     stickersModule.recentStickerIds.addListener(_onRecentsChanged);
@@ -129,7 +132,17 @@ class _StickerPanelState extends State<StickerPanel>
   }
 
   @override
+  void didUpdateWidget(StickerPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.searching == widget.searching) return;
+    oldWidget.searching?.removeListener(_onSearchingChanged);
+    widget.searching?.addListener(_onSearchingChanged);
+  }
+
+  @override
   void dispose() {
+    widget.searching?.removeListener(_onSearchingChanged);
+    _searchFocus.removeListener(_onSearchFocusChanged);
     stickersModule.favoriteStickerIds.removeListener(_onPinnedChanged);
     stickersModule.setsChanged.removeListener(_onPinnedChanged);
     stickersModule.recentStickerIds.removeListener(_onRecentsChanged);
@@ -174,15 +187,35 @@ class _StickerPanelState extends State<StickerPanel>
     });
   }
 
+  bool get _searchOpen => _searchFocus.hasFocus || _query.isNotEmpty;
+
+  void _onSearchFocusChanged() {
+    if (_searchFocus.hasFocus) widget.searching?.value = true;
+    if (mounted) setState(() {});
+  }
+
+  void _onSearchingChanged() {
+    if (widget.searching?.value == false && _searchOpen) _clearSearch();
+  }
+
   void _clearSearch() {
+    if (_clearingSearch) return;
+    _clearingSearch = true;
     _searchCtrl.clear();
     _searchFocus.unfocus();
     _searchDebouncer.cancel();
+    widget.searching?.value = false;
     setState(() {
       _query = '';
       _results = const [];
       _searchLoading = false;
     });
+    _clearingSearch = false;
+  }
+
+  void _sendFound(StickerItem item) {
+    widget.onStickerTap(item);
+    _clearSearch();
   }
 
   Future<void> _load() async {
@@ -351,17 +384,21 @@ class _StickerPanelState extends State<StickerPanel>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return SizedBox(
-      height: widget.height,
-      child: GlassSurface(
-        liquid: false,
-        frostTint: AppFrost.glassTint(cs),
-        border: Border(top: AppFrost.hairline(cs)),
-        child: SafeArea(
-          top: false,
+    return GlassSurface(
+      liquid: false,
+      frostTint: AppFrost.glassTint(cs),
+      border: Border(top: AppFrost.hairline(cs)),
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewPaddingOf(context).bottom,
+          ),
           child: Column(
             children: [
-              if (widget.onResize != null) _buildResizeHandle(cs),
+              if (widget.onResize != null && !_searchOpen)
+                _buildResizeHandle(cs),
               Expanded(
                 child: _mode == _modeEmoji && widget.onEmojiTap != null
                     ? EmojiPanel(onEmojiTap: widget.onEmojiTap!)
@@ -459,6 +496,7 @@ class _StickerPanelState extends State<StickerPanel>
 
   void _setMode(int mode) {
     if (mode == _mode) return;
+    if (_searchOpen) _clearSearch();
     _modeUserChosen = true;
     _persistedMode = mode;
     setState(() => _mode = mode);
@@ -727,7 +765,7 @@ class _StickerPanelState extends State<StickerPanel>
       tags: item.tags,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => widget.onStickerTap(item),
+        onTap: () => _sendFound(item),
         child: Padding(
           padding: const EdgeInsets.all(6),
           child: LottieImage(

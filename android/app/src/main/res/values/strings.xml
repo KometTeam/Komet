@@ -11,6 +11,7 @@
     <string name="fkm_explain">This notification is what keeps a background connection to the server, so messages arrive without Google push. To get rid of it, turn FKM off — with the button below, or in Settings → Notifications → FKM.</string>
     <string name="fkm_disable">Turn off</string>
     <string name="notif_deleted_prefix">Deleted:</string>
+    <string name="notif_mark_read">Mark as read</string>
     <string name="share_target_label">Send to a chat</string>
     <string name="shortcut_saved_messages">Saved Messages</string>
     <string name="shortcut_search">Search</string>

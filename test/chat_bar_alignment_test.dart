@@ -18,6 +18,13 @@ import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/composer_morph_icon.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
 
+final Finder _actionButton = find.byWidgetPredicate(
+  (widget) =>
+      widget is ComposerMorphIcon &&
+      widget.action != ComposerAction.stickers &&
+      widget.action != ComposerAction.keyboard,
+);
+
 void main() {
   late RichMessageController messageController;
   late FocusNode focusNode;
@@ -191,14 +198,14 @@ void main() {
 
     expect(tester.getCenter(find.byIcon(Symbols.face)).dx, back);
     expect(width - tester.getCenter(find.byIcon(Symbols.attachment)).dx, call);
-    expect(width - tester.getCenter(find.byType(ComposerMorphIcon)).dx, menu);
+    expect(width - tester.getCenter(_actionButton).dx, menu);
   });
 
   testWidgets('glossy action geometry is untouched', (tester) async {
     await pumpBar(tester, ComposerStyle.glossy);
     final width = tester.getSize(find.byType(ComposerInputBar)).width;
 
-    expect(tester.getCenter(find.byType(ComposerMorphIcon)).dx, width - 39);
+    expect(tester.getCenter(_actionButton).dx, width - 39);
     expect(tester.getCenter(find.byIcon(Symbols.face)).dx, 38);
     expect(tester.getCenter(find.byIcon(Symbols.attachment)).dx, width - 100);
   });

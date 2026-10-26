@@ -104,6 +104,37 @@ thread, and opening the sticker panel froze the app for up to 300 ms.
 To run the engine test on the host, build the library with `cargo build --release` in
 `native/komet_tlottie/rust` and pass it as `TLOTTIE_LIB`.
 
+## Keyboard and chat panels
+
+The chat follows Telegram: the composer's bottom is always `max(keyboard, visible sticker panel)`
+(`StickerPanelController.visibleHeight`, applied in `ChatScreen` as the bottom inset). Opening the
+panel over an open keyboard sets it to the keyboard height at once and hides the keyboard, which
+slides away over it; going back to typing keeps the panel until the keyboard covers it or settles,
+with a 1 s fallback. The last settled keyboard height is persisted per orientation. Sticker search
+expands the panel to just under the app bar (`expandAnim`) and keeps it open over the keyboard.
+
+On Android the attachment sheet opens **over** an open keyboard instead of closing it
+(`KeyboardCover`, `lib/frontend/widgets/keyboard_cover.dart` + `KeyboardCover.kt`):
+
+- a non-focusable child panel window is added over the FlutterView; Android layers such windows
+  above the IME and the activity stays the IME target, so the keyboard remains open underneath;
+- the FlutterView's surface is paused and the renderer swapped into a `SurfaceView` in that window
+  — the same `pause`/`swapSurface`/`resume` path the embedding uses for `FlutterImageView`;
+  touches are forwarded to the FlutterView, back goes to Flutter before the IME (a
+  `PRIORITY_OVERLAY` callback on 33+, a pre-IME key hook in `FlutterHostFrame` below);
+- the chat paints the keyboard band transparent (`KeyboardCoverHole`, `BlendMode.clear`) so the
+  keyboard shows through until the sheet slides over it, and `KeyboardCoverScope` reports no
+  keyboard to the rest of the app while the chat holds the keyboard's place itself;
+- it is released after the sheet's exit animation, when another text field takes focus (the
+  keyboard is hidden under the cover and reopened, so the caption rides up with it), when the IME
+  closes, and on pause or resize. Not used on iOS, in embedded layouts or with touch exploration.
+
+`FlutterHostFrame` wraps the FlutterFragment container. Besides the pre-IME back hook it re-applies
+the last window insets to the FlutterView once IME animations settle: the embedding's
+`ImeSyncDeferringInsetsCallback` holds insets until the IME animation's `onEnd`, and when that
+end state is stale (overlapping animations, flutter/flutter#118761) or `onEnd` never comes, the
+app stays lifted by the height of a keyboard that is already closed.
+
 ## WebRTC plugin fork
 
 `flutter_webrtc` is overridden with the private fork `KometTeam/flutter-webrtc` (upstream v1.5.2 +

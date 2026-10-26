@@ -83,6 +83,29 @@ object LauncherBadge {
         }
     }
 
+    fun dropChat(ctx: Context, chatId: Long, pushes: Int) {
+        if (live || chatId == 0L) return
+        val app = ctx.applicationContext
+        worker.execute {
+            val p = prefs(app)
+            if (!p.getBoolean(KEY_ENABLED, true)) return@execute
+            val edit = p.edit()
+            val drop = if (p.getBoolean(KEY_BY_CHATS, false)) {
+                val chats = p.getStringSet(KEY_CHATS, null).orEmpty()
+                val key = chatId.toString()
+                if (key !in chats) return@execute
+                edit.putStringSet(KEY_CHATS, chats - key)
+                1
+            } else {
+                pushes
+            }
+            if (drop <= 0) return@execute
+            val count = (p.getInt(KEY_COUNT, 0) - drop).coerceAtLeast(0)
+            edit.putInt(KEY_COUNT, count).commit()
+            show(app, count, launcherClass(app))
+        }
+    }
+
     fun reapply(ctx: Context, launcherClass: String) {
         val app = ctx.applicationContext
         worker.execute { show(app, prefs(app).getInt(KEY_COUNT, 0), launcherClass) }

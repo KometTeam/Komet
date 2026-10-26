@@ -537,6 +537,7 @@ class MainActivity : AudioServiceFragmentActivity() {
         ClipboardMedia.attach(flutterEngine, this)
 
         MediaExport.attach(flutterEngine, this)
+        KeyboardCover.attach(flutterEngine, this)
 
         FkmChannel.attach(flutterEngine, this)
         LauncherBadge.attach(flutterEngine, this)
@@ -550,6 +551,7 @@ class MainActivity : AudioServiceFragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         if (intent?.hasExtra(CallConst.EXTRA_CALL) == true) applyCallWindowFlags()
         super.onCreate(savedInstanceState)
+        FlutterHostFrame.install(this)
         applyKeepAwake()
         requestHighRefreshRate()
         intent?.let { if (it.hasExtra(CallConst.EXTRA_CALL)) stashCall(it, emit = false) }
@@ -1032,6 +1034,7 @@ class MainActivity : AudioServiceFragmentActivity() {
 
     override fun onDestroy() {
         shareExecutor.shutdown()
+        KeyboardCover.detach(this)
         super.onDestroy()
     }
 
@@ -1042,6 +1045,7 @@ class MainActivity : AudioServiceFragmentActivity() {
     }
 
     override fun onPause() {
+        KeyboardCover.forceRelease()
         super.onPause()
         AppState.resumed = false
         if (NfcExchange.active) {

@@ -198,6 +198,9 @@
             android:name=".CallActionReceiver"
             android:exported="false" />
         <receiver
+            android:name=".MessageActionReceiver"
+            android:exported="false" />
+        <receiver
             android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
             android:exported="false" />
         <meta-data

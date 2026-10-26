@@ -91,4 +91,41 @@ void main() {
     expect(forwarded.selectableText, 'исходный текст');
     expect(await _tapCopy(tester, [forwarded], glossy: false), [forwarded]);
   });
+
+  testWidgets('сохранить как появляется только для выбранного файла', (
+    tester,
+  ) async {
+    final file = _text('77', null);
+    CachedMessage? saved;
+    Future<void> pump({CachedMessage? saveMsg}) => tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: SelectionTopBar(
+            cs: ThemeData.light().colorScheme,
+            selected: {file.id},
+            glossy: false,
+            copyMsgs: const [],
+            editMsg: null,
+            saveMsg: saveMsg,
+            onClear: () {},
+            onCopy: (_) {},
+            onEdit: (_) {},
+            onSaveAs: (message) => saved = message,
+            onDelete: () {},
+          ),
+        ),
+      ),
+    );
+
+    await pump();
+    expect(find.widgetWithIcon(IconButton, Symbols.save_as), findsNothing);
+
+    await pump(saveMsg: file);
+    await tester.tap(find.widgetWithIcon(IconButton, Symbols.save_as));
+    await tester.pump();
+    expect(saved, same(file));
+  });
 }

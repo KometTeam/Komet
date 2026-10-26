@@ -10,6 +10,7 @@ import 'package:komet/backend/modules/comments.dart';
 import 'package:komet/backend/modules/forward_sender.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:komet/core/cache/message_session_cache.dart';
+import 'package:komet/core/config/app_commands.dart';
 import 'package:komet/core/protocol/packet.dart';
 import 'package:komet/core/storage/app_database.dart';
 import 'package:komet/core/utils/haptics.dart';
@@ -77,6 +78,7 @@ class _Harness {
   bool mounted = true;
   int bumps = 0;
   final notifications = <String>[];
+  final executed = <String>[];
   final composed = Completer<void>();
 
   late final sender = ChatTextSendController(
@@ -102,7 +104,7 @@ class _Harness {
     chatOf: () => null,
     encryptOutgoing: (text, {notify = true}) async =>
         encrypt ? 'Synthetic ciphertext' : text,
-    executeCommand: (_, _) async {},
+    executeCommand: (command, _) async => executed.add(command.name),
     checkPrankTrigger: (_) {},
     confirmSend: () async => true,
   );
@@ -511,5 +513,35 @@ void main() {
 
     expect(harness.api.requests, isEmpty);
     expect(await AppDatabase.loadPendingMessages(101), hasLength(1));
+  });
+
+  test('a slash text without a local command is sent as a message', () async {
+    AppCommands.current.value = true;
+    final harness = _Harness(encrypt: false);
+    addTearDown(harness.dispose);
+    harness.composer.text = '/synthetic_unknown argument';
+
+    final sending = harness.sender.sendTextMessage();
+    await harness.api.started.future;
+    harness.api.response.completeError(TimeoutException('Synthetic timeout'));
+    await sending;
+
+    final request = harness.api.requests.single['message'] as Map;
+    expect(request['text'], '/synthetic_unknown argument');
+    expect(harness.executed, isEmpty);
+    expect(harness.notifications, isEmpty);
+  });
+
+  test('a local command runs without reaching the network', () async {
+    AppCommands.current.value = true;
+    final harness = _Harness(encrypt: false);
+    addTearDown(harness.dispose);
+    harness.composer.text = '/shrug';
+
+    await harness.sender.sendTextMessage();
+
+    expect(harness.executed, ['/shrug']);
+    expect(harness.api.requests, isEmpty);
+    expect(harness.composer.text, isEmpty);
   });
 }

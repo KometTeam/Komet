@@ -315,6 +315,7 @@ class ComposerArea extends StatelessWidget {
                     channelSubscribing: channelSubscribing,
                     onSubscribe: onSubscribe,
                     showStickerButton: !commentsMode && selectedCommand == null,
+                    stickersShown: stickers.showPanel.value,
                     showAttachButton: !commentsMode && selectedCommand == null,
                     forceSend: commentsMode || selectedCommand != null,
                     readOnly: selectedCommand != null,
