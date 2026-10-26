@@ -330,13 +330,16 @@ Future<void> _downloadAttachment(
   if (att is AudioAttachment) {
     final url = att.fileUrl ?? att.baseUrl ?? '';
     if (url.isEmpty) return;
-    final result = await saveMediaFile(
-      cacheName: '${att.audioId ?? item.messageId}.ogg',
-      resolveUrl: () async => url,
-      saveName: 'AUD_$now.ogg',
-      kind: SaveMediaKind.file,
+    final cacheName = VoiceAudioController.cacheNameFor(
+      audioId: att.audioId,
+      messageId: item.messageId,
+    );
+    final result = await saveVoiceMessage(
+      cacheName: cacheName,
+      url: url,
+      messageTime: item.time,
       download: DownloadMetadata(
-        cacheName: '${att.audioId ?? item.messageId}.ogg',
+        cacheName: cacheName,
         kind: DownloadKind.audio,
         sourceName: sourceName,
         expectedSize: att.size ?? 0,
@@ -345,7 +348,11 @@ Future<void> _downloadAttachment(
         messageTime: item.time,
       ),
     );
-    if (context.mounted) _notifySave(context, result);
+    if (!context.mounted) return;
+    showCustomNotification(
+      context,
+      voiceSaveNotice(AppLocalizations.of(context)!, result),
+    );
   }
 }
 
@@ -1212,7 +1219,10 @@ class _ProfileVoiceTileState extends State<_ProfileVoiceTile> {
   void initState() {
     super.initState();
     _player = VoiceAudioController(
-      cacheName: '${_audio.audioId ?? widget.item.messageId}.ogg',
+      cacheName: VoiceAudioController.cacheNameFor(
+        audioId: _audio.audioId,
+        messageId: widget.item.messageId,
+      ),
       resolveUrl: () async => _audio.fileUrl ?? _audio.baseUrl ?? '',
       fallbackDuration: Duration(milliseconds: _audio.duration ?? 0),
     );

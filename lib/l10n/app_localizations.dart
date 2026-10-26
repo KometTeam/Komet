@@ -1310,6 +1310,12 @@ abstract class AppLocalizations {
   /// **'Copy link'**
   String get msgActionsCopyLink;
 
+  /// No description provided for @msgActionsSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get msgActionsSave;
+
   /// No description provided for @msgActionsSelectAll.
   ///
   /// In en, this message translates to:
@@ -10250,12 +10256,6 @@ abstract class AppLocalizations {
   /// **'You found an Easter egg!'**
   String get loginSuccessGreetingEasterEgg;
 
-  /// No description provided for @chatTextSendUnknownCommand.
-  ///
-  /// In en, this message translates to:
-  /// **'NO SUCH COMMAND🚨🚨🚨'**
-  String get chatTextSendUnknownCommand;
-
   /// No description provided for @chatTextSendSaveFailed.
   ///
   /// In en, this message translates to:
@@ -10291,6 +10291,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'transcription failed'**
   String get voiceBubbleTranscriptionFailed;
+
+  /// No description provided for @voiceSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice message saved'**
+  String get voiceSaved;
+
+  /// No description provided for @voiceSavedTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice message saved to {folder}'**
+  String voiceSavedTo(String folder);
+
+  /// No description provided for @voiceSavedToFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice message saved to the Files app'**
+  String get voiceSavedToFiles;
 
   /// No description provided for @chatInfoStoryCount.
   ///
@@ -12325,6 +12343,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'no access to the gallery'**
   String get mediaSaveNoGalleryAccess;
+
+  /// No description provided for @mediaSaveNoStorageAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'no access to storage'**
+  String get mediaSaveNoStorageAccess;
 
   /// No description provided for @commandShrugDescription.
   ///

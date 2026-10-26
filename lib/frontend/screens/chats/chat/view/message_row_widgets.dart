@@ -239,6 +239,8 @@ class SelectableMessageRow extends StatefulWidget {
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
   final VoidCallback? onCopyLink;
+  final VoidCallback? onSave;
+  final VoidCallback? onSaveAs;
   final bool Function() isPinned;
   final Future<List<MessageReader>> Function()? loadReadBy;
   final void Function(int userId)? onReaderTap;
@@ -271,6 +273,8 @@ class SelectableMessageRow extends StatefulWidget {
     this.onMarkUnread,
     this.onPin,
     this.onCopyLink,
+    this.onSave,
+    this.onSaveAs,
     required this.isPinned,
     this.loadReadBy,
     this.onReaderTap,
@@ -361,6 +365,8 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
       onCopyLink: widget.onCopyLink,
+      onSave: widget.onSave,
+      onSaveAs: widget.onSaveAs,
       isPinned: _isPinnedNow(),
       onPinSticker: _pinStickerAction(stickerId),
       isStickerPinned: _isStickerPinned(stickerId),
@@ -464,6 +470,8 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
       onCopyLink: widget.onCopyLink,
+      onSave: widget.onSave,
+      onSaveAs: widget.onSaveAs,
       isPinned: _isPinnedNow(),
       onPinSticker: _pinStickerAction(stickerId),
       isStickerPinned: _isStickerPinned(stickerId),

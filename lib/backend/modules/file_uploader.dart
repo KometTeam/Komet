@@ -115,12 +115,14 @@ class FileUploader {
         var status = 0;
         String? error;
         final done = Completer<void>();
-        // #***! подписка на события ядра
+        // #***! подписка на события ядра. Имя уходит в Content-Disposition, а
+        // заголовок сервер читает как Latin-1: кириллица без процентного
+        // кодирования превращается в «Ð¾ÑÐ¿». Официальные клиенты кодируют так же
         sub = session
             .uploadFilePath(
               url: info.url,
               path: file.path,
-              filename: filename,
+              filename: Uri.encodeComponent(filename),
               connection: 'close',
             )
             .listen(

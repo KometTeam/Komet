@@ -556,6 +556,16 @@ class CachedMessage {
           ?.whereType<StickerAttachment>()
           .firstOrNull;
 
+  AudioAttachment? get audioAttachment =>
+      (forwardedAttachment?.originalAttachments ?? attachments)
+          ?.whereType<AudioAttachment>()
+          .firstOrNull;
+
+  FileAttachment? get fileAttachment =>
+      (forwardedAttachment?.originalAttachments ?? attachments)
+          ?.whereType<FileAttachment>()
+          .firstOrNull;
+
   String? get selectableText {
     final own = text;
     if (own != null && own.isNotEmpty) return own;

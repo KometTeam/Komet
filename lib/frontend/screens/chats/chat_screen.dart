@@ -27,6 +27,7 @@ import 'package:komet/frontend/screens/contacts/open_contact_profile.dart';
 import 'package:komet/frontend/screens/chats/chat_list_screen.dart';
 import 'package:komet/frontend/screens/chats/poll_create_screen.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/frontend/widgets/keyboard_cover.dart';
 import 'package:komet/frontend/widgets/hint_bubble.dart';
 import 'package:komet/frontend/widgets/undo_notification.dart';
 import 'package:komet/backend/modules/pending_message_deletions.dart';
@@ -142,7 +143,16 @@ import 'e2ee_screen.dart';
 import 'chat_wallpaper_preview_screen.dart';
 import 'profile_action_sheets.dart';
 import '../../../core/media/media_playback.dart';
+import '../../../core/media/voice_audio_controller.dart';
+import '../../../core/utils/download_history.dart';
+import '../../../core/utils/download_progress.dart';
+import '../../../core/utils/file_download.dart';
+import '../../../core/utils/media_cache.dart';
+import '../../../core/utils/media_saver.dart';
+import '../../../core/utils/save_file_as.dart';
+import '../../widgets/attachment/bubbles/file_bubble.dart';
 import '../../../core/config/app_shape.dart';
+import '../../../core/config/ios_release.dart';
 import '../../../core/security/app_lock.dart';
 import '../../widgets/first_frame_clock.dart';
 
@@ -240,7 +250,7 @@ class _ChatScreenState extends State<ChatScreen>
   final FocusNode _messageFocusNode = FocusNode();
   double _keyboardReserve = 0;
   bool _keyboardWasOpen = false;
-  bool _keyboardBeforeStickers = false;
+  bool _coversKeyboard = false;
   final ChatScrollController _scrollController = ChatScrollController();
   bool _userDidScroll = false;
   int? _unreadAnchorTime;
@@ -721,6 +731,8 @@ class _ChatScreenState extends State<ChatScreen>
     );
     stickersModule.ensureFavoritesLoaded().ignore();
     WidgetsBinding.instance.addObserver(this);
+    _messageFocusNode.addListener(_onComposerFocusChanged);
+    KeyboardCover.instance.active.addListener(_onKeyboardCoverChanged);
     _uploadEventSub = UploadService.instance.events.listen(
       _mediaSend.onUploadEvent,
     );
@@ -748,6 +760,7 @@ class _ChatScreenState extends State<ChatScreen>
     _stickers = StickerPanelController(
       vsync: this,
       onSendTyping: () => messagesModule.sendTyping(widget.chatId, 'STICKER'),
+      softKeyboard: !isDesktopPlatform,
     );
     _showAttachmentPanel.addListener(_onAttachPanelToggle);
     _commandPanel = CommandPanelController(
@@ -1684,6 +1697,113 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  String? _voiceUrl(AudioAttachment? audio) {
+    final url = audio?.fileUrl ?? audio?.baseUrl;
+    return url == null || url.isEmpty ? null : url;
+  }
+
+  bool _canSaveVoice(CachedMessage message) =>
+      _voiceUrl(message.audioAttachment) != null;
+
+  Future<void> _saveVoice(CachedMessage message) async {
+    final audio = message.audioAttachment;
+    final url = _voiceUrl(audio);
+    if (audio == null || url == null) return;
+    final cacheName = VoiceAudioController.cacheNameFor(
+      audioId: audio.audioId,
+      messageId: message.forwardedAttachment?.originalMessageId ?? message.id,
+    );
+    final result = await saveVoiceMessage(
+      cacheName: cacheName,
+      url: url,
+      messageTime: message.time,
+      download: DownloadMetadata(
+        cacheName: cacheName,
+        kind: DownloadKind.audio,
+        sourceName: _chatName,
+        expectedSize: audio.size ?? 0,
+        chatId: message.chatId,
+        messageId: message.id,
+        messageTime: message.time,
+      ),
+    );
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      voiceSaveNotice(AppLocalizations.of(context)!, result),
+    );
+  }
+
+  // #***! сохранить как прямо из чата, без захода в недавние загрузки
+  FileAttachment? _savableFile(CachedMessage message) {
+    final file = message.fileAttachment;
+    if (file?.fileId == null) return null;
+    final name = file!.name ?? '';
+    if (FileBubble.holdsEncryptedImage(message, name)) return null;
+    return file;
+  }
+
+  CachedMessage? _singleSavable(Set<String> ids) {
+    if (ids.length != 1) return null;
+    final list = _selectedMessages(ids);
+    if (list.isEmpty) return null;
+    return _savableFile(list.first) == null ? null : list.first;
+  }
+
+  void _saveSelected(CachedMessage message) {
+    _clearSelection();
+    unawaited(_saveFileAs(message));
+  }
+
+  Future<void> _saveFileAs(CachedMessage message) async {
+    final file = _savableFile(message);
+    final fileId = file?.fileId;
+    if (file == null || fileId == null) return;
+    final l10n = AppLocalizations.of(context)!;
+    final name = file.name ?? l10n.attachmentFileFallback;
+    final cacheName = '${fileId}_$name';
+    if (!MediaCache.presence(cacheName).value) {
+      MediaDownloadProgress.set(cacheName, 0);
+    }
+    final downloaded = await ensureCachedFile(
+      cacheName,
+      () => messagesModule.getFileUrl(
+        messageId: message.id,
+        chatId: message.chatId,
+        fileId: fileId,
+      ),
+      onProgress: (value) => MediaDownloadProgress.set(cacheName, value),
+      onReady: () => MediaDownloadProgress.set(cacheName, null),
+      download: DownloadMetadata(
+        cacheName: cacheName,
+        name: name,
+        kind: downloadKindForName(name),
+        sourceName: _chatName,
+        thumbnailUrl: file.preview?.baseUrl ?? file.previewData,
+        expectedSize: file.size ?? 0,
+        chatId: message.chatId,
+        messageId: message.id,
+        messageTime: message.time,
+      ),
+    ).whenComplete(() => MediaDownloadProgress.set(cacheName, null));
+    if (!mounted) return;
+    final path = downloaded.path;
+    if (!downloaded.ok || path == null) {
+      showCustomNotification(context, l10n.fileBubbleDownloadFailed);
+      return;
+    }
+    final saved = await saveFileAs(
+      source: File(path),
+      fileName: name,
+      dialogTitle: l10n.photoViewerSaveAs,
+    );
+    if (!mounted || saved.cancelled) return;
+    showCustomNotification(
+      context,
+      saved.saved ? l10n.photoViewerFileSaved : l10n.photoViewerSaveFileFailed,
+    );
+  }
+
   bool _canPinMessage(CachedMessage message) {
     if (message.isControl) return false;
     if (int.tryParse(message.id) == null) return false;
@@ -2459,7 +2579,12 @@ class _ChatScreenState extends State<ChatScreen>
   void didChangeMetrics() {
     super.didChangeMetrics();
     final view = View.of(context);
-    final keyboardOpen = view.viewInsets.bottom / view.devicePixelRatio > 100;
+    final keyboard = view.viewInsets.bottom / view.devicePixelRatio;
+    final keyboardOpen = keyboard > 100;
+    _stickers.keyboardChanged(
+      keyboard,
+      landscape: view.physicalSize.width > view.physicalSize.height,
+    );
     if (_keyboardWasOpen && !keyboardOpen && _messageFocusNode.hasFocus) {
       _messageFocusNode.unfocus();
     }
@@ -2559,7 +2684,10 @@ class _ChatScreenState extends State<ChatScreen>
     _textSelectionDrag.dispose();
     _disposeCommandArguments();
     _messageController.dispose();
+    _messageFocusNode.removeListener(_onComposerFocusChanged);
     _messageFocusNode.dispose();
+    KeyboardCover.instance.active.removeListener(_onKeyboardCoverChanged);
+    if (_coversKeyboard) unawaited(KeyboardCover.instance.release());
     _stickers.dispose();
     _scrollController.dispose();
     _shimmerStartTimer?.cancel();
@@ -4878,7 +5006,10 @@ class _ChatScreenState extends State<ChatScreen>
   Widget build(BuildContext context) {
     return RouteProbe(
       onRoute: (route) => _route = route,
-      child: _buildScreen(context),
+      child: KeyboardCoverHole(
+        height: _coversKeyboard ? _keyboardReserve : 0,
+        child: _buildScreen(context),
+      ),
     );
   }
 
@@ -4892,7 +5023,7 @@ class _ChatScreenState extends State<ChatScreen>
     // TODO: Локализация
     // TODO: Cклонения
     final viewInsets = MediaQuery.viewInsetsOf(context);
-    final bottomInset = _keyboardReserve > 0
+    final keyboard = _keyboardReserve > 0
         ? math.max(viewInsets.bottom, _keyboardReserve)
         : viewInsets.bottom;
     return ListenableBuilder(
@@ -4900,18 +5031,26 @@ class _ChatScreenState extends State<ChatScreen>
         _selectedIds,
         _search.searchMode,
         _textSelection,
+        _stickers.showPanel,
       ]),
       builder: (context, child) => PopScope(
         canPop:
             _selectedIds.value.isEmpty &&
             !_search.searchMode.value &&
-            _textSelection.value == null,
+            _textSelection.value == null &&
+            !_stickerPanelHoldsBack,
         onPopInvokedWithResult: (didPop, _) {
           if (didPop) {
             _captureScrollPoint();
             return;
           }
-          if (_search.searchMode.value) {
+          if (_stickerPanelHoldsBack) {
+            if (_stickers.searching.value) {
+              _stickers.searching.value = false;
+            } else {
+              _stickers.hide();
+            }
+          } else if (_search.searchMode.value) {
             _closeSearch();
           } else if (_textSelection.value != null) {
             _exitTextSelection();
@@ -4921,14 +5060,19 @@ class _ChatScreenState extends State<ChatScreen>
         },
         child: child!,
       ),
-      child: MediaQuery(
-        data:
-            context
-                .getInheritedWidgetOfExactType<MediaQuery>()!
-                .data
-                .copyWith(
-                  viewInsets: viewInsets.copyWith(bottom: bottomInset),
+      child: AnimatedBuilder(
+        animation: _stickers.layout,
+        builder: (context, child) => MediaQuery(
+          data: context
+              .getInheritedWidgetOfExactType<MediaQuery>()!
+              .data
+              .copyWith(
+                viewInsets: viewInsets.copyWith(
+                  bottom: math.max(0, keyboard - _stickers.visibleHeight),
                 ),
+              ),
+          child: child!,
+        ),
         child: Theme(
           data: theme,
           child: RepaintBoundary(
@@ -5028,9 +5172,11 @@ class _ChatScreenState extends State<ChatScreen>
                     selectedIds: _selectedIds,
                     copyableSelection: _copyableSelection,
                     singleEditable: _singleEditable,
+                    singleSavable: _singleSavable,
                     onClearSelection: _clearSelection,
                     onCopySelected: _copySelected,
                     onEditSelected: _editSelected,
+                    onSaveSelected: _saveSelected,
                     onDeleteSelected: _deleteSelected,
                     search: _search,
                     searchFocusNode: _searchFocusNode,
@@ -5270,6 +5416,12 @@ class _ChatScreenState extends State<ChatScreen>
                                 myId: _myId,
                                 prevMessage: prevMessage,
                                 nextMessage: nextMessage,
+                                separatedAbove:
+                                    itemIndex > 0 &&
+                                    items[itemIndex - 1] is! _MessageItem,
+                                separatedBelow:
+                                    itemIndex + 1 < items.length &&
+                                    items[itemIndex + 1] is! _MessageItem,
                                 chatType: _commentsMode
                                     ? 'CHAT'
                                     : (chat?.type ?? 'CHAT'),
@@ -5368,6 +5520,12 @@ class _ChatScreenState extends State<ChatScreen>
                                 onCopyLink: _canLinkMessage(message)
                                     ? () => _copyMessageLink(message)
                                     : null,
+                                onSave: _canSaveVoice(message)
+                                    ? () => _saveVoice(message)
+                                    : null,
+                                onSaveAs: _savableFile(message) == null
+                                    ? null
+                                    : () => _saveFileAs(message),
                                 isPinned: () =>
                                     chat?.pinnedMsgId ==
                                     int.tryParse(message.id),
@@ -5536,7 +5694,12 @@ class _ChatScreenState extends State<ChatScreen>
     if (hadKeyboard) {
       setState(() => _keyboardReserve = keyboard);
     }
-    FocusManager.instance.primaryFocus?.unfocus();
+    final overKeyboard = hadKeyboard && await _coverKeyboard();
+    if (!mounted) return;
+    if (!overKeyboard) {
+      if (hadKeyboard) setState(() => _keyboardReserve = keyboard);
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
     final draft = _composerCaptionDraft();
     void sendPhotos(
       List<PickedPhoto> picked,
@@ -5589,24 +5752,61 @@ class _ChatScreenState extends State<ChatScreen>
       onSendContact: _encryptionEnabled
           ? (_) => _refuseUnencrypted((l) => l.chatScreenNoEncryptContacts)
           : _mediaSend.sendContact,
+      overKeyboard: overKeyboard,
     );
-    if (!mounted || !hadKeyboard) return;
+    if (!mounted || !hadKeyboard || overKeyboard) return;
     _messageFocusNode.requestFocus();
     await Future.delayed(const Duration(milliseconds: 350));
     if (mounted) setState(() => _keyboardReserve = 0);
   }
 
+  // #***! шторка вложений встаёт поверх клавиатуры, а чат держит её место,
+  // чтобы после закрытия клавиатура оказалась ровно там же
+  Future<bool> _coverKeyboard() async {
+    if (widget.embedded || widget.preview) return false;
+    _coversKeyboard = true;
+    final engaged = await KeyboardCover.instance.engage();
+    if (!engaged) _coversKeyboard = false;
+    return engaged;
+  }
+
+  void _onKeyboardCoverChanged() {
+    if (KeyboardCover.instance.active.value || !_coversKeyboard) return;
+    _coversKeyboard = false;
+    if (mounted) setState(() => _keyboardReserve = 0);
+  }
+
+  // #***! как в телеграме: кнопка переключает панель и клавиатуру, открытая
+  // клавиатура уезжает поверх панели, которая уже стоит на её месте
   void _toggleStickerPanel() {
     if (_stickers.showPanel.value) {
-      _stickers.hide();
-      if (_keyboardBeforeStickers) _messageFocusNode.requestFocus();
+      _stickers.yieldToKeyboard();
+      if (!_messageFocusNode.hasFocus) {
+        _messageFocusNode.requestFocus();
+      } else if (_stickers.softKeyboard) {
+        unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
+      }
       return;
     }
+    final view = View.of(context);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-    _keyboardBeforeStickers = keyboard > 120 || _messageFocusNode.hasFocus;
-    if (keyboard > 120) _stickers.setBaseHeight(keyboard);
-    FocusManager.instance.primaryFocus?.unfocus();
-    _stickers.showPanel.value = true;
+    if (keyboard > 120) {
+      _stickers.showInPlaceOfKeyboard(keyboard);
+      FocusManager.instance.primaryFocus?.unfocus();
+      return;
+    }
+    _stickers.show(
+      landscape: view.physicalSize.width > view.physicalSize.height,
+    );
+  }
+
+  bool get _stickerPanelHoldsBack =>
+      _stickers.showPanel.value && !IosRelease.isIOS;
+
+  void _onComposerFocusChanged() {
+    if (_messageFocusNode.hasFocus && _stickers.softKeyboard) {
+      _stickers.yieldToKeyboard();
+    }
   }
 
   void _insertAnimoji(Animoji animoji) {

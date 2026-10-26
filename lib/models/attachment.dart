@@ -299,7 +299,7 @@ class FileAttachment extends MessageAttachment {
       baseUrl: map['baseUrl'] as String?,
       fileId: map['fileId'] as int?,
       fileToken: (map['fileToken'] ?? map['token'])?.toString(),
-      name: map['name'] as String?,
+      name: repairLatin1Mojibake(map['name'] as String?),
       size: map['size'] as int?,
       preview: preview,
     );

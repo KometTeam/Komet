@@ -13,6 +13,7 @@ import '../../backend/modules/account.dart';
 import '../../backend/modules/messages.dart';
 import '../calls/conversation_params.dart';
 import '../calls/ws2_signaling.dart';
+import '../config/komet_settings.dart';
 import '../protocol/opcode_map.dart';
 import '../storage/app_instance.dart';
 import '../storage/app_database.dart';
@@ -34,11 +35,93 @@ void _onNotificationResponse(NotificationResponse response) {
     if (payload != null) unawaited(_handleCallDecline(payload));
     return;
   }
+  if (response.actionId == 'read') {
+    final payload = response.payload;
+    if (payload != null) unawaited(_handleMarkRead(payload));
+    return;
+  }
   if (response.actionId != 'reply') return;
   final text = response.input?.trim();
   final payload = response.payload;
   if (text == null || text.isEmpty || payload == null) return;
   unawaited(_handleReply(payload, text));
+}
+
+Future<void>? _isolateReady;
+
+// #***! фоновый изолят живёт между нажатиями, готовим его один раз
+Future<void> _prepareIsolate() => _isolateReady ??= _initIsolate();
+
+Future<void> _initIsolate() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initKolibri();
+  if (AppInstance.isNamed) {
+    try {
+      SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
+    } catch (_) {}
+  }
+  await TlsConfig.applyMincifryTrust();
+}
+
+// #***! своя сессия аккаунта ради одного запроса, после него отключаемся
+Future<bool> _withSession(
+  int account,
+  Future<bool> Function(Api api) action,
+) async {
+  final token = await TokenStorage.readToken(account);
+  if (token == null || token.isEmpty) return false;
+  final api = Api()..spoofScope = '$account';
+  try {
+    await api.connect(authenticated: true);
+    if (api.state != SessionState.online) {
+      await api.stateStream
+          .firstWhere((s) => s == SessionState.online)
+          .timeout(const Duration(seconds: 20));
+    }
+    final login = await api.sendRequest(
+      Opcode.login,
+      AccountModule(api).buildLoginPayload(token, interactive: false),
+    );
+    if (!login.isOk) return false;
+    return await action(api);
+  } catch (_) {
+    return false;
+  } finally {
+    await api.disconnect();
+  }
+}
+
+// #***! прочитано из шторки, натив её уже погасил, осталось сказать серверу
+Future<void> _handleMarkRead(String payloadJson) async {
+  int account;
+  int chatId;
+  int messageId;
+  int mark;
+  try {
+    final decoded = jsonDecode(payloadJson);
+    if (decoded is! Map) return;
+    account = (decoded['c'] as num?)?.toInt() ?? 0;
+    chatId = (decoded['chat'] as num?)?.toInt() ?? 0;
+    messageId = (decoded['mid'] as num?)?.toInt() ?? 0;
+    mark = (decoded['mark'] as num?)?.toInt() ?? 0;
+  } catch (_) {
+    return;
+  }
+  if (account == 0 || chatId == 0 || messageId == 0) return;
+
+  await _prepareIsolate();
+  await KometSettings.load();
+  if (KometSettings.ghostMode.value || KometSettings.antiRead.value) return;
+
+  await _withSession(account, (api) async {
+    final response = await api.sendRequest(Opcode.chatMark, {
+      'type': 'READ_MESSAGE',
+      'chatId': chatId,
+      'messageId': messageId,
+      'mark': mark,
+    });
+    return response.isOk;
+  });
 }
 
 // #***! отклонить звонок из уведомления, поднимаем сигналку ради одного сообщения
@@ -89,46 +172,18 @@ Future<void> _handleReply(String payloadJson, String text) async {
   }
   if (account == 0 || chatId == 0) return;
 
-  WidgetsFlutterBinding.ensureInitialized();
-  await initKolibri();
-  if (AppInstance.isNamed) {
-    try {
-      SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
-    } catch (_) {}
-  }
-  await TlsConfig.applyMincifryTrust();
+  await _prepareIsolate();
 
   final plugin = FlutterLocalNotificationsPlugin();
   final notifId = chatId & 0x7fffffff;
-  Api? api;
-  var sent = false;
-  try {
-    final token = await TokenStorage.readToken(account);
-    if (token != null && token.isNotEmpty) {
-      api = Api()..spoofScope = '$account';
-      await api.connect(authenticated: true);
-      if (api.state != SessionState.online) {
-        await api.stateStream
-            .firstWhere((s) => s == SessionState.online)
-            .timeout(const Duration(seconds: 20));
-      }
-      final login = await api.sendRequest(
-        Opcode.login,
-        AccountModule(api).buildLoginPayload(token, interactive: false),
-      );
-      final session = await AppDatabase.loadE2eeSession(account, chatId);
-      if (login.isOk && session == null) {
-        await MessagesModule(
-          api,
-        ).sendMessage(account, chatId, text, replyToMessageId: replyTo);
-        sent = true;
-      }
-    }
-  } catch (_) {
-    sent = false;
-  } finally {
-    await api?.disconnect();
-  }
+  final sent = await _withSession(account, (api) async {
+    final session = await AppDatabase.loadE2eeSession(account, chatId);
+    if (session != null) return false;
+    await MessagesModule(
+      api,
+    ).sendMessage(account, chatId, text, replyToMessageId: replyTo);
+    return true;
+  });
 
   if (sent) {
     await plugin.cancel(id: notifId);

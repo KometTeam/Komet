@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../core/utils/parse.dart';
 import '../../models/attachment.dart';
 import '../../models/chat_preview_media.dart';
 
@@ -33,7 +34,10 @@ String? attachPreviewLabel(dynamic attaches) {
     case 'AUDIO':
       return (label: 'Голосовое сообщение', detail: null);
     case 'FILE':
-      return (label: 'Файл', detail: _nonEmpty(first['name']));
+      return (
+        label: 'Файл',
+        detail: repairLatin1Mojibake(_nonEmpty(first['name'])),
+      );
     case 'STICKER':
       return (label: 'Стикер', detail: null);
     case 'SHARE':

@@ -661,6 +661,8 @@ MIC_OFF = 0xE02B
 CAM = 0xE04B
 CAM_OFF = 0xE04C
 SEND = 0xE163
+FACE = 0xF008
+KEYBOARD = 0xE312
 VOLUME_UP = 0xE050
 VOLUME_OFF = 0xE04F
 FLASH_ON = 0xE3E7
@@ -985,6 +987,16 @@ SPECS = [
         rotation=[(0, 0), (10, -11), (DUR, 0)],
         scale=[(0, 100), (10, 90), (DUR, 100)],
         offset_x=[(0, 0), (10, 24), (19, -8), (DUR, 0)],
+    ),
+    dict(
+        name='ic_face_to_keyboard',
+        from_cp=FACE, to_cp=KEYBOARD,
+        scale=[(0, 100), (10, 86), (DUR, 100)],
+    ),
+    dict(
+        name='ic_keyboard_to_face',
+        from_cp=KEYBOARD, to_cp=FACE,
+        scale=[(0, 100), (10, 86), (DUR, 100)],
     ),
     dict(
         name='ic_screen_share_to_stop',

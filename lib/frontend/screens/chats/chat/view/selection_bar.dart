@@ -11,9 +11,11 @@ class SelectionTopBar extends StatelessWidget {
   final bool glossy;
   final List<CachedMessage> copyMsgs;
   final CachedMessage? editMsg;
+  final CachedMessage? saveMsg;
   final VoidCallback onClear;
   final void Function(List<CachedMessage>) onCopy;
   final void Function(CachedMessage) onEdit;
+  final void Function(CachedMessage)? onSaveAs;
   final VoidCallback onDelete;
 
   const SelectionTopBar({
@@ -23,14 +25,17 @@ class SelectionTopBar extends StatelessWidget {
     required this.glossy,
     required this.copyMsgs,
     required this.editMsg,
+    this.saveMsg,
     required this.onClear,
     required this.onCopy,
     required this.onEdit,
+    this.onSaveAs,
     required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
+    final saveTarget = onSaveAs == null ? null : saveMsg;
     final count = selected.length;
     final label = AppLocalizations.of(
       context,
@@ -69,6 +74,12 @@ class SelectionTopBar extends StatelessWidget {
                 icon: Icon(Symbols.edit, color: cs.onSurface),
                 onPressed: () => onEdit(editMsg!),
               ),
+            if (saveTarget != null)
+              IconButton(
+                tooltip: AppLocalizations.of(context)!.photoViewerSaveAs,
+                icon: Icon(Symbols.save_as, color: cs.onSurface),
+                onPressed: () => onSaveAs!(saveTarget),
+              ),
             IconButton(
               icon: Icon(Symbols.delete, color: cs.onSurface),
               onPressed: onDelete,
@@ -78,10 +89,12 @@ class SelectionTopBar extends StatelessWidget {
       );
     }
 
-    Widget actionBtn(IconData icon, VoidCallback onTap) => IconButton(
-      icon: Icon(icon, weight: 500, color: cs.onSurface),
-      onPressed: onTap,
-    );
+    Widget actionBtn(IconData icon, VoidCallback onTap, {String? tooltip}) =>
+        IconButton(
+          tooltip: tooltip,
+          icon: Icon(icon, weight: 500, color: cs.onSurface),
+          onPressed: onTap,
+        );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
@@ -137,6 +150,12 @@ class SelectionTopBar extends StatelessWidget {
                     actionBtn(Symbols.content_copy, () => onCopy(copyMsgs)),
                   if (editMsg != null)
                     actionBtn(Symbols.edit, () => onEdit(editMsg!)),
+                  if (saveTarget != null)
+                    actionBtn(
+                      Symbols.save_as,
+                      () => onSaveAs!(saveTarget),
+                      tooltip: AppLocalizations.of(context)!.photoViewerSaveAs,
+                    ),
                   actionBtn(Symbols.delete, onDelete),
                 ],
               ),

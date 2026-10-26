@@ -113,6 +113,7 @@ import 'frontend/widgets/adaptive_shell.dart';
 import 'frontend/widgets/chat_wallpaper_view.dart' show WallpaperImages;
 import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/hint_bubble.dart';
+import 'frontend/widgets/keyboard_cover.dart';
 import 'frontend/widgets/liquid_glass.dart';
 import 'frontend/widgets/mesh_gradient_background.dart';
 import 'frontend/widgets/small_spinner.dart';
@@ -1154,7 +1155,7 @@ class KometAppState extends State<KometApp>
                   valueListenable: fontScale,
                   child: child ?? const SizedBox.shrink(),
                   builder: (context, scale, appChild) {
-                    Widget scaledChild = appChild!;
+                    Widget scaledChild = KeyboardCoverScope(child: appChild!);
                     final effective = AppFonts.effectiveScale(_fontId, scale);
                     if ((effective - 1.0).abs() > 0.001) {
                       scaledChild = MediaQuery.withClampedTextScaling(

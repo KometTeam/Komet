@@ -649,6 +649,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get msgActionsCopyLink => 'Скопировать ссылку';
 
   @override
+  String get msgActionsSave => 'Сохранить';
+
+  @override
   String get msgActionsSelectAll => 'Выбрать всё';
 
   @override
@@ -5711,9 +5714,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loginSuccessGreetingEasterEgg => 'Вы нашли пасхалку!';
 
   @override
-  String get chatTextSendUnknownCommand => 'ТАКОЙ КОМАНДЫ НЕТУ🚨🚨🚨';
-
-  @override
   String get chatTextSendSaveFailed => 'Не удалось сохранить сообщение';
 
   @override
@@ -5730,6 +5730,17 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get voiceBubbleTranscriptionFailed => 'ошибка транскрибации';
+
+  @override
+  String get voiceSaved => 'Голосовое сохранено';
+
+  @override
+  String voiceSavedTo(String folder) {
+    return 'Голосовое сохранено в $folder';
+  }
+
+  @override
+  String get voiceSavedToFiles => 'Голосовое сохранено в приложение «Файлы»';
 
   @override
   String chatInfoStoryCount(int count) {
@@ -6979,6 +6990,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get mediaSaveNoGalleryAccess => 'нет доступа к галерее';
+
+  @override
+  String get mediaSaveNoStorageAccess => 'нет доступа к памяти';
 
   @override
   String get commandShrugDescription => 'отправить каомодзи';

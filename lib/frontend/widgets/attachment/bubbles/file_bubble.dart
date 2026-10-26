@@ -50,6 +50,19 @@ class FileBubble extends StatefulWidget {
     this.openFile = openCachedFile,
   });
 
+  static bool isViewableImage(String name) =>
+      name.toLowerCase().endsWith('.png') ||
+      name.toLowerCase().endsWith('.kce');
+
+  // #***! зашифрованную картинку открывает просмотрщик, в кэше лежит шифр
+  static bool holdsEncryptedImage(CachedMessage message, String name) =>
+      (message.e2ee == CachedMessage.e2eeFile && message.sealedText != null) ||
+      (isViewableImage(name) &&
+          ChatCryptoService.instance.isEnabled(
+            message.accountId,
+            message.chatId,
+          ));
+
   @override
   State<FileBubble> createState() => _FileBubbleState();
 }
@@ -270,7 +283,7 @@ class _FileBubbleState extends State<FileBubble> {
     try {
       if (downloadKindForName(name) == DownloadKind.audio) {
         await _playAudioFile(context, file, name);
-      } else if (_isViewableImage(name)) {
+      } else if (FileBubble.isViewableImage(name)) {
         await _openInViewer(context, name, cacheName);
       } else {
         await _downloadFile(context, file, name);
@@ -298,9 +311,6 @@ class _FileBubbleState extends State<FileBubble> {
     '.heif',
   };
 
-  static bool _isViewableImage(String name) =>
-      name.toLowerCase().endsWith('.png') ||
-      name.toLowerCase().endsWith('.kce');
 
   Uint8List? get _sealedTicket => ctx.message.e2ee == CachedMessage.e2eeFile
       ? ctx.message.sealedText
@@ -313,12 +323,7 @@ class _FileBubbleState extends State<FileBubble> {
   }
 
   bool _isEncryptedImage(String name) =>
-      _sealedTicket != null ||
-      (_isViewableImage(name) &&
-          ChatCryptoService.instance.isEnabled(
-            ctx.message.accountId,
-            ctx.message.chatId,
-          ));
+      FileBubble.holdsEncryptedImage(ctx.message, name);
 
   Widget? _preview({
     required String name,

@@ -100,6 +100,7 @@ Future<void> _pumpColumn(
   List<CachedMessage> messages, {
   required String chatType,
   double textScale = 1,
+  Set<int> separatorsBefore = const {},
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 2.5;
@@ -123,6 +124,8 @@ Future<void> _pumpColumn(
                   message: messages[i],
                   prevMessage: i > 0 ? messages[i - 1] : null,
                   nextMessage: i < messages.length - 1 ? messages[i + 1] : null,
+                  separatedAbove: separatorsBefore.contains(i),
+                  separatedBelow: separatorsBefore.contains(i + 1),
                   isMe: false,
                   myId: _me,
                   chatType: chatType,
@@ -144,6 +147,40 @@ Rect _bubbleRect(WidgetTester tester, int index, String text) {
   final box = find.ancestor(of: label, matching: find.byType(Container)).first;
   return tester.getTopLeft(box) & tester.getSize(box);
 }
+
+Rect _backgroundRect(WidgetTester tester, int index) {
+  final box = find
+      .descendant(
+        of: find.byKey(ValueKey('bubble$index')),
+        matching: find.byType(Container),
+      )
+      .first;
+  return tester.getTopLeft(box) & tester.getSize(box);
+}
+
+List<double> _gaps(WidgetTester tester, int count) => [
+  for (var i = 0; i < count - 1; i++)
+    _backgroundRect(tester, i + 1).top - _backgroundRect(tester, i).bottom,
+];
+
+CachedMessage _streamMessage(
+  int index, {
+  required int senderId,
+  required int minute,
+  String? text,
+  List<MessageAttachment>? attachments,
+}) => CachedMessage(
+  id: '$index',
+  accountId: _me,
+  chatId: 2,
+  senderId: senderId,
+  text: text,
+  time: DateTime(2026, 1, 1, 12, minute, index).millisecondsSinceEpoch,
+  status: 'sent',
+  attachments: attachments,
+);
+
+const _call = [CallAttachment(isVideo: false, durationMs: 42000)];
 
 Future<void> _pumpBubble(
   WidgetTester tester,
@@ -287,6 +324,69 @@ void main() {
 
     expect(dialogGaps, everyElement(2.0));
     expect(groupGaps, dialogGaps);
+  });
+
+  testWidgets('звонки одного человека подряд стоят вплотную, как текст', (
+    tester,
+  ) async {
+    final calls = [
+      for (var i = 0; i < 3; i++)
+        _streamMessage(i, senderId: _peer, minute: 54, attachments: _call),
+    ];
+
+    await _pumpColumn(tester, calls, chatType: 'DIALOG', textScale: 0.35);
+
+    expect(_gaps(tester, calls.length), everyElement(2.0));
+  });
+
+  testWidgets('между группами один и тот же зазор при любых соседях', (
+    tester,
+  ) async {
+    final stream = [
+      _streamMessage(0, senderId: _peer, minute: 50, text: 'a0'),
+      _streamMessage(1, senderId: 404, minute: 51, text: 'b1'),
+      _streamMessage(2, senderId: 404, minute: 51, text: 'b2'),
+      _streamMessage(3, senderId: _peer, minute: 52, attachments: _call),
+      _streamMessage(4, senderId: 404, minute: 53, text: 'b4'),
+    ];
+
+    await _pumpColumn(tester, stream, chatType: 'DIALOG', textScale: 0.35);
+
+    expect(_gaps(tester, stream.length), [8.0, 2.0, 8.0, 8.0]);
+  });
+
+  testWidgets('пауза дольше пяти минут начинает группу с именем и аватаркой', (
+    tester,
+  ) async {
+    final stream = [
+      _streamMessage(0, senderId: _peer, minute: 10, text: 'first'),
+      _streamMessage(1, senderId: _peer, minute: 20, text: 'second'),
+    ];
+
+    await _pumpColumn(tester, stream, chatType: 'CHAT');
+
+    expect(find.text('Пётр Синицын'), findsNWidgets(2));
+    expect(find.byType(CircleAvatar), findsNWidgets(2));
+    expect(
+      _bubbleRect(tester, 1, 'second').top -
+          _bubbleRect(tester, 0, 'first').bottom,
+      8.0,
+    );
+  });
+
+  testWidgets('разделитель между сообщениями разбивает группу', (tester) async {
+    final stream = [
+      _streamMessage(0, senderId: _peer, minute: 10, text: 'before'),
+      _streamMessage(1, senderId: _peer, minute: 10, text: 'after'),
+    ];
+
+    await _pumpColumn(tester, stream, chatType: 'CHAT');
+    expect(find.text('Пётр Синицын'), findsOneWidget);
+    expect(find.byType(CircleAvatar), findsOneWidget);
+
+    await _pumpColumn(tester, stream, chatType: 'CHAT', separatorsBefore: {1});
+    expect(find.text('Пётр Синицын'), findsNWidgets(2));
+    expect(find.byType(CircleAvatar), findsNWidgets(2));
   });
 
   testWidgets('a reply above a photo stays inside the photo width', (

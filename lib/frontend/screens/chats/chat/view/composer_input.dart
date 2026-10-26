@@ -65,6 +65,7 @@ class ComposerInputBar extends StatelessWidget {
     this.canPostToChannel = false,
     this.onSubscribe,
     this.showStickerButton = true,
+    this.stickersShown = false,
     this.showAttachButton = true,
     this.forceSend = false,
     this.readOnly = false,
@@ -110,6 +111,7 @@ class ComposerInputBar extends StatelessWidget {
   final bool canPostToChannel;
   final VoidCallback? onSubscribe;
   final bool showStickerButton;
+  final bool stickersShown;
   final bool showAttachButton;
   final bool forceSend;
   final bool readOnly;
@@ -240,11 +242,11 @@ class ComposerInputBar extends StatelessWidget {
                                       GestureDetector(
                                         behavior: HitTestBehavior.opaque,
                                         onTap: onToggleStickerPanel,
-                                        child: Icon(
-                                          Symbols.face,
+                                        child: ComposerMorphIcon(
+                                          action: stickersShown
+                                              ? ComposerAction.keyboard
+                                              : ComposerAction.stickers,
                                           color: mutedIcon,
-                                          size: 24,
-                                          weight: 400,
                                         ),
                                       ),
                                       const SizedBox(width: 12),

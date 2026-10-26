@@ -980,6 +980,8 @@ class MessageBubble extends StatelessWidget {
   final int myId;
   final CachedMessage? prevMessage;
   final CachedMessage? nextMessage;
+  final bool separatedAbove;
+  final bool separatedBelow;
   final String chatType;
   final int? chatId;
   final PhotoViewerActions? photoActions;
@@ -1016,6 +1018,8 @@ class MessageBubble extends StatelessWidget {
     required this.myId,
     this.prevMessage,
     this.nextMessage,
+    this.separatedAbove = false,
+    this.separatedBelow = false,
     required this.chatType,
     this.chatId,
     this.photoActions,
@@ -1102,7 +1106,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   bool get _showsSenderName =>
-      !isMe && chatType == "CHAT" && prevMessage?.senderId != message.senderId;
+      !isMe && chatType == "CHAT" && !_groupedWithPrev;
 
   bool get _stretchesTextRow => message.replyInfo != null || _showsSenderName;
 
@@ -1116,24 +1120,28 @@ class MessageBubble extends StatelessWidget {
       other.senderId == message.senderId &&
       (other.time - message.time).abs() <= forwardBurstWindowMs;
 
+  // #***! одна группа это один отправитель подряд без паузы в 5 минут и без
+  // разделителя между ними; по ней же форма, отступы, имя и аватарка
+  static const int _groupWindowMs = 300000;
+
+  bool get _groupedWithPrev =>
+      !separatedAbove && _sameGroup(prevMessage, message);
+
+  bool get _groupedWithNext =>
+      !separatedBelow && _sameGroup(message, nextMessage);
+
+  static bool _sameGroup(CachedMessage? a, CachedMessage? b) =>
+      a != null &&
+      b != null &&
+      !a.isControl &&
+      !b.isControl &&
+      a.senderId == b.senderId &&
+      (b.time - a.time).abs() < _groupWindowMs;
+
   BubbleShape _computeShape() {
     if (message.isControl) return BubbleShape.singleMiddle;
-
-    final hasPrevFromMe =
-        prevMessage?.senderId == message.senderId && !prevMessage!.isControl;
-    final prevTimeDiff = hasPrevFromMe
-        ? message.time - prevMessage!.time
-        : 999999999;
-
-    final hasNextFromMe =
-        nextMessage?.senderId == message.senderId && !nextMessage!.isControl;
-    final nextTimeDiff = hasNextFromMe
-        ? nextMessage!.time - message.time
-        : 999999999;
-
-    final groupedWithPrev = hasPrevFromMe && prevTimeDiff < 300000;
-    final groupedWithNext = hasNextFromMe && nextTimeDiff < 300000;
-
+    final groupedWithPrev = _groupedWithPrev;
+    final groupedWithNext = _groupedWithNext;
     if (!groupedWithPrev && !groupedWithNext) return BubbleShape.singleMiddle;
     if (!groupedWithPrev && groupedWithNext) return BubbleShape.singleTop;
     if (groupedWithPrev && !groupedWithNext) return BubbleShape.singleBottom;
@@ -1230,55 +1238,22 @@ class MessageBubble extends StatelessWidget {
       case MessageType.attachment:
         return EdgeInsets.zero;
       case MessageType.voice:
-        if (shape == BubbleShape.singleTop ||
-            shape == BubbleShape.singleBottom) {
-          return const EdgeInsets.symmetric(horizontal: 14, vertical: 6);
+        if (shape == BubbleShape.groupedMiddle) {
+          return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
         }
-        return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
+        return const EdgeInsets.symmetric(horizontal: 14, vertical: 6);
       case MessageType.control:
         return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
     }
   }
 
-  double _topMarginFor(MessageType contentType, BubbleShape shape) {
-    switch (contentType) {
-      case MessageType.text:
-        switch (shape) {
-          case BubbleShape.singleTop:
-            return 6;
-          case BubbleShape.singleBottom:
-          case BubbleShape.groupedMiddle:
-            return 1;
-          case BubbleShape.singleMiddle:
-            return 4;
-        }
-      case MessageType.attachment:
-        switch (shape) {
-          case BubbleShape.singleBottom:
-            return 6;
-          case BubbleShape.singleTop:
-          case BubbleShape.groupedMiddle:
-            return 1;
-          case BubbleShape.singleMiddle:
-            return 4;
-        }
-      case MessageType.voice:
-        return shape == BubbleShape.singleMiddle ? 4 : 1;
-      case MessageType.control:
-        return 4;
-    }
-  }
+  // #***! половина зазора с каждой стороны: внутри группы 1+1, между
+  // группами 4+4 при любом типе соседей
+  static const double _groupedMargin = 1;
+  static const double _separateMargin = 4;
 
-  double _bottomMarginFor(MessageType contentType, BubbleShape shape) {
-    switch (contentType) {
-      case MessageType.text:
-      case MessageType.attachment:
-      case MessageType.voice:
-        return shape == BubbleShape.singleMiddle ? 4 : 1;
-      case MessageType.control:
-        return 4;
-    }
-  }
+  static double _marginFor(bool grouped) =>
+      grouped ? _groupedMargin : _separateMargin;
 
   BorderRadius _borderRadiusFor(
     BubbleStyle bubbleStyle,
@@ -1418,12 +1393,8 @@ class MessageBubble extends StatelessWidget {
 
     if (message.isControl) {
       if (message.isSilentBotStart) return const SizedBox.shrink();
-      const controlShape = BubbleShape.singleMiddle;
       return Padding(
-        padding: EdgeInsets.only(
-          top: _topMarginFor(contentType, controlShape),
-          bottom: _bottomMarginFor(contentType, controlShape),
-        ),
+        padding: const EdgeInsets.symmetric(vertical: _separateMargin),
         child: Center(child: _buildControlContent(cs)),
       );
     }
@@ -1474,8 +1445,12 @@ class MessageBubble extends StatelessWidget {
     final hasMultiPhotos = _computeHasMultiplePhotosNoCaption();
     final textColor = bubbleTextColor(context);
 
-    final topMargin = _topMarginFor(contentType, shape);
-    final bottomMargin = _bottomMarginFor(contentType, shape);
+    final topMargin = _marginFor(
+      shape == BubbleShape.singleBottom || shape == BubbleShape.groupedMiddle,
+    );
+    final bottomMargin = _marginFor(
+      shape == BubbleShape.singleTop || shape == BubbleShape.groupedMiddle,
+    );
     final jumboAnimoji = _jumboAnimojiUrls;
     final padding = jumboAnimoji != null
         ? EdgeInsets.zero
@@ -1485,7 +1460,8 @@ class MessageBubble extends StatelessWidget {
     final showAvatar =
         showAvatarSlot &&
         chatType == "CHAT" &&
-        nextMessage?.senderId != message.senderId;
+        (shape == BubbleShape.singleBottom ||
+            shape == BubbleShape.singleMiddle);
     final showSenderName = _showsSenderName;
 
     final keyboard = _inlineKeyboard;

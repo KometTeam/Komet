@@ -57,6 +57,10 @@ class VoiceAudioController {
   final String cacheName;
   final Future<String?> Function() resolveUrl;
 
+  // #***! один ключ кэша у пузыря, сохранения и вкладки голосовых
+  static String cacheNameFor({int? audioId, required String messageId}) =>
+      '${audioId ?? messageId}.ogg';
+
   // #***! у конца считаем что дослушали иначе последний тик не совпадёт
   static const double _endEpsilon = 0.05;
 

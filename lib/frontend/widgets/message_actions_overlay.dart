@@ -117,6 +117,8 @@ void showMessageActions({
   VoidCallback? onMarkUnread,
   VoidCallback? onPin,
   VoidCallback? onCopyLink,
+  VoidCallback? onSave,
+  VoidCallback? onSaveAs,
   bool isPinned = false,
   VoidCallback? onPinSticker,
   bool isStickerPinned = false,
@@ -167,6 +169,8 @@ void showMessageActions({
       onMarkUnread: onMarkUnread,
       onPin: onPin,
       onCopyLink: onCopyLink,
+      onSave: onSave,
+      onSaveAs: onSaveAs,
       isPinned: isPinned,
       onPinSticker: onPinSticker,
       isStickerPinned: isStickerPinned,
@@ -216,6 +220,8 @@ class _MessageActionsLayer extends StatefulWidget {
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
   final VoidCallback? onCopyLink;
+  final VoidCallback? onSave;
+  final VoidCallback? onSaveAs;
   final bool isPinned;
   final VoidCallback? onPinSticker;
   final bool isStickerPinned;
@@ -252,6 +258,8 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onMarkUnread,
     this.onPin,
     this.onCopyLink,
+    this.onSave,
+    this.onSaveAs,
     this.isPinned = false,
     this.onPinSticker,
     this.isStickerPinned = false,
@@ -548,6 +556,10 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       if (canCopy) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
       if (widget.onCopyLink != null)
         _Action(Symbols.link, l10n.msgActionsCopyLink, _copyLink),
+      if (widget.onSave != null)
+        _Action(Symbols.download, l10n.msgActionsSave, _save),
+      if (widget.onSaveAs != null)
+        _Action(Symbols.save_as, l10n.photoViewerSaveAs, _saveAs),
       if (widget.isMe && widget.onEdit != null)
         _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
       if (widget.onPin != null)
@@ -759,6 +771,18 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final onCopyLink = widget.onCopyLink;
     await _close();
     onCopyLink?.call();
+  }
+
+  Future<void> _save() async {
+    final onSave = widget.onSave;
+    await _close();
+    onSave?.call();
+  }
+
+  Future<void> _saveAs() async {
+    final onSaveAs = widget.onSaveAs;
+    await _close();
+    onSaveAs?.call();
   }
 
   @override

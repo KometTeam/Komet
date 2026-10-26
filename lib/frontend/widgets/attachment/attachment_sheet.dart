@@ -27,6 +27,7 @@ import 'package:komet/frontend/widgets/attachment/video_edit.dart';
 import 'package:komet/frontend/widgets/attachment/video_preview_screen.dart';
 import 'package:komet/frontend/widgets/chat_menu_overlay.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/frontend/widgets/keyboard_cover.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 import 'package:komet/frontend/widgets/sliding_pill_nav.dart';
 import 'package:komet/l10n/app_localizations.dart';
@@ -72,13 +73,23 @@ Future<void> showAttachmentSheet(
   ValueChanged<CachedContact>? onSendContact,
   PhotoPickCallback? onPickPhoto,
   String initialCaption = '',
+  bool overKeyboard = false,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
+  final navigator = Navigator.of(context);
+  final localizations = MaterialLocalizations.of(context);
+  final route = ModalBottomSheetRoute<void>(
+    capturedThemes: InheritedTheme.capture(
+      from: context,
+      to: navigator.context,
+    ),
     isScrollControlled: true,
     requestFocus: false,
     backgroundColor: Colors.transparent,
-    barrierColor: AppFrost.scrim(),
+    modalBarrierColor: AppFrost.scrim(),
+    barrierLabel: localizations.scrimLabel,
+    barrierOnTapHint: localizations.scrimOnTapHint(
+      localizations.bottomSheetLabel,
+    ),
     builder: (_) => AttachmentSheet(
       title: title,
       onSend: onSend,
@@ -92,6 +103,9 @@ Future<void> showAttachmentSheet(
       initialCaption: initialCaption,
     ),
   );
+  final popped = navigator.push(route);
+  if (overKeyboard) KeyboardCover.instance.releaseAfter(route);
+  return popped;
 }
 
 class AttachmentSheet extends StatefulWidget {

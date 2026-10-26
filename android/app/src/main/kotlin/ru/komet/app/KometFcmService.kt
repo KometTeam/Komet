@@ -3,6 +3,7 @@ package ru.komet.app
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ShortcutInfo
@@ -139,6 +140,11 @@ class KometNotifier(private val ctx: Context) {
         syncSummary(notifId, null)
     }
 
+    fun markRead(chatId: Long) {
+        LauncherBadge.dropChat(ctx, chatId, loadHistory(chatId).size)
+        cancelChat(chatId)
+    }
+
     fun notifiedChats(): List<Long> {
         val active = activeIds()
         return pushPrefs().all.keys
@@ -256,8 +262,12 @@ class KometNotifier(private val ctx: Context) {
             .setLargeIcon(avatarFor(newest.key, newest.name))
 
         if (meta.account != 0) {
-            val replyTo = history.lastOrNull { !it.deleted }?.mid?.toLongOrNull()
+            val latest = history.lastOrNull { !it.deleted }
+            val replyTo = latest?.mid?.toLongOrNull()
             builder.addAction(replyAction(notifId, meta.account, chatId, replyTo))
+            if (latest != null && replyTo != null) {
+                builder.addAction(readAction(notifId, meta.account, chatId, replyTo, latest.ts))
+            }
         }
 
         manager().notify(notifId, builder.build())
@@ -408,6 +418,36 @@ class KometNotifier(private val ctx: Context) {
             .build()
     }
 
+    private fun readAction(
+        notifId: Int,
+        account: Int,
+        chatId: Long,
+        messageId: Long,
+        mark: Long,
+    ): NotificationCompat.Action {
+        val payload = JSONObject()
+            .put("c", account)
+            .put("chat", chatId)
+            .put("mid", messageId)
+            .put("mark", mark)
+            .toString()
+        val intent = Intent(ctx, MessageActionReceiver::class.java).apply {
+            action = MessageActionReceiver.ACTION_MARK_READ
+            putExtra(MessageActionReceiver.EXTRA_CHAT, chatId)
+            putExtra(MessageActionReceiver.EXTRA_PAYLOAD, payload)
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val pi = PendingIntent.getBroadcast(ctx, notifId, intent, flags)
+        return NotificationCompat.Action.Builder(
+            R.drawable.ic_notification,
+            ctx.getString(R.string.notif_mark_read),
+            pi,
+        )
+            .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ)
+            .setShowsUserInterface(false)
+            .build()
+    }
+
     private fun publishShortcut(id: String, chatId: Long, title: String, person: Person) {
         try {
             val intent = chatIntent(chatId).setAction(Intent.ACTION_VIEW)
@@ -531,4 +571,33 @@ class KometNotifier(private val ctx: Context) {
         pushPrefs().edit().putString("registry", reg.toString()).apply()
     }
 
+}
+
+// Шторка гаснет сразу, а отметку на сервер отправляет фоновый изолят:
+// для неё нужна сессия аккаунта, которой у натива нет.
+class MessageActionReceiver : BroadcastReceiver() {
+    companion object {
+        const val ACTION_MARK_READ = "ru.komet.app.action.MARK_READ"
+        const val EXTRA_CHAT = "chat"
+        const val EXTRA_PAYLOAD = "payload"
+    }
+
+    override fun onReceive(ctx: Context, intent: Intent) {
+        if (intent.action != ACTION_MARK_READ) return
+        val chatId = intent.getLongExtra(EXTRA_CHAT, 0L)
+        val payload = intent.getStringExtra(EXTRA_PAYLOAD)
+        if (chatId == 0L || payload == null) return
+        KometNotifier(ctx).markRead(chatId)
+        val fln = Intent(CallConst.FLN_ACTION_TAPPED).apply {
+            setClassName(ctx, CallConst.FLN_RECEIVER)
+            putExtra("notificationId", (chatId and 0x7fffffff).toInt())
+            putExtra("actionId", "read")
+            putExtra("payload", payload)
+        }
+        try {
+            ctx.sendBroadcast(fln)
+        } catch (e: Exception) {
+            Log.w("KometFcm", "mark read broadcast failed: ${e.message}")
+        }
+    }
 }
