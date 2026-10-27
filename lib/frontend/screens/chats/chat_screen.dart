@@ -250,6 +250,8 @@ class _ChatScreenState extends State<ChatScreen>
   final FocusNode _messageFocusNode = FocusNode();
   double _keyboardReserve = 0;
   bool _keyboardWasOpen = false;
+  Timer? _keyboardClosedCheck;
+  static const Duration _keyboardClosedConfirm = Duration(milliseconds: 250);
   bool _coversKeyboard = false;
   final ChatScrollController _scrollController = ChatScrollController();
   bool _userDidScroll = false;
@@ -2585,14 +2587,32 @@ class _ChatScreenState extends State<ChatScreen>
       keyboard,
       landscape: view.physicalSize.width > view.physicalSize.height,
     );
-    if (_keyboardWasOpen && !keyboardOpen && _messageFocusNode.hasFocus) {
-      _messageFocusNode.unfocus();
+    if (keyboardOpen) {
+      _keyboardClosedCheck?.cancel();
+      _keyboardClosedCheck = null;
+    } else if (_keyboardWasOpen && _messageFocusNode.hasFocus) {
+      _keyboardClosedCheck?.cancel();
+      _keyboardClosedCheck = Timer(
+        _keyboardClosedConfirm,
+        _releaseComposerIfKeyboardClosed,
+      );
     }
     _keyboardWasOpen = keyboardOpen;
   }
 
+  // #***! клавиатуру закрыли жестом назад — отпускаем поле. Ждём чуть-чуть:
+  // один кадр с нулевой клавиатурой от прошивки не должен ронять ввод
+  void _releaseComposerIfKeyboardClosed() {
+    _keyboardClosedCheck = null;
+    if (!mounted) return;
+    final view = View.of(context);
+    if (view.viewInsets.bottom / view.devicePixelRatio > 100) return;
+    if (_messageFocusNode.hasFocus) _messageFocusNode.unfocus();
+  }
+
   @override
   void dispose() {
+    _keyboardClosedCheck?.cancel();
     _flight.value?.dispose();
     _flight.dispose();
     ChatScreen._open.remove(this);

@@ -129,11 +129,14 @@ On Android the attachment sheet opens **over** an open keyboard instead of closi
   keyboard is hidden under the cover and reopened, so the caption rides up with it), when the IME
   closes, and on pause or resize. Not used on iOS, in embedded layouts or with touch exploration.
 
-`FlutterHostFrame` wraps the FlutterFragment container. Besides the pre-IME back hook it re-applies
-the last window insets to the FlutterView once IME animations settle: the embedding's
-`ImeSyncDeferringInsetsCallback` holds insets until the IME animation's `onEnd`, and when that
-end state is stale (overlapping animations, flutter/flutter#118761) or `onEnd` never comes, the
-app stays lifted by the height of a keyboard that is already closed.
+`FlutterHostFrame` wraps the FlutterFragment container. Besides the pre-IME back hook it clears a
+stuck keyboard inset once IME animations settle: the embedding's `ImeSyncDeferringInsetsCallback`
+holds insets until the IME animation's `onEnd`, and when that end state is stale (overlapping
+animations, flutter/flutter#118761) or `onEnd` never comes, the app stays lifted by the height of a
+keyboard that is already closed. It acts only while the system reports the IME hidden and never
+touches insets while the keyboard is on screen — a "no keyboard" metric then makes the chat drop
+the composer's focus and the keyboard closes right after opening. The chat itself also drops that
+focus only after the keyboard has stayed closed for 250 ms, so a single zero-inset frame cannot.
 
 ## WebRTC plugin fork
 

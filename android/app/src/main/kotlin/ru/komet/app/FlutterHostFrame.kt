@@ -2,6 +2,7 @@ package ru.komet.app
 
 import android.app.Activity
 import android.content.Context
+import android.graphics.Insets
 import android.os.Build
 import android.view.KeyEvent
 import android.view.View
@@ -105,10 +106,27 @@ class FlutterHostFrame private constructor(context: Context) : FrameLayout(conte
         postDelayed(resync, delayMs)
     }
 
-    // Повтор тех же insets Flutter не перестраивает, так что лишний вызов бесплатен.
+    // Чиним только застрявшую закрытую клавиатуру и только когда система сама
+    // говорит, что IME скрыт. Пока клавиатура на экране, Flutter ведёт её сам:
+    // записанные insets могли устареть, а «клавиатуры нет» в метриках заставит
+    // чат снять фокус с поля, и клавиатура закроется сразу после открытия.
     private fun resyncInsets() {
         imeAnimating = false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val flutterView = findFlutterView(this) ?: return
+        val current = flutterView.rootWindowInsets ?: return
+        if (current.isVisible(WindowInsets.Type.ime())) return
         val insets = lastInsets ?: return
-        findFlutterView(this)?.onApplyWindowInsets(insets)
+        flutterView.onApplyWindowInsets(withoutIme(insets))
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun withoutIme(insets: WindowInsets): WindowInsets {
+        val ime = WindowInsets.Type.ime()
+        if (!insets.isVisible(ime) && insets.getInsets(ime) == Insets.NONE) return insets
+        return WindowInsets.Builder(insets)
+            .setInsets(ime, Insets.NONE)
+            .setVisible(ime, false)
+            .build()
     }
 }
