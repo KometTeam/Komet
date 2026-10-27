@@ -476,7 +476,7 @@ class AppDatabase {
   // #***! создание таблиц с нуля для свежей установки
   static Future<void> _createTables(Database db) async {
     await db.execute('''
-      CREATE TABLE profile (
+      CREATE TABLE IF NOT EXISTS profile (
         id           INTEGER PRIMARY KEY,
         first_name   TEXT    NOT NULL,
         last_name    TEXT,
@@ -583,9 +583,11 @@ class AppDatabase {
     await batch.commit(noResult: true);
   }
 
-  // #***! схемы таблиц строками, их же жуют onCreate и миграции
+  // #***! схемы таблиц строками, их же жуют onCreate и миграции. IF NOT EXISTS
+  // обязателен: старая сборка, открыв базу, молча опускает её версию, а таблицы
+  // оставляет, и следующая миграция иначе падает на уже существующей таблице
   static const _contactsSchema = '''
-    CREATE TABLE contacts (
+    CREATE TABLE IF NOT EXISTS contacts (
       id           INTEGER PRIMARY KEY,
       account_id   INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       first_name   TEXT    NOT NULL,
@@ -602,7 +604,7 @@ class AppDatabase {
 
   // #***! докуда долистали чат: нижнее видимое сообщение и смещение его низа
   static const _chatScrollSchema = '''
-    CREATE TABLE chat_scroll (
+    CREATE TABLE IF NOT EXISTS chat_scroll (
       account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       chat_id    INTEGER NOT NULL,
       message_id TEXT    NOT NULL,
@@ -614,7 +616,7 @@ class AppDatabase {
 
   // #***! что из телефонной книги уже ушло в SYNC, с тем именем что ушло
   static const _phonebookSyncSchema = '''
-    CREATE TABLE phonebook_sync (
+    CREATE TABLE IF NOT EXISTS phonebook_sync (
       account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       phone      TEXT    NOT NULL,
       first_name TEXT    NOT NULL,
@@ -624,7 +626,7 @@ class AppDatabase {
   ''';
 
   static const _syncStateSchema = '''
-    CREATE TABLE sync_state (
+    CREATE TABLE IF NOT EXISTS sync_state (
       account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       key        TEXT    NOT NULL,
       value      TEXT    NOT NULL,
@@ -633,7 +635,7 @@ class AppDatabase {
   ''';
 
   static const _chatsCacheSchema = '''
-    CREATE TABLE chats_cache (
+    CREATE TABLE IF NOT EXISTS chats_cache (
       id              INTEGER NOT NULL,
       account_id      INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       type            TEXT    NOT NULL,
@@ -670,7 +672,7 @@ class AppDatabase {
   ''';
 
   static const _chatParticipantsSchema = '''
-    CREATE TABLE chat_participants (
+    CREATE TABLE IF NOT EXISTS chat_participants (
       account_id     INTEGER NOT NULL,
       chat_id        INTEGER NOT NULL,
       participant_id INTEGER NOT NULL,
@@ -681,7 +683,7 @@ class AppDatabase {
   ''';
 
   static const _messagesSchema = '''
-    CREATE TABLE messages (
+    CREATE TABLE IF NOT EXISTS messages (
       id         TEXT    NOT NULL,
       account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       chat_id    INTEGER NOT NULL,
@@ -712,7 +714,7 @@ class AppDatabase {
   ''';
 
   static const _e2eeSessionsSchema = '''
-    CREATE TABLE e2ee_sessions (
+    CREATE TABLE IF NOT EXISTS e2ee_sessions (
       account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       chat_id    INTEGER NOT NULL,
       peer_id    INTEGER NOT NULL,
@@ -728,7 +730,7 @@ class AppDatabase {
   ''';
 
   static const _webAppStorageSchema = '''
-    CREATE TABLE webapp_storage (
+    CREATE TABLE IF NOT EXISTS webapp_storage (
       account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       bot_id     INTEGER NOT NULL,
       key        TEXT    NOT NULL,
@@ -738,7 +740,7 @@ class AppDatabase {
   ''';
 
   static const _webAppBiometrySchema = '''
-    CREATE TABLE webapp_biometry (
+    CREATE TABLE IF NOT EXISTS webapp_biometry (
       account_id       INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       bot_id           INTEGER NOT NULL,
       access_requested INTEGER NOT NULL DEFAULT 0,
