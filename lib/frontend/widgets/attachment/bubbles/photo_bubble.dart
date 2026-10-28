@@ -9,11 +9,13 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../core/utils/format.dart';
 import '../../../../models/attachment.dart';
+import '../../../../models/upload_bytes.dart';
 import '../../../../core/media/preview_image.dart';
 import '../../photo_viewer.dart';
 import '../photo_hero.dart';
 import '../../text_with_meta.dart';
 import 'album_layout.dart';
+import '../../upload_bytes_label.dart';
 import '../../upload_progress_ring.dart';
 import 'edge_stretch_fill.dart';
 import 'bubble_context.dart';
@@ -614,7 +616,7 @@ class PhotoBubble extends StatelessWidget {
 
   Widget _buildUploadOverlay(
     BubbleContext ctx,
-    ValueListenable<List<double>> progress,
+    ValueListenable<List<UploadBytes>> progress,
     int index,
   ) {
     final cancelItem = ctx.onCancelUploadItem;
@@ -906,7 +908,7 @@ class _UploadSlotOverlay extends StatefulWidget {
     required this.onCancel,
   });
 
-  final ValueListenable<List<double>> progress;
+  final ValueListenable<List<UploadBytes>> progress;
   final int slot;
   final VoidCallback? onCancel;
 
@@ -959,16 +961,29 @@ class _UploadSlotOverlayState extends State<_UploadSlotOverlay> {
           onTap: widget.onCancel,
           child: ColoredBox(
             color: Colors.black.withValues(alpha: 0.4),
-            child: Center(
-              child: UploadProgressRing(
-                progress: widget.progress,
-                slot: widget.slot,
-                color: Colors.white,
-                trackColor: Colors.white24,
-                size: 52,
-                iconSize: 18,
-                onCancel: widget.onCancel,
-              ),
+            child: Stack(
+              children: [
+                Center(
+                  child: UploadProgressRing(
+                    progress: widget.progress,
+                    slot: widget.slot,
+                    color: Colors.white,
+                    trackColor: Colors.white24,
+                    size: 52,
+                    iconSize: 18,
+                    onCancel: widget.onCancel,
+                  ),
+                ),
+                Positioned(
+                  left: 6,
+                  top: 6,
+                  right: 6,
+                  child: UploadBytesLabel(
+                    progress: widget.progress,
+                    slot: widget.slot,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

@@ -99,7 +99,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   void _onUploadProgress() {
     final values = _uploadJob?.progress.value;
     if (values == null || values.isEmpty) return;
-    _uploadProgress.value = values.first;
+    _uploadProgress.value = values.first.fraction;
   }
 
   Future<void> _onUploadEvent(UploadJobEvent event) async {

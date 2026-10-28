@@ -2,67 +2,53 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/media/gallery_source.dart';
-import '../../../core/security/app_lock.dart';
 import '../../../l10n/app_localizations.dart';
 import '../custom_notification.dart';
 import '../small_spinner.dart';
-import 'attachment_sheet.dart';
 import 'editor_common.dart';
 import 'photo_editor.dart';
+import 'photo_pick.dart';
 
-Future<File?> pickAvatarImage(BuildContext context) async {
-  File? picked;
-  var fromFiles = false;
-  await showAttachmentSheet(
-    context,
-    onPickPhoto: (sheetContext, item) async {
-      final source = item.localFile ?? await item.originFile();
-      if (!sheetContext.mounted) return;
-      if (source == null) {
-        showCustomNotification(
-          sheetContext,
-          AppLocalizations.of(sheetContext)!.mediaPreviewEditorOpenFailed,
-        );
-        return;
-      }
-      final result = await openAvatarEditor(sheetContext, source);
-      if (result == null || !sheetContext.mounted) return;
-      picked = result;
-      Navigator.of(sheetContext).pop();
-    },
-    onPickFile: () => fromFiles = true,
-  );
-  if (picked != null || !fromFiles || !context.mounted) return picked;
-  final files = await AppLock.instance.external(
-    () => FilePicker.platform.pickFiles(type: FileType.image),
-  );
-  final path = files?.files.firstOrNull?.path;
-  if (path == null || !context.mounted) return null;
-  return openAvatarEditor(context, File(path));
-}
+Future<File?> pickAvatarImage(BuildContext context) => pickImageWith(
+  context,
+  (context, source, _) => openAvatarEditor(context, source),
+);
 
 Future<File?> openAvatarEditor(BuildContext context, File source) =>
-    Navigator.of(context, rootNavigator: true).push<File>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => AvatarEditor(source: source),
-      ),
-    );
+    _openCropDrawEditor(context, source, CropPreset.avatar);
 
-class AvatarEditor extends StatefulWidget {
+Future<File?> openPhotoEditor(BuildContext context, File source) =>
+    _openCropDrawEditor(context, source, CropPreset.free);
+
+Future<File?> _openCropDrawEditor(
+  BuildContext context,
+  File source,
+  CropPreset preset,
+) => Navigator.of(context, rootNavigator: true).push<File>(
+  MaterialPageRoute(
+    fullscreenDialog: true,
+    builder: (_) => CropDrawEditor(source: source, preset: preset),
+  ),
+);
+
+class CropDrawEditor extends StatefulWidget {
   final File source;
+  final CropPreset preset;
 
-  const AvatarEditor({super.key, required this.source});
+  const CropDrawEditor({
+    super.key,
+    required this.source,
+    this.preset = CropPreset.avatar,
+  });
 
   @override
-  State<AvatarEditor> createState() => _AvatarEditorState();
+  State<CropDrawEditor> createState() => _CropDrawEditorState();
 }
 
-class _AvatarEditorState extends State<AvatarEditor> {
+class _CropDrawEditorState extends State<CropDrawEditor> {
   late File _source = widget.source;
   final List<File> _drawn = [];
   ui.Image? _image;
@@ -113,7 +99,7 @@ class _AvatarEditorState extends State<AvatarEditor> {
     bool identity,
   ) async {
     final image = _image;
-    if (image == null) return null;
+    if (image == null || (!changed && _drawn.isEmpty)) return null;
     return bakeCropToFile(image, state, viewport);
   }
 
@@ -158,7 +144,7 @@ class _AvatarEditorState extends State<AvatarEditor> {
     }
     return CropWorkspace(
       key: ValueKey(image),
-      preset: CropPreset.avatar,
+      preset: widget.preset,
       imageSize: Size(image.width.toDouble(), image.height.toDouble()),
       initialState: _state,
       onApply: _apply,

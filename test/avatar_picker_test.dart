@@ -142,7 +142,7 @@ void main() {
   ) async {
     final source = (await tester.runAsync(_syntheticImage))!;
     addTearDown(() => source.parent.deleteSync(recursive: true));
-    await tester.pumpWidget(_app(AvatarEditor(source: source)));
+    await tester.pumpWidget(_app(CropDrawEditor(source: source)));
     for (
       var i = 0;
       i < 10 && find.byType(CropWorkspace).evaluate().isEmpty;
@@ -161,5 +161,30 @@ void main() {
     expect(find.byIcon(Symbols.rotate_90_degrees_ccw), findsOneWidget);
     expect(find.byIcon(Symbols.brush), findsOneWidget);
     expect(find.text('СБРОС'), findsNothing);
+  });
+
+  testWidgets('the message photo editor keeps free crop and offers drawing', (
+    tester,
+  ) async {
+    final source = (await tester.runAsync(_syntheticImage))!;
+    addTearDown(() => source.parent.deleteSync(recursive: true));
+    await tester.pumpWidget(
+      _app(CropDrawEditor(source: source, preset: CropPreset.free)),
+    );
+    for (
+      var i = 0;
+      i < 10 && find.byType(CropWorkspace).evaluate().isEmpty;
+      i++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+
+    expect(find.byType(CropWorkspace), findsOneWidget);
+    expect(find.text('СБРОС'), findsOneWidget);
+    expect(find.text('Установить фото'), findsNothing);
+    expect(find.byIcon(Symbols.brush), findsOneWidget);
   });
 }

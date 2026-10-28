@@ -224,7 +224,7 @@ class FkmController {
       return;
     }
 
-    final text = _previewText(msg);
+    final text = previewText(msg);
     if (text == _hiddenPreview) return;
 
     await FkmBridge.instance.editMessage({
@@ -266,7 +266,7 @@ class FkmController {
 
     await E2eeService.instance.ensureLoaded(accountId);
     final text = showPreview && !E2eeService.instance.isOn(accountId, chatId)
-        ? _previewText(msg)
+        ? previewText(msg)
         : _hiddenPreview;
     final time = msg['time'];
     final msgId = msg['id'];
@@ -308,12 +308,10 @@ class FkmController {
   }
 
   // #***! текст превью, для вложений их описание
-  String _previewText(Map<dynamic, dynamic> msg) {
-    final text = msg['text']?.toString().trim();
-    if (text != null && text.isNotEmpty) return text;
-    final attach = attachPreviewLabel(msg['attaches']);
-    if (attach != null && attach.isNotEmpty) return attach;
-    return _hiddenPreview;
+  @visibleForTesting
+  static String previewText(Map<dynamic, dynamic> msg) {
+    final text = messagePreviewText(msg)?.trim();
+    return text == null || text.isEmpty ? _hiddenPreview : text;
   }
 
   void dispose() {

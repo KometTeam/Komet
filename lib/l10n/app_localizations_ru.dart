@@ -6748,6 +6748,24 @@ class AppLocalizationsRu extends AppLocalizations {
   String get messageRowEditTitle => 'Изменить сообщение';
 
   @override
+  String get editMediaAdd => 'Добавить фото';
+
+  @override
+  String get editMediaEdit => 'Редактировать';
+
+  @override
+  String get editMediaReplace => 'Заменить';
+
+  @override
+  String get editMediaRemove => 'Убрать';
+
+  @override
+  String get editMediaRetry => 'Повторить загрузку';
+
+  @override
+  String get editMediaUploadFailed => 'Не удалось загрузить фото';
+
+  @override
   String get locationBubbleOpenInMaps => 'Открыть на карте';
 
   @override

@@ -9,6 +9,7 @@ import '../../../../core/utils/haptics.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
+import '../../upload_bytes_label.dart';
 import '../../upload_progress_ring.dart';
 import '../../../../core/config/komet_settings.dart';
 import '../../../../core/media/auto_download_gate.dart';
@@ -178,7 +179,7 @@ class VideoBubble extends StatelessWidget {
           children: [
             previewImage(),
             Positioned.fill(child: surface),
-            if (uploading != null)
+            if (uploading != null) ...[
               Positioned.fill(
                 child: ColoredBox(
                   color: Colors.black.withValues(alpha: 0.35),
@@ -191,8 +192,14 @@ class VideoBubble extends StatelessWidget {
                     ),
                   ),
                 ),
-              )
-            else
+              ),
+              Positioned(
+                left: 6,
+                top: 6,
+                right: 6,
+                child: UploadBytesLabel(progress: uploading),
+              ),
+            ] else
               Positioned.fill(
                 child: Center(
                   child: AnimatedOpacity(

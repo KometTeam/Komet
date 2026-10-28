@@ -638,6 +638,12 @@ class _CropWorkspaceState extends State<CropWorkspace>
               style: const TextStyle(color: Colors.white, fontSize: 15),
             ),
           ),
+          if (widget.onDraw != null)
+            IconButton(
+              onPressed: _busy ? null : _draw,
+              tooltip: l10n.avatarEditorDraw,
+              icon: const Icon(Symbols.brush, color: Colors.white),
+            ),
           TextButton(
             onPressed: _busy ? null : _done,
             child: Text(

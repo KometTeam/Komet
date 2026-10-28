@@ -6697,6 +6697,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messageRowEditTitle => 'Edit message';
 
   @override
+  String get editMediaAdd => 'Add photo';
+
+  @override
+  String get editMediaEdit => 'Edit';
+
+  @override
+  String get editMediaReplace => 'Replace';
+
+  @override
+  String get editMediaRemove => 'Remove';
+
+  @override
+  String get editMediaRetry => 'Retry upload';
+
+  @override
+  String get editMediaUploadFailed => 'Couldn\'t upload the photo';
+
+  @override
   String get locationBubbleOpenInMaps => 'Open in maps';
 
   @override

@@ -7,7 +7,9 @@ import '../../../../core/config/app_colors.dart';
 import '../../../../core/config/komet_settings.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/text_format.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
+import '../../../../models/upload_bytes.dart';
 import '../../formatted_message_text.dart';
 import '../../sending_clock_icon.dart';
 import '../../photo_viewer.dart';
@@ -90,7 +92,7 @@ class BubbleContext {
   final PhotoViewerActions? photoActions;
   final String? overrideStatus;
   final ValueListenable<int>? otherReadTime;
-  final ValueListenable<List<double>>? uploadProgress;
+  final ValueListenable<List<UploadBytes>>? uploadProgress;
   final VoidCallback? onCancelUpload;
   final void Function(int index)? onCancelUploadItem;
   final void Function(StickerAttachment sticker)? onStickerTap;
@@ -180,6 +182,10 @@ class BubbleContext {
     return t;
   }
 
+  String get timeLabel => message.status == 'EDITED'
+      ? AppLocalizations.of(context)!.messageBubbleEditedTime(clockText)
+      : clockText;
+
   Color get systemTint => cs.onPrimaryContainer.withValues(alpha: 0.12);
 
   List<Widget> metaMarks(Color color) {
@@ -220,7 +226,7 @@ class BubbleContext {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           ...metaMarks(dim),
-          Text(clockText, style: TextStyle(color: dim, fontSize: 11)),
+          Text(timeLabel, style: TextStyle(color: dim, fontSize: 11)),
           if (isMe) ...[const SizedBox(width: 4), statusIcon()],
           if (message.deleted) ...[const SizedBox(width: 4), deletedIcon()],
         ],
@@ -265,7 +271,7 @@ class BubbleContext {
         mainAxisSize: MainAxisSize.min,
         children: [
           ...metaMarks(Colors.white),
-          Text(clockText, style: _overlayChipText),
+          Text(timeLabel, style: _overlayChipText),
           if (message.deleted) ...[
             const SizedBox(width: 3),
             const Icon(Symbols.delete, size: 11, color: Colors.white),
