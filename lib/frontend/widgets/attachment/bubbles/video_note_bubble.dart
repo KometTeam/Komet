@@ -22,6 +22,7 @@ import '../../../../core/utils/media_cache.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../backend/modules/messages.dart' show TranscriptionCache;
 import '../../../../models/attachment.dart';
+import '../../../../models/upload_bytes.dart';
 import '../../small_spinner.dart';
 import '../../upload_progress_ring.dart';
 
@@ -37,7 +38,7 @@ class VideoNoteBubble extends StatefulWidget {
   final ColorScheme cs;
   final Color textColor;
   final Widget meta;
-  final ValueListenable<List<double>>? uploadProgress;
+  final ValueListenable<List<UploadBytes>>? uploadProgress;
   final VoidCallback? onCancelUpload;
 
   const VideoNoteBubble({

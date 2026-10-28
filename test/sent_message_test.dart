@@ -59,4 +59,32 @@ void main() {
     expect(sent.elements, isNull);
     expect(sent.payloadOver(local), same(local));
   });
+
+  test('an edit echo carries the attachments the server kept', () {
+    final sent = SentMessage.fromResponse({
+      'message': {
+        'id': 9,
+        'text': '',
+        'status': 'EDITED',
+        'attaches': [
+          {'_type': 'PHOTO', 'photoId': 1, 'photoToken': 'synthetic-a'},
+          'not a map',
+        ],
+      },
+    });
+    final stripped = SentMessage.fromResponse({
+      'message': {'id': 9, 'text': 'Synthetic', 'attaches': []},
+    });
+
+    expect(sent.attaches, [
+      {'_type': 'PHOTO', 'photoId': 1, 'photoToken': 'synthetic-a'},
+    ]);
+    expect(stripped.attaches, isEmpty);
+    expect(
+      SentMessage.fromResponse({
+        'message': {'id': 9},
+      }).attaches,
+      isNull,
+    );
+  });
 }

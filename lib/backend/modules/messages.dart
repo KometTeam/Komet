@@ -1528,7 +1528,7 @@ class MessagesModule {
     bool encryptedPayload = false,
     bool encryptionControl = false,
     List<Map<String, dynamic>> elements = const [],
-    bool sendAttachments = false,
+    List<Map<String, dynamic>>? attachments,
   }) async {
     final id = int.tryParse(messageId);
     if (id == null) return null;
@@ -1538,8 +1538,8 @@ class MessagesModule {
       'chatId': chatId,
       'elements': elements,
       'text': text,
+      'attachments': ?attachments,
     };
-    if (sendAttachments) payload['attachments'] = const <dynamic>[];
 
     final response = await _sendUserMessage(
       payload,

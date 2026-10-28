@@ -88,6 +88,7 @@ import 'chat/message_search_result.dart';
 import 'chat/typing_label.dart';
 import 'chat/view/chat_intro_cards.dart';
 import 'chat/upload_status.dart';
+import 'chat/message_media_draft.dart';
 import 'chat/mention_panel_controller.dart';
 import 'chat/chat_media_send_controller.dart';
 import 'chat/chat_text_send_controller.dart';
@@ -320,7 +321,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   StreamSubscription<UploadJobEvent>? _uploadEventSub;
 
-  ValueListenable<List<double>>? _photoProgressFor(CachedMessage m) =>
+  ValueListenable<List<UploadBytes>>? _photoProgressFor(CachedMessage m) =>
       UploadService.instance.progressFor(m.id);
 
   VoidCallback? _cancelUploadFor(CachedMessage m) =>
@@ -3278,34 +3279,38 @@ class _ChatScreenState extends State<ChatScreen>
         ? const <FormatRange>[]
         : message.formatRanges;
     final cs = Theme.of(context).colorScheme;
+    final photos = _encryptionEnabled
+        ? null
+        : MessageMediaDraft.editablePhotos(message);
 
-    final content =
-        await showModalBottomSheet<
-          ({String text, List<Map<String, dynamic>> elements})
-        >(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: cs.surfaceContainerHigh,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          builder: (sheetContext) => EditMessageSheet(
-            text: original,
-            formatRanges: formatRanges,
-            contextMenuBuilder: _formatContextMenu,
-          ),
-        );
+    final content = await showModalBottomSheet<EditedMessage>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cs.surfaceContainerHigh,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => EditMessageSheet(
+        text: original,
+        formatRanges: formatRanges,
+        photos: photos,
+        contextMenuBuilder: _formatContextMenu,
+      ),
+    );
 
     if (content == null || !mounted) return;
 
     final rawText = content.text;
     final newText = rawText.trim();
     final elements = trimmedElements(content.elements, rawText, newText);
+    final attachments = content.attachments;
 
     final oldElements = serializeFormatElements(
       formatRanges.where((r) => composerFormats.contains(r.format)),
     );
-    if (newText == original && _sameElements(elements, oldElements)) {
+    if (attachments == null &&
+        newText == original &&
+        _sameElements(elements, oldElements)) {
       return;
     }
 
@@ -3318,6 +3323,7 @@ class _ChatScreenState extends State<ChatScreen>
       text: wireText,
       elements: editEncrypted ? const [] : elements,
       encryptedPayload: editEncrypted,
+      attachments: attachments,
     );
     if (!mounted) return;
     if (accepted == null) {
@@ -3332,6 +3338,7 @@ class _ChatScreenState extends State<ChatScreen>
     final editedText = editEncrypted
         ? wireText
         : (accepted.text ?? wireText);
+    final attaches = attachments == null ? null : accepted.attaches;
     final idx = _chatController.indexOfId(message.id);
     if (idx != -1) {
       final old = _messages[idx];
@@ -3358,8 +3365,14 @@ class _ChatScreenState extends State<ChatScreen>
           'elements': editEncrypted
               ? const <Map<String, dynamic>>[]
               : (accepted.elements ?? elements),
+          'attaches': ?attaches,
         },
-        attachments: old.attachments,
+        attachments: attaches == null
+            ? old.attachments
+            : [
+                for (final attach in attaches)
+                  MessageAttachment.fromMap(attach),
+              ],
         isControl: old.isControl,
         editHistory: newHistory,
         sealedText: editSealed,

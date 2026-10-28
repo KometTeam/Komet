@@ -11996,6 +11996,42 @@ abstract class AppLocalizations {
   /// **'Edit message'**
   String get messageRowEditTitle;
 
+  /// No description provided for @editMediaAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get editMediaAdd;
+
+  /// No description provided for @editMediaEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get editMediaEdit;
+
+  /// No description provided for @editMediaReplace.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get editMediaReplace;
+
+  /// No description provided for @editMediaRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get editMediaRemove;
+
+  /// No description provided for @editMediaRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry upload'**
+  String get editMediaRetry;
+
+  /// No description provided for @editMediaUploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t upload the photo'**
+  String get editMediaUploadFailed;
+
   /// No description provided for @locationBubbleOpenInMaps.
   ///
   /// In en, this message translates to:

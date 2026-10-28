@@ -33,6 +33,7 @@ import 'selectable_message_text.dart';
 import '../../models/attachment.dart';
 import '../../models/animoji.dart';
 import '../../models/reaction_info.dart';
+import '../../models/upload_bytes.dart';
 import 'attachment/bubbles/voice_bubble.dart';
 import 'attachment/bubbles/bubble_context.dart';
 import 'attachment/bubbles/poll_bubble.dart';
@@ -990,7 +991,7 @@ class MessageBubble extends StatelessWidget {
   final ValueListenable<Map<String, dynamic>?>? reactionsListenable;
   final ValueListenable<ReactionAnimationEvent?>? reactionAnimation;
   final ReactionAnimojiResolver? reactionAnimojiResolver;
-  final ValueListenable<List<double>>? uploadProgress;
+  final ValueListenable<List<UploadBytes>>? uploadProgress;
   final VoidCallback? onCancelUpload;
   final void Function(int index)? onCancelUploadItem;
   final void Function(String messageId)? onReplyTap;
@@ -2122,7 +2123,7 @@ class MessageBubble extends StatelessWidget {
         children: [
           ...ctx.metaMarks(Colors.white),
           Text(
-            ctx.clockText,
+            ctx.timeLabel,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 11,
@@ -2349,12 +2350,7 @@ class MessageBubble extends StatelessWidget {
           const SizedBox(width: 3),
         ],
         ...ctx.metaMarks(ctx.dim),
-        Text(
-          message.status == 'EDITED'
-              ? l10n.messageBubbleEditedTime(ctx.clockText)
-              : ctx.clockText,
-          style: TextStyle(color: ctx.dim, fontSize: 10),
-        ),
+        Text(ctx.timeLabel, style: TextStyle(color: ctx.dim, fontSize: 10)),
         if (isMe) ...[const SizedBox(width: 4), ctx.statusIcon()],
         if (message.deleted) ...[const SizedBox(width: 4), ctx.deletedIcon()],
       ],

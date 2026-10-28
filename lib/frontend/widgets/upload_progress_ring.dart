@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../models/upload_bytes.dart';
+
 class UploadProgressRing extends StatefulWidget {
-  final ValueListenable<List<double>> progress;
+  final ValueListenable<List<UploadBytes>> progress;
   final int? slot;
   final Color color;
   final Color? trackColor;
@@ -30,12 +32,14 @@ class UploadProgressRing extends StatefulWidget {
     this.showCancelIcon = true,
   });
 
-  static double fractionOf(List<double> values, int? slot) {
+  static double fractionOf(List<UploadBytes> values, int? slot) {
     if (values.isEmpty) return 0;
-    if (slot != null) {
-      return slot < values.length ? values[slot].clamp(0.0, 1.0) : 1.0;
+    if (slot != null) return slot < values.length ? values[slot].fraction : 1.0;
+    var sum = 0.0;
+    for (final value in values) {
+      sum += value.fraction;
     }
-    return (values.reduce((a, b) => a + b) / values.length).clamp(0.0, 1.0);
+    return sum / values.length;
   }
 
   @override

@@ -12,12 +12,14 @@ import '../../core/storage/app_database.dart';
 import '../../core/utils/logger.dart';
 import '../../main.dart' show api, fileUploader, messagesModule;
 import '../../models/attachment.dart';
+import '../../models/upload_bytes.dart';
 import 'chats.dart' show chats;
 import 'file_uploader.dart';
 import 'messages.dart';
 import 'upload_notification_service.dart';
 
 export 'upload_notification_service.dart' show UploadKind;
+export '../../models/upload_bytes.dart';
 
 // #***! события очереди наружу
 sealed class UploadJobEvent {
@@ -102,13 +104,6 @@ class UploadCancelled implements Exception {
   String toString() => 'UploadCancelled';
 }
 
-class UploadBytes {
-  const UploadBytes(this.sent, this.total);
-
-  final int sent;
-  final int total;
-}
-
 // #***! одна задача, slots это сколько файлов внутри
 class UploadJob {
   UploadJob._({
@@ -129,8 +124,8 @@ class UploadJob {
        _slots = slots < 1 ? 1 : slots,
        _sent = List<int>.filled(slots < 1 ? 1 : slots, 0),
        _total = List<int>.filled(slots < 1 ? 1 : slots, 0),
-       progress = ValueNotifier<List<double>>(
-         List<double>.filled(slots < 1 ? 1 : slots, 0),
+       progress = ValueNotifier<List<UploadBytes>>(
+         List<UploadBytes>.filled(slots < 1 ? 1 : slots, UploadBytes.none),
        ),
        bytes = ValueNotifier<UploadBytes>(UploadBytes(0, totalBytes)) {
     if (_slots == 1 && totalBytes > 0) _total[0] = totalBytes;
@@ -166,7 +161,7 @@ class UploadJob {
     );
   }
 
-  final ValueNotifier<List<double>> progress;
+  final ValueNotifier<List<UploadBytes>> progress;
   final ValueNotifier<UploadBytes> bytes;
 
   int? resultFileId;
@@ -236,26 +231,24 @@ class UploadJob {
 
   // #***! общий прогресс по байтам, размеров нет усредняем доли
   void _publish() {
-    final fractions = [
-      for (final slot in _activeSlots)
-        _total[slot] <= 0 ? 0.0 : (_sent[slot] / _total[slot]).clamp(0.0, 1.0),
+    final slots = [
+      for (final slot in _activeSlots) UploadBytes(_sent[slot], _total[slot]),
     ];
     var sumSent = 0;
     var sumTotal = 0;
     var fractionSum = 0.0;
-    for (var i = 0; i < _activeSlots.length; i++) {
-      final slot = _activeSlots[i];
-      sumSent += _sent[slot];
-      sumTotal += _total[slot];
-      fractionSum += fractions[i];
+    for (final slot in slots) {
+      sumSent += slot.sent;
+      sumTotal += slot.total;
+      fractionSum += slot.fraction;
     }
-    progress.value = fractions;
+    progress.value = slots;
     bytes.value = UploadBytes(sumSent, sumTotal);
     UploadNotificationService.report(
       id,
       sent: sumSent,
       total: sumTotal,
-      fraction: fractions.isEmpty ? 0 : fractionSum / fractions.length,
+      fraction: slots.isEmpty ? 0 : fractionSum / slots.length,
     );
   }
 }
@@ -318,7 +311,7 @@ class UploadService {
     );
   }
 
-  ValueListenable<List<double>>? progressFor(String tempId) =>
+  ValueListenable<List<UploadBytes>>? progressFor(String tempId) =>
       _jobs[tempId]?.progress;
 
   UploadJob? activeFileJob(int chatId) {
@@ -865,49 +858,67 @@ class UploadService {
     return tokens;
   }
 
-  // #***! перед заливкой пережимаем, три попытки с растущей паузой
   Future<String?> _uploadOnePhoto(
     ({File file, GalleryItem? item}) photo,
     int index,
     UploadJob job,
-  ) async {
+  ) => uploadPhoto(
+    photo.file,
+    item: photo.item,
+    cancel: job.slotCancelled(index),
+    onProgress: (sent, total) => job.report(index, sent, total),
+    onRetry: () => job.resetSlot(index),
+    beforeSend: job.ensureSendAllowed,
+  );
+
+  // #***! перед заливкой пережимаем, три попытки с растущей паузой
+  Future<String?> uploadPhoto(
+    File source, {
+    GalleryItem? item,
+    required Future<void> cancel,
+    required void Function(int sent, int total) onProgress,
+    VoidCallback? onRetry,
+    VoidCallback? beforeSend,
+  }) async {
+    var stopped = false;
+    unawaited(cancel.then((_) => stopped = true));
     File file;
     try {
-      file = await optimizePhotoForUpload(photo.file, item: photo.item);
+      file = await optimizePhotoForUpload(source, item: item);
     } catch (e) {
       logger.w('optimize photo: $e');
-      file = photo.file;
+      file = source;
     }
     try {
-      if (job.isCancelled || job.isSlotCancelled(index)) return null;
+      if (stopped) return null;
       for (var attempt = 0; attempt < _photoAttempts; attempt++) {
         if (attempt > 0) {
           await Future.delayed(Duration(seconds: attempt));
-          if (job.isCancelled || job.isSlotCancelled(index)) return null;
-          job.resetSlot(index);
+          if (stopped) return null;
+          onRetry?.call();
         }
         try {
           final url = await messagesModule.requestPhotoUploadUrl(
-            beforeSend: job.ensureSendAllowed,
+            beforeSend: beforeSend,
           );
           if (url == null || url.isEmpty) continue;
-          job.ensureSendAllowed();
+          beforeSend?.call();
           final token = await fileUploader.uploadPhoto(
             Uri.parse(url),
             file,
             filename: _photoFilename(file),
-            onProgress: (sent, total) => job.report(index, sent, total),
-            cancel: job.slotCancelled(index),
+            onProgress: onProgress,
+            cancel: cancel,
           );
           if (token != null) return token;
         } catch (e) {
-          logger.w('uploadOnePhoto attempt ${attempt + 1}: $e');
+          logger.w('uploadPhoto attempt ${attempt + 1}: $e');
         }
-        if (job.isCancelled || job.isSlotCancelled(index)) return null;
+        if (stopped) return null;
       }
       return null;
     } finally {
-      if (file.path != photo.file.path) {
+      if (file.path != source.path) {
         unawaited(file.delete().catchError((_) => file));
       }
     }

@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/frontend/widgets/attachment/bubbles/edge_stretch_fill.dart';
+import 'package:komet/frontend/widgets/upload_bytes_label.dart';
 import 'package:komet/frontend/widgets/upload_progress_ring.dart';
+import 'package:komet/l10n/app_localizations.dart';
+import 'package:komet/models/upload_bytes.dart';
 
 const String _pixel =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'
@@ -11,16 +14,21 @@ const String _pixel =
 
 void main() {
   test('кольцо берёт долю своего слота, а без слота среднее', () {
-    expect(UploadProgressRing.fractionOf(const [0.2, 0.6], 1), 0.6);
-    expect(UploadProgressRing.fractionOf(const [0.2, 0.6], null), 0.4);
-    expect(UploadProgressRing.fractionOf(const [0.2], 3), 1.0);
+    const slots = [UploadBytes(2, 10), UploadBytes(6, 10)];
+    expect(UploadProgressRing.fractionOf(slots, 1), 0.6);
+    expect(UploadProgressRing.fractionOf(slots, null), 0.4);
+    expect(UploadProgressRing.fractionOf(const [UploadBytes(2, 10)], 3), 1.0);
+    expect(UploadProgressRing.fractionOf(const [UploadBytes.none], 0), 0.0);
     expect(UploadProgressRing.fractionOf(const [], null), 0.0);
   });
 
   testWidgets('кольцо доезжает до нового процента без пересборки', (
     tester,
   ) async {
-    final progress = ValueNotifier<List<double>>(const [0.1, 0.0]);
+    final progress = ValueNotifier<List<UploadBytes>>(const [
+      UploadBytes(1, 10),
+      UploadBytes.none,
+    ]);
     addTearDown(progress.dispose);
     var cancelled = 0;
     await tester.pumpWidget(
@@ -35,7 +43,7 @@ void main() {
         ),
       ),
     );
-    progress.value = const [0.1, 0.5];
+    progress.value = const [UploadBytes(1, 10), UploadBytes(5, 10)];
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byType(UploadProgressRing));
     expect(cancelled, 1);
@@ -43,7 +51,9 @@ void main() {
   });
 
   testWidgets('догруженный слот перестаёт крутиться', (tester) async {
-    final progress = ValueNotifier<List<double>>(const [0.4]);
+    final progress = ValueNotifier<List<UploadBytes>>(const [
+      UploadBytes(4, 10),
+    ]);
     addTearDown(progress.dispose);
     await tester.pumpWidget(
       MaterialApp(
@@ -58,15 +68,46 @@ void main() {
     );
     expect(tester.hasRunningAnimations, isTrue);
 
-    progress.value = const [1.0];
+    progress.value = const [UploadBytes(10, 10)];
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(tester.hasRunningAnimations, isFalse);
 
-    progress.value = const [0.2];
+    progress.value = const [UploadBytes(2, 10)];
     await tester.pump();
     expect(tester.hasRunningAnimations, isTrue);
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('над медиа видно, сколько уже залито из скольких', (
+    tester,
+  ) async {
+    final progress = ValueNotifier<List<UploadBytes>>(const [
+      UploadBytes.none,
+      UploadBytes.none,
+    ]);
+    addTearDown(progress.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            child: UploadBytesLabel(progress: progress, slot: 1),
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(Text), findsNothing);
+
+    progress.value = const [
+      UploadBytes(1, 2),
+      UploadBytes(512 * 1024, 3 * 1024 * 1024),
+    ];
+    await tester.pump();
+    expect(find.text('512.0 KB / 3.0 MB'), findsOneWidget);
   });
 
   testWidgets('заливка краёв рисуется и без превью, и с ним', (tester) async {

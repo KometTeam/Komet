@@ -27,12 +27,18 @@ import 'package:komet/frontend/widgets/message_actions_overlay.dart'
 import 'package:komet/frontend/widgets/reaction_picker.dart'
     show availableReactions;
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
+import 'package:komet/frontend/widgets/custom_notification.dart';
 import 'package:komet/frontend/widgets/selection_check_circle.dart';
+import 'package:komet/frontend/widgets/small_spinner.dart';
 import 'package:komet/frontend/widgets/sticker_pin.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:komet/main.dart'
     show accountModule, animojiModule, stickersModule;
+import 'package:komet/models/attachment.dart' show PhotoAttachment;
 import 'package:komet/models/chat_reaction_settings.dart';
+
+import '../message_media_draft.dart';
+import 'edit_media_strip.dart';
 
 class PinnedMessageBanner extends StatelessWidget {
   final String? text;
@@ -689,9 +695,16 @@ class _DeletingMessageAnimationState extends State<DeletingMessageAnimation>
   }
 }
 
+typedef EditedMessage = ({
+  String text,
+  List<Map<String, dynamic>> elements,
+  List<Map<String, dynamic>>? attachments,
+});
+
 class EditMessageSheet extends StatefulWidget {
   final String text;
   final Iterable<FormatRange> formatRanges;
+  final List<PhotoAttachment>? photos;
   final Widget Function(
     RichMessageController controller,
     BuildContext context,
@@ -704,6 +717,7 @@ class EditMessageSheet extends StatefulWidget {
     required this.text,
     required this.formatRanges,
     required this.contextMenuBuilder,
+    this.photos,
   });
 
   @override
@@ -712,24 +726,63 @@ class EditMessageSheet extends StatefulWidget {
 
 class _EditMessageSheetState extends State<EditMessageSheet> {
   late final RichMessageController _controller;
+  late final MessageMediaDraft? _media;
+  late final Listenable _saveInputs;
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
     _controller = RichMessageController(text: widget.text)
       ..setFormatRanges(widget.formatRanges);
+    final photos = widget.photos;
+    _media = photos == null ? null : MessageMediaDraft(photos);
+    _saveInputs = Listenable.merge([_controller, ?_media]);
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _media?.dispose();
     super.dispose();
+  }
+
+  bool get _canSave {
+    if (_saving) return false;
+    final media = _media;
+    if (media == null || !media.isEmpty) return true;
+    return _controller.text.trim().isNotEmpty;
+  }
+
+  Future<void> _save() async {
+    final media = _media;
+    List<Map<String, dynamic>>? attachments;
+    if (media != null && media.changed) {
+      setState(() => _saving = true);
+      attachments = await media.settle();
+      if (!mounted) return;
+      setState(() => _saving = false);
+      if (attachments == null) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.editMediaUploadFailed,
+        );
+        return;
+      }
+    }
+    final content = _controller.buildContent();
+    Navigator.of(context).pop<EditedMessage>((
+      text: content.text,
+      elements: content.elements,
+      attachments: attachments,
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
+    final media = _media;
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -751,6 +804,10 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
             ),
           ),
           const SizedBox(height: 16),
+          if (media != null) ...[
+            EditMediaStrip(draft: media, enabled: !_saving),
+            const SizedBox(height: 12),
+          ],
           TextField(
             controller: _controller,
             autofocus: true,
@@ -761,7 +818,9 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
             contextMenuBuilder: (ctx, state) =>
                 widget.contextMenuBuilder(_controller, ctx, state),
             decoration: InputDecoration(
-              hintText: l10n.scheduledMessageTextHint,
+              hintText: media == null
+                  ? l10n.scheduledMessageTextHint
+                  : l10n.attachSheetAddCaptionHint,
               filled: true,
               fillColor: cs.surfaceContainerHighest,
               border: OutlineInputBorder(
@@ -771,10 +830,14 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
             ),
           ),
           const SizedBox(height: 20),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(context).pop(_controller.buildContent()),
-            child: Text(l10n.editProfileSave),
+          ListenableBuilder(
+            listenable: _saveInputs,
+            builder: (context, _) => FilledButton(
+              onPressed: _canSave ? _save : null,
+              child: _saving
+                  ? SmallSpinner(size: 20, color: cs.onSurfaceVariant)
+                  : Text(l10n.editProfileSave),
+            ),
           ),
         ],
       ),

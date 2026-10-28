@@ -13,6 +13,7 @@ import '../../../../core/media/voice_audio_controller.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../models/upload_bytes.dart';
 import '../../custom_notification.dart';
 import '../../small_spinner.dart';
 import 'meta_marks.dart';
@@ -38,7 +39,7 @@ class VoiceMessageBubble extends StatefulWidget {
   final int senderId;
   final int? audioId;
   final String? preloadedText;
-  final ValueListenable<List<double>>? uploadProgress;
+  final ValueListenable<List<UploadBytes>>? uploadProgress;
 
   const VoiceMessageBubble({
     super.key,
@@ -318,7 +319,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     );
   }
 
-  Widget _buildUploadIndicator(ValueListenable<List<double>> progress) {
+  Widget _buildUploadIndicator(ValueListenable<List<UploadBytes>> progress) {
     return UploadProgressRing(
       progress: progress,
       color: _accent,
