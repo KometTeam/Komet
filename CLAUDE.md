@@ -29,6 +29,20 @@ flutter build windows --release
 
 Android builds require **Java 17**. Gradle memory is configured to `-Xmx4096m`.
 
+**16 KB pages.** Google Play rejects a release whose 64-bit `.so` files have ELF `LOAD` segments
+aligned below 16 KB. NDK r28 links with 16 KB by default, r27 — AGP 8.11's default NDK — with 4 KB,
+so `android/build.gradle.kts` hands every library subproject the app's NDK (`flutter.ndkVersion`)
+before the plugin's own `android {}` block runs; a plugin that pins a version keeps it. Without
+this, `opus_flutter_android` (ndk-build, no `ndkVersion`) shipped a 4 KB `libopus.so`. A plugin
+pinned below r28 has to opt in itself (`ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON`,
+`-Wl,-z,max-page-size=16384`), as `komet_crypto`, `ogg_opus_player` and cargokit already do.
+Check a built APK/AAB before uploading — every line must read `0x4000` or more:
+
+```bash
+unzip -o -q app.aab '*lib/arm64-v8a/*.so' '*lib/x86_64/*.so' -d /tmp/so
+find /tmp/so -name '*.so' | while read -r f; do echo "$(llvm-readelf -lW "$f" | awk '$1=="LOAD"{print $NF}' | sort -u | xargs) $f"; done
+```
+
 **Never run APK/AAB builds yourself** (`flutter build apk`, `flutter build appbundle`, gradle assemble tasks) — they are slow and the user builds them. Verify changes with the scoped `flutter analyze` above; the build commands are documentation only.
 Note that `flutter analyze` treats **info**-level lints as fatal by default, so CI fails on any lint.
 
