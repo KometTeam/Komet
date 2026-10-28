@@ -1,3 +1,6 @@
+import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.dsl.LibraryExtension
+
 allprojects {
     repositories {
         google()
@@ -27,6 +30,13 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
+}
+subprojects {
+    pluginManager.withPlugin("com.android.library") {
+        extensions.configure<LibraryExtension> {
+            ndkVersion = project(":app").extensions.getByType<ApplicationExtension>().ndkVersion
+        }
+    }
 }
 
 gradle.projectsEvaluated {
