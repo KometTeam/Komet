@@ -51,18 +51,32 @@ object FkmChannel {
                     result.success(null)
                 }
 
-                "showMessage" -> result.success(deliver(ctx, call, "showMessage"))
+                "setUnread" -> {
+                    val count = call.argument<Int>("count") ?: 0
+                    if (FkmState.applyUnread(ctx, count)) FkmService.refresh(ctx)
+                    result.success(null)
+                }
 
-                "showCall" -> result.success(deliver(ctx, call, "showCall"))
+                "showMessage" -> result.success(
+                    render(ctx, call, "showMessage") { notifier, data ->
+                        notifier.handle(data)
+                    },
+                )
+
+                "showCall" -> result.success(
+                    render(ctx, call, "showCall") { notifier, data ->
+                        notifier.handle(data)
+                    },
+                )
 
                 "editMessage" -> result.success(
-                    update(ctx, call, "editMessage") { notifier, data ->
+                    render(ctx, call, "editMessage") { notifier, data ->
                         notifier.editMessage(data)
                     },
                 )
 
                 "removeMessage" -> result.success(
-                    update(ctx, call, "removeMessage") { notifier, data ->
+                    render(ctx, call, "removeMessage") { notifier, data ->
                         notifier.removeMessage(data)
                     },
                 )
@@ -124,22 +138,7 @@ object FkmChannel {
     }
 
     // Отрисовка тянет аватарку по сети — только не на главном потоке.
-    private fun deliver(ctx: Context, call: MethodCall, tag: String): Boolean {
-        val data = call.argument<Map<String, String>>("data") ?: return false
-        worker.execute {
-            try {
-                KometNotifier(ctx).handle(data)
-                FkmState.countDelivered(ctx)
-                FkmService.refresh(ctx)
-            } catch (e: Exception) {
-                Log.w("Fkm", "$tag failed: ${e.message}")
-            }
-        }
-        return true
-    }
-
-    // Правка и удаление ничего не «доставляют» — счётчик они не трогают.
-    private fun update(
+    private fun render(
         ctx: Context,
         call: MethodCall,
         tag: String,

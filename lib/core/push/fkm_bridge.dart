@@ -48,6 +48,9 @@ class FkmBridge {
   Future<void> setConnected(bool connected) =>
       _invoke<void>('setConnected', {'connected': connected});
 
+  Future<void> setUnread(int count) =>
+      _invoke<void>('setUnread', {'count': count});
+
   Future<void> showMessage(Map<String, String> data) =>
       _invoke<void>('showMessage', {'data': data});
 

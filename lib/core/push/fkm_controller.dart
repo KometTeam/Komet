@@ -15,10 +15,12 @@ import '../../core/storage/token_storage.dart';
 import '../config/komet_settings.dart';
 import '../utils/logger.dart';
 import 'fkm_bridge.dart';
+import 'launcher_badge.dart';
 import 'push_service.dart';
 
 const _fallbackSender = 'MAX';
 const _hiddenPreview = 'Новое сообщение';
+const _unreadThrottle = Duration(milliseconds: 300);
 
 // #***! FKM, своё фоновое уведомление для флейвора без гугла
 /// FKM — уведомления через собственное фоновое соединение, без FCM.
@@ -35,6 +37,8 @@ class FkmController {
   Api? _api;
   StreamSubscription<Packet>? _pushSub;
   StreamSubscription<SessionState>? _stateSub;
+  Timer? _unreadTimer;
+  int? _sentUnread;
   bool _started = false;
 
   bool get isSupported => FkmBridge.instance.isSupported;
@@ -56,11 +60,15 @@ class FkmController {
         )
         .listen(_onPush);
     _stateSub = api.stateStream.listen(_onSessionState);
+    for (final source in BadgeCount.chatSources) {
+      source.addListener(_scheduleUnread);
+    }
 
     if (enabled.value) {
       await initLocalNotificationActions();
       await FkmBridge.instance.setEnabled(true);
       await _pushConnectionState();
+      _scheduleUnread();
     }
   }
 
@@ -74,12 +82,19 @@ class FkmController {
     if (value) await initLocalNotificationActions();
     await FkmBridge.instance.setEnabled(value);
     enabled.value = value;
-    if (value) await _pushConnectionState();
+    _sentUnread = null;
+    if (value) {
+      await _pushConnectionState();
+      _scheduleUnread();
+    }
     return true;
   }
 
   // #***! выключили FKM кнопкой в уведомлении
-  void _onDisabledFromNotification() => enabled.value = false;
+  void _onDisabledFromNotification() {
+    enabled.value = false;
+    _sentUnread = null;
+  }
 
   void _onSessionState(SessionState state) {
     if (!enabled.value) return;
@@ -87,9 +102,28 @@ class FkmController {
   }
 
   // #***! говорим нативу есть ли связь, от этого текст постоянного уведомления
-  Future<void> _pushConnectionState() => FkmBridge.instance.setConnected(
-    _api?.state == SessionState.online,
-  );
+  Future<void> _pushConnectionState() =>
+      FkmBridge.instance.setConnected(_api?.state == SessionState.online);
+
+  // #***! в постоянном уведомлении непрочитанные в чатах со звуком, не всё принятое
+  void _scheduleUnread() {
+    if (!enabled.value || _unreadTimer != null) return;
+    _unreadTimer = Timer(_unreadThrottle, _syncUnread);
+  }
+
+  void _syncUnread() {
+    _unreadTimer = null;
+    if (!enabled.value) return;
+    if (_sentUnread == null && !chats.chatsLoaded) return;
+    final count = BadgeCount.live(
+      enabled: true,
+      includeMuted: false,
+      countMessages: true,
+    ).count;
+    if (count == _sentUnread) return;
+    _sentUnread = count;
+    unawaited(FkmBridge.instance.setUnread(count));
+  }
 
   // #***! входящий звонок, натив рисует полноэкранное
   /// Входящий звонок, когда приложение не на переднем плане.
@@ -250,9 +284,7 @@ class FkmController {
     if (chat != null && chat.isMuted) return null;
 
     final rawConfig = await AppDatabase.getPrivacyConfig(accountId);
-    final config = rawConfig == null
-        ? null
-        : PrivacyConfig.fromJson(rawConfig);
+    final config = rawConfig == null ? null : PrivacyConfig.fromJson(rawConfig);
     if (config != null && !_pushAllowed(config, chat, msg, accountId)) {
       return null;
     }
@@ -317,8 +349,14 @@ class FkmController {
   void dispose() {
     _pushSub?.cancel();
     _stateSub?.cancel();
+    _unreadTimer?.cancel();
+    for (final source in BadgeCount.chatSources) {
+      source.removeListener(_scheduleUnread);
+    }
     _pushSub = null;
     _stateSub = null;
+    _unreadTimer = null;
+    _sentUnread = null;
     _started = false;
   }
 }
