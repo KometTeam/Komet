@@ -43,6 +43,7 @@ class BannersModule {
   // #***! _pinnedId держит баннер на экране чтоб не менялся под пальцем
   String? _pinnedId;
   Future<void>? _syncing;
+  InformerBanner? _preview;
 
   bool get isEnabled => _enabled;
   int get showTime => _showTime;
@@ -130,9 +131,16 @@ class BannersModule {
     return true;
   }
 
+  void preview(InformerBanner? banner) {
+    _preview = banner;
+    _recompute();
+  }
+
+  bool _isPreview(InformerBanner banner) => banner.id == _preview?.id;
+
   // #***! первый показ фиксит время, от него срок жизни
   Future<void> markShown(InformerBanner banner) async {
-    if (_pinnedId == banner.id) return;
+    if (_isPreview(banner) || _pinnedId == banner.id) return;
     final now = DateTime.now().millisecondsSinceEpoch;
     final current = stateOf(banner.id);
     _showState[banner.id] = current.copyWith(
@@ -146,6 +154,7 @@ class BannersModule {
 
   // #***! закрыли крестиком, помним до истечения rerun
   Future<void> close(InformerBanner banner) async {
+    if (_isPreview(banner)) return preview(null);
     final now = DateTime.now().millisecondsSinceEpoch;
     _showState[banner.id] = stateOf(banner.id).copyWith(closedAt: now);
     if (_pinnedId == banner.id) _pinnedId = null;
@@ -155,6 +164,7 @@ class BannersModule {
 
   Future<void> markClicked(InformerBanner banner) async {
     if (!banner.closesOnClick) return;
+    if (_isPreview(banner)) return preview(null);
     await close(banner);
   }
 
@@ -207,6 +217,11 @@ class BannersModule {
 
   // #***! выбираем активный, закреплённый или самый приоритетный
   void _recompute() {
+    final preview = _preview;
+    if (preview != null) {
+      activeBanner.value = preview;
+      return;
+    }
     if (!_enabled) {
       activeBanner.value = null;
       return;

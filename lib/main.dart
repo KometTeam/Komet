@@ -17,6 +17,9 @@ import 'core/cache/chat_scroll_memory.dart';
 import 'core/cache/info_cache.dart';
 import 'core/plugins/plugin_store.dart';
 import 'core/config/build_profile.dart';
+import 'core/config/whats_new.dart';
+import 'core/config/app_motion.dart';
+import 'frontend/widgets/app_motion_scope.dart';
 import 'core/utils/app_foreground.dart';
 import 'core/utils/logger.dart';
 import 'core/cache/self_presence.dart';
@@ -145,11 +148,21 @@ const ProgressIndicatorThemeData _expressiveProgressTheme =
 
 const PageTransitionsTheme _appPageTransitions = PageTransitionsTheme(
   builders: <TargetPlatform, PageTransitionsBuilder>{
-    TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
-    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-    TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-    TargetPlatform.windows: ZoomPageTransitionsBuilder(),
-    TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+    TargetPlatform.android: MotionAwarePageTransitions(
+      PredictiveBackPageTransitionsBuilder(),
+    ),
+    TargetPlatform.iOS: MotionAwarePageTransitions(
+      CupertinoPageTransitionsBuilder(),
+    ),
+    TargetPlatform.macOS: MotionAwarePageTransitions(
+      CupertinoPageTransitionsBuilder(),
+    ),
+    TargetPlatform.windows: MotionAwarePageTransitions(
+      ZoomPageTransitionsBuilder(),
+    ),
+    TargetPlatform.linux: MotionAwarePageTransitions(
+      ZoomPageTransitionsBuilder(),
+    ),
   },
 );
 
@@ -242,6 +255,8 @@ void main(List<String> args) async {
   unawaited(DeepLinkService.instance.init());
 
   final packageInfoFuture = PackageInfo.fromPlatform();
+  final whatsNewFuture = WhatsNew.load();
+  final motionFuture = AppMotion.load();
   final localeFuture = AppLanguage.load();
   final hapticsFuture = Haptics.load();
   final prefsFuture = SharedPreferences.getInstance();
@@ -295,6 +310,8 @@ void main(List<String> args) async {
   await LocalContactAvatars.instance.load();
   await badgeFuture;
   await notificationsFuture;
+  await whatsNewFuture;
+  await motionFuture;
   await ChatEncryptionStore.instance.load();
   E2eeService.instance.attach(messagesModule);
   await KometSettings.load();
@@ -1155,7 +1172,9 @@ class KometAppState extends State<KometApp>
                   valueListenable: fontScale,
                   child: child ?? const SizedBox.shrink(),
                   builder: (context, scale, appChild) {
-                    Widget scaledChild = KeyboardCoverScope(child: appChild!);
+                    Widget scaledChild = AppMotionScope(
+                      child: KeyboardCoverScope(child: appChild!),
+                    );
                     final effective = AppFonts.effectiveScale(_fontId, scale);
                     if ((effective - 1.0).abs() > 0.001) {
                       scaledChild = MediaQuery.withClampedTextScaling(

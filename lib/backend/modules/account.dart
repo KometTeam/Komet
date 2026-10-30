@@ -221,7 +221,7 @@ class AccountModule {
 
     logger.i('Отправка OTP-кода (opcode=${Opcode.auth})');
 
-    final packet = await _api.sendRequest(Opcode.auth, payload);
+    final packet = await _api.sendRequest(Opcode.auth, payload, silent: true);
 
     final data = _requireMapPayload(packet, 'verifyCode');
 

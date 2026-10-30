@@ -189,6 +189,7 @@ flutter:
     - assets/plugins/nekos/
     - assets/plugins/info/
     - assets/plugins/weather/
+    - assets/whats_new/
 
   fonts:
     - family: Inter

@@ -48,14 +48,14 @@ CLIENT_SESSION_ID = 1_700_000_000
 
 USER_AGENT = {
     "deviceType": "ANDROID",
-    "appVersion": "26.20.2",
+    "appVersion": "26.23.2",
     "osVersion": "Android 14",
     "timezone": "Europe/Moscow",
     "screen": "420dpi 420dpi 1080x2340",
     "pushDeviceType": "GCM",
     "arch": "arm64-v8a",
     "locale": "ru",
-    "buildNumber": 6758,
+    "buildNumber": 6779,
     "deviceName": "Rust",
     "deviceLocale": "ru",
 }
@@ -64,10 +64,10 @@ SIGNATURE_DIGEST = bytes.fromhex(
     "1684414033eb263e2c615f8b7df5ed8793850a07656304997fbf07e9e21e1e93"
 )
 DEX_DIGEST = bytes.fromhex(
-    "0a6265f6e5d8231b9cba641f8c40475e6f3baeb06ed41b804b9bf7307aa4214e"
+    "38cff46f392dc1734c308be011c2f0d8da152a390b41063dbb2c913e3032f4b3"
 )
 SO_DIGEST = bytes.fromhex(
-    "90e2fb8745b17b42a10182f8d8ac590e3fca5b311e2ce2d5144fa2c18cb3090d"
+    "634ecc42b246784d975f180b4fecf903df235cdf0476da47163a85630eb1a6a8"
 )
 
 
@@ -303,9 +303,9 @@ def main():
         print("=" * 60)
         print()
         print("Дальше собери payload для ревьювера:")
+        print("  make -C native/crypto-core shared")
         print(f"  printf '{{\"token\":\"{login_token}\"}}' | \\")
-        print("    cargo run -q --manifest-path native/komet_crypto/rust/Cargo.toml \\")
-        print("    --features blobtool --bin review_blob -- '<номер>' '<код>'")
+        print("    dart run tool/review_blob.dart '<номер>' '<код>'")
     finally:
         try:
             sock.close()

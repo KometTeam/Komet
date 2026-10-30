@@ -252,7 +252,9 @@ Future<void> _openResolvedChat(
   final myId = await currentAccountId();
   var isMember = myId != 0 && await AppDatabase.isChatInList(myId, id);
 
-  await chats.cacheServerChat(chat, myId, inList: isMember);
+  if (!isMember || chats.cachedChat(myId, id) == null) {
+    await chats.cacheServerChat(chat, myId, inList: isMember);
+  }
   if (!context.mounted) return;
 
   if (link.kind == MaxContentKind.invite &&
@@ -293,6 +295,7 @@ Future<void> _openResolvedChat(
   }
 
   final target = _messageTarget(link, resolved.message);
+  if (target == null && ChatScreen.revealOpenChat(id)) return;
   pushSwipeable(
     context,
     (_) => ChatScreen(

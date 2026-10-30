@@ -156,7 +156,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get codeResendSms => 'Resend code via SMS';
+  String get codeResendSms => 'Resend code';
 
   @override
   String get codeError2faMissing => 'Error: missing data for 2FA';
@@ -7128,4 +7128,117 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callYouLoweredHand => 'You lowered the participant\'s hand';
+
+  @override
+  String whatsNewBannerTitle(Object version) {
+    return 'Komet updated to $version';
+  }
+
+  @override
+  String get whatsNewBannerSubtitle => 'Tap to see what\'s new';
+
+  @override
+  String whatsNewSheetTitle(Object version) {
+    return 'What\'s new in $version';
+  }
+
+  @override
+  String get whatsNewNoNotes => 'Bug fixes and stability improvements.';
+
+  @override
+  String get whatsNewDone => 'Got it';
+
+  @override
+  String get appearanceAnimationsTitle => 'Animations';
+
+  @override
+  String get appearanceAnimationsSubtitle =>
+      'Transitions between screens and tabs. Turn off to open everything instantly';
+
+  @override
+  String get login2faRequiredTitle =>
+      'Set a password on the device you\'ve signed in to MAX on';
+
+  @override
+  String get login2faRequiredSteps =>
+      'To do so, go to Settings → Security → Sign-in password';
+
+  @override
+  String get login2faRequiredThen => 'Then you\'ll be able to sign in here';
+
+  @override
+  String get login2faRequiredNotKomet =>
+      'This is NOT a Komet error. MAX requires it from everyone.';
+
+  @override
+  String get login2faRequiredRetry => 'Try signing in again';
+
+  @override
+  String get login2faRequiredNoAccess => 'I can\'t access the device';
+
+  @override
+  String get login2faRequiredLinkFailed =>
+      'Couldn\'t open go.max.ru/reset-session';
+
+  @override
+  String get informerBannerServerNote =>
+      'This is an announcement from the MAX server. It isn\'t related to Komet.';
+
+  @override
+  String get storyReplyHint => 'Reply';
+
+  @override
+  String get storyReplySent => 'Message sent';
+
+  @override
+  String get storyReplyFailed => 'Couldn\'t send the reply';
+
+  @override
+  String get storyReplyEncrypted =>
+      'This chat is encrypted, so story replies aren\'t available';
+
+  @override
+  String get storyLikeFailed => 'Couldn\'t react to the story';
+
+  @override
+  String get storyReplyLabel => 'Story';
+
+  @override
+  String get storyReplyGone => 'A story was here';
+
+  @override
+  String get storyReplyUnavailable => 'The story is no longer available';
+
+  @override
+  String get storyMenuProfile => 'Go to profile';
+
+  @override
+  String get storyMenuHide => 'Hide author\'s stories';
+
+  @override
+  String get storyMenuSave => 'Save to gallery';
+
+  @override
+  String get storyMenuReport => 'Report';
+
+  @override
+  String get storyHiddenNotice => 'The author\'s stories are hidden';
+
+  @override
+  String get storyHideFailed => 'Couldn\'t hide the stories';
+
+  @override
+  String get storyReplyOpenChat => 'View';
+
+  @override
+  String get storyHiddenUndo => 'Undo';
+
+  @override
+  String get storyMenuShow => 'Show author\'s stories';
+
+  @override
+  String get storyShownNotice => 'The author\'s stories are visible again';
+
+  @override
+  String get storyShowFailed => 'Couldn\'t show the stories';
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'login_needs_2fa_screen.dart';
 import 'password_2fa_screen.dart';
 import 'registration_screen.dart';
 import 'session_stale_recovery.dart';
@@ -269,6 +270,16 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     });
   }
 
+  Future<void> _showLoginNeeds2fa() async {
+    final retry = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const LoginNeeds2faScreen()),
+    );
+    if (retry != true || !mounted) return;
+    await _requestFreshCode(
+      AppLocalizations.of(context)!.codeConfirmationNewCodeSent,
+    );
+  }
+
   void _resendCode() {
     if (_timerSeconds > 0 || recovering || _verifying) return;
     unawaited(
@@ -432,6 +443,12 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         '(код принят=$verified): $e\n$st',
       );
       if (!mounted) return;
+      if (!verified &&
+          e is PacketError &&
+          e.errorKey == loginNeeds2faErrorKey) {
+        await _showLoginNeeds2fa();
+        return;
+      }
       if (verified && verifiedAccountId != null) {
         await showTemporaryPasswordRecovery(
           context,

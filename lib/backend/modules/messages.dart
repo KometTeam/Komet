@@ -478,6 +478,8 @@ class ReplyInfo {
           return '';
         case AttachmentType.forward:
           return 'Переслано';
+        case AttachmentType.storyReply:
+          return 'История';
         case AttachmentType.unknown:
           return 'Вложение';
       }
@@ -1156,13 +1158,14 @@ class MessagesModule {
     int? replyToMessageId,
     int? replySourceChatId,
     List<Map<String, dynamic>> elements = const [],
+    List<Map<String, dynamic>> attaches = const [],
     void Function()? beforeSend,
   }) async {
     final message = <String, dynamic>{
       'text': text,
       'cid': -_nextCid(),
       'elements': elements,
-      'attaches': [],
+      'attaches': [...attaches],
     };
     if (replyToMessageId != null) {
       message['link'] = {

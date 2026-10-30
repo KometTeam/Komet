@@ -1,0 +1,4 @@
+• Komet connects even when the network's DNS is broken, blocks ads or hands out wrong addresses.
+• Switching between the front and back camera works in calls again.
+• A call connects even if you turn the camera on before the other person answers.
+• Calls connect more reliably on the first try.

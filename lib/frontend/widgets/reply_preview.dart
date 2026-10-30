@@ -147,6 +147,7 @@ class ReplyPreview {
     AttachmentType.call => Symbols.call,
     AttachmentType.share => Symbols.link,
     AttachmentType.forward => Symbols.forward,
+    AttachmentType.storyReply => Symbols.history_toggle_off,
     AttachmentType.unknown => Symbols.attach_file,
     AttachmentType.control || AttachmentType.inlineKeyboard => null,
   };

@@ -82,6 +82,7 @@ class PhotoViewerRoute<T> extends PageRouteBuilder<T> {
   PhotoViewerRoute({required WidgetBuilder builder})
     : super(
         opaque: false,
+        allowSnapshotting: false,
         transitionDuration: const Duration(milliseconds: 220),
         reverseTransitionDuration: const Duration(milliseconds: 200),
         pageBuilder: (context, animation, secondaryAnimation) =>
