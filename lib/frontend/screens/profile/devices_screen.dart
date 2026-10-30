@@ -395,6 +395,7 @@ class _DevicesScreenState extends State<DevicesScreen>
   static final _androidPattern = RegExp(r'android', caseSensitive: false);
 
   String _displayPlatform(SessionInfo session, String text) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return text;
     final isAppleDevice =
         _appleDevicePattern.hasMatch(session.client) ||
         _appleDevicePattern.hasMatch(session.info);
