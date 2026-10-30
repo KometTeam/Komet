@@ -1,4 +1,8 @@
-• Komet connects even when the network's DNS is broken, blocks ads or hands out wrong addresses.
-• Switching between the front and back camera works in calls again.
-• A call connects even if you turn the camera on before the other person answers.
-• Calls connect more reliably on the first try.
+• Stories: reply, like, open the author's profile, hide their stories, save a story or report it.
+• Video stories open faster, fill the screen properly and are no longer downloaded again on every view.
+• Story replies now show up properly in chats.
+• Calls: switching between the front and back camera works again, a call connects even if you turn the camera on before the other person answers, and calls connect more reliably on the first try.
+• A chat with unread messages no longer opens with an empty gap instead of messages.
+• Tabs switch instantly without flashing the screens in between. Appearance now has a switch to turn off animations.
+• When MAX requires a sign-in password, Komet now shows a clear screen with instructions.
+• Sessions from iPhone and iPad are shown as iOS.
