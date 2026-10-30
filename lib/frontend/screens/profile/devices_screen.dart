@@ -341,9 +341,9 @@ class _DevicesScreenState extends State<DevicesScreen>
                   cs,
                   id: session.uniqueId,
                   title:
-                      session.client +
+                      _displayPlatform(session, session.client) +
                       (session.current ? l10n.devicesCurrentSuffix : ''),
-                  platform: session.info,
+                  platform: _displayPlatform(session, session.info),
                   location: session.location,
                   status: session.current ? l10n.devicesOnlineStatus : null,
                   time: session.current
@@ -386,6 +386,20 @@ class _DevicesScreenState extends State<DevicesScreen>
         ),
       ),
     );
+  }
+
+  static final _appleDevicePattern = RegExp(
+    r'iphone|ipad',
+    caseSensitive: false,
+  );
+  static final _androidPattern = RegExp(r'android', caseSensitive: false);
+
+  String _displayPlatform(SessionInfo session, String text) {
+    final isAppleDevice =
+        _appleDevicePattern.hasMatch(session.client) ||
+        _appleDevicePattern.hasMatch(session.info);
+    if (!isAppleDevice) return text;
+    return text.replaceAll(_androidPattern, 'iOS');
   }
 
   Widget _buildShimmerItem(ColorScheme cs) {
