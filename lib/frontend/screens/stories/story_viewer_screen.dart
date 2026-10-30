@@ -12,11 +12,20 @@ import 'package:video_player/video_player.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/haptics.dart';
+import '../../../backend/modules/complaints.dart';
+import '../../../backend/modules/stories.dart';
+import '../../../backend/modules/story_reply_sender.dart';
+import '../../../core/media/thumbhash.dart';
+import '../../../core/media/video_preloader.dart';
+import '../../../core/utils/media_saver.dart';
 import '../../../core/media/video_request_headers.dart';
-import '../../../main.dart' show api, storiesModule;
+import '../../../core/utils/media_cache.dart';
+import '../../../main.dart' show api, appRouteObserver, storiesModule;
 import '../../../models/story.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/komet_avatar.dart';
+import '../../widgets/max_link_nav.dart';
+import '../../widgets/route_probe.dart';
 import '../chats/profile_action_sheets.dart';
 import '../../widgets/small_spinner.dart';
 import 'story_owner_info.dart';
@@ -41,17 +50,20 @@ Future<void> openStoryViewer(
   required List<StoryPreview> previews,
   int initialIndex = 0,
   Map<int, StoryOwnerInfo> ownerOverrides = const {},
+  Map<int, List<Story>> initialStories = const {},
   Offset? origin,
 }) {
   return Navigator.of(context).push(
     PageRouteBuilder(
       opaque: false,
+      allowSnapshotting: false,
       transitionDuration: const Duration(milliseconds: 420),
       reverseTransitionDuration: const Duration(milliseconds: 320),
       pageBuilder: (_, _, _) => StoryViewerScreen(
         previews: previews,
         initialIndex: initialIndex,
         ownerOverrides: ownerOverrides,
+        initialStories: initialStories,
       ),
       transitionsBuilder: (context, animation, _, child) {
         return AnimatedBuilder(
@@ -108,12 +120,14 @@ class StoryViewerScreen extends StatefulWidget {
   final List<StoryPreview> previews;
   final int initialIndex;
   final Map<int, StoryOwnerInfo> ownerOverrides;
+  final Map<int, List<Story>> initialStories;
 
   const StoryViewerScreen({
     super.key,
     required this.previews,
     this.initialIndex = 0,
     this.ownerOverrides = const {},
+    this.initialStories = const {},
   });
 
   @override
@@ -121,7 +135,7 @@ class StoryViewerScreen extends StatefulWidget {
 }
 
 class _StoryViewerScreenState extends State<StoryViewerScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, RouteAware {
   late final PageController _ownerController;
   late int _ownerIndex;
   late final AnimationController _photoProgress;
@@ -139,9 +153,13 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   static const double _dismissThreshold = 120;
 
   VideoPlayerController? _video;
+  final ValueNotifier<double?> _videoLoading = ValueNotifier<double?>(null);
+  int _videoEpoch = 0;
 
   int _myId = 0;
   bool _deleting = false;
+  ModalRoute<Object?>? _route;
+  bool _resumeWhenUncovered = false;
 
   StoryPreview get _owner => widget.previews[_ownerIndex];
 
@@ -158,6 +176,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     super.initState();
     _ownerIndex = widget.initialIndex.clamp(0, widget.previews.length - 1);
     _ownerController = PageController(initialPage: _ownerIndex);
+    _stories.addAll(widget.initialStories);
     _photoProgress = AnimationController(vsync: this, duration: _photoDuration)
       ..addListener(() => _segment.value = _photoProgress.value)
       ..addStatusListener((s) {
@@ -181,7 +200,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _disposeVideo();
+    _videoLoading.dispose();
     _photoProgress.dispose();
     _segment.dispose();
     _ownerController.dispose();
@@ -189,6 +210,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   }
 
   void _disposeVideo() {
+    _videoEpoch++;
+    _videoLoading.value = null;
     _video?.removeListener(_onVideoTick);
     _video?.dispose();
     _video = null;
@@ -235,26 +258,48 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
     final story = _currentStory;
     if (story == null) return;
-    _markViewed(story);
     storiesModule.setLastViewed(story.owner.ownerId, story.id);
 
     final media = story.media;
     if (media != null && media.isVideo && (media.url?.isNotEmpty ?? false)) {
-      _startVideo(media.url!);
+      unawaited(_startVideo(story, media.url!));
     } else {
+      _markViewed(story);
       _photoProgress.forward(from: 0);
     }
+    _preloadAfter(index);
   }
 
-  Future<void> _startVideo(String url) async {
-    final uri = Uri.parse(url);
-    final controller = VideoPlayerController.networkUrl(
-      uri,
-      httpHeaders: videoRequestHeaders(
-        uri,
-        sessionUserAgent: api.session?.userAgent(),
+  static Map<String, String> _cdnHeaders(Uri uri) =>
+      videoRequestHeaders(uri, sessionUserAgent: api.session?.userAgent());
+
+  static String _videoCacheName(Story story) =>
+      'story_${story.owner.ownerId}_${story.id}.mp4';
+
+  static const int _storyVideoMaxBytes = 64 * 1024 * 1024;
+
+  void _cacheVideo(Story story, String url) {
+    unawaited(
+      VideoPreloader.load(
+        _videoCacheName(story),
+        () async => url,
+        headers: _cdnHeaders,
+        maxBytes: _storyVideoMaxBytes,
+        cancelled: () => !mounted,
       ),
     );
+  }
+
+  Future<void> _startVideo(Story story, String url) async {
+    final epoch = _videoEpoch;
+    _videoLoading.value = 0;
+    final cached = await MediaCache.existing(_videoCacheName(story));
+    if (!mounted || epoch != _videoEpoch) return;
+    final uri = Uri.parse(url);
+    final controller = cached != null
+        ? VideoPlayerController.file(cached)
+        : VideoPlayerController.networkUrl(uri, httpHeaders: _cdnHeaders(uri));
+    if (cached == null) _cacheVideo(story, url);
     _video = controller;
     try {
       await controller.initialize();
@@ -263,14 +308,28 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         return;
       }
       controller.addListener(_onVideoTick);
-      await controller.play();
-      setState(() {});
+      _videoLoading.value = null;
+      _markViewed(story);
+      if (!_paused) await controller.play();
+      if (mounted) setState(() {});
     } catch (_) {
       if (_video == controller) {
         _disposeVideo();
+        _markViewed(story);
         _photoProgress.forward(from: 0);
       }
     }
+  }
+
+  void _preloadAfter(int index) {
+    final next = index + 1 < _ownerStories.length
+        ? _ownerStories[index + 1]
+        : null;
+    final media = next?.media;
+    final url = media?.url;
+    if (next == null || media == null || !media.isVideo) return;
+    if (url == null || url.isEmpty) return;
+    _cacheVideo(next, url);
   }
 
   void _onVideoTick() {
@@ -316,7 +375,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         curve: Curves.easeInOutCubic,
       );
     } else {
-      Navigator.of(context).maybePop();
+      _close();
     }
   }
 
@@ -346,7 +405,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     final video = _video;
     if (video != null && video.value.isInitialized) {
       paused ? video.pause() : video.play();
-    } else {
+    } else if (_videoLoading.value == null) {
       paused ? _photoProgress.stop() : _photoProgress.forward();
     }
   }
@@ -363,7 +422,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   void _onDragEnd(DragEndDetails d) {
     final v = d.primaryVelocity ?? 0;
     if (_dragDy > _dismissThreshold || v > 700) {
-      Navigator.of(context).maybePop();
+      _close();
       return;
     }
     setState(() {
@@ -371,6 +430,46 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       _dragDy = 0;
     });
     _setPaused(false);
+  }
+
+  void _onRoute(ModalRoute<Object?> route) {
+    _route = route;
+    if (route is PageRoute) appRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPushNext() => _pauseUntilUncovered();
+
+  @override
+  void didPopNext() {
+    if (!_resumeWhenUncovered) return;
+    _resumeWhenUncovered = false;
+    _setPaused(false);
+  }
+
+  void _pauseUntilUncovered() {
+    if (_paused) return;
+    _resumeWhenUncovered = true;
+    _setPaused(true);
+  }
+
+  void _close() {
+    final route = _route;
+    if (route == null || route.isCurrent) {
+      Navigator.of(context).maybePop();
+    } else if (route.isActive) {
+      Navigator.of(context).removeRoute(route);
+    }
+  }
+
+  Future<void> _openOwnerProfile() async {
+    final owner = _owner.owner;
+    _pauseUntilUncovered();
+    final opened = owner.isUser
+        ? await openContactById(context, owner.ownerId)
+        : await openChatById(context, owner.ownerId);
+    if (!mounted || (opened && _route?.isCurrent == false)) return;
+    didPopNext();
   }
 
   // #***! меню своей истории, пока открыто — история на паузе
@@ -460,67 +559,71 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween<double>(end: _dragDy),
-            duration: _dragging
-                ? Duration.zero
-                : const Duration(milliseconds: 320),
-            curve: Curves.easeOutCubic,
-            child: PageView.builder(
-              controller: _ownerController,
-              onPageChanged: _onOwnerPageChanged,
-              itemCount: widget.previews.length,
-              physics: const BouncingScrollPhysics(),
-              itemBuilder: (context, index) {
-                final content = index == _ownerIndex
-                    ? _buildActiveOwner()
-                    : _OwnerCover(
-                        preview: widget.previews[index],
-                        overrideInfo:
-                            widget.ownerOverrides[widget
-                                .previews[index]
-                                .owner
-                                .ownerId],
-                      );
-                return _CubePage(
-                  controller: _ownerController,
-                  index: index,
-                  fallbackPage: _ownerIndex.toDouble(),
-                  child: content,
+    return RouteProbe(
+      onRoute: _onRoute,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        resizeToAvoidBottomInset: false,
+        body: Stack(
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: _dragDy),
+              duration: _dragging
+                  ? Duration.zero
+                  : const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              child: PageView.builder(
+                controller: _ownerController,
+                onPageChanged: _onOwnerPageChanged,
+                itemCount: widget.previews.length,
+                physics: const BouncingScrollPhysics(),
+                itemBuilder: (context, index) {
+                  final content = index == _ownerIndex
+                      ? _buildActiveOwner()
+                      : _OwnerCover(
+                          preview: widget.previews[index],
+                          overrideInfo:
+                              widget.ownerOverrides[widget
+                                  .previews[index]
+                                  .owner
+                                  .ownerId],
+                        );
+                  return _CubePage(
+                    controller: _ownerController,
+                    index: index,
+                    fallbackPage: _ownerIndex.toDouble(),
+                    child: content,
+                  );
+                },
+              ),
+              builder: (context, dy, child) {
+                final p = (dy.abs() / 320).clamp(0.0, 1.0);
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: ColoredBox(
+                          color: Colors.black.withValues(alpha: 1.0 - p * 0.7),
+                        ),
+                      ),
+                    ),
+                    Transform.translate(
+                      offset: Offset(0, dy),
+                      child: Transform.scale(
+                        scale: 1.0 - p * 0.12,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(p * 26),
+                          child: child,
+                        ),
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
-            builder: (context, dy, child) {
-              final p = (dy.abs() / 320).clamp(0.0, 1.0);
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: ColoredBox(
-                        color: Colors.black.withValues(alpha: 1.0 - p * 0.7),
-                      ),
-                    ),
-                  ),
-                  Transform.translate(
-                    offset: Offset(0, dy),
-                    child: Transform.scale(
-                      scale: 1.0 - p * 0.12,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(p * 26),
-                        child: child,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -531,20 +634,36 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     final stories = _ownerStories;
     final story = _currentStory;
 
+    final card = LayoutBuilder(
+      builder: (context, constraints) => GestureDetector(
+        onTapUp: (details) {
+          if (details.localPosition.dx < constraints.maxWidth * 0.32) {
+            _rewind();
+          } else {
+            _advance();
+          }
+        },
+        onLongPressStart: (_) => _setPaused(true),
+        onLongPressEnd: (_) => _setPaused(false),
+        child: _buildCardContent(ownerId, loading, stories, story),
+      ),
+    );
     return GestureDetector(
-      onTapUp: (details) {
-        final width = MediaQuery.of(context).size.width;
-        if (details.localPosition.dx < width * 0.32) {
-          _rewind();
-        } else {
-          _advance();
-        }
-      },
-      onLongPressStart: (_) => _setPaused(true),
-      onLongPressEnd: (_) => _setPaused(false),
       onVerticalDragStart: _onDragStart,
       onVerticalDragUpdate: _onDragUpdate,
       onVerticalDragEnd: _onDragEnd,
+      child: _StoryFrame(card: card, bottom: _buildBottomBar(story)),
+    );
+  }
+
+  Widget _buildCardContent(
+    int ownerId,
+    bool loading,
+    List<Story> stories,
+    Story? story,
+  ) {
+    return ColoredBox(
+      color: Colors.black,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -555,7 +674,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
             child: story?.media != null
                 ? KeyedSubtree(
                     key: ValueKey('$ownerId:${story!.id}'),
-                    child: _StoryMediaView(media: story.media!, video: _video),
+                    child: _StoryMediaView(
+                      media: story.media!,
+                      video: _video,
+                      loading: _videoLoading,
+                    ),
                   )
                 : (loading
                       ? const SizedBox.expand(key: ValueKey('loading'))
@@ -573,17 +696,274 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           const _TopScrim(),
           if (loading)
             const Center(child: SmallSpinner(size: 28, color: Colors.white)),
-          SafeArea(
-            child: Column(
-              children: [
-                _buildProgressBars(stories.length),
-                _buildHeader(),
-                const Spacer(),
-              ],
-            ),
+          Column(
+            children: [
+              _buildProgressBars(stories.length),
+              _buildHeader(),
+              const Spacer(),
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBottomBar(Story? story) {
+    if (story == null) return const SizedBox.shrink();
+    if (_isOwnStory(story)) {
+      final views = story.viewsCount;
+      if (views == null) return const SizedBox.shrink();
+      return Row(
+        children: [
+          const SizedBox(width: 16),
+          const Icon(Symbols.visibility, color: Colors.white70, size: 20),
+          const SizedBox(width: 6),
+          Text(
+            '$views',
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+        ],
+      );
+    }
+    if (!story.allowsReplies && !story.allowsReactions) {
+      return const SizedBox.shrink();
+    }
+    return _StoryReplyBar(
+      key: ValueKey('reply-${story.owner.ownerId}'),
+      canReply: story.allowsReplies,
+      canLike: story.allowsReactions,
+      liked: story.liked,
+      onLike: () => _toggleLike(story),
+      onSend: (text) => _sendReply(story, text),
+      onTyping: _holdForInput,
+    );
+  }
+
+  bool _opensProfile(Story story) => !_isOwnStory(story) && story.allowsProfile;
+
+  bool _hasMenu(Story story) =>
+      _isOwnStory(story) ||
+      _opensProfile(story) ||
+      story.allowsHidingAuthor ||
+      story.allowsSaving ||
+      story.allowsComplaints;
+
+  void _holdForInput(bool typing) {
+    if (typing) {
+      _pauseUntilUncovered();
+    } else {
+      didPopNext();
+    }
+  }
+
+  void _replaceLocal(Story updated) {
+    final ownerId = updated.owner.ownerId;
+    final list = _stories[ownerId];
+    if (list == null) return;
+    final index = list.indexWhere((s) => s.id == updated.id);
+    if (index < 0) return;
+    setState(() => _stories[ownerId] = [...list]..[index] = updated);
+  }
+
+  Future<void> _toggleLike(Story story) async {
+    Haptics.selection();
+    final next = story.liked ? null : StoriesModule.like;
+    _replaceLocal(
+      next == null
+          ? story.copyWith(clearReaction: true)
+          : story.copyWith(reaction: next),
+    );
+    final ok = await storiesModule.react(story, next);
+    if (!mounted || ok) return;
+    _replaceLocal(story);
+    showCustomNotification(
+      context,
+      AppLocalizations.of(context)!.storyLikeFailed,
+    );
+  }
+
+  Future<bool> _sendReply(Story story, String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+    final result = await StoryReplySender.send(story, trimmed);
+    if (!mounted) return false;
+    final l10n = AppLocalizations.of(context)!;
+    switch (result.outcome) {
+      case StoryReplyOutcome.sent:
+        final navigatorContext = Navigator.of(context).context;
+        showCustomNotification(
+          context,
+          l10n.storyReplySent,
+          action: (
+            label: l10n.storyReplyOpenChat,
+            onTap: () {
+              if (mounted) _close();
+              unawaited(openChatById(navigatorContext, result.chatId));
+            },
+          ),
+        );
+        return true;
+      case StoryReplyOutcome.encryptedChat:
+        showCustomNotification(context, l10n.storyReplyEncrypted);
+        return false;
+      case StoryReplyOutcome.failed:
+        showCustomNotification(context, l10n.storyReplyFailed);
+        return false;
+    }
+  }
+
+  Future<void> _openForeignMenu() async {
+    final story = _currentStory;
+    if (story == null) return;
+    _pauseUntilUncovered();
+    final l10n = AppLocalizations.of(context)!;
+    final action = await showModalBottomSheet<_StoryAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final cs = Theme.of(sheetContext).colorScheme;
+        Widget item(_StoryAction action, IconData icon, String label) =>
+            ListTile(
+              leading: Icon(
+                icon,
+                color: action == _StoryAction.report ? cs.error : null,
+              ),
+              title: Text(
+                label,
+                style: action == _StoryAction.report
+                    ? TextStyle(color: cs.error)
+                    : null,
+              ),
+              onTap: () => Navigator.of(sheetContext).pop(action),
+            );
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_opensProfile(story))
+                item(
+                  _StoryAction.profile,
+                  Symbols.account_circle,
+                  l10n.storyMenuProfile,
+                ),
+              if (story.allowsHidingAuthor)
+                item(
+                  _StoryAction.hide,
+                  Symbols.visibility_off,
+                  l10n.storyMenuHide,
+                ),
+              if (story.allowsSaving)
+                item(_StoryAction.save, Symbols.download, l10n.storyMenuSave),
+              if (story.allowsComplaints)
+                item(_StoryAction.report, Symbols.report, l10n.storyMenuReport),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted) return;
+    switch (action) {
+      case _StoryAction.profile:
+        await _openOwnerProfile();
+        return;
+      case _StoryAction.hide:
+        await _hideAuthor(story);
+      case _StoryAction.save:
+        await _saveStory(story);
+      case _StoryAction.report:
+        await _reportStory(story);
+      case null:
+        break;
+    }
+    if (mounted && _route?.isCurrent != false) didPopNext();
+  }
+
+  Future<void> _hideAuthor(Story story) async {
+    final ownerId = story.owner.ownerId;
+    final ok = await storiesModule.setAuthorHidden(ownerId, true);
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    if (!ok) {
+      showCustomNotification(context, l10n.storyHideFailed);
+      return;
+    }
+    showCustomNotification(
+      context,
+      l10n.storyHiddenNotice,
+      action: (
+        label: l10n.storyHiddenUndo,
+        onTap: () => unawaited(storiesModule.setAuthorHidden(ownerId, false)),
+      ),
+    );
+    _nextOwner();
+  }
+
+  Future<void> _saveStory(Story story) async {
+    final media = story.media;
+    final url = media?.url;
+    if (media == null || url == null || url.isEmpty) return;
+    final MediaSaveResult result;
+    if (media.isVideo) {
+      final file = await VideoPreloader.load(
+        _videoCacheName(story),
+        () async => url,
+        priority: true,
+        headers: _cdnHeaders,
+      );
+      result = file == null
+          ? const MediaSaveResult(ok: false, failure: MediaSaveFailure.noLink)
+          : await saveLocalMedia(
+              file,
+              saveName: 'story_${story.id}.mp4',
+              kind: SaveMediaKind.video,
+            );
+    } else {
+      result = await saveImageFromUrl(url);
+    }
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    showCustomNotification(
+      context,
+      result.ok
+          ? l10n.photoViewerSavedToGallery
+          : l10n.notificationsSaveFailed(result.errorText(l10n)),
+    );
+  }
+
+  Future<void> _reportStory(Story story) async {
+    final l10n = AppLocalizations.of(context)!;
+    await showComplaintCard(
+      context,
+      title: l10n.chatInfoComplaintTitle,
+      subtitle: l10n.chatInfoComplaintSubtitle,
+      sendLabel: l10n.chatInfoComplaintSend,
+      closeLabel: l10n.chatInfoComplaintClose,
+      emptyLabel: l10n.chatInfoComplaintEmpty,
+      loadReasons: () async {
+        final reasons = await ComplaintsModule.reasonsFor(
+          api,
+          ComplaintsModule.storyTypeId,
+        );
+        return reasons
+            .map((r) => (id: r.reasonId, title: r.reasonTitle))
+            .toList();
+      },
+      onSend: (reasonId) async {
+        final ok = await ComplaintsModule.sendComplaint(
+          api,
+          reasonId: reasonId,
+          typeId: ComplaintsModule.storyTypeId,
+          ids: [story.id],
+          parentId: story.owner.ownerId,
+        );
+        if (mounted) {
+          showCustomNotification(
+            context,
+            ok ? l10n.chatInfoComplaintSent : l10n.chatInfoComplaintFailed,
+          );
+        }
+        return ok;
+      },
     );
   }
 
@@ -626,63 +1006,79 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         overrideInfo: widget.ownerOverrides[preview.owner.ownerId],
         builder: (context, info) => Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(1.6),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  width: 1.6,
-                ),
-              ),
-              child: KometAvatar(
-                name: info?.name.isNotEmpty == true ? info!.name : '?',
-                size: 34,
-                imageUrl: info?.avatarUrl,
-              ),
-            ),
-            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  OfficialName(
-                    contactId: preview.owner.ownerId,
-                    text: info?.name.isNotEmpty == true ? info!.name : '…',
-                    iconSize: 15,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: displayFontOf(context),
-                      shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: story != null && _opensProfile(story)
+                    ? _openOwnerProfile
+                    : null,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(1.6),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          width: 1.6,
+                        ),
+                      ),
+                      child: KometAvatar(
+                        name: info?.name.isNotEmpty == true ? info!.name : '?',
+                        size: 34,
+                        imageUrl: info?.avatarUrl,
+                      ),
                     ),
-                  ),
-                  if (story != null && story.time > 0)
-                    Text(
-                      _timeAgo(AppLocalizations.of(context)!, story.time),
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 12,
-                        shadows: const [
-                          Shadow(color: Colors.black54, blurRadius: 4),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          OfficialName(
+                            contactId: preview.owner.ownerId,
+                            text: info?.name.isNotEmpty == true
+                                ? info!.name
+                                : '…',
+                            iconSize: 15,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: displayFontOf(context),
+                              shadows: [
+                                Shadow(color: Colors.black54, blurRadius: 4),
+                              ],
+                            ),
+                          ),
+                          if (story != null && story.time > 0)
+                            Text(
+                              _timeAgo(
+                                AppLocalizations.of(context)!,
+                                story.time,
+                              ),
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 12,
+                                shadows: const [
+                                  Shadow(color: Colors.black54, blurRadius: 4),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
-            if (_isOwnStory(story))
+            if (story != null && _hasMenu(story))
               _RoundIconButton(
                 key: const ValueKey('story-more'),
-                icon: Symbols.more_horiz,
-                onTap: _openStoryMenu,
+                icon: Symbols.more_vert,
+                onTap: _isOwnStory(story) ? _openStoryMenu : _openForeignMenu,
               ),
-            _RoundIconButton(
-              icon: Symbols.close,
-              onTap: () => Navigator.of(context).maybePop(),
-            ),
+            _RoundIconButton(icon: Symbols.close, onTap: _close),
           ],
         ),
       ),
@@ -859,99 +1255,142 @@ final Expando<ImageProvider> _storyPreviews = Expando('storyPreview');
 ImageProvider? _previewProvider(StoryMedia media) {
   final cached = _storyPreviews[media];
   if (cached != null) return cached;
+  final bytes = _previewBytes(media);
+  if (bytes == null) return null;
+  final provider = MemoryImage(bytes);
+  _storyPreviews[media] = provider;
+  return provider;
+}
+
+Uint8List? _previewBytes(StoryMedia media) {
   final previewData = media.previewData;
-  if (previewData == null) return null;
-  final comma = previewData.indexOf(',');
-  if (comma < 0) return null;
-  try {
-    final provider = MemoryImage(
-      base64Decode(previewData.substring(comma + 1)),
-    );
-    _storyPreviews[media] = provider;
-    return provider;
-  } catch (_) {
-    return null;
+  final comma = previewData?.indexOf(',') ?? -1;
+  if (previewData != null && comma >= 0) {
+    try {
+      return base64Decode(previewData.substring(comma + 1));
+    } catch (_) {}
   }
+  final thumbhash = media.thumbhash;
+  return thumbhash == null ? null : thumbHashToPng(thumbhash);
 }
 
 class _StoryMediaView extends StatelessWidget {
   final StoryMedia media;
   final VideoPlayerController? video;
+  final ValueListenable<double?> loading;
 
-  const _StoryMediaView({required this.media, this.video});
+  const _StoryMediaView({
+    required this.media,
+    required this.loading,
+    this.video,
+  });
+
+  static const double _portraitLimit = 0.8;
+
+  double get _aspect {
+    if ((media.width ?? 0) > 0 && (media.height ?? 0) > 0) {
+      return media.aspectRatio;
+    }
+    final value = video?.value;
+    if (value == null || !value.isInitialized) return media.aspectRatio;
+    final raw = value.aspectRatio;
+    return value.rotationCorrection % 180 == 0 ? raw : 1 / raw;
+  }
 
   @override
   Widget build(BuildContext context) {
     final preview = _previewProvider(media);
-    final Widget blurBg = preview != null
-        ? Positioned.fill(
-            child: ImageFiltered(
-              imageFilter: ui.ImageFilter.blur(
-                sigmaX: AppFrost.mediaBackdropSigma,
-                sigmaY: AppFrost.mediaBackdropSigma,
-              ),
-              child: Image(image: preview, fit: BoxFit.cover),
+    final aspect = _aspect;
+    final fit = aspect < _portraitLimit ? BoxFit.cover : BoxFit.contain;
+    Widget framed(Widget child) => SizedBox.expand(
+      child: FittedBox(
+        fit: fit,
+        clipBehavior: Clip.hardEdge,
+        child: SizedBox(width: aspect * 1000, height: 1000, child: child),
+      ),
+    );
+    final poster = media.thumbnailUrl?.isNotEmpty ?? false
+        ? framed(
+            CachedNetworkImage(
+              imageUrl: media.thumbnailUrl!,
+              fit: BoxFit.fill,
+              placeholder: preview == null
+                  ? null
+                  : (_, _) => Image(image: preview, fit: BoxFit.fill),
+              errorWidget: (_, _, _) => preview == null
+                  ? const SizedBox.shrink()
+                  : Image(image: preview, fit: BoxFit.fill),
             ),
           )
-        : const SizedBox.shrink();
+        : preview == null
+        ? const SizedBox.shrink()
+        : framed(Image(image: preview, fit: BoxFit.fill));
+
+    final children = <Widget>[
+      if (preview != null)
+        Positioned.fill(
+          child: ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(
+              sigmaX: AppFrost.mediaBackdropSigma,
+              sigmaY: AppFrost.mediaBackdropSigma,
+            ),
+            child: Image(image: preview, fit: BoxFit.cover),
+          ),
+        ),
+    ];
 
     if (media.isVideo) {
       final c = video;
-      Widget fg;
-      if (c != null && c.value.isInitialized) {
-        fg = Center(
-          child: AspectRatio(
-            aspectRatio: c.value.aspectRatio,
-            child: VideoPlayer(c),
-          ),
-        );
-      } else if (media.thumbnailUrl?.isNotEmpty ?? false) {
-        fg = CachedNetworkImage(
-          imageUrl: media.thumbnailUrl!,
-          fit: BoxFit.contain,
-        );
-      } else if (preview != null) {
-        fg = Center(
-          child: Image(image: preview, fit: BoxFit.contain),
-        );
-      } else {
-        fg = const SizedBox.shrink();
-      }
-      return Stack(fit: StackFit.expand, children: [blurBg, fg]);
+      children.add(
+        c != null && c.value.isInitialized ? framed(VideoPlayer(c)) : poster,
+      );
+      children.add(
+        ValueListenableBuilder<double?>(
+          valueListenable: loading,
+          builder: (context, progress, _) => progress == null
+              ? const SizedBox.shrink()
+              : Center(
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: CircularProgressIndicator(
+                      value: progress > 0 ? progress : null,
+                      strokeWidth: 3,
+                      color: Colors.white,
+                      backgroundColor: Colors.white24,
+                    ),
+                  ),
+                ),
+        ),
+      );
+      return Stack(fit: StackFit.expand, children: children);
     }
 
     final url = media.url;
-    Widget fg;
-    if (url == null || url.isEmpty) {
-      fg = preview != null
-          ? Center(
-              child: Image(image: preview, fit: BoxFit.contain),
-            )
-          : const SizedBox.shrink();
-    } else {
-      fg = CachedNetworkImage(
-        imageUrl: url,
-        fit: BoxFit.contain,
-        fadeInDuration: const Duration(milliseconds: 200),
-        placeholder: preview != null
-            ? (context, _) => Center(
-                child: Image(image: preview, fit: BoxFit.contain),
-              )
-            : null,
-        errorWidget: (context, _, _) => preview != null
-            ? Center(
-                child: Image(image: preview, fit: BoxFit.contain),
-              )
-            : const Center(
-                child: Icon(
-                  Symbols.broken_image,
-                  color: Colors.white54,
-                  size: 48,
-                ),
+    children.add(
+      url == null || url.isEmpty
+          ? poster
+          : framed(
+              CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.fill,
+                fadeInDuration: const Duration(milliseconds: 200),
+                placeholder: preview != null
+                    ? (_, _) => Image(image: preview, fit: BoxFit.fill)
+                    : null,
+                errorWidget: (_, _, _) => preview != null
+                    ? Image(image: preview, fit: BoxFit.fill)
+                    : const Center(
+                        child: Icon(
+                          Symbols.broken_image,
+                          color: Colors.white54,
+                          size: 48,
+                        ),
+                      ),
               ),
-      );
-    }
-    return Stack(fit: StackFit.expand, children: [blurBg, fg]);
+            ),
+    );
+    return Stack(fit: StackFit.expand, children: children);
   }
 }
 
@@ -963,25 +1402,200 @@ class _OwnerCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.black,
-      child: Center(
-        child: StoryOwnerBuilder(
-          owner: preview.owner,
-          overrideInfo: overrideInfo,
-          builder: (context, info) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              KometAvatar(
-                name: info?.name.isNotEmpty == true ? info!.name : '?',
-                size: 92,
-                imageUrl: info?.avatarUrl,
-              ),
-              const SizedBox(height: 14),
-              const SmallSpinner(size: 22, color: Colors.white30),
-            ],
+    return _StoryFrame(
+      card: ColoredBox(
+        color: Colors.black,
+        child: Center(
+          child: StoryOwnerBuilder(
+            owner: preview.owner,
+            overrideInfo: overrideInfo,
+            builder: (context, info) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                KometAvatar(
+                  name: info?.name.isNotEmpty == true ? info!.name : '?',
+                  size: 92,
+                  imageUrl: info?.avatarUrl,
+                ),
+                const SizedBox(height: 14),
+                const SmallSpinner(size: 22, color: Colors.white30),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StoryFrame extends StatelessWidget {
+  final Widget card;
+  final Widget? bottom;
+
+  const _StoryFrame({required this.card, this.bottom});
+
+  static const double bottomBarHeight = 64;
+  static const double _aspect = 9 / 16;
+
+  @override
+  Widget build(BuildContext context) {
+    final padding = MediaQuery.paddingOf(context);
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final lift = math.max(0.0, keyboard - padding.bottom);
+    return Padding(
+      padding: EdgeInsets.only(top: padding.top, bottom: padding.bottom),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cardMaxHeight = constraints.maxHeight - bottomBarHeight;
+          final width = math.min(constraints.maxWidth, cardMaxHeight * _aspect);
+          final height = math.min(cardMaxHeight, width / _aspect);
+          return Column(
+            children: [
+              SizedBox(
+                width: width,
+                height: height,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: card,
+                ),
+              ),
+              const Spacer(),
+              Transform.translate(
+                offset: Offset(0, -lift),
+                child: SizedBox(
+                  width: width,
+                  height: bottomBarHeight,
+                  child: bottom,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+enum _StoryAction { profile, hide, save, report }
+
+class _StoryReplyBar extends StatefulWidget {
+  final bool canReply;
+  final bool canLike;
+  final bool liked;
+  final VoidCallback onLike;
+  final Future<bool> Function(String text) onSend;
+  final ValueChanged<bool> onTyping;
+
+  const _StoryReplyBar({
+    super.key,
+    required this.canReply,
+    required this.canLike,
+    required this.liked,
+    required this.onLike,
+    required this.onSend,
+    required this.onTyping,
+  });
+
+  @override
+  State<_StoryReplyBar> createState() => _StoryReplyBarState();
+}
+
+class _StoryReplyBarState extends State<_StoryReplyBar> {
+  final TextEditingController _text = TextEditingController();
+  final FocusNode _focus = FocusNode();
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocus);
+    _text.addListener(_onText);
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocus);
+    _text.removeListener(_onText);
+    _focus.dispose();
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _onFocus() => widget.onTyping(_focus.hasFocus);
+
+  void _onText() => setState(() {});
+
+  Future<void> _send() async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    final ok = await widget.onSend(_text.text);
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (!ok) return;
+    _text.clear();
+    _focus.unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final typed = _text.text.trim().isNotEmpty;
+    final Widget trailing = typed || _sending
+        ? IconButton(
+            key: const ValueKey('story-reply-send'),
+            onPressed: _sending ? null : _send,
+            icon: _sending
+                ? const SmallSpinner(size: 20, color: Colors.white)
+                : const Icon(Symbols.send, fill: 1, color: Colors.white),
+          )
+        : widget.canLike
+        ? IconButton(
+            key: const ValueKey('story-like'),
+            onPressed: widget.onLike,
+            icon: Icon(
+              Symbols.favorite,
+              fill: widget.liked ? 1 : 0,
+              color: widget.liked ? const Color(0xFFFF3B5C) : Colors.white,
+              size: 28,
+            ),
+          )
+        : const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 10, 4, 10),
+      child: Row(
+        children: [
+          if (widget.canReply)
+            Expanded(
+              child: TextField(
+                controller: _text,
+                focusNode: _focus,
+                readOnly: _sending,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _send(),
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+                cursorColor: Colors.white,
+                decoration: InputDecoration(
+                  hintText: l10n.storyReplyHint,
+                  hintStyle: const TextStyle(color: Colors.white60),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            )
+          else
+            const Spacer(),
+          const SizedBox(width: 4),
+          trailing,
+        ],
       ),
     );
   }

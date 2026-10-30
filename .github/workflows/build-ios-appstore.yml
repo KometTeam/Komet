@@ -101,8 +101,8 @@ jobs:
       - name: Build App Store variant (no codesign)
         env:
           KOMET_APPSTORE_BUILD: 'true'
-          KOMET_REVIEW_PHONE: ${{ secrets.KOMET_REVIEW_PHONE }}
-          KOMET_REVIEW_PAYLOAD: ${{ secrets.KOMET_REVIEW_PAYLOAD }}
+          KOMET_REVIEW_PHONE: ${{ secrets.KOMET_REVIEW_PHONE_IOS }}
+          KOMET_REVIEW_PAYLOAD: ${{ secrets.KOMET_REVIEW_PAYLOAD_IOS }}
         run: |
           flutter config --no-enable-swift-package-manager
           flutter build ios --release --no-codesign -v \

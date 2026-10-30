@@ -13,6 +13,7 @@ class InformerBannerTile extends StatefulWidget {
   final ValueChanged<InformerBanner>? onPresented;
   final VoidCallback? onTap;
   final VoidCallback? onClose;
+  final String? note;
 
   const InformerBannerTile({
     super.key,
@@ -21,6 +22,7 @@ class InformerBannerTile extends StatefulWidget {
     this.onPresented,
     this.onTap,
     this.onClose,
+    this.note,
   });
 
   @override
@@ -148,6 +150,21 @@ class _InformerBannerTileState extends State<InformerBannerTile>
                                 height: 1.2,
                               ),
                             ),
+                          if (widget.note case final note?) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              note,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant.withValues(
+                                  alpha: 0.75,
+                                ),
+                                fontSize: 11.5,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

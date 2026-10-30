@@ -506,7 +506,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   static const double _headerCollapsedBody = 232;
   static const double _headerVignette = 64;
 
-  bool get _headerHasPhoto => _chatImageUrl.isNotEmpty && !_peerDeleted;
+  bool get _isSavedMessages => widget.chatId == 0;
+
+  bool get _headerHasPhoto =>
+      !_isSavedMessages && _chatImageUrl.isNotEmpty && !_peerDeleted;
 
   Widget _buildScrollBody(ColorScheme cs) {
     return LayoutBuilder(
@@ -850,7 +853,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
                 ),
               ),
               Offstage(
-                offstage: local != null || t < 0.5 || _avatarPages.length < 2,
+                offstage:
+                    _isSavedMessages ||
+                    local != null ||
+                    t < 0.5 ||
+                    _avatarPages.length < 2,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(radius),
                   child: _avatarPager(cs, t),
@@ -863,7 +870,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
   }
 
-  int get _localAvatarUserId => widget.chatType == 'DIALOG' && !_peerDeleted
+  int get _localAvatarUserId =>
+      widget.chatType == 'DIALOG' && !_peerDeleted && !_isSavedMessages
       ? (_otherId ?? widget.dialogPeerId ?? 0)
       : 0;
 
@@ -1010,6 +1018,19 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _headerAvatarContent(ColorScheme cs) {
+    if (_isSavedMessages) {
+      return ColoredBox(
+        color: cs.primary,
+        child: Center(
+          child: Icon(
+            Symbols.bookmark,
+            fill: 1,
+            color: cs.onPrimary,
+            size: _headerAvatarSize * 0.42,
+          ),
+        ),
+      );
+    }
     if (_peerDeleted) {
       return _ghostAvatar(radius: _headerAvatarSize / 2, fontSize: 52);
     }
@@ -1188,6 +1209,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         ));
       }
       if (!_isBot && _otherId != null && _otherId != _myId) {
+        final storiesHidden = storiesModule.isAuthorHidden(_otherId!);
+        entries.add((
+          icon: storiesHidden ? Symbols.visibility : Symbols.visibility_off,
+          label: storiesHidden ? l10n.storyMenuShow : l10n.storyMenuHide,
+          destructive: false,
+          onTap: () => _setStoriesHidden(_otherId!, !storiesHidden),
+        ));
         entries.add((
           icon: _blocked ? Symbols.lock_open : Symbols.block,
           label: _blocked ? l10n.chatInfoMenuUnblock : l10n.chatInfoMenuBlock,
@@ -1722,6 +1750,20 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       ),
     );
     Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _setStoriesHidden(int ownerId, bool hidden) async {
+    final ok = await storiesModule.setAuthorHidden(ownerId, hidden);
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      switch ((hidden, ok)) {
+        (true, true) => l10n.storyHiddenNotice,
+        (true, false) => l10n.storyHideFailed,
+        (false, true) => l10n.storyShownNotice,
+        (false, false) => l10n.storyShowFailed,
+      },
+    );
   }
 
   Future<void> _toggleBlock() async {

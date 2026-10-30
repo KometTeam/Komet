@@ -14,6 +14,7 @@ class ComplaintReason {
 class ComplaintsModule {
   static const int channelTypeId = 2;
   static const int userTypeId = 6;
+  static const int storyTypeId = 9;
 
   // #***! справочник в рамках сессии не меняется, держим в памяти
   static Map<int, List<ComplaintReason>>? _cache;

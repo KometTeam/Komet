@@ -25,6 +25,7 @@ class VideoPreloader {
     void Function(double progress)? onProgress,
     bool Function()? cancelled,
     int? maxBytes,
+    Map<String, String> Function(Uri url)? headers,
   }) async {
     final cached = await MediaCache.existing(cacheName);
     if (cached != null) return cached;
@@ -35,6 +36,7 @@ class VideoPreloader {
       onProgress,
       cancelled,
       maxBytes,
+      headers,
     );
     // #***! видимый кружок в начало очереди
     if (priority) {
@@ -73,6 +75,7 @@ class VideoPreloader {
           url,
           onProgress: job.onProgress,
           maxBytes: job.maxBytes,
+          headers: job.headers?.call(Uri.parse(url)) ?? const {},
         );
       }
     } catch (_) {
@@ -89,6 +92,7 @@ class _PreloadJob {
     this.onProgress,
     this.cancelled,
     this.maxBytes,
+    this.headers,
   );
 
   final String cacheName;
@@ -96,5 +100,6 @@ class _PreloadJob {
   final void Function(double progress)? onProgress;
   final bool Function()? cancelled;
   final int? maxBytes;
+  final Map<String, String> Function(Uri url)? headers;
   final Completer<File?> result = Completer<File?>();
 }

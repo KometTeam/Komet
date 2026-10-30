@@ -1295,7 +1295,9 @@ class _ChatScreenState extends State<ChatScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await _scrollNav.positionAt(messageId, _unreadAnchorAlignment());
-      if (mounted) setState(_markPositioned);
+      if (!mounted) return;
+      setState(_markPositioned);
+      _afterInitialPositioned();
     });
   }
 
@@ -1377,7 +1379,7 @@ class _ChatScreenState extends State<ChatScreen>
   void _restoreScroll(ChatScrollPoint point) {
     if (_scrollNav.anchorBeforeLayout(point)) {
       _markPositioned();
-      _afterScrollRestored();
+      _afterInitialPositioned();
       return;
     }
     _initialPositionDone = true;
@@ -1390,10 +1392,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     if (!restored) ChatScrollMemory.forget(_myId, widget.chatId);
     setState(_markPositioned);
-    _afterScrollRestored();
+    _afterInitialPositioned();
   }
 
-  void _afterScrollRestored() {
+  void _afterInitialPositioned() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _scrollNav.clampIntoRange();
@@ -2115,8 +2117,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (_isLoadingMore || !_hasMoreHistory) return;
     if (_messages.isEmpty) return;
     final pos = _scrollController.position;
-    if (pos.maxScrollExtent <= 0) return;
-    if (pos.maxScrollExtent - pos.pixels <= _historyPrefetchExtent) {
+    if (!pos.hasContentDimensions) return;
+    final oldestOnScreen = pos.maxScrollExtent <= 0;
+    if (oldestOnScreen ||
+        pos.maxScrollExtent - pos.pixels <= _historyPrefetchExtent) {
       unawaited(_loadMoreHistory());
     }
   }

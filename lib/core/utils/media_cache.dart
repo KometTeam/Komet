@@ -164,6 +164,7 @@ class MediaCache {
     String url, {
     void Function(double progress)? onProgress,
     int? maxBytes,
+    Map<String, String> headers = const {},
   }) async {
     name = _sanitize(name);
     final existingFile = await existing(name);
@@ -172,7 +173,7 @@ class MediaCache {
     final running = _inFlight[name];
     if (running != null) return running;
 
-    final future = _download(name, url, onProgress, maxBytes);
+    final future = _download(name, url, onProgress, maxBytes, headers);
     _inFlight[name] = future;
     try {
       return await future;
@@ -187,6 +188,7 @@ class MediaCache {
     String url,
     void Function(double progress)? onProgress,
     int? maxBytes,
+    Map<String, String> headers,
   ) async {
     final generation = _generation;
     final file = await fileFor(name);
@@ -205,6 +207,7 @@ class MediaCache {
       final request = await client
           .getUrl(Uri.parse(url))
           .timeout(const Duration(seconds: 15));
+      headers.forEach(request.headers.set);
       final response = await request.close().timeout(
         const Duration(seconds: 30),
       );

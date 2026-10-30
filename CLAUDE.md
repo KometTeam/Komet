@@ -199,7 +199,9 @@ number, and `KOMET_REVIEW_PAYLOAD`, a session token encrypted with the app's own
 (Argon2id + ChaCha20-Poly1305). The key is derived from `<digits of the phone>:<code>`, so the
 payload in the APK is worthless without the pair handed to the reviewer, and neither define is
 committed — `build-android-play.yml` reads them from the `KOMET_REVIEW_PHONE` and
-`KOMET_REVIEW_PAYLOAD` secrets. Without both defines `ReviewAccess.enabled` is false and the login
+`KOMET_REVIEW_PAYLOAD` secrets, `build-ios-appstore.yml` from `KOMET_REVIEW_PHONE_IOS` and
+`KOMET_REVIEW_PAYLOAD_IOS`, so each store reviewer gets its own session and revoking one leaves
+the other working. Without both defines `ReviewAccess.enabled` is false and the login
 screen behaves exactly as before.
 
 Entering the demo number skips `requestCode` and opens `CodeConfirmationScreen.review`, which

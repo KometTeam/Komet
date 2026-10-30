@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 
+import '../../core/config/app_motion.dart';
 import 'directional_drag_recognizer.dart';
 import 'first_frame_clock.dart';
 
@@ -26,10 +27,12 @@ class SwipeRoute<T> extends PageRoute<T> with FirstFrameClock<T> {
   String? get barrierLabel => null;
 
   @override
-  Duration get transitionDuration => const Duration(milliseconds: 400);
+  Duration get transitionDuration =>
+      AppMotion.of(const Duration(milliseconds: 400));
 
   @override
-  Duration get reverseTransitionDuration => const Duration(milliseconds: 400);
+  Duration get reverseTransitionDuration =>
+      AppMotion.of(const Duration(milliseconds: 400));
 
   @override
   bool canTransitionTo(TransitionRoute<dynamic> nextRoute) {

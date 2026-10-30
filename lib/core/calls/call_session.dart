@@ -161,6 +161,13 @@ class CallSession {
   final List<RTCIceCandidate> _pendingCandidates = [];
   Future<void> _tail = Future.value();
 
+  String? _remoteDevice;
+  bool _opponentAccepted = false;
+  final Map<String, String> _parkedAnswers = {};
+  final Map<String, List<RTCIceCandidate>> _parkedCandidates = {};
+  Timer? _p2pWatchdog;
+  static const Duration _p2pConnectLimit = Duration(seconds: 10);
+
   // #***! участники и их видео, экран звонка подписан
   final Map<int, CallParticipant> _participants = {};
   final Map<int, MediaStream> _participantStreams = {};
@@ -639,6 +646,10 @@ class CallSession {
     _screenSender = null;
     _remoteDescSet = false;
     _pendingCandidates.clear();
+    _parkedAnswers.clear();
+    _parkedCandidates.clear();
+    _remoteDevice = null;
+    _p2pWatchdog?.cancel();
     _accepted = false;
     _mediaConnected = false;
     _sfuSessionId = null;
@@ -787,8 +798,8 @@ class CallSession {
         await _onTransmittedData(msg);
         break;
       case 'accepted-call':
-        _onAcceptedCall(msg);
         _setState(CallSessionState.active);
+        await _onAcceptedCall(msg);
         break;
       case 'options-changed':
         final options = msg['options'];
@@ -983,7 +994,7 @@ class CallSession {
     }
   }
 
-  void _onAcceptedCall(Map<String, dynamic> msg) {
+  Future<void> _onAcceptedCall(Map<String, dynamic> msg) async {
     final id = _participantIdFrom(msg['participantId']);
     if (id == null || id == ws2Config.userId) return;
     _upsertParticipant(
@@ -993,6 +1004,60 @@ class CallSession {
       muteStates: msg['muteStates'],
     );
     _notifyInfo();
+    if (_topology == 'SERVER' || (_peerId != null && id != _peerId)) return;
+    _armP2pWatchdog();
+    await _bindOpponentDevice(_deviceOf(msg['peerId']));
+  }
+
+  static String? _deviceOf(Object? peerId) {
+    final raw = peerId is Map ? peerId['id'] : peerId;
+    final id = raw?.toString();
+    return id == null || id.isEmpty ? null : id;
+  }
+
+  bool get _awaitingOpponentDevice =>
+      role == CallRole.caller && !_opponentAccepted;
+
+  Future<void> _bindOpponentDevice(String? device) async {
+    _opponentAccepted = true;
+    _remoteDevice = device ?? _parkedAnswers.keys.firstOrNull;
+    final chosen = _remoteDevice;
+    final answer = chosen == null ? null : _parkedAnswers[chosen];
+    final candidates = chosen == null ? null : _parkedCandidates[chosen];
+    final dropped = _parkedAnswers.keys.where((d) => d != chosen).toList();
+    _parkedAnswers.clear();
+    _parkedCandidates.clear();
+    logger.i(
+      '[call][p2p] opponent picked up on device $chosen, '
+      'parked answer=${answer != null} candidates=${candidates?.length ?? 0} '
+      'dropped devices=$dropped',
+    );
+    final pc = _pc;
+    if (pc == null) return;
+    if (candidates != null) _pendingCandidates.addAll(candidates);
+    try {
+      if (answer != null) {
+        _applyRemoteSdp(answer, _peerId);
+        await _acceptRemoteSdp(pc, 'answer', answer);
+      } else if (_remoteDescSet) {
+        await _flushCandidates();
+      }
+    } catch (e) {
+      logger.w('[call][p2p] parked answer from $chosen rejected: $e');
+    }
+  }
+
+  void _armP2pWatchdog() {
+    _p2pWatchdog?.cancel();
+    if (_topology == 'SERVER' || _mediaConnected) return;
+    _p2pWatchdog = Timer(_p2pConnectLimit, () {
+      if (_ended || _mediaConnected || _topology == 'SERVER') return;
+      logger.w(
+        '[call][p2p] no media ${_p2pConnectLimit.inSeconds} s after the '
+        'answer, switching to SERVER',
+      );
+      unawaited(switchToServerTopology());
+    });
   }
 
   void _applyConversation(Map<dynamic, dynamic> conversation) {
@@ -1366,7 +1431,11 @@ class CallSession {
 
     await _setupKometProbe(pc);
 
-    if (_isDesktop) await _preferVp8Codecs(pc);
+    if (_isDesktop) {
+      await _preferVp8Codecs(pc);
+    } else {
+      await _preferH264Codecs(pc);
+    }
 
     if (role == CallRole.caller) {
       _setState(CallSessionState.ringing);
@@ -1431,6 +1500,7 @@ class CallSession {
         _mediaConnected = connected;
         _notifyInfo();
         if (connected) {
+          _p2pWatchdog?.cancel();
           _iceRestarts = 0;
           if (_topology != 'SERVER') _startP2pStats(pc);
           if (role == CallRole.joiner || _topology == 'SERVER') {
@@ -2859,6 +2929,27 @@ class CallSession {
     });
   }
 
+  Future<void> _preferH264Codecs(RTCPeerConnection pc) async {
+    const order = ['video/h264', 'video/vp8'];
+    try {
+      final caps = await getRtpSenderCapabilities('video');
+      final all = caps.codecs ?? const <RTCRtpCodecCapability>[];
+      String mime(RTCRtpCodecCapability c) => c.mimeType.toLowerCase();
+      if (!all.any((c) => mime(c) == order.first)) return;
+      final preferred = [
+        for (final kind in order) ...all.where((c) => mime(c) == kind),
+        ...all.where((c) => !order.contains(mime(c))),
+      ];
+      for (final t in await pc.getTransceivers()) {
+        try {
+          await t.setCodecPreferences(preferred);
+        } catch (_) {}
+      }
+    } catch (e) {
+      logger.t('[call] setCodecPreferences недоступен: $e');
+    }
+  }
+
   Future<void> _preferVp8Codecs(RTCPeerConnection pc) async {
     try {
       final caps = await getRtpSenderCapabilities('video');
@@ -2888,73 +2979,59 @@ class CallSession {
     final data = msg['data'];
     if (data is! Map) return;
 
+    final device = _deviceOf(msg['peerId']);
+    final bound = _remoteDevice;
+    if (device != null && bound != null && device != bound) {
+      logger.i(
+        '[call][p2p] ${data['sdp'] is Map ? 'sdp' : 'candidate'} from '
+        'device $device ignored, the call is on $bound',
+      );
+      return;
+    }
+    final park = device != null && bound == null && _awaitingOpponentDevice;
+
     final sdp = data['sdp'];
     if (sdp is Map) {
       final type = sdp['type'] as String?;
       final desc = sdp['sdp'] as String?;
       if (type == null || desc == null) return;
 
+      if (park) {
+        if (type == 'answer') _parkedAnswers[device] = desc;
+        logger.i(
+          '[call][p2p] $type from device $device parked until the opponent '
+          'picks up',
+        );
+        return;
+      }
+      if (type == 'offer' && role != CallRole.caller) _remoteDevice ??= device;
+
       _applyRemoteSdp(desc, _participantIdFrom(msg['participantId']));
       logger.t(
         '[call] remote $type video: ${_videoDir(desc)} '
         'codecs=[${_videoCodecs(desc)}] ufrag=${_iceUfrag(desc)}',
       );
-
-      if (type == 'answer' &&
-          pc.signalingState !=
-              RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
-        final applied = await pc.getRemoteDescription();
-        logger.i(
-          '[call][p2p] extra answer ignored (state=${pc.signalingState}) '
-          'device=${data['deviceIdx'] ?? msg['deviceIdx']} '
-          'ufrag=${_iceUfrag(desc)} applied=${_iceUfrag(applied?.sdp ?? '')} '
-          'video=[${_videoCodecs(desc)}] m=[${_mLineDetails(desc)}]',
-        );
-        return;
-      }
-
-      if (type == 'offer' &&
-          pc.signalingState ==
-              RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
-        logger.w('[call] offer glare, rolling back local offer');
-        await pc.setLocalDescription(RTCSessionDescription(null, 'rollback'));
-      }
-
-      await pc.setRemoteDescription(RTCSessionDescription(desc, type));
-      _remoteDescSet = true;
-      await _flushCandidates();
-
-      if (type == 'offer') {
-        await _adoptOfferedVideo(pc);
-        final answer = await pc.createAnswer({});
-        await pc.setLocalDescription(answer);
-        logger.t('[call] our answer video: ${_videoDir(answer.sdp ?? '')}');
-        final peerId = _peerId;
-        if (peerId != null) {
-          await _signaling?.transmitSdp(
-            participantId: peerId,
-            participantType: _peerType,
-            deviceIdx: _peerDeviceIdx,
-            type: answer.type!,
-            sdp: _labelLocalTracks(answer.sdp!),
-          );
-        }
-        if (_current == CallSessionState.connecting) {
-          _setState(CallSessionState.ringing);
-        }
-      }
-      unawaited(_collectReceivers());
+      await _acceptRemoteSdp(
+        pc,
+        type,
+        desc,
+        deviceIdx: data['deviceIdx'] ?? msg['deviceIdx'],
+      );
       return;
     }
 
     final candidate = data['candidate'];
     if (candidate is Map) {
-      _applyRemoteCandidate(candidate['candidate']);
       final ice = RTCIceCandidate(
         candidate['candidate'] as String?,
         candidate['sdpMid'] as String?,
         candidate['sdpMLineIndex'] as int?,
       );
+      if (park) {
+        _parkedCandidates.putIfAbsent(device, () => []).add(ice);
+        return;
+      }
+      _applyRemoteCandidate(candidate['candidate']);
       if (_remoteDescSet) {
         try {
           await pc.addCandidate(ice);
@@ -2963,6 +3040,59 @@ class CallSession {
         _pendingCandidates.add(ice);
       }
     }
+  }
+
+  Future<void> _acceptRemoteSdp(
+    RTCPeerConnection pc,
+    String type,
+    String desc, {
+    Object? deviceIdx,
+  }) async {
+    if (type == 'answer' &&
+        pc.signalingState !=
+            RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
+      final applied = await pc.getRemoteDescription();
+      logger.i(
+        '[call][p2p] extra answer ignored (state=${pc.signalingState}) '
+        'device=$deviceIdx '
+        'ufrag=${_iceUfrag(desc)} applied=${_iceUfrag(applied?.sdp ?? '')} '
+        'video=[${_videoCodecs(desc)}] m=[${_mLineDetails(desc)}]',
+      );
+      return;
+    }
+
+    if (type == 'offer' &&
+        pc.signalingState ==
+            RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
+      logger.w('[call] offer glare, rolling back local offer');
+      await pc.setLocalDescription(RTCSessionDescription(null, 'rollback'));
+    }
+
+    await pc.setRemoteDescription(RTCSessionDescription(desc, type));
+    _remoteDescSet = true;
+    await _flushCandidates();
+
+    if (type == 'offer') {
+      await _adoptOfferedVideo(pc);
+      if (_isDesktop) await _preferVp8Codecs(pc);
+      final answer = await pc.createAnswer({});
+      await pc.setLocalDescription(answer);
+      logger.t('[call] our answer video: ${_videoDir(answer.sdp ?? '')}');
+      final peerId = _peerId;
+      if (peerId != null) {
+        await _signaling?.transmitSdp(
+          participantId: peerId,
+          participantType: _peerType,
+          deviceIdx: _peerDeviceIdx,
+          type: answer.type!,
+          sdp: _labelLocalTracks(answer.sdp!),
+        );
+      }
+      if (_current == CallSessionState.connecting) {
+        _setState(CallSessionState.ringing);
+      }
+    }
+    unawaited(_collectReceivers());
   }
 
   // #***! придержанные кандидаты отправляем в соединение
@@ -3131,12 +3261,21 @@ class CallSession {
     if (sender == null) return false;
     for (final t in await pc.getTransceivers()) {
       if (t.sender.senderId != sender.senderId) continue;
-      final direction = await t.getCurrentDirection();
-      return direction == TransceiverDirection.SendRecv ||
-          direction == TransceiverDirection.SendOnly;
+      final current = await t.getCurrentDirection();
+      if (current != null) return _sends(current);
+      final awaitingAnswer =
+          pc.signalingState ==
+          RTCSignalingState.RTCSignalingStateHaveLocalOffer;
+      return awaitingAnswer &&
+          t.mid.isNotEmpty &&
+          _sends(await t.getDirection());
     }
     return false;
   }
+
+  static bool _sends(TransceiverDirection direction) =>
+      direction == TransceiverDirection.SendRecv ||
+      direction == TransceiverDirection.SendOnly;
 
   // #***! включение камеры
   Future<void> switchCamera() async {
@@ -3172,9 +3311,21 @@ class CallSession {
     if (_localVideo) await _startCamera(deviceId: deviceId);
   }
 
+  bool get _holdsOneCameraAtATime => !_isDesktop;
+
   Future<void> _startCamera({String? deviceId}) async {
     final pc = _pc;
     if (pc == null) return;
+
+    final released = _cameraStream != null && _holdsOneCameraAtATime;
+    if (released) {
+      try {
+        await _videoSender?.replaceTrack(null);
+      } catch (_) {}
+      await _disposeStream(_cameraStream);
+      _cameraStream = null;
+      _notifyInfo();
+    }
 
     final opening = Stopwatch()..start();
     _cameraOpening = true;
@@ -3184,6 +3335,9 @@ class CallSession {
         'video': CameraDevices.constraints(deviceId ?? AppCamera.deviceId),
         'audio': false,
       });
+    } catch (_) {
+      if (released) await _stopCamera();
+      rethrow;
     } finally {
       _cameraOpening = false;
     }
@@ -3399,6 +3553,7 @@ class CallSession {
     _collectDebounce?.cancel();
     _slotProbeTimer?.cancel();
     _videoStatsTimer?.cancel();
+    _p2pWatchdog?.cancel();
     try {
       await _probeChannel?.close();
     } catch (_) {}

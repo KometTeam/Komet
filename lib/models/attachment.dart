@@ -18,6 +18,7 @@ enum AttachmentType {
   call,
   inlineKeyboard,
   forward,
+  storyReply,
   unknown,
 }
 
@@ -75,6 +76,8 @@ abstract class MessageAttachment {
         return ShareAttachment.fromMap(map);
       case 'INLINE_KEYBOARD':
         return InlineKeyboardAttachment.fromMap(map);
+      case 'STORY_REPLY':
+        return StoryReplyAttachment.fromMap(map);
       default:
         return UnknownAttachment(map);
     }
@@ -855,6 +858,46 @@ class ForwardedMessageAttachment extends MessageAttachment {
     'originalChatId': originalChatId,
     'originalChatAccess': originalChatAccess,
     'originalElements': serializeFormatElements(originalFormatRanges),
+  };
+}
+
+class StoryReplyAttachment extends MessageAttachment {
+  final int storyId;
+  final int ownerId;
+  final int ownerType;
+  final String? previewUrl;
+  final int expirationTime;
+
+  const StoryReplyAttachment({
+    required this.storyId,
+    required this.ownerId,
+    this.ownerType = 0,
+    this.previewUrl,
+    this.expirationTime = 0,
+  }) : super(type: AttachmentType.storyReply);
+
+  factory StoryReplyAttachment.fromMap(Map<String, dynamic> map) {
+    final owner = map['owner'];
+    final preview = map['previewUrl']?.toString();
+    return StoryReplyAttachment(
+      storyId: parseIntOrNull(map['storyId']) ?? 0,
+      ownerId: owner is Map ? parseIntOrNull(owner['ownerId']) ?? 0 : 0,
+      ownerType: owner is Map ? parseIntOrNull(owner['type']) ?? 0 : 0,
+      previewUrl: preview == null || preview.isEmpty ? null : preview,
+      expirationTime: parseIntOrNull(map['expirationTime']) ?? 0,
+    );
+  }
+
+  bool goneAt(int nowMs) =>
+      previewUrl == null || (expirationTime > 0 && nowMs > expirationTime);
+
+  @override
+  Map<String, dynamic> toMap() => {
+    '_type': 'STORY_REPLY',
+    'owner': {'ownerId': ownerId, 'type': ownerType},
+    'storyId': storyId,
+    'previewUrl': ?previewUrl,
+    if (expirationTime > 0) 'expirationTime': expirationTime,
   };
 }
 

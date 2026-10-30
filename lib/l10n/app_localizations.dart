@@ -371,7 +371,7 @@ abstract class AppLocalizations {
   /// No description provided for @codeResendSms.
   ///
   /// In en, this message translates to:
-  /// **'Resend code via SMS'**
+  /// **'Resend code'**
   String get codeResendSms;
 
   /// No description provided for @codeError2faMissing.
@@ -12697,6 +12697,210 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You lowered the participant\'s hand'**
   String get callYouLoweredHand;
+
+  /// No description provided for @whatsNewBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet updated to {version}'**
+  String whatsNewBannerTitle(Object version);
+
+  /// No description provided for @whatsNewBannerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to see what\'s new'**
+  String get whatsNewBannerSubtitle;
+
+  /// No description provided for @whatsNewSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s new in {version}'**
+  String whatsNewSheetTitle(Object version);
+
+  /// No description provided for @whatsNewNoNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Bug fixes and stability improvements.'**
+  String get whatsNewNoNotes;
+
+  /// No description provided for @whatsNewDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get whatsNewDone;
+
+  /// No description provided for @appearanceAnimationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Animations'**
+  String get appearanceAnimationsTitle;
+
+  /// No description provided for @appearanceAnimationsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transitions between screens and tabs. Turn off to open everything instantly'**
+  String get appearanceAnimationsSubtitle;
+
+  /// No description provided for @login2faRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a password on the device you\'ve signed in to MAX on'**
+  String get login2faRequiredTitle;
+
+  /// No description provided for @login2faRequiredSteps.
+  ///
+  /// In en, this message translates to:
+  /// **'To do so, go to Settings → Security → Sign-in password'**
+  String get login2faRequiredSteps;
+
+  /// No description provided for @login2faRequiredThen.
+  ///
+  /// In en, this message translates to:
+  /// **'Then you\'ll be able to sign in here'**
+  String get login2faRequiredThen;
+
+  /// No description provided for @login2faRequiredNotKomet.
+  ///
+  /// In en, this message translates to:
+  /// **'This is NOT a Komet error. MAX requires it from everyone.'**
+  String get login2faRequiredNotKomet;
+
+  /// No description provided for @login2faRequiredRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try signing in again'**
+  String get login2faRequiredRetry;
+
+  /// No description provided for @login2faRequiredNoAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'I can\'t access the device'**
+  String get login2faRequiredNoAccess;
+
+  /// No description provided for @login2faRequiredLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open go.max.ru/reset-session'**
+  String get login2faRequiredLinkFailed;
+
+  /// No description provided for @informerBannerServerNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This is an announcement from the MAX server. It isn\'t related to Komet.'**
+  String get informerBannerServerNote;
+
+  /// No description provided for @storyReplyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply'**
+  String get storyReplyHint;
+
+  /// No description provided for @storyReplySent.
+  ///
+  /// In en, this message translates to:
+  /// **'Message sent'**
+  String get storyReplySent;
+
+  /// No description provided for @storyReplyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t send the reply'**
+  String get storyReplyFailed;
+
+  /// No description provided for @storyReplyEncrypted.
+  ///
+  /// In en, this message translates to:
+  /// **'This chat is encrypted, so story replies aren\'t available'**
+  String get storyReplyEncrypted;
+
+  /// No description provided for @storyLikeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t react to the story'**
+  String get storyLikeFailed;
+
+  /// No description provided for @storyReplyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Story'**
+  String get storyReplyLabel;
+
+  /// No description provided for @storyReplyGone.
+  ///
+  /// In en, this message translates to:
+  /// **'A story was here'**
+  String get storyReplyGone;
+
+  /// No description provided for @storyReplyUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The story is no longer available'**
+  String get storyReplyUnavailable;
+
+  /// No description provided for @storyMenuProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to profile'**
+  String get storyMenuProfile;
+
+  /// No description provided for @storyMenuHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide author\'s stories'**
+  String get storyMenuHide;
+
+  /// No description provided for @storyMenuSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to gallery'**
+  String get storyMenuSave;
+
+  /// No description provided for @storyMenuReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Report'**
+  String get storyMenuReport;
+
+  /// No description provided for @storyHiddenNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'The author\'s stories are hidden'**
+  String get storyHiddenNotice;
+
+  /// No description provided for @storyHideFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t hide the stories'**
+  String get storyHideFailed;
+
+  /// No description provided for @storyReplyOpenChat.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get storyReplyOpenChat;
+
+  /// No description provided for @storyHiddenUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get storyHiddenUndo;
+
+  /// No description provided for @storyMenuShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show author\'s stories'**
+  String get storyMenuShow;
+
+  /// No description provided for @storyShownNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'The author\'s stories are visible again'**
+  String get storyShownNotice;
+
+  /// No description provided for @storyShowFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t show the stories'**
+  String get storyShowFailed;
 }
 
 class _AppLocalizationsDelegate

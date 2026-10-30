@@ -38,6 +38,7 @@ import '../../widgets/compact_bottom_navigation_bar.dart';
 import '../../widgets/springy_tap.dart';
 import '../../widgets/visible_page_tickers.dart';
 import '../../widgets/informer_banner_tile.dart';
+import '../../widgets/whats_new_sheet.dart';
 import '../../../backend/modules/forward_sender.dart';
 import '../../../backend/modules/share_sender.dart';
 import '../../widgets/lottie_slash_icon.dart';
@@ -74,6 +75,8 @@ import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/build_profile.dart';
+import '../../../core/config/whats_new.dart';
+import '../../../core/config/app_motion.dart';
 import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_spectrum_background.dart';
@@ -2156,6 +2159,24 @@ class _ChatListScreenState extends State<ChatListScreen>
     return _currentNavIndex.toDouble();
   }
 
+  double _navPageShift(int index, double position) {
+    final from = _navPageAnimStart.round();
+    final to = _navPageAnimEnd.round();
+    final skipsTabs =
+        !_navDragging &&
+        _navPageAnimController.isAnimating &&
+        (to - from).abs() > 1;
+    if (!skipsTabs) return index - position;
+    final progress =
+        ((position - _navPageAnimStart) /
+                (_navPageAnimEnd - _navPageAnimStart))
+            .clamp(0.0, 1.0);
+    final direction = (to - from).sign.toDouble();
+    if (index == from) return -progress * direction;
+    if (index == to) return (1 - progress) * direction;
+    return index < from ? -2.0 : 2.0;
+  }
+
   void _onNavTabSelected(int index) {
     if (index == _currentNavIndex && !_navPageAnimController.isAnimating) {
       return;
@@ -2172,7 +2193,11 @@ class _ChatListScreenState extends State<ChatListScreen>
     _navPageAnimEnd = index.toDouble();
     setState(() => _currentNavIndex = index);
     activeNavTab.value = index;
-    _navPageAnimController.forward(from: 0);
+    if (AppMotion.enabled.value) {
+      _navPageAnimController.forward(from: 0);
+    } else {
+      _navPageAnimController.value = 1.0;
+    }
     if (index == 0) _scheduleInformerPresentation();
   }
 
@@ -2268,32 +2293,62 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
   }
 
+  Future<void> _openWhatsNew(String version) async {
+    Haptics.tap();
+    await showWhatsNewSheet(context, version);
+    await WhatsNew.dismiss();
+  }
+
+  Widget _buildWhatsNewBanner(String version) {
+    final l10n = AppLocalizations.of(context)!;
+    final banner = InformerBanner(
+      id: 'whats-new-$version',
+      title: l10n.whatsNewBannerTitle(version),
+      description: l10n.whatsNewBannerSubtitle,
+    );
+    return InformerBannerTile(
+      key: ValueKey(banner.id),
+      banner: banner,
+      onTap: () => unawaited(_openWhatsNew(version)),
+      onClose: () => unawaited(WhatsNew.dismiss()),
+    );
+  }
+
   Widget _buildInformerBanner() {
-    return ValueListenableBuilder<InformerBanner?>(
-      valueListenable: bannersModule.activeBanner,
-      builder: (context, banner, _) {
-        return ClipRect(
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: banner == null
-                ? const SizedBox(width: double.infinity)
-                : InformerBannerTile(
-                    key: ValueKey(banner.id),
-                    banner: banner,
-                    animojiLoader: animojiModule.fetchById,
-                    onPresented: _markInformerPresented,
-                    onTap: banner.isClickable
-                        ? () => unawaited(_openInformer(banner))
-                        : null,
-                    onClose: banner.hidesCloseButton
-                        ? null
-                        : () => unawaited(_closeInformer(banner)),
-                  ),
+    return ValueListenableBuilder<String?>(
+      valueListenable: WhatsNew.pendingVersion,
+      builder: (context, whatsNew, _) =>
+          ValueListenableBuilder<InformerBanner?>(
+            valueListenable: bannersModule.activeBanner,
+            builder: (context, banner, _) {
+              return ClipRect(
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: whatsNew != null
+                      ? _buildWhatsNewBanner(whatsNew)
+                      : banner == null
+                      ? const SizedBox(width: double.infinity)
+                      : InformerBannerTile(
+                          key: ValueKey(banner.id),
+                          banner: banner,
+                          animojiLoader: animojiModule.fetchById,
+                          note: AppLocalizations.of(
+                            context,
+                          )!.informerBannerServerNote,
+                          onPresented: _markInformerPresented,
+                          onTap: banner.isClickable
+                              ? () => unawaited(_openInformer(banner))
+                              : null,
+                          onClose: banner.hidesCloseButton
+                              ? null
+                              : () => unawaited(_closeInformer(banner)),
+                        ),
+                ),
+              );
+            },
           ),
-        );
-      },
     );
   }
 
@@ -3129,38 +3184,26 @@ class _ChatListScreenState extends State<ChatListScreen>
                   child: SizedBox(
                     width: pageW,
                     height: pageH,
-                    child: OverflowBox(
-                      alignment: Alignment.topLeft,
-                      maxWidth: pageW * 4,
-                      maxHeight: pageH,
-                      child: SizedBox(
-                        width: pageW * 4,
-                        height: pageH,
-                        child: AnimatedBuilder(
-                          animation: Listenable.merge([
-                            _navPageAnimController,
-                            _navDragDx,
-                          ]),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              page(0, _getChatsBody(context)),
-                              for (var i = 1; i <= 3; i++)
-                                page(i, _navTab(i, contentBottomPadding)),
-                            ],
-                          ),
-                          builder: (context, child) {
-                            final pageDisplayT = _effectivePageNavRowT(
-                              inactiveWidth: inactiveWidth,
-                              bubbleLeftForIndex: bubbleLeftForPageT,
-                            );
-                            return Transform.translate(
-                              offset: Offset(-pageDisplayT * pageW, 0),
+                    child: Stack(
+                      children: [
+                        for (var i = 0; i <= 3; i++)
+                          AnimatedBuilder(
+                            animation: pageMotion,
+                            child: page(
+                              i,
+                              i == 0
+                                  ? _getChatsBody(context)
+                                  : _navTab(i, contentBottomPadding),
+                            ),
+                            builder: (context, child) => Transform.translate(
+                              offset: Offset(
+                                _navPageShift(i, pagePosition()) * pageW,
+                                0,
+                              ),
                               child: child,
-                            );
-                          },
-                        ),
-                      ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),

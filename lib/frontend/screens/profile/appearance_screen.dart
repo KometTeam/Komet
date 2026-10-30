@@ -9,6 +9,7 @@ import '../../../core/config/app_bubble_shape.dart';
 import '../../../core/config/app_pill_gradient.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_spectrum_background.dart';
+import '../../../core/config/app_motion.dart';
 import '../../../core/config/ios_release.dart';
 import '../../../core/utils/bubble_radius.dart';
 import '../../../core/utils/debouncer.dart';
@@ -130,6 +131,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                   ],
                   const SizedBox(height: 12),
                   const _SpectrumToggleCard(),
+                  const SizedBox(height: 12),
+                  const _AnimationsToggleCard(),
                 ],
               ),
             ),
@@ -772,6 +775,31 @@ class _BubbleBehaviorCard extends StatelessWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AnimationsToggleCard extends StatelessWidget {
+  const _AnimationsToggleCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return SettingsPanel(
+      padding: EdgeInsets.zero,
+      child: ValueListenableBuilder<bool>(
+        valueListenable: AppMotion.enabled,
+        builder: (context, value, _) => SettingsToggleTile(
+          icon: Symbols.animation,
+          label: l10n.appearanceAnimationsTitle,
+          subtitle: l10n.appearanceAnimationsSubtitle,
+          value: value,
+          onChanged: (next) {
+            Haptics.selection();
+            AppMotion.save(next);
+          },
+        ),
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'story_reply_quote.dart';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -1075,9 +1076,18 @@ class MessageBubble extends StatelessWidget {
 
   List<MessageAttachment> get _renderableAttachments =>
       message.attachments
-          ?.where((a) => a is! InlineKeyboardAttachment)
+          ?.where(
+            (a) => a is! InlineKeyboardAttachment && a is! StoryReplyAttachment,
+          )
           .toList() ??
       const [];
+
+  StoryReplyAttachment? get _storyReply {
+    for (final a in message.attachments ?? const <MessageAttachment>[]) {
+      if (a is StoryReplyAttachment) return a;
+    }
+    return null;
+  }
 
   List<MessageAttachment> get _contentAttachments =>
       _contentAttachmentsCache[message] ??= _computeContentAttachments();
@@ -1508,6 +1518,18 @@ class MessageBubble extends StatelessWidget {
     final reactionsInside = contentType != MessageType.text;
 
     final reply = _resolvedReply(message.replyInfo);
+    final storyReply = reply == null ? _storyReply : null;
+    final Widget? quote = reply != null
+        ? _buildReplyQuote(context, cs, textColor, reply, maxBubbleWidth)
+        : storyReply != null
+        ? StoryReplyQuote(
+            reply: storyReply,
+            myId: myId,
+            accent: _senderColor(storyReply.ownerId),
+            textColor: textColor,
+            tappable: onReplyTap != null,
+          )
+        : null;
 
     final bool hasCommentsFooter = onCommentsTap != null;
     final EdgeInsets containerPadding = hasCommentsFooter
@@ -1533,7 +1555,7 @@ class MessageBubble extends StatelessWidget {
         ? _buildSenderHeader(cs, padding == EdgeInsets.zero)
         : null;
 
-    final Widget? replyHeader = reply == null
+    final Widget? replyHeader = quote == null
         ? null
         : Padding(
             padding: EdgeInsets.only(
@@ -1541,13 +1563,7 @@ class MessageBubble extends StatelessWidget {
               right: padding == EdgeInsets.zero ? 8 : 0,
               bottom: 4,
             ),
-            child: _buildReplyQuote(
-              context,
-              cs,
-              textColor,
-              reply,
-              maxBubbleWidth,
-            ),
+            child: quote,
           );
 
     final Widget innerContent =
@@ -1563,16 +1579,10 @@ class MessageBubble extends StatelessWidget {
                   alignment: AlignmentDirectional.centerStart,
                   child: senderHeader,
                 ),
-              if (reply != null) ...[
+              if (quote != null) ...[
                 _CapIntrinsicWidth(
                   cap: maxBubbleWidth * _replyWidthShare,
-                  child: _buildReplyQuote(
-                    context,
-                    cs,
-                    textColor,
-                    reply,
-                    maxBubbleWidth,
-                  ),
+                  child: quote,
                 ),
                 const SizedBox(height: 4),
               ],

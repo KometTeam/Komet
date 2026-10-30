@@ -22,6 +22,7 @@ class StoriesModule {
   static const _previewsKey = 'stories_previews';
   static const _peersKey = 'stories_peers';
   static const _progressKey = 'stories_progress';
+  static const _hiddenAuthorsKey = 'stories_hidden_authors';
 
   final Api _api;
 
@@ -31,6 +32,10 @@ class StoriesModule {
 
   /// ownerId → storyId, на котором пользователь остановил просмотр.
   final Map<int, int> _lastViewed = {};
+
+  final Set<int> _hiddenAuthors = {};
+
+  bool isAuthorHidden(int ownerId) => _hiddenAuthors.contains(ownerId);
 
   int? _accountId;
 
@@ -112,10 +117,26 @@ class StoriesModule {
           });
         }
       }
+
+      final rawHidden = await AppDatabase.getSyncValue(acc, _hiddenAuthorsKey);
+      if (rawHidden != null && rawHidden.isNotEmpty) {
+        final list = jsonDecode(rawHidden);
+        if (list is List) _hiddenAuthors.addAll(list.whereType<int>());
+      }
       _bump();
     } catch (e) {
       logger.w('StoriesModule.loadCache: $e');
     }
+  }
+
+  Future<void> _persistHiddenAuthors() async {
+    final acc = await _acc();
+    if (acc == null) return;
+    await AppDatabase.setSyncValue(
+      acc,
+      _hiddenAuthorsKey,
+      jsonEncode(_hiddenAuthors.toList()),
+    );
   }
 
   // #***! три ключа в sync_state, кольца истории и позиции
@@ -286,7 +307,7 @@ class StoriesModule {
 
   // #***! пустое кольцо значит истории кончились
   void _applyPreview(StoryPreview preview) {
-    if (preview.isEmpty) {
+    if (preview.isEmpty || _hiddenAuthors.contains(preview.owner.ownerId)) {
       _previews.remove(preview.owner.ownerId);
       _peerStories.remove(preview.owner.ownerId);
     } else {
@@ -415,6 +436,84 @@ class StoriesModule {
     _previews[ownerId] = preview.copyWith(readCount: preview.readCount + 1);
     _bump();
     unawaited(_persistPreviews());
+  }
+
+  static const StoryReaction like = StoryReaction(id: '❤️');
+
+  Future<bool> react(Story story, StoryReaction? reaction) async {
+    if (_api.state != SessionState.online) return false;
+    try {
+      final ok = await _api.sendRequestOk(Opcode.storiesReact, {
+        'owner': story.owner.toMap(),
+        'storyId': story.id,
+        if (reaction != null) 'reaction': reaction.toMap(),
+      });
+      if (ok) {
+        _replaceStory(
+          reaction == null
+              ? story.copyWith(clearReaction: true)
+              : story.copyWith(reaction: reaction),
+        );
+      }
+      return ok;
+    } catch (e) {
+      logger.w('StoriesModule.react: $e');
+      return false;
+    }
+  }
+
+  void _replaceStory(Story updated) {
+    final ownerId = updated.owner.ownerId;
+    final list = _peerStories[ownerId];
+    if (list == null) return;
+    final index = list.indexWhere((s) => s.id == updated.id);
+    if (index < 0) return;
+    _peerStories[ownerId] = [...list]..[index] = updated;
+    unawaited(_persistPeers());
+  }
+
+  Future<Story?> storyById(StoryOwner owner, int storyId) async {
+    try {
+      final packet = await _api
+          .sendRequest(Opcode.storiesGetByStoryId, {
+            'owner': owner.toMap(),
+            'storyIds': [storyId],
+          }, silent: true)
+          .timeout(const Duration(seconds: 3));
+      final data = packet.payload;
+      final raw = data is Map ? data['stories'] : null;
+      if (raw is! List) return null;
+      for (final item in raw) {
+        final story = Story.fromMap(item);
+        if (story != null && story.id == storyId) return story;
+      }
+    } catch (e) {
+      logger.w('StoriesModule.storyById: $e');
+    }
+    return null;
+  }
+
+  Future<bool> setAuthorHidden(int ownerId, bool hidden) async {
+    try {
+      final packet = await _api.sendRequest(Opcode.contactUpdate, {
+        'contactId': ownerId,
+        'action': hidden ? 'HIDE_STORIES' : 'SHOW_STORIES',
+      });
+      if (!packet.isOk) return false;
+    } catch (e) {
+      logger.w('StoriesModule.setAuthorHidden: $e');
+      return false;
+    }
+    if (hidden) {
+      _hiddenAuthors.add(ownerId);
+      if (_previews.remove(ownerId) != null) unawaited(_persistPreviews());
+    } else {
+      _hiddenAuthors.remove(ownerId);
+      unawaited(loadFeed());
+    }
+    _bump();
+    unawaited(_persistHiddenAuthors());
+    return true;
   }
 
   // #***! публикация, settings 1 всем 2 только контактам
@@ -563,6 +662,7 @@ class StoriesModule {
 
   // #***! сброс при смене аккаунта
   void clear() {
+    _hiddenAuthors.clear();
     _previews.clear();
     _peerStories.clear();
     _lastViewed.clear();

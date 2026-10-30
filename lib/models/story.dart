@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import '../core/utils/parse.dart';
 import 'attachment.dart';
 
@@ -94,6 +97,7 @@ class StoryMedia {
   final String? url;
   final String? thumbnailUrl;
   final String? previewData;
+  final Uint8List? thumbhash;
   final int? width;
   final int? height;
   final int? durationMs;
@@ -103,10 +107,25 @@ class StoryMedia {
     this.url,
     this.thumbnailUrl,
     this.previewData,
+    this.thumbhash,
     this.width,
     this.height,
     this.durationMs,
   });
+
+  static Uint8List? _thumbhashOf(Object? raw) {
+    if (raw is Uint8List) return raw.isEmpty ? null : raw;
+    if (raw is List) {
+      final bytes = raw.whereType<int>().toList();
+      return bytes.isEmpty ? null : Uint8List.fromList(bytes);
+    }
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        return base64Decode(raw);
+      } catch (_) {}
+    }
+    return null;
+  }
 
   // #***! видео и фото рисуют разные виджеты
   bool get isVideo => type == AttachmentType.video;
@@ -125,6 +144,7 @@ class StoryMedia {
     final map = _asStringMap(raw);
     final typeStr = (map['_type'] as String? ?? '').toUpperCase();
     final previewData = decodeAttachPreview(map['previewData']);
+    final thumbhash = _thumbhashOf(map['thumbhash']);
     final width = parseIntOrNull(map['width']);
     final height = parseIntOrNull(map['height']);
     switch (typeStr) {
@@ -135,14 +155,15 @@ class StoryMedia {
           type: AttachmentType.photo,
           url: url,
           previewData: previewData,
+          thumbhash: thumbhash,
           width: width,
           height: height,
         );
       case 'VIDEO':
         final url =
-            (map['mp4Url'] ??
+            (map['MP4_1080'] ??
+                    map['mp4Url'] ??
                     map['videoUrl'] ??
-                    map['MP4_1080'] ??
                     map['baseUrl'])
                 ?.toString();
         return StoryMedia(
@@ -150,6 +171,7 @@ class StoryMedia {
           url: url,
           thumbnailUrl: map['thumbnail']?.toString(),
           previewData: previewData,
+          thumbhash: thumbhash,
           width: width,
           height: height,
           durationMs: parseIntOrNull(map['duration']),
@@ -158,6 +180,7 @@ class StoryMedia {
         return StoryMedia(
           type: AttachmentType.unknown,
           previewData: previewData,
+          thumbhash: thumbhash,
           width: width,
           height: height,
         );
@@ -180,6 +203,7 @@ class StoryMedia {
     final map = <String, dynamic>{
       '_type': _typeName,
       if (previewData != null) 'previewData': previewData,
+      if (thumbhash != null) 'thumbhash': base64Encode(thumbhash!),
       if (width != null) 'width': width,
       if (height != null) 'height': height,
     };
@@ -205,6 +229,9 @@ class Story {
   final int expiration;
   final StoryMedia? media;
   final StoryReaction? reaction;
+  final int version;
+  final int? viewsCount;
+  final int? reactionsCount;
 
   const Story({
     required this.id,
@@ -216,7 +243,33 @@ class Story {
     this.expiration = 0,
     this.media,
     this.reaction,
+    this.version = 0,
+    this.viewsCount,
+    this.reactionsCount,
   });
+
+  static const int _reactionsOff = 4;
+  static const int _repliesOff = 8;
+  static const int _profileOff = 16;
+  static const int _hideAuthorOff = 32;
+  static const int _savingOff = 64;
+  static const int _complaintsOff = 128;
+
+  bool _allows(int bit) => settings & bit == 0;
+  bool get allowsReactions => _allows(_reactionsOff);
+  bool get allowsReplies => owner.isUser && _allows(_repliesOff);
+  bool get allowsProfile => owner.isUser && _allows(_profileOff);
+  bool get allowsHidingAuthor => owner.isUser && _allows(_hideAuthorOff);
+  bool get allowsSaving => _allows(_savingOff);
+  bool get allowsComplaints => _allows(_complaintsOff);
+
+  bool get liked => reaction != null;
+
+  bool expiredAt(int nowMs) {
+    if (expiration <= 0 || time <= 0) return false;
+    final timeMs = time < 1000000000000 ? time * 1000 : time;
+    return nowMs >= timeMs + expiration;
+  }
 
   // #***! локально меняется только реакция
   Story copyWith({StoryReaction? reaction, bool clearReaction = false}) {
@@ -230,6 +283,9 @@ class Story {
       expiration: expiration,
       media: media,
       reaction: clearReaction ? null : (reaction ?? this.reaction),
+      version: version,
+      viewsCount: viewsCount,
+      reactionsCount: reactionsCount,
     );
   }
 
@@ -248,6 +304,9 @@ class Story {
       expiration: parseIntOrNull(map['expiration']) ?? 0,
       media: StoryMedia.fromMap(map['media']),
       reaction: StoryReaction.fromMap(map['reaction']),
+      version: parseIntOrNull(map['version']) ?? 0,
+      viewsCount: parseIntOrNull(map['viewsCount']),
+      reactionsCount: parseIntOrNull(map['reactionsCount']),
     );
   }
 
@@ -261,6 +320,9 @@ class Story {
     'expiration': expiration,
     if (media != null) 'media': media!.toJson(),
     if (reaction != null) 'reaction': reaction!.toMap(),
+    if (version != 0) 'version': version,
+    'viewsCount': ?viewsCount,
+    'reactionsCount': ?reactionsCount,
   };
 }
 

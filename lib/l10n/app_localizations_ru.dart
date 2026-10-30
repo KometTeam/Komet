@@ -157,7 +157,7 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get codeResendSms => 'Отправить код по SMS';
+  String get codeResendSms => 'Выслать код повторно';
 
   @override
   String get codeError2faMissing => 'Ошибка: отсутствуют данные для 2FA';
@@ -7181,4 +7181,117 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get callYouLoweredHand => 'Вы опустили руку участнику';
+
+  @override
+  String whatsNewBannerTitle(Object version) {
+    return 'Комета обновилась до $version';
+  }
+
+  @override
+  String get whatsNewBannerSubtitle => 'Нажмите, чтобы узнать, что нового';
+
+  @override
+  String whatsNewSheetTitle(Object version) {
+    return 'Что нового в $version';
+  }
+
+  @override
+  String get whatsNewNoNotes => 'Исправления ошибок и улучшения стабильности.';
+
+  @override
+  String get whatsNewDone => 'Понятно';
+
+  @override
+  String get appearanceAnimationsTitle => 'Анимации';
+
+  @override
+  String get appearanceAnimationsSubtitle =>
+      'Переходы между экранами и вкладками. Выключите, чтобы всё открывалось сразу';
+
+  @override
+  String get login2faRequiredTitle =>
+      'Установите пароль на устройстве, где вы вошли в MAX';
+
+  @override
+  String get login2faRequiredSteps =>
+      'Для этого перейдите в Настройки → Безопасность → Пароль для входа';
+
+  @override
+  String get login2faRequiredThen => 'Затем вы сможете войти здесь';
+
+  @override
+  String get login2faRequiredNotKomet =>
+      'Это ошибка НЕ ОТ Komet. Это обязательство от МАХ, всем.';
+
+  @override
+  String get login2faRequiredRetry => 'Попробовать войти снова';
+
+  @override
+  String get login2faRequiredNoAccess => 'У меня нет доступа к устройству';
+
+  @override
+  String get login2faRequiredLinkFailed =>
+      'Не удалось открыть go.max.ru/reset-session';
+
+  @override
+  String get informerBannerServerNote =>
+      'Это объявления от сервера МАХ. К Komet не относятся.';
+
+  @override
+  String get storyReplyHint => 'Ответить';
+
+  @override
+  String get storyReplySent => 'Отправили сообщение';
+
+  @override
+  String get storyReplyFailed => 'Не удалось отправить ответ';
+
+  @override
+  String get storyReplyEncrypted =>
+      'В этом чате включено шифрование — ответить на историю нельзя';
+
+  @override
+  String get storyLikeFailed => 'Не удалось поставить реакцию';
+
+  @override
+  String get storyReplyLabel => 'История';
+
+  @override
+  String get storyReplyGone => 'Здесь была история';
+
+  @override
+  String get storyReplyUnavailable => 'История больше не доступна';
+
+  @override
+  String get storyMenuProfile => 'Перейти в профиль';
+
+  @override
+  String get storyMenuHide => 'Скрыть истории автора';
+
+  @override
+  String get storyMenuSave => 'Сохранить в галерею';
+
+  @override
+  String get storyMenuReport => 'Пожаловаться';
+
+  @override
+  String get storyHiddenNotice => 'Истории автора скрыты';
+
+  @override
+  String get storyHideFailed => 'Не удалось скрыть истории';
+
+  @override
+  String get storyReplyOpenChat => 'Посмотреть';
+
+  @override
+  String get storyHiddenUndo => 'Вернуть';
+
+  @override
+  String get storyMenuShow => 'Показывать истории автора';
+
+  @override
+  String get storyShownNotice => 'Истории автора снова видны';
+
+  @override
+  String get storyShowFailed => 'Не удалось вернуть истории';
 }
