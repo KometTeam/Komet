@@ -3465,6 +3465,81 @@ class AppLocalizationsRu extends AppLocalizations {
       'Это ограничения от сервера MAX. Komet на них не влияет.';
 
   @override
+  String get storageTitle => 'Память';
+
+  @override
+  String get storageTotalCaption => 'Komet занимает на устройстве';
+
+  @override
+  String get storageCategoryPhotos => 'Фото и картинки';
+
+  @override
+  String get storageCategoryVideos => 'Видео';
+
+  @override
+  String get storageCategoryFiles => 'Файлы';
+
+  @override
+  String get storageCategoryVoice => 'Голосовые';
+
+  @override
+  String get storageCategoryStickers => 'Стикеры';
+
+  @override
+  String get storageCategoryKept => 'Удалённые медиа';
+
+  @override
+  String get storageCategoryKeptHint => 'Сервер их уже стёр, заново не скачать';
+
+  @override
+  String get storageCategoryDatabase => 'Сообщения и чаты';
+
+  @override
+  String get storageCategoryDatabaseHint => 'История переписки, не очищается';
+
+  @override
+  String get storageScanning => 'Считаем…';
+
+  @override
+  String get storageScanFailed => 'Не удалось посчитать занятое место';
+
+  @override
+  String get storageEmpty => 'Кэш пуст';
+
+  @override
+  String storageClear(String size) {
+    return 'Очистить $size';
+  }
+
+  @override
+  String get storageNothingSelected => 'Выберите, что очистить';
+
+  @override
+  String storageCleared(String size) {
+    return 'Освобождено $size';
+  }
+
+  @override
+  String get storageClearFailed => 'Не удалось очистить кэш';
+
+  @override
+  String get storageClearKeptMessage =>
+      'Удалённые медиа больше не получится скачать: сервер их уже стёр. Очистить их тоже?';
+
+  @override
+  String get storageClearKeptConfirm => 'Очистить';
+
+  @override
+  String get storageLimitTitle => 'Максимальный размер кэша';
+
+  @override
+  String get storageLimitUnlimited => 'Без лимита';
+
+  @override
+  String get storageLimitHint =>
+      'Когда кэш перерастает лимит, Komet удаляет то, что дольше всего не открывали. Удалённые медиа и сообщения лимит не трогает.';
+
+  @override
   String get e2eeTitle => 'Сквозное шифрование';
 
   @override

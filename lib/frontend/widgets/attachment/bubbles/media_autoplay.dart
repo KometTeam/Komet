@@ -12,6 +12,7 @@ import '../../../../core/media/auto_download_gate.dart';
 import '../../../../core/media/video_preloader.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../models/attachment.dart';
+import '../../../../core/utils/media_cache_names.dart';
 
 typedef MediaAutoplayBuilder =
     Widget Function(BuildContext context, Widget surface, bool playing);
@@ -50,7 +51,7 @@ class AutoplayClip {
     final localPath = video.localPath;
     if (localPath == null && (videoId == null || token == null)) return null;
     return AutoplayClip(
-      cacheName: 'videopreview_$videoId.mp4',
+      cacheName: videoPreviewCacheName(videoId),
       localPath: localPath,
       resolveUrl: videoId == null || token == null
           ? null
@@ -73,7 +74,7 @@ class AutoplayClip {
       return null;
     }
     return AutoplayClip(
-      cacheName: 'gif_$photoId.mp4',
+      cacheName: gifCacheName(photoId),
       resolveUrl: () async => url,
       frameSize: _sizeOf(photo.width, photo.height),
       setting: KometSettings.autoplayGif,

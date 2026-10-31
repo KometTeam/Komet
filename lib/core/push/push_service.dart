@@ -18,7 +18,7 @@ import '../protocol/opcode_map.dart';
 import '../storage/app_instance.dart';
 import '../storage/app_database.dart';
 import '../storage/token_storage.dart';
-import '../transport/tls_config.dart';
+import '../transport/network_core.dart';
 import '../utils/logger.dart';
 import 'notification_bridge.dart';
 
@@ -60,7 +60,7 @@ Future<void> _initIsolate() async {
       SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
     } catch (_) {}
   }
-  await TlsConfig.applyMincifryTrust();
+  await NetworkCore.configure();
 }
 
 // #***! своя сессия аккаунта ради одного запроса, после него отключаемся
@@ -140,7 +140,7 @@ Future<void> _handleCallDecline(String payloadJson) async {
 
   // Фоновый изолят: инициализируем ядро перед vcp-декодом/сигналингом.
   await initKolibri();
-  await TlsConfig.applyMincifryTrust();
+  await NetworkCore.configure();
 
   final params = ConversationParams.decode(vcp);
   if (params == null) return;

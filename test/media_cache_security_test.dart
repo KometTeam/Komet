@@ -3,7 +3,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komet/core/config/app_media_cache.dart';
+import 'package:komet/core/cache/cache_janitor.dart';
+import 'package:komet/core/config/app_cache_limit.dart';
 import 'package:komet/core/utils/media_cache.dart';
 
 void main() {
@@ -23,7 +24,7 @@ void main() {
           (call) async => temp.path,
         );
     MediaCache.resetForTesting();
-    AppMediaCacheLimit.current.value = 8;
+    AppCacheLimit.current.value = 8;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
       if (request.uri.path == '/slow') {
@@ -40,7 +41,8 @@ void main() {
     HttpOverrides.global = originalOverrides;
     await server.close(force: true);
     MediaCache.resetForTesting();
-    AppMediaCacheLimit.current.value = AppMediaCacheLimit.defaultValue;
+    CacheJanitor.instance.resetForTesting();
+    AppCacheLimit.current.value = AppCacheLimit.defaultValue;
     await temp.delete(recursive: true);
   });
   test(

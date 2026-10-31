@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../cache/cache_janitor.dart';
 import '../../utils/logger.dart';
 
 // #***! кадры кэшируем на диск, рендерить заново слишком дорого
@@ -14,12 +15,9 @@ class TlottieDiskCache {
   static const _extension = '.ktlf';
   static const _legacyDirName = 'rlottie_frames';
   // #***! под кадры отдаём 256 МБ
-  static const int _maxBytes = 256 * 1024 * 1024;
-  static const Duration _evictDelay = Duration(seconds: 2);
+  static const int maxBytes = 256 * 1024 * 1024;
 
-  Directory? _dir;
   Future<Directory>? _dirFuture;
-  Timer? _evictTimer;
 
   Future<Directory> _directory() {
     return _dirFuture ??= () async {
@@ -27,7 +25,6 @@ class TlottieDiskCache {
       final dir = Directory('${base.path}/tlottie_frames');
       if (!await dir.exists()) await dir.create(recursive: true);
       unawaited(_dropLegacy(base));
-      _dir = dir;
       return dir;
     }();
   }
@@ -52,48 +49,20 @@ class TlottieDiskCache {
     return '${dir.path}/${_key(url, px)}';
   }
 
-  void noteWritten() {
-    _evictTimer?.cancel();
-    _evictTimer = Timer(_evictDelay, () {
-      _evictTimer = null;
-      unawaited(_evict());
-    });
-  }
+  void noteWritten() => CacheJanitor.instance.schedule();
 
-  // #***! вытеснение по времени доступа
-  Future<void> _evict() async {
+  Future<List<File>> files() async {
     try {
-      final dir = _dir ?? await _directory();
-      final files = await dir
+      final dir = await _directory();
+      if (!await dir.exists()) return const [];
+      return await dir
           .list()
           .where((e) => e is File && e.path.endsWith(_extension))
           .cast<File>()
           .toList();
-      var total = 0;
-      final stats = <(File, FileStat)>[];
-      for (final f in files) {
-        final st = await f.stat();
-        total += st.size;
-        stats.add((f, st));
-      }
-      if (total <= _maxBytes) return;
-      stats.sort((a, b) => a.$2.modified.compareTo(b.$2.modified));
-      for (final (file, st) in stats) {
-        if (total <= _maxBytes) break;
-        total -= st.size;
-        await file.delete().catchError((_) => file);
-      }
     } catch (e) {
-      logger.w('TlottieDiskCache.evict failed: $e');
+      logger.w('TlottieDiskCache listing failed: $e');
+      return const [];
     }
-  }
-
-  Future<void> clear() async {
-    try {
-      final dir = await _directory();
-      if (await dir.exists()) await dir.delete(recursive: true);
-      _dir = null;
-      _dirFuture = null;
-    } catch (_) {}
   }
 }

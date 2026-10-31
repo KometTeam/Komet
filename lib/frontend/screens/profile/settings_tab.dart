@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show kIsWeb, listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:material_symbols_icons/symbols.dart';
@@ -24,6 +24,7 @@ import '../../../main.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../widgets/animated_slash_icon.dart';
 import 'media_devices_screen.dart';
+import 'storage_screen.dart';
 import '../../widgets/attachment/photo_hero.dart';
 import '../../widgets/avatar_gallery.dart';
 import '../../widgets/badged_icon.dart';
@@ -772,6 +773,19 @@ class _SettingsTabState extends State<SettingsTab>
                             );
                           },
                         ),
+                        if (!kIsWeb)
+                          _SettingsItem(
+                            icon: Symbols.storage,
+                            label: l10n.storageTitle,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const StorageScreen(),
+                                ),
+                              );
+                            },
+                          ),
                         _SettingsItem(
                           icon: Symbols.cloud,
                           label: BuildProfile.isStoreRelease

@@ -3447,6 +3447,82 @@ class AppLocalizationsEn extends AppLocalizations {
       'These limits come from the MAX server. Komet has no control over them.';
 
   @override
+  String get storageTitle => 'Storage';
+
+  @override
+  String get storageTotalCaption => 'Komet takes up on this device';
+
+  @override
+  String get storageCategoryPhotos => 'Photos and images';
+
+  @override
+  String get storageCategoryVideos => 'Videos';
+
+  @override
+  String get storageCategoryFiles => 'Files';
+
+  @override
+  String get storageCategoryVoice => 'Voice messages';
+
+  @override
+  String get storageCategoryStickers => 'Stickers';
+
+  @override
+  String get storageCategoryKept => 'Deleted media';
+
+  @override
+  String get storageCategoryKeptHint =>
+      'Already erased on the server, can\'t be downloaded again';
+
+  @override
+  String get storageCategoryDatabase => 'Messages and chats';
+
+  @override
+  String get storageCategoryDatabaseHint => 'Your chat history, never cleared';
+
+  @override
+  String get storageScanning => 'Calculating…';
+
+  @override
+  String get storageScanFailed => 'Couldn\'t calculate the used space';
+
+  @override
+  String get storageEmpty => 'The cache is empty';
+
+  @override
+  String storageClear(String size) {
+    return 'Clear $size';
+  }
+
+  @override
+  String get storageNothingSelected => 'Choose what to clear';
+
+  @override
+  String storageCleared(String size) {
+    return 'Freed $size';
+  }
+
+  @override
+  String get storageClearFailed => 'Couldn\'t clear the cache';
+
+  @override
+  String get storageClearKeptMessage =>
+      'Deleted media can\'t be downloaded again: the server has already erased it. Clear it too?';
+
+  @override
+  String get storageClearKeptConfirm => 'Clear';
+
+  @override
+  String get storageLimitTitle => 'Maximum cache size';
+
+  @override
+  String get storageLimitUnlimited => 'No limit';
+
+  @override
+  String get storageLimitHint =>
+      'When the cache outgrows the limit, Komet removes what you haven\'t opened for the longest. Deleted media and messages are never removed by the limit.';
+
+  @override
   String get e2eeTitle => 'End-to-end encryption';
 
   @override

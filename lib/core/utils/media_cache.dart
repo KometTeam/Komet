@@ -5,7 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../config/app_media_cache.dart';
+import '../cache/cache_janitor.dart';
+import '../config/app_cache_limit.dart';
 import 'logger.dart';
 import '../storage/app_instance.dart';
 
@@ -15,9 +16,9 @@ import '../storage/app_instance.dart';
 /// Хранит файлы в `<appSupport>/media_cache/` под детерминированным именем
 /// (обычно по id вложения), чтобы повторные открытия не качали заново.
 class MediaCache {
-  /// Максимальный размер кэша (настраивается в дев-меню); при превышении
-  /// вытесняются старые файлы (LRU), кроме закреплённых.
-  static int get maxBytes => AppMediaCacheLimit.current.value;
+  /// Общий лимит кэша из настроек памяти: файл крупнее него не скачиваем,
+  /// а вытеснение старых файлов (LRU) ведёт [CacheJanitor].
+  static int get maxBytes => AppCacheLimit.current.value;
 
   static const String keptPrefix = 'keep_';
   static const int maxSingleFileBytes = 128 * 1024 * 1024;
@@ -31,9 +32,7 @@ class MediaCache {
     return next;
   }
 
-  // #***! размер держим в памяти, каталог не пересканируем
   static Directory? _dir;
-  static int? _cachedSize;
   static final Map<String, Future<File?>> _inFlight = {};
   static final Set<String> _present = {};
   static final Map<String, ValueNotifier<bool>> _presence = {};
@@ -43,7 +42,6 @@ class MediaCache {
     _generation++;
     _mutations = Future.value();
     _dir = null;
-    _cachedSize = null;
     _inFlight.clear();
     _present.clear();
     for (final notifier in _presence.values) {
@@ -95,7 +93,6 @@ class MediaCache {
             }
             final target = await part.rename((await fileFor(pinned)).path);
             _markPresent(pinned, true);
-            _cachedSize = null;
             return target;
           });
         } finally {
@@ -114,6 +111,45 @@ class MediaCache {
     final dir = await _cacheDir();
     return File(p.join(dir.path, _sanitize(name)));
   }
+
+  static Future<List<({String name, int size, DateTime modified})>>
+  entries() async {
+    final dir = await _cacheDir();
+    final result = <({String name, int size, DateTime modified})>[];
+    await for (final entity in dir.list()) {
+      if (entity is! File || entity.path.endsWith('.part')) continue;
+      try {
+        final stat = await entity.stat();
+        result.add((
+          name: p.basename(entity.path),
+          size: stat.size,
+          modified: stat.modified,
+        ));
+      } catch (_) {}
+    }
+    return result;
+  }
+
+  static Future<int> removeWhere(bool Function(String name) test) =>
+      _mutate(() async {
+        final dir = await _cacheDir();
+        var freed = 0;
+        await for (final entity in dir.list()) {
+          if (entity is! File || entity.path.endsWith('.part')) continue;
+          final name = p.basename(entity.path);
+          if (!test(name) || _isInFlight(name)) continue;
+          try {
+            final size = await entity.length();
+            await entity.delete();
+            freed += size;
+            _markAbsentByBasename(name);
+          } catch (_) {}
+        }
+        return freed;
+      });
+
+  static bool _isInFlight(String name) =>
+      _inFlight.keys.any((key) => _sanitize(key) == name);
 
   static Future<List<File>> files() async {
     final dir = await _cacheDir();
@@ -150,7 +186,6 @@ class MediaCache {
       logger.w('[cache] не удалил $name: $e');
     }
     _markPresent(name, false);
-    _cachedSize = null;
   });
 
   // #***! скачивание с защитой от параллельных запросов
@@ -253,8 +288,7 @@ class MediaCache {
         }
         await part.rename(file.path);
         _markPresent(name, true);
-        _cachedSize = null;
-        await _enforceLimit(protectedName: _sanitize(name));
+        CacheJanitor.instance.schedule();
         return await file.exists() ? file : null;
       });
     } catch (_) {
@@ -279,32 +313,6 @@ class MediaCache {
     }
   }
 
-  // #***! размер считаем инкрементально
-  /// Суммарный размер кэша в байтах.
-  ///
-  /// Результат держится в памяти и поддерживается инкрементально при
-  /// загрузке/очистке/вытеснении — повторные вызовы не пересканируют каталог.
-  static Future<int> currentSize() => _mutate(() async {
-    final cached = _cachedSize;
-    if (cached != null) return cached;
-    final total = await _scanSize();
-    _cachedSize = total;
-    return total;
-  });
-
-  static Future<int> _scanSize() async {
-    final dir = await _cacheDir();
-    var total = 0;
-    await for (final entity in dir.list()) {
-      if (entity is File && !entity.path.endsWith('.part')) {
-        try {
-          total += await entity.length();
-        } catch (_) {}
-      }
-    }
-    return total;
-  }
-
   /// Полностью очищает кэш. Возвращает число удалённых байт.
   static Future<int> clear() {
     _generation++;
@@ -319,7 +327,6 @@ class MediaCache {
           } catch (_) {}
         }
       }
-      _cachedSize = 0;
       _present.clear();
       for (final notifier in _presence.values) {
         notifier.value = false;
@@ -328,11 +335,6 @@ class MediaCache {
     });
   }
 
-  // #***! под лимитом выходим сразу, каталог обходим только при превышении
-  /// Вытесняет старые файлы (по mtime), пока размер превышает [maxBytes].
-  ///
-  /// Под лимитом — ранний выход без сканирования каталога (частый случай).
-  /// Каталог обходится только когда лимит реально превышен.
   static Future<bool> _pinnedFits(String name, int incoming) async {
     var total = incoming;
     for (final file in await files()) {
@@ -342,49 +344,6 @@ class MediaCache {
       }
     }
     return total <= maxPinnedBytes;
-  }
-
-  static Future<void> _enforceLimit({String? protectedName}) async {
-    final limit = maxBytes;
-    if (limit <= 0) return;
-
-    var total = _cachedSize ?? await _scanSize();
-    if (total <= limit) {
-      _cachedSize = total;
-      return;
-    }
-
-    final dir = await _cacheDir();
-    // #***! stat снимаем по разу на файл: в компараторе он звался бы
-    // синхронно и по два раза на сравнение, то есть тысячи блокирующих
-    // сисколлов на изоляте интерфейса
-    final entries = <({File file, DateTime modified, int size})>[];
-    await for (final entity in dir.list()) {
-      if (entity is! File || entity.path.endsWith('.part')) continue;
-      final name = p.basename(entity.path);
-      if (name == protectedName ||
-          name.startsWith(keptPrefix) ||
-          _inFlight.keys.any((key) => _sanitize(key) == name)) {
-        continue;
-      }
-      try {
-        final stat = await entity.stat();
-        entries.add((file: entity, modified: stat.modified, size: stat.size));
-      } catch (_) {}
-    }
-
-    // #***! сортируем по времени доступа и удаляем старое
-    entries.sort((a, b) => a.modified.compareTo(b.modified));
-
-    for (final entry in entries) {
-      if (total <= limit) break;
-      try {
-        await entry.file.delete();
-        total -= entry.size;
-        _markAbsentByBasename(p.basename(entry.file.path));
-      } catch (_) {}
-    }
-    _cachedSize = total;
   }
 
   // #***! флаг файл скачан для иконки в пузыре
