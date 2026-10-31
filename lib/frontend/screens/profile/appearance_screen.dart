@@ -17,6 +17,8 @@ import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/settings_card.dart';
+import '../../widgets/spotlight.dart';
+import '../../../core/whats_new/spotlight_ids.dart';
 import '../../widgets/message_actions_style_card.dart';
 import '../../../core/config/app_shape.dart';
 import '../../../core/utils/seed_scheme.dart';
@@ -786,19 +788,23 @@ class _AnimationsToggleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return SettingsPanel(
-      padding: EdgeInsets.zero,
-      child: ValueListenableBuilder<bool>(
-        valueListenable: AppMotion.enabled,
-        builder: (context, value, _) => SettingsToggleTile(
-          icon: Symbols.animation,
-          label: l10n.appearanceAnimationsTitle,
-          subtitle: l10n.appearanceAnimationsSubtitle,
-          value: value,
-          onChanged: (next) {
-            Haptics.selection();
-            AppMotion.save(next);
-          },
+    return SpotlightTarget(
+      id: SpotlightIds.appearanceAnimations,
+      borderRadius: AppShape.cardRadius,
+      child: SettingsPanel(
+        padding: EdgeInsets.zero,
+        child: ValueListenableBuilder<bool>(
+          valueListenable: AppMotion.enabled,
+          builder: (context, value, _) => SettingsToggleTile(
+            icon: Symbols.animation,
+            label: l10n.appearanceAnimationsTitle,
+            subtitle: l10n.appearanceAnimationsSubtitle,
+            value: value,
+            onChanged: (next) {
+              Haptics.selection();
+              AppMotion.save(next);
+            },
+          ),
         ),
       ),
     );

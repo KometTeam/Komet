@@ -41,14 +41,18 @@ class CompactBottomNavigationBar extends StatelessWidget {
             children: [
               for (var index = 0; index < items.length; index++)
                 Expanded(
-                  child: _CompactTab(
-                    item: items[index],
-                    selected: index == currentIndex,
-                    onTap: () => onTap(index),
-                    onLongPress:
-                        items[index].longPressable && onItemLongPress != null
-                        ? (position) => onItemLongPress!(index, position)
-                        : null,
+                  child: items[index].spotlit(
+                    BorderRadius.circular(14),
+                    () => onTap(index),
+                    _CompactTab(
+                      item: items[index],
+                      selected: index == currentIndex,
+                      onTap: () => onTap(index),
+                      onLongPress:
+                          items[index].longPressable && onItemLongPress != null
+                          ? (position) => onItemLongPress!(index, position)
+                          : null,
+                    ),
                   ),
                 ),
             ],

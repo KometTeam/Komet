@@ -49,20 +49,10 @@ class TlottieDiskCache {
     return '${dir.path}/${_key(url, px)}';
   }
 
-  void noteWritten() => CacheJanitor.instance.schedule();
+  void noteWritten(int bytes) =>
+      CacheJanitor.instance.noteWrite(CacheStore.stickerFrames, bytes);
 
-  Future<List<File>> files() async {
-    try {
-      final dir = await _directory();
-      if (!await dir.exists()) return const [];
-      return await dir
-          .list()
-          .where((e) => e is File && e.path.endsWith(_extension))
-          .cast<File>()
-          .toList();
-    } catch (e) {
-      logger.w('TlottieDiskCache listing failed: $e');
-      return const [];
-    }
-  }
+  Future<String> directoryPath() async => (await _directory()).path;
+
+  static bool holds(String name) => name.endsWith(_extension);
 }

@@ -77,7 +77,9 @@ class LoadMiss {
 }
 
 class CacheWritten {
-  const CacheWritten();
+  const CacheWritten(this.bytes);
+
+  final int bytes;
 }
 
 class WorkerIdle {
@@ -227,8 +229,9 @@ void tlottieWorkerMain(WorkerConfig config) {
     final path = job.cachePath;
     if (path == null) return;
     try {
-      File(path).writeAsBytesSync(TlottieCodec.encode(header, frames));
-      toMain.send(const CacheWritten());
+      final encoded = TlottieCodec.encode(header, frames);
+      File(path).writeAsBytesSync(encoded);
+      toMain.send(CacheWritten(encoded.length));
     } catch (_) {}
   }
 

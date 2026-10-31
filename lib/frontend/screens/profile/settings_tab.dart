@@ -25,6 +25,8 @@ import '../../../backend/modules/contacts.dart';
 import '../../widgets/animated_slash_icon.dart';
 import 'media_devices_screen.dart';
 import 'storage_screen.dart';
+import '../../widgets/spotlight.dart';
+import '../../../core/whats_new/spotlight_ids.dart';
 import '../../widgets/attachment/photo_hero.dart';
 import '../../widgets/avatar_gallery.dart';
 import '../../widgets/badged_icon.dart';
@@ -318,7 +320,8 @@ class _SettingsTabState extends State<SettingsTab>
 
   AvatarPhoto? get _currentAvatar {
     if (_avatarPhotos.isEmpty) return null;
-    return _avatarPhotos[_avatarIndex.clamp(0, _avatarPhotos.length - 1)
+    return _avatarPhotos[_avatarIndex
+        .clamp(0, _avatarPhotos.length - 1)
         .toInt()];
   }
 
@@ -725,6 +728,7 @@ class _SettingsTabState extends State<SettingsTab>
                             color: cs.onSurfaceVariant,
                           ),
                           label: l10n.chatSettingsTitle,
+                          spotlightId: SpotlightIds.settingsChats,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -738,6 +742,7 @@ class _SettingsTabState extends State<SettingsTab>
                         _SettingsItem(
                           icon: Symbols.notifications_active,
                           label: l10n.notificationsTitle,
+                          spotlightId: SpotlightIds.settingsNotifications,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -751,6 +756,7 @@ class _SettingsTabState extends State<SettingsTab>
                         _SettingsItem(
                           icon: Symbols.translate,
                           label: l10n.loginLanguage,
+                          spotlightId: SpotlightIds.settingsLanguage,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -763,6 +769,7 @@ class _SettingsTabState extends State<SettingsTab>
                         _SettingsItem(
                           icon: Symbols.videocam,
                           label: l10n.mediaDevicesTitle,
+                          spotlightId: SpotlightIds.settingsMediaDevices,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -777,6 +784,7 @@ class _SettingsTabState extends State<SettingsTab>
                           _SettingsItem(
                             icon: Symbols.storage,
                             label: l10n.storageTitle,
+                            spotlightId: SpotlightIds.settingsStorage,
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -791,11 +799,13 @@ class _SettingsTabState extends State<SettingsTab>
                           label: BuildProfile.isStoreRelease
                               ? l10n.settingsTabCloudStorage
                               : l10n.settingsTabCloudStorageBeta,
+                          spotlightId: SpotlightIds.settingsCloud,
                           onTap: () => _openCloudStorage(context),
                         ),
                         _SettingsItem(
                           icon: Symbols.vpn_lock,
                           label: l10n.proxySettingsTitle,
+                          spotlightId: SpotlightIds.settingsProxy,
                           onTap: () {
                             final cs = Theme.of(context).colorScheme;
                             showModalBottomSheet<void>(
@@ -814,8 +824,10 @@ class _SettingsTabState extends State<SettingsTab>
                         if (BuildProfile.spoofUi)
                           _SettingsItem(
                             icon: Symbols.shield_lock,
-                            label: AppLocalizations.of(context)!
-                                .profileMenuSpoof,
+                            label: AppLocalizations.of(
+                              context,
+                            )!.profileMenuSpoof,
+                            spotlightId: SpotlightIds.settingsSpoof,
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -828,6 +840,7 @@ class _SettingsTabState extends State<SettingsTab>
                         _SettingsItem(
                           icon: Symbols.lock,
                           label: l10n.securityTitle,
+                          spotlightId: SpotlightIds.settingsSecurity,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -843,6 +856,7 @@ class _SettingsTabState extends State<SettingsTab>
                         _SettingsItem(
                           icon: Symbols.devices,
                           label: l10n.devicesTitle,
+                          spotlightId: SpotlightIds.settingsDevices,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -934,6 +948,7 @@ class _SettingsTabState extends State<SettingsTab>
                             color: cs.onSurfaceVariant,
                           ),
                           label: 'Komet',
+                          spotlightId: SpotlightIds.settingsKomet,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -1568,13 +1583,20 @@ class _SettingsTabState extends State<SettingsTab>
     return SettingsCard(
       children: List.generate(items.length, (index) {
         final item = items[index];
-        return SettingsNavTile(
+        final tile = SettingsNavTile(
           icon: item.icon,
           leading: item.leading,
           label: item.label,
           tintColor: item.tintColor,
           onTap: item.onTap,
           isLast: index == items.length - 1,
+        );
+        final spotlightId = item.spotlightId;
+        if (spotlightId == null) return tile;
+        return SpotlightTarget(
+          id: spotlightId,
+          onActivate: item.onTap,
+          child: tile,
         );
       }),
     );
@@ -1587,6 +1609,7 @@ class _SettingsItem {
   final String label;
   final VoidCallback? onTap;
   final Color? tintColor;
+  final String? spotlightId;
 
   const _SettingsItem({
     this.icon,
@@ -1594,5 +1617,6 @@ class _SettingsItem {
     required this.label,
     this.onTap,
     this.tintColor,
+    this.spotlightId,
   });
 }

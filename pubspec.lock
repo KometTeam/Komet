@@ -1009,10 +1009,10 @@ packages:
     dependency: "direct main"
     description:
       name: kolibri
-      sha256: e2f3414e6a8601c31dd3c5a7ebd901e48b67bf29265333b27366402bf4ac52ef
+      sha256: d33e509b6995dbf86f5b51dbb8f41ed479dd37a4d38ceb0918ed36765af75896
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.5"
+    version: "0.1.7"
   komet_crypto:
     dependency: "direct main"
     description:
