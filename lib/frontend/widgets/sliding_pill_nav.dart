@@ -10,19 +10,37 @@ import '../../core/config/app_visual_style.dart';
 import 'animated_lottie_icon.dart';
 import 'glossy_pill.dart';
 import 'liquid_glass.dart';
+import 'spotlight.dart';
 
 class PillNavItem {
   final IconData icon;
   final String label;
   final bool longPressable;
   final String? animationAsset;
+  final String? spotlightId;
 
   const PillNavItem({
     required this.icon,
     required this.label,
     this.longPressable = false,
     this.animationAsset,
+    this.spotlightId,
   });
+
+  Widget spotlit(
+    BorderRadius borderRadius,
+    VoidCallback onActivate,
+    Widget child,
+  ) {
+    final id = spotlightId;
+    if (id == null) return child;
+    return SpotlightTarget(
+      id: id,
+      borderRadius: borderRadius,
+      onActivate: onActivate,
+      child: child,
+    );
+  }
 }
 
 class PillNavGeometry {
@@ -235,23 +253,27 @@ class SlidingPillNav extends StatelessWidget {
                       duration: animationDuration,
                       curve: Curves.easeOutCubic,
                       width: _interpWidth(i, layout),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(26),
-                        child: _PillNavCell(
-                          key: ValueKey('pill-nav-item-$i'),
-                          item: items[i],
-                          selected: i == visualSel,
-                          cs: cs,
-                          animationDuration: animationDuration,
-                          iconSize: iconSize,
-                          labelGap: labelGap,
-                          iconsOnly: iconsOnly,
-                          onTap: () => onTap(i),
-                          onLongPress:
-                              (onItemLongPress == null ||
-                                  !items[i].longPressable)
-                              ? null
-                              : (pos) => onItemLongPress!(i, pos),
+                      child: items[i].spotlit(
+                        BorderRadius.circular(26),
+                        () => onTap(i),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(26),
+                          child: _PillNavCell(
+                            key: ValueKey('pill-nav-item-$i'),
+                            item: items[i],
+                            selected: i == visualSel,
+                            cs: cs,
+                            animationDuration: animationDuration,
+                            iconSize: iconSize,
+                            labelGap: labelGap,
+                            iconsOnly: iconsOnly,
+                            onTap: () => onTap(i),
+                            onLongPress:
+                                (onItemLongPress == null ||
+                                    !items[i].longPressable)
+                                ? null
+                                : (pos) => onItemLongPress!(i, pos),
+                          ),
                         ),
                       ),
                     );

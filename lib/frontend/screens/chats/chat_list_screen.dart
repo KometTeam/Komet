@@ -86,6 +86,7 @@ import '../../../core/cache/info_cache.dart';
 import '../../../core/cache/official_options.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_stories.dart';
+import '../../../core/whats_new/spotlight_ids.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../backend/models/chat_folder.dart';
@@ -301,14 +302,27 @@ class _ChatListScreenState extends State<ChatListScreen>
   int _currentNavIndex = 0;
 
   List<PillNavItem> _chatsNavItems(AppLocalizations l10n) => [
-    PillNavItem(icon: Symbols.chat_bubble, label: l10n.chatListNavChats),
-    PillNavItem(icon: Symbols.call, label: l10n.chatListNavCalls),
-    PillNavItem(icon: Symbols.person_pin, label: l10n.chatListNavContacts),
+    PillNavItem(
+      icon: Symbols.chat_bubble,
+      label: l10n.chatListNavChats,
+      spotlightId: SpotlightIds.navChats,
+    ),
+    PillNavItem(
+      icon: Symbols.call,
+      label: l10n.chatListNavCalls,
+      spotlightId: SpotlightIds.navCalls,
+    ),
+    PillNavItem(
+      icon: Symbols.person_pin,
+      label: l10n.chatListNavContacts,
+      spotlightId: SpotlightIds.navContacts,
+    ),
     PillNavItem(
       icon: Symbols.settings,
       label: l10n.attachSheetSettings,
       longPressable: true,
       animationAsset: AppAnimations.settings,
+      spotlightId: SpotlightIds.navSettings,
     ),
   ];
 
@@ -2293,10 +2307,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
   }
 
-  Future<void> _openWhatsNew(String version) async {
+  Future<void> _openWhatsNew(String version) {
     Haptics.tap();
-    await showWhatsNewSheet(context, version);
-    await WhatsNew.dismiss();
+    return showWhatsNewSheet(context, version);
   }
 
   Widget _buildWhatsNewBanner(String version) {

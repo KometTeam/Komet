@@ -5,6 +5,8 @@ import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/settings_card.dart';
+import '../../widgets/spotlight.dart';
+import '../../../core/whats_new/spotlight_ids.dart';
 import 'app_icon_screen.dart';
 import 'appearance_screen.dart';
 import 'chat_background_screen.dart';
@@ -15,11 +17,13 @@ class _CustomizationCategory {
   final IconData icon;
   final String Function(AppLocalizations l10n) title;
   final WidgetBuilder builder;
+  final String spotlightId;
 
   const _CustomizationCategory({
     required this.icon,
     required this.title,
     required this.builder,
+    required this.spotlightId,
   });
 }
 
@@ -38,32 +42,41 @@ class _CustomizationSectionState extends State<CustomizationSection> {
       icon: Symbols.dark_mode,
       title: (l10n) => l10n.themeSettingsTitle,
       builder: (context) => const ThemeSettingsScreen(),
+      spotlightId: SpotlightIds.settingsTheme,
     ),
     _CustomizationCategory(
       icon: Symbols.styler,
       title: (l10n) => l10n.appearanceTitle,
       builder: (context) => const AppearanceScreen(),
+      spotlightId: SpotlightIds.settingsAppearance,
     ),
     _CustomizationCategory(
       icon: Symbols.wallpaper,
       title: (l10n) => l10n.customizationChatBackground,
       builder: (context) => const ChatBackgroundScreen(),
+      spotlightId: SpotlightIds.settingsChatBackground,
     ),
     _CustomizationCategory(
       icon: Symbols.text_fields,
       title: (l10n) => l10n.fontSettingsTitle,
       builder: (context) => const FontSettingsScreen(),
+      spotlightId: SpotlightIds.settingsFont,
     ),
     _CustomizationCategory(
       icon: Symbols.apps,
       title: (l10n) => l10n.customizationAppIcon,
       builder: (context) => const AppIconScreen(),
+      spotlightId: SpotlightIds.settingsAppIcon,
     ),
   ];
 
   void _toggle() {
     Haptics.tap();
     setState(() => _expanded = !_expanded);
+  }
+
+  void _expand() {
+    if (!_expanded) _toggle();
   }
 
   void _open(_CustomizationCategory category) {
@@ -80,7 +93,12 @@ class _CustomizationSectionState extends State<CustomizationSection> {
       depth: 6,
       child: Column(
         children: [
-          _buildHeader(cs),
+          SpotlightTarget(
+            id: SpotlightIds.settingsCustomization,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            onActivate: _expand,
+            child: _buildHeader(cs),
+          ),
           AnimatedSize(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeInOut,
@@ -153,11 +171,15 @@ class _CustomizationSectionState extends State<CustomizationSection> {
         ),
       );
       tiles.add(
-        SettingsNavTile(
-          icon: category.icon,
-          label: category.title(l10n),
-          onTap: () => _open(category),
-          isLast: i == _categories.length - 1,
+        SpotlightTarget(
+          id: category.spotlightId,
+          onActivate: () => _open(category),
+          child: SettingsNavTile(
+            icon: category.icon,
+            label: category.title(l10n),
+            onTap: () => _open(category),
+            isLast: i == _categories.length - 1,
+          ),
         ),
       );
     }

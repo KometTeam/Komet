@@ -3,6 +3,8 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/logger.dart';
+import '../whats_new/whats_new_document.dart';
 import 'build_profile.dart';
 
 abstract final class WhatsNew {
@@ -47,14 +49,18 @@ abstract final class WhatsNew {
     pendingVersion.value = (await PackageInfo.fromPlatform()).version;
   }
 
-  static Future<String> notes(String languageCode) async {
+  static Future<WhatsNewDocument> document(String languageCode) async {
+    final String source;
     try {
-      return (await rootBundle.loadString(
-        '$_notesDir/$languageCode.txt',
-      )).trim();
+      source = await rootBundle.loadString('$_notesDir/$languageCode.txt');
     } on FlutterError {
-      if (languageCode == _fallbackLanguage) return '';
-      return notes(_fallbackLanguage);
+      if (languageCode == _fallbackLanguage) return WhatsNewDocument.empty;
+      return document(_fallbackLanguage);
     }
+    final parsed = WhatsNewDocument.parse(source);
+    for (final problem in parsed.problems) {
+      logger.w('[whats-new] $languageCode.txt, $problem');
+    }
+    return parsed;
   }
 }

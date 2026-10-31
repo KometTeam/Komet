@@ -124,11 +124,53 @@ Settings → Storage (`StorageScreen`) shows what Komet keeps on disk by kind an
 kinds. `CacheJanitor` (`lib/core/cache/cache_janitor.dart`) owns three caches: `MediaCache`
 (`media_cache/`), the flutter_cache_manager image cache (`<tmp>/libCachedImageData`, which notices
 files removed behind its back) and the sticker frames (`tlottie_frames/`, own 256 MB cap). One
-budget, `AppCacheLimit` (pref key still `media_cache_limit_bytes`), covers all three together:
-after a download or a written sticker the janitor removes the least recently used files across
-them, skipping anything touched in the last two minutes. Kept media (`keep_*`, already erased on
-the server) and the database are shown but never evicted. A `MediaCache` file's kind is read from
+budget, `AppCacheLimit` (pref key still `media_cache_limit_bytes`), covers all three together,
+and when it is exceeded the least recently used files go first, skipping anything touched in the
+last two minutes. Writers report their bytes (`CacheJanitor.noteWrite`) into per-cache totals kept
+in memory; a full pass runs only when a total crosses the budget or a cap, or the last measurement
+is older than 15 minutes (the image cache grows without telling us). The pass lists and stats the
+directories inside `Isolate.run`, so thousands of files cost the UI isolate one message, not one
+event per file. Kept media (`keep_*`, already erased on the server) and the database are shown but
+never evicted. A `MediaCache` file's kind is read from
 its name, so build new names in `media_cache_names.dart` where `mediaCacheKindOf` can see them.
+
+## What's new
+
+Store builds (no self-updater) show «Что нового» once per build from `assets/whats_new/<lang>.txt`.
+`WhatsNewDocument` (`lib/core/whats_new/`, plain Dart) parses it; `WhatsNewRunner` plays scenarios.
+
+- Lines without indentation are the notes; `//` lines are comments.
+- `[words](#scenario)` makes those words tappable, `… → #scenario` at the end of a line makes the
+  whole line a tappable row. A link works in place of `#scenario`: `:settings/storage` (a MAX route,
+  same router as `max.ru/:…`), `max.ru/channel/123`, `https://…`.
+- `#name` starts a scenario; its steps follow, indented, one per line, text in `"double quotes"`.
+
+| Step | Does |
+|------|------|
+| `close` | closes the sheet (any step that navigates closes it first anyway) |
+| `tab chats\|calls\|contacts\|settings` | pops to the shell and switches the bottom tab |
+| `open <link>` | opens a route or link (`:settings/appearance`, `max.ru/…`, `https://…`) |
+| `back` | pops the current screen |
+| `scroll top\|bottom\|<target>` | scrolls the current screen |
+| `highlight <target>` | scrolls to the target and pulses it |
+| `tap <target>` | scrolls to the target, flashes it and performs its action (opens, expands, switches) |
+| `hint <target> "text"` | scrolls to the target and shows `showHintBubble` next to it |
+| `notify "text" ["button" #scenario]` | `showCustomNotification`, optionally with an action |
+| `wait <ms>` | pauses (0–10000) |
+| `run #scenario` | runs another scenario |
+
+A target is a `SpotlightTarget(id: …)` around a widget; ids live in `SpotlightIds`
+(`lib/core/whats_new/spotlight_ids.dart`), which is also what the parser checks against. To make a
+new element reachable, add its id there and wrap the widget; give it `onActivate` (the same action
+as its own tap) and list it in `SpotlightIds.tappable` to let `tap` press it. Toggles that change a
+setting stay out of `tappable` — a scenario shows them, never flips them. `open` does not wait for
+the opened screen to close (`Navigator.push` completes only on pop); later steps wait for their
+target to appear instead. A target not built yet (lower in a
+lazy list) is found by scrolling the screen's main list until it mounts. `dart run tool/whats_new.dart`
+checks every language and counts characters against Google Play's 500;
+`dart run tool/whats_new.dart play ru` prints the Play text without links and comments. The test
+`whats_new_document_test.dart` fails on any mistake in the shipped files or when the languages
+differ in scenarios or number of notes.
 
 ## Keyboard and chat panels
 

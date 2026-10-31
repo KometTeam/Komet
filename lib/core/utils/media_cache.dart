@@ -112,41 +112,23 @@ class MediaCache {
     return File(p.join(dir.path, _sanitize(name)));
   }
 
-  static Future<List<({String name, int size, DateTime modified})>>
-  entries() async {
+  static Future<String> directoryPath() async => (await _cacheDir()).path;
+
+  static Future<int> remove(Iterable<String> names) => _mutate(() async {
     final dir = await _cacheDir();
-    final result = <({String name, int size, DateTime modified})>[];
-    await for (final entity in dir.list()) {
-      if (entity is! File || entity.path.endsWith('.part')) continue;
+    var freed = 0;
+    for (final name in names) {
+      if (_isInFlight(name)) continue;
+      final file = File(p.join(dir.path, name));
       try {
-        final stat = await entity.stat();
-        result.add((
-          name: p.basename(entity.path),
-          size: stat.size,
-          modified: stat.modified,
-        ));
+        final size = await file.length();
+        await file.delete();
+        freed += size;
+        _markAbsentByBasename(name);
       } catch (_) {}
     }
-    return result;
-  }
-
-  static Future<int> removeWhere(bool Function(String name) test) =>
-      _mutate(() async {
-        final dir = await _cacheDir();
-        var freed = 0;
-        await for (final entity in dir.list()) {
-          if (entity is! File || entity.path.endsWith('.part')) continue;
-          final name = p.basename(entity.path);
-          if (!test(name) || _isInFlight(name)) continue;
-          try {
-            final size = await entity.length();
-            await entity.delete();
-            freed += size;
-            _markAbsentByBasename(name);
-          } catch (_) {}
-        }
-        return freed;
-      });
+    return freed;
+  });
 
   static bool _isInFlight(String name) =>
       _inFlight.keys.any((key) => _sanitize(key) == name);
@@ -288,7 +270,9 @@ class MediaCache {
         }
         await part.rename(file.path);
         _markPresent(name, true);
-        CacheJanitor.instance.schedule();
+        if (!pinned) {
+          CacheJanitor.instance.noteWrite(CacheStore.media, received);
+        }
         return await file.exists() ? file : null;
       });
     } catch (_) {

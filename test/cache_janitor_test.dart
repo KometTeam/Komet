@@ -47,11 +47,8 @@ void main() {
   Future<File> media(String name, int size, Duration age) async =>
       place(await MediaCache.fileFor(name), size, age);
 
-  Future<File> image(String name, int size, Duration age) => place(
-    File(p.join(root.path, DefaultCacheManager.key, name)),
-    size,
-    age,
-  );
+  Future<File> image(String name, int size, Duration age) =>
+      place(File(p.join(root.path, DefaultCacheManager.key, name)), size, age);
 
   Future<File> frames(String name, int size, Duration age) =>
       place(File(p.join(root.path, 'tlottie_frames', name)), size, age);
@@ -110,37 +107,66 @@ void main() {
     expect(await old.exists(), isTrue);
   });
 
-  test('scan groups usage by kind and clear removes only chosen kinds', () async {
-    const day = Duration(days: 1);
-    await media('photo_1.jpg', 10, day);
-    await media('video_1.mp4', 20, day);
-    await media('5.ogg', 30, day);
-    await media('7_archive.zip', 40, day);
-    await media(MediaCache.keptName('video_2.mp4'), 50, day);
-    await image('b.webp', 60, day);
-    await image('c.json', 70, day);
-    await frames('x_256.ktlf', 80, day);
+  test(
+    'scan groups usage by kind and clear removes only chosen kinds',
+    () async {
+      const day = Duration(days: 1);
+      await media('photo_1.jpg', 10, day);
+      await media('video_1.mp4', 20, day);
+      await media('5.ogg', 30, day);
+      await media('7_archive.zip', 40, day);
+      await media(MediaCache.keptName('video_2.mp4'), 50, day);
+      await image('b.webp', 60, day);
+      await image('c.json', 70, day);
+      await frames('x_256.ktlf', 80, day);
 
-    final report = await CacheJanitor.instance.scan();
-    expect(report.of(StorageCategory.photos), 70);
-    expect(report.of(StorageCategory.videos), 20);
-    expect(report.of(StorageCategory.voice), 30);
-    expect(report.of(StorageCategory.files), 40);
-    expect(report.of(StorageCategory.keptMedia), 50);
-    expect(report.of(StorageCategory.stickers), 150);
+      final report = await CacheJanitor.instance.scan();
+      expect(report.of(StorageCategory.photos), 70);
+      expect(report.of(StorageCategory.videos), 20);
+      expect(report.of(StorageCategory.voice), 30);
+      expect(report.of(StorageCategory.files), 40);
+      expect(report.of(StorageCategory.keptMedia), 50);
+      expect(report.of(StorageCategory.stickers), 150);
 
-    final freed = await CacheJanitor.instance.clear({
-      StorageCategory.videos,
-      StorageCategory.stickers,
-      StorageCategory.database,
-    });
-    expect(freed, 170);
+      final (:freed, report: cleared) = await CacheJanitor.instance.clear({
+        StorageCategory.videos,
+        StorageCategory.stickers,
+        StorageCategory.database,
+      });
+      expect(freed, 170);
+      expect(cleared.of(StorageCategory.videos), 0);
+      expect(cleared.of(StorageCategory.stickers), 0);
 
-    final after = await CacheJanitor.instance.scan();
-    expect(after.of(StorageCategory.videos), 0);
-    expect(after.of(StorageCategory.stickers), 0);
-    expect(after.of(StorageCategory.photos), 70);
-    expect(after.of(StorageCategory.keptMedia), 50);
+      final after = await CacheJanitor.instance.scan();
+      expect(after.of(StorageCategory.videos), 0);
+      expect(after.of(StorageCategory.stickers), 0);
+      expect(after.of(StorageCategory.photos), 70);
+      expect(after.of(StorageCategory.keptMedia), 50);
+    },
+  );
+
+  test('a write within the limit does not schedule a full pass', () {
+    AppCacheLimit.current.value = 1000;
+    final janitor = CacheJanitor.instance;
+
+    janitor.noteWrite(CacheStore.media, 10);
+    expect(
+      janitor.debugPassScheduled,
+      isTrue,
+      reason: 'an unmeasured cache is measured once',
+    );
+
+    janitor.resetForTesting();
+    janitor.debugMeasured({CacheStore.media: 100});
+    janitor.noteWrite(CacheStore.media, 10);
+    expect(
+      janitor.debugPassScheduled,
+      isFalse,
+      reason: 'still under the limit, nothing to scan',
+    );
+
+    janitor.noteWrite(CacheStore.images, 950);
+    expect(janitor.debugPassScheduled, isTrue, reason: 'over the limit');
   });
 
   test('clearing a downloaded file updates its presence flag', () async {

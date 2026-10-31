@@ -6,6 +6,8 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/cache/cache_janitor.dart';
 import '../../../core/config/app_cache_limit.dart';
+import '../../../core/config/app_shape.dart';
+import '../../../core/whats_new/spotlight_ids.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/route_settle.dart';
@@ -17,6 +19,7 @@ import '../../widgets/route_probe.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/small_spinner.dart';
+import '../../widgets/spotlight.dart';
 
 class StorageScreen extends StatefulWidget {
   const StorageScreen({super.key});
@@ -104,11 +107,10 @@ class _StorageScreenState extends State<StorageScreen> {
     }
     setState(() => _clearing = true);
     try {
-      final freed = await CacheJanitor.instance.clear(categories);
-      final fresh = await CacheJanitor.instance.scan();
+      final (:freed, :report) = await CacheJanitor.instance.clear(categories);
       if (!mounted) return;
       setState(() {
-        _report = fresh;
+        _report = report;
         _clearing = false;
       });
       showCustomNotification(
@@ -131,8 +133,13 @@ class _StorageScreenState extends State<StorageScreen> {
 
   Future<void> _onLimitChangeEnd(double value) async {
     await AppCacheLimit.save(AppCacheLimit.presets[value.round()]);
-    await CacheJanitor.instance.trim();
-    await _scan();
+    final report = await CacheJanitor.instance.trim();
+    if (!mounted) return;
+    if (report == null) {
+      await _scan();
+    } else {
+      setState(() => _report = report);
+    }
   }
 
   @override
@@ -154,18 +161,26 @@ class _StorageScreenState extends State<StorageScreen> {
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
             children: [
-              SettingsPanel(child: _buildUsage(context)),
+              SpotlightTarget(
+                id: SpotlightIds.storageUsage,
+                borderRadius: AppShape.cardRadius,
+                child: SettingsPanel(child: _buildUsage(context)),
+              ),
               const SizedBox(height: 20),
               SectionHeader(
                 l10n.storageLimitTitle,
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
               ),
-              SettingsPanel(
-                child: _LimitPicker(
-                  limit: _limit,
-                  index: _presetIndexOf(_limit),
-                  onChanged: _onLimitChanged,
-                  onChangeEnd: _onLimitChangeEnd,
+              SpotlightTarget(
+                id: SpotlightIds.storageLimit,
+                borderRadius: AppShape.cardRadius,
+                child: SettingsPanel(
+                  child: _LimitPicker(
+                    limit: _limit,
+                    index: _presetIndexOf(_limit),
+                    onChanged: _onLimitChanged,
+                    onChangeEnd: _onLimitChangeEnd,
+                  ),
                 ),
               ),
             ],
@@ -240,6 +255,7 @@ class _StorageScreenState extends State<StorageScreen> {
 abstract final class _Motion {
   static const Duration reveal = Duration(milliseconds: 1100);
   static const Duration change = Duration(milliseconds: 480);
+  static const Duration collapseGrace = Duration(milliseconds: 80);
   static const Curve curve = Curves.easeOutCubic;
   static const Interval sweep = Interval(0, 0.7, curve: Curves.easeOutCubic);
 
@@ -275,6 +291,34 @@ class _UsagePanelState extends State<_UsagePanel>
     vsync: this,
     duration: _Motion.reveal,
   );
+  late final Animation<double> _sweep = _reveal.drive(
+    CurveTween(curve: _Motion.sweep),
+  );
+  final Map<int, Animation<double>> _entrances = {};
+  final Set<StorageCategory> _collapsing = {};
+  Timer? _collapseTimer;
+
+  Animation<double> _entrance(int index) => _entrances.putIfAbsent(
+    index,
+    () => _reveal.drive(CurveTween(curve: _Motion.row(index))),
+  );
+
+  @override
+  void didUpdateWidget(_UsagePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final gone = [
+      for (final category in StorageCategory.values)
+        if (oldWidget.report.of(category) > 0 &&
+            widget.report.of(category) == 0)
+          category,
+    ];
+    if (gone.isEmpty) return;
+    _collapsing.addAll(gone);
+    _collapseTimer?.cancel();
+    _collapseTimer = Timer(_Motion.change + _Motion.collapseGrace, () {
+      if (mounted) setState(_collapsing.clear);
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -288,6 +332,7 @@ class _UsagePanelState extends State<_UsagePanel>
 
   @override
   void dispose() {
+    _collapseTimer?.cancel();
     _reveal.dispose();
     super.dispose();
   }
@@ -310,26 +355,23 @@ class _UsagePanelState extends State<_UsagePanel>
     var shown = 0;
     final rows = <Widget>[
       for (final category in StorageCategory.values)
-        _RowSlot(
-          key: ValueKey(category),
-          visible: report.of(category) > 0,
-          duration: change,
-          entrance: _reveal.drive(
-            CurveTween(
-              curve: _Motion.row(report.of(category) > 0 ? shown++ : shown),
+        if (report.of(category) > 0 || _collapsing.contains(category))
+          _RowSlot(
+            key: ValueKey(category),
+            visible: report.of(category) > 0,
+            duration: change,
+            entrance: _entrance(report.of(category) > 0 ? shown++ : shown),
+            child: _UsageRow(
+              category: category,
+              bytes: report.of(category),
+              total: total,
+              duration: still ? Duration.zero : _Motion.reveal,
+              selected: widget.selected.contains(category),
+              onToggle: category.clearable && !widget.clearing
+                  ? () => widget.onToggle(category)
+                  : null,
             ),
           ),
-          child: _UsageRow(
-            category: category,
-            bytes: report.of(category),
-            total: total,
-            duration: still ? Duration.zero : _Motion.reveal,
-            selected: widget.selected.contains(category),
-            onToggle: category.clearable && !widget.clearing
-                ? () => widget.onToggle(category)
-                : null,
-          ),
-        ),
     ];
 
     return Column(
@@ -354,11 +396,7 @@ class _UsagePanelState extends State<_UsagePanel>
           style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
         ),
         const SizedBox(height: 18),
-        _UsageBar(
-          report: report,
-          reveal: _reveal.drive(CurveTween(curve: _Motion.sweep)),
-          duration: change,
-        ),
+        _UsageBar(report: report, reveal: _sweep, duration: change),
         const SizedBox(height: 10),
         ...rows,
         const SizedBox(height: 16),
@@ -452,11 +490,16 @@ String? _categoryHint(AppLocalizations l10n, StorageCategory category) =>
       _ => null,
     };
 
+final Map<(String, int), NumberFormat> _percentFormats = {};
+
 String _shareLabel(BuildContext context, int bytes, int total) {
   final locale = Localizations.localeOf(context).toString();
   final share = total == 0 ? 0.0 : bytes / total;
-  final format = NumberFormat.percentPattern(locale)
-    ..maximumFractionDigits = share > 0 && share < 0.01 ? 1 : 0;
+  final digits = share > 0 && share < 0.01 ? 1 : 0;
+  final format = _percentFormats.putIfAbsent((
+    locale,
+    digits,
+  ), () => NumberFormat.percentPattern(locale)..maximumFractionDigits = digits);
   return format.format(share);
 }
 

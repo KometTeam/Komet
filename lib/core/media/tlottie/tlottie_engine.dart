@@ -264,7 +264,7 @@ class TlottieEngine {
     } else if (message is LoadMiss) {
       unawaited(_onMiss(message));
     } else if (message is CacheWritten) {
-      TlottieDiskCache.instance.noteWritten();
+      TlottieDiskCache.instance.noteWritten(message.bytes);
     } else if (message is RenderError) {
       _onError(message);
     }

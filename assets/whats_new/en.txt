@@ -1,8 +1,35 @@
-• Stories: reply, like, open the author's profile, hide their stories, save a story or report it.
+// Lines without indentation are the notes users see.
+// [words](#scenario) makes those words tappable; "… → #scenario" at the end makes the whole line tappable.
+// A link works instead of a #scenario too: :settings/storage, max.ru/channel/123, https://…
+// #name starts a scenario, its steps follow indented. Commands and targets: CLAUDE.md, "What's new".
+// Check the file and get the Google Play text: dart run tool/whats_new.dart
+
+• [Stories](#stories): reply, like, open the author's profile, hide their stories, save a story or report it.
 • Video stories open faster, fill the screen properly and are no longer downloaded again on every view.
 • Story replies now show up properly in chats.
-• Calls: switching between the front and back camera works again, a call connects even if you turn the camera on before the other person answers, and calls connect more reliably on the first try.
+• Calls: switching between the front and back camera works again, a call connects even if you turn the camera on before the other person answers, and calls connect more reliably on the first try. → #calls
 • A chat with unread messages no longer opens with an empty gap instead of messages.
-• Tabs switch instantly without flashing the screens in between. Appearance now has a switch to turn off animations.
+• Tabs switch instantly without flashing the screens in between. Appearance now has a switch to turn off animations. → #animations
 • When MAX requires a sign-in password, Komet now shows a clear screen with instructions.
-• Sessions from iPhone and iPad are shown as iOS.
+• Settings now have [Storage](#storage): see what takes up space, clear the cache and cap its size.
+
+#stories
+    tab chats
+    scroll top
+    notify "Pull the chat list down to see stories at the top"
+
+#calls
+    tab calls
+    highlight nav.calls
+
+#animations
+    tab settings
+    tap settings.customization
+    tap settings.appearance
+    highlight appearance.animations
+    hint appearance.animations "Turn interface animations off here"
+
+#storage
+    tab settings
+    tap settings.storage
+    highlight storage.limit
