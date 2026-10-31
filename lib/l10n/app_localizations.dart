@@ -6458,6 +6458,12 @@ abstract class AppLocalizations {
   /// **'Got it'**
   String get authLimitsConfirm;
 
+  /// No description provided for @authLimitsServerNote.
+  ///
+  /// In en, this message translates to:
+  /// **'These limits come from the MAX server. Komet has no control over them.'**
+  String get authLimitsServerNote;
+
   /// No description provided for @e2eeTitle.
   ///
   /// In en, this message translates to:

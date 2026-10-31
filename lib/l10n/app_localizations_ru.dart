@@ -3461,6 +3461,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get authLimitsConfirm => 'Понятно';
 
   @override
+  String get authLimitsServerNote =>
+      'Это ограничения от сервера MAX. Komet на них не влияет.';
+
+  @override
   String get e2eeTitle => 'Сквозное шифрование';
 
   @override

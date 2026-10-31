@@ -452,11 +452,15 @@ class TlottieEngine {
   // #***! кэш в памяти, потом диск, потом рендер
   Future<TlottieClip?> acquire(String url, int px, {String? inlineJson}) async {
     if (!available) return null;
+    final cached = _clips[_keyFor(url, px)];
+    if (cached != null) return _retain(cached);
     final clip = await _start(url, px, inlineJson, keep: false);
-    if (clip != null) {
-      clip.lastUsed = _tick();
-      clip.active++;
-    }
+    return clip == null ? null : _retain(clip);
+  }
+
+  TlottieClip _retain(TlottieClip clip) {
+    clip.lastUsed = _tick();
+    clip.active++;
     return clip;
   }
 

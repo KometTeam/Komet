@@ -68,6 +68,7 @@ Future<void> showAuthLimitsSheet(
             body: l10n.authLimitsLoginSessionsBody,
           ),
         ],
+        footnote: l10n.authLimitsServerNote,
         confirmLabel: l10n.authLimitsConfirm,
       );
     case AuthEntry.registration:
@@ -94,6 +95,7 @@ Future<void> showAuthLimitsSheet(
             body: l10n.authLimitsSignupMoreBody,
           ),
         ],
+        footnote: l10n.authLimitsServerNote,
         confirmLabel: l10n.authLimitsConfirm,
       );
   }
