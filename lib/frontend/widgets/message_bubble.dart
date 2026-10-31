@@ -28,7 +28,6 @@ import 'formatted_message_text.dart';
 import 'reply_preview.dart';
 import 'sender_badge.dart';
 import 'text_entity_actions.dart';
-import 'sending_clock_icon.dart';
 import 'photo_viewer.dart';
 import 'selectable_message_text.dart';
 import '../../models/attachment.dart';
@@ -2120,8 +2119,6 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildJumboAnimojiMeta(BubbleContext ctx) {
-    final status = ctx.overrideStatus ?? ctx.message.status;
-    final statusVisual = messageStatusVisual(status, dimColor: Colors.white);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
@@ -2142,10 +2139,7 @@ class MessageBubble extends StatelessWidget {
           ),
           if (ctx.isMe) ...[
             const SizedBox(width: 3),
-            if (isSendingStatus(status))
-              SendingClockIcon(color: statusVisual.color, size: 13)
-            else
-              Icon(statusVisual.icon, size: 13, color: statusVisual.color),
+            ctx.statusIcon(color: Colors.white, size: 13),
           ],
           if (ctx.message.deleted) ...[
             const SizedBox(width: 3),

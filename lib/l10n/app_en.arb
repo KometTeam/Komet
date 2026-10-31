@@ -1456,6 +1456,7 @@
   "authLimitsSignupMoreTitle": "Other limits are possible",
   "authLimitsSignupMoreBody": "The server doesn't announce the full list — if something doesn't work, try again later.",
   "authLimitsConfirm": "Got it",
+  "authLimitsServerNote": "These limits come from the MAX server. Komet has no control over them.",
   "e2eeTitle": "End-to-end encryption",
   "e2eeStatusNone": "Off",
   "e2eeStatusOffered": "Waiting for {name} to accept",

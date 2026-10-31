@@ -1175,6 +1175,7 @@
   "authLimitsSignupMoreTitle": "Возможны и другие ограничения",
   "authLimitsSignupMoreBody": "Полного списка сервер не сообщает — если действие не сработало, попробуйте позже.",
   "authLimitsConfirm": "Понятно",
+  "authLimitsServerNote": "Это ограничения от сервера MAX. Komet на них не влияет.",
   "e2eeTitle": "Сквозное шифрование",
   "e2eeStatusNone": "Выключено",
   "e2eeStatusOffered": "Ждём, пока {name} примет запрос",

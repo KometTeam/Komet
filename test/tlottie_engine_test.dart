@@ -138,4 +138,44 @@ void main() {
     expect(second.ready.value, second.frameCount);
     TlottieEngine.instance.release(second);
   });
+
+  test('a clip taken over in the frame its holder lets go keeps rendering', () async {
+    final libPath = Platform.environment['TLOTTIE_LIB'];
+    if (libPath == null || !File(libPath).existsSync()) {
+      markTestSkipped('set TLOTTIE_LIB to libkomet_tlottie.so to run');
+      return;
+    }
+    TlottieEngine.debugLibraryPath = libPath;
+    final tmp = Directory.systemTemp.createTempSync('tlottie_handover_test');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    PathProviderPlatform.instance = _FakePathProvider(tmp.path);
+
+    final json = File('assets/lottie/ic_settings.json').readAsStringSync();
+    const url = 'poc://ic_settings_handover';
+    final first = await TlottieEngine.instance.acquire(
+      url,
+      384,
+      inlineJson: json,
+    );
+    expect(first, isNotNull);
+    expect(first!.complete, isFalse);
+
+    final takeover = TlottieEngine.instance.acquire(
+      url,
+      384,
+      inlineJson: json,
+    );
+    TlottieEngine.instance.release(first);
+    final second = await takeover;
+    expect(identical(second, first), isTrue, reason: 'clip handed over');
+
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (second!.ready.value < second.frameCount &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    expect(second.ready.value, second.frameCount);
+    expect(second.frameAt(second.frameCount - 1), isNotNull);
+    TlottieEngine.instance.release(second);
+  });
 }

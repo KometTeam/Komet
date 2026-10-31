@@ -3443,6 +3443,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authLimitsConfirm => 'Got it';
 
   @override
+  String get authLimitsServerNote =>
+      'These limits come from the MAX server. Komet has no control over them.';
+
+  @override
   String get e2eeTitle => 'End-to-end encryption';
 
   @override

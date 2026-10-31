@@ -32,6 +32,7 @@ Future<bool> showInfoActionSheet(
   required String title,
   String? subtitle,
   List<InfoActionSheetItem> items = const [],
+  String? footnote,
   String? confirmLabel,
   Duration confirmDelay = Duration.zero,
   String? seenKey,
@@ -61,6 +62,7 @@ Future<bool> showInfoActionSheet(
       title: title,
       subtitle: subtitle,
       items: items,
+      footnote: footnote,
       confirmLabel: confirmLabel ?? AppLocalizations.of(ctx)!.photoEditorOk,
       confirmDelay: confirmDelay,
     ),
@@ -81,6 +83,7 @@ class _InfoActionSheet extends StatefulWidget {
   final String title;
   final String? subtitle;
   final List<InfoActionSheetItem> items;
+  final String? footnote;
   final String confirmLabel;
   final Duration confirmDelay;
 
@@ -91,6 +94,7 @@ class _InfoActionSheet extends StatefulWidget {
     required this.title,
     this.subtitle,
     this.items = const [],
+    this.footnote,
     required this.confirmLabel,
     required this.confirmDelay,
   });
@@ -181,6 +185,19 @@ class _InfoActionSheetState extends State<_InfoActionSheet> {
                         if (i < widget.items.length - 1)
                           const SizedBox(height: 18),
                       ],
+                    ],
+                    if (widget.footnote != null) ...[
+                      const SizedBox(height: 24),
+                      Text(
+                        widget.footnote!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w400,
+                          height: 1.35,
+                        ),
+                      ),
                     ],
                   ],
                 ),
