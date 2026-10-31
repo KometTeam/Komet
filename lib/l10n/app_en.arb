@@ -1457,6 +1457,43 @@
   "authLimitsSignupMoreBody": "The server doesn't announce the full list — if something doesn't work, try again later.",
   "authLimitsConfirm": "Got it",
   "authLimitsServerNote": "These limits come from the MAX server. Komet has no control over them.",
+  "storageTitle": "Storage",
+  "storageTotalCaption": "Komet takes up on this device",
+  "storageCategoryPhotos": "Photos and images",
+  "storageCategoryVideos": "Videos",
+  "storageCategoryFiles": "Files",
+  "storageCategoryVoice": "Voice messages",
+  "storageCategoryStickers": "Stickers",
+  "storageCategoryKept": "Deleted media",
+  "storageCategoryKeptHint": "Already erased on the server, can't be downloaded again",
+  "storageCategoryDatabase": "Messages and chats",
+  "storageCategoryDatabaseHint": "Your chat history, never cleared",
+  "storageScanning": "Calculating…",
+  "storageScanFailed": "Couldn't calculate the used space",
+  "storageEmpty": "The cache is empty",
+  "storageClear": "Clear {size}",
+  "@storageClear": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "storageNothingSelected": "Choose what to clear",
+  "storageCleared": "Freed {size}",
+  "@storageCleared": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "storageClearFailed": "Couldn't clear the cache",
+  "storageClearKeptMessage": "Deleted media can't be downloaded again: the server has already erased it. Clear it too?",
+  "storageClearKeptConfirm": "Clear",
+  "storageLimitTitle": "Maximum cache size",
+  "storageLimitUnlimited": "No limit",
+  "storageLimitHint": "When the cache outgrows the limit, Komet removes what you haven't opened for the longest. Deleted media and messages are never removed by the limit.",
   "e2eeTitle": "End-to-end encryption",
   "e2eeStatusNone": "Off",
   "e2eeStatusOffered": "Waiting for {name} to accept",

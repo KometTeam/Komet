@@ -15,6 +15,7 @@ import 'format.dart';
 import 'image_format.dart';
 import 'media_cache.dart';
 import 'save_file_as.dart';
+import 'media_cache_names.dart';
 
 enum MediaSaveFailure {
   noLink,
@@ -56,7 +57,7 @@ Future<MediaSaveResult> saveImageFromUrl(String url) async {
     return const MediaSaveResult(ok: false, failure: MediaSaveFailure.noLink);
   }
   try {
-    final cacheName = 'avatar_${url.hashCode & 0x7fffffff}.jpg';
+    final cacheName = avatarCacheName(url);
     final file = await MediaCache.getOrDownload(cacheName, url);
     if (file == null) {
       return const MediaSaveResult(

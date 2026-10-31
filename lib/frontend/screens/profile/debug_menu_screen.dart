@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import '../../../backend/modules/chats.dart';
 import '../../../core/calls/call_controller.dart';
-import '../../../core/config/app_media_cache.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
-import '../../../core/utils/format.dart';
 import '../../../core/utils/logger.dart';
-import '../../../core/utils/media_cache.dart';
-import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
-import '../../debug/cache_section.dart';
 import '../../debug/feature_toggles_section.dart';
 import '../../debug/header_section.dart';
 import '../../debug/id_search_section.dart';
@@ -26,7 +20,6 @@ import '../../debug/server_section.dart';
 import '../../debug/sync_probe_section.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/connection_status.dart';
-import '../../widgets/sheet_helpers.dart';
 import '../../widgets/underline_tab_bar.dart';
 import '../chats/profile_action_sheets.dart';
 
@@ -43,15 +36,12 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
   bool _hasSearched = false;
   final List<SearchHit> _hits = [];
   final Map<String, String> _errors = {};
-  int _cacheSize = 0;
-  bool _clearingCache = false;
   bool _micSignalOn = true;
   final DebugServerController _server = DebugServerController();
 
   @override
   void initState() {
     super.initState();
-    _loadCacheSize();
     _server.load();
   }
 
@@ -66,77 +56,6 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
           : 'Нет активного звонка',
     );
   }
-
-  Future<void> _loadCacheSize() async {
-    final size = await MediaCache.currentSize();
-    if (mounted) setState(() => _cacheSize = size);
-  }
-
-  Future<void> _clearCache() async {
-    if (_clearingCache) return;
-    setState(() => _clearingCache = true);
-    final freed = await MediaCache.clear();
-    if (!mounted) return;
-    setState(() {
-      _clearingCache = false;
-      _cacheSize = 0;
-    });
-    showCustomNotification(
-      context,
-      'Кэш очищен (${formatBytes(AppLocalizations.of(context)!, freed)})',
-    );
-  }
-
-  void _pickCacheLimit() {
-    final cs = Theme.of(context).colorScheme;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: cs.surfaceContainerHigh,
-      shape: kSheetShape,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Лимит кэша медиа',
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-            for (final preset in AppMediaCacheLimit.presets)
-              ListTile(
-                title: Text(
-                  _limitLabel(preset),
-                  style: TextStyle(color: cs.onSurface, fontSize: 16),
-                ),
-                trailing: AppMediaCacheLimit.current.value == preset
-                    ? Icon(Symbols.check, color: cs.primary)
-                    : null,
-                onTap: () {
-                  AppMediaCacheLimit.save(preset);
-                  Navigator.pop(sheetContext);
-                  setState(() {});
-                },
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _limitLabel(int bytes) => bytes <= 0
-      ? 'Без лимита'
-      : formatBytes(AppLocalizations.of(context)!, bytes);
 
   @override
   void dispose() {
@@ -270,15 +189,6 @@ class _DebugMenuScreenState extends State<DebugMenuScreen> {
                       DebugNetworkSection(appState: appState),
                       DebugQuickActionsSection(
                         onExportLog: () => exportDebugLog(context),
-                      ),
-                      DebugCacheSection(
-                        cacheSize: _cacheSize,
-                        clearingCache: _clearingCache,
-                        cacheLimitLabel: _limitLabel(
-                          AppMediaCacheLimit.current.value,
-                        ),
-                        onPickCacheLimit: _pickCacheLimit,
-                        onClearCache: _clearCache,
                       ),
                       DebugPreviewsSection(
                         micSignalOn: _micSignalOn,

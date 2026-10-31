@@ -58,7 +58,8 @@ import 'core/config/app_phonebook_names.dart';
 import 'core/contacts/device_contacts_service.dart';
 import 'core/config/app_link_preview.dart';
 import 'core/config/app_unchecked_links.dart';
-import 'core/config/app_media_cache.dart';
+import 'core/config/app_cache_limit.dart';
+import 'core/cache/cache_janitor.dart';
 import 'core/config/app_video_note_quality.dart';
 import 'core/config/app_pill_gradient.dart';
 import 'core/config/app_visual_style.dart';
@@ -101,6 +102,7 @@ import 'core/share/native_share_account_sync.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
 import 'core/storage/per_chat_json_store.dart';
+import 'core/transport/network_core.dart';
 import 'core/transport/tls_config.dart';
 import 'core/transport/traffic_monitor.dart';
 import 'core/transport/vpn_bypass.dart';
@@ -233,8 +235,8 @@ void main(List<String> args) async {
   if (AppInstance.isNamed) {
     SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
   }
-  debugPrint('KOMET-STARTUP: applyMincifryTrust...');
-  await TlsConfig.applyMincifryTrust();
+  debugPrint('KOMET-STARTUP: NetworkCore.configure...');
+  await NetworkCore.configure();
   debugPrint('KOMET-STARTUP: AppDatabase.init...');
   await AppDatabase.init();
   await DecryptedPhotoStore.clear();
@@ -284,7 +286,7 @@ void main(List<String> args) async {
   final phonebookNamesFuture = AppPhonebookNames.load();
   final linkPreviewFuture = AppLinkPreview.load();
   final uncheckedLinksFuture = AppUncheckedLinks.load();
-  final cacheLimitFuture = AppMediaCacheLimit.load();
+  final cacheLimitFuture = AppCacheLimit.load();
   final videoNoteResolutionFuture = AppVideoNoteResolution.load();
   final videoNoteFpsFuture = AppVideoNoteFps.load();
   final videoNoteRearCameraFuture = AppVideoNoteRearCamera.load();
@@ -374,6 +376,7 @@ void main(List<String> args) async {
   ]);
   debugPrint('KOMET-STARTUP: DeviceContactsService.loadFromStartup...');
   unawaited(DeviceContactsService.loadFromStartup());
+  CacheJanitor.instance.schedule(CacheJanitor.startupDelay);
   await trafficCaptureFuture;
   await debugLogFuture;
   debugPrint('KOMET-STARTUP: runApp');

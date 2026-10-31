@@ -12,6 +12,7 @@ import '../utils/logger.dart';
 import '../utils/media_cache.dart';
 import 'opus_ogg_index.dart';
 import 'voice_playback_session.dart';
+import '../utils/media_cache_names.dart';
 
 // #***! почему не играет, не скачалось или плеер не открыл
 enum VoiceAudioFailure { none, download, playback }
@@ -59,7 +60,7 @@ class VoiceAudioController {
 
   // #***! один ключ кэша у пузыря, сохранения и вкладки голосовых
   static String cacheNameFor({int? audioId, required String messageId}) =>
-      '${audioId ?? messageId}.ogg';
+      voiceCacheName(audioId: audioId, messageId: messageId);
 
   // #***! у конца считаем что дослушали иначе последний тик не совпадёт
   static const double _endEpsilon = 0.05;

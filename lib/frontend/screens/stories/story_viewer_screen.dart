@@ -33,6 +33,7 @@ import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/official_name.dart';
+import '../../../core/utils/media_cache_names.dart';
 
 const Duration _photoDuration = Duration(seconds: 5);
 
@@ -274,7 +275,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       videoRequestHeaders(uri, sessionUserAgent: api.session?.userAgent());
 
   static String _videoCacheName(Story story) =>
-      'story_${story.owner.ownerId}_${story.id}.mp4';
+      storyVideoCacheName(story.owner.ownerId, story.id);
 
   static const int _storyVideoMaxBytes = 64 * 1024 * 1024;
 

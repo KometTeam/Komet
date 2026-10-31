@@ -118,6 +118,18 @@ thread, and opening the sticker panel froze the app for up to 300 ms.
 To run the engine test on the host, build the library with `cargo build --release` in
 `native/komet_tlottie/rust` and pass it as `TLOTTIE_LIB`.
 
+## Cache and storage
+
+Settings → Storage (`StorageScreen`) shows what Komet keeps on disk by kind and clears the chosen
+kinds. `CacheJanitor` (`lib/core/cache/cache_janitor.dart`) owns three caches: `MediaCache`
+(`media_cache/`), the flutter_cache_manager image cache (`<tmp>/libCachedImageData`, which notices
+files removed behind its back) and the sticker frames (`tlottie_frames/`, own 256 MB cap). One
+budget, `AppCacheLimit` (pref key still `media_cache_limit_bytes`), covers all three together:
+after a download or a written sticker the janitor removes the least recently used files across
+them, skipping anything touched in the last two minutes. Kept media (`keep_*`, already erased on
+the server) and the database are shown but never evicted. A `MediaCache` file's kind is read from
+its name, so build new names in `media_cache_names.dart` where `mediaCacheKindOf` can see them.
+
 ## Keyboard and chat panels
 
 The chat follows Telegram: the composer's bottom is always `max(keyboard, visible sticker panel)`

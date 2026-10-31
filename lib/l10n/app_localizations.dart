@@ -6464,6 +6464,144 @@ abstract class AppLocalizations {
   /// **'These limits come from the MAX server. Komet has no control over them.'**
   String get authLimitsServerNote;
 
+  /// No description provided for @storageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage'**
+  String get storageTitle;
+
+  /// No description provided for @storageTotalCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Komet takes up on this device'**
+  String get storageTotalCaption;
+
+  /// No description provided for @storageCategoryPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos and images'**
+  String get storageCategoryPhotos;
+
+  /// No description provided for @storageCategoryVideos.
+  ///
+  /// In en, this message translates to:
+  /// **'Videos'**
+  String get storageCategoryVideos;
+
+  /// No description provided for @storageCategoryFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get storageCategoryFiles;
+
+  /// No description provided for @storageCategoryVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice messages'**
+  String get storageCategoryVoice;
+
+  /// No description provided for @storageCategoryStickers.
+  ///
+  /// In en, this message translates to:
+  /// **'Stickers'**
+  String get storageCategoryStickers;
+
+  /// No description provided for @storageCategoryKept.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted media'**
+  String get storageCategoryKept;
+
+  /// No description provided for @storageCategoryKeptHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Already erased on the server, can\'t be downloaded again'**
+  String get storageCategoryKeptHint;
+
+  /// No description provided for @storageCategoryDatabase.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages and chats'**
+  String get storageCategoryDatabase;
+
+  /// No description provided for @storageCategoryDatabaseHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your chat history, never cleared'**
+  String get storageCategoryDatabaseHint;
+
+  /// No description provided for @storageScanning.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculating…'**
+  String get storageScanning;
+
+  /// No description provided for @storageScanFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t calculate the used space'**
+  String get storageScanFailed;
+
+  /// No description provided for @storageEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The cache is empty'**
+  String get storageEmpty;
+
+  /// No description provided for @storageClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear {size}'**
+  String storageClear(String size);
+
+  /// No description provided for @storageNothingSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose what to clear'**
+  String get storageNothingSelected;
+
+  /// No description provided for @storageCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Freed {size}'**
+  String storageCleared(String size);
+
+  /// No description provided for @storageClearFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t clear the cache'**
+  String get storageClearFailed;
+
+  /// No description provided for @storageClearKeptMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted media can\'t be downloaded again: the server has already erased it. Clear it too?'**
+  String get storageClearKeptMessage;
+
+  /// No description provided for @storageClearKeptConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get storageClearKeptConfirm;
+
+  /// No description provided for @storageLimitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum cache size'**
+  String get storageLimitTitle;
+
+  /// No description provided for @storageLimitUnlimited.
+  ///
+  /// In en, this message translates to:
+  /// **'No limit'**
+  String get storageLimitUnlimited;
+
+  /// No description provided for @storageLimitHint.
+  ///
+  /// In en, this message translates to:
+  /// **'When the cache outgrows the limit, Komet removes what you haven\'t opened for the longest. Deleted media and messages are never removed by the limit.'**
+  String get storageLimitHint;
+
   /// No description provided for @e2eeTitle.
   ///
   /// In en, this message translates to:

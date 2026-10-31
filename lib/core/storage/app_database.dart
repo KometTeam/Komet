@@ -230,6 +230,20 @@ class AppDatabase {
         .getDatabasesPath();
   }
 
+  static String get _databaseName => 'komet${AppInstance.suffix}.db';
+
+  static Future<int> fileBytes() async {
+    final base = join(await _databasesDir(), _databaseName);
+    var total = 0;
+    for (final suffix in const ['', '-wal', '-shm']) {
+      try {
+        final file = File('$base$suffix');
+        if (await file.exists()) total += await file.length();
+      } catch (_) {}
+    }
+    return total;
+  }
+
   static String? _legacyExposedDb;
 
   // #***! WAL живёт в отдельных файлах, копировать надо все три
@@ -291,7 +305,7 @@ class AppDatabase {
   static Future<Database> _open() async {
     final dbPath = await _databasesDir();
     await Directory(dbPath).create(recursive: true);
-    final target = join(dbPath, 'komet${AppInstance.suffix}.db');
+    final target = join(dbPath, _databaseName);
     await _migrateLegacyDb(target);
     final opened = await openDatabase(
       target,
