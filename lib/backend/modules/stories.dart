@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import '../../core/config/komet_settings.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/storage/app_database.dart';
@@ -23,6 +24,8 @@ class StoriesModule {
   static const _peersKey = 'stories_peers';
   static const _progressKey = 'stories_progress';
   static const _hiddenAuthorsKey = 'stories_hidden_authors';
+  static const _quietViewsKey = 'stories_quiet_views';
+  static const Duration _quietViewFallbackTtl = Duration(hours: 48);
 
   final Api _api;
 
@@ -34,6 +37,8 @@ class StoriesModule {
   final Map<int, int> _lastViewed = {};
 
   final Set<int> _hiddenAuthors = {};
+
+  final Map<int, Map<int, int>> _quietViews = {};
 
   bool isAuthorHidden(int ownerId) => _hiddenAuthors.contains(ownerId);
 
@@ -123,6 +128,11 @@ class StoriesModule {
         final list = jsonDecode(rawHidden);
         if (list is List) _hiddenAuthors.addAll(list.whereType<int>());
       }
+
+      final rawQuiet = await AppDatabase.getSyncValue(acc, _quietViewsKey);
+      if (rawQuiet != null && rawQuiet.isNotEmpty) {
+        _restoreQuietViews(jsonDecode(rawQuiet));
+      }
       _bump();
     } catch (e) {
       logger.w('StoriesModule.loadCache: $e');
@@ -158,6 +168,39 @@ class StoriesModule {
     await AppDatabase.setSyncValue(acc, _peersKey, jsonEncode(map));
   }
 
+  void _restoreQuietViews(Object? decoded) {
+    if (decoded is! Map) return;
+    final now = _nowMs();
+    decoded.forEach((ownerKey, stories) {
+      final ownerId = int.tryParse('$ownerKey');
+      if (ownerId == null || stories is! Map) return;
+      final views = _quietViews[ownerId] ??= {};
+      stories.forEach((storyKey, expiresAt) {
+        final storyId = int.tryParse('$storyKey');
+        final until = expiresAt is int ? expiresAt : int.tryParse('$expiresAt');
+        if (storyId == null || until == null || until < now) return;
+        views.putIfAbsent(storyId, () => until);
+      });
+      if (views.isEmpty) _quietViews.remove(ownerId);
+    });
+  }
+
+  Future<void> _persistQuietViews() async {
+    final acc = await _acc();
+    if (acc == null) return;
+    final now = _nowMs();
+    final map = <String, Map<String, int>>{};
+    _quietViews.forEach((ownerId, views) {
+      views.removeWhere((_, until) => until < now);
+      if (views.isEmpty) return;
+      map['$ownerId'] = {
+        for (final entry in views.entries) '${entry.key}': entry.value,
+      };
+    });
+    _quietViews.removeWhere((_, views) => views.isEmpty);
+    await AppDatabase.setSyncValue(acc, _quietViewsKey, jsonEncode(map));
+  }
+
   Future<void> _persistProgress() async {
     final acc = await _acc();
     if (acc == null) return;
@@ -186,7 +229,10 @@ class StoriesModule {
   // #***! порядок колец, сначала непрочитанные потом по свежести
   /// Кольца-превью, отсортированные: сначала непрочитанные, затем по времени.
   List<StoryPreview> get previews {
-    final list = _previews.values.where((p) => !p.isEmpty).toList();
+    final list = _previews.values
+        .where((p) => !p.isEmpty)
+        .map(_withQuietViews)
+        .toList();
     list.sort((a, b) {
       if (a.hasUnread != b.hasUnread) return a.hasUnread ? -1 : 1;
       return b.updateTime.compareTo(a.updateTime);
@@ -196,7 +242,32 @@ class StoriesModule {
 
   bool get hasAny => previews.isNotEmpty;
 
-  StoryPreview? previewFor(int ownerId) => _previews[ownerId];
+  StoryPreview? previewFor(int ownerId) {
+    final preview = _previews[ownerId];
+    return preview == null ? null : _withQuietViews(preview);
+  }
+
+  StoryPreview _withQuietViews(StoryPreview preview) {
+    final views = _quietViews[preview.owner.ownerId];
+    if (views == null || views.isEmpty) return preview;
+    final stories = _peerStories[preview.owner.ownerId];
+    final int read;
+    if (stories == null) {
+      final now = _nowMs();
+      read =
+          preview.readCount +
+          views.values.where((until) => until >= now).length;
+    } else {
+      var prefix = math.min(preview.readCount, stories.length);
+      while (prefix < stories.length && views.containsKey(stories[prefix].id)) {
+        prefix++;
+      }
+      read = prefix;
+    }
+    final capped = math.min(read, preview.totalCount);
+    if (capped <= preview.readCount) return preview;
+    return preview.copyWith(readCount: capped);
+  }
 
   // #***! превью чужих владельцев, отдельно от ленты
   final Map<int, StoryPreview> _peerPreviews = {};
@@ -207,9 +278,9 @@ class StoriesModule {
 
   StoryPreview? previewOf(int ownerId) {
     final feed = _previews[ownerId];
-    if (feed != null) return feed.isEmpty ? null : feed;
+    if (feed != null) return feed.isEmpty ? null : _withQuietViews(feed);
     final peer = _peerPreviews[ownerId];
-    return (peer == null || peer.isEmpty) ? null : peer;
+    return (peer == null || peer.isEmpty) ? null : _withQuietViews(peer);
   }
 
   // #***! пачками по 20, silent потому что фон
@@ -272,7 +343,7 @@ class StoriesModule {
       for (final raw in rawPeers) {
         final peer = PeerStories.fromMap(raw);
         if (peer == null) continue;
-        _peerStories[peer.owner.ownerId] = peer.stories;
+        _setPeerStories(peer.owner.ownerId, peer.stories);
         changed = true;
       }
     }
@@ -280,6 +351,17 @@ class StoriesModule {
   }
 
   List<Story>? cachedStories(int ownerId) => _peerStories[ownerId];
+
+  void _setPeerStories(int ownerId, List<Story> stories) {
+    _peerStories[ownerId] = stories;
+    final views = _quietViews[ownerId];
+    if (views == null) return;
+    final alive = {for (final story in stories) story.id};
+    final before = views.length;
+    views.removeWhere((storyId, _) => !alive.contains(storyId));
+    if (views.isEmpty) _quietViews.remove(ownerId);
+    if (views.length != before) unawaited(_persistQuietViews());
+  }
 
   // #***! пуш об изменении колец
   /// Подписка на серверные пуши обновления колец (NOTIF_STORIES_UPDATE).
@@ -372,7 +454,7 @@ class StoriesModule {
         for (final raw in rawPeers) {
           final peer = PeerStories.fromMap(raw);
           if (peer == null) continue;
-          _peerStories[peer.owner.ownerId] = peer.stories;
+          _setPeerStories(peer.owner.ownerId, peer.stories);
           if (peer.owner.ownerId == owner.ownerId) result = peer.stories;
         }
       }
@@ -415,18 +497,51 @@ class StoriesModule {
   // #***! отметка просмотра, счётчик поднимаем сразу чтоб кольцо гасло без задержки
   /// Отметить историю просмотренной. Оптимистично поднимает readCount кольца.
   Future<bool> mark(StoryOwner owner, int storyId) async {
+    if (KometSettings.antiStoryView.value) {
+      _markQuietly(owner.ownerId, storyId);
+      return true;
+    }
     if (_api.state != SessionState.online) return false;
     try {
       final ok = await _api.sendRequestOk(Opcode.storiesMark, {
         'owner': owner.toMap(),
         'storyId': storyId,
       });
-      if (ok) _markReadLocally(owner.ownerId);
+      if (ok) {
+        _forgetQuietView(owner.ownerId, storyId);
+        _markReadLocally(owner.ownerId);
+      }
       return ok;
     } catch (e) {
       logger.w('StoriesModule.mark: $e');
       return false;
     }
+  }
+
+  bool _viewedQuietly(int ownerId, int storyId) =>
+      _quietViews[ownerId]?.containsKey(storyId) ?? false;
+
+  void _markQuietly(int ownerId, int storyId) {
+    if (storyId == 0 || _viewedQuietly(ownerId, storyId)) return;
+    final stories = _peerStories[ownerId] ?? const <Story>[];
+    final index = stories.indexWhere((s) => s.id == storyId);
+    final serverRead =
+        (_previews[ownerId] ?? _peerPreviews[ownerId])?.readCount;
+    if (index >= 0 && serverRead != null && index < serverRead) return;
+    final story = index < 0 ? null : stories[index];
+    final expiresAt = story != null && story.time > 0 && story.expiration > 0
+        ? _normMs(story.time) + story.expiration
+        : _nowMs() + _quietViewFallbackTtl.inMilliseconds;
+    (_quietViews[ownerId] ??= {})[storyId] = expiresAt;
+    _bump();
+    unawaited(_persistQuietViews());
+  }
+
+  void _forgetQuietView(int ownerId, int storyId) {
+    final views = _quietViews[ownerId];
+    if (views == null || views.remove(storyId) == null) return;
+    if (views.isEmpty) _quietViews.remove(ownerId);
+    unawaited(_persistQuietViews());
   }
 
   void _markReadLocally(int ownerId) {
@@ -666,6 +781,7 @@ class StoriesModule {
     _previews.clear();
     _peerStories.clear();
     _lastViewed.clear();
+    _quietViews.clear();
     _accountId = null;
     _bump();
   }

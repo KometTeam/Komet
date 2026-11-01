@@ -12,6 +12,7 @@
 • Tabs switch instantly without flashing the screens in between. Appearance now has a switch to turn off animations. → #animations
 • When MAX requires a sign-in password, Komet now shows a clear screen with instructions.
 • Settings now have [Storage](#storage): see what takes up space, clear the cache and cap its size.
+• Links are now checked: before you open a new site, Komet shows its address and highlights fake ones with swapped letters. → #links
 
 #stories
     tab chats
@@ -33,3 +34,7 @@
     tab settings
     tap settings.storage
     highlight storage.limit
+
+// The "о" in kоmet below is Cyrillic on purpose.
+#links
+    check https://kоmet.example/login

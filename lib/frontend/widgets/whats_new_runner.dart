@@ -8,6 +8,7 @@ import '../../core/whats_new/whats_new_document.dart';
 import '../../main.dart' show KometApp;
 import 'custom_notification.dart';
 import 'hint_bubble.dart';
+import 'link_confirm_sheet.dart';
 import 'max_link_nav.dart';
 import 'spotlight.dart';
 
@@ -57,6 +58,12 @@ class WhatsNewRunner {
       case WhatsNewCommand.open:
         await _leaveSheet();
         await _open(args.first);
+      case WhatsNewCommand.check:
+        await _leaveSheet();
+        final context = _context;
+        if (context != null && context.mounted) {
+          await previewLinkCheck(context, args.first);
+        }
       case WhatsNewCommand.back:
         await _leaveSheet();
         final context = _context;

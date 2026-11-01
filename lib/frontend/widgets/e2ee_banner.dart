@@ -40,7 +40,9 @@ class E2eeBanner extends StatelessWidget {
           margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
           decoration: BoxDecoration(
-            color: keyChanged ? cs.errorContainer : cs.primaryContainer,
+            color: keyChanged
+                ? cs.surfaceContainerHighest
+                : cs.primaryContainer,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -52,9 +54,7 @@ class E2eeBanner extends StatelessWidget {
                   Icon(
                     keyChanged ? Symbols.warning : Symbols.lock,
                     size: 20,
-                    color: keyChanged
-                        ? cs.onErrorContainer
-                        : cs.onPrimaryContainer,
+                    color: keyChanged ? cs.error : cs.onPrimaryContainer,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -66,7 +66,7 @@ class E2eeBanner extends StatelessWidget {
                           : l10n.e2eeBannerPending(peerName),
                       style: TextStyle(
                         color: keyChanged
-                            ? cs.onErrorContainer
+                            ? cs.onSurface
                             : cs.onPrimaryContainer,
                         fontSize: 14,
                         height: 1.3,

@@ -15,7 +15,6 @@ import '../../../core/utils/download_history.dart';
 import '../../../core/utils/download_progress.dart';
 import '../../../core/utils/file_download.dart';
 import '../../../core/utils/format.dart';
-import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/media_saver.dart';
 import '../../../core/utils/route_settle.dart';
@@ -24,6 +23,7 @@ import '../../../models/attachment.dart';
 import '../../screens/chats/chat_screen.dart';
 import '../custom_notification.dart';
 import '../komet_avatar.dart';
+import '../link_confirm_sheet.dart';
 import '../photo_viewer.dart';
 import '../reload_on_reconnect.dart';
 import '../route_probe.dart';
@@ -1103,7 +1103,7 @@ class _LinkRow extends StatelessWidget {
         : image?.previewData;
 
     return InkWell(
-      onTap: url.isEmpty ? null : () => openExternalUrl(context, url),
+      onTap: url.isEmpty ? null : () => openMessageLink(context, url),
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),

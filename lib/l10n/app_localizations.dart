@@ -8579,7 +8579,7 @@ abstract class AppLocalizations {
   /// No description provided for @linkConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'The link text doesn\'t match its address, and you haven\'t visited this site before. Check the address above before you continue.'**
+  /// **'You haven\'t visited this site before. Check the address above before you continue.'**
   String get linkConfirmBody;
 
   /// No description provided for @linkConfirmOpen.
@@ -8593,6 +8593,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get linkConfirmCancel;
+
+  /// No description provided for @linkConfirmSuspiciousTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspicious link'**
+  String get linkConfirmSuspiciousTitle;
+
+  /// No description provided for @linkConfirmOpenAnyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Open anyway'**
+  String get linkConfirmOpenAnyway;
+
+  /// No description provided for @linkConfirmDontOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t open'**
+  String get linkConfirmDontOpen;
+
+  /// No description provided for @linkWarningTextMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The text shows {shown}, but it leads to {host}'**
+  String linkWarningTextMismatch(String shown, String host);
+
+  /// No description provided for @linkWarningUserInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Actually leads to {host}'**
+  String linkWarningUserInfo(String host);
+
+  /// No description provided for @linkWarningMixedScripts.
+  ///
+  /// In en, this message translates to:
+  /// **'Mixed alphabets: {letters}'**
+  String linkWarningMixedScripts(String letters);
+
+  /// No description provided for @linkWarningLookalike.
+  ///
+  /// In en, this message translates to:
+  /// **'Only looks Latin: the letters are {script}'**
+  String linkWarningLookalike(String script);
+
+  /// No description provided for @linkWarningInvisible.
+  ///
+  /// In en, this message translates to:
+  /// **'The address hides invisible characters'**
+  String get linkWarningInvisible;
+
+  /// No description provided for @linkWarningIpAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Leads to an IP address, not a site'**
+  String get linkWarningIpAddress;
+
+  /// No description provided for @linkWarningScheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens through {scheme}:, not in a browser'**
+  String linkWarningScheme(String scheme);
+
+  /// No description provided for @linkWarningLetter.
+  ///
+  /// In en, this message translates to:
+  /// **'“{letter}”'**
+  String linkWarningLetter(String letter);
+
+  /// No description provided for @linkWarningLetters.
+  ///
+  /// In en, this message translates to:
+  /// **'{letters} from {script}'**
+  String linkWarningLetters(String letters, String script);
+
+  /// No description provided for @linkScriptLatin.
+  ///
+  /// In en, this message translates to:
+  /// **'Latin'**
+  String get linkScriptLatin;
+
+  /// No description provided for @linkScriptCyrillic.
+  ///
+  /// In en, this message translates to:
+  /// **'Cyrillic'**
+  String get linkScriptCyrillic;
+
+  /// No description provided for @linkScriptGreek.
+  ///
+  /// In en, this message translates to:
+  /// **'Greek'**
+  String get linkScriptGreek;
+
+  /// No description provided for @linkScriptArmenian.
+  ///
+  /// In en, this message translates to:
+  /// **'Armenian'**
+  String get linkScriptArmenian;
 
   /// No description provided for @chatScreenMessageTooLong.
   ///
@@ -10753,6 +10849,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Read messages without marking them as read'**
   String get kometSettingsAntiReadSubtitle;
+
+  /// No description provided for @kometSettingsAntiStoryViewSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch stories without appearing among their viewers. The author still sees your reactions and replies'**
+  String get kometSettingsAntiStoryViewSubtitle;
 
   /// No description provided for @kometSettingsSelfOnlineCheckSubtitle.
   ///

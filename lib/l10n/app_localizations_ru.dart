@@ -4733,13 +4733,75 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get linkConfirmBody =>
-      'Текст ссылки не совпадает с адресом, а на этом сайте вы ещё не были. Проверьте адрес выше, прежде чем переходить.';
+      'Вы ещё не переходили на этот сайт. Проверьте адрес выше, прежде чем открывать.';
 
   @override
   String get linkConfirmOpen => 'Перейти';
 
   @override
   String get linkConfirmCancel => 'Отмена';
+
+  @override
+  String get linkConfirmSuspiciousTitle => 'Подозрительная ссылка';
+
+  @override
+  String get linkConfirmOpenAnyway => 'Всё равно открыть';
+
+  @override
+  String get linkConfirmDontOpen => 'Не открывать';
+
+  @override
+  String linkWarningTextMismatch(String shown, String host) {
+    return 'Текст показывает $shown, а ведёт на $host';
+  }
+
+  @override
+  String linkWarningUserInfo(String host) {
+    return 'На самом деле ведёт на $host';
+  }
+
+  @override
+  String linkWarningMixedScripts(String letters) {
+    return 'Смешаны алфавиты: $letters';
+  }
+
+  @override
+  String linkWarningLookalike(String script) {
+    return 'Только похоже на латиницу: буквы из $script';
+  }
+
+  @override
+  String get linkWarningInvisible => 'В адресе спрятаны невидимые символы';
+
+  @override
+  String get linkWarningIpAddress => 'Ведёт на IP-адрес, а не на сайт';
+
+  @override
+  String linkWarningScheme(String scheme) {
+    return 'Откроется не в браузере, а через $scheme:';
+  }
+
+  @override
+  String linkWarningLetter(String letter) {
+    return '«$letter»';
+  }
+
+  @override
+  String linkWarningLetters(String letters, String script) {
+    return '$letters из $script';
+  }
+
+  @override
+  String get linkScriptLatin => 'латиницы';
+
+  @override
+  String get linkScriptCyrillic => 'кириллицы';
+
+  @override
+  String get linkScriptGreek => 'греческого алфавита';
+
+  @override
+  String get linkScriptArmenian => 'армянского алфавита';
 
   @override
   String get chatScreenMessageTooLong =>
@@ -6031,6 +6093,10 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get kometSettingsAntiReadSubtitle => 'Нечиталка сообщений';
+
+  @override
+  String get kometSettingsAntiStoryViewSubtitle =>
+      'Смотреть истории так, чтобы автор не видел вас среди зрителей. Реакции и ответы он всё равно увидит';
 
   @override
   String get kometSettingsSelfOnlineCheckSubtitle =>

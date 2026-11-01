@@ -159,6 +159,16 @@ class KometSettingsScreen extends StatelessWidget {
                       onChanged: KometSettings.setAntiRead,
                     ),
                   ),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: KometSettings.antiStoryView,
+                    builder: (context, value, _) => SettingsToggleTile(
+                      icon: Symbols.history_toggle_off,
+                      label: 'Anti story view',
+                      subtitle: l10n.kometSettingsAntiStoryViewSubtitle,
+                      value: value,
+                      onChanged: KometSettings.setAntiStoryView,
+                    ),
+                  ),
                 ],
                 ValueListenableBuilder<bool>(
                   valueListenable: KometSettings.selfOnlineCheck,

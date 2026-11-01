@@ -113,20 +113,27 @@ class FormattedMessageText extends StatefulWidget {
   State<FormattedMessageText> createState() => _FormattedMessageTextState();
 }
 
+typedef _LinkText = ({int start, int end, String text});
+
 class _ParsedText {
   const _ParsedText({
     required this.entities,
     required this.segments,
-    required this.hiddenLinks,
+    required this.links,
   });
 
   final List<TextEntity> entities;
   final List<FormatSegment> segments;
-  final List<TextSpanRange> hiddenLinks;
+  final List<_LinkText> links;
 
-  bool hidesLink(FormatSegment segment) => hiddenLinks.any(
-    (link) => link.start <= segment.start && link.end >= segment.end,
-  );
+  String? linkTextOf(FormatSegment segment) {
+    for (final link in links) {
+      if (link.start <= segment.start && link.end >= segment.end) {
+        return link.text;
+      }
+    }
+    return null;
+  }
 }
 
 class _FormattedMessageTextState extends State<FormattedMessageText> {
@@ -160,24 +167,21 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
     return _ParsedText(
       entities: detectTextEntities(widget.text, skip: _claimedRanges(ranges)),
       segments: segmentizeFormats(widget.text, ranges),
-      hiddenLinks: _hiddenLinks(ranges),
+      links: _linkTexts(ranges),
     );
   }
 
-  List<TextSpanRange> _hiddenLinks(List<FormatRange> ranges) {
+  List<_LinkText> _linkTexts(List<FormatRange> ranges) {
     final text = widget.text;
-    final hidden = <TextSpanRange>[];
+    final links = <_LinkText>[];
     for (final range in ranges) {
-      final url = range.url;
-      if (range.format != TextFormat.link || url == null) continue;
+      if (range.format != TextFormat.link || range.url == null) continue;
       final start = range.start.clamp(0, text.length);
       final end = range.end.clamp(0, text.length);
       if (end <= start) continue;
-      if (!linkShowsItsTarget(text.substring(start, end), url)) {
-        hidden.add((start: start, end: end));
-      }
+      links.add((start: start, end: end, text: text.substring(start, end)));
     }
-    return hidden;
+    return links;
   }
 
   @override
@@ -428,14 +432,15 @@ class _FormattedMessageTextState extends State<FormattedMessageText> {
 
       if (segment.url != null) {
         final url = segment.url!;
-        final hidden = _parsed.hidesLink(segment);
+        final shownText = _parsed.linkTextOf(segment);
         spans.add(
           TextSpan(
             text: content,
             style: style,
             recognizer: _track(
               TapGestureRecognizer()
-                ..onTap = () => openMessageLink(context, url, hidden: hidden),
+                ..onTap = () =>
+                    openMessageLink(context, url, shownText: shownText),
             ),
           ),
         );

@@ -12,6 +12,7 @@ class KometSettings {
   static const _kShowTypingTime = 'komet_show_typing_time';
   static const _kGhostMode = 'komet_ghost_mode';
   static const _kAntiRead = 'komet_anti_read';
+  static const _kAntiStoryView = 'komet_anti_story_view';
   static const _kSelfOnlineCheck = 'komet_self_online_check';
   static const _kHideAllChatsFolder = 'komet_hide_all_chats_folder';
   static const _kShowHiddenChats = 'komet_show_hidden_chats';
@@ -34,6 +35,7 @@ class KometSettings {
   static final ValueNotifier<bool> showTypingTime = ValueNotifier(false);
   static final ValueNotifier<bool> ghostMode = ValueNotifier(false);
   static final ValueNotifier<bool> antiRead = ValueNotifier(false);
+  static final ValueNotifier<bool> antiStoryView = ValueNotifier(false);
   static final ValueNotifier<bool> selfOnlineCheck = ValueNotifier(true);
   static final ValueNotifier<bool> hideAllChatsFolder = ValueNotifier(false);
   static final ValueNotifier<bool> showHiddenChats = ValueNotifier(false);
@@ -65,6 +67,9 @@ class KometSettings {
         BuildProfile.stealthPresence && (prefs.getBool(_kGhostMode) ?? false);
     antiRead.value =
         BuildProfile.stealthPresence && (prefs.getBool(_kAntiRead) ?? false);
+    antiStoryView.value =
+        BuildProfile.stealthPresence &&
+        (prefs.getBool(_kAntiStoryView) ?? false);
     selfOnlineCheck.value = prefs.getBool(_kSelfOnlineCheck) ?? true;
     hideAllChatsFolder.value = prefs.getBool(_kHideAllChatsFolder) ?? false;
     showHiddenChats.value = prefs.getBool(_kShowHiddenChats) ?? false;
@@ -123,6 +128,12 @@ class KometSettings {
     antiRead.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kAntiRead, value);
+  }
+
+  static Future<void> setAntiStoryView(bool value) async {
+    antiStoryView.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kAntiStoryView, value);
   }
 
   static Future<void> setSelfOnlineCheck(bool value) async {

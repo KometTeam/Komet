@@ -7,6 +7,7 @@ enum WhatsNewCommand {
   close,
   tab,
   open,
+  check,
   back,
   scroll,
   highlight,
@@ -230,6 +231,11 @@ class _Parser {
         final target = WhatsNewTarget.parse(args.first);
         return target?.link == null
             ? 'open ждёт ссылку, а не «${args.first}»'
+            : null;
+      case WhatsNewCommand.check:
+        if (args.length != 1) return 'check <ссылка>';
+        return WhatsNewTarget.parse(args.first)?.link == null
+            ? 'check ждёт ссылку, а не «${args.first}»'
             : null;
       case WhatsNewCommand.scroll:
         if (args.length != 1) return 'scroll top | bottom | <элемент>';

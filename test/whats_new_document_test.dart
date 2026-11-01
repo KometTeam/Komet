@@ -97,6 +97,22 @@ void main() {
       expect(document.scenarios['tour'], isEmpty);
     });
 
+    test('check takes exactly one link', () {
+      final document = WhatsNewDocument.parse('''
+#tour
+    check https://synthetic.example/login
+    check #tour
+    check
+''');
+      expect(document.problems, [
+        'строка 3: check ждёт ссылку, а не «#tour»',
+        'строка 4: check <ссылка>',
+      ]);
+      final steps = document.scenarios['tour']!;
+      expect(steps.single.command, WhatsNewCommand.check);
+      expect(steps.single.args, ['https://synthetic.example/login']);
+    });
+
     test('only elements with an action can be tapped', () {
       final document = WhatsNewDocument.parse('''
 #tour

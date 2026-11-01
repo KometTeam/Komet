@@ -62,16 +62,6 @@ void main() {
         .setMockMethodCallHandler(_launcher, null);
   });
 
-  test('a link is hidden only when its text hides the address', () {
-    expect(linkShowsItsTarget('example.com', 'https://example.com/'), isTrue);
-    expect(
-      linkShowsItsTarget('Https://WWW.Example.com', 'https://example.com'),
-      isTrue,
-    );
-    expect(linkShowsItsTarget('Synthetic', 'https://example.com'), isFalse);
-    expect(linkShowsItsTarget('safe.org', 'https://example.com'), isFalse);
-  });
-
   test('visited sites are kept per host', () async {
     expect(
       VisitedLinkSites.siteOf('https://WWW.Example.com/a?b'),
@@ -117,13 +107,92 @@ void main() {
     expect(launched, hasLength(2));
   });
 
-  testWidgets('a link that shows its own address opens directly', (
-    tester,
-  ) async {
+  testWidgets('a plain link to a new site asks too', (tester) async {
     await _pumpMessage(tester, 'example.com', 'https://example.com');
     await _tapLink(tester, 'example.com');
 
-    expect(find.text('Открыть ссылку?'), findsNothing);
+    expect(find.text('Открыть ссылку?'), findsOneWidget);
+    await tester.tap(find.text('Перейти'));
+    await tester.pumpAndSettle();
     expect(launched, ['https://example.com']);
+
+    await _tapLink(tester, 'example.com');
+    expect(find.text('Открыть ссылку?'), findsNothing);
+    expect(launched, hasLength(2));
+  });
+
+  testWidgets('a lookalike address warns every time', (tester) async {
+    const url = 'https://ex\u0430mple.test/login';
+    await _pumpMessage(tester, 'Synthetic link', url);
+    await _tapLink(tester, 'Synthetic link');
+
+    expect(find.text('Подозрительная ссылка'), findsOneWidget);
+    expect(find.textContaining('«а» из кириллицы'), findsOneWidget);
+    await tester.tap(find.text('Всё равно открыть'));
+    await tester.pumpAndSettle();
+    expect(launched, hasLength(1));
+
+    await _tapLink(tester, 'Synthetic link');
+    expect(find.text('Подозрительная ссылка'), findsOneWidget);
+    await tester.tap(find.text('Не открывать'));
+    await tester.pumpAndSettle();
+    expect(launched, hasLength(1));
+    expect(await VisitedLinkSites.contains(url), isFalse);
+  });
+
+  testWidgets('a bare domain from the server is checked like any link', (
+    tester,
+  ) async {
+    const domain = 'burm\u0430ld\u0430.test';
+    await _pumpMessage(tester, domain, domain);
+    await _tapLink(tester, domain);
+
+    expect(find.text('Подозрительная ссылка'), findsOneWidget);
+    await tester.tap(find.text('Всё равно открыть'));
+    await tester.pumpAndSettle();
+    expect(launched.single, startsWith('https://'));
+  });
+
+  testWidgets('a preview shows the check but never opens the link', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () =>
+                  previewLinkCheck(context, 'https://k\u043emet.example'),
+              child: const Text('Preview'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    for (final button in ['Всё равно открыть', 'Не открывать']) {
+      await tester.tap(find.text('Preview'));
+      await tester.pumpAndSettle();
+      expect(find.text('Подозрительная ссылка'), findsOneWidget);
+      await tester.tap(find.text(button));
+      await tester.pumpAndSettle();
+    }
+    expect(launched, isEmpty);
+  });
+
+  testWidgets('a link whose text names another site is suspicious', (
+    tester,
+  ) async {
+    await _pumpMessage(tester, 'bank.example', 'https://login.test/form');
+    await _tapLink(tester, 'bank.example');
+
+    expect(find.text('Подозрительная ссылка'), findsOneWidget);
+    expect(
+      find.textContaining('показывает bank.example, а ведёт на login.test'),
+      findsOneWidget,
+    );
   });
 }

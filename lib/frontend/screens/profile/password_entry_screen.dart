@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../main.dart' show accountModule;
 import '../../../core/storage/app_database.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../widgets/alert_note.dart';
 import '../../widgets/animated_slash_icon.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/glossy_pill.dart';
@@ -283,17 +284,9 @@ class _PasswordEntryScreenState extends State<PasswordEntryScreen> {
             ),
             const SizedBox(height: 20),
             if (_errorMessage != null)
-              Container(
-                padding: const EdgeInsets.all(12),
+              AlertNote(
+                _errorMessage!,
                 margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: cs.errorContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: cs.onErrorContainer),
-                ),
               ),
             _PasswordField(
               controller: _passwordController,
@@ -694,28 +687,9 @@ class _TwoFactorSetupScreenState extends State<TwoFactorSetupScreen> {
           _buildStepIndicator(cs),
           const SizedBox(height: 24),
           if (_errorMessage != null)
-            Container(
-              padding: const EdgeInsets.all(12),
+            AlertNote(
+              _errorMessage!,
               margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: cs.errorContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Symbols.error, color: cs.error, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _errorMessage!,
-                      style: TextStyle(
-                        color: cs.onErrorContainer,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
             ),
           _buildCurrentStep(cs),
           const SizedBox(height: 24),
@@ -1066,17 +1040,9 @@ class _TwoFactorPasswordChangeScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_errorMessage != null)
-              Container(
-                padding: const EdgeInsets.all(12),
+              AlertNote(
+                _errorMessage!,
                 margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: cs.errorContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: cs.onErrorContainer),
-                ),
               ),
             Text(
               l10n.passwordEntryNewPassword,
@@ -1244,17 +1210,9 @@ class _TwoFactorEmailChangeScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_errorMessage != null)
-              Container(
-                padding: const EdgeInsets.all(12),
+              AlertNote(
+                _errorMessage!,
                 margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: cs.errorContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: cs.onErrorContainer),
-                ),
               ),
             if (_step == 0) ...[
               Text(
@@ -1403,38 +1361,15 @@ class _TwoFactorRemoveScreenState extends State<TwoFactorRemoveScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cs.errorContainer.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Symbols.warning, color: cs.error),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      l10n.passwordEntryRemoveWarning,
-                      style: TextStyle(color: cs.onSurface),
-                    ),
-                  ),
-                ],
-              ),
+            AlertNote(
+              l10n.passwordEntryRemoveWarning,
+              icon: Symbols.warning,
             ),
             const SizedBox(height: 24),
             if (_errorMessage != null)
-              Container(
-                padding: const EdgeInsets.all(12),
+              AlertNote(
+                _errorMessage!,
                 margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: cs.errorContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: cs.onErrorContainer),
-                ),
               ),
             SizedBox(
               width: double.infinity,

@@ -150,6 +150,7 @@ Store builds (no self-updater) show «Что нового» once per build from 
 | `close` | closes the sheet (any step that navigates closes it first anyway) |
 | `tab chats\|calls\|contacts\|settings` | pops to the shell and switches the bottom tab |
 | `open <link>` | opens a route or link (`:settings/appearance`, `max.ru/…`, `https://…`) |
+| `check <link>` | shows the link check sheet for that address, as a tap on a link in a chat would; opens nothing, whichever button is pressed |
 | `back` | pops the current screen |
 | `scroll top\|bottom\|<target>` | scrolls the current screen |
 | `highlight <target>` | scrolls to the target and pulses it |

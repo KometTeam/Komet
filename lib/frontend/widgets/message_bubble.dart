@@ -17,13 +17,13 @@ import '../../core/crypto/message_decryption_cache.dart';
 import 'decrypted_text.dart';
 import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/emoji_keyword_index.dart';
-import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_format.dart';
 import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import '../../l10n/app_localizations.dart';
 import 'custom_notification.dart';
 import 'hint_bubble.dart';
+import 'link_confirm_sheet.dart';
 import 'formatted_message_text.dart';
 import 'reply_preview.dart';
 import 'sender_badge.dart';
@@ -1880,7 +1880,7 @@ class MessageBubble extends StatelessWidget {
       case 'LINK':
         final url = button.url;
         if (url != null && url.isNotEmpty) {
-          await openExternalUrl(context, url);
+          await openMessageLink(context, url, shownText: button.text);
         }
         return;
       case 'OPEN_APP':
@@ -1913,7 +1913,7 @@ class MessageBubble extends StatelessWidget {
         if (!context.mounted) return;
         final url = answer?['url']?.toString();
         if (url != null && url.isNotEmpty) {
-          await openExternalUrl(context, url);
+          await openMessageLink(context, url);
           return;
         }
         final text = answer?['text']?.toString();

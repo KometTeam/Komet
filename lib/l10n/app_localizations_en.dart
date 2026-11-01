@@ -4696,13 +4696,75 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get linkConfirmBody =>
-      'The link text doesn\'t match its address, and you haven\'t visited this site before. Check the address above before you continue.';
+      'You haven\'t visited this site before. Check the address above before you continue.';
 
   @override
   String get linkConfirmOpen => 'Open';
 
   @override
   String get linkConfirmCancel => 'Cancel';
+
+  @override
+  String get linkConfirmSuspiciousTitle => 'Suspicious link';
+
+  @override
+  String get linkConfirmOpenAnyway => 'Open anyway';
+
+  @override
+  String get linkConfirmDontOpen => 'Don\'t open';
+
+  @override
+  String linkWarningTextMismatch(String shown, String host) {
+    return 'The text shows $shown, but it leads to $host';
+  }
+
+  @override
+  String linkWarningUserInfo(String host) {
+    return 'Actually leads to $host';
+  }
+
+  @override
+  String linkWarningMixedScripts(String letters) {
+    return 'Mixed alphabets: $letters';
+  }
+
+  @override
+  String linkWarningLookalike(String script) {
+    return 'Only looks Latin: the letters are $script';
+  }
+
+  @override
+  String get linkWarningInvisible => 'The address hides invisible characters';
+
+  @override
+  String get linkWarningIpAddress => 'Leads to an IP address, not a site';
+
+  @override
+  String linkWarningScheme(String scheme) {
+    return 'Opens through $scheme:, not in a browser';
+  }
+
+  @override
+  String linkWarningLetter(String letter) {
+    return '“$letter”';
+  }
+
+  @override
+  String linkWarningLetters(String letters, String script) {
+    return '$letters from $script';
+  }
+
+  @override
+  String get linkScriptLatin => 'Latin';
+
+  @override
+  String get linkScriptCyrillic => 'Cyrillic';
+
+  @override
+  String get linkScriptGreek => 'Greek';
+
+  @override
+  String get linkScriptArmenian => 'Armenian';
 
   @override
   String get chatScreenMessageTooLong =>
@@ -5986,6 +6048,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get kometSettingsAntiReadSubtitle =>
       'Read messages without marking them as read';
+
+  @override
+  String get kometSettingsAntiStoryViewSubtitle =>
+      'Watch stories without appearing among their viewers. The author still sees your reactions and replies';
 
   @override
   String get kometSettingsSelfOnlineCheckSubtitle =>

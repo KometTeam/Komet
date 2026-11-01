@@ -64,7 +64,9 @@ void main() {
   final launched = <String>[];
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      VisitedLinkSites.prefKey: ['example.com'],
+    });
     VisitedLinkSites.resetForTest();
     launched.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

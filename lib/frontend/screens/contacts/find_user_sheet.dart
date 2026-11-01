@@ -11,6 +11,7 @@ import '../../../core/storage/token_storage.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../models/contact_info.dart';
+import '../../widgets/alert_note.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
 
@@ -273,35 +274,7 @@ class _FindUserSheetState extends State<_FindUserSheet> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cs.errorContainer.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Symbols.error_outline,
-                        size: 18,
-                        color: cs.onErrorContainer,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _error!,
-                          style: TextStyle(
-                            color: cs.onErrorContainer,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                AlertNote(_error!),
               ],
               const SizedBox(height: 16),
               FilledButton(

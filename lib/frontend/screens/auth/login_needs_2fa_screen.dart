@@ -136,20 +136,20 @@ class _NotKometBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: cs.errorContainer,
+        color: cs.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Symbols.info, size: 18, color: cs.onErrorContainer),
+          Icon(Symbols.info, size: 18, color: cs.error),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               text,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: cs.onErrorContainer,
+                color: cs.onSurface,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 height: 1.3,
