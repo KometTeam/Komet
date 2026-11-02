@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../widgets/connection_status.dart';
 
 import '../../../core/config/build_profile.dart';
+import '../../../backend/modules/chats.dart' show chats;
 import '../../../core/config/komet_settings.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
@@ -34,7 +35,6 @@ class KometSettingsScreen extends StatelessWidget {
             SectionHeader(
               l10n.authLimitsSignupMessagesTitle,
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
             ),
             SettingsCard(
               children: [
@@ -99,13 +99,22 @@ class KometSettingsScreen extends StatelessWidget {
                     onChanged: KometSettings.setShowTypingTime,
                   ),
                 ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.hideChannelRecommendations,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.explore_off,
+                    label: l10n.kometSettingsHideRecommendations,
+                    subtitle: l10n.kometSettingsHideRecommendationsSubtitle,
+                    value: value,
+                    onChanged: KometSettings.setHideChannelRecommendations,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),
             SectionHeader(
               l10n.kometSettingsFoldersHeader,
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
             ),
             SettingsCard(
               children: [
@@ -129,46 +138,48 @@ class KometSettingsScreen extends StatelessWidget {
                     onChanged: KometSettings.setShowHiddenChats,
                   ),
                 ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.archiveOnPull,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.archive,
-                    label: 'Pull-down archive',
-                    subtitle: l10n.kometSettingsArchiveOnPullSubtitle,
-                    value: value,
-                    onChanged: KometSettings.setArchiveOnPull,
-                  ),
-                ),
+
               ],
             ),
             const SizedBox(height: 20),
             const SectionHeader(
-              'Ghost Mode',
+              BuildProfile.stealthPresence ? 'Ghost Mode' : 'Presence',
               padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
             ),
             SettingsCard(
               children: [
-                ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.ghostMode,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.visibility_off,
-                    label: 'Ghost Mode',
-                    subtitle: l10n.kometSettingsGhostModeSubtitle,
-                    value: value,
-                    onChanged: _setGhostMode,
+                if (BuildProfile.stealthPresence) ...[
+                  ValueListenableBuilder<bool>(
+                    valueListenable: KometSettings.ghostMode,
+                    builder: (context, value, _) => SettingsToggleTile(
+                      icon: Symbols.visibility_off,
+                      label: 'Ghost Mode',
+                      subtitle: l10n.kometSettingsGhostModeSubtitle,
+                      value: value,
+                      onChanged: _setGhostMode,
+                    ),
                   ),
-                ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.antiRead,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.mark_chat_read,
-                    label: 'Anti read',
-                    subtitle: l10n.kometSettingsAntiReadSubtitle,
-                    value: value,
-                    onChanged: KometSettings.setAntiRead,
+                  ValueListenableBuilder<bool>(
+                    valueListenable: KometSettings.antiRead,
+                    builder: (context, value, _) => SettingsToggleTile(
+                      icon: Symbols.mark_chat_read,
+                      label: 'Anti read',
+                      subtitle: l10n.kometSettingsAntiReadSubtitle,
+                      value: value,
+                      onChanged: KometSettings.setAntiRead,
+                    ),
                   ),
-                ),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: KometSettings.antiStoryView,
+                    builder: (context, value, _) => SettingsToggleTile(
+                      icon: Symbols.history_toggle_off,
+                      label: 'Anti story view',
+                      subtitle: l10n.kometSettingsAntiStoryViewSubtitle,
+                      value: value,
+                      onChanged: KometSettings.setAntiStoryView,
+                    ),
+                  ),
+                ],
                 ValueListenableBuilder<bool>(
                   valueListenable: KometSettings.selfOnlineCheck,
                   builder: (context, value, _) => SettingsToggleTile(
@@ -185,7 +196,6 @@ class KometSettingsScreen extends StatelessWidget {
             SectionHeader(
               l10n.kometSettingsDebugHeader,
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              fontSize: 14,
             ),
             SettingsCard(
               children: [
@@ -209,6 +219,7 @@ class KometSettingsScreen extends StatelessWidget {
 
   Future<void> _setGhostMode(bool value) async {
     await KometSettings.setGhostMode(value);
+    if (!value) await chats.restoreGhostReads();
     api.sendPing(interactive: !value);
   }
 }

@@ -23,30 +23,35 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
 }
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var channels: [FlutterMethodChannel] = []
   private var eventChannels: [FlutterEventChannel] = []
   private var streamHandlers: [KometStreamHandler] = []
   private var videoNote: KometVideoNote?
+  private let shareBridge = KometShareBridge()
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
     KometNotifications.shared.start()
-
-    if let controller = window?.rootViewController as? FlutterViewController {
-      let messenger = controller.binaryMessenger
-      registerAppIcon(messenger)
-      registerVideo(messenger)
-      registerVideoNote(messenger)
-      registerNotifications(messenger)
-      registerScreen(messenger)
-      registerClipboard(messenger)
-    }
-
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    let registry = engineBridge.pluginRegistry
+    registry.registrar(forPlugin: "KometShareBridge")?.addSceneDelegate(shareBridge)
+    GeneratedPluginRegistrant.register(with: registry)
+
+    let registrar = engineBridge.applicationRegistrar
+    let messenger = registrar.messenger()
+    registerAppIcon(messenger)
+    registerVideo(messenger)
+    registerVideoNote(messenger, textures: registrar.textures())
+    registerNotifications(messenger)
+    registerScreen(messenger)
+    registerShare(messenger)
+    registerClipboard(messenger)
   }
 
   private func method(_ name: String, _ messenger: FlutterBinaryMessenger,
@@ -54,6 +59,15 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
     let channel = FlutterMethodChannel(name: name, binaryMessenger: messenger)
     channel.setMethodCallHandler(handler)
     channels.append(channel)
+  }
+
+  private func registerShare(_ messenger: FlutterBinaryMessenger) {
+    method("ru.komet.app/share", messenger) { [weak self] call, result in
+      self?.shareBridge.handle(call, result: result)
+    }
+    events("ru.komet.app/share_events", messenger) { [weak self] sink in
+      self?.shareBridge.attach(sink)
+    }
   }
 
   private func events(_ name: String, _ messenger: FlutterBinaryMessenger,
@@ -106,9 +120,8 @@ final class KometStreamHandler: NSObject, FlutterStreamHandler {
     }
   }
 
-  private func registerVideoNote(_ messenger: FlutterBinaryMessenger) {
-    guard let textures = registrar(forPlugin: "KometVideoNote")?.textures() else { return }
-
+  private func registerVideoNote(_ messenger: FlutterBinaryMessenger,
+                                 textures: FlutterTextureRegistry) {
     method("ru.komet.app/video_note", messenger) { [weak self] call, result in
       guard let self = self else { return }
       switch call.method {

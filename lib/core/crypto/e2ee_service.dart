@@ -363,11 +363,12 @@ class E2eeService {
         myId: accountId,
         peerId: peerId,
       );
-      final messageId = await messages.sendMessage(
+      final messageId = (await messages.sendMessage(
         accountId,
         chatId,
         '$kE2eeOfferPrefix\n${offer.text}',
-      );
+        encryptionControl: true,
+      )).id;
       if (messageId.isEmpty) return false;
       final previous = info(accountId, chatId);
       await _persist(
@@ -410,11 +411,12 @@ class E2eeService {
         offerText: offerText,
         oldState: hadSession ? await _state(accountId, chatId) : null,
       );
-      final messageId = await messages.sendMessage(
+      final messageId = (await messages.sendMessage(
         accountId,
         chatId,
         '$kE2eeAnswerPrefix\n${answer.text}',
-      );
+        encryptionControl: true,
+      )).id;
       if (messageId.isEmpty) return false;
       final peek = KometCrypto.handshakePeek(offerText);
       await _persist(
@@ -685,8 +687,13 @@ class E2eeService {
       if (offerMessageId != null && messages != null) {
         unawaited(
           messages
-              .editMessage(chatId, offerMessageId, text: kE2eeOfferDonePrefix)
-              .catchError((_) => false),
+              .editMessage(
+                chatId,
+                offerMessageId,
+                text: kE2eeOfferDonePrefix,
+                encryptionControl: true,
+              )
+              .catchError((_) => null),
         );
       }
     } on KometCryptoException catch (e) {
@@ -983,7 +990,11 @@ class E2eeService {
     final items = <Uint8List>[];
     var offset = 4;
     final count = _readBe32(container, 0);
-    for (var index = 0; index < count && offset + 4 <= container.length; index++) {
+    for (
+      var index = 0;
+      index < count && offset + 4 <= container.length;
+      index++
+    ) {
       final length = _readBe32(container, offset);
       offset += 4;
       if (offset + length > container.length) return null;

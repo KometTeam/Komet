@@ -297,6 +297,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.13"
+  desktop_drop:
+    dependency: "direct main"
+    description:
+      name: desktop_drop
+      sha256: "47ded09c85909edfed644fd4cbb5051b040d0aed5c79e7e062ea4b3b7156dbe4"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.8.4"
   device_info_plus:
     dependency: "direct main"
     description:
@@ -490,26 +498,31 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_contacts
-      sha256: "388d32cd33f16640ee169570128c933b45f3259bddbfae7a100bb49e5ffea9ae"
+      sha256: da04f2541d03e70070370e3e2a0b11d3cc4ce7c987d39918a4dd4952e6d87ac2
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.9+2"
+    version: "2.6.0"
+  flutter_driver:
+    dependency: "direct dev"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
   flutter_inappwebview:
     dependency: "direct main"
     description:
       name: flutter_inappwebview
-      sha256: "80092d13d3e29b6227e25b67973c67c7210bd5e35c4b747ca908e31eb71a46d5"
+      sha256: "3952d116ee93bad2946401377e7ade87b5ef200e95ecb5ba1affa1b6329a6867"
       url: "https://pub.dev"
     source: hosted
-    version: "6.1.5"
+    version: "6.2.0-beta.3"
   flutter_inappwebview_android:
     dependency: transitive
     description:
       name: flutter_inappwebview_android
-      sha256: "62557c15a5c2db5d195cb3892aab74fcaec266d7b86d59a6f0027abd672cddba"
+      sha256: "8dfb76bd4e507112c3942c2272eeb01fab2e42be11374e5eb226f58698e7a04b"
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.3"
+    version: "1.2.0-beta.3"
   flutter_inappwebview_internal_annotations:
     dependency: transitive
     description:
@@ -522,42 +535,49 @@ packages:
     dependency: transitive
     description:
       name: flutter_inappwebview_ios
-      sha256: "5818cf9b26cf0cbb0f62ff50772217d41ea8d3d9cc00279c45f8aabaa1b4025d"
+      sha256: ae8a78829398771be863aa3c8804a9d40728e1815e66c9c966f86d2cc3ae4fd9
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.2"
+    version: "1.2.0-beta.3"
+  flutter_inappwebview_linux:
+    dependency: "direct overridden"
+    description:
+      path: "native/flutter_inappwebview_linux"
+      relative: true
+    source: path
+    version: "0.1.0-beta.1"
   flutter_inappwebview_macos:
     dependency: transitive
     description:
       name: flutter_inappwebview_macos
-      sha256: c1fbb86af1a3738e3541364d7d1866315ffb0468a1a77e34198c9be571287da1
+      sha256: "545148cb5c46475ce669ab21621e9f2ad66e05f8e80b2cf49d4018879ab52393"
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.2"
+    version: "1.2.0-beta.3"
   flutter_inappwebview_platform_interface:
     dependency: transitive
     description:
       name: flutter_inappwebview_platform_interface
-      sha256: cf5323e194096b6ede7a1ca808c3e0a078e4b33cc3f6338977d75b4024ba2500
+      sha256: e3522c76e6760d1c0a9ff690e30e1503f226783d3277fa4d26675911977e9766
       url: "https://pub.dev"
     source: hosted
-    version: "1.3.0+1"
+    version: "1.4.0-beta.3"
   flutter_inappwebview_web:
     dependency: transitive
     description:
       name: flutter_inappwebview_web
-      sha256: "55f89c83b0a0d3b7893306b3bb545ba4770a4df018204917148ebb42dc14a598"
+      sha256: e98b8875ccb6a3fd255873318db45c18ab135ed0ed22d20169abad9f5c810eb9
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.2"
+    version: "1.2.0-beta.3"
   flutter_inappwebview_windows:
     dependency: transitive
     description:
       name: flutter_inappwebview_windows
-      sha256: "8b4d3a46078a2cdc636c4a3d10d10f2a16882f6be607962dbfff8874d1642055"
+      sha256: "902edd6f6326952af822e21aa928f7426d723d45c94c15e6ce3c2d5640d28ad7"
       url: "https://pub.dev"
     source: hosted
-    version: "0.6.0"
+    version: "0.7.0-beta.3"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:
@@ -712,10 +732,11 @@ packages:
   flutter_webrtc:
     dependency: "direct main"
     description:
-      name: flutter_webrtc
-      sha256: "0f89dee7f4c35dab5611f351c3897a3bfe9f7057720cc7da209b52455af4316e"
-      url: "https://pub.dev"
-    source: hosted
+      path: "."
+      ref: cba2d1d0df3e9a6f6d6a27a2181570c085f53312
+      resolved-ref: cba2d1d0df3e9a6f6d6a27a2181570c085f53312
+      url: "https://github.com/KometTeam/flutter-webrtc.git"
+    source: git
     version: "1.5.2"
   freezed_annotation:
     dependency: transitive
@@ -725,6 +746,11 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.0"
+  fuchsia_remote_debug_protocol:
+    dependency: transitive
+    description: flutter
+    source: sdk
+    version: "0.0.0"
   geolocator:
     dependency: "direct main"
     description:
@@ -901,6 +927,11 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.2"
+  integration_test:
+    dependency: "direct dev"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
   intl:
     dependency: "direct main"
     description:
@@ -977,10 +1008,10 @@ packages:
     dependency: "direct main"
     description:
       name: kolibri
-      sha256: e59a569756652b5a68d1260b52d9b2ae6f4c0fc831244f9d8aefa15bde03b370
+      sha256: d33e509b6995dbf86f5b51dbb8f41ed479dd37a4d38ceb0918ed36765af75896
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.4"
+    version: "0.1.7"
   komet_crypto:
     dependency: "direct main"
     description:
@@ -1124,7 +1155,7 @@ packages:
     source: hosted
     version: "0.12.20"
   material_color_utilities:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: material_color_utilities
       sha256: "9c337007e82b1889149c82ed242ed1cb24a66044e30979c44912381e9be4c48b"
@@ -1467,6 +1498,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.5.0"
+  process:
+    dependency: transitive
+    description:
+      name: process
+      sha256: "4242ba3508d37e01808bdf71ad1d5bb93a8d671bf2e7450e6b1b353fb0808891"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.0.6"
   progress_indicator_m3e:
     dependency: transitive
     description:
@@ -1792,6 +1831,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
+  sync_http:
+    dependency: transitive
+    description:
+      name: sync_http
+      sha256: "7f0cd72eca000d2e026bcd6f990b81d0ca06022ef4e32fb257b30d3d1014a961"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.1"
   synchronized:
     dependency: transitive
     description:
@@ -2056,6 +2103,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.2"
+  webdriver:
+    dependency: transitive
+    description:
+      name: webdriver
+      sha256: "28b82ec894fed45dd71c23ba62d1af973ed97dd59a4f5790a4d38b0b13e5657e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.0"
   webrtc_interface:
     dependency: transitive
     description:

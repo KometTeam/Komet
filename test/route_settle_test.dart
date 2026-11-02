@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/core/utils/route_settle.dart';
+import 'package:komet/frontend/widgets/route_probe.dart';
 
 class _GatedPage extends StatefulWidget {
   const _GatedPage({required this.onSettled});
@@ -13,16 +14,11 @@ class _GatedPage extends StatefulWidget {
 
 class _GatedPageState extends State<_GatedPage> {
   late final RouteSettle _settle = RouteSettle(isMounted: () => mounted);
-  bool _queued = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _settle.bind(context);
-    if (!_queued) {
-      _queued = true;
-      _settle.run(widget.onSettled);
-    }
+  void initState() {
+    super.initState();
+    _settle.run(widget.onSettled);
   }
 
   @override
@@ -32,7 +28,8 @@ class _GatedPageState extends State<_GatedPage> {
   }
 
   @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
+  Widget build(BuildContext context) =>
+      RouteProbe(onRoute: _settle.bind, child: const SizedBox.shrink());
 }
 
 void main() {

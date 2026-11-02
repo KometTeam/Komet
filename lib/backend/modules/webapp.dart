@@ -51,6 +51,14 @@ abstract class EntryBannerApps {
   }
 }
 
+// #***! «Перевести деньги» из меню чата: мини аппа «Деньги» (VK Pay, СБП);
+// id приходит в конфиге, 0 там значит перевод выключен
+abstract class MoneyTransferApp {
+  static const String configKey = 'money-transfer-botid';
+  static const String syncKey = 'money_transfer_bot_id';
+  static const int knownBotId = 1134691;
+}
+
 // #***! сервер зовёт эту опцию по разному
 const Set<String> kMiniAppOptions = {'HAS_WEBAPP', 'HAS_WEB_APP', 'WEBAPP'};
 
@@ -221,6 +229,18 @@ class WebAppModule {
       );
     }
     return fetchLaunch(result.botId, startParam: result.startParam);
+  }
+
+  // #***! конфиг с ключом мог ещё не прийти (хэш совпал), тогда известный id;
+  // полный конфиг не перезапрашиваем, меню чата открывают постоянно
+  Future<int> moneyTransferBotId() async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null) return 0;
+    final raw = await AppDatabase.getSyncValue(
+      accountId,
+      MoneyTransferApp.syncKey,
+    );
+    return int.tryParse(raw ?? '') ?? MoneyTransferApp.knownBotId;
   }
 
   // #***! id мини аппы лежит в sync_state после login

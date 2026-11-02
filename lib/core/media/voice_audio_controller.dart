@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:async';
 import 'dart:io';
 
@@ -10,11 +11,41 @@ import '../utils/download_progress.dart';
 import '../utils/logger.dart';
 import '../utils/media_cache.dart';
 import 'opus_ogg_index.dart';
+import 'voice_playback_session.dart';
+import '../utils/media_cache_names.dart';
 
 // #***! почему не играет, не скачалось или плеер не открыл
 enum VoiceAudioFailure { none, download, playback }
 
 // #***! воспроизведение одного голосового
+class _PrefetchSlots {
+  _PrefetchSlots(this._limit);
+
+  final int _limit;
+  int _running = 0;
+  final Queue<Completer<void>> _waiting = Queue<Completer<void>>();
+
+  Future<void> acquire() {
+    if (_running < _limit) {
+      _running++;
+      return Future.value();
+    }
+    final waiter = Completer<void>();
+    _waiting.add(waiter);
+    return waiter.future;
+  }
+
+  void release() {
+    if (_waiting.isEmpty) {
+      _running--;
+      return;
+    }
+    _waiting.removeFirst().complete();
+  }
+}
+
+final _PrefetchSlots _prefetchSlots = _PrefetchSlots(2);
+
 class VoiceAudioController {
   VoiceAudioController({
     required this.cacheName,
@@ -26,6 +57,10 @@ class VoiceAudioController {
 
   final String cacheName;
   final Future<String?> Function() resolveUrl;
+
+  // #***! один ключ кэша у пузыря, сохранения и вкладки голосовых
+  static String cacheNameFor({int? audioId, required String messageId}) =>
+      voiceCacheName(audioId: audioId, messageId: messageId);
 
   // #***! у конца считаем что дослушали иначе последний тик не совпадёт
   static const double _endEpsilon = 0.05;
@@ -175,6 +210,14 @@ class VoiceAudioController {
     _disposePlayer();
     if (resume) await _startAt(position.value);
   }
+  Future<void> prefetch() async {
+    await _prefetchSlots.acquire();
+    try {
+      await _ensureLoaded();
+    } finally {
+      _prefetchSlots.release();
+    }
+  }
 
   // #***! качаем один раз, повторные нажатия ждут ту же загрузку
   Future<bool> _ensureLoaded() async {
@@ -273,6 +316,9 @@ class VoiceAudioController {
 
     _sliceOffset = offset;
     position.value = offset;
+
+    await VoicePlaybackSession.prepare();
+    if (_disposed || generation != _startGeneration) return;
 
     try {
       final player = OggOpusPlayer(path);

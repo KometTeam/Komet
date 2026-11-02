@@ -12,11 +12,23 @@ class KometSettings {
   static const _kShowTypingTime = 'komet_show_typing_time';
   static const _kGhostMode = 'komet_ghost_mode';
   static const _kAntiRead = 'komet_anti_read';
+  static const _kAntiStoryView = 'komet_anti_story_view';
   static const _kSelfOnlineCheck = 'komet_self_online_check';
   static const _kHideAllChatsFolder = 'komet_hide_all_chats_folder';
   static const _kShowHiddenChats = 'komet_show_hidden_chats';
   static const _kArchiveOnPull = 'komet_archive_on_pull';
+  static const _kAutoDownloadPhoto = 'komet_auto_download_photo';
+  static const _kAutoDownloadVideo = 'komet_auto_download_video';
+  static const _kAutoDownloadVoice = 'komet_auto_download_voice';
+  static const _kAutoDownloadVideoNote = 'komet_auto_download_video_note';
+  static const _kAutoplayVideo = 'komet_autoplay_video';
+  static const _kAutoplayGif = 'komet_autoplay_gif';
+  static const _kAutoplayAnimoji = 'komet_autoplay_animoji';
+  static const _kAutoplayVideoNote = 'komet_autoplay_video_note';
   static const _kRecordDebugLogs = 'komet_record_debug_logs';
+  static const _kHideChannelRecommendations =
+      'komet_hide_channel_recommendations';
+  static const _kRecommendationsHiddenIn = 'komet_recommendations_hidden_in';
 
   // #***! каждая настройка это ValueNotifier, юишка подписана напрямую
   static final ValueNotifier<bool> viewDeleted = ValueNotifier(false);
@@ -26,11 +38,26 @@ class KometSettings {
   static final ValueNotifier<bool> showTypingTime = ValueNotifier(false);
   static final ValueNotifier<bool> ghostMode = ValueNotifier(false);
   static final ValueNotifier<bool> antiRead = ValueNotifier(false);
+  static final ValueNotifier<bool> antiStoryView = ValueNotifier(false);
   static final ValueNotifier<bool> selfOnlineCheck = ValueNotifier(true);
   static final ValueNotifier<bool> hideAllChatsFolder = ValueNotifier(false);
   static final ValueNotifier<bool> showHiddenChats = ValueNotifier(false);
   static final ValueNotifier<bool> archiveOnPull = ValueNotifier(false);
+  static final ValueNotifier<bool> autoDownloadPhoto = ValueNotifier(true);
+  static final ValueNotifier<bool> autoDownloadVideo = ValueNotifier(true);
+  static final ValueNotifier<bool> autoDownloadVoice = ValueNotifier(true);
+  static final ValueNotifier<bool> autoDownloadVideoNote = ValueNotifier(true);
+  static final ValueNotifier<bool> autoplayVideo = ValueNotifier(true);
+  static final ValueNotifier<bool> autoplayGif = ValueNotifier(true);
+  static final ValueNotifier<bool> autoplayAnimoji = ValueNotifier(true);
+  static final ValueNotifier<bool> autoplayVideoNote = ValueNotifier(true);
   static final ValueNotifier<bool> recordDebugLogs = ValueNotifier(true);
+  static final ValueNotifier<bool> hideChannelRecommendations = ValueNotifier(
+    false,
+  );
+  static final ValueNotifier<Set<int>> recommendationsHiddenIn = ValueNotifier(
+    const {},
+  );
 
   // #***! читаем всё разом на старте
   static Future<void> load() async {
@@ -45,13 +72,34 @@ class KometSettings {
     fullTimestamp.value = prefs.getBool(_kFullTimestamp) ?? false;
     showForward.value = prefs.getBool(_kShowForward) ?? false;
     showTypingTime.value = prefs.getBool(_kShowTypingTime) ?? false;
-    ghostMode.value = prefs.getBool(_kGhostMode) ?? false;
-    antiRead.value = prefs.getBool(_kAntiRead) ?? false;
+    ghostMode.value =
+        BuildProfile.stealthPresence && (prefs.getBool(_kGhostMode) ?? false);
+    antiRead.value =
+        BuildProfile.stealthPresence && (prefs.getBool(_kAntiRead) ?? false);
+    antiStoryView.value =
+        BuildProfile.stealthPresence &&
+        (prefs.getBool(_kAntiStoryView) ?? false);
     selfOnlineCheck.value = prefs.getBool(_kSelfOnlineCheck) ?? true;
     hideAllChatsFolder.value = prefs.getBool(_kHideAllChatsFolder) ?? false;
     showHiddenChats.value = prefs.getBool(_kShowHiddenChats) ?? false;
     archiveOnPull.value = prefs.getBool(_kArchiveOnPull) ?? false;
+    autoDownloadPhoto.value = prefs.getBool(_kAutoDownloadPhoto) ?? true;
+    autoDownloadVideo.value = prefs.getBool(_kAutoDownloadVideo) ?? true;
+    autoDownloadVoice.value = prefs.getBool(_kAutoDownloadVoice) ?? true;
+    autoDownloadVideoNote.value =
+        prefs.getBool(_kAutoDownloadVideoNote) ?? true;
+    autoplayVideo.value = prefs.getBool(_kAutoplayVideo) ?? true;
+    autoplayGif.value = prefs.getBool(_kAutoplayGif) ?? true;
+    autoplayAnimoji.value = prefs.getBool(_kAutoplayAnimoji) ?? true;
+    autoplayVideoNote.value = prefs.getBool(_kAutoplayVideoNote) ?? true;
     recordDebugLogs.value = prefs.getBool(_kRecordDebugLogs) ?? true;
+    hideChannelRecommendations.value =
+        prefs.getBool(_kHideChannelRecommendations) ?? false;
+    recommendationsHiddenIn.value = {
+      for (final raw
+          in prefs.getStringList(_kRecommendationsHiddenIn) ?? const [])
+        ?int.tryParse(raw),
+    };
   }
 
   // #***! дальше по сеттеру на настройку, память потом диск
@@ -98,6 +146,12 @@ class KometSettings {
     await prefs.setBool(_kAntiRead, value);
   }
 
+  static Future<void> setAntiStoryView(bool value) async {
+    antiStoryView.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kAntiStoryView, value);
+  }
+
   static Future<void> setSelfOnlineCheck(bool value) async {
     selfOnlineCheck.value = value;
     final prefs = await SharedPreferences.getInstance();
@@ -108,6 +162,40 @@ class KometSettings {
     hideAllChatsFolder.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kHideAllChatsFolder, value);
+  }
+
+  static Future<void> setAutoDownloadPhoto(bool value) =>
+      _setFlag(autoDownloadPhoto, _kAutoDownloadPhoto, value);
+
+  static Future<void> setAutoDownloadVideo(bool value) =>
+      _setFlag(autoDownloadVideo, _kAutoDownloadVideo, value);
+
+  static Future<void> setAutoDownloadVoice(bool value) =>
+      _setFlag(autoDownloadVoice, _kAutoDownloadVoice, value);
+
+  static Future<void> setAutoDownloadVideoNote(bool value) =>
+      _setFlag(autoDownloadVideoNote, _kAutoDownloadVideoNote, value);
+
+  static Future<void> setAutoplayVideo(bool value) =>
+      _setFlag(autoplayVideo, _kAutoplayVideo, value);
+
+  static Future<void> setAutoplayGif(bool value) =>
+      _setFlag(autoplayGif, _kAutoplayGif, value);
+
+  static Future<void> setAutoplayAnimoji(bool value) =>
+      _setFlag(autoplayAnimoji, _kAutoplayAnimoji, value);
+
+  static Future<void> setAutoplayVideoNote(bool value) =>
+      _setFlag(autoplayVideoNote, _kAutoplayVideoNote, value);
+
+  static Future<void> _setFlag(
+    ValueNotifier<bool> notifier,
+    String key,
+    bool value,
+  ) async {
+    notifier.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
   }
 
   static Future<void> setArchiveOnPull(bool value) async {
@@ -126,5 +214,19 @@ class KometSettings {
     recordDebugLogs.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kRecordDebugLogs, value);
+  }
+
+  static Future<void> setHideChannelRecommendations(bool value) =>
+      _setFlag(hideChannelRecommendations, _kHideChannelRecommendations, value);
+
+  static Future<void> hideRecommendationsIn(int chatId) async {
+    final hidden = recommendationsHiddenIn.value;
+    if (hidden.contains(chatId)) return;
+    final next = {...hidden, chatId};
+    recommendationsHiddenIn.value = next;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_kRecommendationsHiddenIn, [
+      for (final id in next) '$id',
+    ]);
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show ImageProvider, MemoryImage;
@@ -28,15 +29,46 @@ Future<String?> sharedThumbnailDataUri(SharedFile source) async {
 
 // #***! декодируем в изоляте иначе список подвисает
 Future<String?> _photoThumb(File file) async {
-  Uint8List bytes;
   try {
-    bytes = await file.readAsBytes();
+    final png = await _platformPhotoThumb(file);
+    if (png != null) return _asDataUri(png, mime: 'image/png');
+  } catch (_) {}
+  try {
+    final bytes = await file.readAsBytes();
+    final jpeg = await compute(_encodeThumbIsolate, bytes);
+    return _asDataUri(jpeg);
   } catch (e) {
-    logger.w('Поделиться: не прочитать ${file.path}: $e');
+    logger.w('Поделиться: не создать превью ${file.path}: $e');
     return null;
   }
-  final jpeg = await compute(_encodeThumbIsolate, bytes);
-  return _asDataUri(jpeg);
+}
+
+Future<Uint8List?> _platformPhotoThumb(File file) async {
+  ui.ImmutableBuffer? buffer;
+  ui.ImageDescriptor? descriptor;
+  ui.Codec? codec;
+  ui.Image? image;
+  try {
+    buffer = await ui.ImmutableBuffer.fromFilePath(file.path);
+    descriptor = await ui.ImageDescriptor.encoded(buffer);
+    final landscape = descriptor.width >= descriptor.height;
+    codec = await descriptor.instantiateCodec(
+      targetWidth: landscape && descriptor.width > _thumbMaxDimension
+          ? _thumbMaxDimension
+          : null,
+      targetHeight: !landscape && descriptor.height > _thumbMaxDimension
+          ? _thumbMaxDimension
+          : null,
+    );
+    image = (await codec.getNextFrame()).image;
+    final png = await image.toByteData(format: ui.ImageByteFormat.png);
+    return png?.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes);
+  } finally {
+    image?.dispose();
+    codec?.dispose();
+    descriptor?.dispose();
+    buffer?.dispose();
+  }
 }
 
 // #***! плагина кадров может не быть, тогда просто без превью
@@ -55,9 +87,9 @@ Future<String?> _videoThumb(File file) async {
   }
 }
 
-String? _asDataUri(Uint8List? bytes) {
+String? _asDataUri(Uint8List? bytes, {String mime = 'image/jpeg'}) {
   if (bytes == null || bytes.isEmpty) return null;
-  return 'data:image/jpeg;base64,${base64Encode(bytes)}';
+  return 'data:$mime;base64,${base64Encode(bytes)}';
 }
 
 // #***! уважаем EXIF поворот иначе миниатюра на боку

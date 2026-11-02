@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
@@ -15,15 +16,17 @@ Future<Color?> computeWallpaperSeed(ChatWallpaper? wallpaper) async {
     return _mostVivid(colors);
   }
   if (!wallpaper.isImage) {
-    final theme = chatWallpaperThemeById(wallpaper.themeId);
-    if (theme == null) return null;
-    return _mostVivid(theme.colors);
+    return chatWallpaperThemeById(wallpaper.themeId)?.accent;
   }
   final path = wallpaper.imagePath;
   if (path == null) return null;
+  final argb = await compute(_averageImageColor, path);
+  return argb == null ? null : Color(argb);
+}
+
+int? _averageImageColor(String path) {
   try {
-    final bytes = await File(path).readAsBytes();
-    final decoded = img.decodeImage(bytes);
+    final decoded = img.decodeImage(File(path).readAsBytesSync());
     if (decoded == null) return null;
     // #***! усредняем до 8x8, дёшево и даёт нужный средний цвет
     final small = img.copyResize(decoded, width: 8, height: 8);
@@ -35,7 +38,7 @@ Future<Color?> computeWallpaperSeed(ChatWallpaper? wallpaper) async {
       n++;
     }
     if (n == 0) return null;
-    return Color.fromARGB(255, r ~/ n, g ~/ n, b ~/ n);
+    return Color.fromARGB(255, r ~/ n, g ~/ n, b ~/ n).toARGB32();
   } catch (_) {
     return null;
   }

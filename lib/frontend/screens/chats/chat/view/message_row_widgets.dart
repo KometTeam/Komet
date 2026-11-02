@@ -16,7 +16,6 @@ import 'package:komet/core/crypto/message_decryption_cache.dart';
 import 'package:komet/core/utils/haptics.dart';
 import 'package:komet/core/utils/text_format.dart';
 import 'package:komet/frontend/widgets/animated_text_swap.dart';
-import 'package:komet/frontend/widgets/directional_drag_recognizer.dart';
 import 'package:komet/frontend/widgets/liquid_glass.dart';
 import 'package:komet/frontend/widgets/message_actions_overlay.dart'
     show
@@ -25,126 +24,22 @@ import 'package:komet/frontend/widgets/message_actions_overlay.dart'
         MessageReader,
         ReactionEmoji,
         showMessageActions;
+import 'package:komet/frontend/widgets/reaction_picker.dart'
+    show availableReactions;
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
+import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/frontend/widgets/format_selection_toolbar.dart';
 import 'package:komet/frontend/widgets/selection_check_circle.dart';
+import 'package:komet/frontend/widgets/small_spinner.dart';
+import 'package:komet/frontend/widgets/sticker_pin.dart';
 import 'package:komet/l10n/app_localizations.dart';
-import 'package:komet/main.dart' show animojiModule;
-import 'package:komet/models/animoji.dart' show Animoji;
+import 'package:komet/main.dart'
+    show accountModule, animojiModule, stickersModule;
+import 'package:komet/models/attachment.dart' show PhotoAttachment;
 import 'package:komet/models/chat_reaction_settings.dart';
 
-class SwipeToReply extends StatefulWidget {
-  final Widget child;
-  final bool isMe;
-  final VoidCallback onReply;
-
-  const SwipeToReply({
-    super.key,
-    required this.child,
-    required this.isMe,
-    required this.onReply,
-  });
-
-  @override
-  State<SwipeToReply> createState() => _SwipeToReplyState();
-}
-
-class _SwipeToReplyState extends State<SwipeToReply>
-    with SingleTickerProviderStateMixin {
-  static const double _maxDrag = 72.0;
-  static const double _triggerThreshold = 56.0;
-
-  late final AnimationController _springBack;
-  double _dragX = 0.0;
-  double _springFrom = 0.0;
-  bool _triggered = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _springBack =
-        AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 200),
-        )..addListener(() {
-          final t = Curves.easeOut.transform(_springBack.value);
-          setState(() => _dragX = _springFrom * (1 - t));
-        });
-  }
-
-  @override
-  void dispose() {
-    _springBack.dispose();
-    super.dispose();
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (_springBack.isAnimating) _springBack.stop();
-    var next = _dragX + d.delta.dx;
-    if (next > 0) next = 0;
-    if (next < -_maxDrag) next = -_maxDrag;
-    final wasTriggered = _triggered;
-    _triggered = next <= -_triggerThreshold;
-    if (_triggered && !wasTriggered) Haptics.medium();
-    setState(() => _dragX = next);
-  }
-
-  void _onDragEnd(DragEndDetails d) {
-    if (_triggered) widget.onReply();
-    _settle();
-  }
-
-  void _onDragCancel() => _settle();
-
-  void _settle() {
-    _triggered = false;
-    _springFrom = _dragX;
-    _springBack.forward(from: 0);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final progress = (-_dragX / _triggerThreshold).clamp(0.0, 1.0);
-    return RawGestureDetector(
-      behavior: HitTestBehavior.opaque,
-      gestures: <Type, GestureRecognizerFactory>{
-        LeftwardDragRecognizer:
-            GestureRecognizerFactoryWithHandlers<LeftwardDragRecognizer>(
-              () => LeftwardDragRecognizer(debugOwner: this),
-              (instance) {
-                instance
-                  ..onUpdate = _onDragUpdate
-                  ..onEnd = _onDragEnd
-                  ..onCancel = _onDragCancel;
-              },
-            ),
-      },
-      child: Stack(
-        alignment: Alignment.centerRight,
-        children: [
-          Positioned(
-            right: 16,
-            child: Opacity(
-              opacity: progress,
-              child: Transform.scale(
-                scale: 0.6 + 0.4 * progress,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Symbols.reply, size: 20, color: cs.primary),
-                ),
-              ),
-            ),
-          ),
-          Transform.translate(offset: Offset(_dragX, 0), child: widget.child),
-        ],
-      ),
-    );
-  }
-}
+import '../message_media_draft.dart';
+import 'edit_media_strip.dart';
 
 class PinnedMessageBanner extends StatelessWidget {
   final String? text;
@@ -176,11 +71,7 @@ class PinnedMessageBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final content = Material(
-      color: frosted
-          ? AppFrost.glassTint(cs)
-          : floating
-          ? cs.surfaceContainerHigh.withValues(alpha: 0.92)
-          : cs.surfaceContainerHigh,
+      color: frosted ? AppFrost.glassTint(cs) : cs.surfaceContainerHigh,
       borderRadius: floating ? _radius : null,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -338,7 +229,7 @@ class _PinnedMessageTextState extends State<PinnedMessageText> {
 class SelectableMessageRow extends StatefulWidget {
   final Widget child;
   final CachedMessage message;
-  final bool isMe;
+  final bool outgoing;
   final ValueListenable<Set<String>> selectedIds;
   final Animation<double> selectionAnim;
   final bool Function() isSelectionActive;
@@ -355,12 +246,15 @@ class SelectableMessageRow extends StatefulWidget {
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
   final VoidCallback? onCopyLink;
+  final VoidCallback? onSave;
+  final VoidCallback? onSaveAs;
   final bool Function() isPinned;
   final Future<List<MessageReader>> Function()? loadReadBy;
   final void Function(int userId)? onReaderTap;
   final Future<List<({int id, String title})>> Function()? loadReportReasons;
   final Future<bool> Function(int reasonId)? onReport;
   final void Function(String emoji)? onReact;
+  final void Function(String emoji)? onDoubleTapReact;
   final ValueListenable<Map<String, dynamic>?>? reactions;
   final ValueListenable<ChatReactionSettings?>? reactionSettings;
   final ValueListenable<double>? composerHeight;
@@ -369,7 +263,7 @@ class SelectableMessageRow extends StatefulWidget {
     super.key,
     required this.child,
     required this.message,
-    required this.isMe,
+    required this.outgoing,
     required this.selectedIds,
     required this.selectionAnim,
     required this.isSelectionActive,
@@ -386,12 +280,15 @@ class SelectableMessageRow extends StatefulWidget {
     this.onMarkUnread,
     this.onPin,
     this.onCopyLink,
+    this.onSave,
+    this.onSaveAs,
     required this.isPinned,
     this.loadReadBy,
     this.onReaderTap,
     this.loadReportReasons,
     this.onReport,
     this.onReact,
+    this.onDoubleTapReact,
     this.reactions,
     this.reactionSettings,
     this.composerHeight,
@@ -409,6 +306,15 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
   Timer? _openTimer;
 
   bool _isPinnedNow() => widget.isPinned();
+
+  int? get _stickerId =>
+      int.tryParse(widget.message.stickerAttachment?.stickerId ?? '');
+
+  VoidCallback? _pinStickerAction(int? stickerId) =>
+      stickerId == null ? null : () => toggleStickerPin(context, stickerId);
+
+  bool _isStickerPinned(int? stickerId) =>
+      stickerId != null && stickersModule.isFavoriteSticker(stickerId);
 
   @override
   void dispose() {
@@ -438,12 +344,13 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
 
     final controller = MessageActionsController();
     final offers = _reactionFilter();
+    final stickerId = _stickerId;
     showMessageActions(
       context: ctx,
       snapshot: snapshot,
       originRect: rect,
       tapPoint: _lastTapDown ?? rect.center,
-      isMe: widget.isMe,
+      outgoing: widget.outgoing,
       bottomReservedSpace: widget.composerHeight?.value ?? 0,
       messageText: widget.message.text,
       copyText: MessageDecryptionCache.instance.readableText(widget.message),
@@ -465,7 +372,11 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
       onCopyLink: widget.onCopyLink,
+      onSave: widget.onSave,
+      onSaveAs: widget.onSaveAs,
       isPinned: _isPinnedNow(),
+      onPinSticker: _pinStickerAction(stickerId),
+      isStickerPinned: _isStickerPinned(stickerId),
       onReact: _reactionsOpen || _selectedReaction != null
           ? widget.onReact
           : null,
@@ -473,7 +384,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       quickReactions: _offeredQuickReactions(offers),
       loadReactionEmojis: () async {
         await animojiModule.ensureLoaded();
-        return _animojiReactionEmojis()
+        return availableReactions()
             .where((reaction) => offers(reaction.emoji))
             .toList();
       },
@@ -510,7 +421,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
     final offered = quick.where((reaction) => offers(reaction.emoji)).toList();
     if (offered.length == quick.length || !_reactionsOpen) return offered;
     final seen = offered.map((reaction) => reaction.emoji).toSet();
-    for (final reaction in _animojiReactionEmojis()) {
+    for (final reaction in availableReactions()) {
       if (offered.length >= quick.length) break;
       if (offers(reaction.emoji) && seen.add(reaction.emoji)) {
         offered.add(reaction);
@@ -526,24 +437,8 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
           .map((e) => ReactionEmoji(emoji: e))
           .toList();
     }
-    return quick.map(_toReactionEmoji).toList();
+    return quick.map(ReactionEmoji.fromAnimoji).toList();
   }
-
-  List<ReactionEmoji> _animojiReactionEmojis() {
-    final list = animojiModule.animojis;
-    if (list.isEmpty) {
-      return AnimojiModule.fallbackReactions
-          .map((e) => ReactionEmoji(emoji: e))
-          .toList();
-    }
-    return list.map(_toReactionEmoji).toList();
-  }
-
-  ReactionEmoji _toReactionEmoji(Animoji a) => ReactionEmoji(
-    emoji: a.emoji,
-    animationUrl: a.lottieUrl,
-    staticUrl: a.iconUrl,
-  );
 
   void _onSecondaryTapDown(TapDownDetails details) {
     final ctx = _boundaryKey.currentContext;
@@ -555,11 +450,12 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
     final rect = origin & renderObject.size;
 
     final controller = MessageActionsController();
+    final stickerId = _stickerId;
     showMessageActions(
       context: ctx,
       originRect: rect,
       tapPoint: details.globalPosition,
-      isMe: widget.isMe,
+      outgoing: widget.outgoing,
       bottomReservedSpace: widget.composerHeight?.value ?? 0,
       messageText: widget.message.text,
       copyText: MessageDecryptionCache.instance.readableText(widget.message),
@@ -581,7 +477,11 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onMarkUnread: widget.onMarkUnread,
       onPin: widget.onPin,
       onCopyLink: widget.onCopyLink,
+      onSave: widget.onSave,
+      onSaveAs: widget.onSaveAs,
       isPinned: _isPinnedNow(),
+      onPinSticker: _pinStickerAction(stickerId),
+      isStickerPinned: _isStickerPinned(stickerId),
       onDispose: controller.dispose,
     );
   }
@@ -591,12 +491,16 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       widget.onToggleSelection();
       return;
     }
-    final react = _reactionFilter()('❤️') ? widget.onReact : null;
-    if (react != null && (_openTimer?.isActive ?? false)) {
+    final emoji = accountModule.doubleTapReaction.value;
+    final react = widget.onDoubleTapReact;
+    if (emoji != null &&
+        react != null &&
+        (_openTimer?.isActive ?? false) &&
+        _reactionFilter()(emoji)) {
       _openTimer?.cancel();
       _openTimer = null;
       Haptics.tap();
-      react('❤️');
+      react(emoji);
       return;
     }
     _openTimer?.cancel();
@@ -792,78 +696,22 @@ class _DeletingMessageAnimationState extends State<DeletingMessageAnimation>
   }
 }
 
-class SentMessageAnimation extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onComplete;
-
-  const SentMessageAnimation({
-    super.key,
-    required this.child,
-    required this.onComplete,
-  });
-
-  @override
-  State<SentMessageAnimation> createState() => _SentMessageAnimationState();
-}
-
-class _SentMessageAnimationState extends State<SentMessageAnimation>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _opacity;
-  late final Animation<double> _slide;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-    );
-    _opacity = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-    _slide = Tween<double>(
-      begin: 16,
-      end: 0,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    _ctrl.forward().whenComplete(widget.onComplete);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, child) => Opacity(
-        opacity: _opacity.value,
-        child: Transform.translate(
-          offset: Offset(0, _slide.value),
-          child: child,
-        ),
-      ),
-      child: widget.child,
-    );
-  }
-}
+typedef EditedMessage = ({
+  String text,
+  List<Map<String, dynamic>> elements,
+  List<Map<String, dynamic>>? attachments,
+});
 
 class EditMessageSheet extends StatefulWidget {
   final String text;
   final Iterable<FormatRange> formatRanges;
-  final Widget Function(
-    RichMessageController controller,
-    BuildContext context,
-    EditableTextState editableState,
-  )
-  contextMenuBuilder;
+  final List<PhotoAttachment>? photos;
 
   const EditMessageSheet({
     super.key,
     required this.text,
     required this.formatRanges,
-    required this.contextMenuBuilder,
+    this.photos,
   });
 
   @override
@@ -872,24 +720,63 @@ class EditMessageSheet extends StatefulWidget {
 
 class _EditMessageSheetState extends State<EditMessageSheet> {
   late final RichMessageController _controller;
+  late final MessageMediaDraft? _media;
+  late final Listenable _saveInputs;
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
     _controller = RichMessageController(text: widget.text)
       ..setFormatRanges(widget.formatRanges);
+    final photos = widget.photos;
+    _media = photos == null ? null : MessageMediaDraft(photos);
+    _saveInputs = Listenable.merge([_controller, ?_media]);
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _media?.dispose();
     super.dispose();
+  }
+
+  bool get _canSave {
+    if (_saving) return false;
+    final media = _media;
+    if (media == null || !media.isEmpty) return true;
+    return _controller.text.trim().isNotEmpty;
+  }
+
+  Future<void> _save() async {
+    final media = _media;
+    List<Map<String, dynamic>>? attachments;
+    if (media != null && media.changed) {
+      setState(() => _saving = true);
+      attachments = await media.settle();
+      if (!mounted) return;
+      setState(() => _saving = false);
+      if (attachments == null) {
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.editMediaUploadFailed,
+        );
+        return;
+      }
+    }
+    final content = _controller.buildContent();
+    Navigator.of(context).pop<EditedMessage>((
+      text: content.text,
+      elements: content.elements,
+      attachments: attachments,
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
+    final media = _media;
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -911,6 +798,10 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
             ),
           ),
           const SizedBox(height: 16),
+          if (media != null) ...[
+            EditMediaStrip(draft: media, enabled: !_saving),
+            const SizedBox(height: 12),
+          ],
           TextField(
             controller: _controller,
             autofocus: true,
@@ -918,10 +809,14 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
             maxLines: 6,
             textCapitalization: TextCapitalization.sentences,
             style: TextStyle(color: cs.onSurface),
-            contextMenuBuilder: (ctx, state) =>
-                widget.contextMenuBuilder(_controller, ctx, state),
+            contextMenuBuilder: (_, state) => FormatSelectionToolbar(
+              controller: _controller,
+              editableState: state,
+            ),
             decoration: InputDecoration(
-              hintText: l10n.scheduledMessageTextHint,
+              hintText: media == null
+                  ? l10n.scheduledMessageTextHint
+                  : l10n.attachSheetAddCaptionHint,
               filled: true,
               fillColor: cs.surfaceContainerHighest,
               border: OutlineInputBorder(
@@ -931,10 +826,14 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
             ),
           ),
           const SizedBox(height: 20),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(context).pop(_controller.buildContent()),
-            child: Text(l10n.editProfileSave),
+          ListenableBuilder(
+            listenable: _saveInputs,
+            builder: (context, _) => FilledButton(
+              onPressed: _canSave ? _save : null,
+              child: _saving
+                  ? SmallSpinner(size: 20, color: cs.onSurfaceVariant)
+                  : Text(l10n.editProfileSave),
+            ),
           ),
         ],
       ),

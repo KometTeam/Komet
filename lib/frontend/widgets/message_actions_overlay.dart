@@ -13,18 +13,13 @@ import '../../core/utils/emoji_keyword_index.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../l10n/app_localizations.dart';
+import 'close_on_back.dart';
 import 'custom_notification.dart';
 import 'komet_avatar.dart';
-import 'lottie_image.dart';
+import 'reaction_picker.dart';
 import 'small_spinner.dart';
 
-class ReactionEmoji {
-  final String emoji;
-  final String? animationUrl;
-  final String? staticUrl;
-
-  const ReactionEmoji({required this.emoji, this.animationUrl, this.staticUrl});
-}
+export 'reaction_picker.dart' show ReactionEmoji;
 
 class MessageReader {
   final int id;
@@ -100,7 +95,7 @@ void showMessageActions({
   ui.Image? snapshot,
   required Rect originRect,
   required Offset tapPoint,
-  required bool isMe,
+  required bool outgoing,
   double bottomReservedSpace = 0,
   required String? messageText,
   required String? copyText,
@@ -122,7 +117,11 @@ void showMessageActions({
   VoidCallback? onMarkUnread,
   VoidCallback? onPin,
   VoidCallback? onCopyLink,
+  VoidCallback? onSave,
+  VoidCallback? onSaveAs,
   bool isPinned = false,
+  VoidCallback? onPinSticker,
+  bool isStickerPinned = false,
   void Function(String emoji)? onReact,
   String? selectedReaction,
   List<ReactionEmoji> quickReactions = const [
@@ -140,7 +139,7 @@ void showMessageActions({
   final overlay = Overlay.of(context, rootOverlay: true);
   final route = ModalRoute.of(context);
   final layerKey = GlobalKey<_MessageActionsLayerState>();
-  final backEntry = _CloseOnBack(() => layerKey.currentState?._close());
+  final backEntry = CloseOnBack(() => layerKey.currentState?._close());
   late OverlayEntry entry;
   entry = OverlayEntry(
     builder: (ctx) => _MessageActionsLayer(
@@ -148,7 +147,7 @@ void showMessageActions({
       snapshot: snapshot,
       originRect: originRect,
       tapPoint: tapPoint,
-      isMe: isMe,
+      outgoing: outgoing,
       bottomReservedSpace: bottomReservedSpace,
       messageText: messageText,
       copyText: copyText,
@@ -170,7 +169,11 @@ void showMessageActions({
       onMarkUnread: onMarkUnread,
       onPin: onPin,
       onCopyLink: onCopyLink,
+      onSave: onSave,
+      onSaveAs: onSaveAs,
       isPinned: isPinned,
+      onPinSticker: onPinSticker,
+      isStickerPinned: isStickerPinned,
       onReact: onReact,
       selectedReaction: selectedReaction,
       quickReactions: quickReactions,
@@ -187,25 +190,11 @@ void showMessageActions({
   route?.registerPopEntry(backEntry);
 }
 
-class _CloseOnBack extends PopEntry<Object?> {
-  _CloseOnBack(this.onBack);
-
-  final VoidCallback onBack;
-
-  @override
-  final ValueNotifier<bool> canPopNotifier = ValueNotifier<bool>(false);
-
-  @override
-  void onPopInvokedWithResult(bool didPop, Object? result) {
-    if (!didPop) onBack();
-  }
-}
-
 class _MessageActionsLayer extends StatefulWidget {
   final ui.Image? snapshot;
   final Rect originRect;
   final Offset tapPoint;
-  final bool isMe;
+  final bool outgoing;
   // #***! высота панели композера, которая не входит в MediaQuery.viewInsets
   // (она видна и без клавиатуры) — без этого меню/реакции могли вылезать
   // за неё или за нижний край экрана
@@ -231,7 +220,11 @@ class _MessageActionsLayer extends StatefulWidget {
   final VoidCallback? onMarkUnread;
   final VoidCallback? onPin;
   final VoidCallback? onCopyLink;
+  final VoidCallback? onSave;
+  final VoidCallback? onSaveAs;
   final bool isPinned;
+  final VoidCallback? onPinSticker;
+  final bool isStickerPinned;
   final void Function(String emoji)? onReact;
   final String? selectedReaction;
   final List<ReactionEmoji> quickReactions;
@@ -242,7 +235,7 @@ class _MessageActionsLayer extends StatefulWidget {
     required this.snapshot,
     required this.originRect,
     required this.tapPoint,
-    required this.isMe,
+    required this.outgoing,
     this.bottomReservedSpace = 0,
     required this.messageText,
     required this.copyText,
@@ -265,7 +258,11 @@ class _MessageActionsLayer extends StatefulWidget {
     this.onMarkUnread,
     this.onPin,
     this.onCopyLink,
+    this.onSave,
+    this.onSaveAs,
     this.isPinned = false,
+    this.onPinSticker,
+    this.isStickerPinned = false,
     this.onReact,
     this.selectedReaction,
     this.quickReactions = const [],
@@ -417,7 +414,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       final spaceLeft = (rect.left - 16) - _hMargin;
       final rightFits = spaceRight >= reach;
       final leftFits = spaceLeft >= reach;
-      if (widget.isMe) {
+      if (widget.outgoing) {
         side = (leftFits || !rightFits) ? _RadialSide.left : _RadialSide.right;
       } else {
         side = (rightFits || !leftFits) ? _RadialSide.right : _RadialSide.left;
@@ -521,7 +518,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
           ? widget.originRect.bottom + 10
           : widget.originRect.top - 10 - menuHeight;
       menuY = rawY.clamp(8.0, maxMenuY).toDouble();
-      final rawX = widget.isMe
+      final rawX = widget.outgoing
           ? widget.originRect.right - menuWidth
           : widget.originRect.left;
       menuX = rawX.clamp(8.0, screenSize.width - menuWidth - 8.0).toDouble();
@@ -559,13 +556,25 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       if (canCopy) _Action(Symbols.content_copy, l10n.msgActionsCopy, _copy),
       if (widget.onCopyLink != null)
         _Action(Symbols.link, l10n.msgActionsCopyLink, _copyLink),
-      if (widget.isMe && widget.onEdit != null)
+      if (widget.onSave != null)
+        _Action(Symbols.download, l10n.msgActionsSave, _save),
+      if (widget.onSaveAs != null)
+        _Action(Symbols.save_as, l10n.photoViewerSaveAs, _saveAs),
+      if (widget.onEdit != null)
         _Action(Symbols.edit, l10n.msgActionsEdit, _edit),
       if (widget.onPin != null)
         _Action(
           widget.isPinned ? Symbols.keep_off : Symbols.push_pin,
           widget.isPinned ? l10n.msgActionsUnpin : l10n.msgActionsPin,
           _pin,
+        ),
+      if (widget.onPinSticker != null)
+        _Action(
+          widget.isStickerPinned ? Symbols.keep_off : Symbols.push_pin,
+          widget.isStickerPinned
+              ? l10n.msgActionsUnpinSticker
+              : l10n.msgActionsPinSticker,
+          _pinSticker,
         ),
       if (widget.onMarkUnread != null)
         _Action(
@@ -752,10 +761,28 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     onPin?.call();
   }
 
+  Future<void> _pinSticker() async {
+    final onPinSticker = widget.onPinSticker;
+    await _close();
+    onPinSticker?.call();
+  }
+
   Future<void> _copyLink() async {
     final onCopyLink = widget.onCopyLink;
     await _close();
     onCopyLink?.call();
+  }
+
+  Future<void> _save() async {
+    final onSave = widget.onSave;
+    await _close();
+    onSave?.call();
+  }
+
+  Future<void> _saveAs() async {
+    final onSaveAs = widget.onSaveAs;
+    await _close();
+    onSaveAs?.call();
   }
 
   @override
@@ -1016,7 +1043,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
   ) {
     final borderRadius = BorderRadius.circular(radius);
     _pickerCache ??= RepaintBoundary(
-      child: _ReactionEmojiPicker(
+      child: ReactionEmojiPicker(
         onPick: _onReactionPicked,
         loadEmojis: widget.loadReactionEmojis,
       ),
@@ -1112,7 +1139,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
           customBorder: const CircleBorder(),
           onTap: () => _onReactionPicked(reaction.emoji),
           child: Center(
-            child: _ReactionGlyph(reaction: reaction, size: cell * 0.72),
+            child: ReactionGlyph(reaction: reaction, size: cell * 0.72),
           ),
         ),
       ),
@@ -1200,7 +1227,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
       left = _menuRect.left;
       top = _menuRect.top;
     } else {
-      left = widget.isMe
+      left = widget.outgoing
           ? widget.originRect.right - panelWidth
           : widget.originRect.left;
       top = _showBelow
@@ -1440,7 +1467,7 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
               ),
               if (reaction != null) ...[
                 const SizedBox(width: 8),
-                _ReactionGlyph(reaction: reaction, size: 20),
+                ReactionGlyph(reaction: reaction, size: 20),
               ],
             ],
           ),
@@ -1557,7 +1584,10 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
           scale: scale,
           alignment: tapAnchored
               ? Alignment(-1.0, _showBelow ? -1.0 : 1.0)
-              : Alignment(widget.isMe ? 1.0 : -1.0, _showBelow ? -1.0 : 1.0),
+              : Alignment(
+                  widget.outgoing ? 1.0 : -1.0,
+                  _showBelow ? -1.0 : 1.0,
+                ),
           child: Material(
             color: cs.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(16),
@@ -1689,229 +1719,6 @@ class _Action {
   final VoidCallback onTap;
   final bool destructive;
   const _Action(this.icon, this.label, this.onTap, {this.destructive = false});
-}
-
-class _ReactionEmojiPicker extends StatefulWidget {
-  final ValueChanged<String> onPick;
-  final Future<List<ReactionEmoji>> Function()? loadEmojis;
-  const _ReactionEmojiPicker({required this.onPick, this.loadEmojis});
-
-  @override
-  State<_ReactionEmojiPicker> createState() => _ReactionEmojiPickerState();
-}
-
-class _ReactionEmojiPickerState extends State<_ReactionEmojiPicker> {
-  final TextEditingController _searchCtrl = TextEditingController();
-  final FocusNode _searchFocus = FocusNode();
-  final ValueNotifier<bool> _scrolling = ValueNotifier(false);
-  List<ReactionEmoji> _all = const [];
-  List<ReactionEmoji> _results = const [];
-  String _query = '';
-  bool _loaded = false;
-
-  bool _onScrollNotification(ScrollNotification n) {
-    if (n is ScrollStartNotification || n is ScrollUpdateNotification) {
-      if (!_scrolling.value) _scrolling.value = true;
-    } else if (n is ScrollEndNotification) {
-      if (_scrolling.value) _scrolling.value = false;
-    }
-    return false;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    await EmojiKeywordIndex.instance.ensureLoaded();
-    final loader = widget.loadEmojis;
-    final emojis = loader != null
-        ? await loader()
-        : EmojiKeywordIndex.instance.all
-              .map((e) => ReactionEmoji(emoji: e))
-              .toList();
-    if (!mounted) return;
-    setState(() {
-      _all = emojis;
-      _results = _all;
-      _loaded = true;
-    });
-  }
-
-  void _onQueryChanged(String value) {
-    final q = value.trim();
-    setState(() {
-      _query = q;
-      if (q.isEmpty) {
-        _results = _all;
-      } else {
-        final matches = EmojiKeywordIndex.instance
-            .search(q)
-            .map(EmojiKeywordIndex.normalize)
-            .toSet();
-        _results = _all
-            .where(
-              (e) => matches.contains(EmojiKeywordIndex.normalize(e.emoji)),
-            )
-            .toList();
-      }
-    });
-  }
-
-  void _clearSearch() {
-    _searchCtrl.clear();
-    _onQueryChanged('');
-  }
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    _searchFocus.dispose();
-    _scrolling.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      type: MaterialType.transparency,
-      child: Column(
-        children: [
-          _buildSearchField(cs),
-          Expanded(
-            child: !_loaded
-                ? const Center(child: SmallSpinner(size: 26))
-                : _results.isEmpty
-                ? const SizedBox.shrink()
-                : LottieScrollScope(
-                    isScrolling: _scrolling,
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: _onScrollNotification,
-                      child: GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(8, 2, 8, 10),
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        addAutomaticKeepAlives: false,
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 48,
-                              mainAxisSpacing: 2,
-                              crossAxisSpacing: 2,
-                            ),
-                        itemCount: _results.length,
-                        itemBuilder: (context, i) {
-                          final reaction = _results[i];
-                          return _EmojiCell(
-                            reaction: reaction,
-                            onTap: () => widget.onPick(reaction.emoji),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchField(ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
-      child: Container(
-        height: 42,
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(21),
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 12),
-            Icon(Symbols.search, size: 22, color: cs.onSurfaceVariant),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _searchCtrl,
-                focusNode: _searchFocus,
-                onChanged: _onQueryChanged,
-                textInputAction: TextInputAction.search,
-                cursorColor: cs.primary,
-                style: TextStyle(color: cs.onSurface, fontSize: 15),
-                decoration: InputDecoration(
-                  isCollapsed: true,
-                  border: InputBorder.none,
-                  hintText: AppLocalizations.of(context)!.emojiSearchHint,
-                  hintStyle: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-            ),
-            if (_query.isEmpty)
-              const SizedBox(width: 12)
-            else
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _clearSearch,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Icon(
-                    Symbols.close,
-                    size: 20,
-                    color: cs.onSurfaceVariant,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmojiCell extends StatelessWidget {
-  final ReactionEmoji reaction;
-  final VoidCallback onTap;
-  const _EmojiCell({required this.reaction, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Center(child: _ReactionGlyph(reaction: reaction, size: 34)),
-    );
-  }
-}
-
-class _ReactionGlyph extends StatelessWidget {
-  final ReactionEmoji reaction;
-  final double size;
-  const _ReactionGlyph({required this.reaction, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    final anim = reaction.animationUrl;
-    final still = reaction.staticUrl;
-    final hasAsset =
-        (anim != null && anim.isNotEmpty) ||
-        (still != null && still.isNotEmpty);
-    if (!hasAsset) {
-      return Center(
-        child: Text(reaction.emoji, style: TextStyle(fontSize: size * 0.9)),
-      );
-    }
-    return LottieImage(
-      lottieUrl: anim,
-      url: still,
-      size: size,
-      memCacheWidth: (size * 3).round(),
-    );
-  }
 }
 
 class _ListMenuItem extends StatelessWidget {

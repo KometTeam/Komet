@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../gallery_source.dart';
@@ -51,6 +52,29 @@ Future<List<PastedAttachment>> materializeClipboardMedia(
         kind: _kindOf(ref.path),
       ),
     );
+  }
+  return result;
+}
+
+Future<List<PastedAttachment>> materializeDroppedFiles(
+  Iterable<String> paths,
+) async {
+  final result = <PastedAttachment>[];
+  for (final path in paths) {
+    final file = File(path);
+    try {
+      if (!await file.exists()) continue;
+      result.add(
+        PastedAttachment(
+          file: file,
+          name: p.basename(path),
+          size: await file.length(),
+          kind: _kindOf(path),
+        ),
+      );
+    } on FileSystemException {
+      continue;
+    }
   }
   return result;
 }

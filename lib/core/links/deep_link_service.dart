@@ -44,6 +44,7 @@ class DeepLinkService {
   Timer? _logExportRetry;
   // #***! _ready когда дерево построено, до этого ссылки копим
   bool _ready = false;
+  bool _shellReady = false;
   bool _started = false;
 
   // #***! подписка на ссылки и сессию
@@ -70,12 +71,17 @@ class DeepLinkService {
     _flushPending();
   }
 
+  void markShellReady() {
+    _shellReady = true;
+    _flushPending();
+  }
+
   // #***! внешний вход, например тапнули по ссылке в тексте
   void handle(Uri uri) => _onUri(uri);
 
   // #***! разбор ссылки и в очередь
   void _onUri(Uri uri) {
-    if (_isLogExportLink(uri)) {
+    if (BuildProfile.logExportLink && _isLogExportLink(uri)) {
       _pendingLogExport = true;
       _flushPending();
       return;
@@ -161,10 +167,13 @@ class DeepLinkService {
       }
     }
 
-    if (!_ready || context == null) return;
+    if (context == null) return;
     final pending = _pending;
     if (pending == null) return;
-    final needsConnection = MaxLink.parse(pending)?.needsConnection ?? true;
+    final link = MaxLink.parse(pending);
+    final needsSession = link?.needsSession ?? true;
+    if (!_ready && (needsSession || !_shellReady)) return;
+    final needsConnection = link?.needsConnection ?? true;
     if (needsConnection && api.state != SessionState.online) return;
     _pending = null;
     tryHandleMaxLink(context, pending);

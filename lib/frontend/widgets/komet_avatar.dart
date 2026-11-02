@@ -31,6 +31,15 @@ class KometAvatar extends StatefulWidget {
 
   static const _fadeInDuration = Duration(milliseconds: 500);
   static const _fadeOutDuration = Duration(milliseconds: 1000);
+  static const _decodeSteps = [48, 96, 144, 192, 288, 384, 576, 768, 1152];
+
+  static int decodeSizeFor(double size) {
+    final wanted = (size * 3).round();
+    for (final step in _decodeSteps) {
+      if (step >= wanted) return step;
+    }
+    return wanted;
+  }
 
   @override
   State<KometAvatar> createState() => _KometAvatarState();
@@ -40,12 +49,31 @@ class _KometAvatarState extends State<KometAvatar>
     implements SpectrumTintSource {
   Color _background = const Color(0xFF000000);
   bool _registered = false;
+  int _decodeSize = 0;
+  bool _keepPrevious = false;
 
   @override
   void initState() {
     super.initState();
     AppSpectrumBackground.current.addListener(_syncRegistration);
     _syncRegistration();
+    _decodeSize = KometAvatar.decodeSizeFor(widget.size);
+  }
+
+  @override
+  void didUpdateWidget(KometAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final wanted = KometAvatar.decodeSizeFor(widget.size);
+    final sameImage =
+        oldWidget.imageUrl == widget.imageUrl &&
+        oldWidget.userId == widget.userId;
+    if (!sameImage) {
+      _decodeSize = wanted;
+      _keepPrevious = false;
+    } else if (wanted > _decodeSize) {
+      _decodeSize = wanted;
+      _keepPrevious = true;
+    }
   }
 
   @override
@@ -96,13 +124,14 @@ class _KometAvatarState extends State<KometAvatar>
       ),
     );
     final url = widget.imageUrl;
-    final cache = (widget.size * 3).round();
+    final cache = _decodeSize;
     final remote = (url != null && url.isNotEmpty)
         ? CachedNetworkImage(
             imageUrl: url,
             fit: BoxFit.cover,
             memCacheWidth: cache,
             memCacheHeight: cache,
+            useOldImageOnUrlChange: _keepPrevious,
             fadeInDuration: widget.fadeIn
                 ? KometAvatar._fadeInDuration
                 : Duration.zero,
@@ -124,6 +153,7 @@ class _KometAvatarState extends State<KometAvatar>
             : Image(
                 image: ResizeImage(local, width: cache, height: cache),
                 fit: BoxFit.cover,
+                gaplessPlayback: _keepPrevious,
                 errorBuilder: (_, _, _) => remote,
               ),
       ),

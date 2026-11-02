@@ -13,9 +13,13 @@ import 'package:m3e_collection/m3e_collection.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend/api.dart';
+import 'core/cache/chat_scroll_memory.dart';
 import 'core/cache/info_cache.dart';
 import 'core/plugins/plugin_store.dart';
 import 'core/config/build_profile.dart';
+import 'core/config/whats_new.dart';
+import 'core/config/app_motion.dart';
+import 'frontend/widgets/app_motion_scope.dart';
 import 'core/utils/app_foreground.dart';
 import 'core/utils/logger.dart';
 import 'core/cache/self_presence.dart';
@@ -24,18 +28,22 @@ import 'core/storage/draft_store.dart';
 import 'core/storage/archived_chats_store.dart';
 import 'core/storage/local_contact_avatars.dart';
 import 'core/crypto/e2ee_service.dart';
+import 'core/crypto/encrypted_photo_cache.dart';
 import 'core/storage/chat_encryption_store.dart';
+import 'core/crypto/decrypted_photo_store.dart';
 import 'core/config/app_accent.dart';
+import 'core/config/app_language.dart';
 import 'core/config/app_amoled.dart';
 import 'core/config/app_badge.dart';
+import 'core/config/app_notifications.dart';
 import 'core/config/app_show_extra_info.dart';
 import 'core/config/app_spectrum_background.dart';
 import 'core/config/app_bubble_behavior.dart';
 import 'core/config/app_camera.dart';
 import 'core/config/komet_settings.dart';
 import 'core/security/app_lock.dart';
-import 'core/config/call_no_mute.dart';
-import 'core/config/debug_test.dart';
+import 'core/security/archive_lock.dart';
+import 'core/config/launch_flags.dart';
 import 'core/config/app_bubble_shape.dart';
 import 'core/config/app_cache_extent.dart';
 import 'core/config/app_fonts.dart';
@@ -49,17 +57,16 @@ import 'core/config/app_commands.dart';
 import 'core/config/app_phonebook_names.dart';
 import 'core/contacts/device_contacts_service.dart';
 import 'core/config/app_link_preview.dart';
-import 'core/config/app_media_cache.dart';
+import 'core/config/app_unchecked_links.dart';
+import 'core/config/app_cache_limit.dart';
+import 'core/cache/cache_janitor.dart';
 import 'core/config/app_video_note_quality.dart';
 import 'core/config/app_pill_gradient.dart';
 import 'core/config/app_visual_style.dart';
-import 'core/config/app_chat_chrome.dart';
-import 'core/config/app_composer_background.dart';
-import 'core/config/app_composer_style.dart';
-import 'core/config/app_nav_pill_style.dart';
 import 'core/config/app_wallpaper_tint.dart';
 import 'core/storage/chat_wallpaper_store.dart';
 import 'core/utils/wallpaper_seed.dart';
+import 'core/utils/seed_scheme.dart';
 import 'core/config/app_theme_mode.dart';
 import 'core/config/app_theme_schedule.dart';
 import 'core/config/app_digital_id_mode.dart';
@@ -91,8 +98,11 @@ import 'core/push/fkm_controller.dart';
 import 'core/push/launcher_badge.dart';
 import 'core/push/notification_bridge.dart';
 import 'core/share/share_intent_bridge.dart';
+import 'core/share/native_share_account_sync.dart';
 import 'core/push/push_service.dart';
 import 'core/storage/app_database.dart';
+import 'core/storage/per_chat_json_store.dart';
+import 'core/transport/network_core.dart';
 import 'core/transport/tls_config.dart';
 import 'core/transport/traffic_monitor.dart';
 import 'core/transport/vpn_bypass.dart';
@@ -105,8 +115,11 @@ import 'frontend/debug/fps_overlay_layer.dart';
 import 'frontend/debug/performance_monitor.dart';
 import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/widgets/adaptive_shell.dart';
+import 'frontend/widgets/chat_wallpaper_view.dart' show WallpaperImages;
+import 'frontend/widgets/theme_wallpaper.dart' show precacheWallpaperTheme;
 import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/hint_bubble.dart';
+import 'frontend/widgets/keyboard_cover.dart';
 import 'frontend/widgets/liquid_glass.dart';
 import 'frontend/widgets/mesh_gradient_background.dart';
 import 'frontend/widgets/small_spinner.dart';
@@ -138,26 +151,23 @@ const ProgressIndicatorThemeData _expressiveProgressTheme =
 
 const PageTransitionsTheme _appPageTransitions = PageTransitionsTheme(
   builders: <TargetPlatform, PageTransitionsBuilder>{
-    TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
-    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-    TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
-    TargetPlatform.windows: ZoomPageTransitionsBuilder(),
-    TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+    TargetPlatform.android: MotionAwarePageTransitions(
+      PredictiveBackPageTransitionsBuilder(),
+    ),
+    TargetPlatform.iOS: MotionAwarePageTransitions(
+      CupertinoPageTransitionsBuilder(),
+    ),
+    TargetPlatform.macOS: MotionAwarePageTransitions(
+      CupertinoPageTransitionsBuilder(),
+    ),
+    TargetPlatform.windows: MotionAwarePageTransitions(
+      ZoomPageTransitionsBuilder(),
+    ),
+    TargetPlatform.linux: MotionAwarePageTransitions(
+      ZoomPageTransitionsBuilder(),
+    ),
   },
 );
-
-Future<Locale> _loadInitialLocale() async {
-  final prefs = await SharedPreferences.getInstance();
-  final code = prefs.getString('app_locale');
-  if (code != null && (code == 'en' || code == 'ru')) {
-    return Locale(code);
-  }
-  final platform = WidgetsBinding.instance.platformDispatcher.locale;
-  if (platform.languageCode == 'en' || platform.languageCode == 'ru') {
-    return Locale(platform.languageCode);
-  }
-  return const Locale('ru');
-}
 
 void _installLogCapture() {
   final previousDebugPrint = debugPrint;
@@ -199,26 +209,43 @@ void _installLogCapture() {
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  LaunchFlags.parse(args);
   trackHintBubblePresses();
   debugPrint('KOMET-STARTUP: binding ready');
   debugPrint('KOMET-STARTUP: initKolibri...');
   await initKolibri();
   debugPrint('KOMET-STARTUP: initKolibri done');
-  DebugTest.parse(args);
-  CallNoMute.parse(args);
   _installLogCapture();
+  if (LaunchFlags.summary.isNotEmpty) {
+    logger.i('Флаги запуска: ${LaunchFlags.summary.join(' ')}');
+  }
+  if (LaunchFlags.unknown.isNotEmpty) {
+    logger.w('Неизвестные аргументы запуска: ${LaunchFlags.unknown.join(' ')}');
+  }
+  if (LaunchFlags.debug) {
+    logger.w(
+      'Запуск с ${LaunchFlags.activeDebugFlag}: в лог идёт весь трафик с данными'
+      '${LaunchFlags.revealLoginPayload ? ', включая payload LOGIN (19)' : ''}',
+    );
+  } else if (LaunchFlags.callDebug) {
+    logger.i(
+      '[call] запуск с ${LaunchFlags.callDebugFlag}: в лог идут только звонки',
+    );
+  }
   MediaKitVideoPlatform.registerOnDesktop();
   if (AppInstance.isNamed) {
     SharedPreferences.setPrefix('flutter.${AppInstance.id}.');
   }
-  debugPrint('KOMET-STARTUP: applyMincifryTrust...');
-  await TlsConfig.applyMincifryTrust();
+  debugPrint('KOMET-STARTUP: NetworkCore.configure...');
+  await NetworkCore.configure();
   debugPrint('KOMET-STARTUP: AppDatabase.init...');
   await AppDatabase.init();
+  await DecryptedPhotoStore.clear();
   debugPrint('KOMET-STARTUP: AppDatabase.init done');
   final activeAccountId = await TokenStorage.getActiveAccountId();
   if (activeAccountId != null) {
     await ContactsModule.primeCacheFromDb(activeAccountId);
+    await ChatScrollMemory.prime(activeAccountId);
   }
   attachInfoCacheApi(api);
   chats.attachGlobalPushHandlers(api);
@@ -231,7 +258,9 @@ void main(List<String> args) async {
   unawaited(DeepLinkService.instance.init());
 
   final packageInfoFuture = PackageInfo.fromPlatform();
-  final localeFuture = _loadInitialLocale();
+  final whatsNewFuture = WhatsNew.load();
+  final motionFuture = AppMotion.load();
+  final localeFuture = AppLanguage.load();
   final hapticsFuture = Haptics.load();
   final prefsFuture = SharedPreferences.getInstance();
   final accentFuture = AppAccent.load();
@@ -244,10 +273,7 @@ void main(List<String> args) async {
   final visualStyleFuture = AppVisualStyle.load();
   final liquidGlassFuture = LiquidGlass.load();
   final meshGradientFuture = MeshGradient.load();
-  final chatChromeFuture = AppChatChrome.load();
-  final composerStyleFuture = AppComposerStyle.load();
-  final composerBackgroundFuture = AppComposerBackground.load();
-  final navPillStyleFuture = AppNavPillStyle.load();
+  final elementsBlurFuture = AppElementsBlur.load();
   final wallpaperTintFuture = AppWallpaperTint.load();
   final themeScheduleFuture = AppThemeSchedule.load();
   final messageActionsFuture = AppMessageActionsStyle.load();
@@ -260,7 +286,8 @@ void main(List<String> args) async {
   final commandsFuture = AppCommands.load();
   final phonebookNamesFuture = AppPhonebookNames.load();
   final linkPreviewFuture = AppLinkPreview.load();
-  final cacheLimitFuture = AppMediaCacheLimit.load();
+  final uncheckedLinksFuture = AppUncheckedLinks.load();
+  final cacheLimitFuture = AppCacheLimit.load();
   final videoNoteResolutionFuture = AppVideoNoteResolution.load();
   final videoNoteFpsFuture = AppVideoNoteFps.load();
   final videoNoteRearCameraFuture = AppVideoNoteRearCamera.load();
@@ -268,6 +295,7 @@ void main(List<String> args) async {
   final showExtraInfoFuture = AppShowExtraInfo.load();
   final spectrumBackgroundFuture = AppSpectrumBackground.load();
   final badgeFuture = AppBadge.load();
+  final notificationsFuture = AppNotifications.load();
   final trafficCaptureFuture = TrafficMonitor.instance.load();
   final debugLogFuture = DebugSessionLog.instance.init();
 
@@ -284,10 +312,15 @@ void main(List<String> args) async {
   await ArchivedChatsStore.instance.load();
   await LocalContactAvatars.instance.load();
   await badgeFuture;
+  await notificationsFuture;
+  await whatsNewFuture;
+  await motionFuture;
   await ChatEncryptionStore.instance.load();
   E2eeService.instance.attach(messagesModule);
   await KometSettings.load();
   await AppLock.instance.load();
+  await ArchiveLock.instance.load();
+  unawaited(accountModule.restoreDoubleTapReaction());
   if (BuildProfile.plugins) await PluginStore.instance.load();
   CommandRegistry.instance.initialize();
   if (KometSettings.ghostMode.value) SelfPresence.markOffline();
@@ -320,10 +353,7 @@ void main(List<String> args) async {
     visualStyleFuture,
     liquidGlassFuture,
     meshGradientFuture,
-    chatChromeFuture,
-    composerStyleFuture,
-    composerBackgroundFuture,
-    navPillStyleFuture,
+    elementsBlurFuture,
     wallpaperTintFuture,
     themeScheduleFuture,
     messageActionsFuture,
@@ -336,6 +366,7 @@ void main(List<String> args) async {
     commandsFuture,
     phonebookNamesFuture,
     linkPreviewFuture,
+    uncheckedLinksFuture,
     cacheLimitFuture,
     videoNoteResolutionFuture,
     videoNoteFpsFuture,
@@ -345,7 +376,8 @@ void main(List<String> args) async {
     spectrumBackgroundFuture,
   ]);
   debugPrint('KOMET-STARTUP: DeviceContactsService.loadFromStartup...');
-  await DeviceContactsService.loadFromStartup();
+  unawaited(DeviceContactsService.loadFromStartup());
+  CacheJanitor.instance.schedule(CacheJanitor.startupDelay);
   await trafficCaptureFuture;
   await debugLogFuture;
   debugPrint('KOMET-STARTUP: runApp');
@@ -452,11 +484,11 @@ class KometAppState extends State<KometApp>
     AppThemeModeConfig.current.addListener(_onThemeModeChanged);
     AppAmoled.current.addListener(_onAmoledChanged);
     AppThemeSchedule.current.addListener(_onScheduleChanged);
-    AppWallpaperTint.current.addListener(_onWallpaperTintChanged);
-    ChatWallpaperStore.instance.revision.addListener(_onWallpaperTintChanged);
+    AppWallpaperTint.current.addListener(_onGlobalWallpaperChanged);
+    ChatWallpaperStore.instance.revision.addListener(_onGlobalWallpaperChanged);
     _lastAppliedThemeMode = _effectiveThemeMode;
     _rescheduleSwitch();
-    unawaited(_refreshWallpaperSeed());
+    unawaited(_refreshGlobalWallpaper());
 
     api.setReconnectCallback(() async {
       try {
@@ -478,7 +510,7 @@ class KometAppState extends State<KometApp>
         NotificationBridge.instance.markReady();
         unawaited(NotificationBridge.instance.dismissReadChats());
         ShareIntentBridge.instance.markReady();
-        unawaited(_refreshWallpaperSeed());
+        unawaited(_refreshGlobalWallpaper());
         CallController.instance.init(api);
         OutboxService.instance.init(api, messagesModule);
         SelfCheckService.instance.init(api);
@@ -499,6 +531,7 @@ class KometAppState extends State<KometApp>
     NotificationBridge.instance.init();
     unawaited(LauncherBadge.instance.init());
     ShareIntentBridge.instance.init();
+    NativeShareAccountSync.instance.init(api, accountModule, chats);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       CallBridge.instance.checkInitialCall();
       unawaited(NotificationBridge.instance.checkInitialChat());
@@ -597,7 +630,8 @@ class KometAppState extends State<KometApp>
     _presentIncomingCall();
   }
 
-  void markShellReady() {
+  void markShellReady({bool signedIn = true}) {
+    if (signedIn) DeepLinkService.instance.markShellReady();
     if (_shellReady) return;
     _shellReady = true;
     _presentIncomingCall();
@@ -633,6 +667,7 @@ class KometAppState extends State<KometApp>
 
   @override
   void dispose() {
+    NativeShareAccountSync.instance.dispose();
     _finishReveal();
     _sessionExpiredSub?.cancel();
     _loginStatusSub?.cancel();
@@ -645,9 +680,9 @@ class KometAppState extends State<KometApp>
     AppThemeModeConfig.current.removeListener(_onThemeModeChanged);
     AppAmoled.current.removeListener(_onAmoledChanged);
     AppThemeSchedule.current.removeListener(_onScheduleChanged);
-    AppWallpaperTint.current.removeListener(_onWallpaperTintChanged);
+    AppWallpaperTint.current.removeListener(_onGlobalWallpaperChanged);
     ChatWallpaperStore.instance.revision.removeListener(
-      _onWallpaperTintChanged,
+      _onGlobalWallpaperChanged,
     );
     WidgetsBinding.instance.removeObserver(this);
     HardwareKeyboard.instance.removeHandler(_noteKeyInteraction);
@@ -686,6 +721,13 @@ class KometAppState extends State<KometApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     AppLock.instance.onLifecycle(state);
+    ArchiveLock.instance.onLifecycle(
+      state,
+      external: AppLock.instance.inExternal,
+    );
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      unawaited(PerChatJsonStore.flushAll());
+    }
     final background =
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
@@ -699,6 +741,7 @@ class KometAppState extends State<KometApp>
       DebugSessionLog.instance.flushNow();
       SelfCheckService.instance.pause();
       E2eeService.instance.lock();
+      EncryptedPhotoCache.instance.clear();
     }
     if (state != AppLifecycleState.resumed) return;
     api.wakeUp();
@@ -890,15 +933,13 @@ class KometAppState extends State<KometApp>
   }
 
   Future<void> applyLocale(Locale locale) async {
-    if (!AppLocalizations.supportedLocales.any(
-      (l) => l.languageCode == locale.languageCode,
-    )) {
-      return;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('app_locale', locale.languageCode);
+    final serverLanguageBefore = AppLanguage.serverLanguageCode;
+    if (!await AppLanguage.save(locale)) return;
     if (mounted) {
-      setState(() => _locale = locale);
+      setState(() => _locale = AppLanguage.current.value);
+    }
+    if (AppLanguage.serverLanguageCode != serverLanguageBefore) {
+      unawaited(accountModule.refreshServerLanguage());
     }
   }
 
@@ -909,26 +950,25 @@ class KometAppState extends State<KometApp>
     accentSeed.value = seed;
   }
 
-  void _onWallpaperTintChanged() => unawaited(_refreshWallpaperSeed());
+  void _onGlobalWallpaperChanged() => unawaited(_refreshGlobalWallpaper());
 
-  Future<void> _refreshWallpaperSeed() async {
-    if (!AppWallpaperTint.current.value) {
-      _globalWallpaper = null;
-      wallpaperSeed.value = null;
-      return;
-    }
+  Future<void> _refreshGlobalWallpaper() async {
     final profile = await AppDatabase.loadActiveProfile();
     final accountId = profile?.id ?? 0;
-    if (accountId == 0) {
+    await ChatWallpaperStore.instance.load();
+    final wallpaper = accountId == 0
+        ? null
+        : ChatWallpaperStore.instance.effective(
+            accountId,
+            kGlobalWallpaperChatId,
+          );
+    WallpaperImages.holdGlobal(wallpaper);
+    ChatWallpaperStore.instance.themeIds.forEach(precacheWallpaperTheme);
+    if (!AppWallpaperTint.current.value || wallpaper == null) {
       _globalWallpaper = null;
       wallpaperSeed.value = null;
       return;
     }
-    await ChatWallpaperStore.instance.load();
-    final wallpaper = ChatWallpaperStore.instance.get(
-      accountId,
-      kGlobalWallpaperChatId,
-    );
     final seed = await computeWallpaperSeed(wallpaper);
     if (!mounted) return;
     _globalWallpaper = wallpaper;
@@ -963,25 +1003,24 @@ class KometAppState extends State<KometApp>
   ThemeData? _lightTheme;
   ThemeData? _darkTheme;
 
-  Color? _seedCacheKey;
+  ({Color seed, bool accent})? _seedCacheKey;
   ColorScheme? _seedCacheLight;
   ColorScheme? _seedCacheDark;
 
-  ({ColorScheme light, ColorScheme dark}) _schemesForSeed(Color seed) {
-    if (_seedCacheKey == seed &&
+  ({ColorScheme light, ColorScheme dark}) _schemesForSeed(
+    Color seed, {
+    required bool accent,
+  }) {
+    final key = (seed: seed, accent: accent);
+    if (_seedCacheKey == key &&
         _seedCacheLight != null &&
         _seedCacheDark != null) {
       return (light: _seedCacheLight!, dark: _seedCacheDark!);
     }
-    _seedCacheKey = seed;
-    _seedCacheLight = ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: Brightness.light,
-    );
-    _seedCacheDark = ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: Brightness.dark,
-    );
+    final build = accent ? accentSchemeFromSeed : schemeFromSeed;
+    _seedCacheKey = key;
+    _seedCacheLight = build(seed, Brightness.light);
+    _seedCacheDark = build(seed, Brightness.dark);
     return (light: _seedCacheLight!, dark: _seedCacheDark!);
   }
 
@@ -1092,21 +1131,25 @@ class KometAppState extends State<KometApp>
             AppWallpaperTint.current,
           ]),
           builder: (context, _) {
-            final seed =
-                AppWallpaperTint.current.value && wallpaperSeed.value != null
+            final tintSeed = AppWallpaperTint.current.value
                 ? wallpaperSeed.value
-                : accentSeed.value;
+                : null;
+            final accentColor = accentSeed.value;
+            final seeded = tintSeed != null
+                ? _schemesForSeed(tintSeed, accent: false)
+                : accentColor != null
+                ? _schemesForSeed(accentColor, accent: true)
+                : null;
             final ColorScheme lightBase;
             final ColorScheme darkBase;
-            if (seed != null) {
-              final s = _schemesForSeed(seed);
-              lightBase = s.light;
-              darkBase = s.dark;
+            if (seeded != null) {
+              lightBase = seeded.light;
+              darkBase = seeded.dark;
             } else if (lightDynamic != null && darkDynamic != null) {
               lightBase = lightDynamic;
               darkBase = darkDynamic;
             } else {
-              final s = _schemesForSeed(_fallbackSeed);
+              final s = _schemesForSeed(_fallbackSeed, accent: false);
               lightBase = lightDynamic ?? s.light;
               darkBase = darkDynamic ?? s.dark;
             }
@@ -1137,7 +1180,9 @@ class KometAppState extends State<KometApp>
                   valueListenable: fontScale,
                   child: child ?? const SizedBox.shrink(),
                   builder: (context, scale, appChild) {
-                    Widget scaledChild = appChild!;
+                    Widget scaledChild = AppMotionScope(
+                      child: KeyboardCoverScope(child: appChild!),
+                    );
                     final effective = AppFonts.effectiveScale(_fontId, scale);
                     if ((effective - 1.0).abs() > 0.001) {
                       scaledChild = MediaQuery.withClampedTextScaling(
@@ -1235,7 +1280,7 @@ class _StartupScreenState extends State<_StartupScreen> {
   }
 
   Future<void> _tryAutoLogin() async {
-    if (DebugTest.enabled) {
+    if (LaunchFlags.debugTest) {
       await Future<void>.delayed(Duration.zero);
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -1278,6 +1323,7 @@ class _StartupScreenState extends State<_StartupScreen> {
         await TokenStorage.setActiveAccount(profile.id);
         await AppDatabase.setActiveAccount(profile.id);
         await ContactsModule.primeCacheFromDb(profile.id);
+        await ChatScrollMemory.prime(profile.id);
         return profile.id;
       }
     }
@@ -1290,7 +1336,7 @@ class _StartupScreenState extends State<_StartupScreen> {
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
       );
-      KometApp.stateOf(context)?.markShellReady();
+      KometApp.stateOf(context)?.markShellReady(signedIn: false);
     }
   }
 

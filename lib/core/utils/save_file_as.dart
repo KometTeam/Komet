@@ -8,7 +8,7 @@ import 'package:path/path.dart' as p;
 import 'logger.dart';
 import '../security/app_lock.dart';
 
-const _documentExport = MethodChannel('ru.komet.app/media_export');
+const mediaExportChannel = MethodChannel('ru.komet.app/media_export');
 
 // #***! итог сохранить как, отмену отличаем от ошибки
 class SaveFileAsResult {
@@ -43,7 +43,7 @@ Future<SaveFileAsResult> saveFileAs({
     if (directory == null) {
       return const SaveFileAsResult(saved: false, cancelled: true);
     }
-    final target = await _availableTarget(directory, name);
+    final target = await availableSaveTarget(directory, name);
     if (p.equals(p.absolute(source.path), p.absolute(target.path))) {
       return SaveFileAsResult(saved: true, path: target.path);
     }
@@ -56,7 +56,7 @@ Future<SaveFileAsResult> saveFileAs({
 }
 
 Future<SaveFileAsResult> _exportDocument(File source, String name) async {
-  final uri = await _documentExport.invokeMethod<String>('saveAs', {
+  final uri = await mediaExportChannel.invokeMethod<String>('saveAs', {
     'path': source.path,
     'name': name,
   });
@@ -65,7 +65,7 @@ Future<SaveFileAsResult> _exportDocument(File source, String name) async {
 }
 
 // #***! такой файл уже есть, дописываем (2) как проводник
-Future<File> _availableTarget(String directory, String fileName) async {
+Future<File> availableSaveTarget(String directory, String fileName) async {
   var target = File(p.join(directory, fileName));
   if (!await target.exists()) return target;
   final extension = p.extension(fileName);

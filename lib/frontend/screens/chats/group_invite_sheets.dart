@@ -26,24 +26,53 @@ Future<bool?> showAddMembersSheet(
   required int chatId,
   required Set<int> excludeIds,
 }) {
+  final l10n = AppLocalizations.of(context)!;
+  return showPickMembersSheet(
+    context,
+    excludeIds: excludeIds,
+    title: l10n.chatInfoAddMember,
+    successMessage: l10n.chatInfoMembersAdded,
+    failureMessage: l10n.chatInfoAddMembersError,
+    submit: (userIds) =>
+        chats.addMembers(api, chatId: chatId, userIds: userIds),
+  );
+}
+
+Future<bool?> showPickMembersSheet(
+  BuildContext context, {
+  required Set<int> excludeIds,
+  required String title,
+  required String successMessage,
+  required String failureMessage,
+  required Future<bool> Function(List<int> userIds) submit,
+}) {
   return showBlurredCard<bool>(
     context,
     (host) => _AddMembersCard(
-      chatId: chatId,
       excludeIds: excludeIds,
+      title: title,
+      successMessage: successMessage,
+      failureMessage: failureMessage,
+      submit: submit,
       hostContext: host,
     ),
   );
 }
 
 class _AddMembersCard extends StatefulWidget {
-  final int chatId;
   final Set<int> excludeIds;
+  final String title;
+  final String successMessage;
+  final String failureMessage;
+  final Future<bool> Function(List<int> userIds) submit;
   final BuildContext hostContext;
 
   const _AddMembersCard({
-    required this.chatId,
     required this.excludeIds,
+    required this.title,
+    required this.successMessage,
+    required this.failureMessage,
+    required this.submit,
     required this.hostContext,
   });
 
@@ -130,21 +159,16 @@ class _AddMembersCardState extends State<_AddMembersCard> {
   Future<void> _submit() async {
     if (_selected.isEmpty || _submitting) return;
     setState(() => _submitting = true);
-    final ok = await chats.addMembers(
-      api,
-      chatId: widget.chatId,
-      userIds: _selected.toList(),
-    );
+    final ok = await widget.submit(_selected.toList());
     if (!mounted) return;
-    final l10n = AppLocalizations.of(context)!;
     if (ok) {
       Navigator.of(context).pop(true);
       if (widget.hostContext.mounted) {
-        showCustomNotification(widget.hostContext, l10n.chatInfoMembersAdded);
+        showCustomNotification(widget.hostContext, widget.successMessage);
       }
     } else {
       setState(() => _submitting = false);
-      showCustomNotification(context, l10n.chatInfoAddMembersError);
+      showCustomNotification(context, widget.failureMessage);
     }
   }
 
@@ -176,7 +200,7 @@ class _AddMembersCardState extends State<_AddMembersCard> {
                     children: [
                       Expanded(
                         child: Text(
-                          l10n.chatInfoAddMember,
+                          widget.title,
                           style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 20,

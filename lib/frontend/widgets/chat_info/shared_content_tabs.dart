@@ -15,16 +15,18 @@ import '../../../core/utils/download_history.dart';
 import '../../../core/utils/download_progress.dart';
 import '../../../core/utils/file_download.dart';
 import '../../../core/utils/format.dart';
-import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/media_saver.dart';
+import '../../../core/utils/route_settle.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/attachment.dart';
 import '../../screens/chats/chat_screen.dart';
 import '../custom_notification.dart';
 import '../komet_avatar.dart';
+import '../link_confirm_sheet.dart';
 import '../photo_viewer.dart';
 import '../reload_on_reconnect.dart';
+import '../route_probe.dart';
 import '../share_unopenable_file.dart';
 import '../small_spinner.dart';
 import '../swipe_route.dart';
@@ -103,10 +105,14 @@ Widget _emptyState(ColorScheme cs, String label, IconData icon) {
   );
 }
 
-Widget _loadingState(ColorScheme cs) {
+Widget _loadingState(ColorScheme cs, {bool spinner = true}) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 56),
-    child: Center(child: SmallSpinner(size: 26, color: cs.primary)),
+    child: Center(
+      child: spinner
+          ? SmallSpinner(size: 26, color: cs.primary)
+          : const SizedBox.square(dimension: 26),
+    ),
   );
 }
 
@@ -324,13 +330,16 @@ Future<void> _downloadAttachment(
   if (att is AudioAttachment) {
     final url = att.fileUrl ?? att.baseUrl ?? '';
     if (url.isEmpty) return;
-    final result = await saveMediaFile(
-      cacheName: '${att.audioId ?? item.messageId}.ogg',
-      resolveUrl: () async => url,
-      saveName: 'AUD_$now.ogg',
-      kind: SaveMediaKind.file,
+    final cacheName = VoiceAudioController.cacheNameFor(
+      audioId: att.audioId,
+      messageId: item.messageId,
+    );
+    final result = await saveVoiceMessage(
+      cacheName: cacheName,
+      url: url,
+      messageTime: item.time,
       download: DownloadMetadata(
-        cacheName: '${att.audioId ?? item.messageId}.ogg',
+        cacheName: cacheName,
         kind: DownloadKind.audio,
         sourceName: sourceName,
         expectedSize: att.size ?? 0,
@@ -339,7 +348,11 @@ Future<void> _downloadAttachment(
         messageTime: item.time,
       ),
     );
-    if (context.mounted) _notifySave(context, result);
+    if (!context.mounted) return;
+    showCustomNotification(
+      context,
+      voiceSaveNotice(AppLocalizations.of(context)!, result),
+    );
   }
 }
 
@@ -535,16 +548,21 @@ class _SharedMediaTabState extends State<SharedMediaTab>
   int _total = 0;
   final List<SharedMediaItem> _items = [];
   final Set<String> _seen = {};
+  late final RouteSettle _routeSettle = RouteSettle(isMounted: () => mounted);
 
   @override
   void initState() {
     super.initState();
     widget.scrollController?.addListener(_onScroll);
+    _routeSettle.run(() {
+      if (mounted && _loading) setState(() {});
+    });
     _load(widget.anchorMessageId, initial: true);
   }
 
   @override
   void dispose() {
+    _routeSettle.dispose();
     widget.scrollController?.removeListener(_onScroll);
     super.dispose();
   }
@@ -571,7 +589,15 @@ class _SharedMediaTabState extends State<SharedMediaTab>
       backward: _pageSize,
     );
     if (!mounted) return;
+    if (_loading) {
+      _routeSettle.run(() => _apply(page));
+    } else {
+      _apply(page);
+    }
+  }
 
+  void _apply(SharedMediaPage page) {
+    if (!mounted) return;
     var added = 0;
     for (final item in page.items) {
       if (_seen.add(item.dedupKey)) {
@@ -620,8 +646,12 @@ class _SharedMediaTabState extends State<SharedMediaTab>
 
   @override
   Widget build(BuildContext context) {
+    return RouteProbe(onRoute: _routeSettle.bind, child: _buildTab(context));
+  }
+
+  Widget _buildTab(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    if (_loading) return _loadingState(cs);
+    if (_loading) return _loadingState(cs, spinner: _routeSettle.settled);
     if (_items.isEmpty) {
       return _emptyState(cs, widget.emptyLabel, widget.emptyIcon);
     }
@@ -814,11 +844,38 @@ class _MediaTile extends StatelessWidget {
         );
         return;
       }
-      pushSwipeable(
-        context,
-        (_) => PhotoViewerScreen.video(
-          attachment: att,
-          initialVideoSources: sources,
+      Navigator.of(context).push(
+        PhotoViewerRoute(
+          builder: (_) => PhotoViewerScreen.video(
+            attachment: att,
+            initialVideoSources: sources,
+            chatId: item.chatId,
+            message: CachedMessage(
+              id: item.messageId,
+              accountId: 0,
+              chatId: item.chatId,
+              senderId: item.senderId,
+              text: item.text,
+              time: item.time,
+            ),
+            actions: PhotoViewerActions(goToMessage: onGoToMessage),
+            sourceName: sourceName,
+            videoUserAgentProvider: () => api.session?.userAgent(),
+          ),
+        ),
+      );
+      return;
+    }
+    final url = att.baseUrl ?? att.previewData ?? '';
+    if (url.isEmpty) return;
+
+    final photo = att is PhotoAttachment && (att.baseUrl ?? '').isNotEmpty
+        ? att
+        : PhotoAttachment(baseUrl: url);
+    Navigator.of(context).push(
+      PhotoViewerRoute(
+        builder: (_) => PhotoViewerScreen(
+          photos: [photo],
           chatId: item.chatId,
           message: CachedMessage(
             id: item.messageId,
@@ -832,31 +889,6 @@ class _MediaTile extends StatelessWidget {
           sourceName: sourceName,
           videoUserAgentProvider: () => api.session?.userAgent(),
         ),
-      );
-      return;
-    }
-    final url = att.baseUrl ?? att.previewData ?? '';
-    if (url.isEmpty) return;
-
-    final photo = att is PhotoAttachment && (att.baseUrl ?? '').isNotEmpty
-        ? att
-        : PhotoAttachment(baseUrl: url);
-    pushSwipeable(
-      context,
-      (_) => PhotoViewerScreen(
-        photos: [photo],
-        chatId: item.chatId,
-        message: CachedMessage(
-          id: item.messageId,
-          accountId: 0,
-          chatId: item.chatId,
-          senderId: item.senderId,
-          text: item.text,
-          time: item.time,
-        ),
-        actions: PhotoViewerActions(goToMessage: onGoToMessage),
-        sourceName: sourceName,
-        videoUserAgentProvider: () => api.session?.userAgent(),
       ),
     );
   }
@@ -1071,7 +1103,7 @@ class _LinkRow extends StatelessWidget {
         : image?.previewData;
 
     return InkWell(
-      onTap: url.isEmpty ? null : () => openExternalUrl(context, url),
+      onTap: url.isEmpty ? null : () => openMessageLink(context, url),
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -1187,7 +1219,10 @@ class _ProfileVoiceTileState extends State<_ProfileVoiceTile> {
   void initState() {
     super.initState();
     _player = VoiceAudioController(
-      cacheName: '${_audio.audioId ?? widget.item.messageId}.ogg',
+      cacheName: VoiceAudioController.cacheNameFor(
+        audioId: _audio.audioId,
+        messageId: widget.item.messageId,
+      ),
       resolveUrl: () async => _audio.fileUrl ?? _audio.baseUrl ?? '',
       fallbackDuration: Duration(milliseconds: _audio.duration ?? 0),
     );

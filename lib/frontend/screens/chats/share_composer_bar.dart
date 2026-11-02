@@ -316,16 +316,35 @@ class _ShareThumb extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: provider != null
-          ? Image(image: provider, fit: BoxFit.cover)
-          : Icon(
-              file.kind == SharedFileKind.video
-                  ? Symbols.movie
-                  : Symbols.description,
-              size: 20,
-              color: cs.onSurfaceVariant,
-            ),
+          ? Image(
+              image: provider,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _localPhotoOrIcon(),
+            )
+          : _localPhotoOrIcon(),
     );
   }
+
+  Widget _localPhotoOrIcon() {
+    if (file.kind != SharedFileKind.photo) return _icon();
+    return Image.file(
+      file.file,
+      fit: BoxFit.cover,
+      cacheWidth: 128,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => _icon(),
+    );
+  }
+
+  Widget _icon() => Icon(
+    switch (file.kind) {
+      SharedFileKind.photo => Symbols.image,
+      SharedFileKind.video => Symbols.movie,
+      SharedFileKind.file => Symbols.description,
+    },
+    size: 20,
+    color: cs.onSurfaceVariant,
+  );
 }
 
 class _SendButton extends StatelessWidget {

@@ -18,6 +18,8 @@ import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/composer_morph_icon.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/liquid_glass.dart';
+import 'package:komet/frontend/widgets/sender_badge.dart';
+import 'package:komet/frontend/widgets/selection_toolbar.dart';
 import 'package:komet/frontend/widgets/lottie_slash_icon.dart';
 import 'package:komet/frontend/widgets/paste_media_scope.dart';
 import 'package:komet/frontend/widgets/reply_preview.dart';
@@ -43,6 +45,7 @@ class ComposerInputBar extends StatelessWidget {
     required this.voiceRec,
     required this.note,
     required this.onToggleStickerPanel,
+    this.onOpenMiniApp,
     required this.onSendText,
     required this.onScheduleMessage,
     required this.onOpenAttach,
@@ -63,11 +66,12 @@ class ComposerInputBar extends StatelessWidget {
     this.canPostToChannel = false,
     this.onSubscribe,
     this.showStickerButton = true,
+    this.stickersShown = false,
     this.showAttachButton = true,
     this.forceSend = false,
     this.readOnly = false,
     this.hintText,
-    this.bottomSafe = true,
+    required this.bottomPadding,
     this.vignette = false,
   });
 
@@ -87,6 +91,7 @@ class ComposerInputBar extends StatelessWidget {
   final VoiceRecordController voiceRec;
   final VideoNoteController note;
   final VoidCallback onToggleStickerPanel;
+  final VoidCallback? onOpenMiniApp;
   final VoidCallback onSendText;
   final VoidCallback onScheduleMessage;
   final VoidCallback onOpenAttach;
@@ -107,11 +112,12 @@ class ComposerInputBar extends StatelessWidget {
   final bool canPostToChannel;
   final VoidCallback? onSubscribe;
   final bool showStickerButton;
+  final bool stickersShown;
   final bool showAttachButton;
   final bool forceSend;
   final bool readOnly;
   final String? hintText;
-  final bool bottomSafe;
+  final double bottomPadding;
   final bool vignette;
 
   @override
@@ -154,7 +160,8 @@ class ComposerInputBar extends StatelessWidget {
     }
 
     final bar = SafeArea(
-      bottom: bottomSafe,
+      bottom: false,
+      minimum: EdgeInsets.only(bottom: bottomPadding),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -167,6 +174,21 @@ class ComposerInputBar extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                if (onOpenMiniApp != null) ...[
+                  _actionSurface(
+                    color: cs.primary,
+                    onTap: onOpenMiniApp,
+                    borderSide: BorderSide.none,
+                    child: SizedBox(
+                      width: _controlSize,
+                      height: _controlSize,
+                      child: Center(
+                        child: Icon(Symbols.apps, color: cs.onPrimary, size: 24),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: _actionGap),
+                ],
                 Expanded(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
@@ -222,11 +244,11 @@ class ComposerInputBar extends StatelessWidget {
                                       GestureDetector(
                                         behavior: HitTestBehavior.opaque,
                                         onTap: onToggleStickerPanel,
-                                        child: Icon(
-                                          Symbols.face,
+                                        child: ComposerMorphIcon(
+                                          action: stickersShown
+                                              ? ComposerAction.keyboard
+                                              : ComposerAction.stickers,
                                           color: mutedIcon,
-                                          size: 24,
-                                          weight: 400,
                                         ),
                                       ),
                                       const SizedBox(width: 12),
@@ -295,7 +317,6 @@ class ComposerInputBar extends StatelessWidget {
                                     ),
                                     if (showAttachButton)
                                       _AttachButton(
-                                        hasText: hasText,
                                         onOpen: onOpenAttach,
                                         onLongOpen: onOpenAttachScheduled,
                                         uploadStatus: uploadStatus,
@@ -534,7 +555,7 @@ class ComposerInputBar extends StatelessWidget {
       ),
     );
 
-    return _barSurface(cs, bar);
+    return SelectionToolbarFloor(child: _barSurface(cs, bar));
   }
 
   bool get _flat => !ComposerChrome.isGlossy(style);
@@ -573,24 +594,24 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
+  Color _solidPillColor(ColorScheme cs) => Color.alphaBlend(
+    cs.surfaceContainerHighest.withValues(alpha: 0.92),
+    cs.surface,
+  );
+
+  BorderSide _pillBorder(ColorScheme cs) =>
+      BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5), width: 0.5);
+
   Widget _fieldSurface(ColorScheme cs, Widget child) {
     if (_flat) return child;
     return GlossyPill(
-      color: _translucent
-          ? AppFrost.glassTint(cs)
-          : Color.alphaBlend(
-              cs.surfaceContainerHighest.withValues(alpha: 0.92),
-              cs.surface,
-            ),
+      color: _translucent ? AppFrost.glassTint(cs) : _solidPillColor(cs),
       blurSigma: _frost ? AppFrost.sigma : null,
       liquid: _liquid,
       backdropKey: backdropKey,
       borderRadius: BorderRadius.circular(28),
       depth: 8,
-      borderSide: BorderSide(
-        color: cs.outlineVariant.withValues(alpha: 0.5),
-        width: 0.5,
-      ),
+      borderSide: _pillBorder(cs),
       child: child,
     );
   }
@@ -600,6 +621,7 @@ class ComposerInputBar extends StatelessWidget {
     required Widget child,
     VoidCallback? onTap,
     VoidCallback? onLongPress,
+    BorderSide? borderSide,
   }) {
     return TweenAnimationBuilder<Color?>(
       tween: ColorTween(end: color),
@@ -609,6 +631,7 @@ class ComposerInputBar extends StatelessWidget {
         color: tinted ?? color,
         onTap: onTap,
         onLongPress: onLongPress,
+        borderSide: borderSide,
         child: child,
       ),
     );
@@ -619,6 +642,7 @@ class ComposerInputBar extends StatelessWidget {
     required Widget child,
     VoidCallback? onTap,
     VoidCallback? onLongPress,
+    BorderSide? borderSide,
   }) {
     if (_flat) {
       return Material(
@@ -634,6 +658,7 @@ class ComposerInputBar extends StatelessWidget {
       liquid: _liquid,
       backdropKey: backdropKey,
       borderRadius: BorderRadius.circular(_controlSize / 2),
+      borderSide: borderSide,
       onTap: onTap,
       onLongPress: onLongPress,
       keepInkLayer: true,
@@ -698,7 +723,7 @@ class ComposerInputBar extends StatelessWidget {
         ? cs.onSurfaceVariant
         : cs.onSurfaceVariant.withValues(alpha: 0.38);
     final row = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
+      padding: _previewPadding,
       child: Row(
         children: [
           Icon(Symbols.forward, size: 20, color: cs.primary),
@@ -768,7 +793,7 @@ class ComposerInputBar extends StatelessWidget {
           attachments: reply.attachments,
         );
         final row = Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
+          padding: _previewPadding,
           child: Row(
             children: [
               _replyIconButton(cs),
@@ -781,15 +806,24 @@ class ComposerInputBar extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      l10n.composerInputReplyTo(name),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            l10n.composerInputReplyTo(name),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: cs.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (reply.senderId != myId)
+                          SenderBadge(senderId: reply.senderId, size: 13),
+                      ],
                     ),
                     if (preview.isNotEmpty) _previewLine(cs, visual, preview),
                   ],
@@ -847,7 +881,31 @@ class ComposerInputBar extends StatelessWidget {
     );
   }
 
+  bool get _previewFloats =>
+      !_flat && !_translucent && chrome != ChatChromeStyle.transparent;
+
+  EdgeInsets get _previewPadding => _previewFloats
+      ? const EdgeInsets.fromLTRB(16, 4, 6, 4)
+      : const EdgeInsets.fromLTRB(16, 6, 8, 2);
+
   Widget _previewSurface(ColorScheme cs, Widget child) {
+    if (_previewFloats) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          _barSideInset,
+          _barVerticalInset,
+          _barSideInset,
+          0,
+        ),
+        child: GlossyPill(
+          color: _solidPillColor(cs),
+          borderRadius: BorderRadius.circular(28),
+          depth: 8,
+          borderSide: _pillBorder(cs),
+          child: child,
+        ),
+      );
+    }
     if (_flat && _translucent) return child;
     if (!_translucent && chrome != ChatChromeStyle.transparent) return child;
     return GlassSurface(
@@ -1102,7 +1160,6 @@ ContentInsertionConfiguration? _insertionConfig(
 }
 
 class _AttachButton extends StatelessWidget {
-  final ValueListenable<bool> hasText;
   final VoidCallback onOpen;
   final VoidCallback onLongOpen;
   final ValueListenable<UploadStatus> uploadStatus;
@@ -1112,7 +1169,6 @@ class _AttachButton extends StatelessWidget {
   final double leading;
 
   const _AttachButton({
-    required this.hasText,
     required this.onOpen,
     required this.onLongOpen,
     required this.uploadStatus,
@@ -1124,56 +1180,45 @@ class _AttachButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: Listenable.merge([hasText, uploadStatus]),
-      builder: (context, _) {
-        final isText = hasText.value;
-        final status = uploadStatus.value;
+    return ValueListenableBuilder<UploadStatus>(
+      valueListenable: uploadStatus,
+      builder: (context, status, _) {
         final iconColor = status.awaitingResponse
             ? cs.primary
             : (status.active
                   ? cs.onSurfaceVariant.withValues(alpha: 0.5)
                   : mutedIcon);
-        final disabled = isText || status.active;
-        final onTap = disabled ? null : onOpen;
-        final onLongPress = disabled ? null : onLongOpen;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: isText ? 0 : slot,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity: isText ? 0 : 1,
-            child: isText
-                ? const SizedBox.shrink()
-                : GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onTap,
-                    onLongPress: onLongPress,
-                    child: Padding(
-                      padding: EdgeInsets.only(left: leading),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          if (status.active)
-                            SizedBox(
-                              width: 30,
-                              height: 30,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                value: status.progressValue,
-                                color: cs.primary,
-                              ),
-                            ),
-                          Icon(
-                            Symbols.attachment,
-                            color: iconColor,
-                            size: 22,
-                            weight: 400,
-                          ),
-                        ],
+        final disabled = status.active;
+        return SizedBox(
+          width: slot,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: disabled ? null : onOpen,
+            onLongPress: disabled ? null : onLongOpen,
+            child: Padding(
+              padding: EdgeInsets.only(left: leading),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (status.active)
+                    SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        value: status.progressValue,
+                        color: cs.primary,
                       ),
                     ),
+                  Icon(
+                    Symbols.attachment,
+                    color: iconColor,
+                    size: 22,
+                    weight: 400,
                   ),
+                ],
+              ),
+            ),
           ),
         );
       },

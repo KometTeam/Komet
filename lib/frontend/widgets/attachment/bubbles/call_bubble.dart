@@ -41,9 +41,13 @@ class CallBubble extends StatelessWidget {
 
     final directionIcon = isMe ? Symbols.call_made : Symbols.call_received;
 
-    final subtitle = missed
-        ? ctx.clockText
-        : '${ctx.clockText} · ${formatSecondsMmSs((call.durationMs / 1000).round())}';
+    final duration = formatSecondsMmSs((call.durationMs / 1000).round());
+    final subtitle = switch ((missed, ctx.metaInFooter)) {
+      (true, true) => null,
+      (true, false) => ctx.clockText,
+      (false, true) => duration,
+      (false, false) => '${ctx.clockText} · $duration',
+    };
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
@@ -80,28 +84,30 @@ class CallBubble extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      directionIcon,
-                      size: 13,
-                      color: missed ? ctx.cs.error : ctx.dim,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: ctx.dim,
-                        fontSize: 12,
-                        height: 1.2,
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        directionIcon,
+                        size: 13,
+                        color: missed ? ctx.cs.error : ctx.dim,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 3),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: ctx.dim,
+                          fontSize: 12,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

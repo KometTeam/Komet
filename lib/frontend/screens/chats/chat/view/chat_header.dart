@@ -18,6 +18,7 @@ import 'package:komet/main.dart' show storiesModule;
 import 'package:komet/models/story.dart';
 import '../../../../../core/config/app_fonts.dart';
 import '../../../../widgets/local_avatar_builder.dart';
+import '../../../../widgets/verified_mark.dart';
 
 class ChatHeaderRow extends StatelessWidget {
   final bool glossy;
@@ -202,12 +203,13 @@ class ChatHeaderRow extends StatelessWidget {
                             ),
                             if (isOfficial) ...[
                               const SizedBox(width: 4),
-                              Icon(
-                                Symbols.verified,
-                                color: cs.primary,
+                              ProfileHeroBadge(
+                                tag: heroTag,
                                 size: 16,
-                                weight: 600,
-                                fill: 1,
+                                child: VerifiedMark(
+                                  color: cs.primary,
+                                  size: 16,
+                                ),
                               ),
                             ],
                           ],
@@ -381,12 +383,10 @@ class ChatHeaderRow extends StatelessWidget {
                           ),
                           if (isOfficial) ...[
                             const SizedBox(width: 4),
-                            Icon(
-                              Symbols.verified,
-                              color: cs.primary,
+                            ProfileHeroBadge(
+                              tag: heroTag,
                               size: 16,
-                              weight: 600,
-                              fill: 1,
+                              child: VerifiedMark(color: cs.primary, size: 16),
                             ),
                           ],
                         ],

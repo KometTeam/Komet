@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../widgets/connection_status.dart';
 
 import '../../../core/config/app_icon.dart';
+import '../../../core/config/ios_release.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/custom_notification.dart';
@@ -74,9 +75,11 @@ class _AppIconScreenState extends State<AppIconScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    AppIconConfig.isSupported
-                        ? l10n.appIconScreenHint
-                        : l10n.appIconScreenOnlyMobile,
+                    !AppIconConfig.isSupported
+                        ? l10n.appIconScreenOnlyMobile
+                        : IosRelease.isIOS
+                        ? l10n.appIconScreenHintIos
+                        : l10n.appIconScreenHint,
                     style: TextStyle(
                       color: cs.onSurfaceVariant,
                       fontSize: 13,

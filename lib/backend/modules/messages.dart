@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../api.dart';
 import '../../core/config/komet_settings.dart';
 import '../../core/contacts/device_contacts_service.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/crypto/e2ee_service.dart';
+import '../../core/crypto/outgoing_message_policy.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/message_ranges.dart';
 import '../../core/storage/token_storage.dart';
@@ -15,10 +18,14 @@ import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
 import '../../models/attachment.dart';
 import 'chats.dart' show chats;
+import 'history_reconcile.dart';
 import 'message_copy.dart';
+import 'sent_message.dart';
 
 // #***! быстрый кэш id -> имя аватарка телефон, из него подписи в пузырях
 class ContactCache {
+  static final ValueNotifier<int> officialRevision = ValueNotifier(0);
+
   static final Map<int, String> _nameCache = {};
   static final Map<int, String> _avatarCache = {};
   static final Map<int, Set<String>> _optionsCache = {};
@@ -64,8 +71,13 @@ class ContactCache {
     }
   }
 
-  static void putOptions(int id, Set<String> opts) {
+  static void putOptions(int id, Set<String> opts, {bool notify = true}) {
+    final before = _optionsCache[id];
     _optionsCache[id] = opts;
+    final changed =
+        before == null ||
+        before.contains('OFFICIAL') != opts.contains('OFFICIAL');
+    if (notify && changed) officialRevision.value++;
     _scheduleSave();
   }
 
@@ -466,6 +478,8 @@ class ReplyInfo {
           return '';
         case AttachmentType.forward:
           return 'Переслано';
+        case AttachmentType.storyReply:
+          return 'История';
         case AttachmentType.unknown:
           return 'Вложение';
       }
@@ -538,6 +552,21 @@ class CachedMessage {
 
   ForwardedMessageAttachment? get forwardedAttachment =>
       attachments?.whereType<ForwardedMessageAttachment>().firstOrNull;
+
+  StickerAttachment? get stickerAttachment =>
+      (forwardedAttachment?.originalAttachments ?? attachments)
+          ?.whereType<StickerAttachment>()
+          .firstOrNull;
+
+  AudioAttachment? get audioAttachment =>
+      (forwardedAttachment?.originalAttachments ?? attachments)
+          ?.whereType<AudioAttachment>()
+          .firstOrNull;
+
+  FileAttachment? get fileAttachment =>
+      (forwardedAttachment?.originalAttachments ?? attachments)
+          ?.whereType<FileAttachment>()
+          .firstOrNull;
 
   String? get selectableText {
     final own = text;
@@ -804,6 +833,14 @@ class MessagesModule {
       'getMessages': true,
     };
 
+    final reachesNow = fromTime == null && forward <= 0;
+    final settledBefore = DateTime.now()
+        .subtract(historySettleWindow)
+        .millisecondsSinceEpoch;
+    final latestBefore = reachesNow
+        ? await _latestLocalRows(accountId, chatId, backward ?? count)
+        : const <Map<String, dynamic>>[];
+
     final response = await _api.sendRequest(Opcode.chatHistory, payload);
 
     if (!response.isOk) return [];
@@ -856,7 +893,59 @@ class MessagesModule {
       backward: backward ?? count,
       messagesData: messagesData,
     );
+    await _dropDeletedOnServer(
+      accountId,
+      chatId,
+      messagesData,
+      latestBefore: latestBefore,
+      reachesNow: reachesNow,
+      settledBefore: settledBefore,
+    );
     return toSave;
+  }
+
+  Future<List<Map<String, dynamic>>> _latestLocalRows(
+    int accountId,
+    int chatId,
+    int limit,
+  ) async {
+    try {
+      return await AppDatabase.loadMessages(accountId, chatId, limit: limit);
+    } catch (e) {
+      logger.w('Сверка истории $chatId: база не прочиталась: $e');
+      return const [];
+    }
+  }
+
+  Future<void> _dropDeletedOnServer(
+    int accountId,
+    int chatId,
+    List<dynamic> messagesData, {
+    required List<Map<String, dynamic>> latestBefore,
+    required bool reachesNow,
+    required int settledBefore,
+  }) async {
+    final page = HistoryPage.of(messagesData);
+    if (page == null) return;
+    try {
+      final span = await AppDatabase.loadMessagesBetween(
+        accountId,
+        chatId,
+        afterTime: page.oldest - 1,
+        beforeTime: page.newest + 1,
+        limit: messagesData.length * 2 + 100,
+      );
+      final missing = page.missingFrom(
+        [...span, ...latestBefore],
+        reachesNow: reachesNow,
+        settledBefore: settledBefore,
+      );
+      if (missing.isEmpty) return;
+      logger.i('Чат $chatId: ${missing.length} сообщ. удалены на сервере');
+      await chats.dropDeletedOnServer(accountId, chatId, missing);
+    } catch (e) {
+      logger.w('Сверка истории $chatId не удалась: $e');
+    }
   }
 
   Future<void> _recordCoverage(
@@ -1003,22 +1092,80 @@ class MessagesModule {
   }
 
   // #***! отправка текста, cid спасает от дублей
-  Future<String> sendMessage(
+  Future<Packet> _sendUserMessage(
+    Map<dynamic, dynamic> payload, {
+    int opcode = Opcode.msgSend,
+    int? accountId,
+    bool encryptedPayload = false,
+    bool encryptionControl = false,
+    void Function()? beforeSend,
+  }) async {
+    final session = _api.session;
+    final epoch = _api.sessionEpoch;
+    final accountEpoch = TokenStorage.accountEpoch;
+    beforeSend?.call();
+    final chatId = payload['chatId'];
+    if (chatId is! int) {
+      throw ArgumentError.value(chatId, 'chatId', 'Message without chat');
+    }
+    if (encryptionControl &&
+        !OutgoingMessagePolicy.isEncryptionControl(_outgoingText(payload))) {
+      throw ArgumentError('Only E2EE handshake messages skip encryption');
+    }
+    final owner = accountId ?? await TokenStorage.getActiveAccountId();
+    if (owner == null) {
+      throw StateError('No active account for message dispatch');
+    }
+    await OutgoingMessagePolicy.load(owner);
+    if (await TokenStorage.getActiveAccountId() != owner) {
+      throw StateError('Account changed before message dispatch');
+    }
+    return _api.sendRequest(
+      opcode,
+      payload,
+      beforeSend: () {
+        beforeSend?.call();
+        if (!identical(_api.session, session) ||
+            _api.sessionEpoch != epoch ||
+            TokenStorage.accountEpoch != accountEpoch) {
+          throw StateError('Account changed before message dispatch');
+        }
+        if (!encryptionControl) {
+          OutgoingMessagePolicy.requireSupported(
+            owner,
+            chatId,
+            encryptedPayload: encryptedPayload,
+          );
+        }
+      },
+    );
+  }
+
+  static String _outgoingText(Map<dynamic, dynamic> payload) {
+    final message = payload['message'];
+    final text = message is Map ? message['text'] : payload['text'];
+    return text is String ? text : '';
+  }
+
+  Future<SentMessage> sendMessage(
     int accountId,
     int chatId,
     String text, {
     bool notify = true,
+    bool encryptedPayload = false,
+    bool encryptionControl = false,
     int? scheduledTime,
     int? replyToMessageId,
     int? replySourceChatId,
     List<Map<String, dynamic>> elements = const [],
+    List<Map<String, dynamic>> attaches = const [],
     void Function()? beforeSend,
   }) async {
     final message = <String, dynamic>{
       'text': text,
       'cid': -_nextCid(),
       'elements': elements,
-      'attaches': [],
+      'attaches': [...attaches],
     };
     if (replyToMessageId != null) {
       message['link'] = {
@@ -1035,10 +1182,13 @@ class MessagesModule {
     }
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
-    return _sendAndExtractMessageId(
+    return _sendAndExtract(
       payload,
       'Ошибка отправки',
       beforeSend: beforeSend,
+      accountId: accountId,
+      encryptedPayload: encryptedPayload,
+      encryptionControl: encryptionControl,
     );
   }
 
@@ -1081,28 +1231,25 @@ class MessagesModule {
   }
 
   // #***! разбор ответа отправки, достаём id от сервера
-  Future<String> _sendAndExtractMessageId(
+  Future<SentMessage> _sendAndExtract(
     Map<String, dynamic> payload,
     String defaultError, {
     void Function()? beforeSend,
+    int? accountId,
+    bool encryptedPayload = false,
+    bool encryptionControl = false,
   }) async {
-    final response = await _api.sendRequest(
-      Opcode.msgSend,
+    final response = await _sendUserMessage(
       payload,
+      accountId: accountId,
+      encryptedPayload: encryptedPayload,
+      encryptionControl: encryptionControl,
       beforeSend: beforeSend,
     );
     if (!response.isOk) {
       _throwSendError(response.payload, defaultError);
     }
-    final data = response.payload;
-    if (data is Map) {
-      final msgMap = data['message'];
-      if (msgMap is Map) {
-        final id = msgMap['id'];
-        if (id != null) return id.toString();
-      }
-    }
-    return '';
+    return SentMessage.fromResponse(response.payload);
   }
 
   Never _throwSendError(dynamic payload, String fallback) {
@@ -1129,10 +1276,16 @@ class MessagesModule {
     required Duration retryDelay,
     required T Function(Packet response) onResult,
     required T onExhausted,
+    void Function()? beforeSend,
+    bool encryptedPayload = false,
   }) async {
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        final response = await _api.sendRequest(Opcode.msgSend, payload);
+        final response = await _sendUserMessage(
+          payload,
+          encryptedPayload: encryptedPayload,
+          beforeSend: beforeSend,
+        );
         return onResult(response);
       } on PacketError catch (e) {
         if (!(e.errorKey?.contains('not.ready') ?? false)) {
@@ -1172,11 +1325,12 @@ class MessagesModule {
       'notify': notify,
     };
 
-    return _sendAndExtractMessageId(
+    final sent = await _sendAndExtract(
       payload,
       'Ошибка пересылки',
       beforeSend: beforeSend,
     );
+    return sent.id;
   }
 
   Future<Map<String, dynamic>> sendMessageCopy(
@@ -1185,7 +1339,7 @@ class MessagesModule {
     bool notify = true,
     void Function()? beforeSend,
   }) async {
-    final response = await _api.sendRequest(Opcode.msgSend, {
+    final response = await _sendUserMessage({
       'chatId': chatId,
       'message': {
         'cid': -_nextCid(),
@@ -1370,31 +1524,41 @@ class MessagesModule {
   }
 
   // #***! редактирование
-  Future<bool> editMessage(
+  Future<SentMessage?> editMessage(
     int chatId,
     String messageId, {
     required String text,
+    bool encryptedPayload = false,
+    bool encryptionControl = false,
     List<Map<String, dynamic>> elements = const [],
-    bool sendAttachments = false,
+    List<Map<String, dynamic>>? attachments,
   }) async {
     final id = int.tryParse(messageId);
-    if (id == null) return false;
+    if (id == null) return null;
 
     final payload = <String, dynamic>{
       'messageId': id,
       'chatId': chatId,
       'elements': elements,
       'text': text,
+      'attachments': ?attachments,
     };
-    if (sendAttachments) payload['attachments'] = const <dynamic>[];
 
-    return _api.sendRequestOk(Opcode.msgEdit, payload);
+    final response = await _sendUserMessage(
+      payload,
+      opcode: Opcode.msgEdit,
+      encryptedPayload: encryptedPayload,
+      encryptionControl: encryptionControl,
+    );
+    return response.isOk ? SentMessage.fromResponse(response.payload) : null;
   }
 
   Future<bool> editScheduledMessage(
     int chatId,
     String messageId, {
     required String text,
+    bool encryptedPayload = false,
+    bool encryptionControl = false,
     required int timeToFire,
   }) async {
     final id = int.tryParse(messageId);
@@ -1408,7 +1572,13 @@ class MessagesModule {
       'delayedAttributes': {'timeToFire': timeToFire, 'notifySender': true},
     };
 
-    return _api.sendRequestOk(Opcode.msgEdit, payload);
+    final response = await _sendUserMessage(
+      payload,
+      opcode: Opcode.msgEdit,
+      encryptedPayload: encryptedPayload,
+      encryptionControl: encryptionControl,
+    );
+    return response.isOk;
   }
 
   // #***! удаление, deleteForAll значит у всех
@@ -1635,9 +1805,16 @@ class MessagesModule {
   }
 
   // #***! дальше пары запросить адрес и отправить, на каждый тип медиа
-  Future<FileUploadInfo?> requestUploadUrl({int count = 1}) async {
+  Future<FileUploadInfo?> requestUploadUrl({
+    int count = 1,
+    void Function()? beforeSend,
+  }) async {
     final payload = {'count': count};
-    final response = await _api.sendRequest(Opcode.fileUpload, payload);
+    final response = await _api.sendRequest(
+      Opcode.fileUpload,
+      payload,
+      beforeSend: beforeSend,
+    );
     if (!response.isOk) return null;
 
     final data = response.payload;
@@ -1668,6 +1845,8 @@ class MessagesModule {
     int? scheduledTime,
     int maxAttempts = 20,
     Duration retryDelay = const Duration(seconds: 1),
+    void Function()? beforeSend,
+    bool encryptedPayload = false,
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -1696,14 +1875,19 @@ class MessagesModule {
       retryDelay: retryDelay,
       onResult: (response) => _sentMessageMap(response)?['id']?.toString(),
       onExhausted: null,
+      beforeSend: beforeSend,
+      encryptedPayload: encryptedPayload,
     );
   }
 
-  Future<String?> requestPhotoUploadUrl({int? type}) async {
+  Future<String?> requestPhotoUploadUrl({
+    int? type,
+    void Function()? beforeSend,
+  }) async {
     final response = await _api.sendRequest(Opcode.photoUpload, {
       'type': ?type,
       'count': 1,
-    });
+    }, beforeSend: beforeSend);
     if (!response.isOk) return null;
     final data = response.payload;
     if (data is! Map) return null;
@@ -1718,6 +1902,7 @@ class MessagesModule {
     int? scheduledTime,
     int maxAttempts = 20,
     Duration retryDelay = const Duration(seconds: 1),
+    void Function()? beforeSend,
   }) async {
     final message = <String, dynamic>{
       'cid': -_nextCid(),
@@ -1741,15 +1926,19 @@ class MessagesModule {
       retryDelay: retryDelay,
       onResult: _sentMessageMap,
       onExhausted: null,
+      beforeSend: beforeSend,
     );
   }
 
-  Future<VideoUploadInfo?> requestVideoUploadUrl({int type = 0}) async {
+  Future<VideoUploadInfo?> requestVideoUploadUrl({
+    int type = 0,
+    void Function()? beforeSend,
+  }) async {
     final response = await _api.sendRequest(Opcode.videoUpload, {
       'uploaderType': 0,
       'type': type,
       'count': 1,
-    });
+    }, beforeSend: beforeSend);
     if (!response.isOk) return null;
 
     final data = response.payload;
@@ -1776,6 +1965,7 @@ class MessagesModule {
     int? scheduledTime,
     int maxAttempts = 30,
     Duration retryDelay = const Duration(seconds: 1),
+    void Function()? beforeSend,
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -1801,15 +1991,18 @@ class MessagesModule {
       retryDelay: retryDelay,
       onResult: _sentMessageMap,
       onExhausted: null,
+      beforeSend: beforeSend,
     );
   }
 
-  Future<AudioUploadInfo?> requestAudioUploadUrl() async {
+  Future<AudioUploadInfo?> requestAudioUploadUrl({
+    void Function()? beforeSend,
+  }) async {
     final response = await _api.sendRequest(Opcode.videoUpload, {
       'uploaderType': 1,
       'type': 2,
       'count': 1,
-    });
+    }, beforeSend: beforeSend);
     if (!response.isOk) return null;
 
     final data = response.payload;
@@ -1837,6 +2030,7 @@ class MessagesModule {
     int? scheduledTime,
     int maxAttempts = 30,
     Duration retryDelay = const Duration(seconds: 1),
+    void Function()? beforeSend,
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -1866,15 +2060,18 @@ class MessagesModule {
       retryDelay: retryDelay,
       onResult: _sentMessageMap,
       onExhausted: null,
+      beforeSend: beforeSend,
     );
   }
 
-  Future<VideoUploadInfo?> requestVideoNoteUploadUrl() async {
+  Future<VideoUploadInfo?> requestVideoNoteUploadUrl({
+    void Function()? beforeSend,
+  }) async {
     final response = await _api.sendRequest(Opcode.videoUpload, {
       'uploaderType': 1,
       'type': 1,
       'count': 1,
-    });
+    }, beforeSend: beforeSend);
     if (!response.isOk) return null;
 
     final data = response.payload;
@@ -1902,6 +2099,7 @@ class MessagesModule {
     bool notify = true,
     int maxAttempts = 30,
     Duration retryDelay = const Duration(seconds: 1),
+    void Function()? beforeSend,
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -1927,6 +2125,7 @@ class MessagesModule {
       retryDelay: retryDelay,
       onResult: _sentMessageMap,
       onExhausted: null,
+      beforeSend: beforeSend,
     );
   }
 
@@ -1936,6 +2135,7 @@ class MessagesModule {
     double longitude, {
     double zoom = 15,
     bool notify = true,
+    void Function()? beforeSend,
   }) async {
     final payload = {
       'chatId': chatId,
@@ -1953,7 +2153,7 @@ class MessagesModule {
       'notify': notify,
     };
 
-    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    final response = await _sendUserMessage(payload, beforeSend: beforeSend);
     return _sentMessageMap(response);
   }
 
@@ -1961,6 +2161,7 @@ class MessagesModule {
     int chatId,
     int contactId, {
     bool notify = true,
+    void Function()? beforeSend,
   }) async {
     final payload = {
       'chatId': chatId,
@@ -1973,7 +2174,7 @@ class MessagesModule {
       'notify': notify,
     };
 
-    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    final response = await _sendUserMessage(payload, beforeSend: beforeSend);
     return _sentMessageMap(response);
   }
 
@@ -1987,6 +2188,7 @@ class MessagesModule {
     bool multiple = false,
     bool anonymous = true,
     bool notify = true,
+    void Function()? beforeSend,
   }) async {
     final settings =
         (anonymous ? _pollAnonymousFlag : 0) |
@@ -2009,7 +2211,7 @@ class MessagesModule {
       'notify': notify,
     };
 
-    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    final response = await _sendUserMessage(payload, beforeSend: beforeSend);
     return _sentMessageMap(response);
   }
 
@@ -2029,6 +2231,7 @@ class MessagesModule {
     int chatId,
     int stickerId, {
     bool notify = true,
+    void Function()? beforeSend,
   }) async {
     final payload = {
       'chatId': chatId,
@@ -2041,7 +2244,7 @@ class MessagesModule {
       'notify': notify,
     };
 
-    final response = await _api.sendRequest(Opcode.msgSend, payload);
+    final response = await _sendUserMessage(payload, beforeSend: beforeSend);
     return _sentMessageMap(response);
   }
 
@@ -2148,6 +2351,34 @@ class MessagesModule {
       videoId: videoId,
     );
     return sources.values.isEmpty ? null : sources.values.first;
+  }
+
+  static const List<String> _previewQualities = [
+    '480p',
+    '360p',
+    '720p',
+    '240p',
+    '144p',
+    '1080p',
+  ];
+
+  Future<String?> getVideoPreviewUrl({
+    required String messageId,
+    required int chatId,
+    required String token,
+    required int videoId,
+  }) async {
+    final sources = await getVideoSources(
+      messageId: messageId,
+      chatId: chatId,
+      token: token,
+      videoId: videoId,
+    );
+    for (final quality in _previewQualities) {
+      final url = sources[quality];
+      if (url != null) return url;
+    }
+    return null;
   }
 
   Future<Uint8List?> downloadVideo(String baseUrl, String videoToken) async {

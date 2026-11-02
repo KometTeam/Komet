@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show kIsWeb, listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:material_symbols_icons/symbols.dart';
@@ -12,9 +12,11 @@ import '../../../core/cache/self_presence.dart';
 import '../../../core/config/build_profile.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/komet_settings.dart';
+import '../../../core/config/legal_links.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/link_opener.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/update_checker.dart';
 import '../../../l10n/app_localizations.dart';
@@ -22,8 +24,12 @@ import '../../../main.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../widgets/animated_slash_icon.dart';
 import 'media_devices_screen.dart';
+import 'storage_screen.dart';
+import '../../widgets/spotlight.dart';
+import '../../../core/whats_new/spotlight_ids.dart';
 import '../../widgets/attachment/photo_hero.dart';
 import '../../widgets/avatar_gallery.dart';
+import '../../widgets/badged_icon.dart';
 import '../../widgets/photo_viewer.dart';
 import '../../widgets/avatar_photo_actions.dart';
 import '../../widgets/connection_status.dart';
@@ -35,6 +41,7 @@ import '../../widgets/reload_on_reconnect.dart';
 import '../../widgets/settings_card.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
+import '../../widgets/spoiler.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/update_dialog.dart';
 import '../chats/chat_list_screen.dart' show activeNavTab;
@@ -47,6 +54,7 @@ import '../digital_id/digital_id_web_screen.dart';
 import '../webapp/web_app_bridge.dart';
 import '../webapp/web_app_screen.dart';
 import 'avatar_carousel.dart';
+import 'language_screen.dart';
 import 'cloud_storage_screen.dart';
 import 'customization_section.dart';
 import 'debug_menu_screen.dart';
@@ -62,9 +70,12 @@ import 'spoof_screen.dart';
 import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
 import '../../../core/config/app_shape.dart';
+import 'chat_settings_screen.dart';
 
 class SettingsTab extends StatefulWidget {
-  const SettingsTab({super.key});
+  const SettingsTab({super.key, this.bottomPadding = 120});
+
+  final double bottomPadding;
 
   @override
   State<SettingsTab> createState() => _SettingsTabState();
@@ -100,6 +111,7 @@ class _SettingsTabState extends State<SettingsTab>
   Timer? _versionSecretTapResetTimer;
   StreamSubscription? _profileUpdateSub;
   bool _avatarsLoading = false;
+  bool _loggingOut = false;
 
   @override
   void reloadAfterReconnect() {
@@ -308,7 +320,8 @@ class _SettingsTabState extends State<SettingsTab>
 
   AvatarPhoto? get _currentAvatar {
     if (_avatarPhotos.isEmpty) return null;
-    return _avatarPhotos[_avatarIndex.clamp(0, _avatarPhotos.length - 1)
+    return _avatarPhotos[_avatarIndex
+        .clamp(0, _avatarPhotos.length - 1)
         .toInt()];
   }
 
@@ -495,6 +508,7 @@ class _SettingsTabState extends State<SettingsTab>
   }
 
   Future<void> _confirmLogout() async {
+    if (_loggingOut) return;
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showModalBottomSheet<bool>(
@@ -544,8 +558,13 @@ class _SettingsTabState extends State<SettingsTab>
         );
       },
     );
-    if (confirmed != true || !mounted) return;
-    await _doLogout();
+    if (confirmed != true || !mounted || _loggingOut) return;
+    _loggingOut = true;
+    try {
+      await _doLogout();
+    } finally {
+      _loggingOut = false;
+    }
   }
 
   Future<void> _doLogout() async {
@@ -562,10 +581,6 @@ class _SettingsTabState extends State<SettingsTab>
       return;
     }
     await resetDigitalIdSession();
-    try {
-      // #***! вышли из аккаунта — дальше экран входа по телефону, прошлая версия
-      await api.connect(authenticated: false);
-    } catch (_) {}
     if (navState != null) {
       await navState.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -705,8 +720,29 @@ class _SettingsTabState extends State<SettingsTab>
                       context,
                       items: [
                         _SettingsItem(
+                          leading: BadgedIcon(
+                            icon: Symbols.chat,
+                            badge: Symbols.folder,
+                            size: 22,
+                            weight: 400,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          label: l10n.chatSettingsTitle,
+                          spotlightId: SpotlightIds.settingsChats,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const ChatSettingsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _SettingsItem(
                           icon: Symbols.notifications_active,
                           label: l10n.notificationsTitle,
+                          spotlightId: SpotlightIds.settingsNotifications,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -718,8 +754,22 @@ class _SettingsTabState extends State<SettingsTab>
                           },
                         ),
                         _SettingsItem(
+                          icon: Symbols.translate,
+                          label: l10n.loginLanguage,
+                          spotlightId: SpotlightIds.settingsLanguage,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const LanguageScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _SettingsItem(
                           icon: Symbols.videocam,
                           label: l10n.mediaDevicesTitle,
+                          spotlightId: SpotlightIds.settingsMediaDevices,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -730,14 +780,32 @@ class _SettingsTabState extends State<SettingsTab>
                             );
                           },
                         ),
+                        if (!kIsWeb)
+                          _SettingsItem(
+                            icon: Symbols.storage,
+                            label: l10n.storageTitle,
+                            spotlightId: SpotlightIds.settingsStorage,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const StorageScreen(),
+                                ),
+                              );
+                            },
+                          ),
                         _SettingsItem(
                           icon: Symbols.cloud,
-                          label: l10n.settingsTabCloudStorageBeta,
+                          label: BuildProfile.isStoreRelease
+                              ? l10n.settingsTabCloudStorage
+                              : l10n.settingsTabCloudStorageBeta,
+                          spotlightId: SpotlightIds.settingsCloud,
                           onTap: () => _openCloudStorage(context),
                         ),
                         _SettingsItem(
                           icon: Symbols.vpn_lock,
                           label: l10n.proxySettingsTitle,
+                          spotlightId: SpotlightIds.settingsProxy,
                           onTap: () {
                             final cs = Theme.of(context).colorScheme;
                             showModalBottomSheet<void>(
@@ -756,8 +824,10 @@ class _SettingsTabState extends State<SettingsTab>
                         if (BuildProfile.spoofUi)
                           _SettingsItem(
                             icon: Symbols.shield_lock,
-                            label: AppLocalizations.of(context)!
-                                .profileMenuSpoof,
+                            label: AppLocalizations.of(
+                              context,
+                            )!.profileMenuSpoof,
+                            spotlightId: SpotlightIds.settingsSpoof,
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -770,6 +840,7 @@ class _SettingsTabState extends State<SettingsTab>
                         _SettingsItem(
                           icon: Symbols.lock,
                           label: l10n.securityTitle,
+                          spotlightId: SpotlightIds.settingsSecurity,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -785,6 +856,7 @@ class _SettingsTabState extends State<SettingsTab>
                         _SettingsItem(
                           icon: Symbols.devices,
                           label: l10n.devicesTitle,
+                          spotlightId: SpotlightIds.settingsDevices,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -876,6 +948,7 @@ class _SettingsTabState extends State<SettingsTab>
                             color: cs.onSurfaceVariant,
                           ),
                           label: 'Komet',
+                          spotlightId: SpotlightIds.settingsKomet,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -885,6 +958,20 @@ class _SettingsTabState extends State<SettingsTab>
                               ),
                             );
                           },
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.policy,
+                          label: l10n.settingsTabPrivacyPolicy,
+                          onTap: () => openExternalUrl(
+                            context,
+                            LegalLinks.privacyPolicy,
+                          ),
+                        ),
+                        _SettingsItem(
+                          icon: Symbols.gavel,
+                          label: l10n.settingsTabTermsOfUse,
+                          onTap: () =>
+                              openExternalUrl(context, LegalLinks.terms),
                         ),
                         _SettingsItem(
                           icon: Symbols.logout,
@@ -925,7 +1012,9 @@ class _SettingsTabState extends State<SettingsTab>
                       ),
                     ),
                   ),
-                const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                SliverToBoxAdapter(
+                  child: SizedBox(height: widget.bottomPadding),
+                ),
               ],
             ),
           ),
@@ -1084,18 +1173,19 @@ class _SettingsTabState extends State<SettingsTab>
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        IconButton(
-                          key: _avatarMenuKey,
-                          icon: Icon(
-                            Symbols.more_vert,
-                            color: iconColor,
-                            size: 22,
-                            weight: 400,
+                        if (hasPhoto)
+                          IconButton(
+                            key: _avatarMenuKey,
+                            icon: Icon(
+                              Symbols.more_vert,
+                              color: iconColor,
+                              size: 22,
+                              weight: 400,
+                            ),
+                            onPressed: _currentAvatar == null
+                                ? null
+                                : _openAvatarMenu,
                           ),
-                          onPressed: _currentAvatar == null
-                              ? null
-                              : _openAvatarMenu,
-                        ),
                         IconButton(
                           icon: Icon(
                             Symbols.edit,
@@ -1168,14 +1258,17 @@ class _SettingsTabState extends State<SettingsTab>
                                   ),
                                   child: MouseRegion(
                                     cursor: SystemMouseCursors.click,
-                                    child: _PhoneSpoiler(
-                                      text: phone,
-                                      isVisible: _isPhoneVisible,
-                                      style: TextStyle(
-                                        color: subColor,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w400,
-                                        letterSpacing: 0.5,
+                                    child: Spoiler(
+                                      revealed: _isPhoneVisible,
+                                      color: subColor,
+                                      child: Text(
+                                        phone,
+                                        style: TextStyle(
+                                          color: subColor,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w400,
+                                          letterSpacing: 0.5,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1490,13 +1583,20 @@ class _SettingsTabState extends State<SettingsTab>
     return SettingsCard(
       children: List.generate(items.length, (index) {
         final item = items[index];
-        return SettingsNavTile(
+        final tile = SettingsNavTile(
           icon: item.icon,
           leading: item.leading,
           label: item.label,
           tintColor: item.tintColor,
           onTap: item.onTap,
           isLast: index == items.length - 1,
+        );
+        final spotlightId = item.spotlightId;
+        if (spotlightId == null) return tile;
+        return SpotlightTarget(
+          id: spotlightId,
+          onActivate: item.onTap,
+          child: tile,
         );
       }),
     );
@@ -1509,6 +1609,7 @@ class _SettingsItem {
   final String label;
   final VoidCallback? onTap;
   final Color? tintColor;
+  final String? spotlightId;
 
   const _SettingsItem({
     this.icon,
@@ -1516,106 +1617,6 @@ class _SettingsItem {
     required this.label,
     this.onTap,
     this.tintColor,
+    this.spotlightId,
   });
-}
-
-class _PhoneSpoiler extends StatefulWidget {
-  final String text;
-  final bool isVisible;
-  final TextStyle style;
-
-  const _PhoneSpoiler({
-    required this.text,
-    required this.isVisible,
-    required this.style,
-  });
-
-  @override
-  State<_PhoneSpoiler> createState() => _PhoneSpoilerState();
-}
-
-class _PhoneSpoilerState extends State<_PhoneSpoiler>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    );
-    if (!widget.isVisible) {
-      _controller.repeat();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _PhoneSpoiler oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isVisible == oldWidget.isVisible) return;
-    if (widget.isVisible) {
-      _controller.stop();
-    } else if (!_controller.isAnimating) {
-      _controller.repeat();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedCrossFade(
-      duration: const Duration(milliseconds: 200),
-      crossFadeState: widget.isVisible
-          ? CrossFadeState.showSecond
-          : CrossFadeState.showFirst,
-      firstChild: SizedBox(
-        child: CustomPaint(
-          size: const Size(110, 16),
-          painter: _SpoilerPainter(_controller, widget.style.color!),
-        ),
-      ),
-      secondChild: Text(widget.text, style: widget.style),
-    );
-  }
-}
-
-class _SpoilerPainter extends CustomPainter {
-  final Animation<double> animation;
-  final Color color;
-
-  _SpoilerPainter(this.animation, this.color) : super(repaint: animation);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withValues(alpha: 0.15)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, size.width, size.height),
-        const Radius.circular(4),
-      ),
-      paint,
-    );
-
-    final particlePaint = Paint()..style = PaintingStyle.fill;
-
-    for (int i = 0; i < 60; i++) {
-      double dx = (i * 17.5 + animation.value * 20) % size.width;
-      double dy = (i * 13.7 + animation.value * 15) % size.height;
-      double opacity = (0.2 + 0.3 * (i % 5) / 5.0).clamp(0.0, 1.0);
-      particlePaint.color = color.withValues(alpha: opacity);
-      canvas.drawCircle(Offset(dx, dy), 1.2, particlePaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_SpoilerPainter oldDelegate) => true;
 }

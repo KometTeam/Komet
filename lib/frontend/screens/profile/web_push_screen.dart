@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/api.dart';
+import '../../../core/config/build_profile.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/utils/link_opener.dart';
@@ -216,7 +217,12 @@ class _WebPushScreenState extends State<WebPushScreen> {
   ) => switch (_stage) {
     _Stage.loading => const [],
     _Stage.intro => [
-      _explainer(cs, l10n.webPushIntro),
+      _explainer(
+        cs,
+        BuildProfile.isAppStoreBuild
+            ? l10n.webPushIntroAppStore
+            : l10n.webPushIntro,
+      ),
       const SizedBox(height: 20),
       _primary(l10n.webPushConnect, _connect),
     ],
@@ -263,7 +269,6 @@ class _WebPushScreenState extends State<WebPushScreen> {
       SectionHeader(
         _linked ? l10n.webPushLinkedTitle : l10n.webPushInstallTitle,
         padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-        fontSize: 14,
       ),
       _explainer(cs, _linked ? l10n.webPushLinkedBody : l10n.webPushInstallBody),
       if (_link != null) ...[

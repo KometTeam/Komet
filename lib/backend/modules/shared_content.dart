@@ -154,16 +154,32 @@ class SharedContentModule {
     required int chatId,
     required String mediaKey,
     required Future<String?> Function() resolveAnchor,
+    int? mediaTime,
   }) async {
-    final index = _mediaIndexes.putIfAbsent(chatId, _ChatMediaIndex.new);
+    var index = _mediaIndexes.putIfAbsent(chatId, _ChatMediaIndex.new);
+    if (_startsAfter(index, mediaKey, mediaTime)) {
+      index = _mediaIndexes[chatId] = _ChatMediaIndex();
+    }
 
     for (var page = 0; page < _mediaIndexMaxPages; page++) {
       if (index.seen.contains(mediaKey)) return _snapshot(index);
-      if (index.reachedEnd) return null;
+      if (_loadedPast(index, mediaTime)) return _snapshot(index);
+      if (index.reachedEnd) {
+        return index.items.isEmpty ? null : _snapshot(index);
+      }
       await _nextMediaPage(chatId, index, resolveAnchor);
     }
     return null;
   }
+
+  static bool _loadedPast(_ChatMediaIndex index, int? time) =>
+      time != null && index.items.isNotEmpty && index.items.last.time < time;
+
+  static bool _startsAfter(_ChatMediaIndex index, String key, int? time) =>
+      time != null &&
+      index.items.isNotEmpty &&
+      index.items.first.time < time &&
+      !index.seen.contains(key);
 
   // #***! подгрузка следующей страницы при скролле
   Future<ChatMediaFeed> loadMoreMedia({
@@ -289,8 +305,9 @@ class SharedContentModule {
         if (id == null) continue;
         final sender = (map['sender'] as num?)?.toInt() ?? 0;
         final time = (map['time'] as num?)?.toInt() ?? 0;
-        final text = map['text'] as String?;
-        final attaches = map['attaches'];
+        final shown = _shownContent(map);
+        final text = shown['text'] as String?;
+        final attaches = shown['attaches'];
         if (attaches is! List) continue;
         for (final a in attaches) {
           if (a is! Map) continue;
@@ -316,6 +333,13 @@ class SharedContentModule {
       logger.w('SharedContent.fetchMedia failed: $e');
       return SharedMediaPage.empty;
     }
+  }
+
+  static Map<dynamic, dynamic> _shownContent(Map<String, dynamic> message) {
+    final link = message['link'];
+    if (link is! Map || link['type'] != 'FORWARD') return message;
+    final original = link['message'];
+    return original is Map ? original : message;
   }
 
   // #***! общие чаты для карточки контакта

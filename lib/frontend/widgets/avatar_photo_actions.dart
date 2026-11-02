@@ -9,6 +9,7 @@ import '../../l10n/app_localizations.dart';
 import 'chat_menu_overlay.dart';
 import 'custom_notification.dart';
 import 'sheet_helpers.dart';
+import '../../core/utils/media_cache_names.dart';
 
 // #***! на телефоне аватарка едет в галерею, на десктопе в выбранную папку
 String avatarSaveLabel(BuildContext context) {
@@ -36,7 +37,7 @@ Future<void> saveAvatarPhoto(BuildContext context, String url) async {
   }
 
   final dialogTitle = avatarSaveLabel(context);
-  final cacheName = 'avatar_${url.hashCode & 0x7fffffff}.jpg';
+  final cacheName = avatarCacheName(url);
   final file = await MediaCache.getOrDownload(cacheName, url);
   if (!context.mounted) return;
   if (file == null) {

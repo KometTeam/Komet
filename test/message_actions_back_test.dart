@@ -32,7 +32,7 @@ void main() {
                 context: context,
                 originRect: const Rect.fromLTWH(20, 200, 200, 40),
                 tapPoint: const Offset(60, 220),
-                isMe: false,
+                outgoing: false,
                 messageText: 'текст',
                 copyText: 'текст',
                 controller: controller,

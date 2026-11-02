@@ -180,5 +180,14 @@ void main() {
           MaxLink.parse('https://max.ru/:Settings/Appearance') as MaxRouteLink;
       expect(nested.route, ':settings/appearance');
     });
+
+    test('only shell routes open before the session is up', () {
+      expect(MaxLink.parse('max.ru/:saved-messages')!.needsSession, isFalse);
+      expect(MaxLink.parse('max.ru/:chats-search')!.needsSession, isFalse);
+      expect(MaxLink.parse('max.ru/:contact-list')!.needsSession, isFalse);
+      expect(MaxLink.parse('max.ru/:chats?id=5')!.needsSession, isTrue);
+      expect(MaxLink.parse('max.ru/:profile?id=5')!.needsSession, isTrue);
+      expect(MaxLink.parse('max.ru/synthetic_user')!.needsSession, isTrue);
+    });
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -11,19 +13,24 @@ import '../../../../core/media/voice_audio_controller.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../models/upload_bytes.dart';
 import '../../custom_notification.dart';
 import '../../small_spinner.dart';
 import 'meta_marks.dart';
+import '../../upload_progress_ring.dart';
 
 class VoiceMessageBubble extends StatefulWidget {
   final int duration;
   final String url;
   final Color textColor;
   final bool isMe;
+  final bool showsStatus;
+  final ValueListenable<int?>? views;
   final bool deleted;
   final String? status;
   final ValueListenable<int>? otherReadTime;
   final int time;
+  final bool showMeta;
   final bool likelyForwarded;
   final ColorScheme cs;
   final String? waveData;
@@ -34,7 +41,7 @@ class VoiceMessageBubble extends StatefulWidget {
   final int senderId;
   final int? audioId;
   final String? preloadedText;
-  final ValueListenable<List<double>>? uploadProgress;
+  final ValueListenable<List<UploadBytes>>? uploadProgress;
 
   const VoiceMessageBubble({
     super.key,
@@ -42,10 +49,13 @@ class VoiceMessageBubble extends StatefulWidget {
     required this.url,
     required this.textColor,
     required this.isMe,
+    required this.showsStatus,
+    this.views,
     this.deleted = false,
     this.status,
     this.otherReadTime,
     required this.time,
+    this.showMeta = true,
     this.likelyForwarded = false,
     required this.cs,
     this.waveData,
@@ -90,6 +100,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     _audio.failure.addListener(_onFailure);
     TranscriptionCache.listen(_sourceMessageId, _onTranscriptionPush);
     _adoptCachedTranscription();
+    if (KometSettings.autoDownloadVoice.value) unawaited(_audio.prefetch());
   }
 
   @override
@@ -128,7 +139,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         final text => text,
       };
 
-  String get _cacheName => '${widget.audioId ?? _sourceMessageId}.ogg';
+  String get _cacheName => VoiceAudioController.cacheNameFor(
+    audioId: widget.audioId,
+    messageId: _sourceMessageId,
+  );
 
   int get _sourceChatId => widget.sourceChatId ?? widget.chatId;
 
@@ -172,6 +186,30 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
           AppLocalizations.of(context)!.voiceBubblePlaybackError,
         );
     }
+  }
+
+  List<Widget> _buildMeta() {
+    final dim = widget.textColor.withValues(alpha: 0.6);
+    return [
+      if (widget.likelyForwarded) LikelyForwardedMark(color: dim),
+      if (widget.views case final views?)
+        ViewsMark(views: views, color: dim, fontSize: 10),
+      Text(
+        formatClock(
+          DateTime.fromMillisecondsSinceEpoch(widget.time),
+          withSeconds: KometSettings.fullTimestamp.value,
+        ),
+        style: TextStyle(color: dim, fontSize: 10),
+      ),
+      if (widget.showsStatus) ...[
+        const SizedBox(width: 2),
+        _buildStatusIcon(),
+      ],
+      if (widget.deleted) ...[
+        const SizedBox(width: 2),
+        Icon(Symbols.delete, size: 13, color: dim),
+      ],
+    ];
   }
 
   Widget _buildStatusIcon() {
@@ -290,28 +328,14 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     );
   }
 
-  Widget _buildUploadIndicator(ValueListenable<List<double>> progress) {
-    return Padding(
+  Widget _buildUploadIndicator(ValueListenable<List<UploadBytes>> progress) {
+    return UploadProgressRing(
+      progress: progress,
+      color: _accent,
+      trackColor: _accent.withValues(alpha: 0.2),
+      size: 32,
+      strokeWidth: 2,
       padding: const EdgeInsets.all(4),
-      child: ValueListenableBuilder<List<double>>(
-        valueListenable: progress,
-        builder: (context, values, _) {
-          final value = values.isEmpty
-              ? 0.0
-              : values.reduce((a, b) => a + b) / values.length;
-          return TweenAnimationBuilder<double>(
-            tween: Tween<double>(end: value.clamp(0.0, 1.0)),
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            builder: (context, shown, _) => CircularProgressIndicator(
-              strokeWidth: 2,
-              value: shown >= 1.0 ? null : shown,
-              color: _accent,
-              backgroundColor: _accent.withValues(alpha: 0.2),
-            ),
-          );
-        },
-      ),
     );
   }
 
@@ -423,69 +447,14 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
                       : const SizedBox.shrink(),
                 ),
               ),
-              if (!_transcriptionVisible) ...[
-                if (widget.likelyForwarded)
-                  LikelyForwardedMark(
-                    color: widget.textColor.withValues(alpha: 0.6),
-                  ),
-                Text(
-                  formatClock(
-                    DateTime.fromMillisecondsSinceEpoch(widget.time),
-                    withSeconds: KometSettings.fullTimestamp.value,
-                  ),
-                  style: TextStyle(
-                    color: widget.textColor.withValues(alpha: 0.6),
-                    fontSize: 10,
-                  ),
-                ),
-                if (widget.isMe) ...[
-                  const SizedBox(width: 2),
-                  _buildStatusIcon(),
-                ],
-                if (widget.deleted) ...[
-                  const SizedBox(width: 2),
-                  Icon(
-                    Symbols.delete,
-                    size: 13,
-                    color: widget.textColor.withValues(alpha: 0.6),
-                  ),
-                ],
-              ],
+              if (!_transcriptionVisible && widget.showMeta) ..._buildMeta(),
             ],
           ),
-          if (_transcriptionVisible) ...[
+          if (_transcriptionVisible && widget.showMeta)
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (widget.likelyForwarded)
-                  LikelyForwardedMark(
-                    color: widget.textColor.withValues(alpha: 0.6),
-                  ),
-                Text(
-                  formatClock(
-                    DateTime.fromMillisecondsSinceEpoch(widget.time),
-                    withSeconds: KometSettings.fullTimestamp.value,
-                  ),
-                  style: TextStyle(
-                    color: widget.textColor.withValues(alpha: 0.6),
-                    fontSize: 10,
-                  ),
-                ),
-                if (widget.isMe) ...[
-                  const SizedBox(width: 2),
-                  _buildStatusIcon(),
-                ],
-                if (widget.deleted) ...[
-                  const SizedBox(width: 2),
-                  Icon(
-                    Symbols.delete,
-                    size: 13,
-                    color: widget.textColor.withValues(alpha: 0.6),
-                  ),
-                ],
-              ],
+              children: _buildMeta(),
             ),
-          ],
         ],
       ),
     );

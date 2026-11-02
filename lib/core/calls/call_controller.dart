@@ -5,8 +5,10 @@ import '../../backend/modules/calls.dart';
 import '../protocol/opcode_map.dart';
 import '../push/fkm_controller.dart';
 import '../protocol/packet.dart';
+import '../utils/logger.dart';
 import '../utils/parse.dart';
 import 'call_bridge.dart';
+import 'call_link.dart';
 import 'call_session.dart';
 import 'conversation_params.dart';
 import 'ws2_signaling.dart';
@@ -67,6 +69,19 @@ class CallController {
   String? _activeJoinLink;
   String? get activeJoinLink => _active == null ? null : _activeJoinLink;
 
+  Future<String?> ensureJoinLink() async {
+    final session = _active;
+    if (session == null) return null;
+    final known = _activeJoinLink;
+    if (known != null) return known;
+    final conversationId = session.info.conversationId;
+    if (conversationId == null) return null;
+    final raw = await _calls!.createJoinLink(conversationId);
+    final token = raw == null ? null : CallLink.normalizeToken(raw);
+    if (token != null && identical(_active, session)) _activeJoinLink = token;
+    return token;
+  }
+
   IncomingCall? _pending;
   IncomingCall? get pendingIncoming => _pending;
 
@@ -89,20 +104,33 @@ class CallController {
     final payload = packet.payload;
     if (payload is! Map) return;
 
-    final vcp = payload['vcp'] as String?;
-    final conversationId = payload['conversationId'] as String?;
-    final callerId = payload['callerId'] as int?;
-    if (vcp == null || conversationId == null || callerId == null) return;
+    final vcp = payload['vcp'];
+    final conversationId = payload['conversationId']?.toString();
+    final callerId = parseIntOrNull(payload['callerId']);
+    if (vcp is! String || conversationId == null || callerId == null) {
+      logger.w(
+        '[call] incoming push skipped: '
+        '${payload.map((k, v) => MapEntry(k, v.runtimeType))}',
+      );
+      return;
+    }
+    logger.i(
+      '[call] incoming push conversation=$conversationId caller=$callerId '
+      'resumed=$appResumed',
+    );
 
     // Приложение свёрнуто — звонок показывает FKM отдельным уведомлением,
     // приём оттуда вернётся через injectFromNative.
-    if (!appResumed) {
+    if (!appResumed && FkmController.instance.isSupported) {
       unawaited(FkmController.instance.showIncomingCall(payload));
       return;
     }
 
     final params = ConversationParams.decode(vcp);
-    if (params == null) return;
+    if (params == null) {
+      logger.w('[call] incoming push: vcp не разобран');
+      return;
+    }
 
     _emitIncoming(
       IncomingCall(
@@ -220,7 +248,7 @@ class CallController {
   // #***! принятие входящего
   Future<CallSession> acceptIncoming(IncomingCall call) async {
     _pending = null;
-    CallBridge.instance.cancelIncoming();
+    CallBridge.instance.cancelIncoming(conversationId: call.conversationId);
     final config = Ws2Config.fromVcp(
       call.params,
       conversationId: call.conversationId,
@@ -232,20 +260,16 @@ class CallController {
       params: call.params,
       role: CallRole.callee,
     );
-    return _launch(
-      session,
-      () async {
-        await session.start();
-        await session.accept();
-      },
-      caller: call.callerName,
-    );
+    return _launch(session, () async {
+      await session.start();
+      await session.accept();
+    }, caller: call.callerName);
   }
 
   // #***! отклонение
   Future<void> rejectIncoming(IncomingCall call) async {
     _pending = null;
-    CallBridge.instance.notifyEnded();
+    CallBridge.instance.notifyEnded(conversationId: call.conversationId);
     final config = Ws2Config.fromVcp(
       call.params,
       conversationId: call.conversationId,
@@ -288,7 +312,10 @@ class CallController {
       } catch (_) {}
       rethrow;
     }
-    CallBridge.instance.notifyAccepted(caller: caller);
+    CallBridge.instance.notifyAccepted(
+      caller: caller,
+      conversationId: session.info.conversationId,
+    );
     return session;
   }
 
@@ -308,7 +335,9 @@ class CallController {
     _activeJoinLink = null;
     await _activeSub?.cancel();
     _activeSub = null;
-    CallBridge.instance.notifyEnded();
+    CallBridge.instance.notifyEnded(
+      conversationId: session.info.conversationId,
+    );
     _ended.add(null);
   }
 

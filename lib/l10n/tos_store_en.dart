@@ -14,6 +14,8 @@ Terms of use for the "Komet" app
 • send bulk messages (spam);
 • violate applicable law;
 • take actions that disrupt the normal operation of the MAX service.
+2.4. There is no tolerance for objectionable content or abusive users: threats, harassment, hate speech, violence, sexual content involving minors, and any other content that breaks the law or violates the rights of others.
+2.5. You can report any message, user or channel right from the App and block any user. Reports go to the moderation of the MAX service, which may remove the content and restrict the offender's access.
 
 3. Technical aspects
 3.1. The App works as a client: it passes your requests to the MAX service servers and displays the data received from them.

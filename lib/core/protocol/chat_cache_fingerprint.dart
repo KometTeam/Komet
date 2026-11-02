@@ -47,16 +47,36 @@ class ChatCacheFingerprint {
   }) {
     final seed = _int64BigEndian(callsSeed);
     final device = Uint8List.fromList(utf8.encode(deviceId));
-    final dexDigest = preLogin ? _preLoginDexDigest : _dexDigest;
-    final soDigest = preLogin
-        ? _preLoginSoDigest
-        : (_soDigests[arch] ?? _soDigests[defaultArch]!);
+    final digests = _digests(arch, preLogin);
     final result = BytesBuilder();
     result.add(_sha256(_signatureDigest, seed, device));
-    result.add(_sha256(dexDigest, seed, device));
-    result.add(_sha256(soDigest, seed, device));
+    result.add(_sha256(digests.dex, seed, device));
+    result.add(_sha256(digests.so, seed, device));
     return result.toBytes();
   }
+
+  static Map<String, String> exportDigests({
+    String arch = defaultArch,
+    bool preLogin = false,
+  }) {
+    final digests = _digests(arch, preLogin);
+    return {
+      'signature': _encodeHex(_signatureDigest),
+      'dex': _encodeHex(digests.dex),
+      'so': _encodeHex(digests.so),
+    };
+  }
+
+  static ({Uint8List dex, Uint8List so}) _digests(String arch, bool preLogin) =>
+      (
+        dex: preLogin ? _preLoginDexDigest : _dexDigest,
+        so: preLogin
+            ? _preLoginSoDigest
+            : (_soDigests[arch] ?? _soDigests[defaultArch]!),
+      );
+
+  static String _encodeHex(Uint8List bytes) =>
+      bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
 
   static List<int> _sha256(Uint8List a, Uint8List b, Uint8List c) {
     final builder = BytesBuilder()

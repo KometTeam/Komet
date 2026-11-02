@@ -132,6 +132,7 @@ class _LottiePlayerState extends State<LottiePlayer>
   int? _px;
   bool _started = false;
   bool _showedFrames = false;
+  bool _builtWithFrames = false;
   bool _completed = false;
   Timer? _deferTimer;
   Timer? _fallbackCompletionTimer;
@@ -271,13 +272,21 @@ class _LottiePlayerState extends State<LottiePlayer>
     } else if (_canLoad && !_started) {
       _startLoad();
     }
+    _syncShown();
   }
 
   void _onReady() {
     if (!mounted) return;
     final clip = _clip;
     if (clip != null) _maybeStartTicker(clip);
-    if (mounted) setState(() {});
+    _syncShown();
+  }
+
+  bool _wantsFrames(TlottieClip? clip) =>
+      clip != null && clip.ready.value > 0 && (_showedFrames || !_isScrolling);
+
+  void _syncShown() {
+    if (mounted && _wantsFrames(_clip) != _builtWithFrames) setState(() {});
   }
 
   void _maybeStartTicker(TlottieClip clip) {
@@ -371,20 +380,12 @@ class _LottiePlayerState extends State<LottiePlayer>
                 : 96.0);
         _ensure(box);
         final clip = _clip;
-        if (clip == null ||
-            clip.ready.value == 0 ||
-            (_isScrolling && !_showedFrames)) {
-          return _staticFallback(box);
-        }
+        _builtWithFrames = _wantsFrames(clip);
+        if (clip == null || !_builtWithFrames) return _staticFallback(box);
         _showedFrames = true;
-        return ValueListenableBuilder<int>(
-          valueListenable: _frameIndex,
-          builder: (_, index, _) => RawImage(
-            image: clip.frameAt(index),
-            width: box,
-            height: box,
-            fit: BoxFit.contain,
-          ),
+        return CustomPaint(
+          size: Size.square(box),
+          painter: _ClipPainter(clip, _frameIndex),
         );
       },
     );
@@ -427,6 +428,30 @@ class _LottiePlayerState extends State<LottiePlayer>
       errorWidget: (_, _, _) => SizedBox(width: box, height: box),
     );
   }
+}
+
+class _ClipPainter extends CustomPainter {
+  _ClipPainter(this.clip, this.frameIndex)
+    : super(repaint: Listenable.merge([frameIndex, clip.ready]));
+
+  final TlottieClip clip;
+  final ValueListenable<int> frameIndex;
+
+  static final Paint _paint = Paint()
+    ..isAntiAlias = false
+    ..filterQuality = FilterQuality.medium;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final frame = clip.frameAt(frameIndex.value);
+    if (frame == null) return;
+    canvas.drawImageRect(frame.image, frame.source, Offset.zero & size, _paint);
+  }
+
+  @override
+  bool shouldRepaint(_ClipPainter oldDelegate) =>
+      !identical(oldDelegate.clip, clip) ||
+      !identical(oldDelegate.frameIndex, frameIndex);
 }
 
 class LottieImage extends StatelessWidget {

@@ -80,11 +80,14 @@ Future<void> showFolderActionSheet(
     case _FolderAction.create:
       await showFolderEditSheet(context);
     case _FolderAction.delete:
-      await _confirmDelete(context, folder);
+      await confirmDeleteFolder(context, folder);
   }
 }
 
-Future<void> _confirmDelete(BuildContext context, ChatFolder folder) async {
+Future<void> confirmDeleteFolder(
+  BuildContext context,
+  ChatFolder folder,
+) async {
   final l10n = AppLocalizations.of(context)!;
   final confirmed = await showConfirmDialog(
     context,

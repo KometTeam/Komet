@@ -52,6 +52,20 @@ void showChatMenu({
   Haptics.medium();
 }
 
+Future<void> closeChatMenu(BuildContext context) {
+  final scope = context.getInheritedWidgetOfExactType<_ChatMenuScope>();
+  return scope?.close() ?? Future.value();
+}
+
+class _ChatMenuScope extends InheritedWidget {
+  final Future<void> Function() close;
+
+  const _ChatMenuScope({required this.close, required super.child});
+
+  @override
+  bool updateShouldNotify(_ChatMenuScope oldWidget) => false;
+}
+
 class _ChatMenuLayer extends StatefulWidget {
   final Rect anchorRect;
   final List<ChatMenuItem> items;
@@ -186,49 +200,52 @@ class _ChatMenuLayerState extends State<_ChatMenuLayer>
           ],
         );
       },
-      child: Material(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(20),
-        clipBehavior: Clip.antiAlias,
-        elevation: 12,
-        shadowColor: Colors.black.withValues(alpha: 0.45),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (widget.header != null) ...[
-                widget.header!,
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: cs.onSurface.withValues(alpha: 0.07),
-                ),
-              ],
-              SizedBox(height: widget.compact ? 4 : 6),
-              for (final item in widget.items) ...[
-                _ChatMenuRow(
-                  item: item,
-                  compact: widget.compact,
-                  onTap: () => _onItemTap(item),
-                ),
-                if (item.dividerAfter)
+      child: _ChatMenuScope(
+        close: closeOverlay,
+        child: Material(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(20),
+          clipBehavior: Clip.antiAlias,
+          elevation: 12,
+          shadowColor: Colors.black.withValues(alpha: 0.45),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (widget.header != null) ...[
+                  widget.header!,
                   Divider(
                     height: 1,
                     thickness: 1,
                     color: cs.onSurface.withValues(alpha: 0.07),
                   ),
+                ],
+                SizedBox(height: widget.compact ? 4 : 6),
+                for (final item in widget.items) ...[
+                  _ChatMenuRow(
+                    item: item,
+                    compact: widget.compact,
+                    onTap: () => _onItemTap(item),
+                  ),
+                  if (item.dividerAfter)
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: cs.onSurface.withValues(alpha: 0.07),
+                    ),
+                ],
+                SizedBox(height: widget.compact ? 4 : 6),
+                if (widget.footer != null) ...[
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: cs.onSurface.withValues(alpha: 0.07),
+                  ),
+                  widget.footer!,
+                ],
               ],
-              SizedBox(height: widget.compact ? 4 : 6),
-              if (widget.footer != null) ...[
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: cs.onSurface.withValues(alpha: 0.07),
-                ),
-                widget.footer!,
-              ],
-            ],
+            ),
           ),
         ),
       ),

@@ -15,10 +15,12 @@ import '../../core/storage/token_storage.dart';
 import '../config/komet_settings.dart';
 import '../utils/logger.dart';
 import 'fkm_bridge.dart';
+import 'launcher_badge.dart';
 import 'push_service.dart';
 
 const _fallbackSender = 'MAX';
 const _hiddenPreview = 'Новое сообщение';
+const _unreadThrottle = Duration(milliseconds: 300);
 
 // #***! FKM, своё фоновое уведомление для флейвора без гугла
 /// FKM — уведомления через собственное фоновое соединение, без FCM.
@@ -35,6 +37,8 @@ class FkmController {
   Api? _api;
   StreamSubscription<Packet>? _pushSub;
   StreamSubscription<SessionState>? _stateSub;
+  Timer? _unreadTimer;
+  int? _sentUnread;
   bool _started = false;
 
   bool get isSupported => FkmBridge.instance.isSupported;
@@ -56,11 +60,15 @@ class FkmController {
         )
         .listen(_onPush);
     _stateSub = api.stateStream.listen(_onSessionState);
+    for (final source in BadgeCount.chatSources) {
+      source.addListener(_scheduleUnread);
+    }
 
     if (enabled.value) {
       await initLocalNotificationActions();
       await FkmBridge.instance.setEnabled(true);
       await _pushConnectionState();
+      _scheduleUnread();
     }
   }
 
@@ -74,12 +82,19 @@ class FkmController {
     if (value) await initLocalNotificationActions();
     await FkmBridge.instance.setEnabled(value);
     enabled.value = value;
-    if (value) await _pushConnectionState();
+    _sentUnread = null;
+    if (value) {
+      await _pushConnectionState();
+      _scheduleUnread();
+    }
     return true;
   }
 
   // #***! выключили FKM кнопкой в уведомлении
-  void _onDisabledFromNotification() => enabled.value = false;
+  void _onDisabledFromNotification() {
+    enabled.value = false;
+    _sentUnread = null;
+  }
 
   void _onSessionState(SessionState state) {
     if (!enabled.value) return;
@@ -87,9 +102,28 @@ class FkmController {
   }
 
   // #***! говорим нативу есть ли связь, от этого текст постоянного уведомления
-  Future<void> _pushConnectionState() => FkmBridge.instance.setConnected(
-    _api?.state == SessionState.online,
-  );
+  Future<void> _pushConnectionState() =>
+      FkmBridge.instance.setConnected(_api?.state == SessionState.online);
+
+  // #***! в постоянном уведомлении непрочитанные в чатах со звуком, не всё принятое
+  void _scheduleUnread() {
+    if (!enabled.value || _unreadTimer != null) return;
+    _unreadTimer = Timer(_unreadThrottle, _syncUnread);
+  }
+
+  void _syncUnread() {
+    _unreadTimer = null;
+    if (!enabled.value) return;
+    if (_sentUnread == null && !chats.chatsLoaded) return;
+    final count = BadgeCount.live(
+      enabled: true,
+      includeMuted: false,
+      countMessages: true,
+    ).count;
+    if (count == _sentUnread) return;
+    _sentUnread = count;
+    unawaited(FkmBridge.instance.setUnread(count));
+  }
 
   // #***! входящий звонок, натив рисует полноэкранное
   /// Входящий звонок, когда приложение не на переднем плане.
@@ -220,13 +254,11 @@ class FkmController {
     if (accountId == null) return;
 
     final rawConfig = await AppDatabase.getPrivacyConfig(accountId);
-    if (rawConfig != null) {
-      final config = PrivacyConfig.fromJson(rawConfig);
-      if (config.chatsPushNotification != 'ON') return;
-      if (!config.pushDetails) return;
+    if (rawConfig != null && !PrivacyConfig.fromJson(rawConfig).pushDetails) {
+      return;
     }
 
-    final text = _previewText(msg);
+    final text = previewText(msg);
     if (text == _hiddenPreview) return;
 
     await FkmBridge.instance.editMessage({
@@ -247,17 +279,16 @@ class FkmController {
     final accountId = await TokenStorage.getActiveAccountId();
     if (accountId == null || senderId == accountId) return null;
 
-    final rawConfig = await AppDatabase.getPrivacyConfig(accountId);
-    var showPreview = true;
-    if (rawConfig != null) {
-      final config = PrivacyConfig.fromJson(rawConfig);
-      if (config.chatsPushNotification != 'ON') return null;
-      showPreview = config.pushDetails;
-    }
-
     final rows = await AppDatabase.loadChat(accountId, chatId);
     final chat = rows.isEmpty ? null : CachedChat.fromDbRow(rows.first);
     if (chat != null && chat.isMuted) return null;
+
+    final rawConfig = await AppDatabase.getPrivacyConfig(accountId);
+    final config = rawConfig == null ? null : PrivacyConfig.fromJson(rawConfig);
+    if (config != null && !_pushAllowed(config, chat, msg, accountId)) {
+      return null;
+    }
+    final showPreview = config?.pushDetails ?? true;
 
     final senderName =
         ContactCache.get(senderId) ?? chat?.title ?? _fallbackSender;
@@ -267,7 +298,7 @@ class FkmController {
 
     await E2eeService.instance.ensureLoaded(accountId);
     final text = showPreview && !E2eeService.instance.isOn(accountId, chatId)
-        ? _previewText(msg)
+        ? previewText(msg)
         : _hiddenPreview;
     final time = msg['time'];
     final msgId = msg['id'];
@@ -284,20 +315,48 @@ class FkmController {
     };
   }
 
+  bool _pushAllowed(
+    PrivacyConfig config,
+    CachedChat? chat,
+    Map<dynamic, dynamic> msg,
+    int accountId,
+  ) {
+    if (chat == null || chat.type == 'DIALOG') {
+      return config.dialogsPushNotification != PrivacyConfig.pushOff;
+    }
+    return switch (config.chatsPushNotification) {
+      PrivacyConfig.pushOff => false,
+      PrivacyConfig.pushReplies =>
+        _repliesTo(msg, accountId) || messageMentionsUser(msg, accountId),
+      _ => true,
+    };
+  }
+
+  bool _repliesTo(Map<dynamic, dynamic> msg, int accountId) {
+    final link = msg['link'];
+    if (link is! Map || link['type']?.toString() != 'REPLY') return false;
+    final replied = link['message'];
+    return replied is Map && replied['sender'] == accountId;
+  }
+
   // #***! текст превью, для вложений их описание
-  String _previewText(Map<dynamic, dynamic> msg) {
-    final text = msg['text']?.toString().trim();
-    if (text != null && text.isNotEmpty) return text;
-    final attach = attachPreviewLabel(msg['attaches']);
-    if (attach != null && attach.isNotEmpty) return attach;
-    return _hiddenPreview;
+  @visibleForTesting
+  static String previewText(Map<dynamic, dynamic> msg) {
+    final text = messagePreviewText(msg)?.trim();
+    return text == null || text.isEmpty ? _hiddenPreview : text;
   }
 
   void dispose() {
     _pushSub?.cancel();
     _stateSub?.cancel();
+    _unreadTimer?.cancel();
+    for (final source in BadgeCount.chatSources) {
+      source.removeListener(_scheduleUnread);
+    }
     _pushSub = null;
     _stateSub = null;
+    _unreadTimer = null;
+    _sentUnread = null;
     _started = false;
   }
 }

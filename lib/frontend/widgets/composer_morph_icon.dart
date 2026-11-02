@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-enum ComposerAction { mic, videocam, send }
+enum ComposerAction { mic, videocam, send, stickers, keyboard }
 
 const Map<(ComposerAction, ComposerAction), String> _morphs = {
   (ComposerAction.mic, ComposerAction.videocam):
@@ -17,12 +17,18 @@ const Map<(ComposerAction, ComposerAction), String> _morphs = {
       'assets/lottie/ic_send_to_mic.json',
   (ComposerAction.send, ComposerAction.videocam):
       'assets/lottie/ic_send_to_videocam.json',
+  (ComposerAction.stickers, ComposerAction.keyboard):
+      'assets/lottie/ic_face_to_keyboard.json',
+  (ComposerAction.keyboard, ComposerAction.stickers):
+      'assets/lottie/ic_keyboard_to_face.json',
 };
 
 IconData composerActionIcon(ComposerAction action) => switch (action) {
   ComposerAction.mic => Symbols.mic,
   ComposerAction.videocam => Symbols.videocam,
   ComposerAction.send => Symbols.send,
+  ComposerAction.stickers => Symbols.face,
+  ComposerAction.keyboard => Symbols.keyboard,
 };
 
 class ComposerMorphIcon extends StatefulWidget {
@@ -118,7 +124,9 @@ class _ComposerMorphIconState extends State<ComposerMorphIcon>
         controller: _controller,
         fit: BoxFit.contain,
         delegates: LottieDelegates(
-          values: [ValueDelegate.color(const ['**'], value: widget.color)],
+          values: [
+            ValueDelegate.color(const ['**'], value: widget.color),
+          ],
         ),
       ),
     );

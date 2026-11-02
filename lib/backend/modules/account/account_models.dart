@@ -90,6 +90,7 @@ class PrivacyConfig {
   final String stickersSuggest;
   final bool safeMode;
   final bool audioTranscriptionEnabled;
+  final String dialogsPushNotification;
   final String chatsPushNotification;
   final String mCallPushNotification;
   final String pushSound;
@@ -116,12 +117,25 @@ class PrivacyConfig {
     required this.stickersSuggest,
     required this.safeMode,
     required this.audioTranscriptionEnabled,
+    required this.dialogsPushNotification,
     required this.chatsPushNotification,
     required this.mCallPushNotification,
     required this.pushSound,
     required this.chatsPushSound,
     required this.hash,
   });
+
+  static const String defaultDoubleTapReaction = '❤️';
+
+  static const String pushOn = 'ON';
+  static const String pushOff = 'OFF';
+  static const String pushReplies = 'REPLY';
+
+  String? get doubleTapReaction {
+    if (doubleTapReactionDisabled) return null;
+    final value = doubleTapReactionValue;
+    return value == null || value.isEmpty ? defaultDoubleTapReaction : value;
+  }
 
   // #***! незнакомое игнорим, пустое берём дефолтом
   factory PrivacyConfig.fromMap(Map<dynamic, dynamic> map) {
@@ -145,7 +159,10 @@ class PrivacyConfig {
       stickersSuggest: map['STICKERS_SUGGEST']?.toString() ?? 'ON',
       safeMode: map['SAFE_MODE'] ?? false,
       audioTranscriptionEnabled: map['AUDIO_TRANSCRIPTION_ENABLED'] ?? true,
-      chatsPushNotification: map['CHATS_PUSH_NOTIFICATION']?.toString() ?? 'ON',
+      dialogsPushNotification:
+          map['DIALOGS_PUSH_NOTIFICATION']?.toString() ?? pushOn,
+      chatsPushNotification:
+          map['CHATS_PUSH_NOTIFICATION']?.toString() ?? pushOn,
       mCallPushNotification:
           map['M_CALL_PUSH_NOTIFICATION']?.toString() ?? 'ON',
       pushSound: map['PUSH_SOUND']?.toString() ?? 'oki.aiff',
@@ -175,6 +192,7 @@ class PrivacyConfig {
     'STICKERS_SUGGEST': stickersSuggest,
     'SAFE_MODE': safeMode,
     'AUDIO_TRANSCRIPTION_ENABLED': audioTranscriptionEnabled,
+    'DIALOGS_PUSH_NOTIFICATION': dialogsPushNotification,
     'CHATS_PUSH_NOTIFICATION': chatsPushNotification,
     'M_CALL_PUSH_NOTIFICATION': mCallPushNotification,
     'PUSH_SOUND': pushSound,
@@ -212,8 +230,9 @@ class PrivacyConfig {
       stickersSuggest: 'ON',
       safeMode: false,
       audioTranscriptionEnabled: true,
-      chatsPushNotification: 'ON',
-      mCallPushNotification: 'ON',
+      dialogsPushNotification: pushOn,
+      chatsPushNotification: pushOn,
+      mCallPushNotification: pushOn,
       pushSound: 'oki.aiff',
       chatsPushSound: 'oki.aiff',
       hash: '',
@@ -433,7 +452,7 @@ class LoginSyncParams {
   final String? chatCacheFingerprint;
   final bool serverConfigSeen;
 
-  static const String serverConfigRevision = '2';
+  static const String serverConfigRevision = '3';
 
   static Future<void> forgetServerConfig(int accountId) =>
       AppDatabase.setSyncValue(accountId, SyncKey.serverConfigSeen, '');

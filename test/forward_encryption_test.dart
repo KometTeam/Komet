@@ -5,9 +5,11 @@ import 'package:komet/backend/api.dart';
 import 'package:komet/backend/modules/forward_sender.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:komet/core/crypto/e2ee_service.dart';
+import 'package:komet/core/crypto/outgoing_message_policy.dart';
 import 'package:komet/core/protocol/packet.dart';
 import 'package:komet/core/storage/app_database.dart';
 import 'package:komet/core/storage/chat_encryption_store.dart';
+import 'package:komet/core/storage/token_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -89,7 +91,7 @@ void main() {
   }
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'active_account_id': '101'});
     final directory = await Directory.systemTemp.createTemp(
       'synthetic_forward',
     );
@@ -135,6 +137,58 @@ void main() {
       );
     }
   }
+
+  for (final phase in ['offered', 'pendingConsent']) {
+    test('$phase handshake still allows plaintext like the chat screen', () async {
+      await setPhase(phase);
+      await E2eeService.instance.ensureLoaded(101);
+
+      expect(OutgoingMessagePolicy.requiresEncryption(101, 404), isFalse);
+      await sender.sendMessage(101, 404, 'Synthetic plaintext');
+      expect(api.requests, hasLength(1));
+    });
+  }
+
+  test('only E2EE handshake text may skip the encryption gate', () async {
+    await setPhase('established');
+    await E2eeService.instance.ensureLoaded(101);
+
+    await expectLater(
+      sender.sendMessage(
+        101,
+        404,
+        'Synthetic plaintext',
+        encryptionControl: true,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+    await sender.sendMessage(
+      101,
+      404,
+      '$kE2eeAnswerPrefix\nsynthetic-handshake',
+      encryptionControl: true,
+    );
+    expect(api.requests, hasLength(1));
+  });
+
+  test('enabling encryption while dispatch waits prevents plaintext', () async {
+    api.beforeDispatch = () =>
+        ChatEncryptionStore.instance.setEnabled(101, 404, true);
+
+    await expectLater(
+      sender.sendFileMessage(404, 301),
+      throwsA(isA<UnencryptedSendException>()),
+    );
+    expect(api.requests, isEmpty);
+    expect(
+      () => OutgoingMessagePolicy.requireSupported(
+        101,
+        404,
+        encryptedPayload: true,
+      ),
+      returnsNormally,
+    );
+  });
 
   test('legacy destination rejects a caption-only resumed batch', () async {
     await ChatEncryptionStore.instance.setEnabled(101, 404, true);
@@ -217,6 +271,15 @@ void main() {
     await expectLater(
       ForwardSender.sendCopy(101, 404, _source, sender: sender),
       throwsA(isA<StateError>()),
+    );
+    expect(api.requests, isEmpty);
+  });
+
+  test('account selection change before dispatch blocks the request', () async {
+    api.beforeDispatch = () => TokenStorage.setActiveAccount(202);
+    await expectLater(
+      sender.sendMessage(101, 505, 'Synthetic plaintext'),
+      throwsStateError,
     );
     expect(api.requests, isEmpty);
   });

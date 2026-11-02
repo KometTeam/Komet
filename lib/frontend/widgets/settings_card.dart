@@ -139,7 +139,9 @@ class SettingsNavTile extends StatelessWidget {
   final IconData? icon;
   final Widget? leading;
   final String label;
+  final String? subtitle;
   final String? value;
+  final Widget? trailing;
   final Color? tintColor;
   final VoidCallback? onTap;
   final bool isLast;
@@ -149,7 +151,9 @@ class SettingsNavTile extends StatelessWidget {
     this.icon,
     this.leading,
     required this.label,
+    this.subtitle,
     this.value,
+    this.trailing,
     this.tintColor,
     this.onTap,
     this.isLast = false,
@@ -180,16 +184,36 @@ class SettingsNavTile extends StatelessWidget {
                   ),
               const SizedBox(width: 16),
               Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: tintColor ?? cs.onSurface,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: tintColor ?? cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 13,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              if (value != null) ...[
+              if (trailing != null) ...[
+                const SizedBox(width: 12),
+                trailing!,
+                const SizedBox(width: 4),
+              ] else if (value != null) ...[
                 const SizedBox(width: 12),
                 Text(
                   value!,

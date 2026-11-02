@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart' show Locale;
+import 'package:flutter/widgets.dart' show Locale, TextRange;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komet/backend/api.dart';
 import 'package:komet/backend/modules/chats.dart';
@@ -10,6 +10,7 @@ import 'package:komet/backend/modules/comments.dart';
 import 'package:komet/backend/modules/forward_sender.dart';
 import 'package:komet/backend/modules/messages.dart';
 import 'package:komet/core/cache/message_session_cache.dart';
+import 'package:komet/core/config/app_commands.dart';
 import 'package:komet/core/protocol/packet.dart';
 import 'package:komet/core/storage/app_database.dart';
 import 'package:komet/core/utils/haptics.dart';
@@ -61,9 +62,10 @@ class _DelayedApi extends Api {
 }
 
 class _Harness {
-  _Harness({this.commentsMode = false});
+  _Harness({this.commentsMode = false, this.encrypt = true});
 
   final bool commentsMode;
+  final bool encrypt;
   final api = _DelayedApi();
   late final comments = CommentsModule(api);
   final chat = ChatController()
@@ -76,6 +78,7 @@ class _Harness {
   bool mounted = true;
   int bumps = 0;
   final notifications = <String>[];
+  final executed = <String>[];
   final composed = Completer<void>();
 
   late final sender = ChatTextSendController(
@@ -99,8 +102,9 @@ class _Harness {
     isMounted: () => mounted,
     l10nOf: () => lookupAppLocalizations(const Locale('ru')),
     chatOf: () => null,
-    encryptOutgoing: (text, {notify = true}) async => 'Synthetic ciphertext',
-    executeCommand: (_, _) async {},
+    encryptOutgoing: (text, {notify = true}) async =>
+        encrypt ? 'Synthetic ciphertext' : text,
+    executeCommand: (command, _) async => executed.add(command.name),
     checkPrankTrigger: (_) {},
     confirmSend: () async => true,
   );
@@ -123,7 +127,7 @@ void main() {
   setUpAll(AppDatabase.init);
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'active_account_id': '101'});
     MessageSessionCache.clearAll();
     Haptics.enabled = false;
     final directory = await Directory.systemTemp.createTemp('synthetic_send');
@@ -310,6 +314,64 @@ void main() {
     expect((await chats.getChat(101, 303)).single.lastMsgStatus, 'pending');
   });
 
+  Future<CachedMessage> sendLinkAndAnswer(
+    List<Map<String, dynamic>> acceptedElements,
+  ) async {
+    final harness = _Harness(encrypt: false);
+    addTearDown(harness.dispose);
+    harness.composer
+      ..text = 'Synthetic link'
+      ..setLink(const TextRange(start: 0, end: 9), 'synthetic');
+    final sending = harness.sender.sendTextMessage();
+    await harness.api.started.future;
+    final request = harness.api.requests.single['message'] as Map;
+    expect((request['elements'] as List).single['type'], 'LINK');
+    expect(harness.chat.messages.single.payload?['elements'], isNotEmpty);
+
+    harness.api.response.complete(
+      Packet(
+        cmd: CmdType.ok,
+        payload: {
+          'chatId': 303,
+          'message': {
+            'id': 'synthetic-sent',
+            'time': 1000,
+            'text': 'Synthetic link',
+            'elements': acceptedElements,
+          },
+        },
+      ),
+    );
+    await sending;
+
+    final sent = harness.chat.messages.single;
+    expect(sent.id, 'synthetic-sent');
+    final row = (await AppDatabase.loadMessages(101, 303)).single;
+    expect(
+      CachedMessage.fromDbRow(row).payload?['elements'],
+      sent.payload?['elements'],
+    );
+    await pumpEventQueue();
+    return sent;
+  }
+
+  test('formatting the server dropped leaves the sent message', () async {
+    final sent = await sendLinkAndAnswer(const []);
+    expect(sent.payload?['elements'], isNull);
+  });
+
+  test('the sent message keeps the formatting the server accepted', () async {
+    const accepted = [
+      {
+        'type': 'LINK',
+        'length': 9,
+        'attributes': {'checkResult': 2, 'url': 'https://example.com'},
+      },
+    ];
+    final sent = await sendLinkAndAnswer(accepted);
+    expect(sent.payload?['elements'], accepted);
+  });
+
   test('a failed initial write prevents network dispatch', () async {
     final harness = _Harness();
     addTearDown(harness.dispose);
@@ -451,5 +513,35 @@ void main() {
 
     expect(harness.api.requests, isEmpty);
     expect(await AppDatabase.loadPendingMessages(101), hasLength(1));
+  });
+
+  test('a slash text without a local command is sent as a message', () async {
+    AppCommands.current.value = true;
+    final harness = _Harness(encrypt: false);
+    addTearDown(harness.dispose);
+    harness.composer.text = '/synthetic_unknown argument';
+
+    final sending = harness.sender.sendTextMessage();
+    await harness.api.started.future;
+    harness.api.response.completeError(TimeoutException('Synthetic timeout'));
+    await sending;
+
+    final request = harness.api.requests.single['message'] as Map;
+    expect(request['text'], '/synthetic_unknown argument');
+    expect(harness.executed, isEmpty);
+    expect(harness.notifications, isEmpty);
+  });
+
+  test('a local command runs without reaching the network', () async {
+    AppCommands.current.value = true;
+    final harness = _Harness(encrypt: false);
+    addTearDown(harness.dispose);
+    harness.composer.text = '/shrug';
+
+    await harness.sender.sendTextMessage();
+
+    expect(harness.executed, ['/shrug']);
+    expect(harness.api.requests, isEmpty);
+    expect(harness.composer.text, isEmpty);
   });
 }

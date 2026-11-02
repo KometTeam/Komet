@@ -8,7 +8,8 @@ import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../utils/logger.dart';
-import '../utils/media_cache.dart';
+import '../storage/chat_encryption_store.dart';
+import 'decrypted_photo_store.dart';
 import 'chat_crypto_service.dart';
 
 // #***! парольное фото уходит на сервер как png, сквозное как шифртекст без обёртки
@@ -89,20 +90,27 @@ Future<EncryptedPhotoResult> openEncryptedPhoto({
   required File encrypted,
   required String cacheName,
 }) async {
-  final target = await MediaCache.fileFor(
-    decryptedCacheName(accountId, chatId, cacheName),
-  );
-  if (await target.exists() && await target.length() > 0) {
-    return EncryptedPhotoResult.ok(target);
+  final generation = DecryptedPhotoStore.generation;
+  if (await ChatEncryptionStore.instance.readKey(accountId, chatId) == null ||
+      generation != DecryptedPhotoStore.generation) {
+    return const EncryptedPhotoResult.failed(CryptoFailure.noKey);
   }
+  final name = decryptedCacheName(accountId, chatId, cacheName);
+  final target = await DecryptedPhotoStore.existing(name);
+  if (target != null) return EncryptedPhotoResult.ok(target);
   final result = await ChatCryptoService.instance.decryptImageBytes(
     accountId,
     chatId,
     await encrypted.readAsBytes(),
   );
   if (!result.isOk) return EncryptedPhotoResult.failed(result.failure!);
-  await target.writeAsBytes(result.bytes!, flush: true);
-  return EncryptedPhotoResult.ok(target);
+  if (generation != DecryptedPhotoStore.generation) {
+    return const EncryptedPhotoResult.failed(CryptoFailure.noKey);
+  }
+  final file = await DecryptedPhotoStore.write(name, (part) async {
+    await part.writeAsBytes(result.bytes!, flush: true);
+  });
+  return EncryptedPhotoResult.ok(file);
 }
 
 // #***! сквозное фото: свой ключ на файл, билет едет внутри рэтчет-сообщения
@@ -121,9 +129,10 @@ Future<E2eePhotoPrepared?> prepareE2eePhoto({
   if (png == null) return null;
   final key = KometCrypto.randomBytes(KometCryptoSizes.fileKey);
   final nonce = KometCrypto.randomBytes(KometCryptoSizes.fileNonce);
-  final out = BytesBuilder(copy: false);
+  FileSealer? sealer;
   try {
-    final sealer = KometCrypto.fileSealer(key, nonce);
+    final out = BytesBuilder(copy: false);
+    sealer = KometCrypto.fileSealer(key, nonce);
     var offset = 0;
     while (true) {
       final last = png.length - offset <= KometCryptoSizes.fileChunk;
@@ -132,75 +141,104 @@ Future<E2eePhotoPrepared?> prepareE2eePhoto({
       offset = end;
       if (last) break;
     }
-    sealer.dispose();
-  } catch (e) {
-    logger.w('e2ee photo seal: $e');
+    final dir = await _scratchDir();
+    final file = File('${dir.path}/enc_$stamp$kE2eePhotoExtension');
+    await file.writeAsBytes(out.toBytes(), flush: true);
+    final name = Uint8List.fromList(utf8.encode('photo_$stamp.png'));
+    final ticket = Uint8List(_ticketHeader + name.length);
+    ticket.setAll(0, key);
+    ticket.setAll(KometCryptoSizes.fileKey, nonce);
+    var size = png.length;
+    for (var i = _ticketHeader - 1; i >= _ticketHeader - 8; i--) {
+      ticket[i] = size & 0xff;
+      size >>= 8;
+    }
+    ticket.setAll(_ticketHeader, name);
+    return E2eePhotoPrepared(file, ticket);
+  } catch (error) {
+    logger.w('e2ee photo seal: $error');
     return null;
+  } finally {
+    sealer?.dispose();
+    KometCrypto.wipe(key);
   }
-  final dir = await _scratchDir();
-  final file = File('${dir.path}/enc_$stamp$kE2eePhotoExtension');
-  await file.writeAsBytes(out.toBytes(), flush: true);
-  final name = Uint8List.fromList(utf8.encode('photo_$stamp.png'));
-  final ticket = Uint8List(_ticketHeader + name.length);
-  ticket.setAll(0, key);
-  ticket.setAll(KometCryptoSizes.fileKey, nonce);
-  var size = png.length;
-  for (var i = _ticketHeader - 1; i >= _ticketHeader - 8; i--) {
-    ticket[i] = size & 0xff;
-    size >>= 8;
-  }
-  ticket.setAll(_ticketHeader, name);
-  KometCrypto.wipe(key);
-  return E2eePhotoPrepared(file, ticket);
 }
 
 Future<EncryptedPhotoResult> openE2eePhoto({
   required File encrypted,
   required Uint8List ticket,
 }) async {
+  final generation = DecryptedPhotoStore.generation;
   if (ticket.length < _ticketHeader) {
     return const EncryptedPhotoResult.failed(CryptoFailure.malformed);
   }
-  final target = await MediaCache.fileFor(e2eeDecryptedCacheName(ticket));
-  if (await target.exists() && await target.length() > 0) {
+  final name = e2eeDecryptedCacheName(ticket);
+  final target = await DecryptedPhotoStore.existing(name);
+  if (target != null) {
     return EncryptedPhotoResult.ok(target);
   }
   final key = ticket.sublist(0, KometCryptoSizes.fileKey);
   final nonce = ticket.sublist(KometCryptoSizes.fileKey, _ticketHeader - 8);
   const step = KometCryptoSizes.fileChunk + KometCryptoSizes.tag;
-  final total = await encrypted.length();
   // #***! блоками, размер выбирает сервер и в память вложение не влезет
-  final source = await encrypted.open();
-  final sink = target.openWrite();
+  var expectedSize = 0;
+  for (var i = _ticketHeader - 8; i < _ticketHeader; i++) {
+    expectedSize = (expectedSize << 8) | ticket[i];
+  }
+  if (expectedSize <= 0 || expectedSize > DecryptedPhotoStore.maxBytes) {
+    KometCrypto.wipe(key);
+    return const EncryptedPhotoResult.failed(CryptoFailure.malformed);
+  }
+  if (generation != DecryptedPhotoStore.generation) {
+    KometCrypto.wipe(key);
+    return const EncryptedPhotoResult.failed(CryptoFailure.noKey);
+  }
   try {
-    final opener = KometCrypto.fileOpener(key, nonce);
-    try {
-      var offset = 0;
-      while (true) {
-        final last = total - offset <= step;
-        final take = last ? total - offset : step;
-        final block = await source.read(take);
-        if (block.length != take) throw const FormatException('truncated');
-        sink.add(opener.chunk(block, last: last));
-        offset += take;
-        if (last) break;
-      }
-    } finally {
-      opener.dispose();
+    final total = await encrypted.length();
+    if (generation != DecryptedPhotoStore.generation) {
+      return const EncryptedPhotoResult.failed(CryptoFailure.noKey);
     }
-    await sink.close();
+    final file = await DecryptedPhotoStore.write(name, (part) async {
+      final source = await encrypted.open();
+      IOSink? sink;
+      FileOpener? opener;
+      var written = 0;
+      try {
+        sink = part.openWrite();
+        opener = KometCrypto.fileOpener(key, nonce);
+        var offset = 0;
+        while (true) {
+          final last = total - offset <= step;
+          final take = last ? total - offset : step;
+          final block = await source.read(take);
+          if (block.length != take) throw const FormatException('truncated');
+          final plain = opener.chunk(block, last: last);
+          written += plain.length;
+          if (written > expectedSize) {
+            throw const FormatException('invalid file size');
+          }
+          sink.add(plain);
+          offset += take;
+          if (last) break;
+        }
+        if (written != expectedSize) {
+          throw const FormatException('invalid file size');
+        }
+        await sink.flush();
+      } finally {
+        opener?.dispose();
+        try {
+          await sink?.close();
+        } finally {
+          await source.close();
+        }
+      }
+    });
+    return EncryptedPhotoResult.ok(file);
   } catch (e) {
     logger.w('e2ee photo open: $e');
-    try {
-      await sink.close();
-    } catch (_) {}
-    try {
-      if (await target.exists()) await target.delete();
-    } catch (_) {}
     return EncryptedPhotoResult.failed(cryptoFailureOf(e));
   } finally {
     KometCrypto.wipe(key);
-    await source.close();
   }
-  return EncryptedPhotoResult.ok(target);
 }

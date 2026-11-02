@@ -5,7 +5,10 @@ import 'package:komet/backend/modules/messages.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/scheduler.dart';
 import 'chat_preview_card.dart';
 import 'chat_screen.dart';
 import 'search_screen.dart';
@@ -28,11 +31,14 @@ import '../contacts/find_user_sheet.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/route_probe.dart';
 import '../../widgets/toast_placement.dart';
 import '../../widgets/sliding_pill_nav.dart';
+import '../../widgets/compact_bottom_navigation_bar.dart';
 import '../../widgets/springy_tap.dart';
 import '../../widgets/visible_page_tickers.dart';
 import '../../widgets/informer_banner_tile.dart';
+import '../../widgets/whats_new_sheet.dart';
 import '../../../backend/modules/forward_sender.dart';
 import '../../../backend/modules/share_sender.dart';
 import '../../widgets/lottie_slash_icon.dart';
@@ -58,6 +64,9 @@ import '../../widgets/account_switcher_overlay.dart';
 import '../../widgets/local_avatar_builder.dart';
 import '../../widgets/lost_account_dialog.dart';
 import 'chat/view/chat_list_shimmer.dart';
+import 'chat/view/archive_pull.dart';
+import '../lock/archive_gate.dart';
+import 'chat/view/drag_intercept_scroll.dart';
 import 'chat/view/chat_list_tile.dart';
 import 'chat/view/chat_preview_line.dart';
 import '../../widgets/connection_status.dart';
@@ -66,14 +75,18 @@ import '../../../core/protocol/opcode_map.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../core/config/build_profile.dart';
-import '../../../core/config/ios_release.dart';
+import '../../../core/config/whats_new.dart';
+import '../../../core/config/app_motion.dart';
 import '../../../core/config/app_animations.dart';
 import '../../../core/config/app_frost.dart';
 import '../../../core/config/app_spectrum_background.dart';
 import '../../../core/config/app_nav_pill_style.dart';
+import '../../../core/config/app_bottom_navigation_style.dart';
 import '../../../core/cache/info_cache.dart';
+import '../../../core/cache/official_options.dart';
 import '../../../core/config/app_visual_style.dart';
 import '../../../core/config/app_stories.dart';
+import '../../../core/whats_new/spotlight_ids.dart';
 import '../../../core/config/app_colors.dart';
 import '../../../core/config/komet_settings.dart';
 import '../../../backend/models/chat_folder.dart';
@@ -87,6 +100,7 @@ import '../../../core/storage/app_database.dart';
 import '../../../core/storage/draft_store.dart';
 import '../../../core/storage/archived_chats_store.dart';
 import '../../../core/crypto/e2ee_service.dart';
+import '../../../core/crypto/outgoing_message_policy.dart';
 import '../../../core/storage/chat_encryption_store.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../../core/storage/chat_activity_store.dart';
@@ -117,6 +131,7 @@ import '../../widgets/media_playback_pill.dart';
 import '../../../core/config/app_fonts.dart';
 import '../lock/lock_glyph.dart';
 import '../../../core/security/app_lock.dart';
+import '../../widgets/verified_mark.dart';
 
 const String _savedWelcomeKey = 'welcome.saved.dialog.message';
 
@@ -127,10 +142,14 @@ final ValueNotifier<int> activeNavTab = ValueNotifier<int>(0);
 class _StoriesScrollPhysics extends BouncingScrollPhysics {
   final bool Function() blockPositive;
   final bool Function() allowPullOverscrollTop;
+  final bool Function() archiveClaimsPull;
+  final double Function() archivePullBase;
 
   const _StoriesScrollPhysics({
     required this.blockPositive,
     required this.allowPullOverscrollTop,
+    required this.archiveClaimsPull,
+    required this.archivePullBase,
     super.parent,
   });
 
@@ -139,18 +158,42 @@ class _StoriesScrollPhysics extends BouncingScrollPhysics {
     return _StoriesScrollPhysics(
       blockPositive: blockPositive,
       allowPullOverscrollTop: allowPullOverscrollTop,
+      archiveClaimsPull: archiveClaimsPull,
+      archivePullBase: archivePullBase,
       parent: buildParent(ancestor),
     );
   }
 
   @override
+  double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
+    if (offset > 0 && !allowPullOverscrollTop()) {
+      return min(offset, max(0.0, position.pixels - position.minScrollExtent));
+    }
+    return _withArchiveResistance(position, offset);
+  }
+
+  double _withArchiveResistance(ScrollMetrics position, double offset) {
+    if (position.pixels > position.maxScrollExtent || !archiveClaimsPull()) {
+      return super.applyPhysicsToUserOffset(position, offset);
+    }
+    final inRange = max(0.0, position.pixels - position.minScrollExtent);
+    if (offset <= inRange) return offset;
+    final overscroll = position.minScrollExtent - position.pixels;
+    final pulled = max(0.0, overscroll - archivePullBase());
+    return inRange + archivePullOffset(pulled, offset - inRange);
+  }
+
+  @override
   double applyBoundaryConditions(ScrollMetrics position, double value) {
-    if (blockPositive() && value > 0.0) {
-      return value - max(0.0, position.pixels);
+    if (blockPositive() &&
+        value > position.pixels &&
+        value > position.minScrollExtent &&
+        position.pixels <= position.minScrollExtent) {
+      return value - position.minScrollExtent;
     }
     if (!allowPullOverscrollTop() &&
         value < position.minScrollExtent &&
-        position.pixels <= position.minScrollExtent) {
+        position.pixels >= position.minScrollExtent) {
       return value - position.minScrollExtent;
     }
     return super.applyBoundaryConditions(position, value);
@@ -242,7 +285,16 @@ enum _DeleteKind { personalLike, ownerGroup, blocked }
 
 class _ChatListScreenState extends State<ChatListScreen>
     with TickerProviderStateMixin, RouteAware, SpectrumSurface {
-  String? _selectedFolderId;
+  final ValueNotifier<String?> _selectedFolder = ValueNotifier(null);
+  String? get _selectedFolderId => _selectedFolder.value;
+  set _selectedFolderId(String? id) => _selectedFolder.value = id;
+  int? _folderSwitchTarget;
+  final ValueNotifier<int> _chatListData = ValueNotifier(0);
+  late final Listenable _folderStripChanges = Listenable.merge([
+    chats.chatsChanged,
+    _selectedFolder,
+    _chatListData,
+  ]);
 
   List<ChatFolder> _folders = [];
   Set<int> _contactIds = <int>{};
@@ -250,14 +302,27 @@ class _ChatListScreenState extends State<ChatListScreen>
   int _currentNavIndex = 0;
 
   List<PillNavItem> _chatsNavItems(AppLocalizations l10n) => [
-    PillNavItem(icon: Symbols.chat_bubble, label: l10n.chatListNavChats),
-    PillNavItem(icon: Symbols.call, label: l10n.chatListNavCalls),
-    PillNavItem(icon: Symbols.person_pin, label: l10n.chatListNavContacts),
+    PillNavItem(
+      icon: Symbols.chat_bubble,
+      label: l10n.chatListNavChats,
+      spotlightId: SpotlightIds.navChats,
+    ),
+    PillNavItem(
+      icon: Symbols.call,
+      label: l10n.chatListNavCalls,
+      spotlightId: SpotlightIds.navCalls,
+    ),
+    PillNavItem(
+      icon: Symbols.person_pin,
+      label: l10n.chatListNavContacts,
+      spotlightId: SpotlightIds.navContacts,
+    ),
     PillNavItem(
       icon: Symbols.settings,
       label: l10n.attachSheetSettings,
       longPressable: true,
       animationAsset: AppAnimations.settings,
+      spotlightId: SpotlightIds.navSettings,
     ),
   ];
 
@@ -268,12 +333,15 @@ class _ChatListScreenState extends State<ChatListScreen>
   double _revealAnimBegin = 0.0;
   double _closeAnimBegin = 0.0;
   static const double _kStoriesPullTriggerPx = 16.0;
-  static const double _kArchivePullTriggerPx = 56.0;
-  bool _archiveRevealed = false;
-  bool _archivePullArmed = true;
-  bool _archiveRevealAnimates = false;
-  bool _collapsingArchive = false;
-  final GlobalKey _archiveEntryKey = GlobalKey();
+  static const double _kStoriesRowExtent = 96.0;
+  int _storiesDragDirection = 0;
+  final ArchivePullController _archivePull = ArchivePullController();
+  late final ArchiveWheelPull _archiveWheel = ArchiveWheelPull(
+    vsync: this,
+    controller: _archivePull,
+  );
+  bool _archiveWasRevealed = false;
+  Offset? _archiveTapPosition;
 
   final _StoriesUi _storiesUi = _StoriesUi();
   double get _pullRatio => _storiesUi.pullRatio;
@@ -323,13 +391,19 @@ class _ChatListScreenState extends State<ChatListScreen>
       DateTime.fromMillisecondsSinceEpoch(0);
   ProfileData? _profile;
 
+  Object? get _profileKey {
+    final p = _profile;
+    if (p == null) return null;
+    return Object.hash(p.id, p.firstName, p.lastName, p.photoId, p.baseUrl);
+  }
+
   List<CachedChat> _chats = [];
   List<CachedChat> _chatsWithArchived = [];
   Set<int> _archivedIds = const {};
   int _archivedCount = 0;
   bool _archiveHadChats = false;
 
-  int _chatListRevision = 0;
+  final ValueNotifier<int> _chatListMoves = ValueNotifier(0);
   final Set<String> _knownChatIds = {};
   bool _didInitialChatLoad = false;
   Set<String> _enteringChatIds = {};
@@ -342,14 +416,39 @@ class _ChatListScreenState extends State<ChatListScreen>
   StreamSubscription<MessageEvent>? _typingMsgSub;
   String? _presentedInformerId;
 
-  Widget? _cachedChatsBody;
-  Object? _chatsBodyCacheKey;
+  Object? _contextKey;
+  Widget? _cachedHeader;
+  Object? _headerCacheKey;
+  Widget? _cachedPager;
+  Object? _pagerCacheKey;
+  final Map<int, ({Object key, Widget page})> _builtPages = {};
+  final Set<int> _stalePages = {};
+  List<String> _builtPagesFolderIds = const [];
+  int _tilesRevision = 0;
+  int _warmPages = 0;
+  bool _warmUpScheduled = false;
+  Widget? _callsTab;
+  Widget? _contactsTab;
+  Widget? _settingsTab;
+  double? _tabsBottomPadding;
 
-  Widget _getChatsBody() {
+  Widget _getChatsBody(BuildContext context) {
+    final theme = Theme.of(context);
+    _contextKey = Object.hash(
+      theme.colorScheme,
+      theme.textTheme,
+      Localizations.localeOf(context),
+      MediaQuery.textScalerOf(context),
+    );
+    return _buildChatsTabBody(context);
+  }
+
+  Widget _chatsHeader(BuildContext context) {
     final key = Object.hashAll([
-      identityHashCode(_chats),
-      identityHashCode(_folders),
-      _selectedFolderId,
+      _contextKey,
+      Object.hashAll([
+        for (final f in _folders) Object.hash(f.id, f.title, f.emoji),
+      ]),
       _isInitialLoading,
       _foldersListKnown,
       _isSelectionMode,
@@ -360,13 +459,126 @@ class _ChatListScreenState extends State<ChatListScreen>
       _storiesOverscrollRevealArmed,
       storiesModule.storiesChanged.value,
       _sessionState,
-      identityHashCode(_profile),
+      _profileKey,
     ]);
-    if (_cachedChatsBody == null || _chatsBodyCacheKey != key) {
-      _chatsBodyCacheKey = key;
-      _cachedChatsBody = _buildChatsTabBody();
+    final cached = _cachedHeader;
+    if (cached != null && key == _headerCacheKey) return cached;
+    _headerCacheKey = key;
+    return _cachedHeader = _buildPinnedChatsHeader(context);
+  }
+
+  Widget _chatsPager() {
+    final pageCount = _folderPageCount;
+    final center = _selectedFolderIndex;
+    final key = Object.hashAll([
+      pageCount,
+      _warmPages,
+      for (var i = center - 1; i <= center + 1; i++)
+        if (i >= 0 && i < pageCount) _folderPageKey(i),
+    ]);
+    final cached = _cachedPager;
+    if (cached != null && key == _pagerCacheKey) return cached;
+    _pagerCacheKey = key;
+    return _cachedPager = PageView.builder(
+      controller: _folderPageController,
+      physics: pageCount <= 1
+          ? const NeverScrollableScrollPhysics()
+          : const BouncingScrollPhysics(),
+      allowImplicitScrolling: _warmPages > 0,
+      scrollCacheExtent: ScrollCacheExtent.viewport(_warmPages.toDouble()),
+      onPageChanged: _onFolderPageChanged,
+      itemCount: pageCount,
+      itemBuilder: (context, pageIndex) => _folderPage(pageIndex),
+    );
+  }
+
+  Object _folderPageKey(int pageIndex) => Object.hashAll([
+    _contextKey,
+    pageIndex < _folders.length ? _folders[pageIndex].id : null,
+    identityHashCode(_chatsForPageIndex(pageIndex)),
+    _isInitialLoading,
+    _isSelectionMode,
+    Object.hashAllUnordered(_selectedChats),
+    _profileKey,
+    storiesModule.storiesChanged.value,
+    _tilesRevision,
+    _shouldShowArchiveEntry(pageIndex),
+    KometSettings.archiveOnPull.value,
+  ]);
+
+  bool _isNearSelectedFolder(int pageIndex) =>
+      (pageIndex - _selectedFolderIndex).abs() <= 1;
+
+  Widget _folderPage(int pageIndex) {
+    final folderIds = [for (final f in _folders) f.id];
+    if (!listEquals(folderIds, _builtPagesFolderIds)) {
+      _builtPagesFolderIds = folderIds;
+      _builtPages.clear();
+      _stalePages.clear();
+      _tileCache.clear();
+      _stablePageChats.removeWhere(
+        (id, _) => id.isNotEmpty && !folderIds.contains(id),
+      );
     }
-    return _cachedChatsBody!;
+    final key = _folderPageKey(pageIndex);
+    final built = _builtPages[pageIndex];
+    if (built != null &&
+        (built.key == key || !_isNearSelectedFolder(pageIndex))) {
+      if (built.key == key) {
+        _stalePages.remove(pageIndex);
+      } else {
+        _stalePages.add(pageIndex);
+      }
+      return built.page;
+    }
+    _stalePages.remove(pageIndex);
+    final pageChatIds = {
+      for (final chat in _chatsForPageIndex(pageIndex)) chat.id,
+    };
+    _tileCache[pageIndex]?.removeWhere((id, _) => !pageChatIds.contains(id));
+    final page = _buildFolderChatPage(pageIndex);
+    _builtPages[pageIndex] = (key: key, page: page);
+    return page;
+  }
+
+  void _refreshNearFolderPages() {
+    if (!mounted) return;
+    if (_stalePages.any(_isNearSelectedFolder)) setState(() {});
+  }
+
+  void _onFolderPageChanged(int pageIndex) {
+    if (_folderSwitchTarget != null) return;
+    if (pageIndex < 0 || pageIndex >= _folders.length) return;
+    _selectedFolderId = _folders[pageIndex].id;
+  }
+
+  void _scheduleFolderWarmUp() {
+    if (_warmUpScheduled || _warmPages >= _folderPageCount - 1) return;
+    _warmUpScheduled = true;
+    unawaited(
+      SchedulerBinding.instance.scheduleTask(() {
+        _warmUpScheduled = false;
+        if (!mounted || _warmPages >= _folderPageCount - 1) return;
+        setState(() => _warmPages++);
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _scheduleFolderWarmUp(),
+        );
+      }, Priority.idle),
+    );
+  }
+
+  Widget _navTab(int index, double bottomPadding) {
+    if (_tabsBottomPadding != bottomPadding) {
+      _tabsBottomPadding = bottomPadding;
+      _callsTab = CallsTab(bottomPadding: bottomPadding);
+      _contactsTab = ContactsTab(bottomPadding: bottomPadding);
+      _settingsTab = SettingsTab(bottomPadding: bottomPadding);
+    }
+    return switch (index) {
+      1 => _callsTab!,
+      2 => _contactsTab!,
+      _ => _settingsTab!,
+    };
   }
 
   void _toggleSelection(String chatId) {
@@ -412,7 +624,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         return;
       }
       if (!mounted || _profile?.id != myId) return;
-      if (ForwardSender.isBlocked(myId, chatIdValue)) {
+      if (OutgoingMessagePolicy.requiresEncryption(myId, chatIdValue)) {
         showCustomNotification(
           context,
           AppLocalizations.of(context)!.e2eeForwardBlocked,
@@ -461,6 +673,15 @@ class _ChatListScreenState extends State<ChatListScreen>
         share: prepared,
         caption: caption,
       );
+    } on UnencryptedSendException {
+      if (mounted) {
+        setState(() => _shareSending = false);
+        showCustomNotification(
+          context,
+          AppLocalizations.of(context)!.shareEncryptedUnsupported,
+        );
+      }
+      return;
     } catch (e) {
       logger.w('Поделиться: отправка не удалась: $e');
     }
@@ -918,6 +1139,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   DateTime _storiesLockdownUntil = DateTime.fromMillisecondsSinceEpoch(0);
 
   bool _shouldBlockPositiveScroll() {
+    if (_archivePull.revealed) return false;
     if (_pullRatio > 0 ||
         _storiesDockedOpen ||
         _storiesRevealController.isAnimating) {
@@ -931,23 +1153,53 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   void _onArchiveModeChanged() {
     if (!mounted) return;
-    setState(() {
-      _archiveRevealed = false;
-      _archiveRevealAnimates = false;
-    });
+    _archivePull.hide();
+    setState(() {});
   }
 
-  bool get _archiveAwaitsPull =>
+  void _onArchivePullChanged() {
+    final revealed = _archivePull.revealed;
+    if (revealed && !_archiveWasRevealed) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _settleRevealedArchive(),
+      );
+    }
+    _archiveWasRevealed = revealed;
+  }
+
+  void _settleRevealedArchive() {
+    if (!mounted || !_archivePull.revealed) return;
+    final c = _activeChatScrollController();
+    if (c == null || !c.hasClients) return;
+    final top = c.position.minScrollExtent;
+    if (c.position.pixels <= top) return;
+    c.animateTo(
+      top,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutQuint,
+    );
+  }
+
+  bool get _archiveCanPull =>
       KometSettings.archiveOnPull.value &&
-      !_archiveRevealed &&
-      _shouldShowArchiveEntry(_selectedFolderIndex, ignorePull: true);
+      !_archivePull.revealed &&
+      _shouldShowArchiveEntry(_selectedFolderIndex) &&
+      _storiesStagePassed;
+
+  bool _archiveClaimsPull() =>
+      _archivePull.claimsDrag(canPull: _archiveCanPull);
 
   bool get _storiesStagePassed =>
       !AppStories.current.value ||
       (_storiesDockedOpen && !_storiesRevealController.isAnimating);
 
   bool _allowStoriesPullOverscrollTop() {
-    if (_archiveAwaitsPull && _storiesStagePassed) return true;
+    if (_archiveClaimsPull()) return true;
+    if (_storiesFollowDrag) return false;
+    return _storiesRevealAllowed();
+  }
+
+  bool _storiesRevealAllowed() {
     if (!AppStories.current.value) return false;
     if (_storiesDockedOpen ||
         _storiesRevealController.isAnimating ||
@@ -1013,6 +1265,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
     });
     chats.chatOrderRevision.addListener(_onChatsChanged);
+    ContactCache.officialRevision.addListener(_onOfficialRevision);
     ArchivedChatsStore.instance.revision.addListener(_onArchivedChanged);
     ChatEncryptionStore.instance.revision.addListener(_onEncryptionChanged);
     E2eeService.instance.revision.addListener(_onEncryptionChanged);
@@ -1021,6 +1274,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     storiesModule.storiesChanged.addListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.addListener(_requestReload);
     KometSettings.archiveOnPull.addListener(_onArchiveModeChanged);
+    _archivePull.addListener(_onArchivePullChanged);
     KometSettings.showHiddenChats.addListener(_requestReload);
     ContactsModule.revision.addListener(_requestReload);
     FoldersModule.revision.addListener(_requestReload);
@@ -1057,7 +1311,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   void _onDraftsChanged() {
-    if (mounted) _requestReload();
+    if (!mounted) return;
+    _tilesRevision++;
+    _requestReload();
   }
 
   void _onArchivedChanged() {
@@ -1065,7 +1321,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   void _onEncryptionChanged() {
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _tilesRevision++);
   }
 
   void _onStoriesEnabledChanged() {
@@ -1088,7 +1344,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   void _maybeLoadStories() {
     if (!AppStories.current.value) return;
-    if (api.state != SessionState.online) return;
+    if (api.state != SessionState.online || !accountModule.isLoggedIn) return;
     unawaited(storiesModule.loadFeed());
   }
 
@@ -1146,13 +1402,11 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final route = ModalRoute.of(context);
-    if (route is PageRoute) {
-      appRouteObserver.subscribe(this, route);
-    }
+  ModalRoute<Object?>? _route;
+
+  void _onRoute(ModalRoute<Object?> route) {
+    _route = route;
+    if (route is PageRoute) appRouteObserver.subscribe(this, route);
   }
 
   @override
@@ -1198,6 +1452,23 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   void _onChatsChanged() {
     _requestReload();
+  }
+
+  void _prefetchPeerOptions(List<CachedChat> items, int myId) {
+    final peers = <int>[];
+    for (final chat in items) {
+      if (chat.type != 'DIALOG') continue;
+      final peer = chat.participants.keys.firstWhere(
+        (id) => id != myId,
+        orElse: () => 0,
+      );
+      if (peer != 0) peers.add(peer);
+    }
+    OfficialOptions.requestAll(peers);
+  }
+
+  void _onOfficialRevision() {
+    if (mounted) setState(() => _tilesRevision++);
   }
 
   Future<void> _reloadChatsAndFolders() async {
@@ -1289,10 +1560,11 @@ class _ChatListScreenState extends State<ChatListScreen>
           _chats = filteredChats;
           _chatsWithArchived = visibleChats;
           _archivedIds = archivedIds;
+          _prefetchPeerOptions(visibleChats, p.id);
           _archivedCount = archivedCount;
           _contactIds = contactIds;
           _enteringChatIds = entering;
-          _chatListRevision++;
+          _chatListMoves.value++;
           _folders = folders;
           _foldersListKnown = foldersKnown;
           if (_selectedFolderId != null &&
@@ -1310,6 +1582,9 @@ class _ChatListScreenState extends State<ChatListScreen>
           }
           _isInitialLoading = false;
         });
+        if (archivedCount == 0) _archivePull.hide();
+        _chatListData.value++;
+        _scheduleFolderWarmUp();
         _syncShimmer();
         _prefetchContactsForChats(loadedChats);
         unawaited(_prefetchPresenceForChats(loadedChats));
@@ -1471,7 +1746,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       await messagesModule.ensureContactNames(ids);
     } finally {
       _inflightContactIds.removeAll(ids);
-      _scheduleContactRebuild();
+      if (ids.any((id) => ContactCache.get(id) != null)) {
+        _scheduleContactRebuild();
+      }
     }
   }
 
@@ -1480,13 +1757,24 @@ class _ChatListScreenState extends State<ChatListScreen>
     _contactRebuildTimer?.cancel();
     _contactRebuildTimer = Timer(const Duration(milliseconds: 120), () {
       if (!mounted) return;
-      _cachedChatsBody = null;
-      setState(() {});
+      setState(() => _tilesRevision++);
     });
   }
 
   int? _pageChatsBaseKey;
   final Map<int, List<CachedChat>> _pageChatsCache = {};
+  final Map<String, List<CachedChat>> _stablePageChats = {};
+
+  static bool _sameChatOrder(List<CachedChat> a, List<CachedChat> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id) return false;
+      if (((a[i].favIndex ?? 0) > 0) != ((b[i].favIndex ?? 0) > 0)) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   List<CachedChat> _chatsForPageIndex(int pageIndex) {
     final baseKey = Object.hash(
@@ -1523,7 +1811,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     final pinned = base.where((c) => (c.favIndex ?? 0) > 0).toList()
       ..sort((a, b) => a.favIndex!.compareTo(b.favIndex!));
     final regular = base.where((c) => (c.favIndex ?? 0) <= 0).toList();
-    final result = [...pinned, ...regular];
+    var result = [...pinned, ...regular];
+    final stableKey = pageIndex < _folders.length ? _folders[pageIndex].id : '';
+    final previous = _stablePageChats[stableKey];
+    if (previous != null && _sameChatOrder(previous, result)) {
+      result = previous;
+    }
+    _stablePageChats[stableKey] = result;
     _pageChatsCache[pageIndex] = result;
     return result;
   }
@@ -1536,7 +1830,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     while (_folderChatScrollControllers.length < n) {
       final i = _folderChatScrollControllers.length;
       void fn() => _onFolderChatScrollAt(i);
-      final c = ScrollController();
+      final c = DragInterceptScrollController(intercept: _consumeStoriesDrag);
       c.addListener(fn);
       _folderChatScrollControllers.add(c);
       _folderChatScrollListenerFns.add(fn);
@@ -1575,14 +1869,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       _storiesUi.notify();
     }
 
+    _archivePull.onScroll(offset, canPull: _archiveCanPull);
     if (offset < 0) {
-      if (_archiveAwaitsPull &&
-          _archivePullArmed &&
-          _storiesStagePassed &&
-          offset.abs() >= _kArchivePullTriggerPx) {
-        _revealArchive();
-        return;
-      }
+      if (_archivePull.pulling || _storiesFollowDrag) return;
       if (!_allowStoriesPullOverscrollTop()) {
         return;
       }
@@ -1599,8 +1888,6 @@ class _ChatListScreenState extends State<ChatListScreen>
         }
       }
     } else {
-      if (offset > 3) _archivePullArmed = false;
-      _collapseArchiveIfScrolledPast(c);
       if (_storiesDockedOpen &&
           offset > 12 &&
           DateTime.now().isAfter(_storiesRevealLayoutSettleUntil)) {
@@ -1610,7 +1897,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         return;
       }
       final disarm = offset > 3 && _storiesOverscrollRevealArmed;
-      final clearPull = _pullRatio > 0;
+      final clearPull = _pullRatio > 0 && !_storiesFollowDrag;
       if (disarm || clearPull) {
         if (disarm) _storiesOverscrollRevealArmed = false;
         if (clearPull) _pullRatio = 0.0;
@@ -1699,16 +1986,65 @@ class _ChatListScreenState extends State<ChatListScreen>
     _storiesRevealController.forward(from: 0);
   }
 
-  void _startStoriesAutoClose() {
+  bool get _storiesFollowDrag =>
+      AppStories.current.value &&
+      _currentNavIndex == 0 &&
+      !widget.forwardMode &&
+      !widget.archiveMode &&
+      !_shareMode &&
+      !_isSelectionMode;
+
+  double _consumeStoriesDrag(ScrollMetrics position, double offset) {
+    if (!_storiesFollowDrag || _storiesRevealController.isAnimating) return 0;
+    if (_archivePull.pulling) return 0;
+    if (position.pixels > position.minScrollExtent + 0.5) return 0;
+    final wanted = _pullRatio + offset / _kStoriesRowExtent;
+    final next = wanted.clamp(0.0, 1.0);
+    if (next == _pullRatio) return 0;
+    final consumed = next == wanted
+        ? offset
+        : (next - _pullRatio) * _kStoriesRowExtent;
+    _storiesDragDirection = consumed > 0 ? 1 : -1;
+    _pullRatio = next;
+    final docked = next >= 1;
+    if (docked != _storiesDockedOpen) {
+      _storiesDockedOpen = docked;
+      if (docked) {
+        _storiesRevealLayoutSettleUntil = DateTime.now().add(
+          const Duration(milliseconds: 520),
+        );
+      }
+    }
+    _storiesUi.notify();
+    return consumed;
+  }
+
+  void _settleStoriesDrag() {
+    final direction = _storiesDragDirection;
+    _storiesDragDirection = 0;
+    if (direction == 0 || _storiesRevealController.isAnimating) return;
+    final ratio = _pullRatio;
+    if (ratio <= 0 || ratio >= 1) return;
+    final open = direction > 0 ? ratio > 0.2 : ratio > 0.8;
+    if (open) {
+      _startStoriesAutoReveal(ratio);
+    } else {
+      _startStoriesAutoClose(lockdown: false);
+    }
+  }
+
+  void _startStoriesAutoClose({bool lockdown = true}) {
     if (_pullRatio <= 0 &&
         !_storiesDockedOpen &&
         !_storiesRevealController.isAnimating) {
       return;
     }
     if (_storiesAnimClosing && _storiesRevealController.isAnimating) return;
-    _storiesLockdownUntil = DateTime.now().add(
-      const Duration(milliseconds: 800),
-    );
+    if (lockdown) {
+      _storiesLockdownUntil = DateTime.now().add(
+        const Duration(milliseconds: 800),
+      );
+    }
     _storiesRevealController.stop();
     _storiesAnimClosing = true;
     final from = _pullRatio.clamp(0.0, 1.0);
@@ -1733,7 +2069,6 @@ class _ChatListScreenState extends State<ChatListScreen>
 
     if (n is ScrollEndNotification) {
       if (n.metrics.pixels <= 0.5) {
-        _archivePullArmed = true;
         _storiesOverscrollRevealArmed = true;
         _storiesUi.notify();
       }
@@ -1777,6 +2112,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     appRouteObserver.unsubscribe(this);
     _settleTimer?.cancel();
     chats.chatOrderRevision.removeListener(_onChatsChanged);
+    ContactCache.officialRevision.removeListener(_onOfficialRevision);
     ArchivedChatsStore.instance.revision.removeListener(_onArchivedChanged);
     ChatEncryptionStore.instance.revision.removeListener(_onEncryptionChanged);
     E2eeService.instance.revision.removeListener(_onEncryptionChanged);
@@ -1785,6 +2121,12 @@ class _ChatListScreenState extends State<ChatListScreen>
     storiesModule.storiesChanged.removeListener(_onStoriesDataChanged);
     KometSettings.hideAllChatsFolder.removeListener(_requestReload);
     KometSettings.archiveOnPull.removeListener(_onArchiveModeChanged);
+    _archivePull.removeListener(_onArchivePullChanged);
+    _archiveWheel.dispose();
+    _archivePull.dispose();
+    _selectedFolder.dispose();
+    _chatListData.dispose();
+    _chatListMoves.dispose();
     KometSettings.showHiddenChats.removeListener(_requestReload);
     ContactsModule.revision.removeListener(_requestReload);
     FoldersModule.revision.removeListener(_requestReload);
@@ -1831,6 +2173,24 @@ class _ChatListScreenState extends State<ChatListScreen>
     return _currentNavIndex.toDouble();
   }
 
+  double _navPageShift(int index, double position) {
+    final from = _navPageAnimStart.round();
+    final to = _navPageAnimEnd.round();
+    final skipsTabs =
+        !_navDragging &&
+        _navPageAnimController.isAnimating &&
+        (to - from).abs() > 1;
+    if (!skipsTabs) return index - position;
+    final progress =
+        ((position - _navPageAnimStart) /
+                (_navPageAnimEnd - _navPageAnimStart))
+            .clamp(0.0, 1.0);
+    final direction = (to - from).sign.toDouble();
+    if (index == from) return -progress * direction;
+    if (index == to) return (1 - progress) * direction;
+    return index < from ? -2.0 : 2.0;
+  }
+
   void _onNavTabSelected(int index) {
     if (index == _currentNavIndex && !_navPageAnimController.isAnimating) {
       return;
@@ -1847,7 +2207,11 @@ class _ChatListScreenState extends State<ChatListScreen>
     _navPageAnimEnd = index.toDouble();
     setState(() => _currentNavIndex = index);
     activeNavTab.value = index;
-    _navPageAnimController.forward(from: 0);
+    if (AppMotion.enabled.value) {
+      _navPageAnimController.forward(from: 0);
+    } else {
+      _navPageAnimController.value = 1.0;
+    }
     if (index == 0) _scheduleInformerPresentation();
   }
 
@@ -1867,7 +2231,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (widget.forwardMode || widget.archiveMode || _currentNavIndex != 0) {
       return;
     }
-    final route = ModalRoute.of(context);
+    final route = _route;
     if (route != null && !route.isCurrent) return;
     if (_presentedInformerId == banner.id) return;
     if (bannersModule.activeBanner.value?.id != banner.id) return;
@@ -1943,32 +2307,61 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
   }
 
+  Future<void> _openWhatsNew(String version) {
+    Haptics.tap();
+    return showWhatsNewSheet(context, version);
+  }
+
+  Widget _buildWhatsNewBanner(String version) {
+    final l10n = AppLocalizations.of(context)!;
+    final banner = InformerBanner(
+      id: 'whats-new-$version',
+      title: l10n.whatsNewBannerTitle(version),
+      description: l10n.whatsNewBannerSubtitle,
+    );
+    return InformerBannerTile(
+      key: ValueKey(banner.id),
+      banner: banner,
+      onTap: () => unawaited(_openWhatsNew(version)),
+      onClose: () => unawaited(WhatsNew.dismiss()),
+    );
+  }
+
   Widget _buildInformerBanner() {
-    return ValueListenableBuilder<InformerBanner?>(
-      valueListenable: bannersModule.activeBanner,
-      builder: (context, banner, _) {
-        return ClipRect(
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: banner == null
-                ? const SizedBox(width: double.infinity)
-                : InformerBannerTile(
-                    key: ValueKey(banner.id),
-                    banner: banner,
-                    animojiLoader: animojiModule.fetchById,
-                    onPresented: _markInformerPresented,
-                    onTap: banner.isClickable
-                        ? () => unawaited(_openInformer(banner))
-                        : null,
-                    onClose: banner.hidesCloseButton
-                        ? null
-                        : () => unawaited(_closeInformer(banner)),
-                  ),
+    return ValueListenableBuilder<String?>(
+      valueListenable: WhatsNew.pendingVersion,
+      builder: (context, whatsNew, _) =>
+          ValueListenableBuilder<InformerBanner?>(
+            valueListenable: bannersModule.activeBanner,
+            builder: (context, banner, _) {
+              return ClipRect(
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: whatsNew != null
+                      ? _buildWhatsNewBanner(whatsNew)
+                      : banner == null
+                      ? const SizedBox(width: double.infinity)
+                      : InformerBannerTile(
+                          key: ValueKey(banner.id),
+                          banner: banner,
+                          animojiLoader: animojiModule.fetchById,
+                          note: AppLocalizations.of(
+                            context,
+                          )!.informerBannerServerNote,
+                          onPresented: _markInformerPresented,
+                          onTap: banner.isClickable
+                              ? () => unawaited(_openInformer(banner))
+                              : null,
+                          onClose: banner.hidesCloseButton
+                              ? null
+                              : () => unawaited(_closeInformer(banner)),
+                        ),
+                ),
+              );
+            },
           ),
-        );
-      },
     );
   }
 
@@ -2151,7 +2544,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           ),
                           if (AppStories.current.value)
                             SizedBox(
-                              height: 96 * _pullRatio,
+                              height: _kStoriesRowExtent * _pullRatio,
                               child: Opacity(
                                 opacity: _pullRatio,
                                 child: _buildStoriesRow(),
@@ -2222,50 +2615,12 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
                 child: _showFoldersShimmer
                     ? FolderStripShimmer(shimmer: _shimmerController)
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          final availableWidth = constraints.maxWidth - 40;
-                          final folderCount = _folders.length;
-                          final minWidthPerFolder = 80.0;
-                          final totalMinWidth =
-                              folderCount * minWidthPerFolder +
-                              (folderCount - 1) * 8;
-                          final needsScroll = totalMinWidth > availableWidth;
-
-                          if (needsScroll) {
-                            return ListView(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 2,
-                              ),
-                              physics: const BouncingScrollPhysics(),
-                              children: [
-                                for (var i = 0; i < _folders.length; i++) ...[
-                                  if (i > 0) const SizedBox(width: 8),
-                                  _buildFolderChip(_folders[i], i),
-                                ],
-                              ],
-                            );
-                          } else {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 2,
-                              ),
-                              child: Row(
-                                children: [
-                                  for (var i = 0; i < _folders.length; i++) ...[
-                                    if (i > 0) const SizedBox(width: 8),
-                                    Expanded(
-                                      child: _buildFolderChip(_folders[i], i),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            );
-                          }
-                        },
+                    : ListenableBuilder(
+                        listenable: _folderStripChanges,
+                        builder: (context, _) => LayoutBuilder(
+                          builder: (context, constraints) =>
+                              _buildFolderStrip(constraints.maxWidth),
+                        ),
                       ),
               ),
             ),
@@ -2275,6 +2630,143 @@ class _ChatListScreenState extends State<ChatListScreen>
         ],
       ),
     );
+  }
+
+  Object get _tileContextKey => Object.hash(
+    _contextKey,
+    _profileKey,
+    _tilesRevision,
+    _isSelectionMode,
+    _forwardPicking,
+    storiesModule.storiesChanged.value,
+  );
+
+  final Map<int, Map<int, ({Object key, Widget tile})>> _tileCache = {};
+
+  Widget _chatTile(int pageIndex, CachedChat baseChat) {
+    final id = baseChat.id;
+    final key = Object.hash(
+      _tileContextKey,
+      _selectedChats.contains(id.toString()),
+    );
+    final cache = _tileCache.putIfAbsent(pageIndex, () => {});
+    final cached = cache[id];
+    if (cached != null && cached.key == key) return cached.tile;
+    final tile = ValueListenableBuilder<CachedChat>(
+      key: ValueKey('chat_$id'),
+      valueListenable: chats.chatListenable(baseChat),
+      builder: (context, chat, _) => _chatTileContent(context, chat),
+    );
+    cache[id] = (key: key, tile: tile);
+    return tile;
+  }
+
+  Widget _chatTileContent(BuildContext context, CachedChat chat) {
+    final isPinned = (chat.favIndex ?? 0) > 0;
+
+    if (chat.type.isNotEmpty && chat.type == "DIALOG" && chat.id != 0) {
+      int secondId = _profile?.id ?? 0;
+      for (final entry in chat.participants.entries) {
+        if (entry.key != _profile?.id) {
+          secondId = entry.key;
+          break;
+        }
+      }
+      final name = ContactCache.get(secondId) ?? chat.title;
+      final avatar = ContactCache.getAvatar(secondId) ?? chat.iconUrl;
+      final isVerified = ContactCache.isOfficial(secondId) || chat.isOfficial;
+
+      final isPlaceholder = chat.isLastMsgDeleted;
+      final previewText = isPlaceholder
+          ? AppLocalizations.of(context)!.chatListOpenToLoad
+          : (chat.lastMsgTextOneLine ?? '');
+      return _animateChatTile(
+        chat.id.toString(),
+        _buildChatItem(
+          chat.id.toString(),
+          name ?? AppLocalizations.of(context)!.msgActionsReadByUnknownUser,
+          previewText,
+          _formatTime(chat.lastMsgTime),
+          avatar ?? "",
+          presenceUserId: secondId,
+          unreadCount: chat.unreadCount,
+          hasMention: chat.hasUnreadMention,
+          isMuted: chat.isMuted,
+          isVerified: isVerified,
+          isPinned: isPinned,
+          chatType: "DIALOG",
+          messageItalic: isPlaceholder,
+          draft: _draftFor(chat.id),
+          ownStatus: _ownStatusFor(chat, isPlaceholder),
+          ownRead: chat.lastMsgReadByOthers,
+          messageRanges: isPlaceholder ? const [] : chat.lastMsgFormatRanges,
+          previewMessageId: isPlaceholder ? null : chat.lastMsgId,
+          previewCipherText: isPlaceholder ? null : chat.lastMsgTextOneLine,
+          previewMedia: isPlaceholder ? null : chat.lastMsgMedia,
+          titleIcon: chatKindIcon(
+            'DIALOG',
+            isBot: _isBotDialog(secondId, chat),
+          ),
+          hasMiniApp: _hasMiniApp(secondId, chat),
+          hasCall: chat.activeCall != null,
+        ),
+      );
+    } else {
+      final isPlaceholder = chat.isLastMsgDeleted;
+      final isSavedWelcome =
+          chat.id == 0 && chat.lastMsgText == _savedWelcomeKey;
+      final sender = chat.lastMsgSenderId != null
+          ? ContactCache.get(chat.lastMsgSenderId!)
+          : null;
+
+      final senderPrefix =
+          !isPlaceholder && sender?.isNotEmpty == true && chat.id != 0
+          ? "$sender: "
+          : "";
+      final body = isPlaceholder
+          ? AppLocalizations.of(context)!.chatListOpenToLoad
+          : isSavedWelcome
+          ? AppLocalizations.of(context)!.savedMessagesEmptyPreview
+          : (chat.lastMsgTextOneLine ?? '');
+
+      return _animateChatTile(
+        chat.id.toString(),
+        _buildChatItem(
+          chat.id.toString(),
+          chat.id == 0
+              ? AppLocalizations.of(context)!.chatListSavedMessages
+              : chat.title ?? AppLocalizations.of(context)!.hubChatTileTitle,
+          body,
+          _formatTime(chat.lastMsgTime),
+          (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
+              ? chat.iconUrl!
+              : '',
+          unreadCount: chat.unreadCount,
+          hasMention: chat.hasUnreadMention,
+          isMuted: chat.isMuted,
+          isVerified: chat.isOfficial,
+          isPinned: isPinned,
+          chatType: chat.type,
+          messageItalic: isPlaceholder || isSavedWelcome,
+          draft: chat.id == 0 ? null : _draftFor(chat.id),
+          ownStatus: _ownStatusFor(chat, isPlaceholder),
+          ownRead: chat.lastMsgReadByOthers,
+          messageRanges: isPlaceholder || isSavedWelcome
+              ? const []
+              : chat.lastMsgFormatRanges,
+          previewMessageId: isPlaceholder ? null : chat.lastMsgId,
+          previewPrefix: senderPrefix,
+          previewCipherText: isPlaceholder || isSavedWelcome
+              ? null
+              : chat.lastMsgText,
+          previewMedia: isPlaceholder ? null : chat.lastMsgMedia,
+          titleIcon: chat.id == 0
+              ? null
+              : chatKindIcon(chat.type, isBot: false),
+          hasCall: chat.activeCall != null,
+        ),
+      );
+    }
   }
 
   Widget _buildFolderChatPage(int pageIndex) {
@@ -2291,6 +2783,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final idToIndex = <String, int>{
       for (var i = 0; i < pageChats.length; i++) pageChats[i].id.toString(): i,
     };
+    final showArchive = _shouldShowArchiveEntry(pageIndex);
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification n) {
         if (_currentNavIndex != 0) return false;
@@ -2312,12 +2805,30 @@ class _ChatListScreenState extends State<ChatListScreen>
         physics: _StoriesScrollPhysics(
           blockPositive: _shouldBlockPositiveScroll,
           allowPullOverscrollTop: _allowStoriesPullOverscrollTop,
+          archiveClaimsPull: _archiveClaimsPull,
+          archivePullBase: () => _archivePull.pullBase,
           parent: const AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
+          if (showArchive && KometSettings.archiveOnPull.value)
+            SliverArchivePull(
+              controller: _archivePull,
+              child: ArchivePullCell(
+                controller: _archivePull,
+                pullLabel: AppLocalizations.of(context)!.chatListArchivePull,
+                releaseLabel: AppLocalizations.of(
+                  context,
+                )!.chatListArchiveRelease,
+                rowBuilder: (avatarVisible) => _buildArchiveEntry(
+                  cs,
+                  accent: true,
+                  avatarVisible: avatarVisible,
+                ),
+              ),
+            ),
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
-          if (_shouldShowArchiveEntry(pageIndex))
-            SliverToBoxAdapter(child: _buildRevealableArchiveEntry(cs)),
+          if (showArchive && !KometSettings.archiveOnPull.value)
+            SliverToBoxAdapter(child: _buildArchiveEntry(cs)),
           if (pageChats.isEmpty && !_isInitialLoading)
             SliverFillRemaining(
               child: Center(
@@ -2353,147 +2864,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   final chatIndex = hasSeparator && index > pinnedCount
                       ? index - 1
                       : index;
-                  final baseChat = pageChats[chatIndex];
-                  return ValueListenableBuilder<CachedChat>(
-                    valueListenable: chats.chatListenable(baseChat),
-                    builder: (context, chat, _) {
-                      final isPinned = (chat.favIndex ?? 0) > 0;
-
-                      if (chat.type.isNotEmpty &&
-                          chat.type == "DIALOG" &&
-                          chat.id != 0) {
-                        int secondId = _profile?.id ?? 0;
-                        for (final entry in chat.participants.entries) {
-                          if (entry.key != _profile?.id) {
-                            secondId = entry.key;
-                            break;
-                          }
-                        }
-                        final name = ContactCache.get(secondId) ?? chat.title;
-                        final avatar =
-                            ContactCache.getAvatar(secondId) ?? chat.iconUrl;
-                        final isVerified =
-                            ContactCache.isOfficial(secondId) ||
-                            chat.isOfficial;
-
-                        final isPlaceholder = chat.isLastMsgDeleted;
-                        final previewText = isPlaceholder
-                            ? AppLocalizations.of(context)!.chatListOpenToLoad
-                            : (chat.lastMsgTextOneLine ?? '');
-                        return _animateChatTile(
-                          chat.id.toString(),
-                          _buildChatItem(
-                            chat.id.toString(),
-                            name ??
-                                AppLocalizations.of(
-                                  context,
-                                )!.msgActionsReadByUnknownUser,
-                            previewText,
-                            _formatTime(chat.lastMsgTime),
-                            avatar ?? "",
-                            presenceUserId: secondId,
-                            unreadCount: chat.unreadCount,
-                            hasMention: chat.hasUnreadMention,
-                            isMuted: chat.isMuted,
-                            isVerified: isVerified,
-                            isPinned: isPinned,
-                            chatType: "DIALOG",
-                            messageItalic: isPlaceholder,
-                            draft: _draftFor(chat.id),
-                            ownStatus: _ownStatusFor(chat, isPlaceholder),
-                            ownRead: chat.lastMsgReadByOthers,
-                            messageRanges: isPlaceholder
-                                ? const []
-                                : chat.lastMsgFormatRanges,
-                            previewMessageId: isPlaceholder
-                                ? null
-                                : chat.lastMsgId,
-                            previewCipherText: isPlaceholder
-                                ? null
-                                : chat.lastMsgTextOneLine,
-                            previewMedia: isPlaceholder
-                                ? null
-                                : chat.lastMsgMedia,
-                            titleIcon: chatKindIcon(
-                              'DIALOG',
-                              isBot: _isBotDialog(secondId, chat),
-                            ),
-                            hasMiniApp: _hasMiniApp(secondId, chat),
-                            hasCall: chat.activeCall != null,
-                          ),
-                        );
-                      } else {
-                        final isPlaceholder = chat.isLastMsgDeleted;
-                        final isSavedWelcome =
-                            chat.id == 0 &&
-                            chat.lastMsgText == _savedWelcomeKey;
-                        final sender = chat.lastMsgSenderId != null
-                            ? ContactCache.get(chat.lastMsgSenderId!)
-                            : null;
-
-                        final senderPrefix =
-                            !isPlaceholder &&
-                                sender?.isNotEmpty == true &&
-                                chat.id != 0
-                            ? "$sender: "
-                            : "";
-                        final body = isPlaceholder
-                            ? AppLocalizations.of(context)!.chatListOpenToLoad
-                            : isSavedWelcome
-                            ? AppLocalizations.of(
-                                context,
-                              )!.savedMessagesEmptyPreview
-                            : (chat.lastMsgTextOneLine ?? '');
-
-                        return _animateChatTile(
-                          chat.id.toString(),
-                          _buildChatItem(
-                            chat.id.toString(),
-                            chat.id == 0
-                                ? AppLocalizations.of(
-                                    context,
-                                  )!.chatListSavedMessages
-                                : chat.title ??
-                                      AppLocalizations.of(
-                                        context,
-                                      )!.hubChatTileTitle,
-                            body,
-                            _formatTime(chat.lastMsgTime),
-                            (chat.iconUrl != null && chat.iconUrl!.isNotEmpty)
-                                ? chat.iconUrl!
-                                : '',
-                            unreadCount: chat.unreadCount,
-                            hasMention: chat.hasUnreadMention,
-                            isMuted: chat.isMuted,
-                            isVerified: chat.isOfficial,
-                            isPinned: isPinned,
-                            chatType: chat.type,
-                            messageItalic: isPlaceholder || isSavedWelcome,
-                            draft: chat.id == 0 ? null : _draftFor(chat.id),
-                            ownStatus: _ownStatusFor(chat, isPlaceholder),
-                            ownRead: chat.lastMsgReadByOthers,
-                            messageRanges: isPlaceholder || isSavedWelcome
-                                ? const []
-                                : chat.lastMsgFormatRanges,
-                            previewMessageId: isPlaceholder
-                                ? null
-                                : chat.lastMsgId,
-                            previewPrefix: senderPrefix,
-                            previewCipherText: isPlaceholder || isSavedWelcome
-                                ? null
-                                : chat.lastMsgText,
-                            previewMedia: isPlaceholder
-                                ? null
-                                : chat.lastMsgMedia,
-                            titleIcon: chat.id == 0
-                                ? null
-                                : chatKindIcon(chat.type, isBot: false),
-                            hasCall: chat.activeCall != null,
-                          ),
-                        );
-                      }
-                    },
-                  );
+                  return _chatTile(pageIndex, pageChats[chatIndex]);
                 },
                 childCount: totalItems,
                 findChildIndexCallback: (Key key) {
@@ -2506,9 +2877,58 @@ class _ChatListScreenState extends State<ChatListScreen>
                 },
               ),
             ),
-          SliverPadding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+          ValueListenableBuilder<BottomNavigationStyle>(
+            valueListenable: AppBottomNavigationStyle.current,
+            builder: (context, style, _) {
+              final compact = style == BottomNavigationStyle.compact;
+              final keyboardVisible =
+                  MediaQuery.viewInsetsOf(context).bottom > 0;
+              final bottom = compact && keyboardVisible
+                  ? 12.0
+                  : MediaQuery.viewPaddingOf(context).bottom +
+                        (compact
+                            ? CompactBottomNavigationBar.contentHeight(
+                                    context,
+                                  ) +
+                                  12
+                            : 100);
+              return SliverPadding(padding: EdgeInsets.only(bottom: bottom));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatsTabBody(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (event) {
+        _storiesLockdownUntil = DateTime.fromMillisecondsSinceEpoch(0);
+        _archivePull.pointerDown(event);
+      },
+      onPointerUp: _onChatsPointerReleased,
+      onPointerCancel: _onChatsPointerReleased,
+      onPointerPanZoomStart: _archivePull.pointerDown,
+      onPointerPanZoomEnd: _onChatsPointerReleased,
+      onPointerHover: _archivePull.pointerHover,
+      onPointerSignal: _onChatsPointerSignal,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _chatsHeader(context),
+          Expanded(
+            child: NotificationListener<ScrollEndNotification>(
+              onNotification: (n) {
+                if (n.depth == 0) _refreshNearFolderPages();
+                return false;
+              },
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _archiveWheel.active,
+                builder: (context, wheelPulling, child) =>
+                    IgnorePointer(ignoring: wheelPulling, child: child),
+                child: _chatsPager(),
+              ),
             ),
           ),
         ],
@@ -2516,57 +2936,40 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  Widget _buildChatsTabBody() {
-    return Listener(
-      onPointerDown: (_) {
-        _storiesLockdownUntil = DateTime.fromMillisecondsSinceEpoch(0);
-      },
-      onPointerSignal: (pointerSignal) {
-        if (pointerSignal is PointerScrollEvent) {
-          if (_shouldBlockPositiveScroll() &&
-              pointerSignal.scrollDelta.dy > 0) {
-            _storiesLockdownUntil = DateTime.now().add(
-              const Duration(milliseconds: 300),
-            );
-          }
-          final ac = _activeChatScrollController();
-          if (ac != null && ac.hasClients && ac.offset <= 0) {
-            if (pointerSignal.scrollDelta.dy < 0) {
-              if (_allowStoriesPullOverscrollTop()) {
-                _startStoriesAutoReveal(max(_pullRatio, 0.18));
-              }
-            } else if (pointerSignal.scrollDelta.dy > 0 && _pullRatio > 0) {
-              _startStoriesAutoClose();
-            }
-          }
-        }
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildPinnedChatsHeader(context),
-          Expanded(
-            child: PageView.builder(
-              controller: _folderPageController,
-              physics: _folderPageCount <= 1
-                  ? const NeverScrollableScrollPhysics()
-                  : const BouncingScrollPhysics(),
-              onPageChanged: (i) {
-                if (_folders.isEmpty) return;
-                if (i < 0 || i >= _folders.length) return;
-                setState(() {
-                  _selectedFolderId = _folders[i].id;
-                });
-              },
-              itemCount: _folderPageCount,
-              itemBuilder: (context, pageIndex) {
-                return _buildFolderChatPage(pageIndex);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+  void _onChatsPointerReleased(PointerEvent event) {
+    _archivePull.pointerUp(event);
+    if (!_archivePull.touching) _settleStoriesDrag();
+  }
+
+  void _onChatsPointerSignal(PointerSignalEvent signal) {
+    if (signal is! PointerScrollEvent) return;
+    final dy = signal.scrollDelta.dy;
+    if (_archiveWheel.active.value) {
+      GestureBinding.instance.pointerSignalResolver.register(signal, (_) {});
+      _archiveWheel.add(-dy);
+      return;
+    }
+    if (_shouldBlockPositiveScroll() && dy > 0) {
+      _storiesLockdownUntil = DateTime.now().add(
+        const Duration(milliseconds: 300),
+      );
+    }
+    final ac = _activeChatScrollController();
+    if (ac == null || !ac.hasClients || ac.offset > 0) return;
+    if (dy < 0 && _archiveCanPull && !_archivePull.touching) {
+      GestureBinding.instance.pointerSignalResolver.register(
+        signal,
+        (_) => _archiveWheel.start(ac.position, -dy),
+      );
+      return;
+    }
+    if (dy < 0) {
+      if (_storiesRevealAllowed()) {
+        _startStoriesAutoReveal(max(_pullRatio, 0.18));
+      }
+    } else if (dy > 0 && _pullRatio > 0) {
+      _startStoriesAutoClose();
+    }
   }
 
   Widget _buildDockedBottomNav(
@@ -2681,9 +3084,21 @@ class _ChatListScreenState extends State<ChatListScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    if (widget.archiveMode) {
-      return _buildArchiveScaffold(cs);
-    }
+    return RouteProbe(
+      onRoute: _onRoute,
+      child: HeroMode(
+        enabled: false,
+        child: widget.archiveMode
+            ? _buildArchiveScaffold(cs)
+            : ValueListenableBuilder<BottomNavigationStyle>(
+                valueListenable: AppBottomNavigationStyle.current,
+                builder: (context, style, _) => _buildMainScaffold(cs, style),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildMainScaffold(ColorScheme cs, BottomNavigationStyle navStyle) {
     return Scaffold(
       backgroundColor: cs.surface,
       body: SafeArea(
@@ -2691,10 +3106,10 @@ class _ChatListScreenState extends State<ChatListScreen>
         child: LayoutBuilder(
           builder: (context, constraints) {
             if (widget.forwardMode) {
-              if (widget.forwardBatch == null) return _getChatsBody();
+              if (widget.forwardBatch == null) return _getChatsBody(context);
               return Column(
                 children: [
-                  Expanded(child: _getChatsBody()),
+                  Expanded(child: _getChatsBody(context)),
                   _buildForwardComposer(),
                 ],
               );
@@ -2702,12 +3117,22 @@ class _ChatListScreenState extends State<ChatListScreen>
             if (_shareMode) {
               return Column(
                 children: [
-                  Expanded(child: _getChatsBody()),
+                  Expanded(child: _getChatsBody(context)),
                   _buildShareComposer(cs),
                 ],
               );
             }
             final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+            final compactNav = navStyle == BottomNavigationStyle.compact;
+            final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+            final compactHeight = CompactBottomNavigationBar.contentHeight(
+              context,
+            );
+            final contentBottomPadding = compactNav
+                ? (keyboardVisible ? 12.0 : bottomInset + compactHeight + 12)
+                : 120.0;
+            final fabBottom =
+                bottomInset + (compactNav ? compactHeight + 12 : 90);
             final pageW = constraints.maxWidth;
             final pageH = constraints.maxHeight;
             final navInnerW = pageW - 20;
@@ -2736,7 +3161,6 @@ class _ChatListScreenState extends State<ChatListScreen>
                 height: pageH,
                 child: VisiblePageTickers(
                   index: index,
-                  enabled: IosRelease.isIOS,
                   positionChanges: pageMotion,
                   pagePosition: pagePosition,
                   child: body,
@@ -2773,43 +3197,48 @@ class _ChatListScreenState extends State<ChatListScreen>
                   child: SizedBox(
                     width: pageW,
                     height: pageH,
-                    child: OverflowBox(
-                      alignment: Alignment.topLeft,
-                      maxWidth: pageW * 4,
-                      maxHeight: pageH,
-                      child: SizedBox(
-                        width: pageW * 4,
-                        height: pageH,
-                        child: AnimatedBuilder(
-                          animation: Listenable.merge([
-                            _navPageAnimController,
-                            _navDragDx,
-                          ]),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              page(0, _getChatsBody()),
-                              page(1, const CallsTab()),
-                              page(2, const ContactsTab()),
-                              page(3, const SettingsTab()),
-                            ],
-                          ),
-                          builder: (context, child) {
-                            final pageDisplayT = _effectivePageNavRowT(
-                              inactiveWidth: inactiveWidth,
-                              bubbleLeftForIndex: bubbleLeftForPageT,
-                            );
-                            return Transform.translate(
-                              offset: Offset(-pageDisplayT * pageW, 0),
+                    child: Stack(
+                      children: [
+                        for (var i = 0; i <= 3; i++)
+                          AnimatedBuilder(
+                            animation: pageMotion,
+                            child: page(
+                              i,
+                              i == 0
+                                  ? _getChatsBody(context)
+                                  : _navTab(i, contentBottomPadding),
+                            ),
+                            builder: (context, child) => Transform.translate(
+                              offset: Offset(
+                                _navPageShift(i, pagePosition()) * pageW,
+                                0,
+                              ),
                               child: child,
-                            );
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (compactNav) ...[
+                  if (!_isSelectionMode)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: ToastObstruction(
+                        child: CompactBottomNavigationBar(
+                          items: _chatsNavItems(AppLocalizations.of(context)!),
+                          currentIndex: _currentNavIndex,
+                          onTap: _onNavTabSelected,
+                          onItemLongPress: (index, position) {
+                            if (index == 3) _openAccountSwitcher(position);
                           },
                         ),
                       ),
                     ),
-                  ),
-                ),
-                _buildDockedBottomNav(cs, navInnerW, bottomInset),
+                ] else
+                  _buildDockedBottomNav(cs, navInnerW, bottomInset),
                 AnimatedBuilder(
                   animation: Listenable.merge([
                     _fabController,
@@ -2822,6 +3251,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                     );
                     final showChatsFab =
                         !_isSelectionMode &&
+                        !(compactNav && keyboardVisible) &&
                         (_navDragging || _navPageAnimController.isAnimating
                             ? pageDisplayT < 1.0
                             : _currentNavIndex == 0);
@@ -2847,7 +3277,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           if (_fabController.value > 0)
                             Positioned(
                               right: 20,
-                              bottom: bottomInset + 90 + 74,
+                              bottom: fabBottom + 74,
                               child: RepaintBoundary(
                                 child: Transform.scale(
                                   scale: val,
@@ -2861,7 +3291,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             ),
                           Positioned(
                             right: 20,
-                            bottom: bottomInset + 90,
+                            bottom: fabBottom,
                             child: ToastObstruction(
                               child: ValueListenableBuilder<VisualStyle>(
                                 valueListenable: AppVisualStyle.current,
@@ -2885,7 +3315,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                                               : null,
                                           liquid: liquid,
                                           backdropKey: _frostBackdrop,
-                                          borderRadius: BorderRadius.circular(28),
+                                          borderRadius: BorderRadius.circular(
+                                            28,
+                                          ),
                                           elevated: true,
                                           depth: 12,
                                           child: child!,
@@ -2972,13 +3404,10 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
   }
 
-  bool _shouldShowArchiveEntry(int pageIndex, {bool ignorePull = false}) {
+  bool _shouldShowArchiveEntry(int pageIndex) {
     if (widget.archiveMode || widget.forwardMode) return false;
     if (_isInitialLoading) return false;
     if (_archivedCount <= 0) return false;
-    if (!ignorePull && KometSettings.archiveOnPull.value && !_archiveRevealed) {
-      return false;
-    }
     if (_folders.isEmpty) return pageIndex == 0;
     final allIdx = _folders.indexWhere(
       (f) => FoldersModule.isAllChatsFolder(f),
@@ -2986,112 +3415,100 @@ class _ChatListScreenState extends State<ChatListScreen>
     return pageIndex == (allIdx >= 0 ? allIdx : 0);
   }
 
-  void _revealArchive() {
-    Haptics.medium();
-    setState(() {
-      _archiveRevealed = true;
-      _archiveRevealAnimates = true;
-    });
-  }
-
-  void _collapseArchiveIfScrolledPast(ScrollController c) {
-    if (_collapsingArchive || !_archiveRevealed) return;
-    if (!KometSettings.archiveOnPull.value) return;
-    final box = _archiveEntryKey.currentContext?.findRenderObject();
-    if (box is! RenderBox || !box.hasSize) return;
-    final height = box.size.height;
-    if (c.offset <= height + 8) return;
-    _collapsingArchive = true;
-    setState(() {
-      _archiveRevealed = false;
-      _archiveRevealAnimates = false;
-    });
-    c.jumpTo(c.offset - height);
-    _collapsingArchive = false;
-  }
-
-  Widget _buildRevealableArchiveEntry(ColorScheme cs) {
-    final entry = KeyedSubtree(
-      key: _archiveEntryKey,
-      child: _buildArchiveEntry(cs),
-    );
-    if (!_archiveRevealAnimates) return entry;
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-      onEnd: () => _archiveRevealAnimates = false,
-      builder: (context, t, child) => ClipRect(
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          heightFactor: t,
-          child: Opacity(opacity: t, child: child),
-        ),
+  void _openArchive(BuildContext anchor) {
+    final tapPosition = _archiveTapPosition;
+    _archiveTapPosition = null;
+    if (_isSelectionMode) return;
+    pushPastArchiveLock(
+      anchor,
+      tapPosition: tapPosition,
+      destination: () => SwipeRoute<void>(
+        builder: (_) =>
+            const ArchiveSessionScope(child: ChatListScreen(archiveMode: true)),
       ),
-      child: entry,
     );
   }
 
-  Widget _buildArchiveEntry(ColorScheme cs) {
-    return InkWell(
-      onTap: () {
-        if (_isSelectionMode) return;
-        pushSwipeable(context, (_) => const ChatListScreen(archiveMode: true));
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: cs.surfaceContainerHighest,
-              child: Icon(
-                Symbols.archive,
-                color: cs.onSurfaceVariant,
-                weight: 500,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                AppLocalizations.of(context)!.chatListArchive,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+  Widget _buildArchiveEntry(
+    ColorScheme cs, {
+    bool accent = false,
+    bool avatarVisible = true,
+  }) {
+    return Builder(
+      builder: (rowContext) => InkWell(
+        onTapDown: (details) => _archiveTapPosition = details.globalPosition,
+        onTap: () => _openArchive(rowContext),
+        child: Container(
+          height: kArchiveRowExtent,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Opacity(
+                opacity: avatarVisible ? 1 : 0,
+                child: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: accent
+                      ? cs.primary
+                      : cs.surfaceContainerHighest,
+                  child: Icon(
+                    Symbols.archive,
+                    color: accent ? cs.onPrimary : cs.onSurfaceVariant,
+                    size: 24,
+                    weight: 500,
+                  ),
                 ),
               ),
-            ),
-            ValueListenableBuilder<int>(
-              valueListenable: chats.chatsChanged,
-              builder: (context, _, _) {
-                final unread = _liveUnread(
-                  _chatsWithArchived.where((c) => _archivedIds.contains(c.id)),
-                ).total;
-                if (unread <= 0) return const SizedBox.shrink();
-                return Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cs.primary,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    unread > 99 ? '99+' : '$unread',
-                    style: TextStyle(
-                      color: cs.onPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        AppLocalizations.of(context)!.chatListArchive,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-            Icon(Symbols.chevron_right, color: cs.outline),
-          ],
+                    ArchiveLockBadge(color: cs.onSurfaceVariant),
+                  ],
+                ),
+              ),
+              ValueListenableBuilder<int>(
+                valueListenable: chats.chatsChanged,
+                builder: (context, _, _) {
+                  final unread = _liveUnread(
+                    _chatsWithArchived.where(
+                      (c) => _archivedIds.contains(c.id),
+                    ),
+                  ).total;
+                  if (unread <= 0) return const SizedBox.shrink();
+                  return Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      unread > 99 ? '99+' : '$unread',
+                      style: TextStyle(
+                        color: cs.onPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              Icon(Symbols.chevron_right, color: cs.outline),
+            ],
+          ),
         ),
       ),
     );
@@ -3256,20 +3673,29 @@ class _ChatListScreenState extends State<ChatListScreen>
   bool _selectFolder(String folderId) {
     final target = _folders.indexWhere((f) => f.id == folderId);
     if (target < 0) return false;
-    setState(() => _selectedFolderId = folderId);
-    if (_folderPageController.hasClients) {
-      final cur = _folderPageController.page?.round() ?? 0;
-      if (cur == target) return true;
-      if ((target - cur).abs() > 1) {
-        final neighbor = target > cur ? target - 1 : target + 1;
-        _folderPageController.jumpToPage(neighbor);
-      }
-      _folderPageController.animateToPage(
-        target,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-      );
+    _selectedFolderId = folderId;
+    _refreshNearFolderPages();
+    if (!_folderPageController.hasClients) return true;
+    final cur = _folderPageController.page?.round() ?? 0;
+    if (cur == target) return true;
+    _folderSwitchTarget = target;
+    if ((target - cur).abs() > 1) {
+      _folderPageController.jumpToPage(target > cur ? target - 1 : target + 1);
     }
+    _folderPageController
+        .animateToPage(
+          target,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        )
+        .whenComplete(() {
+          if (!mounted || _folderSwitchTarget != target) return;
+          _folderSwitchTarget = null;
+          final settled = _folderPageController.hasClients
+              ? _folderPageController.page?.round()
+              : null;
+          if (settled != null) _onFolderPageChanged(settled);
+        });
     return true;
   }
 
@@ -3286,8 +3712,111 @@ class _ChatListScreenState extends State<ChatListScreen>
     return (total: total, loud: loud);
   }
 
-  Widget _buildFolderChip(ChatFolder folder, int pageIndex) {
+  static const double _folderStripInset = 20;
+  static const double _folderChipGap = 8;
+  static const double _folderChipPadding = 12;
+  static const double _folderBadgeGap = 6;
+  static const TextStyle _folderChipTextStyle = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w500,
+  );
+  static const TextStyle _countBadgeTextStyle = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    height: 1.1,
+  );
+
+  Widget _buildFolderStrip(double maxWidth) {
+    final unread = [
+      for (var i = 0; i < _folders.length; i++)
+        _liveUnread(_chatsForPageIndex(i)),
+    ];
+    final widths = [
+      for (var i = 0; i < _folders.length; i++)
+        _folderChipWidth(_folders[i], _badgeLabel(unread[i].total)),
+    ];
+    final used =
+        widths.fold(0.0, (sum, w) => sum + w) +
+        _folderChipGap * (_folders.length - 1) +
+        _folderStripInset * 2;
+    final free = maxWidth - used;
+    const padding = EdgeInsets.symmetric(
+      horizontal: _folderStripInset,
+      vertical: 2,
+    );
+    final chips = [
+      for (var i = 0; i < _folders.length; i++) ...[
+        if (i > 0) const SizedBox(width: _folderChipGap),
+        free < 0
+            ? _buildFolderChip(_folders[i], unread[i])
+            : SizedBox(
+                width: widths[i] + free / _folders.length,
+                child: _buildFolderChip(_folders[i], unread[i]),
+              ),
+      ],
+    ];
+    if (free < 0) {
+      return ListView(
+        scrollDirection: Axis.horizontal,
+        padding: padding,
+        physics: const BouncingScrollPhysics(),
+        children: chips,
+      );
+    }
+    return Padding(
+      padding: padding,
+      child: Row(children: chips),
+    );
+  }
+
+  static String? _badgeLabel(int total) =>
+      total <= 0 ? null : (total > 99 ? '99+' : '$total');
+
+  final Map<(String, String?), double> _folderChipWidths = {};
+  Object? _folderChipWidthsKey;
+
+  double _folderChipWidth(ChatFolder folder, String? badge) {
+    if (_folderChipWidthsKey != _contextKey) {
+      _folderChipWidthsKey = _contextKey;
+      _folderChipWidths.clear();
+    }
+    return _folderChipWidths.putIfAbsent((
+      _folderChipLabel(folder),
+      badge,
+    ), () => _measureFolderChip(folder, badge));
+  }
+
+  double _measureFolderChip(ChatFolder folder, String? badge) {
+    final base = DefaultTextStyle.of(context).style;
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    double measure(String text, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: base.merge(style)),
+        textDirection: direction,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return width.ceilToDouble();
+    }
+
+    var width =
+        _folderChipPadding * 2 +
+        measure(_folderChipLabel(folder), _folderChipTextStyle) +
+        2;
+    if (badge != null) {
+      width +=
+          _folderBadgeGap +
+          max(20.0, measure(badge, _countBadgeTextStyle) + 12);
+    }
+    return width;
+  }
+
+  Widget _buildFolderChip(ChatFolder folder, ({int total, int loud}) unread) {
     final cs = Theme.of(context).colorScheme;
+    final badge = _badgeLabel(unread.total);
     final folderId = folder.id;
     final isSelected = _selectedFolderId == folderId;
     return GestureDetector(
@@ -3299,7 +3828,10 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: GlossyPill(
         color: isSelected ? cs.primaryContainer : cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(50),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(
+          horizontal: _folderChipPadding,
+          vertical: 4,
+        ),
         depth: 4,
         child: Center(
           child: Row(
@@ -3310,30 +3842,16 @@ class _ChatListScreenState extends State<ChatListScreen>
                   _folderChipLabel(folder),
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: _folderChipTextStyle.copyWith(
                     color: isSelected ? cs.onPrimaryContainer : cs.primary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
-              ValueListenableBuilder<int>(
-                valueListenable: chats.chatsChanged,
-                builder: (context, _, _) {
-                  final (:total, :loud) = _liveUnread(
-                    _chatsForPageIndex(pageIndex),
-                  );
-                  if (total <= 0) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: _countBadge(
-                      cs,
-                      total > 99 ? '99+' : '$total',
-                      muted: loud == 0,
-                    ),
-                  );
-                },
-              ),
+              if (badge != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: _folderBadgeGap),
+                  child: _countBadge(cs, badge, muted: unread.loud == 0),
+                ),
             ],
           ),
         ),
@@ -3378,7 +3896,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     return AnimatedChatTile(
       key: ValueKey('chat_$id'),
       id: id,
-      revision: _chatListRevision,
+      moves: _chatListMoves,
       isNew: _enteringChatIds.contains(id),
       child: child,
     );
@@ -3402,7 +3920,7 @@ class _ChatListScreenState extends State<ChatListScreen>
               style: TextStyle(color: cs.error),
             ),
             TextSpan(
-              text: draft,
+              text: chatPreviewSnippet(draft),
               style: TextStyle(color: cs.outline),
             ),
           ],
@@ -3443,11 +3961,8 @@ class _ChatListScreenState extends State<ChatListScreen>
       child: Text(
         label,
         textAlign: TextAlign.center,
-        style: TextStyle(
+        style: _countBadgeTextStyle.copyWith(
           color: muted ? cs.outline : cs.onPrimary,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          height: 1.1,
         ),
       ),
     );
@@ -3574,8 +4089,9 @@ class _ChatListScreenState extends State<ChatListScreen>
           int.tryParse(id) ?? 0,
         ) ||
         E2eeService.instance.isOn(_profile?.id ?? 0, int.tryParse(id) ?? 0);
-    final isVerified =
+    final e2eeVerified =
         e2eeInfo?.phase == E2eePhase.established && e2eeInfo!.verified;
+    final showVerified = isVerified || e2eeVerified;
     final Widget? statusIcon = (ownStatus != null && draft == null)
         ? _ownStatusIcon(cs, ownStatus, ownRead)
         : null;
@@ -3761,7 +4277,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           bottom: -2,
                           child: EncryptionLockBadge(
                             size: 18,
-                            verified: isVerified,
+                            verified: showVerified,
                           ),
                         ),
                       if (isSelected)
@@ -3840,15 +4356,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    if (isVerified) ...[
+                                    if (showVerified) ...[
                                       const SizedBox(width: 4),
-                                      Icon(
-                                        Symbols.verified,
-                                        color: cs.primary,
-                                        size: 16,
-                                        weight: 600,
-                                        fill: 1,
-                                      ),
+                                      VerifiedMark(color: cs.primary, size: 16),
                                     ],
                                   ],
                                 ),
@@ -3964,10 +4474,12 @@ class _ChatListScreenState extends State<ChatListScreen>
         openMiniApp(context, botId: botId, chatId: chatId, title: name),
       ),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        height: 18,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: cs.primary,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(9),
         ),
         child: Text(
           AppLocalizations.of(context)!.miniAppOpen,
@@ -3975,6 +4487,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             color: cs.onPrimary,
             fontSize: 13,
             fontWeight: FontWeight.w600,
+            height: 1,
           ),
         ),
       ),

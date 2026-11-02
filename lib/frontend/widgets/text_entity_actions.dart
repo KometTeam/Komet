@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,9 +7,11 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../backend/modules/contacts.dart';
+import '../../core/utils/haptics.dart';
 import '../../core/utils/text_entities.dart';
 import '../../l10n/app_localizations.dart';
 import '../../main.dart' show api;
+import '../screens/contacts/open_contact_profile.dart';
 import 'chat_menu_overlay.dart';
 import 'custom_notification.dart';
 import 'hint_bubble.dart';
@@ -44,7 +48,10 @@ void showPhoneEntityMenu(
     context: context,
     anchorRect: Rect.fromLTWH(at.dx, at.dy, 0, 0),
     compact: true,
-    header: _PhoneOwnerHeader(phone: phone),
+    header: _PhoneOwnerHeader(
+      phone: phone,
+      onOpen: (found) => _openPhoneOwner(context, found, phone),
+    ),
     items: [
       ChatMenuItem(
         icon: Symbols.content_copy,
@@ -81,6 +88,23 @@ void showCardEntityMenu(
       ),
     ],
     footer: _CardFooter(digits: digits),
+  );
+}
+
+void _openPhoneOwner(
+  BuildContext context,
+  PhoneLookupResult found,
+  String phone,
+) {
+  if (!context.mounted) return;
+  final resolved = found.name;
+  unawaited(
+    openContactDialogProfile(
+      context,
+      contactId: found.id,
+      name: (resolved == null || resolved.isEmpty) ? phone : resolved,
+      avatarUrl: found.avatarUrl,
+    ),
   );
 }
 
@@ -132,8 +156,9 @@ class _CardFooter extends StatelessWidget {
 
 class _PhoneOwnerHeader extends StatefulWidget {
   final String phone;
+  final ValueChanged<PhoneLookupResult> onOpen;
 
-  const _PhoneOwnerHeader({required this.phone});
+  const _PhoneOwnerHeader({required this.phone, required this.onOpen});
 
   @override
   State<_PhoneOwnerHeader> createState() => _PhoneOwnerHeaderState();
@@ -146,12 +171,20 @@ class _PhoneOwnerHeaderState extends State<_PhoneOwnerHeader> {
     silent: true,
   );
 
+  void _open(BuildContext context, PhoneLookupResult found) {
+    Haptics.tap();
+    closeChatMenu(context).then((_) => widget.onOpen(found));
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return FutureBuilder<PhoneLookupResult?>(
       future: _lookup,
       builder: (context, snapshot) {
+        final found = snapshot.connectionState == ConnectionState.done
+            ? snapshot.data
+            : null;
         final Widget content;
         if (snapshot.connectionState != ConnectionState.done) {
           content = Row(
@@ -165,7 +198,6 @@ class _PhoneOwnerHeaderState extends State<_PhoneOwnerHeader> {
             ],
           );
         } else {
-          final found = snapshot.data;
           content = found == null
               ? Text(
                   AppLocalizations.of(context)!.textEntityNotOnMax,
@@ -173,10 +205,12 @@ class _PhoneOwnerHeaderState extends State<_PhoneOwnerHeader> {
                 )
               : _OwnerRow(found: found, phone: widget.phone);
         }
-        return Padding(
+        final padded = Padding(
           padding: const EdgeInsets.fromLTRB(14, 11, 14, 10),
           child: content,
         );
+        if (found == null) return padded;
+        return InkWell(onTap: () => _open(context, found), child: padded);
       },
     );
   }
@@ -217,6 +251,12 @@ class _OwnerRow extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        Icon(
+          Symbols.chevron_right,
+          size: 22,
+          weight: 400,
+          color: cs.onSurface.withValues(alpha: 0.7),
         ),
       ],
     );

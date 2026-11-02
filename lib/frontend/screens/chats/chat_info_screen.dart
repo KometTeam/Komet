@@ -15,7 +15,6 @@ import '../../../backend/modules/complaints.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
-import '../../../core/calls/call_controller.dart';
 import '../../../core/config/app_show_extra_info.dart';
 import '../../../core/config/app_stories.dart';
 import '../../../core/protocol/packet.dart';
@@ -37,6 +36,7 @@ import '../../widgets/photo_viewer.dart';
 import '../../widgets/chat_info/shared_content_tabs.dart';
 import '../../widgets/connection_status.dart';
 import '../../widgets/custom_notification.dart';
+import '../../widgets/direct_call.dart';
 import '../../widgets/hint_bubble.dart';
 import 'chat_removal_undo.dart';
 import '../../widgets/formatted_message_text.dart';
@@ -46,9 +46,9 @@ import '../../widgets/komet_avatar.dart';
 import '../../widgets/profile_header_scroll.dart';
 import '../../widgets/profile_hero.dart';
 import '../../widgets/swipe_route.dart';
+import '../../widgets/route_probe.dart';
 import '../../widgets/local_avatar_builder.dart';
 import '../../../backend/modules/chats.dart';
-import '../calls/call_screen.dart';
 import '../contacts/open_contact_profile.dart';
 import '../profile/profile_qr_sheet.dart';
 import '../stories/story_owner_info.dart';
@@ -65,6 +65,8 @@ import 'chat_admin/admin_section.dart';
 import 'chat_admin/member_actions.dart';
 import 'chat_admin/chat_admin_state.dart';
 import 'chat_admin/ownership_transfer.dart';
+import '../../widgets/official_name.dart';
+import '../../widgets/verified_mark.dart';
 
 enum ChatInfoTab { media }
 
@@ -75,6 +77,7 @@ class ChatInfoScreen extends StatefulWidget {
   final String chatType;
 
   final int? dialogPeerId;
+  final bool initialOfficial;
   final ChatInfoTab? initialTab;
   final Object? heroTag;
   final bool openedFromChat;
@@ -88,6 +91,7 @@ class ChatInfoScreen extends StatefulWidget {
     required this.imageUrl,
     required this.chatType,
     this.dialogPeerId,
+    this.initialOfficial = false,
     this.initialTab,
     this.heroTag,
     this.openedFromChat = false,
@@ -175,11 +179,6 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     _load();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _routeSettle.bind(context);
-  }
 
   int? get _memberCount => ChatMembersStore.instance.count(widget.chatId);
 
@@ -341,6 +340,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         if (contact != null) {
           _contactData = contact;
           _isBot = _contactData!.options.contains('BOT');
+          ContactCache.putOptions(otherId, contact.options.toSet());
+          ContactsModule.primeContactCache(contact.raw);
         }
         if (presence != null) {
           _seenTime = presence['seen'] as int?;
@@ -404,9 +405,34 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     }
   }
 
-  String get _chatName => _chatAdmin?.name ?? widget.name;
+  int? get _dialogPeerId =>
+      widget.chatType == 'DIALOG' ? _otherId ?? widget.dialogPeerId : null;
 
-  String get _chatImageUrl => _chatAdmin?.imageUrl ?? widget.imageUrl;
+  // #***! человека открыли не видя (упоминание, отправитель) — имя и аву
+  // берём из карточки с сервера, заглушка только если её так и не дали
+  String get _chatName {
+    final admin = _chatAdmin;
+    if (admin != null) return admin.name;
+    if (widget.name.isNotEmpty) return widget.name;
+    final peer = _dialogPeerId;
+    if (peer == null) return '';
+    final known =
+        (_contactData ?? ContactInfoFetch.peek(peer))?.fullName ??
+        ContactCache.get(peer);
+    if (known != null && known.isNotEmpty) return known;
+    return _isLoading ? '' : l10n.userFallbackName(peer);
+  }
+
+  String get _chatImageUrl {
+    final admin = _chatAdmin;
+    if (admin != null) return admin.imageUrl;
+    if (widget.imageUrl.isNotEmpty) return widget.imageUrl;
+    final peer = _dialogPeerId;
+    if (peer == null) return '';
+    return (_contactData ?? ContactInfoFetch.peek(peer))?.avatarUrl ??
+        ContactCache.getAvatar(peer) ??
+        '';
+  }
 
   Future<void> _loadBlockedState(int peerId) async {
     final blocked = await ContactsModule.isBlocked(api, peerId);
@@ -462,6 +488,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
 
   @override
   Widget build(BuildContext context) {
+    return RouteProbe(onRoute: _routeSettle.bind, child: _buildScreen(context));
+  }
+
+  Widget _buildScreen(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -476,7 +506,10 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   static const double _headerCollapsedBody = 232;
   static const double _headerVignette = 64;
 
-  bool get _headerHasPhoto => _chatImageUrl.isNotEmpty && !_peerDeleted;
+  bool get _isSavedMessages => widget.chatId == 0;
+
+  bool get _headerHasPhoto =>
+      !_isSavedMessages && _chatImageUrl.isNotEmpty && !_peerDeleted;
 
   Widget _buildScrollBody(ColorScheme cs) {
     return LayoutBuilder(
@@ -820,7 +853,11 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
                 ),
               ),
               Offstage(
-                offstage: local != null || t < 0.5 || _avatarPages.length < 2,
+                offstage:
+                    _isSavedMessages ||
+                    local != null ||
+                    t < 0.5 ||
+                    _avatarPages.length < 2,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(radius),
                   child: _avatarPager(cs, t),
@@ -833,7 +870,8 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
   }
 
-  int get _localAvatarUserId => widget.chatType == 'DIALOG' && !_peerDeleted
+  int get _localAvatarUserId =>
+      widget.chatType == 'DIALOG' && !_peerDeleted && !_isSavedMessages
       ? (_otherId ?? widget.dialogPeerId ?? 0)
       : 0;
 
@@ -959,12 +997,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
   }
 
-  Widget _avatarPhoto(ColorScheme cs, String url) {
+  Widget _avatarPhoto(ColorScheme cs, String url, {bool fadeIn = true}) {
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
       memCacheWidth: _avatarMemWidth,
-      fadeInDuration: const Duration(milliseconds: 150),
+      fadeInDuration: fadeIn
+          ? const Duration(milliseconds: 150)
+          : Duration.zero,
       errorWidget: (_, _, _) => ColoredBox(
         color: cs.surfaceContainerHigh,
         child: Center(
@@ -978,6 +1018,19 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
   }
 
   Widget _headerAvatarContent(ColorScheme cs) {
+    if (_isSavedMessages) {
+      return ColoredBox(
+        color: cs.primary,
+        child: Center(
+          child: Icon(
+            Symbols.bookmark,
+            fill: 1,
+            color: cs.onPrimary,
+            size: _headerAvatarSize * 0.42,
+          ),
+        ),
+      );
+    }
     if (_peerDeleted) {
       return _ghostAvatar(radius: _headerAvatarSize / 2, fontSize: 52);
     }
@@ -990,7 +1043,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         fadeIn: false,
       );
     }
-    return _avatarPhoto(cs, url);
+    return _avatarPhoto(cs, url, fadeIn: false);
   }
 
   void _refreshUnreadStories() {
@@ -1156,6 +1209,13 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
         ));
       }
       if (!_isBot && _otherId != null && _otherId != _myId) {
+        final storiesHidden = storiesModule.isAuthorHidden(_otherId!);
+        entries.add((
+          icon: storiesHidden ? Symbols.visibility : Symbols.visibility_off,
+          label: storiesHidden ? l10n.storyMenuShow : l10n.storyMenuHide,
+          destructive: false,
+          onTap: () => _setStoriesHidden(_otherId!, !storiesHidden),
+        ));
         entries.add((
           icon: _blocked ? Symbols.lock_open : Symbols.block,
           label: _blocked ? l10n.chatInfoMenuUnblock : l10n.chatInfoMenuBlock,
@@ -1288,6 +1348,17 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
             ),
           ),
         ),
+        if (_otherId != null
+            ? ContactCache.isOfficial(_otherId!)
+            : widget.initialOfficial)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: ProfileHeroBadge(
+              tag: widget.heroTag,
+              size: 18,
+              child: VerifiedMark(size: 18, color: cs.primary),
+            ),
+          ),
         SizedBox(
           width: hasToggle ? 30 : 0,
           height: 28,
@@ -1536,38 +1607,12 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
     );
     if (!mounted || !choice.confirmed) return;
 
-    final navigator = Navigator.of(context);
-    final avatarUrl = _chatImageUrl.isNotEmpty ? _chatImageUrl : null;
-    final active = CallController.instance.activeSession;
-    if (active != null) {
-      await navigator.push(
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            name: _customName,
-            avatarUrl: avatarUrl,
-            session: active,
-          ),
-        ),
-      );
-      return;
-    }
-
-    try {
-      final session = await CallController.instance.startOutgoing(peerId);
-      if (!mounted) return;
-      await navigator.push(
-        MaterialPageRoute(
-          builder: (_) => CallScreen(
-            name: _customName,
-            avatarUrl: avatarUrl,
-            session: session,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      showCustomNotification(context, l10n.chatInfoCallFailed);
-    }
+    await startDirectCall(
+      context,
+      peerId: peerId,
+      name: _customName,
+      avatarUrl: _chatImageUrl.isNotEmpty ? _chatImageUrl : null,
+    );
   }
 
   Future<void> _leaveChat() async {
@@ -1705,6 +1750,20 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
       ),
     );
     Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _setStoriesHidden(int ownerId, bool hidden) async {
+    final ok = await storiesModule.setAuthorHidden(ownerId, hidden);
+    if (!mounted) return;
+    showCustomNotification(
+      context,
+      switch ((hidden, ok)) {
+        (true, true) => l10n.storyHiddenNotice,
+        (true, false) => l10n.storyHideFailed,
+        (false, true) => l10n.storyShownNotice,
+        (false, false) => l10n.storyShowFailed,
+      },
+    );
   }
 
   Future<void> _toggleBlock() async {
@@ -2483,8 +2542,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name,
+                  OfficialName(
+                    contactId: member.id,
+                    text: name,
                     style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 15,

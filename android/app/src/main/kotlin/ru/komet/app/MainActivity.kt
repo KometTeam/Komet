@@ -67,6 +67,7 @@ class MainActivity : AudioServiceFragmentActivity() {
     private val nfcReaderCallback = NfcAdapter.ReaderCallback { tag -> onNfcTagDiscovered(tag) }
 
     private var noteRecorder: VideoNoteRecorder? = null
+    private var screenShareDecoders: ScreenShareDecoders? = null
     private var ble: BleContactExchange? = null
     private var pendingSelfId = 0L
     private var pendingSelfPhone = 0L
@@ -122,6 +123,13 @@ class MainActivity : AudioServiceFragmentActivity() {
         super.configureFlutterEngine(flutterEngine)
 
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+
+        val decoders = ScreenShareDecoders(flutterEngine.renderer)
+        screenShareDecoders = decoders
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "ru.komet.app/screen_decoder",
+        ).setMethodCallHandler(decoders)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -343,7 +351,7 @@ class MainActivity : AudioServiceFragmentActivity() {
                 }
                 "notifyAccepted" -> {
                     val caller = call.argument<String>("caller") ?: "Звонок"
-                    CallRinger.stop()
+                    CallRinger.stop(call.argument<String>("conversationId"))
                     NotificationManagerCompat.from(this).cancel(CallConst.NOTIF_ID)
                     CallForegroundService.start(applicationContext, caller)
                     result.success(null)
@@ -368,14 +376,14 @@ class MainActivity : AudioServiceFragmentActivity() {
                     result.success(null)
                 }
                 "notifyEnded" -> {
-                    CallRinger.stop()
+                    CallRinger.stop(call.argument<String>("conversationId"))
                     NotificationManagerCompat.from(this).cancel(CallConst.NOTIF_ID)
                     CallForegroundService.stop(applicationContext)
                     clearCallWindowFlags()
                     result.success(null)
                 }
                 "cancelIncoming" -> {
-                    CallRinger.stop()
+                    CallRinger.stop(call.argument<String>("conversationId"))
                     NotificationManagerCompat.from(this).cancel(CallConst.NOTIF_ID)
                     result.success(null)
                 }
@@ -457,6 +465,10 @@ class MainActivity : AudioServiceFragmentActivity() {
                 "notifiedChats" -> {
                     result.success(KometNotifier(applicationContext).notifiedChats())
                 }
+                "openSystemSettings" -> {
+                    openNotificationSettings()
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -525,6 +537,7 @@ class MainActivity : AudioServiceFragmentActivity() {
         ClipboardMedia.attach(flutterEngine, this)
 
         MediaExport.attach(flutterEngine, this)
+        KeyboardCover.attach(flutterEngine, this)
 
         FkmChannel.attach(flutterEngine, this)
         LauncherBadge.attach(flutterEngine, this)
@@ -538,11 +551,13 @@ class MainActivity : AudioServiceFragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         if (intent?.hasExtra(CallConst.EXTRA_CALL) == true) applyCallWindowFlags()
         super.onCreate(savedInstanceState)
+        FlutterHostFrame.install(this)
         applyKeepAwake()
         requestHighRefreshRate()
         intent?.let { if (it.hasExtra(CallConst.EXTRA_CALL)) stashCall(it, emit = false) }
         stashChatOpen(intent, emit = false)
         stashShare(intent, emit = false)
+        Thread({ LauncherShortcuts.publish(applicationContext) }, "LauncherShortcuts").start()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -568,6 +583,23 @@ class MainActivity : AudioServiceFragmentActivity() {
             sink.success(chatId)
         } else {
             pendingChat = chatId
+        }
+    }
+
+    private fun openNotificationSettings() {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        } else {
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", packageName, null),
+            )
+        }
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.w("Notifications", "system settings failed: ${e.message}")
         }
     }
 
@@ -990,6 +1022,8 @@ class MainActivity : AudioServiceFragmentActivity() {
     override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        screenShareDecoders?.releaseAll()
+        screenShareDecoders = null
         if (!keepEngineAlive()) {
             FkmChannel.detach()
             LauncherBadge.detach()
@@ -1000,6 +1034,7 @@ class MainActivity : AudioServiceFragmentActivity() {
 
     override fun onDestroy() {
         shareExecutor.shutdown()
+        KeyboardCover.detach(this)
         super.onDestroy()
     }
 
@@ -1010,6 +1045,7 @@ class MainActivity : AudioServiceFragmentActivity() {
     }
 
     override fun onPause() {
+        KeyboardCover.forceRelease()
         super.onPause()
         AppState.resumed = false
         if (NfcExchange.active) {

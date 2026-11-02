@@ -2,9 +2,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/haptics.dart';
-import '../../../../core/utils/link_opener.dart';
 import '../../../../models/attachment.dart';
 import '../../formatted_message_text.dart';
+import '../../link_confirm_sheet.dart';
 import 'bubble_context.dart';
 
 class ShareBubble extends StatelessWidget {
@@ -33,7 +33,7 @@ class ShareBubble extends StatelessWidget {
           ? null
           : () {
               Haptics.tap();
-              openExternalUrl(ctx.context, share.url!);
+              openMessageLink(ctx.context, share.url!);
             },
       child: Container(
         decoration: BoxDecoration(

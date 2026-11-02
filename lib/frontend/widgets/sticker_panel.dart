@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -12,11 +13,17 @@ import '../../l10n/app_localizations.dart';
 import '../../main.dart' show stickersModule;
 import '../../models/animoji.dart';
 import '../../models/sticker.dart';
+import 'confirm_dialog.dart';
+import 'custom_notification.dart';
 import 'emoji_panel.dart';
 import 'segmented_pill_toggle.dart';
 import 'small_spinner.dart';
 import 'lottie_image.dart';
 import 'sticker_peek.dart';
+import 'sticker_pin.dart';
+import 'swipe_route.dart';
+import '../screens/stickers/sticker_sets_screen.dart';
+import '../screens/stickers/sticker_settings_screen.dart';
 import '../../core/config/app_frost.dart';
 import 'liquid_glass.dart';
 
@@ -34,31 +41,35 @@ class _DragScrollBehavior extends MaterialScrollBehavior {
 }
 
 class _Section {
+  final String id;
   final String title;
   final List<int> stickerIds;
   final IconData? icon;
   final String? iconUrl;
+  final VoidCallback? onClear;
 
   const _Section({
+    required this.id,
     required this.title,
     required this.stickerIds,
     this.icon,
     this.iconUrl,
+    this.onClear,
   });
 }
 
 class StickerPanel extends StatefulWidget {
-  final double height;
   final void Function(StickerItem sticker) onStickerTap;
   final void Function(Animoji animoji)? onEmojiTap;
   final void Function(double delta)? onResize;
+  final ValueNotifier<bool>? searching;
 
   const StickerPanel({
     super.key,
-    required this.height,
     required this.onStickerTap,
     this.onEmojiTap,
     this.onResize,
+    this.searching,
   });
 
   @override
@@ -69,6 +80,7 @@ class _StickerPanelState extends State<StickerPanel>
     with SingleTickerProviderStateMixin {
   static const double _tabBarHeight = 52;
   static const double _headerHeight = 34;
+  static const double _clearableHeaderHeight = 48;
   static const double _searchFieldHeight = 50;
   static const double _toggleBarHeight = 48;
   static const double _resizeHandleHeight = 16;
@@ -94,8 +106,10 @@ class _StickerPanelState extends State<StickerPanel>
   List<_Section> _sections = const [];
   List<double> _heights = const [];
   List<double> _offsets = const [];
+  List<int> _recents = const [];
   String _query = '';
   bool _searchLoading = false;
+  bool _clearingSearch = false;
   List<StickerItem> _results = const [];
 
   @override
@@ -108,12 +122,30 @@ class _StickerPanelState extends State<StickerPanel>
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
     _scroll.addListener(_onScroll);
+    _searchFocus.addListener(_onSearchFocusChanged);
+    widget.searching?.addListener(_onSearchingChanged);
+    stickersModule.favoriteStickerIds.addListener(_onPinnedChanged);
+    stickersModule.setsChanged.addListener(_onPinnedChanged);
+    stickersModule.recentStickerIds.addListener(_onRecentsChanged);
     EmojiKeywordIndex.instance.ensureLoaded();
     _load();
   }
 
   @override
+  void didUpdateWidget(StickerPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.searching == widget.searching) return;
+    oldWidget.searching?.removeListener(_onSearchingChanged);
+    widget.searching?.addListener(_onSearchingChanged);
+  }
+
+  @override
   void dispose() {
+    widget.searching?.removeListener(_onSearchingChanged);
+    _searchFocus.removeListener(_onSearchFocusChanged);
+    stickersModule.favoriteStickerIds.removeListener(_onPinnedChanged);
+    stickersModule.setsChanged.removeListener(_onPinnedChanged);
+    stickersModule.recentStickerIds.removeListener(_onRecentsChanged);
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
     _scrolling.dispose();
@@ -155,21 +187,42 @@ class _StickerPanelState extends State<StickerPanel>
     });
   }
 
+  bool get _searchOpen => _searchFocus.hasFocus || _query.isNotEmpty;
+
+  void _onSearchFocusChanged() {
+    if (_searchFocus.hasFocus) widget.searching?.value = true;
+    if (mounted) setState(() {});
+  }
+
+  void _onSearchingChanged() {
+    if (widget.searching?.value == false && _searchOpen) _clearSearch();
+  }
+
   void _clearSearch() {
+    if (_clearingSearch) return;
+    _clearingSearch = true;
     _searchCtrl.clear();
     _searchFocus.unfocus();
     _searchDebouncer.cancel();
+    widget.searching?.value = false;
     setState(() {
       _query = '';
       _results = const [];
       _searchLoading = false;
     });
+    _clearingSearch = false;
+  }
+
+  void _sendFound(StickerItem item) {
+    widget.onStickerTap(item);
+    _clearSearch();
   }
 
   Future<void> _load() async {
     try {
       await stickersModule.ensureLoaded();
       if (!mounted) return;
+      _recents = stickersModule.recentStickerIds.value;
       _buildSections();
       setState(() => _loading = false);
     } catch (e) {
@@ -182,14 +235,28 @@ class _StickerPanelState extends State<StickerPanel>
   }
 
   void _buildSections() {
+    final l10n = AppLocalizations.of(context)!;
     final sections = <_Section>[];
-    final recents = stickersModule.recentStickerIds;
+    final pinned = stickersModule.favoriteStickerIds.value;
+    if (pinned.isNotEmpty) {
+      sections.add(
+        _Section(
+          id: 'pinned',
+          title: l10n.stickerPanelPinned,
+          stickerIds: pinned,
+          icon: Symbols.push_pin,
+        ),
+      );
+    }
+    final recents = _recents;
     if (recents.isNotEmpty) {
       sections.add(
         _Section(
-          title: AppLocalizations.of(context)!.emojiPanelRecent,
+          id: 'recent',
+          title: l10n.emojiPanelRecent,
           stickerIds: recents,
           icon: Symbols.schedule,
+          onClear: _confirmClearRecents,
         ),
       );
     }
@@ -197,6 +264,7 @@ class _StickerPanelState extends State<StickerPanel>
       if (set.stickerIds.isEmpty) continue;
       sections.add(
         _Section(
+          id: 'set:${set.id}',
           title: set.name,
           stickerIds: set.stickerIds,
           iconUrl: set.iconUrl,
@@ -204,6 +272,71 @@ class _StickerPanelState extends State<StickerPanel>
       );
     }
     _sections = sections;
+  }
+
+  double _headerHeightOf(_Section section) =>
+      section.onClear == null ? _headerHeight : _clearableHeaderHeight;
+
+  void _onPinnedChanged() {
+    if (!mounted || _loading || _error != null) return;
+    setState(_buildSections);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _onScroll();
+    });
+  }
+
+  void _onRecentsChanged() {
+    if (!mounted || _loading || _error != null) return;
+    final current = stickersModule.recentStickerIds.value.toSet();
+    final kept = [
+      for (final id in _recents)
+        if (current.contains(id)) id,
+    ];
+    if (kept.length == _recents.length) return;
+    _recents = kept;
+    _onPinnedChanged();
+  }
+
+  Future<void> _confirmClearRecents() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.stickerPanelClearRecentTitle,
+      message: l10n.stickerPanelClearRecentBody,
+      confirmLabel: l10n.downloadsClearConfirm,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    String? failure;
+    try {
+      if (!await stickersModule.clearRecentStickers()) {
+        failure = l10n.stickerPanelClearRecentFailed;
+      }
+    } catch (e) {
+      failure = stickerActionError(e) ?? l10n.stickerPanelClearRecentFailed;
+    }
+    if (!mounted) return;
+    if (failure != null) {
+      showCustomNotification(context, failure);
+      return;
+    }
+    setState(() {
+      _recents = const [];
+      _buildSections();
+    });
+  }
+
+  List<StickerPeekAction> _peekActions(Object peekId) {
+    final item = peekId is int ? stickersModule.cachedSticker(peekId) : null;
+    if (item == null) return const [];
+    return [
+      StickerPeekAction(
+        icon: Symbols.send,
+        label: AppLocalizations.of(context)!.chatSendConfirmAction,
+        onTap: () => widget.onStickerTap(item),
+      ),
+      stickerPinPeekAction(context, item.id),
+    ];
   }
 
   void _onScroll() {
@@ -251,17 +384,21 @@ class _StickerPanelState extends State<StickerPanel>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return SizedBox(
-      height: widget.height,
-      child: GlassSurface(
-        liquid: false,
-        frostTint: AppFrost.glassTint(cs),
-        border: Border(top: AppFrost.hairline(cs)),
-        child: SafeArea(
-          top: false,
+    return GlassSurface(
+      liquid: false,
+      frostTint: AppFrost.glassTint(cs),
+      border: Border(top: AppFrost.hairline(cs)),
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewPaddingOf(context).bottom,
+          ),
           child: Column(
             children: [
-              if (widget.onResize != null) _buildResizeHandle(cs),
+              if (widget.onResize != null && !_searchOpen)
+                _buildResizeHandle(cs),
               Expanded(
                 child: _mode == _modeEmoji && widget.onEmojiTap != null
                     ? EmojiPanel(onEmojiTap: widget.onEmojiTap!)
@@ -319,7 +456,7 @@ class _StickerPanelState extends State<StickerPanel>
           var acc = _searchFieldHeight;
           for (final s in _sections) {
             final rows = (s.stickerIds.length / columns).ceil();
-            final h = _headerHeight + rows * cell;
+            final h = _headerHeightOf(s) + rows * cell;
             offsets.add(acc);
             heights.add(h);
             acc += h;
@@ -359,6 +496,7 @@ class _StickerPanelState extends State<StickerPanel>
 
   void _setMode(int mode) {
     if (mode == _mode) return;
+    if (_searchOpen) _clearSearch();
     _modeUserChosen = true;
     _persistedMode = mode;
     setState(() => _mode = mode);
@@ -384,15 +522,68 @@ class _StickerPanelState extends State<StickerPanel>
         ),
         SizedBox(
           height: _toggleBarHeight,
-          child: Center(
-            child: SegmentedPillToggle(
-              labels: [l10n.stickerPanelEmojiTab, l10n.stickerPanelStickersTab],
-              selected: _mode,
-              onChanged: _setMode,
-            ),
+          child: Row(
+            children: [
+              _buildBarAction(
+                cs,
+                key: const ValueKey('sticker-panel-settings'),
+                icon: Symbols.settings,
+                tooltip: l10n.stickerSettingsTitle,
+                onTap: () => pushSwipeable(
+                  context,
+                  (_) => const StickerSettingsScreen(),
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: SegmentedPillToggle(
+                    labels: [
+                      l10n.stickerPanelEmojiTab,
+                      l10n.stickerPanelStickersTab,
+                    ],
+                    selected: _mode,
+                    onChanged: _setMode,
+                  ),
+                ),
+              ),
+              _buildBarAction(
+                cs,
+                key: const ValueKey('sticker-panel-sets'),
+                icon: Symbols.add,
+                tooltip: l10n.stickerSetsTitle,
+                onTap: () =>
+                    pushSwipeable(context, (_) => const StickerSetsScreen()),
+              ),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBarAction(
+    ColorScheme cs, {
+    required Key key,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    final visible = _mode == _modeStickers;
+    return SizedBox(
+      width: _toggleBarHeight + 8,
+      child: AnimatedOpacity(
+        opacity: visible ? 1 : 0,
+        duration: const Duration(milliseconds: 160),
+        child: IgnorePointer(
+          ignoring: !visible,
+          child: IconButton(
+            key: key,
+            icon: Icon(icon, color: cs.onSurfaceVariant, size: 24),
+            tooltip: tooltip,
+            onPressed: onTap,
+          ),
+        ),
+      ),
     );
   }
 
@@ -448,6 +639,7 @@ class _StickerPanelState extends State<StickerPanel>
     return LottieScrollScope(
       isScrolling: _scrolling,
       child: StickerPeekScope(
+        actionsFor: _peekActions,
         child: NotificationListener<ScrollNotification>(
           onNotification: _onScrollNotification,
           child: CustomScrollView(
@@ -459,12 +651,13 @@ class _StickerPanelState extends State<StickerPanel>
                   itemExtentBuilder: (i, _) => _heights[i],
                   delegate: SliverChildBuilderDelegate(
                     (context, i) => _StickerSection(
-                      key: ValueKey(_sections[i].title + i.toString()),
+                      key: ValueKey(_sections[i].id),
                       title: _sections[i].title,
+                      onClear: _sections[i].onClear,
                       stickerIds: _sections[i].stickerIds,
                       columns: columns,
                       cell: cell,
-                      headerHeight: _headerHeight,
+                      headerHeight: _headerHeightOf(_sections[i]),
                       shimmer: _shimmer,
                       onTap: widget.onStickerTap,
                     ),
@@ -572,7 +765,7 @@ class _StickerPanelState extends State<StickerPanel>
       tags: item.tags,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => widget.onStickerTap(item),
+        onTap: () => _sendFound(item),
         child: Padding(
           padding: const EdgeInsets.all(6),
           child: LottieImage(
@@ -588,6 +781,7 @@ class _StickerPanelState extends State<StickerPanel>
 
 class _StickerSection extends StatefulWidget {
   final String title;
+  final VoidCallback? onClear;
   final List<int> stickerIds;
   final int columns;
   final double cell;
@@ -598,6 +792,7 @@ class _StickerSection extends StatefulWidget {
   const _StickerSection({
     super.key,
     required this.title,
+    this.onClear,
     required this.stickerIds,
     required this.columns,
     required this.cell,
@@ -619,9 +814,16 @@ class _StickerSectionState extends State<_StickerSection> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(_StickerSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.stickerIds, widget.stickerIds)) _load();
+  }
+
   Future<void> _load() async {
-    await stickersModule.ensureStickers(widget.stickerIds);
-    if (!mounted) return;
+    final ids = widget.stickerIds;
+    await stickersModule.ensureStickers(ids);
+    if (!mounted || !listEquals(ids, widget.stickerIds)) return;
     setState(() => _loaded = true);
   }
 
@@ -639,19 +841,40 @@ class _StickerSectionState extends State<_StickerSection> {
         SizedBox(
           height: widget.headerHeight,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                widget.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+            padding: EdgeInsets.only(
+              left: 14,
+              right: widget.onClear == null ? 14 : 0,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
+                if (widget.onClear != null)
+                  IconButton(
+                    onPressed: widget.onClear,
+                    tooltip: AppLocalizations.of(
+                      context,
+                    )!.stickerPanelClearRecent,
+                    icon: const Icon(Symbols.close),
+                    iconSize: 18,
+                    color: cs.onSurfaceVariant,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 48,
+                      height: 48,
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

@@ -7,17 +7,26 @@ import 'package:flutter/material.dart';
 import 'package:komet/main.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../../core/media/preview_image.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../models/attachment.dart';
+import '../../../../models/upload_bytes.dart';
+import '../../../../core/media/preview_image.dart';
 import '../../photo_viewer.dart';
 import '../photo_hero.dart';
 import '../../text_with_meta.dart';
 import 'album_layout.dart';
+import '../../upload_bytes_label.dart';
+import '../../upload_progress_ring.dart';
+import 'edge_stretch_fill.dart';
 import 'bubble_context.dart';
+import 'media_autoplay.dart';
+import 'network_photo.dart';
 import 'video_bubble.dart';
+import '../../../../core/config/komet_settings.dart';
+import '../../../../core/media/auto_download_gate.dart';
 
 class PhotoBubble extends StatelessWidget {
+  static const String gifLabel = 'GIF';
   static const Radius _bigRadius = Radius.circular(
     BubbleContext.bubbleBorderRadius,
   );
@@ -73,8 +82,39 @@ class PhotoBubble extends StatelessWidget {
       if (thumb != null && thumb.isNotEmpty) return thumb;
       return item.baseUrl ?? '';
     }
-    if (item is PhotoAttachment) return item.baseUrl ?? '';
+    if (item is PhotoAttachment) {
+      final still = item.isGif ? item.previewUrl : null;
+      if (still != null && still.isNotEmpty) return still;
+      return item.baseUrl ?? '';
+    }
     return '';
+  }
+
+  Widget _autoplay(
+    BuildContext context,
+    BubbleContext ctx,
+    MessageAttachment item, {
+    required MediaAutoplayBuilder builder,
+  }) {
+    final clip = switch (item) {
+      VideoAttachment() => AutoplayClip.video(
+        item,
+        messageId: ctx.sourceMessageId,
+        chatId: ctx.sourceChatId,
+      ),
+      PhotoAttachment() => AutoplayClip.gif(item),
+      _ => null,
+    };
+    if (clip == null) return builder(context, const SizedBox.shrink(), false);
+    final previewUrl = _previewUrlOf(item);
+    return MediaAutoplay(
+      clip: clip,
+      manualLoadKey: previewUrl.isEmpty || previewUrl.startsWith('data:')
+          ? null
+          : previewUrl,
+      suspended: ctx.uploadProgress != null,
+      builder: builder,
+    );
   }
 
   static double layoutWidth(
@@ -208,8 +248,6 @@ class PhotoBubble extends StatelessWidget {
     required bool hasContentAbove,
   }) {
     final size = _displaySize(photo, hasCaption: hasCaption);
-    final constrainedWidth = size.width;
-    final constrainedHeight = size.height;
     final dpr = MediaQuery.of(ctx.context).devicePixelRatio;
 
     final matchTop = hasCaption && !hasContentAbove;
@@ -229,41 +267,147 @@ class PhotoBubble extends StatelessWidget {
       bottomLeft: bottomL,
       bottomRight: bottomR,
     );
-    final memWidth = (constrainedWidth * dpr).round();
-    final memHeight = (constrainedHeight * dpr).round();
+    final shown = _shownSize(photo, size);
+    final decoded = _coverSize(photo, shown);
+    final memWidth = (decoded.width * dpr).round();
+    final memHeight = (decoded.height * dpr).round();
 
     return ClipRRect(
       borderRadius: radius,
-      child: Stack(
+      child: _autoplay(
+        ctx.context,
+        ctx,
+        photo,
+        builder: (context, surface, playing) => Stack(
         children: [
-          _buildPhotoImage(
+          _buildLetterboxedImage(
             ctx,
             photo,
-            constrainedWidth,
-            constrainedHeight,
+            size,
+            shown,
             memWidth: memWidth,
             memHeight: memHeight,
           ),
-          ..._videoBadges(photo, compact: false),
+          Positioned.fill(
+            child: shown == size
+                ? surface
+                : Center(child: SizedBox.fromSize(size: shown, child: surface)),
+          ),
+          ..._mediaBadges(ctx, photo, compact: false, playing: playing),
           if (ctx.uploadProgress != null)
-            _buildUploadOverlay(ctx.uploadProgress!, 0),
+            _buildUploadOverlay(ctx, ctx.uploadProgress!, 0),
           if (ctx.uploadProgress == null)
             Positioned.fill(
               child: Builder(
                 builder: (tileContext) => GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _openMedia(
-                    ctx.context,
-                    0,
-                    tileContext: tileContext,
-                    radius: radius,
-                    memWidth: memWidth,
-                    memHeight: memHeight,
-                  ),
+                  onTap: () {
+                    if (_awaitsManualLoad(photo)) {
+                      AutoDownloadGate.loadManually(_previewUrlOf(photo));
+                      return;
+                    }
+                    _openMedia(
+                      ctx.context,
+                      0,
+                      tileContext: tileContext,
+                      radius: radius,
+                      memWidth: memWidth,
+                      memHeight: memHeight,
+                      letterboxed: shown != size,
+                    );
+                  },
                 ),
               ),
             ),
         ],
+        ),
+      ),
+    );
+  }
+
+  static const double _minVisibleFraction = 0.6;
+
+  static bool _isLetterboxed(MessageAttachment photo, Size box) {
+    final imageAspect = _aspectRatio(photo);
+    final boxAspect = box.width / box.height;
+    final visible =
+        math.min(imageAspect, boxAspect) / math.max(imageAspect, boxAspect);
+    return visible < _minVisibleFraction;
+  }
+
+  static Size _coverSize(MessageAttachment photo, Size box) {
+    final imageAspect = _aspectRatio(photo);
+    return imageAspect > box.width / box.height
+        ? Size(box.height * imageAspect, box.height)
+        : Size(box.width, box.width / imageAspect);
+  }
+
+  static Size _shownSize(MessageAttachment photo, Size box) {
+    if (!_isLetterboxed(photo, box)) return box;
+    final imageAspect = _aspectRatio(photo);
+    return imageAspect < box.width / box.height
+        ? Size(box.height * imageAspect, box.height)
+        : Size(box.width, box.width / imageAspect);
+  }
+
+  Widget _buildLetterboxedImage(
+    BubbleContext ctx,
+    MessageAttachment photo,
+    Size box,
+    Size shown, {
+    required int memWidth,
+    required int memHeight,
+  }) {
+    final image = _buildPhotoImage(
+      ctx,
+      photo,
+      shown.width,
+      shown.height,
+      memWidth: memWidth,
+      memHeight: memHeight,
+    );
+    if (shown == box) return image;
+    return SizedBox.fromSize(
+      size: box,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _buildEdgeFill(ctx, photo, memWidth: memWidth, memHeight: memHeight),
+          Center(child: image),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEdgeFill(
+    BubbleContext ctx,
+    MessageAttachment photo, {
+    required int memWidth,
+    required int memHeight,
+  }) {
+    Widget fill(ImageProvider? source) => EdgeStretchFill(
+      source: source,
+      imageAspect: _aspectRatio(photo),
+      fallback: ctx.cs.surfaceContainerHighest,
+    );
+    final preview = dataUriImage(photo, photo.previewData);
+    if (preview != null || _localPathOf(photo) != null) {
+      return fill(
+        preview ??
+            _photoProvider(photo, memWidth: memWidth, memHeight: memHeight),
+      );
+    }
+    final url = _previewUrlOf(photo);
+    if (url.isEmpty || url.startsWith('data:')) return fill(null);
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        AutoDownloadGate.listen(url),
+        KometSettings.autoDownloadPhoto,
+      ]),
+      builder: (context, _) => fill(
+        AutoDownloadGate.allows(KometSettings.autoDownloadPhoto.value, url)
+            ? _photoProvider(photo, memWidth: memWidth, memHeight: memHeight)
+            : null,
       ),
     );
   }
@@ -276,7 +420,6 @@ class PhotoBubble extends StatelessWidget {
     required int memWidth,
     required int memHeight,
   }) {
-    final embedded = dataUriImage(photo, photo.previewData);
     final localPath = _localPathOf(photo);
     if (localPath != null) {
       return Image.file(
@@ -286,70 +429,159 @@ class PhotoBubble extends StatelessWidget {
         fit: BoxFit.cover,
         cacheWidth: memWidth,
         gaplessPlayback: true,
-        errorBuilder: (_, _, _) => embedded == null
-            ? _buildPhotoPlaceholder(ctx.cs, width, height)
-            : Image(
-                image: embedded,
-                width: width,
-                height: height,
-                fit: BoxFit.cover,
-              ),
+        frameBuilder: (_, child, frame, synchronouslyLoaded) =>
+            frame != null || synchronouslyLoaded
+            ? child
+            : _buildPreviewImage(ctx, photo, width, height),
+        errorBuilder: (_, _, _) => _buildNetworkPhoto(
+          ctx,
+          photo,
+          width,
+          height,
+          memWidth: memWidth,
+          memHeight: memHeight,
+        ),
       );
     }
+    return _buildNetworkPhoto(
+      ctx,
+      photo,
+      width,
+      height,
+      memWidth: memWidth,
+      memHeight: memHeight,
+    );
+  }
+
+  Widget _buildNetworkPhoto(
+    BubbleContext ctx,
+    MessageAttachment photo,
+    double width,
+    double height, {
+    required int memWidth,
+    required int memHeight,
+  }) {
     final imageUrl = _previewUrlOf(photo);
-    if (imageUrl.isNotEmpty && !imageUrl.startsWith('data:')) {
-      return CachedNetworkImage(
-        imageUrl: imageUrl,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        memCacheWidth: memWidth,
-        memCacheHeight: memHeight,
-        fadeInDuration: Duration.zero,
-        placeholderFadeInDuration: Duration.zero,
-        errorWidget: (_, _, _) => embedded == null
-            ? _buildPhotoPlaceholder(ctx.cs, width, height)
-            : Image(
-                image: embedded,
-                width: width,
-                height: height,
-                fit: BoxFit.cover,
+    if (imageUrl.isEmpty || imageUrl.startsWith('data:')) {
+      return _buildPreviewImage(ctx, photo, width, height);
+    }
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        AutoDownloadGate.listen(imageUrl),
+        KometSettings.autoDownloadPhoto,
+      ]),
+      builder: (context, _) {
+        if (!AutoDownloadGate.allows(
+          KometSettings.autoDownloadPhoto.value,
+          imageUrl,
+        )) {
+          return _manualLoadTile(ctx, photo, imageUrl, width, height);
+        }
+        return NetworkPhoto(
+          url: imageUrl,
+          width: width,
+          height: height,
+          memWidth: memWidth,
+          memHeight: memHeight,
+          logId: switch (photo) {
+            PhotoAttachment(:final photoId) => photoId,
+            VideoAttachment(:final videoId) => videoId,
+            _ => null,
+          },
+          fallback: (_) => _buildPreviewImage(ctx, photo, width, height),
+        );
+      },
+    );
+  }
+
+  Widget _manualLoadTile(
+    BubbleContext ctx,
+    MessageAttachment photo,
+    String key,
+    double width,
+    double height,
+  ) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _buildPreviewImage(ctx, photo, width, height),
+          Center(
+            child: GestureDetector(
+              onTap: () => AutoDownloadGate.loadManually(key),
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Symbols.download, color: Colors.white),
               ),
-      );
-    }
-    if (embedded != null) {
-      return Image(
-        image: embedded,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        errorBuilder: (_, _, _) =>
-            _buildPhotoPlaceholder(ctx.cs, width, height),
-      );
-    }
-    return _buildPhotoPlaceholder(ctx.cs, width, height);
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewImage(
+    BubbleContext ctx,
+    MessageAttachment photo,
+    double width,
+    double height,
+  ) {
+    final preview = dataUriImage(photo, photo.previewData);
+    if (preview == null) return _buildPhotoPlaceholder(ctx.cs, width, height);
+    return Image(
+      image: preview,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) => _buildPhotoPlaceholder(ctx.cs, width, height),
+    );
   }
 
   // #***! плитка видео отличается от фото только кружком плеера и длительностью
-  List<Widget> _videoBadges(MessageAttachment item, {required bool compact}) {
+  List<Widget> _mediaBadges(
+    BubbleContext ctx,
+    MessageAttachment item, {
+    required bool compact,
+    bool playing = false,
+  }) {
+    if (item is PhotoAttachment && item.isGif) {
+      return [
+        Positioned(
+          left: BubbleContext.compactTimePadding,
+          bottom: BubbleContext.compactTimePadding,
+          child: ctx.overlayLabel(gifLabel),
+        ),
+      ];
+    }
     if (item is! VideoAttachment) return const [];
     final side = compact ? 36.0 : 48.0;
     final durationMs = item.duration;
     return [
       Positioned.fill(
         child: Center(
-          child: Container(
-            width: side,
-            height: side,
-            decoration: const BoxDecoration(
-              color: Colors.black54,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Symbols.play_arrow,
-              color: Colors.white,
-              size: side * 0.625,
+          child: AnimatedOpacity(
+            opacity: playing ? 0 : 1,
+            duration: const Duration(milliseconds: 200),
+            child: Container(
+              width: side,
+              height: side,
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Symbols.play_arrow,
+                color: Colors.white,
+                size: side * 0.625,
+              ),
             ),
           ),
         ),
@@ -364,9 +596,18 @@ class PhotoBubble extends StatelessWidget {
               color: Colors.black54,
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Text(
-              formatSecondsMmSs((durationMs / 1000).round()),
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  formatSecondsMmSs((durationMs / 1000).round()),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+                if (playing) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Symbols.volume_off, color: Colors.white, size: 13),
+                ],
+              ],
             ),
           ),
         ),
@@ -374,29 +615,18 @@ class PhotoBubble extends StatelessWidget {
   }
 
   Widget _buildUploadOverlay(
-    ValueListenable<List<double>> progress,
+    BubbleContext ctx,
+    ValueListenable<List<UploadBytes>> progress,
     int index,
   ) {
+    final cancelItem = ctx.onCancelUploadItem;
     return Positioned.fill(
-      child: ValueListenableBuilder<List<double>>(
-        valueListenable: progress,
-        builder: (context, values, _) {
-          final value = index < values.length ? values[index] : 1.0;
-          final indeterminate = value <= 0 || value >= 1.0;
-          return Container(
-            color: Colors.black.withValues(alpha: 0.4),
-            alignment: Alignment.center,
-            child: SizedBox(
-              width: 34,
-              height: 34,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                value: indeterminate ? null : value,
-                color: Colors.white,
-              ),
-            ),
-          );
-        },
+      child: _UploadSlotOverlay(
+        progress: progress,
+        slot: index,
+        onCancel: cancelItem != null
+            ? () => cancelItem(index)
+            : ctx.onCancelUpload,
       ),
     );
   }
@@ -497,7 +727,7 @@ class PhotoBubble extends StatelessWidget {
         final coverWidth = math.max(tileWidth, tileHeight * ratio);
         final memWidth = (coverWidth * dpr).round().clamp(1, 2048);
         final memHeight = math.max(1, (memWidth / ratio).round());
-        return Stack(
+        Widget tile(Widget surface, bool playing) => Stack(
           children: [
             _buildPhotoImage(
               ctx,
@@ -507,8 +737,9 @@ class PhotoBubble extends StatelessWidget {
               memWidth: memWidth,
               memHeight: memHeight,
             ),
+            Positioned.fill(child: surface),
             if (overlay == null)
-              ..._videoBadges(photo, compact: true)
+              ..._mediaBadges(ctx, photo, compact: true, playing: playing)
             else
               Positioned.fill(
                 child: Container(
@@ -526,10 +757,17 @@ class PhotoBubble extends StatelessWidget {
                 ),
               ),
             if (ctx.uploadProgress != null)
-              _buildUploadOverlay(ctx.uploadProgress!, index),
+              _buildUploadOverlay(ctx, ctx.uploadProgress!, index),
             if (ctx.uploadProgress == null)
-              _buildTileTapTarget(ctx, index, memWidth, memHeight),
+              _buildTileTapTarget(ctx, index, memWidth, memHeight, photo),
           ],
+        );
+        if (overlay != null) return tile(const SizedBox.shrink(), false);
+        return _autoplay(
+          context,
+          ctx,
+          photo,
+          builder: (context, surface, playing) => tile(surface, playing),
         );
       },
     );
@@ -540,21 +778,38 @@ class PhotoBubble extends StatelessWidget {
     int index,
     int memWidth,
     int memHeight,
+    MessageAttachment photo,
   ) {
     return Positioned.fill(
       child: Builder(
         builder: (tileContext) => GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => _openMedia(
-            ctx.context,
-            index,
-            tileContext: tileContext,
-            radius: BorderRadius.zero,
-            memWidth: memWidth,
-            memHeight: memHeight,
-          ),
+          onTap: () {
+            if (_awaitsManualLoad(photo)) {
+              AutoDownloadGate.loadManually(_previewUrlOf(photo));
+              return;
+            }
+            _openMedia(
+              ctx.context,
+              index,
+              tileContext: tileContext,
+              radius: BorderRadius.zero,
+              memWidth: memWidth,
+              memHeight: memHeight,
+            );
+          },
         ),
       ),
+    );
+  }
+
+  bool _awaitsManualLoad(MessageAttachment photo) {
+    if (_localPathOf(photo) != null) return false;
+    final url = _previewUrlOf(photo);
+    if (url.isEmpty || url.startsWith('data:')) return false;
+    return !AutoDownloadGate.allows(
+      KometSettings.autoDownloadPhoto.value,
+      url,
     );
   }
 
@@ -608,6 +863,7 @@ class PhotoBubble extends StatelessWidget {
     required BorderRadius radius,
     required int memWidth,
     required int memHeight,
+    bool letterboxed = false,
   }) {
     final photo = media[index];
     if (photo is VideoAttachment) {
@@ -616,8 +872,13 @@ class PhotoBubble extends StatelessWidget {
     }
     final photos = media.whereType<PhotoAttachment>().toList();
     final photoIndex = photos.indexOf(photo as PhotoAttachment);
+    final imageSize = _photoSize(photo);
     final hero = PhotoHeroController(
-      origin: () => photoHeroRectOf(tileContext),
+      origin: () {
+        final box = photoHeroRectOf(tileContext);
+        if (box == null || !letterboxed || imageSize == null) return box;
+        return inscribeRect(imageSize, box);
+      },
       image: _photoProvider(photo, memWidth: memWidth, memHeight: memHeight),
       size: _photoSize(photo),
       radius: radius,
@@ -634,6 +895,97 @@ class PhotoBubble extends StatelessWidget {
           hero: hero,
           sourceName: ctx.chatName,
           videoUserAgentProvider: () => api.session?.userAgent(),
+        ),
+      ),
+    );
+  }
+}
+
+class _UploadSlotOverlay extends StatefulWidget {
+  const _UploadSlotOverlay({
+    required this.progress,
+    required this.slot,
+    required this.onCancel,
+  });
+
+  final ValueListenable<List<UploadBytes>> progress;
+  final int slot;
+  final VoidCallback? onCancel;
+
+  @override
+  State<_UploadSlotOverlay> createState() => _UploadSlotOverlayState();
+}
+
+class _UploadSlotOverlayState extends State<_UploadSlotOverlay> {
+  late bool _done = _isDone;
+
+  bool get _isDone =>
+      UploadProgressRing.fractionOf(widget.progress.value, widget.slot) >= 1;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.progress.addListener(_onProgress);
+  }
+
+  @override
+  void didUpdateWidget(_UploadSlotOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.progress, widget.progress)) {
+      oldWidget.progress.removeListener(_onProgress);
+      widget.progress.addListener(_onProgress);
+    }
+    _done = _isDone;
+  }
+
+  @override
+  void dispose() {
+    widget.progress.removeListener(_onProgress);
+    super.dispose();
+  }
+
+  void _onProgress() {
+    final done = _isDone;
+    if (done != _done) setState(() => _done = done);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: _done,
+      child: AnimatedOpacity(
+        opacity: _done ? 0 : 1,
+        duration: const Duration(milliseconds: 240),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onCancel,
+          child: ColoredBox(
+            color: Colors.black.withValues(alpha: 0.4),
+            child: Stack(
+              children: [
+                Center(
+                  child: UploadProgressRing(
+                    progress: widget.progress,
+                    slot: widget.slot,
+                    color: Colors.white,
+                    trackColor: Colors.white24,
+                    size: 52,
+                    iconSize: 18,
+                    onCancel: widget.onCancel,
+                  ),
+                ),
+                Positioned(
+                  left: 6,
+                  top: 6,
+                  right: 6,
+                  child: UploadBytesLabel(
+                    progress: widget.progress,
+                    slot: widget.slot,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

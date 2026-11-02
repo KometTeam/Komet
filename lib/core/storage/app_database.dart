@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:komet/core/contacts/phonebook_entry.dart';
 import 'package:komet/core/storage/app_instance.dart';
 import 'package:komet/core/storage/message_ranges.dart';
 import 'package:komet/core/utils/logger.dart';
@@ -177,6 +178,10 @@ abstract class SyncKey {
   static const serverConfigSeen = 'server_config_seen';
   static const profileInviteLink = 'profile_invite_link';
   static const welcomeStickerIds = 'welcome_sticker_ids';
+  static const channelsFolderSuggested = 'channels_folder_suggested';
+  static const viewsCountEnabled = 'views_count_enabled';
+  static const folderFiltersEnabled = 'folder_filters_enabled';
+  static const privacyOverrides = 'privacy_overrides';
 }
 
 // #***! вся локальная база, профили чаты контакты сообщения
@@ -224,6 +229,20 @@ class AppDatabase {
     }
     return _mobileDbDir ??= await databaseFactorySqflitePlugin
         .getDatabasesPath();
+  }
+
+  static String get _databaseName => 'komet${AppInstance.suffix}.db';
+
+  static Future<int> fileBytes() async {
+    final base = join(await _databasesDir(), _databaseName);
+    var total = 0;
+    for (final suffix in const ['', '-wal', '-shm']) {
+      try {
+        final file = File('$base$suffix');
+        if (await file.exists()) total += await file.length();
+      } catch (_) {}
+    }
+    return total;
   }
 
   static String? _legacyExposedDb;
@@ -287,12 +306,12 @@ class AppDatabase {
   static Future<Database> _open() async {
     final dbPath = await _databasesDir();
     await Directory(dbPath).create(recursive: true);
-    final target = join(dbPath, 'komet${AppInstance.suffix}.db');
+    final target = join(dbPath, _databaseName);
     await _migrateLegacyDb(target);
     final opened = await openDatabase(
       target,
       // #***! каждый if oldVersion < N это шаг миграции, идут по порядку
-      version: 29,
+      version: 31,
       onOpen: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -457,6 +476,12 @@ class AppDatabase {
         if (oldVersion < 29) {
           await _addColumnIfMissing(db, 'messages', 'typing_ms', 'INTEGER');
         }
+        if (oldVersion < 30) {
+          await db.execute(_phonebookSyncSchema);
+        }
+        if (oldVersion < 31) {
+          await db.execute(_chatScrollSchema);
+        }
       },
     );
     await _dropLegacyExposedDb();
@@ -466,7 +491,7 @@ class AppDatabase {
   // #***! создание таблиц с нуля для свежей установки
   static Future<void> _createTables(Database db) async {
     await db.execute('''
-      CREATE TABLE profile (
+      CREATE TABLE IF NOT EXISTS profile (
         id           INTEGER PRIMARY KEY,
         first_name   TEXT    NOT NULL,
         last_name    TEXT,
@@ -491,6 +516,8 @@ class AppDatabase {
     await db.execute(_webAppBiometrySchema);
     await db.execute(_e2eeSessionsSchema);
     await db.execute(_messageRangesSchema);
+    await db.execute(_phonebookSyncSchema);
+    await db.execute(_chatScrollSchema);
     await _createIndexes(db);
     await _createChatParticipantsIndex(db);
   }
@@ -571,9 +598,11 @@ class AppDatabase {
     await batch.commit(noResult: true);
   }
 
-  // #***! схемы таблиц строками, их же жуют onCreate и миграции
+  // #***! схемы таблиц строками, их же жуют onCreate и миграции. IF NOT EXISTS
+  // обязателен: старая сборка, открыв базу, молча опускает её версию, а таблицы
+  // оставляет, и следующая миграция иначе падает на уже существующей таблице
   static const _contactsSchema = '''
-    CREATE TABLE contacts (
+    CREATE TABLE IF NOT EXISTS contacts (
       id           INTEGER PRIMARY KEY,
       account_id   INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       first_name   TEXT    NOT NULL,
@@ -588,8 +617,31 @@ class AppDatabase {
     )
   ''';
 
+  // #***! докуда долистали чат: нижнее видимое сообщение и смещение его низа
+  static const _chatScrollSchema = '''
+    CREATE TABLE IF NOT EXISTS chat_scroll (
+      account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      chat_id    INTEGER NOT NULL,
+      message_id TEXT    NOT NULL,
+      time       INTEGER NOT NULL,
+      pixels     REAL    NOT NULL,
+      PRIMARY KEY (account_id, chat_id)
+    )
+  ''';
+
+  // #***! что из телефонной книги уже ушло в SYNC, с тем именем что ушло
+  static const _phonebookSyncSchema = '''
+    CREATE TABLE IF NOT EXISTS phonebook_sync (
+      account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+      phone      TEXT    NOT NULL,
+      first_name TEXT    NOT NULL,
+      last_name  TEXT,
+      PRIMARY KEY (account_id, phone)
+    )
+  ''';
+
   static const _syncStateSchema = '''
-    CREATE TABLE sync_state (
+    CREATE TABLE IF NOT EXISTS sync_state (
       account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       key        TEXT    NOT NULL,
       value      TEXT    NOT NULL,
@@ -598,7 +650,7 @@ class AppDatabase {
   ''';
 
   static const _chatsCacheSchema = '''
-    CREATE TABLE chats_cache (
+    CREATE TABLE IF NOT EXISTS chats_cache (
       id              INTEGER NOT NULL,
       account_id      INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       type            TEXT    NOT NULL,
@@ -635,7 +687,7 @@ class AppDatabase {
   ''';
 
   static const _chatParticipantsSchema = '''
-    CREATE TABLE chat_participants (
+    CREATE TABLE IF NOT EXISTS chat_participants (
       account_id     INTEGER NOT NULL,
       chat_id        INTEGER NOT NULL,
       participant_id INTEGER NOT NULL,
@@ -646,7 +698,7 @@ class AppDatabase {
   ''';
 
   static const _messagesSchema = '''
-    CREATE TABLE messages (
+    CREATE TABLE IF NOT EXISTS messages (
       id         TEXT    NOT NULL,
       account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       chat_id    INTEGER NOT NULL,
@@ -677,7 +729,7 @@ class AppDatabase {
   ''';
 
   static const _e2eeSessionsSchema = '''
-    CREATE TABLE e2ee_sessions (
+    CREATE TABLE IF NOT EXISTS e2ee_sessions (
       account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       chat_id    INTEGER NOT NULL,
       peer_id    INTEGER NOT NULL,
@@ -693,7 +745,7 @@ class AppDatabase {
   ''';
 
   static const _webAppStorageSchema = '''
-    CREATE TABLE webapp_storage (
+    CREATE TABLE IF NOT EXISTS webapp_storage (
       account_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       bot_id     INTEGER NOT NULL,
       key        TEXT    NOT NULL,
@@ -703,7 +755,7 @@ class AppDatabase {
   ''';
 
   static const _webAppBiometrySchema = '''
-    CREATE TABLE webapp_biometry (
+    CREATE TABLE IF NOT EXISTS webapp_biometry (
       account_id       INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
       bot_id           INTEGER NOT NULL,
       access_requested INTEGER NOT NULL DEFAULT 0,
@@ -1372,6 +1424,97 @@ class AppDatabase {
       where: 'account_id = ? AND id IN ($placeholders)',
       whereArgs: [accountId, ...ids],
     );
+  }
+
+  static Future<List<Map<String, Object?>>> loadChatScrollPoints(
+    int accountId,
+  ) async {
+    final db = await _instance;
+    return db.query(
+      'chat_scroll',
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+    );
+  }
+
+  static Future<void> saveChatScrollPoint(
+    int accountId,
+    int chatId, {
+    required String messageId,
+    required int time,
+    required double pixels,
+  }) async {
+    final db = await _instance;
+    await db.insert('chat_scroll', {
+      'account_id': accountId,
+      'chat_id': chatId,
+      'message_id': messageId,
+      'time': time,
+      'pixels': pixels,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  static Future<void> deleteChatScrollPoint(int accountId, int chatId) async {
+    final db = await _instance;
+    await db.delete(
+      'chat_scroll',
+      where: 'account_id = ? AND chat_id = ?',
+      whereArgs: [accountId, chatId],
+    );
+  }
+
+  static Future<Map<String, PhonebookEntry>> loadSyncedPhonebook(
+    int accountId,
+  ) async {
+    final db = await _instance;
+    final rows = await db.query(
+      'phonebook_sync',
+      where: 'account_id = ?',
+      whereArgs: [accountId],
+    );
+    return {
+      for (final r in rows)
+        r['phone'] as String: PhonebookEntry(
+          phone: r['phone'] as String,
+          firstName: r['first_name'] as String,
+          lastName: r['last_name'] as String?,
+        ),
+    };
+  }
+
+  static Future<void> markPhonebookSynced(
+    int accountId,
+    List<PhonebookEntry> entries,
+  ) async {
+    final db = await _instance;
+    final batch = db.batch();
+    for (final entry in entries) {
+      batch.insert('phonebook_sync', {
+        'account_id': accountId,
+        'phone': entry.phone,
+        'first_name': entry.firstName,
+        'last_name': entry.lastName,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  // #***! по одному, IN на тысячи номеров упрётся в лимит переменных sqlite
+  static Future<void> forgetPhonebookPhones(
+    int accountId,
+    List<String> phones,
+  ) async {
+    if (phones.isEmpty) return;
+    final db = await _instance;
+    final batch = db.batch();
+    for (final phone in phones) {
+      batch.delete(
+        'phonebook_sync',
+        where: 'account_id = ? AND phone = ?',
+        whereArgs: [accountId, phone],
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   // #***! сообщения пачкой

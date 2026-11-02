@@ -8,6 +8,56 @@ import 'package:sensors_plus/sensors_plus.dart';
 import 'package:komet/core/config/chat_wallpaper_themes.dart';
 import 'package:komet/core/storage/chat_wallpaper_store.dart';
 import 'package:komet/frontend/widgets/mesh_gradient_background.dart';
+import 'theme_wallpaper.dart';
+
+class WallpaperImages {
+  WallpaperImages._();
+
+  static const int _recentCapacity = 2;
+
+  static _HeldImage? _global;
+  static final List<_HeldImage> _recent = [];
+
+  static ImageProvider providerFor(String path) => FileImage(File(path));
+
+  static void holdGlobal(ChatWallpaper? wallpaper) {
+    final path = wallpaper?.imagePath;
+    if (_global?.path == path) return;
+    _global?.release();
+    _global = path == null ? null : _HeldImage(path);
+  }
+
+  static void holdRecent(String path) {
+    if (_global?.path == path) return;
+    final index = _recent.indexWhere((held) => held.path == path);
+    if (index >= 0) {
+      _recent.add(_recent.removeAt(index));
+      return;
+    }
+    _recent.add(_HeldImage(path));
+    while (_recent.length > _recentCapacity) {
+      _recent.removeAt(0).release();
+    }
+  }
+}
+
+class _HeldImage {
+  final String path;
+  final ImageStream _stream;
+  final ImageStreamListener _listener = ImageStreamListener(
+    (_, _) {},
+    onError: (_, _) {},
+  );
+
+  _HeldImage(this.path)
+    : _stream = WallpaperImages.providerFor(
+        path,
+      ).resolve(ImageConfiguration.empty) {
+    _stream.addListener(_listener);
+  }
+
+  void release() => _stream.removeListener(_listener);
+}
 
 class ChatWallpaperView extends StatelessWidget {
   final ChatWallpaper wallpaper;
@@ -15,12 +65,14 @@ class ChatWallpaperView extends StatelessWidget {
   const ChatWallpaperView({super.key, required this.wallpaper});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => RepaintBoundary(child: _buildLayer());
+
+  Widget _buildLayer() {
     if (wallpaper.isImage) {
       final path = wallpaper.imagePath;
       if (path == null) return const SizedBox.shrink();
       return WallpaperImageLayer(
-        image: FileImage(File(path)),
+        image: WallpaperImages.providerFor(path),
         dim: wallpaper.dim,
         blur: wallpaper.blur,
         motion: wallpaper.motion,
@@ -38,7 +90,7 @@ class ChatWallpaperView extends StatelessWidget {
     }
     final theme = chatWallpaperThemeById(wallpaper.themeId);
     if (theme == null) return const SizedBox.shrink();
-    return theme.buildBackground();
+    return ThemeWallpaper(theme: theme, pinned: true);
   }
 }
 
@@ -62,7 +114,8 @@ class WallpaperImageLayer extends StatefulWidget {
   State<WallpaperImageLayer> createState() => _WallpaperImageLayerState();
 }
 
-class _WallpaperImageLayerState extends State<WallpaperImageLayer> {
+class _WallpaperImageLayerState extends State<WallpaperImageLayer>
+    with WidgetsBindingObserver {
   static const double _maxShift = 20;
   static const double _motionScale = 1.16;
   static const double _blurSigma = 22;
@@ -74,7 +127,17 @@ class _WallpaperImageLayerState extends State<WallpaperImageLayer> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.motion) _startMotion();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (widget.motion) _startMotion();
+    } else {
+      _stopMotion();
+    }
   }
 
   @override
@@ -87,7 +150,7 @@ class _WallpaperImageLayerState extends State<WallpaperImageLayer> {
   void _startMotion() {
     _offset.value = Offset.zero;
     _sub ??= accelerometerEventStream(
-      samplingPeriod: SensorInterval.gameInterval,
+      samplingPeriod: SensorInterval.uiInterval,
     ).listen(_onAccelerometer, onError: (_) {}, cancelOnError: false);
   }
 
@@ -100,14 +163,17 @@ class _WallpaperImageLayerState extends State<WallpaperImageLayer> {
     final targetX = (-event.x / 9.8).clamp(-1.0, 1.0) * _maxShift;
     final targetY = (event.y / 9.8).clamp(-1.0, 1.0) * _maxShift;
     final prev = _offset.value;
-    _offset.value = Offset(
+    final next = Offset(
       prev.dx + (targetX - prev.dx) * 0.12,
       prev.dy + (targetY - prev.dy) * 0.12,
     );
+    if ((next - prev).distance < 0.25) return;
+    _offset.value = next;
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     _offset.dispose();
     super.dispose();

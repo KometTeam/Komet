@@ -9,6 +9,14 @@ class AppLocalizationsRu extends AppLocalizations {
   AppLocalizationsRu([String locale = 'ru']) : super(locale);
 
   @override
+  String get shareEncryptedUnsupported =>
+      'В зашифрованный чат пока нельзя отправлять через «Поделиться». Откройте чат и отправьте сообщение из него.';
+
+  @override
+  String get chatEncryptedUnsupportedMedia =>
+      'Этот тип вложения пока нельзя зашифровать. Отправка отменена.';
+
+  @override
   String get loginTitle => 'Войдите в Komet';
 
   @override
@@ -119,6 +127,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get languageNameEn => 'English';
 
   @override
+  String get languageServerTitle => 'Менять язык и для сервера тоже';
+
+  @override
+  String get languageServerSubtitle =>
+      'При включении переключателя названия встроенных папок, уведомления о серверных ошибках и некоторые встроенные элементы будут на выбранном вами языке. По умолчанию они не переводятся.';
+
+  @override
   String get selectCountryTitle => 'Выберите страну';
 
   @override
@@ -129,12 +144,20 @@ class AppLocalizationsRu extends AppLocalizations {
       'Мы отправили SMS с кодом подтверждения на ваш номер телефона.';
 
   @override
+  String get codeConfirmationCheckMaxChat =>
+      'Проверьте чат «Коды подтверждения» в МАХ.';
+
+  @override
+  String get loginSlowSmsHint =>
+      'Вход с этим способом дольше обычного. Подождите немного, не выходите.';
+
+  @override
   String codeResendInSeconds(int seconds) {
     return 'Отправить повторно через $seconds сек.';
   }
 
   @override
-  String get codeResendSms => 'Отправить код по SMS';
+  String get codeResendSms => 'Выслать код повторно';
 
   @override
   String get codeError2faMissing => 'Ошибка: отсутствуют данные для 2FA';
@@ -626,6 +649,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get msgActionsCopyLink => 'Скопировать ссылку';
 
   @override
+  String get msgActionsSave => 'Сохранить';
+
+  @override
   String get msgActionsSelectAll => 'Выбрать всё';
 
   @override
@@ -648,6 +674,12 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get msgActionsUnpin => 'Открепить';
+
+  @override
+  String get msgActionsPinSticker => 'Закрепить стикер';
+
+  @override
+  String get msgActionsUnpinSticker => 'Открепить стикер';
 
   @override
   String get pinnedMessageTitle => 'Закреплённое сообщение';
@@ -703,17 +735,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'На iOS пуш-уведомления пока недоступны';
 
   @override
-  String get notificationsTitle => 'Уведомления';
-
-  @override
-  String get notificationsFkmSectionTitle => 'Уведомления без Google (FKM)';
+  String get notificationsTitle => 'Уведомления и звук';
 
   @override
   String get notificationsFkmEnableLabel => 'Включить уведомления';
-
-  @override
-  String get notificationsFkmEnableSubtitle =>
-      'Komet сам держит соединение с сервером и показывает уведомления. Пока это включено, в шторке висит служебное уведомление.';
 
   @override
   String get notificationsFkmUnsupported => 'FKM работает только на Android';
@@ -740,28 +765,18 @@ class AppLocalizationsRu extends AppLocalizations {
       'Уведомления начнут приходить через собственное фоновое соединение, а в шторке будет постоянно висеть уведомление сервиса. Выключить FKM можно прямо в нём.';
 
   @override
-  String get notificationsMainSectionTitle => 'Уведомления';
+  String get notificationsAllLabel => 'Включить все уведомления';
 
   @override
-  String get notificationsAllLabel => 'Все уведомления';
-
-  @override
-  String get notificationsNewSectionTitle => 'Все новые уведомления';
-
-  @override
-  String get notificationsPreviewLabel => 'Предпросмотр сообщений';
-
-  @override
-  String get notificationsSoundLabel => 'Звук';
-
-  @override
-  String get notificationsAdditionalSectionTitle => 'Дополнительно';
+  String get notificationsPreviewLabel =>
+      'Показывать содержимое в системных уведомлениях';
 
   @override
   String get notificationsCallsLabel => 'Уведомления о звонках';
 
   @override
-  String get notificationsNewContactsLabel => 'Уведомления от новых контактов';
+  String get notificationsNewContactsLabel =>
+      'Уведомление о регистрации контактов';
 
   @override
   String get notificationsHapticsSectionTitle => 'Тактильная отдача';
@@ -772,6 +787,50 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get notificationsHapticsSubtitle =>
       'Виброотклик при действиях в приложении';
+
+  @override
+  String get notificationsNetworkSectionTitle =>
+      'Настройки при ограничениях сети';
+
+  @override
+  String get notificationsBackgroundLabel => 'Работа в фоне';
+
+  @override
+  String get notificationsBackgroundSubtitle =>
+      'Оставайтесь на связи при перебоях интернета';
+
+  @override
+  String get notificationsBatteryLabel => 'Энергосбережение';
+
+  @override
+  String get notificationsBatterySubtitle => 'Может блокировать уведомления';
+
+  @override
+  String get notificationsDialogsLabel => 'Личные чаты';
+
+  @override
+  String get notificationsGroupsLabel => 'Группы';
+
+  @override
+  String get notificationsOtherLabel => 'Прочие уведомления';
+
+  @override
+  String get notificationsSystemLabel => 'Настройки';
+
+  @override
+  String get notificationsSystemSubtitle => 'Звуки, вибрация, важность';
+
+  @override
+  String get notificationsModeOn => 'Включено';
+
+  @override
+  String get notificationsModeOff => 'Выключено';
+
+  @override
+  String get notificationsModeReplies => 'Ответы и упоминания';
+
+  @override
+  String get notificationsAndroidOnly => 'Доступно только на Android';
 
   @override
   String devicesLoadFailed(String error) {
@@ -882,10 +941,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get appearanceVisualStyleSubtitle =>
-      'Material You или объёмные Glossy-капсулы';
-
-  @override
-  String get appearanceStyleAuto => 'Как в теме';
+      'Определяет вид панелей, переключателей и поля ввода';
 
   @override
   String get appearanceVisualStyleMaterialYou => 'Material You';
@@ -894,54 +950,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appearanceVisualStyleGlossy => 'Glossy';
 
   @override
-  String get appearanceVisualStyleLiquidGlass => 'Liquid Glass';
-
-  @override
-  String get appearanceGlassMaterial => 'Стекло';
-
-  @override
-  String get appearanceChatChromeTitle => 'Элементы экрана чата';
-
-  @override
-  String get appearanceChatChromeSubtitle =>
-      'Фон панелей ввода и верхнего бара';
-
-  @override
-  String get appearanceChatChromeColor => 'Цвет';
-
-  @override
-  String get appearanceChatChromeBlur => 'Блюр';
-
-  @override
   String get appearanceChatChromeNone => 'Нет';
-
-  @override
-  String get appearanceChatChromeTransparent => 'Frost blur';
-
-  @override
-  String get appearanceComposerTitle => 'Вид панели ввода';
-
-  @override
-  String get appearanceComposerSubtitle => 'Стиль и фон панели ввода сообщений';
-
-  @override
-  String get appearanceComposerBackgroundStandard => 'Default';
-
-  @override
-  String get appearanceComposerBackgroundFrost => 'Frost blur';
-
-  @override
-  String get appearanceNavPillTitle => 'Вид переключателей';
-
-  @override
-  String get appearanceNavPillSubtitle =>
-      'Переключатель разделов на экране чатов';
-
-  @override
-  String get appearanceNavPillGlossy => 'Glossy';
-
-  @override
-  String get appearanceNavPillFrost => 'G-FrostBlur';
 
   @override
   String get playbackPillAt => 'в';
@@ -954,6 +963,16 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get appearanceGradientSubtitle => 'Объём и блики в Glossy-капсулах';
+
+  @override
+  String get appearanceElementsBlurTitle => 'Размытие элементов';
+
+  @override
+  String get appearanceElementsBlurSubtitle =>
+      'Матовое стекло на переключателе разделов и плавающих кнопках';
+
+  @override
+  String get appearanceMaterialYouEmpty => 'Пока пусто…';
 
   @override
   String get appearanceSpectrumTitle => 'Спектр на фоне';
@@ -1059,6 +1078,147 @@ class AppLocalizationsRu extends AppLocalizations {
   String get callTooltipExpand => 'Развернуть';
 
   @override
+  String get callExitFocus => 'Обычный вид';
+
+  @override
+  String get callEnterFullscreen => 'На весь экран';
+
+  @override
+  String get callExitFullscreen => 'Выйти из полноэкранного режима';
+
+  @override
+  String callScreenOf(String name) {
+    return 'Экран $name';
+  }
+
+  @override
+  String get callInfoTooltip => 'Техническая информация';
+
+  @override
+  String get callInfoHide => 'Скрыть информацию';
+
+  @override
+  String get callInfoAccount => 'Аккаунт MAX';
+
+  @override
+  String get callInfoCallId => 'ID в звонке';
+
+  @override
+  String get callInfoDeviceIndex => 'Номер устройства';
+
+  @override
+  String get callInfoTransport => 'Транспорт';
+
+  @override
+  String get callInfoGuess => 'Похоже на';
+
+  @override
+  String get callGuessBrowser => 'браузер';
+
+  @override
+  String get callGuessChromium => 'Chrome, Chromium или Safari';
+
+  @override
+  String get callGuessAndroidApp => 'приложение для Android';
+
+  @override
+  String get callGuessIosApp => 'приложение для iOS';
+
+  @override
+  String get callGuessNativeWebrtc => 'нативный libwebrtc';
+
+  @override
+  String get callInfoRole => 'Роль';
+
+  @override
+  String get callInfoRoleCreator => 'Создатель';
+
+  @override
+  String get callInfoRoleAdmin => 'Администратор';
+
+  @override
+  String get callInfoRoleMember => 'Участник';
+
+  @override
+  String get callInfoJoined => 'В звонке с';
+
+  @override
+  String get callInfoMedia => 'Медиа';
+
+  @override
+  String get callInfoMediaMic => 'микрофон';
+
+  @override
+  String get callInfoMediaCamera => 'камера';
+
+  @override
+  String get callInfoMediaScreen => 'экран';
+
+  @override
+  String get callInfoMediaNone => 'всё выключено';
+
+  @override
+  String get callInfoMediaConnected => 'Медиа подключено';
+
+  @override
+  String get callInfoYes => 'да';
+
+  @override
+  String get callInfoNo => 'нет';
+
+  @override
+  String get callInfoNetwork => 'Сеть';
+
+  @override
+  String callInfoNetworkValue(int percent, String quality) {
+    return '$percent% · $quality';
+  }
+
+  @override
+  String get callInfoNetworkGood => 'хорошая';
+
+  @override
+  String get callInfoNetworkMedium => 'средняя';
+
+  @override
+  String get callInfoNetworkBad => 'плохая';
+
+  @override
+  String get callInfoNetworkNoIssues =>
+      'хорошая, сервер не сообщал о проблемах';
+
+  @override
+  String get callInfoUnknown => 'нет данных';
+
+  @override
+  String get callInfoVideo => 'Видео';
+
+  @override
+  String get callInfoVideoStalled => 'зависло';
+
+  @override
+  String get callInfoHand => 'Рука';
+
+  @override
+  String callInfoHandRaisedAt(String time) {
+    return 'поднята в $time';
+  }
+
+  @override
+  String get callInfoModel => 'Модель';
+
+  @override
+  String get callInfoOs => 'Версия ОС';
+
+  @override
+  String get callInfoSdk => 'Версия SDK';
+
+  @override
+  String callNetworkTooltip(int percent) {
+    return 'Соединение $percent%';
+  }
+
+  @override
   String get callTooltipKometHub => 'Komet';
 
   @override
@@ -1090,6 +1250,138 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get callSpeaker => 'Динамик';
+
+  @override
+  String get callSwitchCamera => 'Переключить камеру';
+
+  @override
+  String get callsTabDeleteFailed => 'Не удалось удалить вызов';
+
+  @override
+  String get chatSettingsTitle => 'Настройки чатов и папок';
+
+  @override
+  String get chatSettingsTabChats => 'Чаты';
+
+  @override
+  String get chatSettingsTabFolders => 'Папки';
+
+  @override
+  String get chatSettingsArchiveOnPull => 'Архив при свайпе вниз';
+
+  @override
+  String get chatSettingsAutoDownloadTitle => 'Автозагрузка медиа';
+
+  @override
+  String get chatSettingsAutoDownloadPhoto => 'Фото';
+
+  @override
+  String get chatSettingsAutoDownloadVideo => 'Видео';
+
+  @override
+  String get chatSettingsAutoDownloadVoice => 'Голосовые';
+
+  @override
+  String get chatSettingsAutoDownloadVideoNote => 'Кружки';
+
+  @override
+  String get chatSettingsAutoplayTitle => 'Автовоспроизведение';
+
+  @override
+  String get chatSettingsAutoplayVideo => 'Видео';
+
+  @override
+  String get chatSettingsAutoplayVideoHint =>
+      'Без звука, ролики до минуты, если включена их автозагрузка';
+
+  @override
+  String get chatSettingsAutoplayGif => 'GIF';
+
+  @override
+  String get chatSettingsAutoplayAnimoji => 'Анимированные эмодзи';
+
+  @override
+  String get chatSettingsAutoplayVideoNote => 'Видеосообщения';
+
+  @override
+  String get chatSettingsReactionsTitle => 'Реакции';
+
+  @override
+  String get chatSettingsDoubleTapReaction => 'Реакция на двойной тап';
+
+  @override
+  String get chatSettingsDoubleTapReactionHint =>
+      'Ставится, если дважды коснуться сообщения. Настройка общая с другими устройствами.';
+
+  @override
+  String get chatSettingsDoubleTapReactionNone => 'Не ставить реакцию';
+
+  @override
+  String get chatSettingsDoubleTapReactionOff => 'Выкл.';
+
+  @override
+  String get chatSettingsDoubleTapReactionFailed =>
+      'Не удалось сохранить реакцию';
+
+  @override
+  String get archiveLockTitle => 'Пароль на архив';
+
+  @override
+  String get archiveLockPrompt => 'Введите пароль архива';
+
+  @override
+  String get archiveLockEnable => 'Установить пароль';
+
+  @override
+  String get archiveLockEnabled => 'Пароль на архив установлен';
+
+  @override
+  String get archiveLockChange => 'Сменить пароль';
+
+  @override
+  String get archiveLockChanged => 'Пароль архива изменён';
+
+  @override
+  String get archiveLockRelock => 'Блокировать архив';
+
+  @override
+  String get archiveLockRelockHint =>
+      'Сколько архив остаётся открытым после выхода из него. Если вернуться раньше, отсчёт начнётся заново.';
+
+  @override
+  String get archiveLockRelockNow => 'Сразу после выхода';
+
+  @override
+  String archiveLockRelockHours(int hours) {
+    return 'Через $hours ч';
+  }
+
+  @override
+  String get archiveLockDisable => 'Снять пароль';
+
+  @override
+  String get archiveLockDisableTitle => 'Снять пароль с архива?';
+
+  @override
+  String get archiveLockDisableMessage => 'Архив будет открываться без пароля.';
+
+  @override
+  String get archiveLockDisableAction => 'Снять';
+
+  @override
+  String get archiveLockDisabled => 'Пароль с архива снят';
+
+  @override
+  String get archiveLockOnDescription =>
+      'Архив открывается только по паролю и закрывается снова, если не заходить в него дольше выбранного времени.';
+
+  @override
+  String get archiveLockOffDescription =>
+      'Спрячьте архив за паролем: при входе он попросит четыре цифры.';
+
+  @override
+  String get archiveLockForgotHint =>
+      'Пароль архива не восстановить: если забудете его, придётся очистить данные Komet. После пяти неверных попыток ввод блокируется на пять минут.';
 
   @override
   String get callVideoLabel => 'Видео';
@@ -1960,7 +2252,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get securityWhoCanInvite => 'Кто может приглашать в чаты';
 
   @override
-  String get securityShowContact => 'Показывать контакт';
+  String get securityShowContent => 'Показывать контент';
 
   @override
   String get securityContentSafe => 'Безопасный';
@@ -1982,7 +2274,7 @@ class AppLocalizationsRu extends AppLocalizations {
       'Вы не сможете видеть статусы посещения других пользователей.';
 
   @override
-  String get securityConfidentialityHeader => 'КОНФИДЕНЦИАЛЬНОСТЬ';
+  String get securityConfidentialityHeader => 'Конфиденциальность';
 
   @override
   String get securityReadReceipts => 'Галочки «Прочитано»';
@@ -2231,6 +2523,52 @@ class AppLocalizationsRu extends AppLocalizations {
   String get cloudStorageSend => 'Отправить';
 
   @override
+  String get cloudStorageAboutTooltip => 'Как работает хранилище';
+
+  @override
+  String get cloudStorageAboutTitle => 'Как работает хранилище';
+
+  @override
+  String get cloudStorageAboutSubtitle =>
+      'Отдельного сервера нет: всё лежит в вашем аккаунте MAX';
+
+  @override
+  String get cloudStorageAboutGroupTitle => 'Это скрытая группа в MAX';
+
+  @override
+  String get cloudStorageAboutGroupBody =>
+      'Komet создаёт группу, в которой кроме вас никого нет, и отправляет туда файлы обычными сообщениями. В списке чатов, папках и счётчике непрочитанных Komet её не показывает.';
+
+  @override
+  String cloudStorageAboutNameTitle(String name) {
+    return 'Ваша группа называется $name';
+  }
+
+  @override
+  String cloudStorageAboutSampleNameTitle(String name) {
+    return 'Группа называется примерно так: $name';
+  }
+
+  @override
+  String get cloudStorageAboutNameBody =>
+      'Число в имени Komet вычисляет из id группы. Так он узнаёт своё хранилище и не путает его с чужими группами. Если переименовать группу, Komet перестанет её находить, а если удалить, файлы пропадут вместе с ней.';
+
+  @override
+  String get cloudStorageAboutOtherAppsTitle =>
+      'В других приложениях группа видна';
+
+  @override
+  String get cloudStorageAboutOtherAppsBody =>
+      'Официальный MAX и веб-версия покажут её как обычный чат: сервер не знает, что это хранилище.';
+
+  @override
+  String get cloudStorageAboutLinksTitle => 'Ссылки на скачивание временные';
+
+  @override
+  String get cloudStorageAboutLinksBody =>
+      'Ссылку выдаёт сервер MAX, и через какое-то время она истекает. Тогда просто создайте новую.';
+
+  @override
   String get digitalIdGosuslugiLinkUnavailable =>
       'Привязка Госуслуг недоступна на этой платформе. Сделайте это в приложении на телефоне.';
 
@@ -2352,6 +2690,27 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get attachSheetGallery => 'Галерея';
+
+  @override
+  String get attachSheetAlbumsTitle => 'Альбомы';
+
+  @override
+  String get attachSheetAllMedia => 'Все фото и видео';
+
+  @override
+  String get attachSheetSort => 'Сортировка';
+
+  @override
+  String get attachSheetSortNewestFirst => 'По дате: сначала новые';
+
+  @override
+  String get attachSheetSortOldestFirst => 'По дате: сначала старые';
+
+  @override
+  String get attachSheetSortNameAsc => 'По имени: от А до Я';
+
+  @override
+  String get attachSheetSortNameDesc => 'По имени: от Я до А';
 
   @override
   String get attachSheetPoll => 'Опрос';
@@ -3027,6 +3386,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get pasteAttachFailed => 'В буфере обмена нечего вставить';
 
   @override
+  String get chatDropHint => 'Отпустите, чтобы отправить';
+
+  @override
+  String get chatDropFoldersUnsupported =>
+      'Папку отправить нельзя, перетащите сами файлы';
+
+  @override
   String get profileQrTitle => 'Мой QR-код';
 
   @override
@@ -3093,6 +3459,85 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get authLimitsConfirm => 'Понятно';
+
+  @override
+  String get authLimitsServerNote =>
+      'Это ограничения от сервера MAX. Komet на них не влияет.';
+
+  @override
+  String get storageTitle => 'Память';
+
+  @override
+  String get storageTotalCaption => 'Komet занимает на устройстве';
+
+  @override
+  String get storageCategoryPhotos => 'Фото и картинки';
+
+  @override
+  String get storageCategoryVideos => 'Видео';
+
+  @override
+  String get storageCategoryFiles => 'Файлы';
+
+  @override
+  String get storageCategoryVoice => 'Голосовые';
+
+  @override
+  String get storageCategoryStickers => 'Стикеры';
+
+  @override
+  String get storageCategoryKept => 'Удалённые медиа';
+
+  @override
+  String get storageCategoryKeptHint => 'Сервер их уже стёр, заново не скачать';
+
+  @override
+  String get storageCategoryDatabase => 'Сообщения и чаты';
+
+  @override
+  String get storageCategoryDatabaseHint => 'История переписки, не очищается';
+
+  @override
+  String get storageScanning => 'Считаем…';
+
+  @override
+  String get storageScanFailed => 'Не удалось посчитать занятое место';
+
+  @override
+  String get storageEmpty => 'Кэш пуст';
+
+  @override
+  String storageClear(String size) {
+    return 'Очистить $size';
+  }
+
+  @override
+  String get storageNothingSelected => 'Выберите, что очистить';
+
+  @override
+  String storageCleared(String size) {
+    return 'Освобождено $size';
+  }
+
+  @override
+  String get storageClearFailed => 'Не удалось очистить кэш';
+
+  @override
+  String get storageClearKeptMessage =>
+      'Удалённые медиа больше не получится скачать: сервер их уже стёр. Очистить их тоже?';
+
+  @override
+  String get storageClearKeptConfirm => 'Очистить';
+
+  @override
+  String get storageLimitTitle => 'Максимальный размер кэша';
+
+  @override
+  String get storageLimitUnlimited => 'Без лимита';
+
+  @override
+  String get storageLimitHint =>
+      'Когда кэш перерастает лимит, Komet удаляет то, что дольше всего не открывали. Удалённые медиа и сообщения лимит не трогает.';
 
   @override
   String get e2eeTitle => 'Сквозное шифрование';
@@ -3341,10 +3786,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get linkQrUnavailable => 'Не удалось получить ссылку';
 
   @override
-  String get notificationsDesktopNote =>
-      'На компьютере уведомления пока не показываются. Ниже — push-настройки аккаунта для телефонов.';
-
-  @override
   String get fileNoAppToOpen =>
       'Нет приложения, чтобы открыть этот файл. Выберите, куда его отправить.';
 
@@ -3498,6 +3939,25 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get mediaDevicesVideoNoteRearHint =>
       'Иначе кружок открывается с фронтальной';
+
+  @override
+  String get mediaDevicesVideoNoteResolution => 'Разрешение';
+
+  @override
+  String get mediaDevicesVideoNoteResolutionHint =>
+      'Чем выше, тем чётче кружок и тяжелее файл';
+
+  @override
+  String get mediaDevicesVideoNoteFps => 'Частота кадров';
+
+  @override
+  String get mediaDevicesVideoNoteFpsHint =>
+      'При 60 движение плавнее, а файл тяжелее. Камера без 60 кадров снимет с наибольшей доступной частотой';
+
+  @override
+  String mediaDevicesVideoNoteFpsValue(int fps) {
+    return '$fps кадр/с';
+  }
 
   @override
   String get chatPreviewMarkRead => 'Пометить прочитанным';
@@ -4177,6 +4637,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatScreenMenuMute => 'Отключить уведомления';
 
   @override
+  String get chatScreenMenuSendMoney => 'Перевести деньги';
+
+  @override
+  String get moneyTransferAppTitle => 'Деньги';
+
+  @override
   String get chatScreenMenuChangeWallpaper => 'Изменить обои';
 
   @override
@@ -4224,6 +4690,33 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get channelRecommendationsTitle => 'Рекомендуемые каналы';
+
+  @override
+  String get channelRecommendationsHide => 'Скрыть рекомендации';
+
+  @override
+  String get channelRecommendationsHidden =>
+      'Рекомендации скрыты в этом канале';
+
+  @override
+  String get channelRecommendationsHideEverywhere => 'Скрыть везде';
+
+  @override
+  String get channelPostViews => 'Просмотры';
+
+  @override
+  String get kometSettingsHideRecommendations =>
+      'Не показывать рекомендуемые каналы';
+
+  @override
+  String get kometSettingsHideRecommendationsSubtitle =>
+      'Похожие каналы внизу канала';
+
+  @override
+  String get chatScreenFormatMenu => 'Форматирование';
+
+  @override
   String get chatScreenFormatHeading => 'Заголовок';
 
   @override
@@ -4242,10 +4735,100 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatScreenFormatMonospace => 'Моноширинный';
 
   @override
+  String get chatScreenFormatRed => 'Красный';
+
+  @override
   String get chatScreenFormatQuote => 'Цитата';
 
   @override
   String get chatScreenFormatMention => 'Упоминание';
+
+  @override
+  String get chatScreenFormatLink => 'Ссылка';
+
+  @override
+  String get chatScreenFormatLinkTitle => 'Добавить ссылку';
+
+  @override
+  String get chatScreenFormatLinkHint => 'https://example.com';
+
+  @override
+  String get chatScreenFormatLinkInvalid => 'Это не похоже на ссылку';
+
+  @override
+  String get linkConfirmTitle => 'Открыть ссылку?';
+
+  @override
+  String get linkConfirmBody =>
+      'Вы ещё не переходили на этот сайт. Проверьте адрес выше, прежде чем открывать.';
+
+  @override
+  String get linkConfirmOpen => 'Перейти';
+
+  @override
+  String get linkConfirmCancel => 'Отмена';
+
+  @override
+  String get linkConfirmSuspiciousTitle => 'Подозрительная ссылка';
+
+  @override
+  String get linkConfirmOpenAnyway => 'Всё равно открыть';
+
+  @override
+  String get linkConfirmDontOpen => 'Не открывать';
+
+  @override
+  String linkWarningTextMismatch(String shown, String host) {
+    return 'Текст показывает $shown, а ведёт на $host';
+  }
+
+  @override
+  String linkWarningUserInfo(String host) {
+    return 'На самом деле ведёт на $host';
+  }
+
+  @override
+  String linkWarningMixedScripts(String letters) {
+    return 'Смешаны алфавиты: $letters';
+  }
+
+  @override
+  String linkWarningLookalike(String script) {
+    return 'Только похоже на латиницу: буквы из $script';
+  }
+
+  @override
+  String get linkWarningInvisible => 'В адресе спрятаны невидимые символы';
+
+  @override
+  String get linkWarningIpAddress => 'Ведёт на IP-адрес, а не на сайт';
+
+  @override
+  String linkWarningScheme(String scheme) {
+    return 'Откроется не в браузере, а через $scheme:';
+  }
+
+  @override
+  String linkWarningLetter(String letter) {
+    return '«$letter»';
+  }
+
+  @override
+  String linkWarningLetters(String letters, String script) {
+    return '$letters из $script';
+  }
+
+  @override
+  String get linkScriptLatin => 'латиницы';
+
+  @override
+  String get linkScriptCyrillic => 'кириллицы';
+
+  @override
+  String get linkScriptGreek => 'греческого алфавита';
+
+  @override
+  String get linkScriptArmenian => 'армянского алфавита';
 
   @override
   String get chatScreenMessageTooLong =>
@@ -4383,6 +4966,51 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatWallpaperSheetSampleOutgoing => 'Выглядит отлично 🔥';
 
   @override
+  String get chatWallpaperSheetInherit => 'Как у всех';
+
+  @override
+  String get chatWallpaperSheetCurrent => 'Текущие';
+
+  @override
+  String get chatWallpaperSheetCustomGradient => 'Градиент';
+
+  @override
+  String get chatWallpaperSheetApply => 'Применить';
+
+  @override
+  String get chatWallpaperPresetKomet => 'Комета';
+
+  @override
+  String get chatWallpaperPresetGraphite => 'Графит';
+
+  @override
+  String get chatWallpaperPresetInk => 'Чернила';
+
+  @override
+  String get chatWallpaperPresetPine => 'Хвоя';
+
+  @override
+  String get chatWallpaperPresetPlum => 'Слива';
+
+  @override
+  String get chatWallpaperPresetUmber => 'Умбра';
+
+  @override
+  String get chatWallpaperPresetPaper => 'Бумага';
+
+  @override
+  String get chatWallpaperPresetFog => 'Туман';
+
+  @override
+  String get chatWallpaperPresetSage => 'Шалфей';
+
+  @override
+  String get chatWallpaperPresetSand => 'Песок';
+
+  @override
+  String get chatWallpaperPresetPowder => 'Пудра';
+
+  @override
   String get chatWallpaperSheetNone => 'Без обоев';
 
   @override
@@ -4458,24 +5086,24 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get messageActionsScreenTitle => 'Меню действий';
+  String get appearanceMessageActionsTitle => 'Меню действий';
 
   @override
-  String get messageActionsScreenRadialDescription =>
+  String get appearanceMessageActionsRadial => 'Радиальное';
+
+  @override
+  String get appearanceMessageActionsRadialDescription =>
       'Дуга кнопок вокруг точки нажатия';
 
   @override
-  String get messageActionsScreenList => 'Список';
+  String get appearanceMessageActionsList => 'Список';
 
   @override
-  String get messageActionsScreenListDescription =>
+  String get appearanceMessageActionsListDescription =>
       'Вертикальное меню рядом с сообщением';
 
   @override
-  String get messageActionsScreenStyle => 'Стиль';
-
-  @override
-  String get messageActionsScreenStyleSubtitle =>
+  String get appearanceMessageActionsSubtitle =>
       'Как показывается меню при долгом нажатии на сообщение';
 
   @override
@@ -4483,6 +5111,10 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get webAppScreenCloseConfirm => 'Закрыть мини-приложение?';
+
+  @override
+  String get webAppUnsupportedPlatform =>
+      'Мини-приложения пока недоступны в версии для Linux';
 
   @override
   String get voiceRecordUnsupported =>
@@ -4608,6 +5240,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chatListArchive => 'Архив';
 
   @override
+  String get chatListArchivePull => 'Потяните, чтобы открыть архив';
+
+  @override
+  String get chatListArchiveRelease => 'Отпустите, чтобы открыть архив';
+
+  @override
   String get chatListNewStory => 'Новая история';
 
   @override
@@ -4668,6 +5306,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get callsTabPeerUnknown => 'Не удалось определить собеседника';
 
   @override
+  String get callPeerIsBot => 'Ботам нельзя звонить';
+
+  @override
   String get callsTabAlreadyInCall => 'Звонок уже идёт';
 
   @override
@@ -4701,6 +5342,13 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get chatEncryptionEnabled => 'Шифрование включено';
+
+  @override
+  String get e2eeLegacyDescription =>
+      'В этом чате включено старое шифрование по ключу. Оно работает отдельно от нового и не выключается здесь само. Выключите его, чтобы сообщения шли без ключа.';
+
+  @override
+  String get e2eeLegacyDisable => 'Выключить старое шифрование';
 
   @override
   String get chatEncryptionDisabled => 'Шифрование отключено';
@@ -4874,9 +5522,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get customizationChatBackground => 'Фон чатов';
 
   @override
-  String get customizationMessageActions => 'Меню действий';
-
-  @override
   String get customizationAppIcon => 'Иконка приложения';
 
   @override
@@ -4889,6 +5534,34 @@ class AppLocalizationsRu extends AppLocalizations {
   String folderActionDeleteConfirm(String title) {
     return 'Удалить папку «$title»? Чаты останутся на месте.';
   }
+
+  @override
+  String get foldersSettingsCreate => 'Создать папку';
+
+  @override
+  String get foldersSettingsRecommended => 'Рекомендованные папки';
+
+  @override
+  String get foldersSettingsPresetUnread => 'Новые';
+
+  @override
+  String get foldersSettingsPresetPersonal => 'Личные';
+
+  @override
+  String get foldersSettingsPresetChannels => 'Каналы';
+
+  @override
+  String get foldersSettingsAdd => 'Добавить';
+
+  @override
+  String get foldersSettingsReorder => 'Перетащите, чтобы изменить порядок';
+
+  @override
+  String get foldersSettingsReorderFailed =>
+      'Не удалось изменить порядок папок';
+
+  @override
+  String get foldersSettingsAddFailed => 'Не удалось добавить папку';
 
   @override
   String get folderActionDeleteFailed => 'Не удалось удалить папку';
@@ -5258,9 +5931,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loginSuccessGreetingEasterEgg => 'Вы нашли пасхалку!';
 
   @override
-  String get chatTextSendUnknownCommand => 'ТАКОЙ КОМАНДЫ НЕТУ🚨🚨🚨';
-
-  @override
   String get chatTextSendSaveFailed => 'Не удалось сохранить сообщение';
 
   @override
@@ -5277,6 +5947,17 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get voiceBubbleTranscriptionFailed => 'ошибка транскрибации';
+
+  @override
+  String get voiceSaved => 'Голосовое сохранено';
+
+  @override
+  String voiceSavedTo(String folder) {
+    return 'Голосовое сохранено в $folder';
+  }
+
+  @override
+  String get voiceSavedToFiles => 'Голосовое сохранено в приложение «Файлы»';
 
   @override
   String chatInfoStoryCount(int count) {
@@ -5488,6 +6169,10 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get kometSettingsAntiReadSubtitle => 'Нечиталка сообщений';
+
+  @override
+  String get kometSettingsAntiStoryViewSubtitle =>
+      'Смотреть истории так, чтобы автор не видел вас среди зрителей. Реакции и ответы он всё равно увидит';
 
   @override
   String get kometSettingsSelfOnlineCheckSubtitle =>
@@ -6140,6 +6825,86 @@ class AppLocalizationsRu extends AppLocalizations {
   String get stickerPanelStickersTab => 'Стикеры';
 
   @override
+  String get stickerPanelPinned => 'Закреплённые';
+
+  @override
+  String get stickerPanelClearRecent => 'Очистить недавние';
+
+  @override
+  String get stickerPanelClearRecentTitle => 'Очистить недавние?';
+
+  @override
+  String get stickerPanelClearRecentBody =>
+      'Недавно отправленные стикеры пропадут из списка.';
+
+  @override
+  String get stickerPanelClearRecentFailed => 'Не удалось очистить недавние';
+
+  @override
+  String get stickerSettingsTitle => 'Настройки стикеров';
+
+  @override
+  String get stickerSettingsRecent => 'Недавние';
+
+  @override
+  String get stickerSettingsFavorites => 'Избранные';
+
+  @override
+  String get stickerRecentTitle => 'Недавние стикеры';
+
+  @override
+  String get stickerFavoritesTitle => 'Избранные стикеры';
+
+  @override
+  String get stickerListEdit => 'Изменить';
+
+  @override
+  String stickerListSelected(int count) {
+    return 'Выбрано: $count';
+  }
+
+  @override
+  String stickerListDeleteTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Удалить $count стикера?',
+      many: 'Удалить $count стикеров?',
+      few: 'Удалить $count стикера?',
+      one: 'Удалить $count стикер?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stickerListDeleteBody =>
+      'Они пропадут из этого списка на всех ваших устройствах.';
+
+  @override
+  String get stickerListDelete => 'Удалить';
+
+  @override
+  String get stickerListDeleteFailed => 'Не удалось удалить стикеры';
+
+  @override
+  String get stickerSetsTitle => 'Наборы стикеров';
+
+  @override
+  String get stickerSetsAdd => 'Добавить';
+
+  @override
+  String get stickerSetsSearchHint => 'Поиск наборов';
+
+  @override
+  String get chatSettingsStickers => 'Недавние и избранные';
+
+  @override
+  String get stickerPinned => 'Стикер закреплён';
+
+  @override
+  String get stickerUnpinned => 'Стикер откреплён';
+
+  @override
   String get callBubbleGroupVideo => 'Групповой видеозвонок';
 
   @override
@@ -6202,6 +6967,24 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get messageRowEditTitle => 'Изменить сообщение';
+
+  @override
+  String get editMediaAdd => 'Добавить фото';
+
+  @override
+  String get editMediaEdit => 'Редактировать';
+
+  @override
+  String get editMediaReplace => 'Заменить';
+
+  @override
+  String get editMediaRemove => 'Убрать';
+
+  @override
+  String get editMediaRetry => 'Повторить загрузку';
+
+  @override
+  String get editMediaUploadFailed => 'Не удалось загрузить фото';
 
   @override
   String get locationBubbleOpenInMaps => 'Открыть на карте';
@@ -6406,46 +7189,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get transcriptionNotRecognized => 'Не распознали голос';
 
   @override
-  String get chatWallpaperThemeOcean => 'Океан';
-
-  @override
-  String get chatWallpaperThemeSunset => 'Закат';
-
-  @override
-  String get chatWallpaperThemeLavender => 'Лаванда';
-
-  @override
-  String get chatWallpaperThemeMint => 'Мята';
-
-  @override
-  String get chatWallpaperThemeGraphite => 'Графит';
-
-  @override
-  String get chatWallpaperThemeSky => 'Небо';
-
-  @override
-  String get chatWallpaperThemePeach => 'Персик';
-
-  @override
-  String get chatWallpaperThemeForest => 'Лес';
-
-  @override
-  String get chatWallpaperThemeGrape => 'Виноград';
-
-  @override
-  String get chatWallpaperThemeNight => 'Ночь';
-
-  @override
-  String get chatWallpaperThemeRose => 'Роза';
-
-  @override
-  String get chatWallpaperThemeAmber => 'Янтарь';
-
-  @override
   String get mediaSaveFileNotFound => 'файл не найден';
 
   @override
   String get mediaSaveNoGalleryAccess => 'нет доступа к галерее';
+
+  @override
+  String get mediaSaveNoStorageAccess => 'нет доступа к памяти';
 
   @override
   String get commandShrugDescription => 'отправить каомодзи';
@@ -6466,4 +7216,267 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get avatarPickerFilesSubtitle => 'Если нужного фото нет в галерее';
+
+  @override
+  String get temporaryPasswordRecoveryTitle =>
+      'Восстановление временного пароля';
+
+  @override
+  String get temporaryPasswordRecoveryMessage =>
+      'Временный пароль MAX не удалось снять. Покажите его в безопасном месте и сохраните перед удалением или сменой пароля в настройках MAX.';
+
+  @override
+  String get temporaryPasswordRecoveryShow => 'Показать пароль';
+
+  @override
+  String get temporaryPasswordRecoveryInstructions =>
+      'Снимите или смените этот пароль в MAX перед удалением Komet. Не отправляйте его на скриншотах или в логах.';
+
+  @override
+  String get settingsTabCloudStorage => 'Облачное хранилище';
+
+  @override
+  String get settingsTabPrivacyPolicy => 'Политика конфиденциальности';
+
+  @override
+  String get settingsTabTermsOfUse => 'Условия использования';
+
+  @override
+  String get appIconScreenHintIos =>
+      'Иконка сменится сразу, iOS подтвердит это системным диалогом.';
+
+  @override
+  String get webPushIntroAppStore =>
+      'Обычные пуши сервер MAX шлёт только официальному приложению MAX, поэтому Комет получает их через веб-приложение на экране «Домой». Уведомления шлёт сам сервер MAX через Apple, а показывает их отдельная иконка.\n\nДля этого нужна веб-сессия. Комет создаст её и подтвердит сам, с этого же устройства — вводить номер и код не придётся.';
+
+  @override
+  String get callGroupTitle => 'Групповой звонок';
+
+  @override
+  String get callInviteTitle => 'Пригласите других участников';
+
+  @override
+  String get callInviteCopyLink => 'Скопировать ссылку';
+
+  @override
+  String get callInviteAdd => 'Добавить участников';
+
+  @override
+  String get callLinkLabel => 'Ссылка';
+
+  @override
+  String get callLinkUnavailable => 'Не удалось получить ссылку на звонок';
+
+  @override
+  String get callInvited => 'Приглашения отправлены';
+
+  @override
+  String get callInviteFailed => 'Не удалось пригласить участников';
+
+  @override
+  String get callHandLoweredByAdmin => 'Администратор опустил вашу руку';
+
+  @override
+  String get callAllHandsLoweredByAdmin => 'Администратор опустил всем руки';
+
+  @override
+  String get callMicMutedByAdmin => 'Администратор выключил ваш микрофон';
+
+  @override
+  String get callCameraMutedByAdmin => 'Администратор выключил вашу камеру';
+
+  @override
+  String get callScreenMutedByAdmin =>
+      'Администратор остановил вашу демонстрацию экрана';
+
+  @override
+  String get callMediaLocked => 'Администратор запретил это в звонке';
+
+  @override
+  String callRecordingBy(String name) {
+    return '$name записывает звонок';
+  }
+
+  @override
+  String get callRecordingSelf => 'Вы записываете звонок';
+
+  @override
+  String get callRecordingSomeone => 'Идёт запись звонка';
+
+  @override
+  String callRecordName(String date) {
+    return 'Запись звонка $date';
+  }
+
+  @override
+  String get callChat => 'Чат';
+
+  @override
+  String get callMore => 'Ещё';
+
+  @override
+  String get callSettingsTitle => 'Настройки звонка';
+
+  @override
+  String get callSettingsMicrophone => 'Микрофон';
+
+  @override
+  String get callSettingsParticipantsCan => 'Участники звонка могут';
+
+  @override
+  String get callSettingsAllowMic => 'Включать микрофон';
+
+  @override
+  String get callSettingsAllowCamera => 'Включать камеру';
+
+  @override
+  String get callSettingsAllowScreen => 'Показывать экран';
+
+  @override
+  String get callSettingsAllowRecord => 'Записывать звонок';
+
+  @override
+  String get callMuteAllMics => 'Выключить все микрофоны';
+
+  @override
+  String get callMuteAllCameras => 'Выключить все камеры';
+
+  @override
+  String get callParticipantMessage => 'Написать';
+
+  @override
+  String get callParticipantStopScreen => 'Остановить демонстрацию';
+
+  @override
+  String get callParticipantMuteCamera => 'Выключить камеру';
+
+  @override
+  String callParticipantRemoveConfirm(String name) {
+    return 'Удалить $name из звонка?';
+  }
+
+  @override
+  String get callParticipantsSearchHint => 'Поиск участников';
+
+  @override
+  String get callShareScreen => 'Показать экран';
+
+  @override
+  String get callYouLoweredAllHands => 'Вы опустили всем руки';
+
+  @override
+  String get callYouLoweredHand => 'Вы опустили руку участнику';
+
+  @override
+  String whatsNewBannerTitle(Object version) {
+    return 'Комета обновилась до $version';
+  }
+
+  @override
+  String get whatsNewBannerSubtitle => 'Нажмите, чтобы узнать, что нового';
+
+  @override
+  String whatsNewSheetTitle(Object version) {
+    return 'Что нового в $version';
+  }
+
+  @override
+  String get whatsNewNoNotes => 'Исправления ошибок и улучшения стабильности.';
+
+  @override
+  String get whatsNewDone => 'Понятно';
+
+  @override
+  String get appearanceAnimationsTitle => 'Анимации';
+
+  @override
+  String get appearanceAnimationsSubtitle =>
+      'Переходы между экранами и вкладками. Выключите, чтобы всё открывалось сразу';
+
+  @override
+  String get login2faRequiredTitle =>
+      'Установите пароль на устройстве, где вы вошли в MAX';
+
+  @override
+  String get login2faRequiredSteps =>
+      'Для этого перейдите в Настройки → Безопасность → Пароль для входа';
+
+  @override
+  String get login2faRequiredThen => 'Затем вы сможете войти здесь';
+
+  @override
+  String get login2faRequiredNotKomet =>
+      'Это ошибка НЕ ОТ Komet. Это обязательство от МАХ, всем.';
+
+  @override
+  String get login2faRequiredRetry => 'Попробовать войти снова';
+
+  @override
+  String get login2faRequiredNoAccess => 'У меня нет доступа к устройству';
+
+  @override
+  String get login2faRequiredLinkFailed =>
+      'Не удалось открыть go.max.ru/reset-session';
+
+  @override
+  String get informerBannerServerNote =>
+      'Это объявления от сервера МАХ. К Komet не относятся.';
+
+  @override
+  String get storyReplyHint => 'Ответить';
+
+  @override
+  String get storyReplySent => 'Отправили сообщение';
+
+  @override
+  String get storyReplyFailed => 'Не удалось отправить ответ';
+
+  @override
+  String get storyReplyEncrypted =>
+      'В этом чате включено шифрование — ответить на историю нельзя';
+
+  @override
+  String get storyLikeFailed => 'Не удалось поставить реакцию';
+
+  @override
+  String get storyReplyLabel => 'История';
+
+  @override
+  String get storyReplyGone => 'Здесь была история';
+
+  @override
+  String get storyReplyUnavailable => 'История больше не доступна';
+
+  @override
+  String get storyMenuProfile => 'Перейти в профиль';
+
+  @override
+  String get storyMenuHide => 'Скрыть истории автора';
+
+  @override
+  String get storyMenuSave => 'Сохранить в галерею';
+
+  @override
+  String get storyMenuReport => 'Пожаловаться';
+
+  @override
+  String get storyHiddenNotice => 'Истории автора скрыты';
+
+  @override
+  String get storyHideFailed => 'Не удалось скрыть истории';
+
+  @override
+  String get storyReplyOpenChat => 'Посмотреть';
+
+  @override
+  String get storyHiddenUndo => 'Вернуть';
+
+  @override
+  String get storyMenuShow => 'Показывать истории автора';
+
+  @override
+  String get storyShownNotice => 'Истории автора снова видны';
+
+  @override
+  String get storyShowFailed => 'Не удалось вернуть истории';
 }

@@ -17,6 +17,7 @@ class DirectionalDragRecognizer extends HorizontalDragGestureRecognizer {
   final Map<int, Offset> _initialPositions = {};
   final Map<int, VelocityTracker> _velocityTrackers = {};
   final Map<int, double> _currentDeltaX = {};
+  bool _accepted = false;
 
   @override
   void addAllowedPointer(PointerDownEvent event) {
@@ -36,9 +37,10 @@ class DirectionalDragRecognizer extends HorizontalDragGestureRecognizer {
       );
       final initial = _initialPositions[event.pointer];
       if (initial != null) {
-        final dx = (event.position.dx - initial.dx) * direction;
+        final delta = event.position - initial;
+        final dx = delta.dx * direction;
         _currentDeltaX[event.pointer] = dx;
-        if (dx < -kTouchSlop) {
+        if (dx < -kTouchSlop || (!_accepted && _isMostlyVertical(delta))) {
           stopTrackingPointer(event.pointer);
           _cleanup(event.pointer);
           return;
@@ -74,6 +76,15 @@ class DirectionalDragRecognizer extends HorizontalDragGestureRecognizer {
     return false;
   }
 
+  static bool _isMostlyVertical(Offset delta) =>
+      delta.dy.abs() > kTouchSlop && delta.dy.abs() > delta.dx.abs();
+
+  @override
+  void acceptGesture(int pointer) {
+    _accepted = true;
+    super.acceptGesture(pointer);
+  }
+
   void _cleanup(int pointer) {
     _initialPositions.remove(pointer);
     _velocityTrackers.remove(pointer);
@@ -83,6 +94,7 @@ class DirectionalDragRecognizer extends HorizontalDragGestureRecognizer {
   @override
   void didStopTrackingLastPointer(int pointer) {
     _cleanup(pointer);
+    _accepted = false;
     super.didStopTrackingLastPointer(pointer);
   }
 

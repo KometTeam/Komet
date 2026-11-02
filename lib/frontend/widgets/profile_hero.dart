@@ -33,14 +33,20 @@ class ProfileHeroAvatar extends StatelessWidget {
     final from = _AvatarHeroChild.of(fromHeroContext);
     final to = _AvatarHeroChild.of(toHeroContext);
     final sharpest = from.size >= to.size ? from : to;
+    final backdrop = identical(sharpest, from) ? to : from;
     return Material(
       type: MaterialType.transparency,
-      child: FittedBox(
-        fit: BoxFit.fill,
-        child: SizedBox.square(dimension: sharpest.size, child: sharpest.child),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [_fitted(backdrop), _fitted(sharpest)],
       ),
     );
   }
+
+  static Widget _fitted(_AvatarHeroChild avatar) => FittedBox(
+    fit: BoxFit.fill,
+    child: SizedBox.square(dimension: avatar.size, child: avatar.child),
+  );
 }
 
 class ProfileHeroName extends StatelessWidget {
@@ -96,6 +102,58 @@ class ProfileHeroName extends StatelessWidget {
       ),
     );
   }
+}
+
+class ProfileHeroBadge extends StatelessWidget {
+  const ProfileHeroBadge({
+    super.key,
+    required this.tag,
+    required this.size,
+    required this.child,
+  });
+
+  final Object? tag;
+  final double size;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final tag = this.tag;
+    if (tag == null) return child;
+    return Hero(
+      tag: ('profile-badge', tag),
+      flightShuttleBuilder: _buildFlyingBadge,
+      child: _BadgeHeroChild(size: size, child: child),
+    );
+  }
+
+  static Widget _buildFlyingBadge(
+    BuildContext flightContext,
+    Animation<double> animation,
+    HeroFlightDirection direction,
+    BuildContext fromHeroContext,
+    BuildContext toHeroContext,
+  ) {
+    final from = _BadgeHeroChild.of(fromHeroContext);
+    final to = _BadgeHeroChild.of(toHeroContext);
+    final sharpest = from.size >= to.size ? from : to;
+    return FittedBox(
+      child: SizedBox.square(dimension: sharpest.size, child: sharpest.child),
+    );
+  }
+}
+
+class _BadgeHeroChild extends StatelessWidget {
+  const _BadgeHeroChild({required this.size, required this.child});
+
+  final double size;
+  final Widget child;
+
+  static _BadgeHeroChild of(BuildContext heroContext) =>
+      (heroContext.widget as Hero).child as _BadgeHeroChild;
+
+  @override
+  Widget build(BuildContext context) => child;
 }
 
 class _AvatarHeroChild extends StatelessWidget {

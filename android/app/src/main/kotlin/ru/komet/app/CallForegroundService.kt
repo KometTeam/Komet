@@ -34,6 +34,11 @@ class CallForegroundService : Service() {
 
         fun setScreenShare(ctx: Context, enabled: Boolean, caller: String) {
             screenShare = enabled
+            val service = running
+            if (service != null) {
+                service.startAsForeground(caller)
+                return
+            }
             val intent = Intent(ctx, CallForegroundService::class.java).apply {
                 action = ACTION_SCREEN_SHARE
                 putExtra(CallConst.EXTRA_CALLER, caller)
@@ -161,6 +166,11 @@ class CallForegroundService : Service() {
             }
         } catch (e: Exception) {
             Log.w("KometFcm", "startForeground failed: ${e.message}")
+            if (screenShare) {
+                screenShare = false
+                startAsForeground(caller)
+                return
+            }
             stopSelf()
         }
     }

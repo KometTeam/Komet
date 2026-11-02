@@ -12,6 +12,17 @@ final RegExp linkPattern = RegExp(
 
 String linkTarget(String raw) => raw.contains('://') ? raw : 'https://$raw';
 
+String? linkFromInput(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty || trimmed.contains(RegExp(r'\s'))) return null;
+  final target = linkTarget(trimmed);
+  final uri = Uri.tryParse(target);
+  if (uri == null || uri.host.isEmpty) return null;
+  final web = uri.scheme == 'http' || uri.scheme == 'https';
+  if (web && !uri.host.contains('.')) return null;
+  return target;
+}
+
 class LinkText extends StatefulWidget {
   final String text;
   final TextStyle style;

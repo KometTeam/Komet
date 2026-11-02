@@ -48,6 +48,9 @@ class FkmBridge {
   Future<void> setConnected(bool connected) =>
       _invoke<void>('setConnected', {'connected': connected});
 
+  Future<void> setUnread(int count) =>
+      _invoke<void>('setUnread', {'count': count});
+
   Future<void> showMessage(Map<String, String> data) =>
       _invoke<void>('showMessage', {'data': data});
 
@@ -78,6 +81,9 @@ class FkmBridge {
 
   Future<void> requestIgnoreBatteryOptimizations() =>
       _invoke<void>('requestIgnoreBatteryOptimizations');
+
+  Future<void> openBatteryOptimizationSettings() =>
+      _invoke<void>('openBatteryOptimizationSettings');
 
   // #***! ошибки канала не пробрасываем, без FKM просто не будет пушей
   Future<T?> _invoke<T>(String method, [Map<String, dynamic>? args]) async {

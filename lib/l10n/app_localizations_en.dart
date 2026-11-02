@@ -9,6 +9,14 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get shareEncryptedUnsupported =>
+      'Sharing to an encrypted chat is not supported yet. Open the chat and send the message there.';
+
+  @override
+  String get chatEncryptedUnsupportedMedia =>
+      'This attachment type cannot be encrypted yet. Sending was cancelled.';
+
+  @override
   String get loginTitle => 'Sign in to Komet';
 
   @override
@@ -118,6 +126,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageNameEn => 'English';
 
   @override
+  String get languageServerTitle => 'Use this language on the server too';
+
+  @override
+  String get languageServerSubtitle =>
+      'When on, built-in folder names, server error messages and some other built-in elements come in the language you chose. By default they are not translated.';
+
+  @override
   String get selectCountryTitle => 'Select country';
 
   @override
@@ -128,12 +143,20 @@ class AppLocalizationsEn extends AppLocalizations {
       'We sent an SMS with a verification code to your phone number.';
 
   @override
+  String get codeConfirmationCheckMaxChat =>
+      'Check the “Verification codes” chat in MAX.';
+
+  @override
+  String get loginSlowSmsHint =>
+      'Signing in this way takes longer than usual. Please wait and don\'t leave.';
+
+  @override
   String codeResendInSeconds(int seconds) {
     return 'Resend in $seconds s.';
   }
 
   @override
-  String get codeResendSms => 'Resend code via SMS';
+  String get codeResendSms => 'Resend code';
 
   @override
   String get codeError2faMissing => 'Error: missing data for 2FA';
@@ -623,6 +646,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgActionsCopyLink => 'Copy link';
 
   @override
+  String get msgActionsSave => 'Save';
+
+  @override
   String get msgActionsSelectAll => 'Select all';
 
   @override
@@ -645,6 +671,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get msgActionsUnpin => 'Unpin';
+
+  @override
+  String get msgActionsPinSticker => 'Pin sticker';
+
+  @override
+  String get msgActionsUnpinSticker => 'Unpin sticker';
 
   @override
   String get pinnedMessageTitle => 'Pinned message';
@@ -700,18 +732,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Push notifications are not available on iOS yet.';
 
   @override
-  String get notificationsTitle => 'Notifications';
-
-  @override
-  String get notificationsFkmSectionTitle =>
-      'Notifications without Google (FKM)';
+  String get notificationsTitle => 'Notifications and sound';
 
   @override
   String get notificationsFkmEnableLabel => 'Enable notifications';
-
-  @override
-  String get notificationsFkmEnableSubtitle =>
-      'Komet keeps its own connection to the server and shows notifications itself. A service notification will stay in the shade while this is on.';
 
   @override
   String get notificationsFkmUnsupported => 'FKM is Android-only';
@@ -738,28 +762,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Notifications will arrive over the app’s own background connection, and a permanent service notification will stay in the shade. You can turn FKM off right from it.';
 
   @override
-  String get notificationsMainSectionTitle => 'Notifications';
+  String get notificationsAllLabel => 'Enable all notifications';
 
   @override
-  String get notificationsAllLabel => 'All notifications';
-
-  @override
-  String get notificationsNewSectionTitle => 'New notifications';
-
-  @override
-  String get notificationsPreviewLabel => 'Message preview';
-
-  @override
-  String get notificationsSoundLabel => 'Sound';
-
-  @override
-  String get notificationsAdditionalSectionTitle => 'Additional';
+  String get notificationsPreviewLabel =>
+      'Show content in system notifications';
 
   @override
   String get notificationsCallsLabel => 'Call notifications';
 
   @override
-  String get notificationsNewContactsLabel => 'Notifications from new contacts';
+  String get notificationsNewContactsLabel => 'Notify when contacts sign up';
 
   @override
   String get notificationsHapticsSectionTitle => 'Haptic feedback';
@@ -770,6 +783,50 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationsHapticsSubtitle =>
       'Vibration feedback for actions in the app';
+
+  @override
+  String get notificationsNetworkSectionTitle =>
+      'When the network is restricted';
+
+  @override
+  String get notificationsBackgroundLabel => 'Run in background';
+
+  @override
+  String get notificationsBackgroundSubtitle =>
+      'Stay connected when the internet is unreliable';
+
+  @override
+  String get notificationsBatteryLabel => 'Battery saving';
+
+  @override
+  String get notificationsBatterySubtitle => 'May block notifications';
+
+  @override
+  String get notificationsDialogsLabel => 'Private chats';
+
+  @override
+  String get notificationsGroupsLabel => 'Groups';
+
+  @override
+  String get notificationsOtherLabel => 'Other notifications';
+
+  @override
+  String get notificationsSystemLabel => 'Settings';
+
+  @override
+  String get notificationsSystemSubtitle => 'Sounds, vibration, importance';
+
+  @override
+  String get notificationsModeOn => 'On';
+
+  @override
+  String get notificationsModeOff => 'Off';
+
+  @override
+  String get notificationsModeReplies => 'Replies and mentions';
+
+  @override
+  String get notificationsAndroidOnly => 'Available on Android only';
 
   @override
   String devicesLoadFailed(String error) {
@@ -880,10 +937,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceVisualStyleSubtitle =>
-      'Material You or dimensional Glossy capsules';
-
-  @override
-  String get appearanceStyleAuto => 'Match theme';
+      'Sets the look of panels, switchers and the message bar';
 
   @override
   String get appearanceVisualStyleMaterialYou => 'Material You';
@@ -892,55 +946,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appearanceVisualStyleGlossy => 'Glossy';
 
   @override
-  String get appearanceVisualStyleLiquidGlass => 'Liquid Glass';
-
-  @override
-  String get appearanceGlassMaterial => 'Glass';
-
-  @override
-  String get appearanceChatChromeTitle => 'Chat screen elements';
-
-  @override
-  String get appearanceChatChromeSubtitle =>
-      'Background of the top and bottom panels: color, blur, or transparent. With blur or transparency, messages scroll under the panels';
-
-  @override
-  String get appearanceChatChromeColor => 'Color';
-
-  @override
-  String get appearanceChatChromeBlur => 'Blur';
-
-  @override
   String get appearanceChatChromeNone => 'None';
-
-  @override
-  String get appearanceChatChromeTransparent => 'Frost blur';
-
-  @override
-  String get appearanceComposerTitle => 'Input bar';
-
-  @override
-  String get appearanceComposerSubtitle =>
-      'Style and background of the message input bar';
-
-  @override
-  String get appearanceComposerBackgroundStandard => 'Default';
-
-  @override
-  String get appearanceComposerBackgroundFrost => 'Frost blur';
-
-  @override
-  String get appearanceNavPillTitle => 'Switcher style';
-
-  @override
-  String get appearanceNavPillSubtitle =>
-      'Section switcher on the chats screen';
-
-  @override
-  String get appearanceNavPillGlossy => 'Glossy';
-
-  @override
-  String get appearanceNavPillFrost => 'G-FrostBlur';
 
   @override
   String get playbackPillAt => 'at';
@@ -954,6 +960,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get appearanceGradientSubtitle =>
       'Depth and highlights in Glossy capsules';
+
+  @override
+  String get appearanceElementsBlurTitle => 'Element blur';
+
+  @override
+  String get appearanceElementsBlurSubtitle =>
+      'Frosted glass on the section switcher and floating buttons';
+
+  @override
+  String get appearanceMaterialYouEmpty => 'Nothing here yet…';
 
   @override
   String get appearanceSpectrumTitle => 'Spectrum background';
@@ -1058,6 +1074,147 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callTooltipExpand => 'Expand';
 
   @override
+  String get callExitFocus => 'Normal view';
+
+  @override
+  String get callEnterFullscreen => 'Full screen';
+
+  @override
+  String get callExitFullscreen => 'Exit full screen';
+
+  @override
+  String callScreenOf(String name) {
+    return '$name\'s screen';
+  }
+
+  @override
+  String get callInfoTooltip => 'Technical info';
+
+  @override
+  String get callInfoHide => 'Hide info';
+
+  @override
+  String get callInfoAccount => 'MAX account';
+
+  @override
+  String get callInfoCallId => 'Call ID';
+
+  @override
+  String get callInfoDeviceIndex => 'Device index';
+
+  @override
+  String get callInfoTransport => 'Transport';
+
+  @override
+  String get callInfoGuess => 'Looks like';
+
+  @override
+  String get callGuessBrowser => 'browser';
+
+  @override
+  String get callGuessChromium => 'Chrome, Chromium or Safari';
+
+  @override
+  String get callGuessAndroidApp => 'Android app';
+
+  @override
+  String get callGuessIosApp => 'iOS app';
+
+  @override
+  String get callGuessNativeWebrtc => 'native libwebrtc';
+
+  @override
+  String get callInfoRole => 'Role';
+
+  @override
+  String get callInfoRoleCreator => 'Creator';
+
+  @override
+  String get callInfoRoleAdmin => 'Admin';
+
+  @override
+  String get callInfoRoleMember => 'Member';
+
+  @override
+  String get callInfoJoined => 'Joined at';
+
+  @override
+  String get callInfoMedia => 'Media';
+
+  @override
+  String get callInfoMediaMic => 'microphone';
+
+  @override
+  String get callInfoMediaCamera => 'camera';
+
+  @override
+  String get callInfoMediaScreen => 'screen';
+
+  @override
+  String get callInfoMediaNone => 'all off';
+
+  @override
+  String get callInfoMediaConnected => 'Media connected';
+
+  @override
+  String get callInfoYes => 'yes';
+
+  @override
+  String get callInfoNo => 'no';
+
+  @override
+  String get callInfoNetwork => 'Network';
+
+  @override
+  String callInfoNetworkValue(int percent, String quality) {
+    return '$percent% · $quality';
+  }
+
+  @override
+  String get callInfoNetworkGood => 'good';
+
+  @override
+  String get callInfoNetworkMedium => 'fair';
+
+  @override
+  String get callInfoNetworkBad => 'poor';
+
+  @override
+  String get callInfoNetworkNoIssues =>
+      'good, no issues reported by the server';
+
+  @override
+  String get callInfoUnknown => 'no data';
+
+  @override
+  String get callInfoVideo => 'Video';
+
+  @override
+  String get callInfoVideoStalled => 'frozen';
+
+  @override
+  String get callInfoHand => 'Hand';
+
+  @override
+  String callInfoHandRaisedAt(String time) {
+    return 'raised at $time';
+  }
+
+  @override
+  String get callInfoModel => 'Model';
+
+  @override
+  String get callInfoOs => 'OS version';
+
+  @override
+  String get callInfoSdk => 'SDK version';
+
+  @override
+  String callNetworkTooltip(int percent) {
+    return 'Connection $percent%';
+  }
+
+  @override
   String get callTooltipKometHub => 'Komet';
 
   @override
@@ -1089,6 +1246,139 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callSpeaker => 'Speaker';
+
+  @override
+  String get callSwitchCamera => 'Switch camera';
+
+  @override
+  String get callsTabDeleteFailed => 'Could not delete the call';
+
+  @override
+  String get chatSettingsTitle => 'Chat and folder settings';
+
+  @override
+  String get chatSettingsTabChats => 'Chats';
+
+  @override
+  String get chatSettingsTabFolders => 'Folders';
+
+  @override
+  String get chatSettingsArchiveOnPull => 'Pull-down archive';
+
+  @override
+  String get chatSettingsAutoDownloadTitle => 'Media auto-download';
+
+  @override
+  String get chatSettingsAutoDownloadPhoto => 'Photos';
+
+  @override
+  String get chatSettingsAutoDownloadVideo => 'Videos';
+
+  @override
+  String get chatSettingsAutoDownloadVoice => 'Voice messages';
+
+  @override
+  String get chatSettingsAutoDownloadVideoNote => 'Video notes';
+
+  @override
+  String get chatSettingsAutoplayTitle => 'Autoplay';
+
+  @override
+  String get chatSettingsAutoplayVideo => 'Videos';
+
+  @override
+  String get chatSettingsAutoplayVideoHint =>
+      'Muted, clips up to a minute when their auto-download is on';
+
+  @override
+  String get chatSettingsAutoplayGif => 'GIFs';
+
+  @override
+  String get chatSettingsAutoplayAnimoji => 'Animated emoji';
+
+  @override
+  String get chatSettingsAutoplayVideoNote => 'Video messages';
+
+  @override
+  String get chatSettingsReactionsTitle => 'Reactions';
+
+  @override
+  String get chatSettingsDoubleTapReaction => 'Double-tap reaction';
+
+  @override
+  String get chatSettingsDoubleTapReactionHint =>
+      'Sent when you double-tap a message. Shared with your other devices.';
+
+  @override
+  String get chatSettingsDoubleTapReactionNone => 'Don\'t react';
+
+  @override
+  String get chatSettingsDoubleTapReactionOff => 'Off';
+
+  @override
+  String get chatSettingsDoubleTapReactionFailed =>
+      'Couldn\'t save the reaction';
+
+  @override
+  String get archiveLockTitle => 'Archive passcode';
+
+  @override
+  String get archiveLockPrompt => 'Enter archive passcode';
+
+  @override
+  String get archiveLockEnable => 'Set passcode';
+
+  @override
+  String get archiveLockEnabled => 'Archive passcode set';
+
+  @override
+  String get archiveLockChange => 'Change passcode';
+
+  @override
+  String get archiveLockChanged => 'Archive passcode changed';
+
+  @override
+  String get archiveLockRelock => 'Lock archive';
+
+  @override
+  String get archiveLockRelockHint =>
+      'How long the archive stays open after you leave it. Coming back earlier restarts the countdown.';
+
+  @override
+  String get archiveLockRelockNow => 'Right after leaving';
+
+  @override
+  String archiveLockRelockHours(int hours) {
+    return 'After $hours h';
+  }
+
+  @override
+  String get archiveLockDisable => 'Remove passcode';
+
+  @override
+  String get archiveLockDisableTitle => 'Remove archive passcode?';
+
+  @override
+  String get archiveLockDisableMessage =>
+      'The archive will open without a passcode.';
+
+  @override
+  String get archiveLockDisableAction => 'Remove';
+
+  @override
+  String get archiveLockDisabled => 'Archive passcode removed';
+
+  @override
+  String get archiveLockOnDescription =>
+      'The archive opens only with the passcode and locks again if you stay out of it longer than the chosen time.';
+
+  @override
+  String get archiveLockOffDescription =>
+      'Hide the archive behind a passcode: it will ask for four digits when you open it.';
+
+  @override
+  String get archiveLockForgotHint =>
+      'The archive passcode can\'t be recovered: if you forget it, you\'ll have to clear Komet\'s data. After five wrong attempts input is blocked for five minutes.';
 
   @override
   String get callVideoLabel => 'Video';
@@ -1953,7 +2243,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get securityWhoCanInvite => 'Who can invite me to chats';
 
   @override
-  String get securityShowContact => 'Show contact';
+  String get securityShowContent => 'Show content';
 
   @override
   String get securityContentSafe => 'Safe';
@@ -1975,7 +2265,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'You won\'t be able to see the online status of other users.';
 
   @override
-  String get securityConfidentialityHeader => 'PRIVACY';
+  String get securityConfidentialityHeader => 'Privacy';
 
   @override
   String get securityReadReceipts => 'Read receipts';
@@ -2222,6 +2512,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cloudStorageSend => 'Send';
 
   @override
+  String get cloudStorageAboutTooltip => 'How storage works';
+
+  @override
+  String get cloudStorageAboutTitle => 'How cloud storage works';
+
+  @override
+  String get cloudStorageAboutSubtitle =>
+      'There is no separate server: everything lives in your MAX account';
+
+  @override
+  String get cloudStorageAboutGroupTitle => 'It\'s a hidden MAX group';
+
+  @override
+  String get cloudStorageAboutGroupBody =>
+      'Komet creates a group with nobody in it but you and sends your files there as regular messages. Komet keeps it out of the chat list, folders and the unread counter.';
+
+  @override
+  String cloudStorageAboutNameTitle(String name) {
+    return 'Your group is $name';
+  }
+
+  @override
+  String cloudStorageAboutSampleNameTitle(String name) {
+    return 'The group is named like $name';
+  }
+
+  @override
+  String get cloudStorageAboutNameBody =>
+      'Komet derives the number in the name from the group\'s id, so it recognizes its own storage and never mistakes another group for it. Rename the group and Komet won\'t find it; delete it and the files go with it.';
+
+  @override
+  String get cloudStorageAboutOtherAppsTitle => 'Other apps can see the group';
+
+  @override
+  String get cloudStorageAboutOtherAppsBody =>
+      'The official MAX app and web client show it as a regular chat: the server doesn\'t know it\'s storage.';
+
+  @override
+  String get cloudStorageAboutLinksTitle => 'Download links expire';
+
+  @override
+  String get cloudStorageAboutLinksBody =>
+      'The MAX server issues each link for a limited time. Once it expires, just create a new one.';
+
+  @override
   String get digitalIdGosuslugiLinkUnavailable =>
       'Linking Gosuslugi isn\'t available on this platform. Do this in the mobile app.';
 
@@ -2341,6 +2676,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attachSheetGallery => 'Gallery';
+
+  @override
+  String get attachSheetAlbumsTitle => 'Albums';
+
+  @override
+  String get attachSheetAllMedia => 'All photos and videos';
+
+  @override
+  String get attachSheetSort => 'Sort';
+
+  @override
+  String get attachSheetSortNewestFirst => 'By date: newest first';
+
+  @override
+  String get attachSheetSortOldestFirst => 'By date: oldest first';
+
+  @override
+  String get attachSheetSortNameAsc => 'By name: A to Z';
+
+  @override
+  String get attachSheetSortNameDesc => 'By name: Z to A';
 
   @override
   String get attachSheetPoll => 'Poll';
@@ -3013,6 +3369,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pasteAttachFailed => 'Nothing to paste from the clipboard';
 
   @override
+  String get chatDropHint => 'Drop to send';
+
+  @override
+  String get chatDropFoldersUnsupported =>
+      'Folders can\'t be sent, drop the files themselves';
+
+  @override
   String get profileQrTitle => 'My QR code';
 
   @override
@@ -3078,6 +3441,86 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authLimitsConfirm => 'Got it';
+
+  @override
+  String get authLimitsServerNote =>
+      'These limits come from the MAX server. Komet has no control over them.';
+
+  @override
+  String get storageTitle => 'Storage';
+
+  @override
+  String get storageTotalCaption => 'Komet takes up on this device';
+
+  @override
+  String get storageCategoryPhotos => 'Photos and images';
+
+  @override
+  String get storageCategoryVideos => 'Videos';
+
+  @override
+  String get storageCategoryFiles => 'Files';
+
+  @override
+  String get storageCategoryVoice => 'Voice messages';
+
+  @override
+  String get storageCategoryStickers => 'Stickers';
+
+  @override
+  String get storageCategoryKept => 'Deleted media';
+
+  @override
+  String get storageCategoryKeptHint =>
+      'Already erased on the server, can\'t be downloaded again';
+
+  @override
+  String get storageCategoryDatabase => 'Messages and chats';
+
+  @override
+  String get storageCategoryDatabaseHint => 'Your chat history, never cleared';
+
+  @override
+  String get storageScanning => 'Calculating…';
+
+  @override
+  String get storageScanFailed => 'Couldn\'t calculate the used space';
+
+  @override
+  String get storageEmpty => 'The cache is empty';
+
+  @override
+  String storageClear(String size) {
+    return 'Clear $size';
+  }
+
+  @override
+  String get storageNothingSelected => 'Choose what to clear';
+
+  @override
+  String storageCleared(String size) {
+    return 'Freed $size';
+  }
+
+  @override
+  String get storageClearFailed => 'Couldn\'t clear the cache';
+
+  @override
+  String get storageClearKeptMessage =>
+      'Deleted media can\'t be downloaded again: the server has already erased it. Clear it too?';
+
+  @override
+  String get storageClearKeptConfirm => 'Clear';
+
+  @override
+  String get storageLimitTitle => 'Maximum cache size';
+
+  @override
+  String get storageLimitUnlimited => 'No limit';
+
+  @override
+  String get storageLimitHint =>
+      'When the cache outgrows the limit, Komet removes what you haven\'t opened for the longest. Deleted media and messages are never removed by the limit.';
 
   @override
   String get e2eeTitle => 'End-to-end encryption';
@@ -3324,10 +3767,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get linkQrUnavailable => 'Couldn\'t get the link';
 
   @override
-  String get notificationsDesktopNote =>
-      'Notifications aren\'t shown on the computer yet. The settings below are your account\'s push settings for phones.';
-
-  @override
   String get fileNoAppToOpen =>
       'No app on this device can open this file. Choose where to send it.';
 
@@ -3483,6 +3922,25 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get mediaDevicesVideoNoteRearHint =>
       'Otherwise a video message starts with the front camera';
+
+  @override
+  String get mediaDevicesVideoNoteResolution => 'Resolution';
+
+  @override
+  String get mediaDevicesVideoNoteResolutionHint =>
+      'Higher means a sharper video message and a heavier file';
+
+  @override
+  String get mediaDevicesVideoNoteFps => 'Frame rate';
+
+  @override
+  String get mediaDevicesVideoNoteFpsHint =>
+      '60 is smoother but heavier. A camera without 60 fps records at its highest supported rate';
+
+  @override
+  String mediaDevicesVideoNoteFpsValue(int fps) {
+    return '$fps fps';
+  }
 
   @override
   String get chatPreviewMarkRead => 'Mark as read';
@@ -4145,6 +4603,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatScreenMenuMute => 'Disable notifications';
 
   @override
+  String get chatScreenMenuSendMoney => 'Send money';
+
+  @override
+  String get moneyTransferAppTitle => 'Money';
+
+  @override
   String get chatScreenMenuChangeWallpaper => 'Change wallpaper';
 
   @override
@@ -4189,6 +4653,32 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get channelRecommendationsTitle => 'Recommended channels';
+
+  @override
+  String get channelRecommendationsHide => 'Hide recommendations';
+
+  @override
+  String get channelRecommendationsHidden =>
+      'Recommendations are hidden in this channel';
+
+  @override
+  String get channelRecommendationsHideEverywhere => 'Hide everywhere';
+
+  @override
+  String get channelPostViews => 'Views';
+
+  @override
+  String get kometSettingsHideRecommendations => 'Hide recommended channels';
+
+  @override
+  String get kometSettingsHideRecommendationsSubtitle =>
+      'Don\'t show similar channels at the bottom of a channel';
+
+  @override
+  String get chatScreenFormatMenu => 'Formatting';
+
+  @override
   String get chatScreenFormatHeading => 'Heading';
 
   @override
@@ -4207,10 +4697,100 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatScreenFormatMonospace => 'Monospace';
 
   @override
+  String get chatScreenFormatRed => 'Red';
+
+  @override
   String get chatScreenFormatQuote => 'Quote';
 
   @override
   String get chatScreenFormatMention => 'Mention';
+
+  @override
+  String get chatScreenFormatLink => 'Link';
+
+  @override
+  String get chatScreenFormatLinkTitle => 'Add link';
+
+  @override
+  String get chatScreenFormatLinkHint => 'https://example.com';
+
+  @override
+  String get chatScreenFormatLinkInvalid => 'That doesn\'t look like a link';
+
+  @override
+  String get linkConfirmTitle => 'Open this link?';
+
+  @override
+  String get linkConfirmBody =>
+      'You haven\'t visited this site before. Check the address above before you continue.';
+
+  @override
+  String get linkConfirmOpen => 'Open';
+
+  @override
+  String get linkConfirmCancel => 'Cancel';
+
+  @override
+  String get linkConfirmSuspiciousTitle => 'Suspicious link';
+
+  @override
+  String get linkConfirmOpenAnyway => 'Open anyway';
+
+  @override
+  String get linkConfirmDontOpen => 'Don\'t open';
+
+  @override
+  String linkWarningTextMismatch(String shown, String host) {
+    return 'The text shows $shown, but it leads to $host';
+  }
+
+  @override
+  String linkWarningUserInfo(String host) {
+    return 'Actually leads to $host';
+  }
+
+  @override
+  String linkWarningMixedScripts(String letters) {
+    return 'Mixed alphabets: $letters';
+  }
+
+  @override
+  String linkWarningLookalike(String script) {
+    return 'Only looks Latin: the letters are $script';
+  }
+
+  @override
+  String get linkWarningInvisible => 'The address hides invisible characters';
+
+  @override
+  String get linkWarningIpAddress => 'Leads to an IP address, not a site';
+
+  @override
+  String linkWarningScheme(String scheme) {
+    return 'Opens through $scheme:, not in a browser';
+  }
+
+  @override
+  String linkWarningLetter(String letter) {
+    return '“$letter”';
+  }
+
+  @override
+  String linkWarningLetters(String letters, String script) {
+    return '$letters from $script';
+  }
+
+  @override
+  String get linkScriptLatin => 'Latin';
+
+  @override
+  String get linkScriptCyrillic => 'Cyrillic';
+
+  @override
+  String get linkScriptGreek => 'Greek';
+
+  @override
+  String get linkScriptArmenian => 'Armenian';
 
   @override
   String get chatScreenMessageTooLong =>
@@ -4345,6 +4925,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatWallpaperSheetSampleOutgoing => 'Looks great 🔥';
 
   @override
+  String get chatWallpaperSheetInherit => 'Default';
+
+  @override
+  String get chatWallpaperSheetCurrent => 'Current';
+
+  @override
+  String get chatWallpaperSheetCustomGradient => 'Gradient';
+
+  @override
+  String get chatWallpaperSheetApply => 'Apply';
+
+  @override
+  String get chatWallpaperPresetKomet => 'Comet';
+
+  @override
+  String get chatWallpaperPresetGraphite => 'Graphite';
+
+  @override
+  String get chatWallpaperPresetInk => 'Ink';
+
+  @override
+  String get chatWallpaperPresetPine => 'Pine';
+
+  @override
+  String get chatWallpaperPresetPlum => 'Plum';
+
+  @override
+  String get chatWallpaperPresetUmber => 'Umber';
+
+  @override
+  String get chatWallpaperPresetPaper => 'Paper';
+
+  @override
+  String get chatWallpaperPresetFog => 'Fog';
+
+  @override
+  String get chatWallpaperPresetSage => 'Sage';
+
+  @override
+  String get chatWallpaperPresetSand => 'Sand';
+
+  @override
+  String get chatWallpaperPresetPowder => 'Powder';
+
+  @override
   String get chatWallpaperSheetNone => 'No wallpaper';
 
   @override
@@ -4421,24 +5046,24 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get messageActionsScreenTitle => 'Action menu';
+  String get appearanceMessageActionsTitle => 'Action menu';
 
   @override
-  String get messageActionsScreenRadialDescription =>
+  String get appearanceMessageActionsRadial => 'Radial';
+
+  @override
+  String get appearanceMessageActionsRadialDescription =>
       'An arc of buttons around the tap point';
 
   @override
-  String get messageActionsScreenList => 'List';
+  String get appearanceMessageActionsList => 'List';
 
   @override
-  String get messageActionsScreenListDescription =>
+  String get appearanceMessageActionsListDescription =>
       'A vertical menu next to the message';
 
   @override
-  String get messageActionsScreenStyle => 'Style';
-
-  @override
-  String get messageActionsScreenStyleSubtitle =>
+  String get appearanceMessageActionsSubtitle =>
       'How the menu appears when you long-press a message';
 
   @override
@@ -4446,6 +5071,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webAppScreenCloseConfirm => 'Close the mini app?';
+
+  @override
+  String get webAppUnsupportedPlatform =>
+      'Mini apps aren\'t available in the Linux version yet';
 
   @override
   String get voiceRecordUnsupported =>
@@ -4569,6 +5198,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatListArchive => 'Archive';
 
   @override
+  String get chatListArchivePull => 'Swipe down to go to archive';
+
+  @override
+  String get chatListArchiveRelease => 'Release to go to archive';
+
+  @override
   String get chatListNewStory => 'New story';
 
   @override
@@ -4629,6 +5264,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callsTabPeerUnknown => 'Couldn\'t identify the other person';
 
   @override
+  String get callPeerIsBot => 'Bots can\'t be called';
+
+  @override
   String get callsTabAlreadyInCall => 'A call is already in progress';
 
   @override
@@ -4662,6 +5300,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatEncryptionEnabled => 'Encryption enabled';
+
+  @override
+  String get e2eeLegacyDescription =>
+      'Key-based encryption from the old version is on in this chat. It works separately from the new one. Turn it off so messages are sent without the key.';
+
+  @override
+  String get e2eeLegacyDisable => 'Turn off old encryption';
 
   @override
   String get chatEncryptionDisabled => 'Encryption disabled';
@@ -4834,9 +5479,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customizationChatBackground => 'Chat background';
 
   @override
-  String get customizationMessageActions => 'Actions menu';
-
-  @override
   String get customizationAppIcon => 'App icon';
 
   @override
@@ -4849,6 +5491,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String folderActionDeleteConfirm(String title) {
     return 'Delete the folder “$title”? The chats will stay where they are.';
   }
+
+  @override
+  String get foldersSettingsCreate => 'Create folder';
+
+  @override
+  String get foldersSettingsRecommended => 'Recommended folders';
+
+  @override
+  String get foldersSettingsPresetUnread => 'New';
+
+  @override
+  String get foldersSettingsPresetPersonal => 'Personal';
+
+  @override
+  String get foldersSettingsPresetChannels => 'Channels';
+
+  @override
+  String get foldersSettingsAdd => 'Add';
+
+  @override
+  String get foldersSettingsReorder => 'Drag to reorder';
+
+  @override
+  String get foldersSettingsReorderFailed => 'Couldn\'t reorder folders';
+
+  @override
+  String get foldersSettingsAddFailed => 'Couldn\'t add the folder';
 
   @override
   String get folderActionDeleteFailed => 'Couldn\'t delete the folder';
@@ -5221,9 +5890,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginSuccessGreetingEasterEgg => 'You found an Easter egg!';
 
   @override
-  String get chatTextSendUnknownCommand => 'NO SUCH COMMAND🚨🚨🚨';
-
-  @override
   String get chatTextSendSaveFailed => 'Couldn\'t save the message';
 
   @override
@@ -5240,6 +5906,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceBubbleTranscriptionFailed => 'transcription failed';
+
+  @override
+  String get voiceSaved => 'Voice message saved';
+
+  @override
+  String voiceSavedTo(String folder) {
+    return 'Voice message saved to $folder';
+  }
+
+  @override
+  String get voiceSavedToFiles => 'Voice message saved to the Files app';
 
   @override
   String chatInfoStoryCount(int count) {
@@ -5446,6 +6123,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get kometSettingsAntiReadSubtitle =>
       'Read messages without marking them as read';
+
+  @override
+  String get kometSettingsAntiStoryViewSubtitle =>
+      'Watch stories without appearing among their viewers. The author still sees your reactions and replies';
 
   @override
   String get kometSettingsSelfOnlineCheckSubtitle =>
@@ -6094,6 +6775,84 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stickerPanelStickersTab => 'Stickers';
 
   @override
+  String get stickerPanelPinned => 'Pinned';
+
+  @override
+  String get stickerPanelClearRecent => 'Clear recent';
+
+  @override
+  String get stickerPanelClearRecentTitle => 'Clear recent stickers?';
+
+  @override
+  String get stickerPanelClearRecentBody =>
+      'Recently sent stickers will be removed from the list.';
+
+  @override
+  String get stickerPanelClearRecentFailed => 'Couldn\'t clear recent stickers';
+
+  @override
+  String get stickerSettingsTitle => 'Sticker settings';
+
+  @override
+  String get stickerSettingsRecent => 'Recent';
+
+  @override
+  String get stickerSettingsFavorites => 'Favorites';
+
+  @override
+  String get stickerRecentTitle => 'Recent stickers';
+
+  @override
+  String get stickerFavoritesTitle => 'Favorite stickers';
+
+  @override
+  String get stickerListEdit => 'Edit';
+
+  @override
+  String stickerListSelected(int count) {
+    return 'Selected: $count';
+  }
+
+  @override
+  String stickerListDeleteTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Delete $count stickers?',
+      one: 'Delete $count sticker?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stickerListDeleteBody =>
+      'They will disappear from this list on all your devices.';
+
+  @override
+  String get stickerListDelete => 'Delete';
+
+  @override
+  String get stickerListDeleteFailed => 'Couldn\'t delete stickers';
+
+  @override
+  String get stickerSetsTitle => 'Sticker sets';
+
+  @override
+  String get stickerSetsAdd => 'Add';
+
+  @override
+  String get stickerSetsSearchHint => 'Search sets';
+
+  @override
+  String get chatSettingsStickers => 'Recent and favorites';
+
+  @override
+  String get stickerPinned => 'Sticker pinned';
+
+  @override
+  String get stickerUnpinned => 'Sticker unpinned';
+
+  @override
   String get callBubbleGroupVideo => 'Group video call';
 
   @override
@@ -6157,6 +6916,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get messageRowEditTitle => 'Edit message';
+
+  @override
+  String get editMediaAdd => 'Add photo';
+
+  @override
+  String get editMediaEdit => 'Edit';
+
+  @override
+  String get editMediaReplace => 'Replace';
+
+  @override
+  String get editMediaRemove => 'Remove';
+
+  @override
+  String get editMediaRetry => 'Retry upload';
+
+  @override
+  String get editMediaUploadFailed => 'Couldn\'t upload the photo';
 
   @override
   String get locationBubbleOpenInMaps => 'Open in maps';
@@ -6360,46 +7137,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get transcriptionNotRecognized => 'Couldn\'t recognize the voice';
 
   @override
-  String get chatWallpaperThemeOcean => 'Ocean';
-
-  @override
-  String get chatWallpaperThemeSunset => 'Sunset';
-
-  @override
-  String get chatWallpaperThemeLavender => 'Lavender';
-
-  @override
-  String get chatWallpaperThemeMint => 'Mint';
-
-  @override
-  String get chatWallpaperThemeGraphite => 'Graphite';
-
-  @override
-  String get chatWallpaperThemeSky => 'Sky';
-
-  @override
-  String get chatWallpaperThemePeach => 'Peach';
-
-  @override
-  String get chatWallpaperThemeForest => 'Forest';
-
-  @override
-  String get chatWallpaperThemeGrape => 'Grape';
-
-  @override
-  String get chatWallpaperThemeNight => 'Night';
-
-  @override
-  String get chatWallpaperThemeRose => 'Rose';
-
-  @override
-  String get chatWallpaperThemeAmber => 'Amber';
-
-  @override
   String get mediaSaveFileNotFound => 'file not found';
 
   @override
   String get mediaSaveNoGalleryAccess => 'no access to the gallery';
+
+  @override
+  String get mediaSaveNoStorageAccess => 'no access to storage';
 
   @override
   String get commandShrugDescription => 'send a kaomoji';
@@ -6421,4 +7165,265 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get avatarPickerFilesSubtitle =>
       'If the photo you need isn\'t in the gallery';
+
+  @override
+  String get temporaryPasswordRecoveryTitle => 'Temporary password recovery';
+
+  @override
+  String get temporaryPasswordRecoveryMessage =>
+      'The temporary MAX password could not be removed. Show it privately and save it before removing or changing the password in MAX settings.';
+
+  @override
+  String get temporaryPasswordRecoveryShow => 'Show password';
+
+  @override
+  String get temporaryPasswordRecoveryInstructions =>
+      'Remove or change this password in MAX before deleting Komet. Do not include it in screenshots or logs.';
+
+  @override
+  String get settingsTabCloudStorage => 'Cloud storage';
+
+  @override
+  String get settingsTabPrivacyPolicy => 'Privacy policy';
+
+  @override
+  String get settingsTabTermsOfUse => 'Terms of use';
+
+  @override
+  String get appIconScreenHintIos =>
+      'The icon changes right away, iOS confirms it with a system dialog.';
+
+  @override
+  String get webPushIntroAppStore =>
+      'MAX\'s server sends ordinary push notifications only to the official MAX app, so Komet receives them through a web app on the Home Screen. MAX\'s own server sends the notifications through Apple, and a separate icon displays them.\n\nThat needs a web session. Komet creates one and approves it itself, from this very device — no phone number or code required.';
+
+  @override
+  String get callGroupTitle => 'Group call';
+
+  @override
+  String get callInviteTitle => 'Invite other participants';
+
+  @override
+  String get callInviteCopyLink => 'Copy link';
+
+  @override
+  String get callInviteAdd => 'Add participants';
+
+  @override
+  String get callLinkLabel => 'Link';
+
+  @override
+  String get callLinkUnavailable => 'Couldn\'t get the call link';
+
+  @override
+  String get callInvited => 'Invitations sent';
+
+  @override
+  String get callInviteFailed => 'Couldn\'t invite participants';
+
+  @override
+  String get callHandLoweredByAdmin => 'An admin lowered your hand';
+
+  @override
+  String get callAllHandsLoweredByAdmin => 'An admin lowered everyone\'s hands';
+
+  @override
+  String get callMicMutedByAdmin => 'An admin turned off your microphone';
+
+  @override
+  String get callCameraMutedByAdmin => 'An admin turned off your camera';
+
+  @override
+  String get callScreenMutedByAdmin => 'An admin stopped your screen sharing';
+
+  @override
+  String get callMediaLocked => 'An admin has disabled this in the call';
+
+  @override
+  String callRecordingBy(String name) {
+    return '$name is recording the call';
+  }
+
+  @override
+  String get callRecordingSelf => 'You\'re recording the call';
+
+  @override
+  String get callRecordingSomeone => 'The call is being recorded';
+
+  @override
+  String callRecordName(String date) {
+    return 'Call recording $date';
+  }
+
+  @override
+  String get callChat => 'Chat';
+
+  @override
+  String get callMore => 'More';
+
+  @override
+  String get callSettingsTitle => 'Call settings';
+
+  @override
+  String get callSettingsMicrophone => 'Microphone';
+
+  @override
+  String get callSettingsParticipantsCan => 'Participants can';
+
+  @override
+  String get callSettingsAllowMic => 'Turn on the microphone';
+
+  @override
+  String get callSettingsAllowCamera => 'Turn on the camera';
+
+  @override
+  String get callSettingsAllowScreen => 'Share their screen';
+
+  @override
+  String get callSettingsAllowRecord => 'Record the call';
+
+  @override
+  String get callMuteAllMics => 'Turn off all microphones';
+
+  @override
+  String get callMuteAllCameras => 'Turn off all cameras';
+
+  @override
+  String get callParticipantMessage => 'Message';
+
+  @override
+  String get callParticipantStopScreen => 'Stop screen sharing';
+
+  @override
+  String get callParticipantMuteCamera => 'Turn off camera';
+
+  @override
+  String callParticipantRemoveConfirm(String name) {
+    return 'Remove $name from the call?';
+  }
+
+  @override
+  String get callParticipantsSearchHint => 'Search participants';
+
+  @override
+  String get callShareScreen => 'Share screen';
+
+  @override
+  String get callYouLoweredAllHands => 'You lowered everyone\'s hands';
+
+  @override
+  String get callYouLoweredHand => 'You lowered the participant\'s hand';
+
+  @override
+  String whatsNewBannerTitle(Object version) {
+    return 'Komet updated to $version';
+  }
+
+  @override
+  String get whatsNewBannerSubtitle => 'Tap to see what\'s new';
+
+  @override
+  String whatsNewSheetTitle(Object version) {
+    return 'What\'s new in $version';
+  }
+
+  @override
+  String get whatsNewNoNotes => 'Bug fixes and stability improvements.';
+
+  @override
+  String get whatsNewDone => 'Got it';
+
+  @override
+  String get appearanceAnimationsTitle => 'Animations';
+
+  @override
+  String get appearanceAnimationsSubtitle =>
+      'Transitions between screens and tabs. Turn off to open everything instantly';
+
+  @override
+  String get login2faRequiredTitle =>
+      'Set a password on the device you\'ve signed in to MAX on';
+
+  @override
+  String get login2faRequiredSteps =>
+      'To do so, go to Settings → Security → Sign-in password';
+
+  @override
+  String get login2faRequiredThen => 'Then you\'ll be able to sign in here';
+
+  @override
+  String get login2faRequiredNotKomet =>
+      'This is NOT a Komet error. MAX requires it from everyone.';
+
+  @override
+  String get login2faRequiredRetry => 'Try signing in again';
+
+  @override
+  String get login2faRequiredNoAccess => 'I can\'t access the device';
+
+  @override
+  String get login2faRequiredLinkFailed =>
+      'Couldn\'t open go.max.ru/reset-session';
+
+  @override
+  String get informerBannerServerNote =>
+      'This is an announcement from the MAX server. It isn\'t related to Komet.';
+
+  @override
+  String get storyReplyHint => 'Reply';
+
+  @override
+  String get storyReplySent => 'Message sent';
+
+  @override
+  String get storyReplyFailed => 'Couldn\'t send the reply';
+
+  @override
+  String get storyReplyEncrypted =>
+      'This chat is encrypted, so story replies aren\'t available';
+
+  @override
+  String get storyLikeFailed => 'Couldn\'t react to the story';
+
+  @override
+  String get storyReplyLabel => 'Story';
+
+  @override
+  String get storyReplyGone => 'A story was here';
+
+  @override
+  String get storyReplyUnavailable => 'The story is no longer available';
+
+  @override
+  String get storyMenuProfile => 'Go to profile';
+
+  @override
+  String get storyMenuHide => 'Hide author\'s stories';
+
+  @override
+  String get storyMenuSave => 'Save to gallery';
+
+  @override
+  String get storyMenuReport => 'Report';
+
+  @override
+  String get storyHiddenNotice => 'The author\'s stories are hidden';
+
+  @override
+  String get storyHideFailed => 'Couldn\'t hide the stories';
+
+  @override
+  String get storyReplyOpenChat => 'View';
+
+  @override
+  String get storyHiddenUndo => 'Undo';
+
+  @override
+  String get storyMenuShow => 'Show author\'s stories';
+
+  @override
+  String get storyShownNotice => 'The author\'s stories are visible again';
+
+  @override
+  String get storyShowFailed => 'Couldn\'t show the stories';
 }

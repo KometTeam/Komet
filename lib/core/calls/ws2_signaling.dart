@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:kolibri/kolibri.dart' as kb;
 
+import '../utils/logger.dart';
 import 'conversation_params.dart';
 
 // #***! параметры подключения к сигналке
@@ -22,8 +23,8 @@ class Ws2Config {
   const Ws2Config({required this.uri, required this.userId});
 
   // #***! capabilities и версия SDK, сервер сверяет и отказывает незнакомым
-  static const defaultCapabilities = '3c02f';
-  static const _appVersion = 'sdk-0.2.1.3';
+  static const defaultCapabilities = '3c03f';
+  static const _appVersion = 'sdk-0.3.6';
   static const defaultDevice = 'Android/Unknown';
   static const defaultOsVersion = '34';
 
@@ -107,8 +108,12 @@ class Ws2CommandException implements Exception {
 class Ws2Signaling {
   final Ws2Config config;
 
+  // #***! рукопожатие TLS и WebSocket у ядра без таймаута, висеть вечно нельзя
+  static const Duration _connectLimit = Duration(seconds: 10);
+
   kb.CallSignaling? _call;
   StreamSubscription<String>? _notifSub;
+  bool _shutDown = false;
 
   // #***! уведомления стримом, ответы на команды по завершению future
   final _notifications = StreamController<Map<String, dynamic>>.broadcast();
@@ -124,15 +129,29 @@ class Ws2Signaling {
 
   bool get isConnected => _call?.isConnected() ?? false;
 
-  // #***! подключение к сигналке
+  // #***! подключение к сигналке. Сокет, открывшийся уже после таймаута или
+  // после close, сразу закрываем: иначе по нему ушёл бы accept звонка, который
+  // пользователь успел сбросить
   Future<void> connect() async {
-    final call = await kb.connectCallSignaling(
+    final pending = kb.connectCallSignaling(
       url: config.uri.toString(),
       userAgent: 'okhttp/4.12.0',
     );
+    final kb.CallSignaling call;
+    try {
+      call = await pending.timeout(_connectLimit);
+    } on TimeoutException {
+      unawaited(pending.then((late) => late.close(), onError: (_) {}));
+      rethrow;
+    }
+    if (_shutDown) {
+      call.close();
+      throw StateError('ws2 закрыт до подключения');
+    }
     _call = call;
     _notifSub = call.notifications().listen(
       (json) {
+        logger.t('[call] ws2 <= $json');
         Object? decoded;
         try {
           decoded = jsonDecode(json);
@@ -164,13 +183,17 @@ class Ws2Signaling {
     if (call == null) {
       return Future.error(StateError('ws2 не подключён'));
     }
+    final extraJson = jsonEncode(extra);
+    logger.t('[call] ws2 => $command $extraJson');
     try {
       final response = await call
-          .sendCommand(command: command, extraJson: jsonEncode(extra))
+          .sendCommand(command: command, extraJson: extraJson)
           .timeout(timeout);
+      logger.t('[call] ws2 <= $command $response');
       final decoded = jsonDecode(response);
       return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
     } catch (e) {
+      logger.d('[call] ws2 <= $command failed: $e');
       throw Ws2CommandException(command, e);
     }
   }
@@ -262,6 +285,14 @@ class Ws2Signaling {
 
   Future<void> requestRealloc() => sendCommand('request-realloc');
 
+  // #***! та же раскладка, что по producerCommand, но JSON через сигналку
+  Future<Map<String, dynamic>> updateDisplayLayout(
+    Map<String, String> layouts,
+  ) => sendCommand(
+    'update-display-layout',
+    extra: {'layouts': layouts, 'snapshot': true},
+  );
+
   // #***! принятие входящего
   /// Принять входящий звонок (сторона вызываемого).
   Future<void> acceptCall({
@@ -301,6 +332,8 @@ class Ws2Signaling {
         'singleSession': true,
         'unifiedPlan': true,
         'fastScreenShare': true,
+        'producerScreenDataChannelVersion': 1,
+        'consumerScreenDataChannelVersion': 1,
         'consumerFastScreenShareQualityOnDemand': true,
         'red': true,
         'videoTracksCount': 10,
@@ -323,6 +356,7 @@ class Ws2Signaling {
   );
 
   Future<void> close() async {
+    _shutDown = true;
     await _notifSub?.cancel();
     _notifSub = null;
     _call?.close();

@@ -7,7 +7,9 @@ import '../../../../core/config/app_colors.dart';
 import '../../../../core/config/komet_settings.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/text_format.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
+import '../../../../models/upload_bytes.dart';
 import '../../formatted_message_text.dart';
 import '../../sending_clock_icon.dart';
 import '../../photo_viewer.dart';
@@ -80,9 +82,11 @@ class BubbleContext {
   final bool hasPhotoWithCaption;
   final bool hasMultiplePhotosNoCaption;
   final Map? reactionInfo;
+  final ValueListenable<int?>? views;
 
   final CachedMessage message;
   final bool isMe;
+  final bool showsStatus;
   final int myId;
   final String chatType;
   final int? chatId;
@@ -90,7 +94,9 @@ class BubbleContext {
   final PhotoViewerActions? photoActions;
   final String? overrideStatus;
   final ValueListenable<int>? otherReadTime;
-  final ValueListenable<List<double>>? uploadProgress;
+  final ValueListenable<List<UploadBytes>>? uploadProgress;
+  final VoidCallback? onCancelUpload;
+  final void Function(int index)? onCancelUploadItem;
   final void Function(StickerAttachment sticker)? onStickerTap;
   final ForwardedSourceTap? onForwardedSourceTap;
   final BubblePresentation? presentation;
@@ -108,6 +114,7 @@ class BubbleContext {
     required this.hasMultiplePhotosNoCaption,
     required this.message,
     required this.isMe,
+    bool? showsStatus,
     required this.myId,
     required this.chatType,
     this.chatId,
@@ -116,14 +123,18 @@ class BubbleContext {
     this.overrideStatus,
     this.otherReadTime,
     this.uploadProgress,
+    this.onCancelUpload,
+    this.onCancelUploadItem,
     this.onStickerTap,
     this.onForwardedSourceTap,
     this.reactionInfo,
+    this.views,
     this.presentation,
     this.metaInFooter = false,
     this.likelyForwarded = false,
     this.selectable,
-  }) : dim = text.withValues(alpha: 0.7);
+  }) : dim = text.withValues(alpha: 0.7),
+       showsStatus = showsStatus ?? isMe;
 
   String? get contentText =>
       presentation == null ? message.text : presentation!.text;
@@ -145,6 +156,7 @@ class BubbleContext {
     hasMultiplePhotosNoCaption: hasMultiplePhotosNoCaption,
     message: message,
     isMe: isMe,
+    showsStatus: showsStatus,
     myId: myId,
     chatType: chatType,
     chatId: chatId,
@@ -153,9 +165,12 @@ class BubbleContext {
     overrideStatus: overrideStatus,
     otherReadTime: otherReadTime,
     uploadProgress: uploadProgress,
+    onCancelUpload: onCancelUpload,
+    onCancelUploadItem: onCancelUploadItem,
     onStickerTap: onStickerTap,
     onForwardedSourceTap: onForwardedSourceTap,
     reactionInfo: reactionInfo,
+    views: views,
     presentation: value,
     metaInFooter: metaInFooter,
     likelyForwarded: likelyForwarded,
@@ -174,13 +189,20 @@ class BubbleContext {
     return t;
   }
 
+  String get timeLabel => message.status == 'EDITED'
+      ? AppLocalizations.of(context)!.messageBubbleEditedTime(clockText)
+      : clockText;
+
   Color get systemTint => cs.onPrimaryContainer.withValues(alpha: 0.12);
 
-  List<Widget> metaMarks(Color color) {
+  List<Widget> metaMarks(Color color, {double fontSize = 11}) {
     final typingMs = message.typingMs;
+    final views = this.views;
     return [
       if (likelyForwarded) LikelyForwardedMark(color: color),
       if (typingMs != null) TypingTimeMark(typingMs: typingMs, color: color),
+      if (views != null)
+        ViewsMark(views: views, color: color, fontSize: fontSize),
     ];
   }
 
@@ -214,44 +236,57 @@ class BubbleContext {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           ...metaMarks(dim),
-          Text(clockText, style: TextStyle(color: dim, fontSize: 11)),
-          if (isMe) ...[const SizedBox(width: 4), statusIcon()],
+          Text(timeLabel, style: TextStyle(color: dim, fontSize: 11)),
+          if (showsStatus) ...[const SizedBox(width: 4), statusIcon()],
           if (message.deleted) ...[const SizedBox(width: 4), deletedIcon()],
         ],
       ),
     );
   }
 
+  static const EdgeInsets _overlayChipPadding = EdgeInsets.symmetric(
+    horizontal: 6,
+    vertical: 3,
+  );
+  static const BorderRadius _overlayChipRadius = BorderRadius.all(
+    Radius.circular(4),
+  );
+  static const TextStyle _overlayChipText = TextStyle(
+    color: Colors.white,
+    fontSize: 10,
+    fontWeight: FontWeight.w500,
+  );
+
+  BoxDecoration get _overlayChipDecoration => BoxDecoration(
+    color: Colors.black.withValues(alpha: isMe ? 0.4 : 0.5),
+    borderRadius: _overlayChipRadius,
+  );
+
+  Widget overlayLabel(String text) => Container(
+    padding: _overlayChipPadding,
+    decoration: _overlayChipDecoration,
+    child: Text(
+      text,
+      style: _overlayChipText.copyWith(fontWeight: FontWeight.w700),
+    ),
+  );
+
   Widget compactTime() {
     if (metaInFooter) return const SizedBox.shrink();
 
-    final bgColor = isMe
-        ? Colors.black.withValues(alpha: 0.4)
-        : Colors.black.withValues(alpha: 0.5);
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(4),
-      ),
+      padding: _overlayChipPadding,
+      decoration: _overlayChipDecoration,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           ...metaMarks(Colors.white),
-          Text(
-            clockText,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text(timeLabel, style: _overlayChipText),
           if (message.deleted) ...[
             const SizedBox(width: 3),
             const Icon(Symbols.delete, size: 11, color: Colors.white),
           ],
-          if (isMe) ...[
+          if (showsStatus) ...[
             const SizedBox(width: 3),
             statusIcon(color: Colors.white, size: 12),
           ],

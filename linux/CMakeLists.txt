@@ -90,6 +90,18 @@ if(TARGET flutter_webrtc_plugin)
   target_compile_options(flutter_webrtc_plugin PRIVATE -include cstdint)
 endif()
 
+if(TARGET flutter_inappwebview_linux_plugin AND WPE_PLATFORM_FOUND)
+  include(CheckCXXSymbolExists)
+  set(CMAKE_REQUIRED_INCLUDES ${WPE_PLATFORM_INCLUDE_DIRS})
+  check_cxx_symbol_exists(WPE_SETTING_DISABLE_ANIMATIONS wpe/wpe-platform.h
+    WPE_HAS_SETTING_DISABLE_ANIMATIONS)
+  unset(CMAKE_REQUIRED_INCLUDES)
+  if(NOT WPE_HAS_SETTING_DISABLE_ANIMATIONS)
+    target_compile_definitions(flutter_inappwebview_linux_plugin PRIVATE
+      WPE_SETTING_DISABLE_ANIMATIONS=WPE_SETTING_REDUCED_MOTION)
+  endif()
+endif()
+
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build
 # directory.

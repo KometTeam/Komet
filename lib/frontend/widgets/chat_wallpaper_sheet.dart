@@ -5,19 +5,21 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import 'package:komet/core/config/app_motion.dart';
 import 'package:komet/core/config/chat_wallpaper_themes.dart';
-import 'package:komet/core/config/app_colors.dart';
 import 'package:komet/core/storage/chat_wallpaper_store.dart';
+import 'package:komet/core/utils/haptics.dart';
 import 'package:komet/core/utils/image_utils.dart';
 import 'package:komet/frontend/screens/profile/custom_gradient_editor_screen.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'chat_wallpaper_view.dart';
 import 'mesh_gradient_background.dart';
+import 'theme_wallpaper.dart';
 import 'custom_notification.dart';
 import '../../core/config/app_fonts.dart';
 import '../../core/security/app_lock.dart';
 
-enum WallpaperPickType { none, theme, gallery, gradient }
+enum WallpaperPickType { inherit, none, theme, gallery, gradient }
 
 class WallpaperPick {
   final WallpaperPickType type;
@@ -26,22 +28,28 @@ class WallpaperPick {
   final bool gradientAnimated;
   final double gradientRotation;
 
+  const WallpaperPick.inherit()
+    : type = WallpaperPickType.inherit,
+      theme = null,
+      gradientColors = null,
+      gradientAnimated = false,
+      gradientRotation = 0;
   const WallpaperPick.none()
     : type = WallpaperPickType.none,
       theme = null,
       gradientColors = null,
-      gradientAnimated = true,
+      gradientAnimated = false,
       gradientRotation = 0;
   const WallpaperPick.gallery()
     : type = WallpaperPickType.gallery,
       theme = null,
       gradientColors = null,
-      gradientAnimated = true,
+      gradientAnimated = false,
       gradientRotation = 0;
   const WallpaperPick.theme(this.theme)
     : type = WallpaperPickType.theme,
       gradientColors = null,
-      gradientAnimated = true,
+      gradientAnimated = false,
       gradientRotation = 0;
   const WallpaperPick.gradient(
     this.gradientColors, {
@@ -51,7 +59,6 @@ class WallpaperPick {
        theme = null;
 }
 
-// #***! путь, а не байты: withData грузит файл в java-кучу и валит процесс на OOM
 Future<Uint8List?> pickWallpaperBytes(BuildContext context) async {
   final result = await AppLock.instance.external(
     () => FilePicker.platform.pickFiles(type: FileType.image),
@@ -80,19 +87,61 @@ Future<Uint8List?> pickWallpaperBytes(BuildContext context) async {
 Future<WallpaperPick?> showChatWallpaperSheet(
   BuildContext context, {
   required ChatWallpaper? current,
+  ChatWallpaper? inherited,
+  bool perChat = false,
 }) {
   return Navigator.of(context).push<WallpaperPick>(
     MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => ChatWallpaperGalleryScreen(current: current),
+      builder: (_) => ChatWallpaperGalleryScreen(
+        current: current,
+        inherited: inherited,
+        perChat: perChat,
+      ),
     ),
   );
 }
 
+sealed class _Choice {
+  const _Choice();
+}
+
+final class _InheritChoice extends _Choice {
+  const _InheritChoice();
+}
+
+final class _NoneChoice extends _Choice {
+  const _NoneChoice();
+}
+
+final class _CurrentChoice extends _Choice {
+  const _CurrentChoice();
+}
+
+final class _PresetChoice extends _Choice {
+  const _PresetChoice(this.theme);
+
+  final ChatWallpaperTheme theme;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _PresetChoice && other.theme.id == theme.id;
+
+  @override
+  int get hashCode => theme.id.hashCode;
+}
+
 class ChatWallpaperGalleryScreen extends StatefulWidget {
   final ChatWallpaper? current;
+  final ChatWallpaper? inherited;
+  final bool perChat;
 
-  const ChatWallpaperGalleryScreen({super.key, required this.current});
+  const ChatWallpaperGalleryScreen({
+    super.key,
+    required this.current,
+    this.inherited,
+    this.perChat = false,
+  });
 
   @override
   State<ChatWallpaperGalleryScreen> createState() =>
@@ -101,47 +150,52 @@ class ChatWallpaperGalleryScreen extends StatefulWidget {
 
 class _ChatWallpaperGalleryScreenState
     extends State<ChatWallpaperGalleryScreen> {
-  ChatWallpaperTheme? _selected;
-  bool _keepsImage = false;
+  late final _Choice _initial = _choiceFor(widget.current);
+  late _Choice _choice = _initial;
 
-  @override
-  void initState() {
-    super.initState();
-    final current = widget.current;
-    _keepsImage = current?.isImage ?? false;
-    _selected = current == null || current.isImage
-        ? null
-        : chatWallpaperThemeById(current.themeId);
+  _Choice _choiceFor(ChatWallpaper? wallpaper) {
+    if (wallpaper == null) {
+      return widget.perChat ? const _InheritChoice() : const _NoneChoice();
+    }
+    if (wallpaper.isNone) return const _NoneChoice();
+    if (!wallpaper.isImage && !wallpaper.isGradient) {
+      final theme = chatWallpaperThemeById(wallpaper.themeId);
+      if (theme != null) return _PresetChoice(theme);
+    }
+    return const _CurrentChoice();
   }
 
-  bool get _changed {
-    if (_keepsImage) return false;
-    if (widget.current?.isImage == true) return true;
-    return _selected?.id != chatWallpaperThemeById(widget.current?.themeId)?.id;
+  ChatWallpaper? get _ownCustom {
+    final current = widget.current;
+    if (current == null || current.isNone) return null;
+    return _choiceFor(current) is _CurrentChoice ? current : null;
+  }
+
+  void _select(_Choice choice) {
+    if (choice == _choice) return;
+    Haptics.selection();
+    setState(() => _choice = choice);
   }
 
   void _apply() {
-    if (_selected == null) {
-      Navigator.pop(context, const WallpaperPick.none());
-    } else {
-      Navigator.pop(context, WallpaperPick.theme(_selected));
-    }
+    final pick = switch (_choice) {
+      _InheritChoice() => const WallpaperPick.inherit(),
+      _NoneChoice() => const WallpaperPick.none(),
+      _PresetChoice(:final theme) => WallpaperPick.theme(theme),
+      _CurrentChoice() => null,
+    };
+    Navigator.pop(context, pick);
   }
 
   Future<void> _openGradientEditor() async {
     final current = widget.current;
+    final gradient = current != null && current.isGradient ? current : null;
     final result = await Navigator.of(context).push<CustomGradientResult>(
       MaterialPageRoute(
         builder: (_) => CustomGradientEditorScreen(
-          initialColors: current?.isGradient == true
-              ? current!.gradientColors
-              : null,
-          initialAnimated: current?.isGradient == true
-              ? current!.gradientAnimated
-              : false,
-          initialRotation: current?.isGradient == true
-              ? current!.gradientRotation
-              : 0,
+          initialColors: gradient?.gradientColors,
+          initialAnimated: gradient?.gradientAnimated ?? false,
+          initialRotation: gradient?.gradientRotation ?? 0,
         ),
       ),
     );
@@ -156,9 +210,21 @@ class _ChatWallpaperGalleryScreenState
     );
   }
 
+  Widget _previewLayer() => switch (_choice) {
+    _InheritChoice() => _layerFor(widget.inherited),
+    _NoneChoice() => const SizedBox.shrink(),
+    _CurrentChoice() => _layerFor(widget.current),
+    _PresetChoice(:final theme) => ThemeWallpaper(theme: theme),
+  };
+
+  Widget _layerFor(ChatWallpaper? wallpaper) => wallpaper == null
+      ? const SizedBox.shrink()
+      : ChatWallpaperView(wallpaper: wallpaper);
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -169,7 +235,7 @@ class _ChatWallpaperGalleryScreenState
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          AppLocalizations.of(context)!.chatWallpaperSheetTitle,
+          l10n.chatWallpaperSheetTitle,
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w700,
@@ -179,109 +245,113 @@ class _ChatWallpaperGalleryScreenState
       ),
       body: Column(
         children: [
-          Expanded(child: _preview(cs)),
-          _panel(cs),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              child: WallpaperPreview(
+                layer: AnimatedSwitcher(
+                  duration: AppMotion.of(const Duration(milliseconds: 260)),
+                  child: KeyedSubtree(
+                    key: ValueKey(_choice),
+                    child: _previewLayer(),
+                  ),
+                ),
+                incoming: l10n.chatWallpaperSheetSampleIncoming,
+                outgoing: l10n.chatWallpaperSheetSampleOutgoing,
+              ),
+            ),
+          ),
+          _panel(context),
         ],
       ),
     );
   }
 
-  Widget _preview(ColorScheme cs) {
-    final theme = _selected;
-    final image = _keepsImage ? widget.current : null;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (theme != null)
-              theme.buildBackground()
-            else if (image != null)
-              ChatWallpaperView(wallpaper: image)
-            else
-              ColoredBox(color: cs.surfaceContainerHighest),
-            const IgnorePointer(child: _PreviewScrim()),
-            _SampleBubbles(theme: theme),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget? _currentImageTile() {
-    final current = widget.current;
-    if (current == null || !current.isImage) return null;
-    return _CurrentImageTile(
-      wallpaper: current,
-      selected: _keepsImage,
-      onTap: () => setState(() {
-        _keepsImage = true;
-        _selected = null;
-      }),
-    );
-  }
-
-  Widget _panel(ColorScheme cs) {
-    final currentImage = _currentImageTile();
-    return Container(
+  Widget _panel(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
+    final inherited = widget.inherited;
+    final custom = _ownCustom;
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: cs.surfaceContainerLow,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
         top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             SizedBox(
-              height: 150,
+              height: _WallpaperTile.height,
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  ?currentImage,
-                  _NoneTile(
-                    selected: _selected == null && !_keepsImage,
-                    onTap: () => setState(() {
-                      _selected = null;
-                      _keepsImage = false;
-                    }),
-                  ),
-                  _CustomGradientTile(
-                    current: widget.current?.isGradient == true
-                        ? widget.current
-                        : null,
-                    onTap: _openGradientEditor,
-                  ),
-                  for (final theme in kChatWallpaperThemes)
-                    _ThemeTile(
-                      theme: theme,
-                      selected: _selected?.id == theme.id,
-                      onTap: () => setState(() {
-                        _selected = theme;
-                        _keepsImage = false;
-                      }),
+                  if (widget.perChat)
+                    _WallpaperTile(
+                      label: l10n.chatWallpaperSheetInherit,
+                      selected: _choice is _InheritChoice,
+                      onTap: () => _select(const _InheritChoice()),
+                      child: inherited == null
+                          ? const _TileIcon(Symbols.forum)
+                          : _TileWallpaper(wallpaper: inherited),
                     ),
+                  _WallpaperTile(
+                    label: l10n.chatWallpaperSheetNone,
+                    selected: _choice is _NoneChoice,
+                    onTap: () => _select(const _NoneChoice()),
+                    child: const _TileIcon(Symbols.hide_image),
+                  ),
+                  if (custom != null)
+                    _WallpaperTile(
+                      label: custom.isImage
+                          ? l10n.chatWallpaperSheetYourPhoto
+                          : l10n.chatWallpaperSheetCurrent,
+                      selected: _choice is _CurrentChoice,
+                      onTap: () => _select(const _CurrentChoice()),
+                      child: _TileWallpaper(wallpaper: custom),
+                    ),
+                  for (final theme in kChatWallpaperThemes)
+                    _WallpaperTile(
+                      label: _presetName(l10n, theme),
+                      selected: _choice == _PresetChoice(theme),
+                      onTap: () => _select(_PresetChoice(theme)),
+                      child: ThemeWallpaper(
+                        theme: theme,
+                        patternScale: _WallpaperTile.patternScale,
+                      ),
+                    ),
+                  _WallpaperTile(
+                    label: l10n.chatWallpaperSheetCustomGradient,
+                    selected: false,
+                    onTap: _openGradientEditor,
+                    child: const _TileIcon(Symbols.gradient),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Row(
                 children: [
                   Expanded(
-                    child: _GalleryButton(
-                      onTap: () =>
+                    child: FilledButton.tonalIcon(
+                      style: wallpaperButtonStyle(context),
+                      onPressed: () =>
                           Navigator.pop(context, const WallpaperPick.gallery()),
+                      icon: const Icon(Symbols.add_photo_alternate, size: 20),
+                      label: Text(l10n.chatWallpaperSheetFromGallery),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _ApplyButton(enabled: _changed, onTap: _apply),
+                    child: FilledButton(
+                      style: wallpaperButtonStyle(context),
+                      onPressed: _choice == _initial ? null : _apply,
+                      child: Text(l10n.chatWallpaperSheetApply),
+                    ),
                   ),
                 ],
               ),
@@ -293,86 +363,121 @@ class _ChatWallpaperGalleryScreenState
   }
 }
 
-class _PreviewScrim extends StatelessWidget {
-  const _PreviewScrim();
-
-  @override
-  Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0x14000000), Color(0x00000000), Color(0x1F000000)],
-          stops: [0.0, 0.5, 1.0],
-        ),
+ButtonStyle wallpaperButtonStyle(BuildContext context) =>
+    FilledButton.styleFrom(
+      minimumSize: const Size.fromHeight(52),
+      shape: const StadiumBorder(),
+      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
       ),
-      child: SizedBox.expand(),
     );
-  }
-}
 
-class _SampleBubbles extends StatelessWidget {
-  final ChatWallpaperTheme? theme;
+String _presetName(AppLocalizations l10n, ChatWallpaperTheme theme) =>
+    switch (theme.id) {
+      'komet' => l10n.chatWallpaperPresetKomet,
+      'graphite' => l10n.chatWallpaperPresetGraphite,
+      'ink' => l10n.chatWallpaperPresetInk,
+      'pine' => l10n.chatWallpaperPresetPine,
+      'plum' => l10n.chatWallpaperPresetPlum,
+      'umber' => l10n.chatWallpaperPresetUmber,
+      'paper' => l10n.chatWallpaperPresetPaper,
+      'fog' => l10n.chatWallpaperPresetFog,
+      'sage' => l10n.chatWallpaperPresetSage,
+      'sand' => l10n.chatWallpaperPresetSand,
+      'powder' => l10n.chatWallpaperPresetPowder,
+      _ => theme.id,
+    };
 
-  const _SampleBubbles({required this.theme});
+class WallpaperPreview extends StatelessWidget {
+  const WallpaperPreview({
+    super.key,
+    required this.layer,
+    required this.incoming,
+    required this.outgoing,
+  });
+
+  final Widget layer;
+  final String incoming;
+  final String outgoing;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final l10n = AppLocalizations.of(context)!;
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _bubble(
-              context,
-              text: l10n.chatWallpaperSheetSampleIncoming,
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.94),
-              textColor: cs.onSurface,
-              alignment: Alignment.centerLeft,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: cs.surface),
+          layer,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.5),
+              ),
             ),
-            const SizedBox(height: 8),
-            _bubble(
-              context,
-              text: l10n.chatWallpaperSheetSampleOutgoing,
-              color: cs.primary,
-              textColor: cs.onPrimary,
-              alignment: Alignment.centerRight,
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _SampleBubble(
+                    text: incoming,
+                    color: cs.surfaceContainerHighest,
+                    textColor: cs.onSurface,
+                    alignment: Alignment.centerLeft,
+                  ),
+                  const SizedBox(height: 6),
+                  _SampleBubble(
+                    text: outgoing,
+                    color: cs.primaryContainer,
+                    textColor: cs.onPrimaryContainer,
+                    alignment: Alignment.centerRight,
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _bubble(
-    BuildContext context, {
-    required String text,
-    required Color color,
-    required Color textColor,
-    required Alignment alignment,
-  }) {
+class _SampleBubble extends StatelessWidget {
+  const _SampleBubble({
+    required this.text,
+    required this.color,
+    required this.textColor,
+    required this.alignment,
+  });
+
+  final String text;
+  final Color color;
+  final Color textColor;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
     return Align(
       alignment: alignment,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 260),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: DecoratedBox(
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
           ),
-          child: Text(
-            text,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 15,
-              fontFamily: displayFontOf(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: Text(
+              text,
+              style: TextStyle(color: textColor, fontSize: 15, height: 1.3),
             ),
           ),
         ),
@@ -381,82 +486,121 @@ class _SampleBubbles extends StatelessWidget {
   }
 }
 
-class _TileFrame extends StatelessWidget {
-  final bool selected;
-  final VoidCallback onTap;
-  final Widget child;
-  final String label;
-
-  const _TileFrame({
+class _WallpaperTile extends StatelessWidget {
+  const _WallpaperTile({
+    required this.label,
     required this.selected,
     required this.onTap,
     required this.child,
-    required this.label,
   });
+
+  static const double width = 76;
+  static const double patternScale = 0.6;
+  static const double frameHeight = 104;
+  static const double height = frameHeight + 30;
+  static const double _ringGap = 3;
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final duration = AppMotion.of(const Duration(milliseconds: 220));
+    final outer = selected ? 26.0 : 18.0;
     return Padding(
-      padding: const EdgeInsets.only(right: 12),
-      child: GestureDetector(
-        onTap: onTap,
-        child: SizedBox(
-          width: 96,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                height: 116,
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: selected ? cs.primary : Colors.transparent,
-                    width: 2.5,
+      padding: const EdgeInsets.only(right: 10),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        excludeSemantics: true,
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            width: width,
+            child: Column(
+              children: [
+                AnimatedContainer(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  height: frameHeight,
+                  padding: const EdgeInsets.all(_ringGap),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(outer),
+                    border: Border.all(
+                      color: selected ? cs.primary : Colors.transparent,
+                      width: 2.5,
+                    ),
                   ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(15),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      child,
-                      if (selected)
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Container(
-                            margin: const EdgeInsets.all(6),
-                            padding: const EdgeInsets.all(3),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(end: outer - _ringGap),
+                    duration: duration,
+                    curve: Curves.easeOutCubic,
+                    builder: (context, radius, _) => ClipRRect(
+                      borderRadius: BorderRadius.circular(radius),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          DecoratedBox(
                             decoration: BoxDecoration(
-                              color: cs.primary,
-                              shape: BoxShape.circle,
+                              color: cs.surfaceContainerHighest,
                             ),
-                            child: Icon(
-                              Symbols.check,
-                              size: 16,
-                              color: cs.onPrimary,
+                            child: child,
+                          ),
+                          AnimatedScale(
+                            scale: selected ? 1 : 0,
+                            duration: duration,
+                            curve: Curves.easeOutBack,
+                            alignment: Alignment.topRight,
+                            child: Align(
+                              alignment: Alignment.topRight,
+                              child: Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: cs.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(2),
+                                    child: Icon(
+                                      Symbols.check,
+                                      size: 14,
+                                      weight: 600,
+                                      color: cs.onPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected ? cs.primary : cs.onSurfaceVariant,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  fontFamily: displayFontOf(context),
+                const SizedBox(height: 8),
+                AnimatedDefaultTextStyle(
+                  duration: duration,
+                  style: DefaultTextStyle.of(context).style.merge(
+                    TextStyle(
+                      color: selected ? cs.onSurface : cs.onSurfaceVariant,
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -464,193 +608,50 @@ class _TileFrame extends StatelessWidget {
   }
 }
 
-class _NoneTile extends StatelessWidget {
-  final bool selected;
-  final VoidCallback onTap;
+class _TileIcon extends StatelessWidget {
+  const _TileIcon(this.icon);
 
-  const _NoneTile({required this.selected, required this.onTap});
+  final IconData icon;
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return _TileFrame(
-      selected: selected,
-      onTap: onTap,
-      label: AppLocalizations.of(context)!.chatWallpaperSheetNone,
-      child: ColoredBox(
-        color: cs.surfaceContainerHighest,
-        child: const Center(
-          child: Icon(Symbols.block, color: kDangerRed, size: 34),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Center(
+    child: Icon(
+      icon,
+      size: 26,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    ),
+  );
 }
 
-class _CurrentImageTile extends StatelessWidget {
+class _TileWallpaper extends StatelessWidget {
+  const _TileWallpaper({required this.wallpaper});
+
   final ChatWallpaper wallpaper;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _CurrentImageTile({
-    required this.wallpaper,
-    required this.selected,
-    required this.onTap,
-  });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final path = wallpaper.imagePath;
-    return _TileFrame(
-      selected: selected,
-      onTap: onTap,
-      label: AppLocalizations.of(context)!.chatWallpaperSheetYourPhoto,
-      child: path == null
-          ? ColoredBox(color: cs.surfaceContainerHighest)
-          : Image.file(File(path), fit: BoxFit.cover),
-    );
-  }
-}
-
-class _CustomGradientTile extends StatelessWidget {
-  final ChatWallpaper? current;
-  final VoidCallback onTap;
-
-  const _CustomGradientTile({required this.current, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final colors = current?.gradientColors;
-    return _TileFrame(
-      selected: false,
-      onTap: onTap,
-      label: AppLocalizations.of(context)!.themeSettingsCustomTitle,
-      child: colors != null && colors.isNotEmpty
-          ? MeshGradientBackground(
-              colors: colors,
-              animate: false,
-              rotation: current?.gradientRotation ?? 0,
-            )
-          : ColoredBox(
-              color: cs.surfaceContainerHighest,
-              child: Center(
-                child: Icon(Symbols.palette, color: cs.onSurface, size: 30),
-              ),
-            ),
-    );
-  }
-}
-
-class _ThemeTile extends StatelessWidget {
-  final ChatWallpaperTheme theme;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ThemeTile({
-    required this.theme,
-    required this.selected,
-    required this.onTap,
-  });
-
-  String _name(AppLocalizations l10n) => switch (theme.id) {
-    'ocean' => l10n.chatWallpaperThemeOcean,
-    'sunset' => l10n.chatWallpaperThemeSunset,
-    'lavender' => l10n.chatWallpaperThemeLavender,
-    'mint' => l10n.chatWallpaperThemeMint,
-    'graphite' => l10n.chatWallpaperThemeGraphite,
-    'sky' => l10n.chatWallpaperThemeSky,
-    'peach' => l10n.chatWallpaperThemePeach,
-    'forest' => l10n.chatWallpaperThemeForest,
-    'grape' => l10n.chatWallpaperThemeGrape,
-    'night' => l10n.chatWallpaperThemeNight,
-    'rose' => l10n.chatWallpaperThemeRose,
-    'amber' => l10n.chatWallpaperThemeAmber,
-    _ => theme.id,
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    return _TileFrame(
-      selected: selected,
-      onTap: onTap,
-      label: _name(AppLocalizations.of(context)!),
-      child: theme.buildPreview(),
-    );
-  }
-}
-
-class _GalleryButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _GalleryButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 52,
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Symbols.image, color: cs.onSurface, size: 22),
-            const SizedBox(width: 8),
-            Text(
-              AppLocalizations.of(context)!.chatWallpaperSheetFromGallery,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                fontFamily: displayFontOf(context),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ApplyButton extends StatelessWidget {
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _ApplyButton({required this.enabled, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 140),
-        opacity: enabled ? 1 : 0.4,
-        child: Container(
-          height: 52,
-          decoration: BoxDecoration(
-            color: cs.primary,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Center(
-            child: Text(
-              AppLocalizations.of(context)!.spoofButtonApply,
-              style: TextStyle(
-                color: cs.onPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                fontFamily: displayFontOf(context),
-              ),
-            ),
-          ),
-        ),
-      ),
+    if (wallpaper.isImage && path != null) {
+      return Image.file(
+        File(path),
+        fit: BoxFit.cover,
+        cacheWidth: 240,
+        errorBuilder: (_, _, _) => const _TileIcon(Symbols.image),
+      );
+    }
+    final colors = wallpaper.gradientColors;
+    if (wallpaper.isGradient && colors != null && colors.isNotEmpty) {
+      return MeshGradientBackground(
+        colors: colors,
+        animate: false,
+        rotation: wallpaper.gradientRotation,
+      );
+    }
+    final theme = chatWallpaperThemeById(wallpaper.themeId);
+    if (theme == null) return const _TileIcon(Symbols.wallpaper);
+    return ThemeWallpaper(
+      theme: theme,
+      patternScale: _WallpaperTile.patternScale,
     );
   }
 }

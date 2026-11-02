@@ -9,8 +9,10 @@ import 'package:path/path.dart' as p;
 import 'plugin_host.dart';
 import 'plugin_manifest.dart';
 import 'plugin_media_downloader.dart';
+import 'plugin_network_policy.dart';
 import 'plugin_models.dart';
 import 'plugin_storage.dart';
+import '../storage/token_storage.dart';
 
 class PluginRuntime {
   PluginRuntime._();
@@ -25,7 +27,9 @@ class PluginRuntime {
   ) async {
     await initialize();
     final plugin = command.plugin;
-    final storage = PluginStorage(plugin.manifest.id);
+    final accountId = host.accountId;
+    if (accountId == null) throw StateError('Plugin account is unavailable');
+    final storage = PluginStorage(plugin.manifest.id, accountId: accountId);
     final sentMessageIds = <String>{};
     final engine = await JsEngine.create(
       builtins: JsBuiltinOptions.none(),
@@ -99,6 +103,7 @@ class PluginRuntime {
     JsValue value,
   ) async {
     try {
+      await _requireCurrentHost(host);
       final request = value.value;
       if (request is! Map) {
         throw const FormatException('Некорректный вызов API');
@@ -152,6 +157,15 @@ class PluginRuntime {
     }
   }
 
+  static Future<void> _requireCurrentHost(PluginHost host) async {
+    if (!host.isActive ||
+        host.accountId == null ||
+        await TokenStorage.getActiveAccountId() != host.accountId ||
+        !host.isActive) {
+      throw StateError('Контекст аккаунта изменился');
+    }
+  }
+
   static Future<String> _sendText(
     PluginDescriptor plugin,
     PluginHost host,
@@ -201,6 +215,7 @@ class PluginRuntime {
       options,
       maxBytes: 15 * 1024 * 1024,
     );
+    await _requireCurrentHost(host);
     await host.sendPhoto(
       bytes,
       filename: _filename(options, 'plugin_photo.jpg'),
@@ -220,6 +235,7 @@ class PluginRuntime {
       options,
       maxBytes: 25 * 1024 * 1024,
     );
+    await _requireCurrentHost(host);
     await host.sendFile(bytes, filename: _filename(options, 'plugin_file.bin'));
   }
 
@@ -237,10 +253,11 @@ class PluginRuntime {
     if (!const {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'}.contains(method)) {
       throw const FormatException('Неподдерживаемый HTTP-метод');
     }
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 10);
+    final client = PluginNetworkPolicy.createClient();
     try {
-      final request = await client.openUrl(method, uri);
+      final request = await client
+          .openUrl(method, uri)
+          .timeout(const Duration(seconds: 15));
       request.followRedirects = false;
       final rawHeaders = options['headers'];
       if (rawHeaders is Map) {
@@ -256,7 +273,7 @@ class PluginRuntime {
         const Duration(seconds: 15),
       );
       if (response.isRedirect) {
-        await response.drain<void>();
+        await response.drain<void>().timeout(const Duration(seconds: 15));
         throw const HttpException('HTTP redirects are disabled for plugins');
       }
       final bytes = await _readLimited(response, 1024 * 1024);
@@ -302,45 +319,15 @@ class PluginRuntime {
   ) async {
     final bytes = <int>[];
     await for (final chunk in response.timeout(const Duration(seconds: 20))) {
-      bytes.addAll(chunk);
-      if (bytes.length > maxBytes) {
+      if (bytes.length + chunk.length > maxBytes) {
         throw const FormatException('Ответ слишком большой');
       }
+      bytes.addAll(chunk);
     }
     return Uint8List.fromList(bytes);
   }
 
-  static Uri _httpsUri(String source) {
-    final uri = Uri.tryParse(source);
-    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
-      throw const FormatException('Разрешены только корректные HTTPS URL');
-    }
-    final host = uri.host.toLowerCase();
-    if (host == 'localhost' || host.endsWith('.localhost')) {
-      throw const FormatException('Локальные адреса запрещены');
-    }
-    final address = InternetAddress.tryParse(host);
-    if (address != null && _isPrivateAddress(address)) {
-      throw const FormatException('Локальные адреса запрещены');
-    }
-    return uri;
-  }
-
-  static bool _isPrivateAddress(InternetAddress address) {
-    if (address.isLoopback || address.isLinkLocal) return true;
-    final bytes = address.rawAddress;
-    if (address.type == InternetAddressType.IPv4) {
-      return bytes[0] == 10 ||
-          bytes[0] == 127 ||
-          bytes[0] == 0 ||
-          (bytes[0] == 169 && bytes[1] == 254) ||
-          (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
-          (bytes[0] == 192 && bytes[1] == 168);
-    }
-    return bytes.every((byte) => byte == 0) ||
-        (bytes[0] & 0xfe) == 0xfc ||
-        (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80);
-  }
+  static Uri _httpsUri(String source) => PluginNetworkPolicy.httpsUri(source);
 
   static bool _forbiddenHeader(String name) {
     final lower = name.toLowerCase();

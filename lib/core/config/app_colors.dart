@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/seed_scheme.dart';
 
 // #***! доп цвета поверх ColorScheme
 extension AppColorTokens on ColorScheme {
@@ -11,6 +12,7 @@ const int kAvatarThumbSize = 144;
 // #***! цвета статусов фиксированные, иначе доставлено станет неузнаваемым
 const Color kSuccessGreen = Color(0xFF2EC36B);
 const Color kDangerRed = Color(0xFFE5484D);
+const Color kWarningAmber = Color(0xFFF5A524);
 const Color kReadReceiptBlue = Color(0xFF4FC3F7);
 
 // #***! тёмная схема для просмотрщика, строится от акцента
@@ -23,10 +25,7 @@ class MediaAccent {
     final seed = Theme.of(context).colorScheme.primary;
     if (_seed != seed || _scheme == null) {
       _seed = seed;
-      _scheme = ColorScheme.fromSeed(
-        seedColor: seed,
-        brightness: Brightness.dark,
-      );
+      _scheme = schemeFromSeed(seed, Brightness.dark);
     }
     return _scheme!;
   }

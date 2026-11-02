@@ -9,10 +9,14 @@ import '../../../../core/utils/haptics.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../models/attachment.dart';
 import '../../custom_notification.dart';
+import '../../upload_bytes_label.dart';
 import '../../upload_progress_ring.dart';
+import '../../../../core/config/komet_settings.dart';
+import '../../../../core/media/auto_download_gate.dart';
 import '../../photo_viewer.dart';
 import '../../text_with_meta.dart';
 import 'bubble_context.dart';
+import 'media_autoplay.dart';
 import 'video_note_bubble.dart';
 
 class VideoBubble extends StatelessWidget {
@@ -47,6 +51,7 @@ class VideoBubble extends StatelessWidget {
         textColor: ctx.text,
         meta: ctx.meta(),
         uploadProgress: ctx.uploadProgress,
+        onCancelUpload: ctx.onCancelUpload,
       );
     }
     final hasMessageCaption = ctx.contentText?.isNotEmpty ?? false;
@@ -76,26 +81,73 @@ class VideoBubble extends StatelessWidget {
     );
 
     final localThumb = dataUriImage(video, video.previewData);
+    final awaitsPreviewLoad =
+        previewUrl.isNotEmpty &&
+        !previewUrl.startsWith('data:') &&
+        !AutoDownloadGate.allows(
+          KometSettings.autoDownloadVideo.value,
+          previewUrl,
+        );
     final uploading = ctx.uploadProgress;
 
     Widget previewImage() {
       if (previewUrl.isNotEmpty && !previewUrl.startsWith('data:')) {
-        return CachedNetworkImage(
-          imageUrl: previewUrl,
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
-          memCacheWidth: (width * dpr).round(),
-          fadeInDuration: Duration.zero,
-          placeholderFadeInDuration: Duration.zero,
-          errorWidget: (_, _, _) => localThumb == null
-              ? placeholder()
-              : Image(
-                  image: localThumb,
-                  width: width,
-                  height: height,
-                  fit: BoxFit.cover,
+        return ListenableBuilder(
+          listenable: Listenable.merge([
+            AutoDownloadGate.listen(previewUrl),
+            KometSettings.autoDownloadVideo,
+          ]),
+          builder: (context, _) {
+            if (!AutoDownloadGate.allows(
+              KometSettings.autoDownloadVideo.value,
+              previewUrl,
+            )) {
+              return SizedBox(
+                width: width,
+                height: height,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    placeholder(),
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => AutoDownloadGate.loadManually(previewUrl),
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Symbols.download,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+              );
+            }
+            return CachedNetworkImage(
+              imageUrl: previewUrl,
+              width: width,
+              height: height,
+              fit: BoxFit.cover,
+              memCacheWidth: (width * dpr).round(),
+              fadeInDuration: Duration.zero,
+              placeholderFadeInDuration: Duration.zero,
+              errorWidget: (_, _, _) => localThumb == null
+                  ? placeholder()
+                  : Image(
+                      image: localThumb,
+                      width: width,
+                      height: height,
+                      fit: BoxFit.cover,
+                    ),
+            );
+          },
         );
       }
       if (localThumb != null) {
@@ -113,64 +165,112 @@ class VideoBubble extends StatelessWidget {
 
     final preview = ClipRRect(
       borderRadius: BorderRadius.circular(BubbleContext.photoBorderRadius),
-      child: Stack(
-        children: [
-          previewImage(),
-          if (uploading != null)
-            Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.35),
+      child: MediaAutoplay(
+        clip: AutoplayClip.video(
+          video,
+          messageId: ctx.sourceMessageId,
+          chatId: ctx.sourceChatId,
+        ),
+        manualLoadKey: previewUrl.isEmpty || previewUrl.startsWith('data:')
+            ? null
+            : previewUrl,
+        suspended: uploading != null,
+        builder: (context, surface, playing) => Stack(
+          children: [
+            previewImage(),
+            Positioned.fill(child: surface),
+            if (uploading != null) ...[
+              Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  child: Center(
+                    child: UploadProgressRing(
+                      progress: uploading,
+                      color: Colors.white,
+                      trackColor: Colors.white24,
+                      onCancel: ctx.onCancelUpload,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 6,
+                top: 6,
+                right: 6,
+                child: UploadBytesLabel(progress: uploading),
+              ),
+            ] else
+              Positioned.fill(
                 child: Center(
-                  child: UploadProgressRing(
-                    progress: uploading,
-                    color: Colors.white,
-                    trackColor: Colors.white24,
+                  child: AnimatedOpacity(
+                    opacity: playing ? 0 : 1,
+                    duration: const Duration(milliseconds: 200),
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Symbols.play_arrow,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            )
-          else
-            Positioned.fill(
-              child: Center(
+            if (durationMs != null && durationMs > 0)
+              Positioned(
+                left: 6,
+                bottom: 6,
                 child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
                     color: Colors.black54,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Icon(
-                    Symbols.play_arrow,
-                    color: Colors.white,
-                    size: 30,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatSecondsMmSs((durationMs / 1000).round()),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (playing) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Symbols.volume_off,
+                          color: Colors.white,
+                          size: 13,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
-            ),
-          if (durationMs != null && durationMs > 0)
-            Positioned(
-              left: 6,
-              bottom: 6,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  formatSecondsMmSs((durationMs / 1000).round()),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+            if (uploading == null)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (awaitsPreviewLoad) {
+                      AutoDownloadGate.loadManually(previewUrl);
+                      return;
+                    }
+                    _playVideo(ctx.context, video);
+                  },
                 ),
               ),
-            ),
-          if (uploading == null)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _playVideo(ctx.context, video),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
 
@@ -246,8 +346,7 @@ Future<void> openVideoPlayer(BubbleContext ctx, VideoAttachment video) async {
   }
 
   Navigator.of(context).push(
-    MaterialPageRoute(
-      fullscreenDialog: true,
+    PhotoViewerRoute(
       builder: (_) => PhotoViewerScreen.video(
         attachment: video,
         initialVideoSources: sources,

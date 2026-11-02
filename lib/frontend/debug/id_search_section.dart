@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../widgets/alert_note.dart';
 import '../widgets/hint_bubble.dart';
 import '../widgets/glossy_pill.dart';
 import '../widgets/small_spinner.dart';
@@ -401,28 +402,6 @@ class _ErrorChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: cs.errorContainer.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(Symbols.error_outline, size: 16, color: cs.onErrorContainer),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '$label: $message',
-              style: TextStyle(color: cs.onErrorContainer, fontSize: 12),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
+    return AlertNote('$label: $message');
   }
 }

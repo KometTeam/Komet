@@ -7,6 +7,7 @@ import '../../../../backend/modules/chats.dart';
 import '../../../../backend/modules/comments.dart';
 import '../../../../backend/modules/message_copy.dart';
 import '../../../../backend/modules/messages.dart';
+import '../../../../backend/modules/sent_message.dart';
 import '../../../../core/config/app_commands.dart';
 import '../../../../core/crypto/message_decryption_cache.dart';
 import '../../../../core/plugins/plugin_outgoing_text.dart';
@@ -14,7 +15,7 @@ import '../../../../core/storage/app_database.dart';
 import '../../../../core/cache/message_session_cache.dart';
 import '../../../../core/storage/draft_store.dart';
 import '../../../../core/crypto/e2ee_service.dart';
-import '../../../../core/storage/chat_encryption_store.dart';
+import '../../../../core/crypto/outgoing_message_policy.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/utils/logger.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -82,10 +83,8 @@ class ChatTextSendController {
   int get _myId => chatController.myId;
   int get _chatId => chatController.chatId;
 
-  bool get _e2eeActive => E2eeService.instance.isActive(_myId, _chatId);
-
   bool get _encrypted =>
-      _e2eeActive || ChatEncryptionStore.instance.isEnabled(_myId, _chatId);
+      OutgoingMessagePolicy.requiresEncryption(_myId, _chatId);
 
   Future<Uint8List?> _seal(int accountId, int chatId, String plaintext) =>
       E2eeService.instance.isActive(accountId, chatId)
@@ -334,14 +333,10 @@ class ChatTextSendController {
     bool canUpdateChat() =>
         isMounted() && _myId == accountId && _chatId == chatId;
 
-    if (AppCommands.current.value && text.startsWith('/')) {
-      final command = CommandRegistry.instance.find(text);
-      if (command == null) {
-        messageController.clear();
-        hasText.value = false;
-        notify(l10nOf().chatTextSendUnknownCommand);
-        return;
-      }
+    final command = AppCommands.current.value && text.startsWith('/')
+        ? CommandRegistry.instance.find(text)
+        : null;
+    if (command != null) {
       final args = commandArgs(text);
       messageController.clear();
       hasText.value = false;
@@ -409,15 +404,20 @@ class ChatTextSendController {
       sealedText: sealedText,
       e2ee: e2eeFlag,
     );
-    if (encrypted) MessageDecryptionCache.instance.seed(tempId, text);
+    if (encrypted) {
+      MessageDecryptionCache.instance.seed(
+        tempId,
+        text,
+        accountId: accountId,
+        chatId: chatId,
+        cipherText: wireText,
+      );
+    }
 
     hasText.value = false;
     setLastSentId(tempId);
     chatController.addMessage(composed);
-    messageController.clear();
-    if (!commentsMode && DraftStore.instance.get(accountId, chatId) != null) {
-      unawaited(DraftStore.instance.clear(accountId, chatId));
-    }
+    clearComposer(accountId, chatId);
     bumpMessages();
 
     // Instant tactile "whoosh" the moment the message leaves the composer,
@@ -459,14 +459,16 @@ class ChatTextSendController {
       }
 
       checkSession();
-      final actualId = commentsMode
-          ? await _comments.sendComment(
-              accountId,
-              chatId,
-              commentPostId!,
-              wireText,
-              replyToMessageId: replyId,
-              elements: elements,
+      final accepted = commentsMode
+          ? SentMessage(
+              await _comments.sendComment(
+                accountId,
+                chatId,
+                commentPostId!,
+                wireText,
+                replyToMessageId: replyId,
+                elements: elements,
+              ),
             )
           : await _messages.sendMessage(
               accountId,
@@ -476,7 +478,16 @@ class ChatTextSendController {
               replySourceChatId: replySrcChatId,
               elements: elements,
               beforeSend: checkSession,
+              encryptedPayload: encrypted,
             );
+      final actualId = accepted.id;
+      final sentText = encrypted ? wireText : (accepted.text ?? wireText);
+      final sentPayload = encrypted
+          ? composedPayload
+          : accepted.payloadOver(composedPayload);
+      final sentElements = encrypted
+          ? elements
+          : (accepted.elements ?? elements);
 
       final mounted = canUpdateChat();
       final index = chatController.indexOfId(tempId);
@@ -487,15 +498,20 @@ class ChatTextSendController {
           accountId: accountId,
           chatId: chatId,
           senderId: accountId,
-          text: wireText,
+          text: sentText,
           time: sentTime,
           status: 'sent',
-          payload: composedPayload,
+          payload: sentPayload,
           sealedText: sealedText,
           e2ee: e2eeFlag,
         );
         if (encrypted) {
-          MessageDecryptionCache.instance.adopt(tempId, sent.id);
+          MessageDecryptionCache.instance.adopt(
+            tempId,
+            sent.id,
+            accountId: accountId,
+            chatId: chatId,
+          );
         }
         if (mounted) {
           chatController.setMessageAt(index, sent);
@@ -513,9 +529,9 @@ class ChatTextSendController {
               chatId,
               messageId: sent.id,
               time: sentTime,
-              text: wireText,
+              text: sentText,
               status: 'sent',
-              elements: elements,
+              elements: sentElements,
               replacesTime: now,
             ),
           );
@@ -622,7 +638,13 @@ class ChatTextSendController {
       status: online ? 'sending' : 'pending',
     );
     if (outgoing.encrypted) {
-      MessageDecryptionCache.instance.seed(tempId, outgoing.plaintext);
+      MessageDecryptionCache.instance.seed(
+        tempId,
+        outgoing.plaintext,
+        accountId: _myId,
+        chatId: _chatId,
+        cipherText: outgoing.wireText,
+      );
     }
     chatController.addMessage(composed);
     bumpMessages();
@@ -640,17 +662,23 @@ class ChatTextSendController {
     );
     if (!online) return tempId;
     try {
-      final actualId = await _messages.sendMessage(
+      final actualId = (await _messages.sendMessage(
         _myId,
         _chatId,
         outgoing.wireText,
-      );
+        encryptedPayload: outgoing.encrypted,
+      )).id;
       final realId = actualId.isNotEmpty ? actualId : tempId;
       final i = chatController.indexOfId(tempId);
       if (i != -1) {
         final sent = _replaceMessage(i, id: realId, status: 'sent');
         if (outgoing.encrypted) {
-          MessageDecryptionCache.instance.adopt(tempId, realId);
+          MessageDecryptionCache.instance.adopt(
+            tempId,
+            realId,
+            accountId: _myId,
+            chatId: _chatId,
+          );
         }
         unawaited(chatController.persistOutgoing(sent, removeId: tempId));
         unawaited(
@@ -685,12 +713,31 @@ class ChatTextSendController {
         status: 'EDITED',
       );
       if (outgoing.encrypted) {
-        MessageDecryptionCache.instance.seed(id, outgoing.plaintext);
+        MessageDecryptionCache.instance.seed(
+          id,
+          outgoing.plaintext,
+          accountId: _myId,
+          chatId: _chatId,
+          cipherText: outgoing.wireText,
+        );
       }
       unawaited(chatController.persistOutgoing(edited));
     }
     if (!id.startsWith('temp_')) {
-      await _messages.editMessage(_chatId, id, text: outgoing.wireText);
+      await _messages.editMessage(
+        _chatId,
+        id,
+        text: outgoing.wireText,
+        encryptedPayload: outgoing.encrypted,
+      );
+    }
+  }
+
+  void clearComposer(int accountId, int chatId) {
+    hasText.value = false;
+    messageController.clear();
+    if (!commentsMode && DraftStore.instance.get(accountId, chatId) != null) {
+      unawaited(DraftStore.instance.clear(accountId, chatId));
     }
   }
 }

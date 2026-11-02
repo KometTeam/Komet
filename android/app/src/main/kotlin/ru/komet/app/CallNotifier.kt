@@ -86,6 +86,15 @@ object CallNotifier {
 
         Log.d("KometFcm", "showIncoming caller=$callerId conv=$conversationId keys=${data.keys}")
 
+        if (CallState.inCall) {
+            Log.d("KometFcm", "call push ignored: another call is in progress")
+            return
+        }
+        if (!CallRinger.start(ctx, conversationId)) {
+            Log.d("KometFcm", "call push ignored: $conversationId already rings or ended")
+            return
+        }
+
         ensureChannel(ctx)
 
         val fullScreen = launchIntent(ctx, callJson, CallConst.ACTION_RING, name, 1)
@@ -119,7 +128,6 @@ object CallNotifier {
 
         val manager = NotificationManagerCompat.from(ctx)
         manager.notify(CallConst.NOTIF_ID, notification(NotifAvatars.initials(name), update = false))
-        CallRinger.start(ctx, conversationId)
 
         val photo = NotifAvatars.photo(ctx, callerId) ?: return
         if (!isIncomingShowing(ctx)) return
@@ -136,7 +144,7 @@ object CallNotifier {
 
     fun finishCall(ctx: Context, data: Map<String, String>) {
         Log.d("KometFcm", "finishCall keys=${data.keys}")
-        CallRinger.stop()
+        CallRinger.stop(data["conversationId"] ?: data["vcId"])
         NotificationManagerCompat.from(ctx).cancel(CallConst.NOTIF_ID)
         CallEvents.emit("ended")
     }
@@ -210,20 +218,30 @@ object CallNotifier {
     }
 }
 
+// Пуши о звонке приходят из потока FCM и из потока FKM почти одновременно. Без
+// общей блокировки оба успевали запустить свой зацикленный рингтон, ссылка
+// оставалась только на один, а второй играл, пока не перезагрузят телефон.
+// Звонок, который уже приняли, отклонили или завершили, повторный или поздний
+// пуш больше не поднимает.
 object CallRinger {
+    private const val FINISHED_LIMIT = 32
+
     private val handler = Handler(Looper.getMainLooper())
     private var ringtone: Ringtone? = null
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var timeout: Runnable? = null
+    private var ringing: String? = null
+    private val finished = LinkedHashSet<String>()
 
-    @Volatile
-    var activeConversationId: String? = null
-        private set
-
-    fun start(ctx: Context, conversationId: String) {
-        stop()
-        activeConversationId = conversationId
+    @Synchronized
+    fun start(ctx: Context, conversationId: String): Boolean {
+        if (conversationId.isNotEmpty()) {
+            if (conversationId in finished) return false
+            if (conversationId == ringing) return false
+        }
+        stopRinging()
+        ringing = conversationId
 
         val power = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "komet:call").apply {
@@ -243,9 +261,18 @@ object CallRinger {
         val t = Runnable { onTimeout(ctx) }
         timeout = t
         handler.postDelayed(t, 45_000L)
+        return true
     }
 
-    fun stop() {
+    @Synchronized
+    fun stop(conversationId: String? = null) {
+        if (!conversationId.isNullOrEmpty()) markFinished(conversationId)
+        stopRinging()
+    }
+
+    private fun stopRinging() {
+        ringing?.let(::markFinished)
+        ringing = null
         timeout?.let { handler.removeCallbacks(it) }
         timeout = null
         try {
@@ -263,7 +290,13 @@ object CallRinger {
         } catch (_: Exception) {
         }
         wakeLock = null
-        activeConversationId = null
+    }
+
+    private fun markFinished(conversationId: String) {
+        if (conversationId.isEmpty()) return
+        finished.remove(conversationId)
+        finished.add(conversationId)
+        while (finished.size > FINISHED_LIMIT) finished.remove(finished.first())
     }
 
     private fun onTimeout(ctx: Context) {
@@ -318,11 +351,12 @@ class CallActionReceiver : BroadcastReceiver() {
             return
         }
         if (intent.action != CallConst.ACTION_DECLINE) return
-        CallRinger.stop()
+        val payload = intent.getStringExtra(CallConst.EXTRA_DECLINE_PAYLOAD)
+        CallRinger.stop(payload?.let(::conversationOf))
         val notifId = intent.getIntExtra(CallConst.EXTRA_NOTIF_ID, CallConst.NOTIF_ID)
         NotificationManagerCompat.from(ctx).cancel(notifId)
 
-        val payload = intent.getStringExtra(CallConst.EXTRA_DECLINE_PAYLOAD) ?: return
+        if (payload == null) return
         val fln = Intent(CallConst.FLN_ACTION_TAPPED).apply {
             setClassName(ctx, CallConst.FLN_RECEIVER)
             putExtra("notificationId", notifId)
@@ -335,5 +369,11 @@ class CallActionReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.w("KometFcm", "decline broadcast failed: ${e.message}")
         }
+    }
+
+    private fun conversationOf(payload: String): String? = try {
+        JSONObject(payload).optString("conversationId").takeIf { it.isNotEmpty() }
+    } catch (e: Exception) {
+        null
     }
 }

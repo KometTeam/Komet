@@ -72,3 +72,42 @@ class TypingTimeMark extends StatelessWidget {
     );
   }
 }
+
+class ViewsMark extends StatelessWidget {
+  final ValueListenable<int?> views;
+  final Color color;
+  final double fontSize;
+
+  const ViewsMark({
+    super.key,
+    required this.views,
+    required this.color,
+    this.fontSize = 11,
+  });
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<int?>(
+    valueListenable: views,
+    builder: (context, count, _) {
+      if (count == null) return const SizedBox.shrink();
+      return Semantics(
+        label: '${AppLocalizations.of(context)!.channelPostViews}: $count',
+        excludeSemantics: true,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Symbols.visibility, size: fontSize + 2, color: color),
+              const SizedBox(width: 2),
+              Text(
+                formatCompactCount(count),
+                style: TextStyle(color: color, fontSize: fontSize),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'story_reply_quote.dart';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -16,22 +17,23 @@ import '../../core/crypto/message_decryption_cache.dart';
 import 'decrypted_text.dart';
 import '../../core/utils/bubble_radius.dart';
 import '../../core/utils/emoji_keyword_index.dart';
-import '../../core/utils/link_opener.dart';
 import '../../core/utils/text_format.dart';
 import '../../core/utils/webview_support.dart';
 import '../../core/config/app_link_preview.dart';
 import '../../l10n/app_localizations.dart';
 import 'custom_notification.dart';
 import 'hint_bubble.dart';
+import 'link_confirm_sheet.dart';
 import 'formatted_message_text.dart';
 import 'reply_preview.dart';
+import 'sender_badge.dart';
 import 'text_entity_actions.dart';
-import 'sending_clock_icon.dart';
 import 'photo_viewer.dart';
 import 'selectable_message_text.dart';
 import '../../models/attachment.dart';
 import '../../models/animoji.dart';
 import '../../models/reaction_info.dart';
+import '../../models/upload_bytes.dart';
 import 'attachment/bubbles/voice_bubble.dart';
 import 'attachment/bubbles/bubble_context.dart';
 import 'attachment/bubbles/poll_bubble.dart';
@@ -46,7 +48,11 @@ import 'attachment/bubbles/video_bubble.dart';
 import 'attachment/bubbles/file_bubble.dart';
 import 'attachment/bubbles/forwarded_bubble.dart';
 import 'lottie_image.dart';
+import 'message_animoji.dart';
+import 'bubble_geometry.dart';
 import 'text_with_meta.dart';
+import 'official_name.dart';
+import 'sending_clock_icon.dart';
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
 final Expando<List<MessageAttachment>> _contentAttachmentsCache =
@@ -57,11 +63,13 @@ class ReactionAnimationEvent {
   final String messageId;
   final String emoji;
   final int token;
+  final bool emphasized;
 
   const ReactionAnimationEvent({
     required this.messageId,
     required this.emoji,
     required this.token,
+    this.emphasized = false,
   });
 }
 
@@ -102,6 +110,238 @@ class _RenderCapIntrinsicWidth extends RenderProxyBox {
   @override
   double computeMaxIntrinsicWidth(double height) =>
       math.min(super.computeMaxIntrinsicWidth(height), _cap);
+}
+
+class _IntrinsicColumn extends MultiChildRenderObjectWidget {
+  const _IntrinsicColumn({
+    required this.stretch,
+    required this.measureLast,
+    this.fillHeight = false,
+    required super.children,
+  });
+
+  final bool stretch;
+  final bool measureLast;
+  final bool fillHeight;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderIntrinsicColumn(
+        stretch: stretch,
+        measureLast: measureLast,
+        fillHeight: fillHeight,
+        textDirection: Directionality.of(context),
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderIntrinsicColumn renderObject,
+  ) {
+    renderObject
+      ..stretch = stretch
+      ..measureLast = measureLast
+      ..fillHeight = fillHeight
+      ..textDirection = Directionality.of(context);
+  }
+}
+
+class _IntrinsicColumnParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderIntrinsicColumn extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _IntrinsicColumnParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _IntrinsicColumnParentData> {
+  _RenderIntrinsicColumn({
+    required bool stretch,
+    required bool measureLast,
+    required bool fillHeight,
+    required TextDirection textDirection,
+  }) : _stretch = stretch,
+       _measureLast = measureLast,
+       _fillHeight = fillHeight,
+       _textDirection = textDirection;
+
+  bool _stretch;
+  set stretch(bool value) {
+    if (value == _stretch) return;
+    _stretch = value;
+    markNeedsLayout();
+  }
+
+  bool _measureLast;
+  set measureLast(bool value) {
+    if (value == _measureLast) return;
+    _measureLast = value;
+    markNeedsLayout();
+  }
+
+  bool _fillHeight;
+  set fillHeight(bool value) {
+    if (value == _fillHeight) return;
+    _fillHeight = value;
+    markNeedsLayout();
+  }
+
+  TextDirection _textDirection;
+  set textDirection(TextDirection value) {
+    if (value == _textDirection) return;
+    _textDirection = value;
+    markNeedsLayout();
+  }
+
+  double? _layoutIntrinsicWidth;
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _IntrinsicColumnParentData) {
+      child.parentData = _IntrinsicColumnParentData();
+    }
+  }
+
+  static double _crossIntrinsicWidth(RenderBox child) =>
+      child.getMaxIntrinsicWidth(child.getMaxIntrinsicHeight(double.infinity));
+
+  @override
+  double computeMaxIntrinsicWidth(double height) {
+    var widest = 0.0;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      widest = math.max(widest, _crossIntrinsicWidth(child));
+    }
+    return widest;
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) =>
+      getMaxIntrinsicWidth(height);
+
+  double _stackedHeight(
+    double width,
+    double Function(RenderBox child, double width) heightOf,
+  ) {
+    final extent = width.isFinite
+        ? width
+        : getMaxIntrinsicWidth(double.infinity);
+    var total = 0.0;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      total += heightOf(child, extent);
+    }
+    return total;
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      _stackedHeight(width, (child, w) => child.getMinIntrinsicHeight(w));
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      _stackedHeight(width, (child, w) => child.getMaxIntrinsicHeight(w));
+
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) =>
+      defaultComputeDistanceToFirstActualBaseline(baseline);
+
+  BoxConstraints _childConstraints(double width) => _stretch
+      ? BoxConstraints.tightFor(width: width)
+      : BoxConstraints(maxWidth: width);
+
+  Size _sizeFor(double width, double stacked, BoxConstraints constraints) {
+    final main = _fillHeight && constraints.maxHeight.isFinite
+        ? constraints.maxHeight
+        : stacked;
+    return Size(width, constraints.constrainHeight(main));
+  }
+
+  @override
+  @protected
+  Size computeDryLayout(covariant BoxConstraints constraints) {
+    final width = constraints.hasTightWidth
+        ? constraints.maxWidth
+        : constraints.constrainWidth(
+            getMaxIntrinsicWidth(constraints.maxHeight),
+          );
+    final childConstraints = _childConstraints(width);
+    var stacked = 0.0;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      stacked += child.getDryLayout(childConstraints).height;
+    }
+    return _sizeFor(width, stacked, constraints);
+  }
+
+  double? _intrinsicWidthAfterLooseLayout(RenderBox child) {
+    RenderBox? inner = child;
+    while (inner is RenderBubbleGeometryReporter) {
+      inner = inner.child;
+    }
+    final loose = BoxConstraints(maxWidth: constraints.maxWidth);
+    switch (inner) {
+      case RenderTextWithMeta():
+        child.layout(loose, parentUsesSize: true);
+        return inner.layoutIntrinsicWidth;
+      case _RenderIntrinsicColumn():
+        child.layout(loose, parentUsesSize: true);
+        return inner._layoutIntrinsicWidth;
+      case RenderParagraph() when isPlainParagraph(inner):
+        child.layout(loose, parentUsesSize: true);
+        final width = child.size.width;
+        return width < constraints.maxWidth ? width : double.infinity;
+      default:
+        return null;
+    }
+  }
+
+  double _resolveWidth() {
+    if (constraints.hasTightWidth) return constraints.maxWidth;
+    final measured = _measureLast ? lastChild : firstChild;
+    final fromLayout = measured == null
+        ? null
+        : _intrinsicWidthAfterLooseLayout(measured);
+    if (fromLayout == null) {
+      return constraints.constrainWidth(
+        getMaxIntrinsicWidth(constraints.maxHeight),
+      );
+    }
+    var widest = fromLayout;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      if (child == measured) continue;
+      widest = math.max(widest, _crossIntrinsicWidth(child));
+    }
+    return constraints.constrainWidth(widest);
+  }
+
+  @override
+  void performLayout() {
+    final width = _resolveWidth();
+    final childConstraints = _childConstraints(width);
+    var stacked = 0.0;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      child.layout(childConstraints, parentUsesSize: true);
+      final dx = _stretch || _textDirection == TextDirection.ltr
+          ? 0.0
+          : width - child.size.width;
+      (child.parentData! as _IntrinsicColumnParentData).offset = Offset(
+        dx,
+        stacked,
+      );
+      stacked += child.size.height;
+    }
+    size = _sizeFor(width, stacked, constraints);
+    _layoutIntrinsicWidth = constraints.minWidth > 0
+        ? null
+        : size.width < constraints.maxWidth
+        ? size.width
+        : double.infinity;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
 }
 
 class _HeaderAboveMatchWidth extends MultiChildRenderObjectWidget {
@@ -475,7 +715,6 @@ class _ReactionAnimojiGlyph extends StatefulWidget {
   final ValueListenable<ReactionAnimationEvent?>? animation;
 
   const _ReactionAnimojiGlyph({
-    super.key,
     required this.messageId,
     required this.emoji,
     required this.animoji,
@@ -625,6 +864,106 @@ class _ReactionAnimojiGlyphState extends State<_ReactionAnimojiGlyph> {
   }
 }
 
+class _ReactionEmphasis extends StatefulWidget {
+  final String messageId;
+  final String emoji;
+  final ValueListenable<ReactionAnimationEvent?>? animation;
+  final Widget child;
+
+  const _ReactionEmphasis({
+    super.key,
+    required this.messageId,
+    required this.emoji,
+    required this.animation,
+    required this.child,
+  });
+
+  @override
+  State<_ReactionEmphasis> createState() => _ReactionEmphasisState();
+}
+
+class _ReactionEmphasisState extends State<_ReactionEmphasis>
+    with SingleTickerProviderStateMixin {
+  static const double _peak = 1.65;
+  static const Duration _grow = Duration(milliseconds: 150);
+  static const Duration _hold = Duration(seconds: 1);
+  static const Duration _settle = Duration(milliseconds: 300);
+  static const Animation<double> _rest = AlwaysStoppedAnimation(1);
+
+  static final Animatable<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween<double>(
+        begin: 1,
+        end: _peak,
+      ).chain(CurveTween(curve: Curves.easeOutCubic)),
+      weight: _grow.inMilliseconds.toDouble(),
+    ),
+    TweenSequenceItem(
+      tween: ConstantTween<double>(_peak),
+      weight: _hold.inMilliseconds.toDouble(),
+    ),
+    TweenSequenceItem(
+      tween: Tween<double>(
+        begin: _peak,
+        end: 1,
+      ).chain(CurveTween(curve: Curves.easeInOutCubic)),
+      weight: _settle.inMilliseconds.toDouble(),
+    ),
+  ]);
+
+  AnimationController? _controller;
+  Animation<double>? _scaleAnimation;
+  int? _token;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.animation?.addListener(_onAnimation);
+  }
+
+  @override
+  void didUpdateWidget(_ReactionEmphasis oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.animation, widget.animation)) {
+      oldWidget.animation?.removeListener(_onAnimation);
+      widget.animation?.addListener(_onAnimation);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.animation?.removeListener(_onAnimation);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _onAnimation() {
+    final event = widget.animation?.value;
+    if (event == null ||
+        !event.emphasized ||
+        event.token == _token ||
+        event.messageId != widget.messageId ||
+        EmojiKeywordIndex.normalize(event.emoji) !=
+            EmojiKeywordIndex.normalize(widget.emoji)) {
+      return;
+    }
+    _token = event.token;
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return;
+    final controller = _controller ??= AnimationController(
+      vsync: this,
+      duration: _grow + _hold + _settle,
+    );
+    if (_scaleAnimation == null) {
+      setState(() => _scaleAnimation = controller.drive(_scale));
+    }
+    controller.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ScaleTransition(scale: _scaleAnimation ?? _rest, child: widget.child);
+}
+
 class MessageBubble extends StatelessWidget {
   static const int forwardBurstWindowMs = 250;
 
@@ -640,9 +979,13 @@ class MessageBubble extends StatelessWidget {
 
   final CachedMessage message;
   final bool isMe;
+  final bool channelPost;
+  final ValueListenable<int?>? views;
   final int myId;
   final CachedMessage? prevMessage;
   final CachedMessage? nextMessage;
+  final bool separatedAbove;
+  final bool separatedBelow;
   final String chatType;
   final int? chatId;
   final PhotoViewerActions? photoActions;
@@ -651,7 +994,9 @@ class MessageBubble extends StatelessWidget {
   final ValueListenable<Map<String, dynamic>?>? reactionsListenable;
   final ValueListenable<ReactionAnimationEvent?>? reactionAnimation;
   final ReactionAnimojiResolver? reactionAnimojiResolver;
-  final ValueListenable<List<double>>? uploadProgress;
+  final ValueListenable<List<UploadBytes>>? uploadProgress;
+  final VoidCallback? onCancelUpload;
+  final void Function(int index)? onCancelUploadItem;
   final void Function(String messageId)? onReplyTap;
   final void Function(int senderId)? onAvatarTap;
   final ForwardedSourceTap? onForwardedSourceTap;
@@ -668,14 +1013,19 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onCommentsTap;
   final CachedMessage? Function(String messageId)? resolveLocalMessage;
   final double? listWidth;
+  final BubbleGeometry? geometry;
 
   const MessageBubble({
     super.key,
     required this.message,
     required this.isMe,
+    this.channelPost = false,
+    this.views,
     required this.myId,
     this.prevMessage,
     this.nextMessage,
+    this.separatedAbove = false,
+    this.separatedBelow = false,
     required this.chatType,
     this.chatId,
     this.photoActions,
@@ -685,6 +1035,8 @@ class MessageBubble extends StatelessWidget {
     this.reactionAnimation,
     this.reactionAnimojiResolver,
     this.uploadProgress,
+    this.onCancelUpload,
+    this.onCancelUploadItem,
     this.onReplyTap,
     this.onAvatarTap,
     this.onForwardedSourceTap,
@@ -701,6 +1053,7 @@ class MessageBubble extends StatelessWidget {
     this.onCommentsTap,
     this.resolveLocalMessage,
     this.listWidth,
+    this.geometry,
   });
 
   bool _computeHasPhotoWithCaption() {
@@ -727,9 +1080,18 @@ class MessageBubble extends StatelessWidget {
 
   List<MessageAttachment> get _renderableAttachments =>
       message.attachments
-          ?.where((a) => a is! InlineKeyboardAttachment)
+          ?.where(
+            (a) => a is! InlineKeyboardAttachment && a is! StoryReplyAttachment,
+          )
           .toList() ??
       const [];
+
+  StoryReplyAttachment? get _storyReply {
+    for (final a in message.attachments ?? const <MessageAttachment>[]) {
+      if (a is StoryReplyAttachment) return a;
+    }
+    return null;
+  }
 
   List<MessageAttachment> get _contentAttachments =>
       _contentAttachmentsCache[message] ??= _computeContentAttachments();
@@ -758,8 +1120,17 @@ class MessageBubble extends StatelessWidget {
     return forwarded == null ? message.text : forwarded.originalText;
   }
 
+  bool get _outgoing => isMe && !channelPost;
+
+  bool get _showsStatus {
+    if (!isMe) return false;
+    if (!channelPost) return true;
+    final status = overrideStatus ?? message.status;
+    return isSendingStatus(status) || status == 'error';
+  }
+
   bool get _showsSenderName =>
-      !isMe && chatType == "CHAT" && prevMessage?.senderId != message.senderId;
+      !_outgoing && (chatType == "CHAT" || channelPost) && !_groupedWithPrev;
 
   bool get _stretchesTextRow => message.replyInfo != null || _showsSenderName;
 
@@ -773,24 +1144,28 @@ class MessageBubble extends StatelessWidget {
       other.senderId == message.senderId &&
       (other.time - message.time).abs() <= forwardBurstWindowMs;
 
+  // #***! одна группа это один отправитель подряд без паузы в 5 минут и без
+  // разделителя между ними; по ней же форма, отступы, имя и аватарка
+  static const int _groupWindowMs = 300000;
+
+  bool get _groupedWithPrev =>
+      !separatedAbove && _sameGroup(prevMessage, message);
+
+  bool get _groupedWithNext =>
+      !separatedBelow && _sameGroup(message, nextMessage);
+
+  bool _sameGroup(CachedMessage? a, CachedMessage? b) =>
+      a != null &&
+      b != null &&
+      !a.isControl &&
+      !b.isControl &&
+      (channelPost || a.senderId == b.senderId) &&
+      (b.time - a.time).abs() < _groupWindowMs;
+
   BubbleShape _computeShape() {
     if (message.isControl) return BubbleShape.singleMiddle;
-
-    final hasPrevFromMe =
-        prevMessage?.senderId == message.senderId && !prevMessage!.isControl;
-    final prevTimeDiff = hasPrevFromMe
-        ? message.time - prevMessage!.time
-        : 999999999;
-
-    final hasNextFromMe =
-        nextMessage?.senderId == message.senderId && !nextMessage!.isControl;
-    final nextTimeDiff = hasNextFromMe
-        ? nextMessage!.time - message.time
-        : 999999999;
-
-    final groupedWithPrev = hasPrevFromMe && prevTimeDiff < 300000;
-    final groupedWithNext = hasNextFromMe && nextTimeDiff < 300000;
-
+    final groupedWithPrev = _groupedWithPrev;
+    final groupedWithNext = _groupedWithNext;
     if (!groupedWithPrev && !groupedWithNext) return BubbleShape.singleMiddle;
     if (!groupedWithPrev && groupedWithNext) return BubbleShape.singleTop;
     if (groupedWithPrev && !groupedWithNext) return BubbleShape.singleBottom;
@@ -887,55 +1262,22 @@ class MessageBubble extends StatelessWidget {
       case MessageType.attachment:
         return EdgeInsets.zero;
       case MessageType.voice:
-        if (shape == BubbleShape.singleTop ||
-            shape == BubbleShape.singleBottom) {
-          return const EdgeInsets.symmetric(horizontal: 14, vertical: 6);
+        if (shape == BubbleShape.groupedMiddle) {
+          return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
         }
-        return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
+        return const EdgeInsets.symmetric(horizontal: 14, vertical: 6);
       case MessageType.control:
         return const EdgeInsets.symmetric(horizontal: 14, vertical: 4);
     }
   }
 
-  double _topMarginFor(MessageType contentType, BubbleShape shape) {
-    switch (contentType) {
-      case MessageType.text:
-        switch (shape) {
-          case BubbleShape.singleTop:
-            return 6;
-          case BubbleShape.singleBottom:
-          case BubbleShape.groupedMiddle:
-            return 1;
-          case BubbleShape.singleMiddle:
-            return 4;
-        }
-      case MessageType.attachment:
-        switch (shape) {
-          case BubbleShape.singleBottom:
-            return 6;
-          case BubbleShape.singleTop:
-          case BubbleShape.groupedMiddle:
-            return 1;
-          case BubbleShape.singleMiddle:
-            return 4;
-        }
-      case MessageType.voice:
-        return shape == BubbleShape.singleMiddle ? 4 : 1;
-      case MessageType.control:
-        return 4;
-    }
-  }
+  // #***! половина зазора с каждой стороны: внутри группы 1+1, между
+  // группами 4+4 при любом типе соседей
+  static const double _groupedMargin = 1;
+  static const double _separateMargin = 4;
 
-  double _bottomMarginFor(MessageType contentType, BubbleShape shape) {
-    switch (contentType) {
-      case MessageType.text:
-      case MessageType.attachment:
-      case MessageType.voice:
-        return shape == BubbleShape.singleMiddle ? 4 : 1;
-      case MessageType.control:
-        return 4;
-    }
-  }
+  static double _marginFor(bool grouped) =>
+      grouped ? _groupedMargin : _separateMargin;
 
   BorderRadius _borderRadiusFor(
     BubbleStyle bubbleStyle,
@@ -949,7 +1291,7 @@ class MessageBubble extends StatelessWidget {
     final isBottom =
         shape == BubbleShape.singleBottom || shape == BubbleShape.singleMiddle;
     return computeBubbleRadius(
-      isMe: isMe,
+      isMe: _outgoing,
       isTop: isTop,
       isBottom: isBottom,
       style: bubbleStyle,
@@ -976,25 +1318,37 @@ class MessageBubble extends StatelessWidget {
       _senderPalette[id.abs() % _senderPalette.length];
 
   Widget _buildSenderHeader(ColorScheme cs, bool needsInset) {
-    final name = senderNameOverride ?? ContactCache.get(message.senderId);
+    final name =
+        senderNameOverride ??
+        (channelPost ? peerName : ContactCache.get(message.senderId));
     if (name == null || name.isEmpty) return const SizedBox.shrink();
     final header = Padding(
       padding: needsInset
           ? const EdgeInsets.fromLTRB(12, 6, 12, 2)
           : const EdgeInsets.only(bottom: 2),
-      child: Text(
-        name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: _senderColor(message.senderId),
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: channelPost
+                    ? cs.onSurface
+                    : _senderColor(message.senderId),
+                fontSize: channelPost ? 14 : 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (!channelPost) SenderBadge(senderId: message.senderId, size: 13),
+        ],
       ),
     );
 
-    final cb = onAvatarTap;
+    final cb = channelPost ? null : onAvatarTap;
     if (cb == null) return header;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1045,14 +1399,21 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (_hasShareAttachment) {
-      return ValueListenableBuilder<bool>(
-        valueListenable: AppLinkPreview.current,
-        builder: (context, _, _) => _buildBubble(context),
-      );
-    }
-    return _buildBubble(context);
+    return BubbleGeometryReporter(
+      geometry: _reportedGeometry(context),
+      slot: BubbleSlot.root,
+      bubble: this,
+      child: _hasShareAttachment
+          ? ValueListenableBuilder<bool>(
+              valueListenable: AppLinkPreview.current,
+              builder: (context, _, _) => _buildBubble(context),
+            )
+          : _buildBubble(context),
+    );
   }
+
+  BubbleGeometry? _reportedGeometry(BuildContext context) =>
+      BubbleChrome.hiddenOf(context) ? null : geometry;
 
   Widget _buildBubble(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -1060,12 +1421,8 @@ class MessageBubble extends StatelessWidget {
 
     if (message.isControl) {
       if (message.isSilentBotStart) return const SizedBox.shrink();
-      const controlShape = BubbleShape.singleMiddle;
       return Padding(
-        padding: EdgeInsets.only(
-          top: _topMarginFor(contentType, controlShape),
-          bottom: _bottomMarginFor(contentType, controlShape),
-        ),
+        padding: const EdgeInsets.symmetric(vertical: _separateMargin),
         child: Center(child: _buildControlContent(cs)),
       );
     }
@@ -1116,18 +1473,23 @@ class MessageBubble extends StatelessWidget {
     final hasMultiPhotos = _computeHasMultiplePhotosNoCaption();
     final textColor = bubbleTextColor(context);
 
-    final topMargin = _topMarginFor(contentType, shape);
-    final bottomMargin = _bottomMarginFor(contentType, shape);
+    final topMargin = _marginFor(
+      shape == BubbleShape.singleBottom || shape == BubbleShape.groupedMiddle,
+    );
+    final bottomMargin = _marginFor(
+      shape == BubbleShape.singleTop || shape == BubbleShape.groupedMiddle,
+    );
     final jumboAnimoji = _jumboAnimojiUrls;
     final padding = jumboAnimoji != null
         ? EdgeInsets.zero
         : _paddingFor(contentType, shape);
 
-    final showAvatarSlot = !isMe;
+    final showAvatarSlot = !_outgoing;
     final showAvatar =
         showAvatarSlot &&
         chatType == "CHAT" &&
-        nextMessage?.senderId != message.senderId;
+        (shape == BubbleShape.singleBottom ||
+            shape == BubbleShape.singleMiddle);
     final showSenderName = _showsSenderName;
 
     final keyboard = _inlineKeyboard;
@@ -1138,9 +1500,9 @@ class MessageBubble extends StatelessWidget {
         : math.min(screenWidth * 0.75, 760.0);
     final noBubbleBackground =
         isVideoNote || _isSticker || jumboAnimoji != null;
-    final bubbleColor = noBubbleBackground
+    final bubbleColor = noBubbleBackground || BubbleChrome.hiddenOf(context)
         ? Colors.transparent
-        : (isMe ? cs.primaryContainer : cs.surfaceContainerHighest);
+        : (_outgoing ? cs.primaryContainer : cs.surfaceContainerHighest);
 
     BubbleContext makeCtx({bool metaInFooter = false}) => BubbleContext(
       context: context,
@@ -1153,7 +1515,8 @@ class MessageBubble extends StatelessWidget {
       hasPhotoWithCaption: hasPhotoCap,
       hasMultiplePhotosNoCaption: hasMultiPhotos,
       message: message,
-      isMe: isMe,
+      isMe: _outgoing,
+      showsStatus: _showsStatus,
       myId: myId,
       chatType: chatType,
       chatId: chatId,
@@ -1162,15 +1525,30 @@ class MessageBubble extends StatelessWidget {
       overrideStatus: overrideStatus,
       otherReadTime: otherReadTime,
       uploadProgress: uploadProgress,
+      onCancelUpload: onCancelUpload,
+      onCancelUploadItem: onCancelUploadItem,
       onStickerTap: onStickerTap,
       onForwardedSourceTap: onForwardedSourceTap,
       reactionInfo: _resolveReactionInfo(),
+      views: views,
       selectable: _wrapSelectable,
     );
 
     final reactionsInside = contentType != MessageType.text;
 
     final reply = _resolvedReply(message.replyInfo);
+    final storyReply = reply == null ? _storyReply : null;
+    final Widget? quote = reply != null
+        ? _buildReplyQuote(context, cs, textColor, reply, maxBubbleWidth)
+        : storyReply != null
+        ? StoryReplyQuote(
+            reply: storyReply,
+            myId: myId,
+            accent: _senderColor(storyReply.ownerId),
+            textColor: textColor,
+            tappable: onReplyTap != null,
+          )
+        : null;
 
     final bool hasCommentsFooter = onCommentsTap != null;
     final EdgeInsets containerPadding = hasCommentsFooter
@@ -1196,7 +1574,7 @@ class MessageBubble extends StatelessWidget {
         ? _buildSenderHeader(cs, padding == EdgeInsets.zero)
         : null;
 
-    final Widget? replyHeader = reply == null
+    final Widget? replyHeader = quote == null
         ? null
         : Padding(
             padding: EdgeInsets.only(
@@ -1204,45 +1582,31 @@ class MessageBubble extends StatelessWidget {
               right: padding == EdgeInsets.zero ? 8 : 0,
               bottom: 4,
             ),
-            child: _buildReplyQuote(
-              context,
-              cs,
-              textColor,
-              reply,
-              maxBubbleWidth,
-            ),
+            child: quote,
           );
 
     final Widget innerContent =
         contentType == MessageType.text &&
             jumboAnimoji == null &&
             _stretchesTextRow
-        ? IntrinsicWidth(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (senderHeader != null)
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: senderHeader,
-                  ),
-                if (reply != null) ...[
-                  _CapIntrinsicWidth(
-                    cap: maxBubbleWidth * _replyWidthShare,
-                    child: _buildReplyQuote(
-                      context,
-                      cs,
-                      textColor,
-                      reply,
-                      maxBubbleWidth,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                ],
-                contentWithReactions,
+        ? _IntrinsicColumn(
+            stretch: true,
+            measureLast: true,
+            children: [
+              if (senderHeader != null)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: senderHeader,
+                ),
+              if (quote != null) ...[
+                _CapIntrinsicWidth(
+                  cap: maxBubbleWidth * _replyWidthShare,
+                  child: quote,
+                ),
+                const SizedBox(height: 4),
               ],
-            ),
+              contentWithReactions,
+            ],
           )
         : _mediaDictatesWidth && (senderHeader != null || replyHeader != null)
         ? _HeaderAboveMatchWidth(
@@ -1273,27 +1637,31 @@ class MessageBubble extends StatelessWidget {
         AppBubbleShape.current,
         AppBubbleBehavior.current,
       ]),
-      builder: (context, child) => Container(
-        constraints: BoxConstraints(
-          maxWidth: maxBubbleWidth,
-          minHeight: showAvatarSlot && chatType == "CHAT"
-              ? _groupAvatarSize
-              : 0,
+      builder: (context, child) => BubbleGeometryReporter(
+        geometry: _reportedGeometry(context),
+        slot: BubbleSlot.background,
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: maxBubbleWidth,
+            minHeight: showAvatarSlot && chatType == "CHAT"
+                ? _groupAvatarSize
+                : 0,
+          ),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: noBubbleBackground
+                ? null
+                : _borderRadiusFor(
+                    AppBubbleShape.current.value,
+                    AppBubbleBehavior.current.value,
+                    shape,
+                    hasPhotoCap,
+                    hasMultiPhotos,
+                  ),
+          ),
+          padding: containerPadding,
+          child: child,
         ),
-        decoration: BoxDecoration(
-          color: bubbleColor,
-          borderRadius: noBubbleBackground
-              ? null
-              : _borderRadiusFor(
-                  AppBubbleShape.current.value,
-                  AppBubbleBehavior.current.value,
-                  shape,
-                  hasPhotoCap,
-                  hasMultiPhotos,
-                ),
-        ),
-        padding: containerPadding,
-        child: child,
       ),
       child: hasCommentsFooter
           ? _StackMatchTopWidth(
@@ -1313,7 +1681,7 @@ class MessageBubble extends StatelessWidget {
       ),
       child: Align(
         child: Row(
-          mainAxisAlignment: isMe
+          mainAxisAlignment: _outgoing
               ? MainAxisAlignment.end
               : MainAxisAlignment.start,
           spacing: 8,
@@ -1324,7 +1692,7 @@ class MessageBubble extends StatelessWidget {
             else if (showAvatarSlot && chatType == "CHAT")
               const SizedBox(width: _groupAvatarSize),
             Column(
-              crossAxisAlignment: isMe
+              crossAxisAlignment: _outgoing
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
@@ -1346,7 +1714,7 @@ class MessageBubble extends StatelessWidget {
   Widget _buildCommentsFooter(BuildContext context, ColorScheme cs) {
     final label =
         commentsLabel ?? AppLocalizations.of(context)!.commentsTitle;
-    final accent = isMe ? cs.onPrimaryContainer : cs.primary;
+    final accent = _outgoing ? cs.onPrimaryContainer : cs.primary;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1399,14 +1767,14 @@ class MessageBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final row in keyboard.rows)
+          for (final (r, row) in keyboard.rows.indexed)
             if (row.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.only(bottom: 2),
                 child: Row(
                   children: [
                     for (var i = 0; i < row.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 4),
+                      if (i > 0) const SizedBox(width: 2),
                       Expanded(
                         child: Builder(
                           builder: (buttonContext) =>
@@ -1415,6 +1783,11 @@ class MessageBubble extends StatelessWidget {
                                 cs,
                                 keyboard,
                                 row[i],
+                                radius: _inlineKeyboardRadius(
+                                  keyboard.rows,
+                                  r,
+                                  i,
+                                ),
                               ),
                         ),
                       ),
@@ -1427,12 +1800,38 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
+  static BorderRadius _inlineKeyboardRadius(
+    List<List<InlineKeyboardButton>> rows,
+    int row,
+    int col,
+  ) {
+    const outer = Radius.circular(14);
+    const inner = Radius.circular(4);
+    bool has(int r, int c) =>
+        r >= 0 &&
+        r < rows.length &&
+        c >= 0 &&
+        c < rows[r].length;
+    Radius corner(bool vertical, bool horizontal) {
+      final vNeighbor = has(row + (vertical ? -1 : 1), col);
+      final hNeighbor = has(row, col + (horizontal ? -1 : 1));
+      return vNeighbor || hNeighbor ? inner : outer;
+    }
+    return BorderRadius.only(
+      topLeft: corner(true, true),
+      topRight: corner(true, false),
+      bottomLeft: corner(false, true),
+      bottomRight: corner(false, false),
+    );
+  }
+
   Widget _buildInlineKeyboardButton(
     BuildContext context,
     ColorScheme cs,
     InlineKeyboardAttachment keyboard,
-    InlineKeyboardButton button,
-  ) {
+    InlineKeyboardButton button, {
+    required BorderRadius radius,
+  }) {
     final trailingIcon = switch (button.type) {
       'LINK' => Symbols.open_in_new,
       'OPEN_APP' => Symbols.chevron_right,
@@ -1441,7 +1840,7 @@ class MessageBubble extends StatelessWidget {
     final isClipboard = button.type == 'CLIPBOARD';
     return Material(
       color: cs.primary.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: radius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _onInlineButtonTap(context, keyboard, button),
@@ -1501,7 +1900,7 @@ class MessageBubble extends StatelessWidget {
       case 'LINK':
         final url = button.url;
         if (url != null && url.isNotEmpty) {
-          await openExternalUrl(context, url);
+          await openMessageLink(context, url, shownText: button.text);
         }
         return;
       case 'OPEN_APP':
@@ -1534,7 +1933,7 @@ class MessageBubble extends StatelessWidget {
         if (!context.mounted) return;
         final url = answer?['url']?.toString();
         if (url != null && url.isNotEmpty) {
-          await openExternalUrl(context, url);
+          await openMessageLink(context, url);
           return;
         }
         final text = answer?['text']?.toString();
@@ -1713,7 +2112,7 @@ class MessageBubble extends StatelessWidget {
               SizedBox(
                 width: size,
                 height: size,
-                child: LottieImage(
+                child: MessageAnimoji(
                   lottieUrl: url,
                   size: size,
                   memCacheWidth: cache,
@@ -1740,8 +2139,6 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildJumboAnimojiMeta(BubbleContext ctx) {
-    final status = ctx.overrideStatus ?? ctx.message.status;
-    final statusVisual = messageStatusVisual(status, dimColor: Colors.white);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
@@ -1753,19 +2150,16 @@ class MessageBubble extends StatelessWidget {
         children: [
           ...ctx.metaMarks(Colors.white),
           Text(
-            ctx.clockText,
+            ctx.timeLabel,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
           ),
-          if (ctx.isMe) ...[
+          if (ctx.showsStatus) ...[
             const SizedBox(width: 3),
-            if (isSendingStatus(status))
-              SendingClockIcon(color: statusVisual.color, size: 13)
-            else
-              Icon(statusVisual.icon, size: 13, color: statusVisual.color),
+            ctx.statusIcon(color: Colors.white, size: 13),
           ],
           if (ctx.message.deleted) ...[
             const SizedBox(width: 3),
@@ -1819,16 +2213,21 @@ class MessageBubble extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_resolveReactionAnimoji(c.reaction) case final animoji?)
-              _ReactionAnimojiGlyph(
-                key: ValueKey((message.id, c.reaction)),
-                messageId: message.id,
-                emoji: c.reaction,
-                animoji: animoji,
-                animation: reactionAnimation,
-              )
-            else
-              Text(c.reaction, style: const TextStyle(fontSize: 13)),
+            _ReactionEmphasis(
+              key: ValueKey((message.id, c.reaction)),
+              messageId: message.id,
+              emoji: c.reaction,
+              animation: reactionAnimation,
+              child: switch (_resolveReactionAnimoji(c.reaction)) {
+                final animoji? => _ReactionAnimojiGlyph(
+                  messageId: message.id,
+                  emoji: c.reaction,
+                  animoji: animoji,
+                  animation: reactionAnimation,
+                ),
+                null => Text(c.reaction, style: const TextStyle(fontSize: 13)),
+              },
+            ),
             if (c.count > 1) ...[
               const SizedBox(width: 3),
               Text(
@@ -1920,7 +2319,11 @@ class MessageBubble extends StatelessWidget {
     chatId: message.chatId,
     messageId: message.id,
     cipherText: message.text ?? '',
-    builder: (decryption) => _buildTextContentBody(ctx, decryption),
+    builder: (decryption) => BubbleGeometryReporter(
+      geometry: _reportedGeometry(ctx.context),
+      slot: BubbleSlot.text,
+      child: _buildTextContentBody(ctx, decryption),
+    ),
   );
 
   Widget _buildTextContentBody(
@@ -1938,10 +2341,12 @@ class MessageBubble extends StatelessWidget {
     final forwarded = message.forwardedAttachment;
     final isForwarded = forwarded != null && !isForwardedContact;
 
-    final reactionChips = _buildReactionChipsFor(
-      ctx.cs,
-      ReactionInfo.fromMap(ctx.reactionInfo),
-    );
+    final reactionChips = ctx.metaInFooter
+        ? const <Widget>[]
+        : _buildReactionChipsFor(
+            ctx.cs,
+            ReactionInfo.fromMap(ctx.reactionInfo),
+          );
     final hasReactions = reactionChips.isNotEmpty;
 
     final activeFontFamily = Theme.of(
@@ -1968,14 +2373,9 @@ class MessageBubble extends StatelessWidget {
           Icon(Symbols.lock, size: 11, weight: 700, fill: 1, color: ctx.dim),
           const SizedBox(width: 3),
         ],
-        ...ctx.metaMarks(ctx.dim),
-        Text(
-          message.status == 'EDITED'
-              ? l10n.messageBubbleEditedTime(ctx.clockText)
-              : ctx.clockText,
-          style: TextStyle(color: ctx.dim, fontSize: 10),
-        ),
-        if (isMe) ...[const SizedBox(width: 4), ctx.statusIcon()],
+        ...ctx.metaMarks(ctx.dim, fontSize: 10),
+        Text(ctx.timeLabel, style: TextStyle(color: ctx.dim, fontSize: 10)),
+        if (ctx.showsStatus) ...[const SizedBox(width: 4), ctx.statusIcon()],
         if (message.deleted) ...[const SizedBox(width: 4), ctx.deletedIcon()],
       ],
     );
@@ -2011,24 +2411,25 @@ class MessageBubble extends StatelessWidget {
     }
 
     if (hasReactions) {
-      return IntrinsicWidth(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            textWidget,
-            const SizedBox(height: 6),
-            _ReactionsFlow(
-              chips: reactionChips,
-              meta: Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: metaRow,
-              ),
+      return _IntrinsicColumn(
+        stretch: false,
+        measureLast: false,
+        fillHeight: true,
+        children: [
+          textWidget,
+          const SizedBox(height: 6),
+          _ReactionsFlow(
+            chips: reactionChips,
+            meta: Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: metaRow,
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
+    if (ctx.metaInFooter) return textWidget;
     return TextWithMeta(text: textWidget, meta: metaRow);
   }
 
@@ -2116,10 +2517,10 @@ class MessageBubble extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          OfficialName(
+            contactId: reply.senderId == myId ? 0 : reply.senderId,
+            text: name,
+            iconSize: 12,
             style: TextStyle(
               color: accent,
               fontSize: 12.5,
@@ -2404,11 +2805,14 @@ class MessageBubble extends StatelessWidget {
       duration: duration,
       url: url,
       textColor: ctx.text,
-      isMe: isMe,
+      isMe: ctx.isMe,
+      showsStatus: ctx.showsStatus,
+      views: ctx.views,
       deleted: message.deleted,
       status: overrideStatus ?? message.status,
       otherReadTime: otherReadTime,
       time: message.time,
+      showMeta: !ctx.metaInFooter,
       likelyForwarded: ctx.likelyForwarded,
       cs: ctx.cs,
       waveData: audio?.waveform,

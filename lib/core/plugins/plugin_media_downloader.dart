@@ -2,12 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'plugin_network_policy.dart';
+
 class PluginMediaDownloader {
   PluginMediaDownloader._();
 
   static const int _attempts = 3;
   static const int _maxRedirects = 5;
-  static const Duration _connectionTimeout = Duration(seconds: 10);
   static const Duration _responseTimeout = Duration(seconds: 20);
 
   static Future<Uint8List> download(
@@ -47,12 +48,14 @@ class PluginMediaDownloader {
     required int maxBytes,
     required bool allowHttpForTesting,
   }) async {
-    final client = HttpClient()..connectionTimeout = _connectionTimeout;
+    final client = PluginNetworkPolicy.createClient(
+      allowHttpForTesting: allowHttpForTesting,
+    );
     try {
       var uri = initialUri;
       for (var redirect = 0; redirect <= _maxRedirects; redirect++) {
         _validateUri(uri, allowHttpForTesting: allowHttpForTesting);
-        final request = await client.getUrl(uri);
+        final request = await client.getUrl(uri).timeout(_responseTimeout);
         request
           ..followRedirects = false
           ..persistentConnection = false;
@@ -66,7 +69,7 @@ class PluginMediaDownloader {
         final response = await request.close().timeout(_responseTimeout);
         if (response.isRedirect) {
           final location = response.headers.value(HttpHeaders.locationHeader);
-          await response.drain<void>();
+          await response.drain<void>().timeout(_responseTimeout);
           if (location == null || redirect == _maxRedirects) {
             throw HttpException('Некорректный HTTP redirect', uri: uri);
           }
@@ -74,20 +77,20 @@ class PluginMediaDownloader {
           continue;
         }
         if (response.statusCode < 200 || response.statusCode >= 300) {
-          await response.drain<void>();
+          await response.drain<void>().timeout(_responseTimeout);
           throw HttpException('HTTP ${response.statusCode}', uri: uri);
         }
         final contentLength = response.contentLength;
         if (contentLength > maxBytes) {
-          await response.drain<void>();
+          await response.drain<void>().timeout(_responseTimeout);
           throw const FormatException('Файл слишком большой');
         }
         final bytes = <int>[];
         await for (final chunk in response.timeout(_responseTimeout)) {
-          bytes.addAll(chunk);
-          if (bytes.length > maxBytes) {
+          if (bytes.length + chunk.length > maxBytes) {
             throw const FormatException('Файл слишком большой');
           }
+          bytes.addAll(chunk);
         }
         if (contentLength >= 0 && bytes.length != contentLength) {
           throw HttpException(
@@ -103,36 +106,9 @@ class PluginMediaDownloader {
     }
   }
 
-  static void _validateUri(Uri uri, {required bool allowHttpForTesting}) {
-    final validScheme =
-        uri.scheme == 'https' || (allowHttpForTesting && uri.scheme == 'http');
-    if (!validScheme || uri.host.isEmpty) {
-      throw const FormatException('Разрешены только корректные HTTPS URL');
-    }
-    if (allowHttpForTesting) return;
-    final host = uri.host.toLowerCase();
-    if (host == 'localhost' || host.endsWith('.localhost')) {
-      throw const FormatException('Локальные адреса запрещены');
-    }
-    final address = InternetAddress.tryParse(host);
-    if (address != null && _isPrivateAddress(address)) {
-      throw const FormatException('Локальные адреса запрещены');
-    }
-  }
-
-  static bool _isPrivateAddress(InternetAddress address) {
-    if (address.isLoopback || address.isLinkLocal) return true;
-    final bytes = address.rawAddress;
-    if (address.type == InternetAddressType.IPv4) {
-      return bytes[0] == 10 ||
-          bytes[0] == 127 ||
-          bytes[0] == 0 ||
-          (bytes[0] == 169 && bytes[1] == 254) ||
-          (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
-          (bytes[0] == 192 && bytes[1] == 168);
-    }
-    return bytes.every((byte) => byte == 0) ||
-        (bytes[0] & 0xfe) == 0xfc ||
-        (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80);
-  }
+  static void _validateUri(Uri uri, {required bool allowHttpForTesting}) =>
+      PluginNetworkPolicy.validateUri(
+        uri,
+        allowHttpForTesting: allowHttpForTesting,
+      );
 }

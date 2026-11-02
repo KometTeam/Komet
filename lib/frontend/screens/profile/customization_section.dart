@@ -1,32 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../../core/config/ios_release.dart';
 import '../../../core/utils/haptics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/settings_card.dart';
+import '../../widgets/spotlight.dart';
+import '../../../core/whats_new/spotlight_ids.dart';
 import 'app_icon_screen.dart';
 import 'appearance_screen.dart';
 import 'chat_background_screen.dart';
 import 'font_settings_screen.dart';
-import 'message_actions_screen.dart';
 import 'theme_settings_screen.dart';
 
 class _CustomizationCategory {
   final IconData icon;
   final String Function(AppLocalizations l10n) title;
   final WidgetBuilder builder;
-  final bool Function() isAvailable;
+  final String spotlightId;
 
   const _CustomizationCategory({
     required this.icon,
     required this.title,
     required this.builder,
-    this.isAvailable = _always,
+    required this.spotlightId,
   });
-
-  static bool _always() => true;
 }
 
 class CustomizationSection extends StatefulWidget {
@@ -44,41 +42,41 @@ class _CustomizationSectionState extends State<CustomizationSection> {
       icon: Symbols.dark_mode,
       title: (l10n) => l10n.themeSettingsTitle,
       builder: (context) => const ThemeSettingsScreen(),
+      spotlightId: SpotlightIds.settingsTheme,
     ),
     _CustomizationCategory(
       icon: Symbols.styler,
       title: (l10n) => l10n.appearanceTitle,
       builder: (context) => const AppearanceScreen(),
+      spotlightId: SpotlightIds.settingsAppearance,
     ),
     _CustomizationCategory(
       icon: Symbols.wallpaper,
       title: (l10n) => l10n.customizationChatBackground,
       builder: (context) => const ChatBackgroundScreen(),
+      spotlightId: SpotlightIds.settingsChatBackground,
     ),
     _CustomizationCategory(
       icon: Symbols.text_fields,
       title: (l10n) => l10n.fontSettingsTitle,
       builder: (context) => const FontSettingsScreen(),
-    ),
-    _CustomizationCategory(
-      icon: Symbols.touch_app,
-      title: (l10n) => l10n.customizationMessageActions,
-      builder: (context) => const MessageActionsScreen(),
-      isAvailable: _messageActionsStyleChoice,
+      spotlightId: SpotlightIds.settingsFont,
     ),
     _CustomizationCategory(
       icon: Symbols.apps,
       title: (l10n) => l10n.customizationAppIcon,
       builder: (context) => const AppIconScreen(),
+      spotlightId: SpotlightIds.settingsAppIcon,
     ),
   ];
-
-  static bool _messageActionsStyleChoice() =>
-      IosRelease.messageActionsStyleChoice;
 
   void _toggle() {
     Haptics.tap();
     setState(() => _expanded = !_expanded);
+  }
+
+  void _expand() {
+    if (!_expanded) _toggle();
   }
 
   void _open(_CustomizationCategory category) {
@@ -95,7 +93,12 @@ class _CustomizationSectionState extends State<CustomizationSection> {
       depth: 6,
       child: Column(
         children: [
-          _buildHeader(cs),
+          SpotlightTarget(
+            id: SpotlightIds.settingsCustomization,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            onActivate: _expand,
+            child: _buildHeader(cs),
+          ),
           AnimatedSize(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeInOut,
@@ -155,12 +158,8 @@ class _CustomizationSectionState extends State<CustomizationSection> {
   List<Widget> _buildCategoryTiles(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
     final tiles = <Widget>[];
-    final categories = [
-      for (final category in _categories)
-        if (category.isAvailable()) category,
-    ];
-    for (var i = 0; i < categories.length; i++) {
-      final category = categories[i];
+    for (var i = 0; i < _categories.length; i++) {
+      final category = _categories[i];
       tiles.add(
         Padding(
           padding: const EdgeInsets.only(left: 58),
@@ -172,11 +171,15 @@ class _CustomizationSectionState extends State<CustomizationSection> {
         ),
       );
       tiles.add(
-        SettingsNavTile(
-          icon: category.icon,
-          label: category.title(l10n),
-          onTap: () => _open(category),
-          isLast: i == categories.length - 1,
+        SpotlightTarget(
+          id: category.spotlightId,
+          onActivate: () => _open(category),
+          child: SettingsNavTile(
+            icon: category.icon,
+            label: category.title(l10n),
+            onTap: () => _open(category),
+            isLast: i == _categories.length - 1,
+          ),
         ),
       );
     }

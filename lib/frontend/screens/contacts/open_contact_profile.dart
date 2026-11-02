@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/storage/token_storage.dart';
 import '../chats/chat_info_screen.dart';
+import '../../widgets/first_frame_clock.dart';
 
 Future<void> openContactDialogProfile(
   BuildContext context, {
   required int contactId,
-  required String name,
+  required String? name,
   String? avatarUrl,
 }) async {
   final accountId = await TokenStorage.getActiveAccountId();
@@ -18,10 +19,10 @@ Future<void> openContactDialogProfile(
   if (!context.mounted) return;
   Navigator.push(
     context,
-    MaterialPageRoute(
+    FirstFramePageRoute(
       builder: (_) => ChatInfoScreen(
         chatId: chatId,
-        name: name,
+        name: name ?? '',
         imageUrl: avatarUrl ?? '',
         chatType: 'DIALOG',
         dialogPeerId: contactId,

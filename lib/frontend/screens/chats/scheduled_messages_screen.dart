@@ -6,6 +6,7 @@ import 'package:m3e_collection/m3e_collection.dart'
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../backend/modules/messages.dart';
+import '../../../core/crypto/outgoing_message_policy.dart';
 import '../../../core/protocol/opcode_map.dart';
 import '../../../models/attachment.dart';
 import '../../../core/protocol/packet.dart';
@@ -89,6 +90,15 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen>
 
   Future<void> _edit(CachedMessage msg) async {
     final l10n = AppLocalizations.of(context)!;
+    await OutgoingMessagePolicy.load(widget.accountId);
+    if (!mounted) return;
+    if (OutgoingMessagePolicy.requiresEncryption(
+      widget.accountId,
+      widget.chatId,
+    )) {
+      showCustomNotification(context, l10n.shareEncryptedUnsupported);
+      return;
+    }
     final controller = TextEditingController(text: msg.text ?? '');
     var when = DateTime.fromMillisecondsSinceEpoch(
       msg.delayedTimeToFire ?? msg.time,
@@ -189,13 +199,19 @@ class _ScheduledMessagesScreenState extends State<ScheduledMessagesScreen>
       return;
     }
 
-    final ok = await messagesModule.editScheduledMessage(
-      widget.chatId,
-      msg.id,
-      text: controller.text.trim(),
-      timeToFire: when.millisecondsSinceEpoch,
-    );
-    controller.dispose();
+    var ok = false;
+    try {
+      ok = await messagesModule.editScheduledMessage(
+        widget.chatId,
+        msg.id,
+        text: controller.text.trim(),
+        timeToFire: when.millisecondsSinceEpoch,
+      );
+    } catch (_) {
+      ok = false;
+    } finally {
+      controller.dispose();
+    }
     if (!mounted) return;
     if (ok) {
       Haptics.send();

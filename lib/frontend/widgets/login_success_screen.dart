@@ -7,6 +7,8 @@ import '../../core/utils/haptics.dart';
 import '../../l10n/app_localizations.dart';
 import 'adaptive_shell.dart';
 
+const _avatarPrecacheTimeout = Duration(seconds: 5);
+
 Future<ImageProvider?> precacheLoginAvatar(
   BuildContext context,
   String? url,
@@ -14,7 +16,7 @@ Future<ImageProvider?> precacheLoginAvatar(
   if (url == null || url.isEmpty) return null;
   final provider = CachedNetworkImageProvider(url);
   try {
-    await precacheImage(provider, context);
+    await precacheImage(provider, context).timeout(_avatarPrecacheTimeout);
     return provider;
   } catch (_) {
     return null;

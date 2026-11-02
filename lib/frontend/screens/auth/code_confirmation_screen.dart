@@ -3,19 +3,23 @@ import 'package:flutter/material.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'login_needs_2fa_screen.dart';
 import 'password_2fa_screen.dart';
 import 'registration_screen.dart';
 import 'session_stale_recovery.dart';
+import 'slow_login_hint.dart';
 import '../../../backend/api.dart';
 import '../../../core/config/review_access.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/spoofing_service.dart';
+import '../../../core/utils/logger.dart';
 import '../../../core/utils/sms_code_listener.dart';
 import '../../../main.dart';
 import '../../widgets/auth_limits_sheet.dart';
 import '../../widgets/custom_notification.dart';
 import '../../widgets/login_success_screen.dart';
 import '../../widgets/small_spinner.dart';
+import '../../widgets/temporary_password_recovery_dialog.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -73,6 +77,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     if (!widget.reviewAccess) {
       _startTimer();
       _listenForSmsCode();
+      accountModule.prepareWebSmsSocket();
     }
 
     _shakeController = AnimationController(
@@ -265,6 +270,16 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     });
   }
 
+  Future<void> _showLoginNeeds2fa() async {
+    final retry = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const LoginNeeds2faScreen()),
+    );
+    if (retry != true || !mounted) return;
+    await _requestFreshCode(
+      AppLocalizations.of(context)!.codeConfirmationNewCodeSent,
+    );
+  }
+
   void _resendCode() {
     if (_timerSeconds > 0 || recovering || _verifying) return;
     unawaited(
@@ -307,6 +322,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         _showError(AppLocalizations.of(context)!.codeErrorInvalid);
         return;
       }
+      stopSessionRecovery();
 
       final spoof = credentials.spoof;
       if (spoof != null) {
@@ -339,12 +355,15 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
 
     setState(() => _verifying = true);
     var verified = false;
+    int? verifiedAccountId;
     try {
       final result = await accountModule.verifyCode(
         _codeController.text,
         _token,
       );
       verified = true;
+      verifiedAccountId = result.accountId;
+      stopSessionRecovery();
 
       if (!mounted) return;
 
@@ -386,6 +405,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         return;
       }
 
+      logger.d(
+        '[${api.debugTag}] код подтверждён: '
+        '${api.webHandshake ? 'SMS-вход через веб' : 'обычный вход'}',
+      );
       // #***! эксперим. SMS-вход через веб: получаем сокетовый токен хитрой схемой
       if (api.webHandshake) {
         final token = result.loginToken;
@@ -394,13 +417,19 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
           _showError(AppLocalizations.of(context)!.codeConfirmationSmsNoToken);
           return;
         }
-        stopSessionRecovery();
         await accountModule.completeWebSmsSocketLogin(
           phone: widget.rawPhone,
           accountId: accId,
           webToken: token,
           existingPassword: null,
         );
+        if (!mounted) return;
+        await showTemporaryPasswordRecovery(
+          context,
+          accId,
+          verifiedAccountId: verifiedAccountId,
+        );
+        if (!mounted) return;
         await _completeLogin(null);
         return;
       }
@@ -408,8 +437,26 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
       final loginResult = await accountModule.login();
 
       await _completeLogin(loginResult.profile.baseUrl);
-    } catch (e) {
+    } catch (e, st) {
+      logger.d(
+        '[${api.debugTag}] подтверждение кода упало '
+        '(код принят=$verified): $e\n$st',
+      );
       if (!mounted) return;
+      if (!verified &&
+          e is PacketError &&
+          e.errorKey == loginNeeds2faErrorKey) {
+        await _showLoginNeeds2fa();
+        return;
+      }
+      if (verified && verifiedAccountId != null) {
+        await showTemporaryPasswordRecovery(
+          context,
+          verifiedAccountId,
+          verifiedAccountId: verifiedAccountId,
+        );
+        if (!mounted) return;
+      }
       if (verified) {
         _showError(e.toString());
       } else if (isAuthSessionLostError(e)) {
@@ -432,237 +479,249 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     final l10n = AppLocalizations.of(context)!;
     final hasError = _errorMessage != null;
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Symbols.arrow_back, color: cs.onSurfaceVariant),
-          onPressed: () => Navigator.pop(context),
+    return PopScope(
+      canPop: !_verifying,
+      child: Scaffold(
+        backgroundColor: cs.surface,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Symbols.arrow_back, color: cs.onSurfaceVariant),
+            onPressed: _verifying ? null : () => Navigator.pop(context),
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              Text(
-                widget.phoneNumber,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w500,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 16),
+                Text(
+                  widget.phoneNumber,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                l10n.codeConfirmationSmsSent,
-                style: TextStyle(
-                  color: cs.outline,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  height: 1.4,
+                const SizedBox(height: 12),
+                Text(
+                  api.webHandshake
+                      ? l10n.codeConfirmationSmsSent
+                      : l10n.codeConfirmationCheckMaxChat,
+                  style: TextStyle(
+                    color: cs.outline,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                    height: 1.4,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              AnimatedBuilder(
-                animation: _shakeAnimation,
-                builder: (context, child) => Transform.translate(
-                  offset: Offset(_shakeAnimation.value, 0),
-                  child: child,
+                const SizedBox(height: 12),
+                AnimatedBuilder(
+                  animation: _shakeAnimation,
+                  builder: (context, child) => Transform.translate(
+                    offset: Offset(_shakeAnimation.value, 0),
+                    child: child,
+                  ),
+                  child: Stack(
+                    children: [
+                      Opacity(
+                        opacity: 0,
+                        child: SizedBox(
+                          height: 0,
+                          width: 0,
+                          child: TextField(
+                            controller: _codeController,
+                            focusNode: _focusNode,
+                            keyboardType: TextInputType.number,
+                            autofillHints: const [AutofillHints.oneTimeCode],
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(6),
+                            ],
+                            onChanged: (value) {
+                              if (hasError) {
+                                setState(() => _errorMessage = null);
+                              }
+                              setState(() {});
+                              if (value.length == 6) _verifyCode();
+                            },
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _openKeyboard,
+                        child: FittedBox(
+                          child: Row(
+                            children: List.generate(6, (index) {
+                              final isFocused =
+                                  _codeController.text.length == index &&
+                                  _focusNode.hasFocus;
+                              final hasValue =
+                                  _codeController.text.length > index;
+                              final char = hasValue
+                                  ? _codeController.text[index]
+                                  : '';
+
+                              Color borderColor;
+                              if (hasError && hasValue) {
+                                borderColor = cs.error;
+                              } else if (isFocused) {
+                                borderColor = cs.primary;
+                              } else if (hasValue) {
+                                borderColor = cs.outlineVariant;
+                              } else {
+                                borderColor = Colors.transparent;
+                              }
+
+                              return AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 44,
+                                height: 54,
+                                margin: EdgeInsets.only(
+                                  right: index == 5 ? 0 : 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: hasError && hasValue
+                                      ? cs.error.withValues(alpha: 0.1)
+                                      : cs.surfaceContainerHigh,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: borderColor,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 100),
+                                  transitionBuilder:
+                                      (
+                                        Widget child,
+                                        Animation<double> animation,
+                                      ) {
+                                        return ScaleTransition(
+                                          scale: animation,
+                                          child: FadeTransition(
+                                            opacity: animation,
+                                            child: child,
+                                          ),
+                                        );
+                                      },
+                                  child: Text(
+                                    char,
+                                    key: ValueKey<String>(
+                                      char +
+                                          index.toString() +
+                                          (hasError ? 'e' : ''),
+                                    ),
+                                    style: TextStyle(
+                                      color: hasError && hasValue
+                                          ? cs.error
+                                          : cs.onSurface,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Stack(
+                const SizedBox(height: 16),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topLeft,
+                  child: hasError
+                      ? Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: AnimatedOpacity(
+                            opacity: hasError ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: Text(
+                              _errorMessage!,
+                              style: TextStyle(
+                                color: cs.error,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                if (!widget.reviewAccess)
+                  GestureDetector(
+                    onTap: _resendCode,
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 200),
+                      style: TextStyle(
+                        color: _timerSeconds > 0 ? cs.outline : cs.tertiary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      child: Text(
+                        _timerSeconds > 0
+                            ? l10n.codeResendInSeconds(_timerSeconds)
+                            : l10n.codeResendSms,
+                      ),
+                    ),
+                  ),
+                const Spacer(),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Opacity(
-                      opacity: 0,
-                      child: SizedBox(
-                        height: 0,
-                        width: 0,
-                        child: TextField(
-                          controller: _codeController,
-                          focusNode: _focusNode,
-                          keyboardType: TextInputType.number,
-                          autofillHints: const [AutofillHints.oneTimeCode],
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(6),
-                          ],
-                          onChanged: (value) {
-                            if (hasError) setState(() => _errorMessage = null);
-                            setState(() {});
-                            if (value.length == 6) _verifyCode();
-                          },
+                    Expanded(
+                      child: SlowLoginHint(
+                        active: _verifying && api.webHandshake,
+                        idle: Text(
+                          l10n.codeConfirmation2faWarning,
+                          style: TextStyle(
+                            color: cs.error.withValues(alpha: 0.5),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            height: 1.35,
+                          ),
                         ),
                       ),
                     ),
-                    GestureDetector(
-                      onTap: _openKeyboard,
-                      child: FittedBox(
-                        child: Row(
-                          children: List.generate(6, (index) {
-                            final isFocused =
-                                _codeController.text.length == index &&
-                                _focusNode.hasFocus;
-                            final hasValue =
-                                _codeController.text.length > index;
-                            final char = hasValue
-                                ? _codeController.text[index]
-                                : '';
-
-                            Color borderColor;
-                            if (hasError && hasValue) {
-                              borderColor = cs.error;
-                            } else if (isFocused) {
-                              borderColor = cs.primary;
-                            } else if (hasValue) {
-                              borderColor = cs.outlineVariant;
-                            } else {
-                              borderColor = Colors.transparent;
-                            }
-
-                            return AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 44,
-                              height: 54,
-                              margin: EdgeInsets.only(
-                                right: index == 5 ? 0 : 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: hasError && hasValue
-                                    ? cs.error.withValues(alpha: 0.1)
-                                    : cs.surfaceContainerHigh,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: borderColor,
-                                  width: 1.5,
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 100),
-                                transitionBuilder:
-                                    (
-                                      Widget child,
-                                      Animation<double> animation,
-                                    ) {
-                                      return ScaleTransition(
-                                        scale: animation,
-                                        child: FadeTransition(
-                                          opacity: animation,
-                                          child: child,
-                                        ),
-                                      );
-                                    },
-                                child: Text(
-                                  char,
-                                  key: ValueKey<String>(
-                                    char +
-                                        index.toString() +
-                                        (hasError ? 'e' : ''),
-                                  ),
-                                  style: TextStyle(
-                                    color: hasError && hasValue
-                                        ? cs.error
-                                        : cs.onSurface,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
+                    const SizedBox(width: 16),
+                    FloatingActionButton(
+                      onPressed: (recovering || _verifying)
+                          ? null
+                          : () {
+                              if (_codeController.text.length == 6) {
+                                _verifyCode();
+                              }
+                            },
+                      backgroundColor: _codeController.text.length == 6
+                          ? cs.primaryContainer
+                          : cs.surfaceContainerHighest,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(50),
                       ),
+                      child: (recovering || _verifying)
+                          ? SmallSpinner(size: 24, color: cs.onPrimaryContainer)
+                          : Icon(
+                              Symbols.arrow_forward,
+                              color: _codeController.text.length == 6
+                                  ? cs.onPrimaryContainer
+                                  : cs.onSurfaceVariant,
+                            ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.topLeft,
-                child: hasError
-                    ? Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: AnimatedOpacity(
-                          opacity: hasError ? 1.0 : 0.0,
-                          duration: const Duration(milliseconds: 200),
-                          child: Text(
-                            _errorMessage!,
-                            style: TextStyle(
-                              color: cs.error,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-              if (!widget.reviewAccess)
-                GestureDetector(
-                  onTap: _resendCode,
-                  child: AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 200),
-                    style: TextStyle(
-                      color: _timerSeconds > 0 ? cs.outline : cs.tertiary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    child: Text(
-                      _timerSeconds > 0
-                          ? l10n.codeResendInSeconds(_timerSeconds)
-                          : l10n.codeResendSms,
-                    ),
-                  ),
-                ),
-              const Spacer(),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Text(
-                      l10n.codeConfirmation2faWarning,
-                      style: TextStyle(
-                        color: cs.error.withValues(alpha: 0.5),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  FloatingActionButton(
-                    onPressed: (recovering || _verifying)
-                        ? null
-                        : () {
-                            if (_codeController.text.length == 6) _verifyCode();
-                          },
-                    backgroundColor: _codeController.text.length == 6
-                        ? cs.primaryContainer
-                        : cs.surfaceContainerHighest,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: (recovering || _verifying)
-                        ? SmallSpinner(size: 24, color: cs.onPrimaryContainer)
-                        : Icon(
-                            Symbols.arrow_forward,
-                            color: _codeController.text.length == 6
-                                ? cs.onPrimaryContainer
-                                : cs.onSurfaceVariant,
-                          ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-            ],
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),

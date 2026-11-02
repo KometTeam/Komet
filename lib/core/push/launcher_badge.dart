@@ -47,6 +47,29 @@ class BadgeCount {
     );
   }
 
+  factory BadgeCount.live({
+    required bool enabled,
+    required bool includeMuted,
+    required bool countMessages,
+  }) => BadgeCount.of(
+    chats.chatsLoaded
+        ? chats.chatsSnapshot(
+            includeHidden: KometSettings.showHiddenChats.value,
+          )
+        : const <CachedChat>[],
+    enabled: enabled,
+    includeMuted: includeMuted,
+    countMessages: countMessages,
+    isArchived: (chat) =>
+        ArchivedChatsStore.instance.isArchived(chat.accountId, chat.id),
+  );
+
+  static List<Listenable> get chatSources => [
+    chats.chatsChanged,
+    ArchivedChatsStore.instance.revision,
+    KometSettings.showHiddenChats,
+  ];
+
   final bool enabled;
   final bool byChats;
   final int count;
@@ -86,9 +109,7 @@ class LauncherBadge {
   bool _sawChats = false;
 
   List<Listenable> get _sources => [
-    chats.chatsChanged,
-    ArchivedChatsStore.instance.revision,
-    KometSettings.showHiddenChats,
+    ...BadgeCount.chatSources,
     AppBadge.enabled.current,
     AppBadge.includeMuted.current,
     AppBadge.countMessages.current,
@@ -129,17 +150,10 @@ class LauncherBadge {
     final loaded = chats.chatsLoaded;
     if (enabled && !loaded && !_sawChats) return null;
     if (loaded) _sawChats = true;
-    return BadgeCount.of(
-      loaded
-          ? chats.chatsSnapshot(
-              includeHidden: KometSettings.showHiddenChats.value,
-            )
-          : const <CachedChat>[],
+    return BadgeCount.live(
       enabled: enabled,
       includeMuted: AppBadge.includeMuted.current.value,
       countMessages: AppBadge.countMessages.current.value,
-      isArchived: (chat) =>
-          ArchivedChatsStore.instance.isArchived(chat.accountId, chat.id),
     );
   }
 

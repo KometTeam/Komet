@@ -7,6 +7,7 @@ import '../../core/config/komet_settings.dart';
 import '../../core/protocol/opcode_map.dart';
 import '../../core/protocol/packet.dart';
 import '../../core/push/push_service.dart';
+import '../../core/cache/chat_scroll_memory.dart';
 import '../../core/cache/info_cache.dart';
 import '../../core/cache/message_session_cache.dart';
 import 'shared_content.dart';
@@ -15,6 +16,7 @@ import '../../core/media/deleted_media_keeper.dart';
 import '../../core/storage/app_database.dart';
 import '../../core/storage/chat_activity_store.dart';
 import '../../core/storage/chat_members_store.dart';
+import '../../core/storage/ghost_read_store.dart';
 import '../../core/storage/token_storage.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/text_format.dart';
@@ -140,9 +142,12 @@ class CachedChat {
 
   late final ChatCall? activeCall = ChatCall.decode(activeCallData);
 
-  // #***! форматирование последнего сообщения строкой джейсона
-  List<FormatRange> get lastMsgFormatRanges {
-    final raw = lastMsgElements;
+  // #***! форматирование последнего сообщения строкой джейсона, разбираем один раз
+  late final List<FormatRange> lastMsgFormatRanges = _decodeRanges(
+    lastMsgElements,
+  );
+
+  static List<FormatRange> _decodeRanges(String? raw) {
     if (raw == null || raw.isEmpty) return const [];
     try {
       return parseFormatElements(jsonDecode(raw));
@@ -570,8 +575,12 @@ class ChatsModule {
     final row = Map<String, dynamic>.from(rows.first);
     if ((row['unread_count'] as int? ?? 0) == 0) return;
 
+    final ghost = KometSettings.ghostMode.value;
+    if (ghost) {
+      await _rememberGhostRead(accountId, chatId, rows.first, mark);
+    }
     final msgIdNum = int.tryParse(messageId);
-    if (msgIdNum != null && !KometSettings.antiRead.value) {
+    if (msgIdNum != null && !KometSettings.antiRead.value && !ghost) {
       try {
         await api.sendRequest(Opcode.chatMark, {
           'type': 'READ_MESSAGE',
@@ -602,8 +611,9 @@ class ChatsModule {
     int mark, {
     required int remaining,
   }) async {
+    final ghost = KometSettings.ghostMode.value;
     final msgIdNum = int.tryParse(messageId);
-    if (msgIdNum != null && !KometSettings.antiRead.value) {
+    if (msgIdNum != null && !KometSettings.antiRead.value && !ghost) {
       try {
         await api.sendRequest(Opcode.chatMark, {
           'type': 'READ_MESSAGE',
@@ -616,6 +626,9 @@ class ChatsModule {
 
     final rows = await AppDatabase.loadChat(accountId, chatId);
     if (rows.isEmpty) return;
+    if (ghost) {
+      await _rememberGhostRead(accountId, chatId, rows.first, mark);
+    }
     final cached = CachedChat.fromDbRow(rows.first);
     final next = remaining < 0 ? 0 : remaining;
     final currentMark = cached.participants[accountId] ?? 0;
@@ -810,6 +823,23 @@ class ChatsModule {
 
   bool get chatsLoaded => _readyAccounts.isNotEmpty;
 
+  int? cachedUnreadCount(int accountId, int chatId) {
+    if (!_readyAccounts.contains(accountId)) return null;
+    final chat = _chatsById[chatId];
+    if (chat == null || chat.accountId != accountId) return null;
+    return chat.unreadCount;
+  }
+
+  ({CachedChat chat, bool inList})? cachedChat(int accountId, int chatId) {
+    if (!_readyAccounts.contains(accountId)) return null;
+    final chat = _chatsById[chatId];
+    if (chat == null || chat.accountId != accountId) return null;
+    return (
+      chat: chat.copyWith(participants: Map.of(chat.participants)),
+      inList: _inListById[chatId] != ChatListState.notInList,
+    );
+  }
+
   // #***! разовая подгрузка кэша чатов аккаунта из базы
   Future<void> ensureLoaded(int accountId) async {
     if (!_loadedAccounts.add(accountId)) return;
@@ -900,6 +930,38 @@ class ChatsModule {
   void _refreshChatInfo(int chatId) {
     ChatInfoFetch.invalidate(chatId);
     unawaited(ChatInfoFetch.get(chatId));
+  }
+
+  Future<void> _rememberGhostRead(
+    int accountId,
+    int chatId,
+    Map<String, Object?> row,
+    int mark,
+  ) {
+    final cached = CachedChat.fromDbRow(row);
+    return GhostReadStore.instance.remember(
+      accountId,
+      chatId,
+      mark: mark,
+      unread: cached.unreadCount,
+      ownMark: cached.participants[accountId] ?? 0,
+    );
+  }
+
+  Future<void> restoreGhostReads() async {
+    final entries = GhostReadStore.instance.snapshot();
+    for (final entry in entries) {
+      final read = entry.read;
+      await _updateChat(entry.accountId, entry.chatId, (chat) {
+        final participants = Map<int, int>.from(chat.participants)
+          ..[entry.accountId] = read.ownMark;
+        return chat.copyWith(
+          unreadCount: read.unread,
+          participants: participants,
+        );
+      });
+    }
+    await GhostReadStore.instance.clearAll();
   }
 
   // #***! шаблон прочитать поменять сохранить оповестить
@@ -1128,7 +1190,6 @@ class ChatsModule {
     }
     if (chatId == null) return;
 
-    final keepDeleted = KometSettings.viewDeleted.value;
     final ids = payload['messageIds'];
     if (ids is List) {
       final messageIds = ids
@@ -1136,21 +1197,7 @@ class ChatsModule {
           .whereType<String>()
           .where((id) => id.isNotEmpty)
           .toList();
-      if (messageIds.isNotEmpty) {
-        if (keepDeleted) {
-          await AppDatabase.markMessagesDeleted(accountId, chatId, messageIds);
-          unawaited(keepDeletedMedia(accountId, chatId, messageIds));
-        } else {
-          await AppDatabase.deleteMessages(accountId, chatId, messageIds);
-        }
-        for (final id in messageIds) {
-          _messageEventsController.add(
-            keepDeleted
-                ? MessageMarkedDeletedEvent(chatId, id)
-                : MessageRemovedEvent(chatId, id),
-          );
-        }
-      }
+      await applyServerDeletions(accountId, chatId, messageIds);
     }
     await _notifyChatFromDb(accountId, chatId);
   }
@@ -1468,54 +1515,51 @@ class ChatsModule {
     );
   }
 
-  // #***! сверяем что удалили на сервере
-  Future<List<String>> reconcileDeletedFromFetch(
+  Future<void> dropDeletedOnServer(
     int accountId,
     int chatId,
-    List<CachedMessage> serverMessages,
+    List<String> messageIds,
   ) async {
-    if (serverMessages.isEmpty) return const [];
+    if (messageIds.isEmpty) return;
+    await applyServerDeletions(accountId, chatId, messageIds);
+    final rows = await AppDatabase.loadChat(accountId, chatId);
+    if (rows.isEmpty) return;
+    final lastId = CachedChat.fromDbRow(rows.first).lastMsgId;
+    if (lastId == null || !messageIds.contains('$lastId')) return;
+    await _reconcileLastMessage(accountId, chatId, rows.first);
+    await _notifyChatFromDb(accountId, chatId);
+  }
 
-    final serverIds = <String>{};
-    var minTime = serverMessages.first.time;
-    var maxTime = serverMessages.first.time;
-    for (final m in serverMessages) {
-      serverIds.add(m.id);
-      if (m.time < minTime) minTime = m.time;
-      if (m.time > maxTime) maxTime = m.time;
+  Future<void> applyServerDeletions(
+    int accountId,
+    int chatId,
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) return;
+    final keepDeleted = KometSettings.viewDeleted.value;
+    if (keepDeleted) {
+      await AppDatabase.markMessagesDeleted(accountId, chatId, messageIds);
+      unawaited(keepDeletedMedia(accountId, chatId, messageIds));
+    } else {
+      await AppDatabase.deleteMessages(accountId, chatId, messageIds);
     }
-
-    final cached = await AppDatabase.loadMessages(
-      accountId,
-      chatId,
-      limit: 300,
-      onlyVisible: true,
-    );
-
-    final newlyDeleted = <String>[];
-    for (final row in cached) {
-      final id = row['id']?.toString();
-      if (id == null || id.isEmpty || id.startsWith('temp_')) continue;
-      if (serverIds.contains(id)) continue;
-
-      final status = row['status']?.toString();
-      if (status == 'pending' || status == 'sending' || status == 'error') {
-        continue;
+    for (final id in messageIds) {
+      if (keepDeleted) {
+        MessageSessionCache.replace(
+          accountId,
+          chatId,
+          id,
+          (message) => message.copyWith(deleted: true),
+        );
+      } else {
+        MessageSessionCache.removeMessage(accountId, chatId, id);
       }
-
-      final time = row['time'] is int
-          ? row['time'] as int
-          : int.tryParse(row['time']?.toString() ?? '') ?? 0;
-      if (time < minTime || time > maxTime) continue;
-
-      newlyDeleted.add(id);
+      _messageEventsController.add(
+        keepDeleted
+            ? MessageMarkedDeletedEvent(chatId, id)
+            : MessageRemovedEvent(chatId, id),
+      );
     }
-
-    if (newlyDeleted.isNotEmpty) {
-      await AppDatabase.markMessagesDeleted(accountId, chatId, newlyDeleted);
-      unawaited(keepDeletedMedia(accountId, chatId, newlyDeleted));
-    }
-    return newlyDeleted;
   }
 
   // #***! пуш про реакции
@@ -2373,6 +2417,7 @@ class ChatsModule {
       if (accountId != null) {
         await AppDatabase.clearMessages(accountId, chatId);
         MessageSessionCache.remove(accountId, chatId);
+        ChatScrollMemory.forget(accountId, chatId);
         _historyFetched.remove(chatId);
         await reconcileLastMessage(accountId, chatId);
       }

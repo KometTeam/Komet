@@ -22,32 +22,38 @@ class StickerPanelView extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final padding = MediaQuery.paddingOf(context);
+    final navigationBar = MediaQuery.viewPaddingOf(context).bottom;
     stickers.maxHeight = size.height - padding.top - 160;
 
     return AnimatedBuilder(
-      animation: stickers.anim,
+      animation: stickers.layout,
       child: LottieHoldScope(
         isHeld: stickers.panelHold,
-        child: ValueListenableBuilder<double>(
-          valueListenable: stickers.panelHeight,
-          builder: (context, height, _) => StickerPanel(
-            height: height,
-            onStickerTap: onStickerTap,
-            onEmojiTap: onEmojiTap,
-            onResize: stickers.resizeBy,
-          ),
+        child: StickerPanel(
+          searching: stickers.searching,
+          onStickerTap: onStickerTap,
+          onEmojiTap: onEmojiTap,
+          onResize: stickers.resizeBy,
         ),
       ),
       builder: (context, child) {
-        final t = Curves.easeOutCubic.transform(
-          stickers.anim.value.clamp(0.0, 1.0),
-        );
-        if (t == 0) return const SizedBox.shrink();
+        final visible = stickers.visibleHeight;
+        if (visible <= 0) return const SizedBox.shrink();
+        final height = stickers.currentHeight;
+        final keyboard = stickers.searching.value
+            ? (stickers.keyboardInset.value - navigationBar).clamp(0.0, height)
+            : 0.0;
         return ClipRect(
           child: Align(
             alignment: Alignment.topCenter,
-            heightFactor: t,
-            child: child,
+            heightFactor: visible / height,
+            child: SizedBox(
+              height: height,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: keyboard),
+                child: child,
+              ),
+            ),
           ),
         );
       },

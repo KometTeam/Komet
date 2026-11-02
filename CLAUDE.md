@@ -29,8 +29,59 @@ flutter build windows --release
 
 Android builds require **Java 17**. Gradle memory is configured to `-Xmx4096m`.
 
+**16 KB pages.** Google Play rejects a release whose 64-bit `.so` files have ELF `LOAD` segments
+aligned below 16 KB. NDK r28 links with 16 KB by default, r27 — AGP 8.11's default NDK — with 4 KB,
+so `android/build.gradle.kts` hands every library subproject the app's NDK (`flutter.ndkVersion`)
+before the plugin's own `android {}` block runs; a plugin that pins a version keeps it. Without
+this, `opus_flutter_android` (ndk-build, no `ndkVersion`) shipped a 4 KB `libopus.so`. A plugin
+pinned below r28 has to opt in itself (`ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON`,
+`-Wl,-z,max-page-size=16384`), as `komet_crypto`, `ogg_opus_player` and cargokit already do.
+Check a built APK/AAB before uploading — every line must read `0x4000` or more:
+
+```bash
+unzip -o -q app.aab '*lib/arm64-v8a/*.so' '*lib/x86_64/*.so' -d /tmp/so
+find /tmp/so -name '*.so' | while read -r f; do echo "$(llvm-readelf -lW "$f" | awk '$1=="LOAD"{print $NF}' | sort -u | xargs) $f"; done
+```
+
 **Never run APK/AAB builds yourself** (`flutter build apk`, `flutter build appbundle`, gradle assemble tasks) — they are slow and the user builds them. Verify changes with the scoped `flutter analyze` above; the build commands are documentation only.
 Note that `flutter analyze` treats **info**-level lints as fatal by default, so CI fails on any lint.
+
+### Launch flags
+
+Every launch flag and build-time define is declared in one place, `LaunchFlags`
+(`lib/core/config/launch_flags.dart`). `main()` parses the arguments once, logs the active set
+as `Флаги запуска: …` and warns about unknown arguments. Add a new flag there, never as a
+`String.fromEnvironment` or `args.contains` somewhere else.
+
+| Argument              | dart-define                 | Effect                                                                  |
+|-----------------------|-----------------------------|-------------------------------------------------------------------------|
+| `--debug`             | `KOMET_DEBUG=true`          | every log level passes; every wire packet is logged with its JSON       |
+| `--dw19p-im-crazy`    | `KOMET_DW19P_IM_CRAZY=true` | same, plus the payload of opcode 19 (`LOGIN`)                           |
+| `--calldebug`         | `KOMET_CALL_DEBUG=true`     | only call logs (`[call…`, `[media]`, `CallBridge.`) at every level, no wire packets; `--debug` wins |
+| `--debug-test`        | `DEBUG_TEST=true`           | fake-data mode: skips login, opens the shell as account `-424242`       |
+| `--contacts N`        | `DEBUG_CONTACTS=N`          | implies `--debug-test` and generates N fake contacts                    |
+| `--berserk`           | `BERSERK=true`              | drops the profile on login to exercise profile recovery                 |
+| `--no-mute`           | `NO_MUTE=true`              | call audio keeps flowing while the mic is shown as muted                |
+| —                     | `KOMET_LOG_LEVEL=…`         | minimum log level: `trace`…`fatal`, `off`                               |
+| —                     | `KOMET_INSTANCE=name`       | separate app copy: own prefs, database, media cache and plugins         |
+| —                     | `KOMET_UPDATE_BASE_URL=…`   | updater manifest base, default `https://cdn.komet.pw`, empty disables   |
+| —                     | `KOMET_REVIEW_PHONE` + `_PAYLOAD` | Google Play review account, see *Review account*                  |
+| —                     | `is_appstore_build=true`    | App Store build, trimmed by `BuildProfile`                              |
+
+Without `--dw19p-im-crazy` the `LOGIN` payload is replaced by its length in both directions: it
+carries the session token and the whole account snapshot. Payloads of every other opcode go out
+verbatim — including `AUTH`/`AUTH_REQUEST` responses with their tokens — so a `--debug` log is
+not safe to publish as is.
+
+Packets are logged by `WireDebugLog` from `Api._onWireLog`, tagged `api<N>/<pre|auth|web>`, so
+the two parallel sessions of the experimental "always SMS" login stay apart. Extra login
+diagnostics are plain `logger.d` calls — release filters them out unless a flag is set. Long
+lines are split into ≤900-char chunks so logcat does not truncate them.
+
+Arguments reach `main()` only on desktop: `flutter run -d linux --dart-entrypoint-args=--debug`
+(repeat the option per argument), or `./build/linux/x64/release/bundle/Komet --debug` for a built
+bundle. On Android the engine is started by `audio_service` without entrypoint args, so mobile
+builds take the dart-define: `flutter run --dart-define=KOMET_DEBUG=true`.
 
 ## Message encryption core
 
@@ -52,6 +103,129 @@ exact git `rev`, and the vendored cargokit compiles it during the Flutter build 
 toolchain as `kolibri`; bump it by changing the `rev` and running `cargo update -p tlottie`.
 `lib/core/media/tlottie/` renders frames in a pool of worker isolates and caches them in RAM and
 on disk. Web has no native path and falls back to the pure-Dart `lottie` package.
+
+The UI isolate never touches pixels. A clip is packed into atlas pages of 16 frames
+(`AtlasLayout`, one texture per page instead of one per frame, with a transparent 2px gap so
+filtering never samples the neighbouring frame), and the workers read and write the disk cache
+(`TlottieCodec`) themselves. `TlottieEngine` hands a worker one job at a time, disk loads before
+renders, cancels the job of a clip released before it finished (prewarm excepted) and respawns a
+worker that died. A finished page reaches the UI isolate as a temp file under
+`tlottie_pages/`, opened with `ImmutableBuffer.fromFilePath`, so the engine loads it off the UI
+thread. `LottiePlayer` paints the current cell with a `CustomPainter`, so playback repaints without
+rebuilding. Before this, one sticker meant ~90 `decodeImageFromPixels` calls and setStates on the UI
+thread, and opening the sticker panel froze the app for up to 300 ms.
+
+To run the engine test on the host, build the library with `cargo build --release` in
+`native/komet_tlottie/rust` and pass it as `TLOTTIE_LIB`.
+
+## Cache and storage
+
+Settings → Storage (`StorageScreen`) shows what Komet keeps on disk by kind and clears the chosen
+kinds. `CacheJanitor` (`lib/core/cache/cache_janitor.dart`) owns three caches: `MediaCache`
+(`media_cache/`), the flutter_cache_manager image cache (`<tmp>/libCachedImageData`, which notices
+files removed behind its back) and the sticker frames (`tlottie_frames/`, own 256 MB cap). One
+budget, `AppCacheLimit` (pref key still `media_cache_limit_bytes`), covers all three together,
+and when it is exceeded the least recently used files go first, skipping anything touched in the
+last two minutes. Writers report their bytes (`CacheJanitor.noteWrite`) into per-cache totals kept
+in memory; a full pass runs only when a total crosses the budget or a cap, or the last measurement
+is older than 15 minutes (the image cache grows without telling us). The pass lists and stats the
+directories inside `Isolate.run`, so thousands of files cost the UI isolate one message, not one
+event per file. Kept media (`keep_*`, already erased on the server) and the database are shown but
+never evicted. A `MediaCache` file's kind is read from
+its name, so build new names in `media_cache_names.dart` where `mediaCacheKindOf` can see them.
+
+## What's new
+
+Store builds (no self-updater) show «Что нового» once per build from `assets/whats_new/<lang>.txt`.
+`WhatsNewDocument` (`lib/core/whats_new/`, plain Dart) parses it; `WhatsNewRunner` plays scenarios.
+
+- Lines without indentation are the notes; `//` lines are comments.
+- `[words](#scenario)` makes those words tappable, `… → #scenario` at the end of a line makes the
+  whole line a tappable row. A link works in place of `#scenario`: `:settings/storage` (a MAX route,
+  same router as `max.ru/:…`), `max.ru/channel/123`, `https://…`.
+- `#name` starts a scenario; its steps follow, indented, one per line, text in `"double quotes"`.
+
+| Step | Does |
+|------|------|
+| `close` | closes the sheet (any step that navigates closes it first anyway) |
+| `tab chats\|calls\|contacts\|settings` | pops to the shell and switches the bottom tab |
+| `open <link>` | opens a route or link (`:settings/appearance`, `max.ru/…`, `https://…`) |
+| `check <link>` | shows the link check sheet for that address, as a tap on a link in a chat would; opens nothing, whichever button is pressed |
+| `back` | pops the current screen |
+| `scroll top\|bottom\|<target>` | scrolls the current screen |
+| `highlight <target>` | scrolls to the target and pulses it |
+| `tap <target>` | scrolls to the target, flashes it and performs its action (opens, expands, switches) |
+| `hint <target> "text"` | scrolls to the target and shows `showHintBubble` next to it |
+| `notify "text" ["button" #scenario]` | `showCustomNotification`, optionally with an action |
+| `wait <ms>` | pauses (0–10000) |
+| `run #scenario` | runs another scenario |
+
+A target is a `SpotlightTarget(id: …)` around a widget; ids live in `SpotlightIds`
+(`lib/core/whats_new/spotlight_ids.dart`), which is also what the parser checks against. To make a
+new element reachable, add its id there and wrap the widget; give it `onActivate` (the same action
+as its own tap) and list it in `SpotlightIds.tappable` to let `tap` press it. Toggles that change a
+setting stay out of `tappable` — a scenario shows them, never flips them. `open` does not wait for
+the opened screen to close (`Navigator.push` completes only on pop); later steps wait for their
+target to appear instead. A target not built yet (lower in a
+lazy list) is found by scrolling the screen's main list until it mounts. `dart run tool/whats_new.dart`
+checks every language and counts characters against Google Play's 500;
+`dart run tool/whats_new.dart play ru` prints the Play text without links and comments. The test
+`whats_new_document_test.dart` fails on any mistake in the shipped files or when the languages
+differ in scenarios or number of notes.
+
+## Keyboard and chat panels
+
+The chat follows Telegram: the composer's bottom is always `max(keyboard, visible sticker panel)`
+(`StickerPanelController.visibleHeight`, applied in `ChatScreen` as the bottom inset). Opening the
+panel over an open keyboard sets it to the keyboard height at once and hides the keyboard, which
+slides away over it; going back to typing keeps the panel until the keyboard covers it or settles,
+with a 1 s fallback. The last settled keyboard height is persisted per orientation. Sticker search
+expands the panel to just under the app bar (`expandAnim`) and keeps it open over the keyboard.
+
+On Android the attachment sheet opens **over** an open keyboard instead of closing it
+(`KeyboardCover`, `lib/frontend/widgets/keyboard_cover.dart` + `KeyboardCover.kt`):
+
+- a non-focusable child panel window is added over the FlutterView; Android layers such windows
+  above the IME and the activity stays the IME target, so the keyboard remains open underneath;
+- the FlutterView's surface is paused and the renderer swapped into a `SurfaceView` in that window
+  — the same `pause`/`swapSurface`/`resume` path the embedding uses for `FlutterImageView`;
+  touches are forwarded to the FlutterView, back goes to Flutter before the IME (a
+  `PRIORITY_OVERLAY` callback on 33+, a pre-IME key hook in `FlutterHostFrame` below);
+- the chat paints the keyboard band transparent (`KeyboardCoverHole`, `BlendMode.clear`) so the
+  keyboard shows through until the sheet slides over it, and `KeyboardCoverScope` reports no
+  keyboard to the rest of the app while the chat holds the keyboard's place itself;
+- it is released after the sheet's exit animation, when another text field takes focus (the
+  keyboard is hidden under the cover and reopened, so the caption rides up with it), when the IME
+  closes, and on pause or resize. Not used on iOS, in embedded layouts or with touch exploration.
+
+`FlutterHostFrame` wraps the FlutterFragment container. Besides the pre-IME back hook it clears a
+stuck keyboard inset once IME animations settle: the embedding's `ImeSyncDeferringInsetsCallback`
+holds insets until the IME animation's `onEnd`, and when that end state is stale (overlapping
+animations, flutter/flutter#118761) or `onEnd` never comes, the app stays lifted by the height of a
+keyboard that is already closed. It acts only while the system reports the IME hidden and never
+touches insets while the keyboard is on screen — a "no keyboard" metric then makes the chat drop
+the composer's focus and the keyboard closes right after opening. The chat itself also drops that
+focus only after the keyboard has stayed closed for 250 ms, so a single zero-inset frame cannot.
+
+## WebRTC plugin fork
+
+`flutter_webrtc` is overridden with the private fork `KometTeam/flutter-webrtc` (upstream v1.5.2 +
+patches), pinned by commit in `dependency_overrides` in `pubspec.yaml`. To change the plugin, commit
+in the fork, push, and bump the `ref`. The patches:
+
+- desktop camera open/close and `getStats` run on background threads — libwebrtc does both through
+  `Thread::BlockingCall` on its worker thread, and on Linux the window is drawn on the platform
+  thread, so the UI froze for the 1–2 s a V4L2 camera takes to start;
+- `VideoFrameTap` hands the frames of a video track to Dart: raw I420 on Linux/Windows, VP8 encoded
+  with MediaCodec on Android.
+
+CI fetches the fork with the repo secret `KOMET_DEPS_TOKEN` (read access to the fork): every Flutter
+workflow rewrites the fork URL through workflow-level `GIT_CONFIG_*` env.
+
+Call screen sharing follows MAX: in SERVER topology frames travel as VP8/VP9 over SFU data channels,
+not as an RTP track — `consumerScreenShare` to send (`ScreenSharePipeline`, libvpx encoder in an
+isolate on desktop), `producerScreenShare` to receive (`RemoteScreens`: libvpx → `ui.Image` on
+desktop, MediaCodec → Flutter texture on Android). libvpx is loaded from the system on desktop.
 
 ## Build Flavors
 
@@ -80,7 +254,9 @@ number, and `KOMET_REVIEW_PAYLOAD`, a session token encrypted with the app's own
 (Argon2id + ChaCha20-Poly1305). The key is derived from `<digits of the phone>:<code>`, so the
 payload in the APK is worthless without the pair handed to the reviewer, and neither define is
 committed — `build-android-play.yml` reads them from the `KOMET_REVIEW_PHONE` and
-`KOMET_REVIEW_PAYLOAD` secrets. Without both defines `ReviewAccess.enabled` is false and the login
+`KOMET_REVIEW_PAYLOAD` secrets, `build-ios-appstore.yml` from `KOMET_REVIEW_PHONE_IOS` and
+`KOMET_REVIEW_PAYLOAD_IOS`, so each store reviewer gets its own session and revoking one leaves
+the other working. Without both defines `ReviewAccess.enabled` is false and the login
 screen behaves exactly as before.
 
 Entering the demo number skips `requestCode` and opens `CodeConfirmationScreen.review`, which
@@ -164,6 +340,17 @@ rather than introducing a different approach.
   it lets Flutter skip rebuilding that subtree entirely.
 - **Keep `build()` pure and cheap** — no network/IO calls, no heavy computation inline; extract
   reusable pieces into their own `StatelessWidget`s instead of nesting logic in one big builder.
+- **Opening a screen: pay in the first frame, not during the slide.** Routes with the
+  `FirstFrameClock` mixin (`SwipeRoute`, and `FirstFramePageRoute` for Material transitions) start
+  their clock at the first presented frame and absorb the stalls of the first three frames of a
+  push, so a heavy first build only delays the transition, while a `setState` that lands
+  mid-transition rebuilds the whole screen and drops visible frames. Put data that is already in
+  memory (`chats.cachedChat`, `MessageSessionCache`) into `initState`; defer the rest — server
+  responses included — with `RouteSettle.run`. A page that needs its route takes it from
+  `RouteProbe` and hands it to `RouteSettle.bind` — `ModalRoute.of(context)` subscribes the caller
+  to `isCurrent`, so a whole screen rebuilds whenever anything is pushed over it or popped. Subtrees
+  without a `Hero` sit under `HeroMode(enabled: false)`, so `HeroController` does not walk them on
+  each transition.
 
 ## Animated icons
 
@@ -191,6 +378,7 @@ script in `tool/`, so the source art lives in exactly one place:
 | `make_minimal_android.dart` / `make_minimal_adaptive.dart` / `make_minimal_ios.dart` | the `Minimal` launcher + adaptive layers                                    |
 | `make_monochrome_android.dart`                                                       | `ic_launcher[_minimal]_monochrome.png` — alpha silhouettes for themed icons |
 | `make_appearances_ios.dart`                                                          | `Icon-App-{Dark,Tinted}-1024x1024@1x.png` + their `Contents.json` entries   |
+| `make_shortcut_icons.py`                                                             | `ic_shortcut_*` — launcher shortcut icons, glyphs from Material Symbols     |
 
 **Themed icons.** Both adaptive icons carry a `<monochrome>` layer, so Android 13+
 launchers with *Themed icons* enabled recolour the icon from the wallpaper. The
@@ -198,6 +386,14 @@ layer is only the alpha channel of the artwork filled black — the system suppl
 both colours, and the same 16% inset as the foreground keeps it aligned with the
 normal icon. The iOS 18 counterpart is the dark/tinted appearance pair on the
 primary `AppIcon`; alternate icons cannot carry appearance variants.
+
+**Launcher shortcuts.** Long-pressing the Android icon shows *Saved Messages* and
+*Search*: `LauncherShortcuts.kt` publishes them as dynamic shortcuts on every
+`MainActivity` start (the package differs per flavor, so a static `shortcuts.xml`
+cannot name it). Each opens `komet://max.ru/<route>`, which `DeepLinkService` hands
+to `openMaxRoute` as soon as the shell is up — these routes have `needsSession`
+false and do not wait for login. They rank ahead of the conversation shortcuts
+from `KometFcmService`, so the limit evicts old chats, never the actions.
 
 `flutter_launcher_icons` (configured in `pubspec.yaml`) only generates the default
 icon and rewrites `mipmap-anydpi-v26/*.xml` without the insets or the monochrome
@@ -239,7 +435,7 @@ they are 114 MB each, only Google Play consumes them, and they stay on GitHub.
 The in-app updater (`UpdateChecker`) reads that manifest and nothing else; GitHub
 Releases stay as a human-facing mirror. The bucket URL comes from the
 `S3_PUBLIC_BASE_URL` repo variable and is baked into builds as
-`--dart-define=KOMET_UPDATE_BASE_URL`; it defaults to `https://dl.komet.pw`
+`--dart-define=KOMET_UPDATE_BASE_URL`; it defaults to `https://cdn.komet.pw`
 (`lib/core/config/update_config.dart`), so local builds check for updates too.
 An empty URL makes the updater inert. `UpdateInstaller` verifies the downloaded
 APK against the `size` and `sha256` recorded in the manifest.

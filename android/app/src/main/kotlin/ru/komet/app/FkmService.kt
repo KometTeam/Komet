@@ -17,7 +17,7 @@ import androidx.core.app.NotificationCompat
 object FkmState {
     private const val PREFS = "komet_fkm"
     private const val KEY_ENABLED = "enabled"
-    private const val KEY_DELIVERED = "delivered"
+    private const val KEY_UNREAD = "unread"
 
     @Volatile
     var enabled = false
@@ -26,8 +26,10 @@ object FkmState {
     @Volatile
     var connected = false
 
+    // Непрочитанные считает Dart по чатам; здесь последнее присланное число,
+    // чтобы уведомление после ребута показывало его, пока движка нет.
     @Volatile
-    var delivered = 0
+    var unread = 0
         private set
 
     private fun prefs(ctx: Context) =
@@ -36,26 +38,28 @@ object FkmState {
     fun restore(ctx: Context) {
         val p = prefs(ctx)
         enabled = p.getBoolean(KEY_ENABLED, false)
-        delivered = p.getInt(KEY_DELIVERED, 0)
+        unread = p.getInt(KEY_UNREAD, 0)
     }
 
     fun applyEnabled(ctx: Context, value: Boolean) {
         enabled = value
-        // Счётчик обнуляем только на выключении, чтобы перезапуск приложения
-        // не сбрасывал накопленное.
+        // После включения Dart пришлёт свежее число, старое было бы враньём.
         if (!value) {
-            delivered = 0
+            unread = 0
             connected = false
         }
         prefs(ctx).edit()
             .putBoolean(KEY_ENABLED, value)
-            .putInt(KEY_DELIVERED, delivered)
+            .putInt(KEY_UNREAD, unread)
             .apply()
     }
 
-    fun countDelivered(ctx: Context) {
-        delivered += 1
-        prefs(ctx).edit().putInt(KEY_DELIVERED, delivered).apply()
+    fun applyUnread(ctx: Context, value: Int): Boolean {
+        val next = value.coerceAtLeast(0)
+        if (next == unread) return false
+        unread = next
+        prefs(ctx).edit().putInt(KEY_UNREAD, next).apply()
+        return true
     }
 }
 
@@ -72,7 +76,16 @@ object FkmNotification {
             ctx.getString(R.string.fkm_status_inactive)
         }
         val title = ctx.getString(R.string.fkm_title)
-        val text = ctx.getString(R.string.fkm_status_line, status, FkmState.delivered)
+        val unread = FkmState.unread
+        val text = if (unread > 0) {
+            ctx.getString(
+                R.string.fkm_status_line,
+                status,
+                ctx.resources.getQuantityString(R.plurals.fkm_unread, unread, unread),
+            )
+        } else {
+            status
+        }
 
         val immutable = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val open = PendingIntent.getActivity(
