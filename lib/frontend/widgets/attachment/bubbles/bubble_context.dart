@@ -82,9 +82,11 @@ class BubbleContext {
   final bool hasPhotoWithCaption;
   final bool hasMultiplePhotosNoCaption;
   final Map? reactionInfo;
+  final ValueListenable<int?>? views;
 
   final CachedMessage message;
   final bool isMe;
+  final bool showsStatus;
   final int myId;
   final String chatType;
   final int? chatId;
@@ -112,6 +114,7 @@ class BubbleContext {
     required this.hasMultiplePhotosNoCaption,
     required this.message,
     required this.isMe,
+    bool? showsStatus,
     required this.myId,
     required this.chatType,
     this.chatId,
@@ -125,11 +128,13 @@ class BubbleContext {
     this.onStickerTap,
     this.onForwardedSourceTap,
     this.reactionInfo,
+    this.views,
     this.presentation,
     this.metaInFooter = false,
     this.likelyForwarded = false,
     this.selectable,
-  }) : dim = text.withValues(alpha: 0.7);
+  }) : dim = text.withValues(alpha: 0.7),
+       showsStatus = showsStatus ?? isMe;
 
   String? get contentText =>
       presentation == null ? message.text : presentation!.text;
@@ -151,6 +156,7 @@ class BubbleContext {
     hasMultiplePhotosNoCaption: hasMultiplePhotosNoCaption,
     message: message,
     isMe: isMe,
+    showsStatus: showsStatus,
     myId: myId,
     chatType: chatType,
     chatId: chatId,
@@ -164,6 +170,7 @@ class BubbleContext {
     onStickerTap: onStickerTap,
     onForwardedSourceTap: onForwardedSourceTap,
     reactionInfo: reactionInfo,
+    views: views,
     presentation: value,
     metaInFooter: metaInFooter,
     likelyForwarded: likelyForwarded,
@@ -188,11 +195,14 @@ class BubbleContext {
 
   Color get systemTint => cs.onPrimaryContainer.withValues(alpha: 0.12);
 
-  List<Widget> metaMarks(Color color) {
+  List<Widget> metaMarks(Color color, {double fontSize = 11}) {
     final typingMs = message.typingMs;
+    final views = this.views;
     return [
       if (likelyForwarded) LikelyForwardedMark(color: color),
       if (typingMs != null) TypingTimeMark(typingMs: typingMs, color: color),
+      if (views != null)
+        ViewsMark(views: views, color: color, fontSize: fontSize),
     ];
   }
 
@@ -227,7 +237,7 @@ class BubbleContext {
         children: [
           ...metaMarks(dim),
           Text(timeLabel, style: TextStyle(color: dim, fontSize: 11)),
-          if (isMe) ...[const SizedBox(width: 4), statusIcon()],
+          if (showsStatus) ...[const SizedBox(width: 4), statusIcon()],
           if (message.deleted) ...[const SizedBox(width: 4), deletedIcon()],
         ],
       ),
@@ -276,7 +286,7 @@ class BubbleContext {
             const SizedBox(width: 3),
             const Icon(Symbols.delete, size: 11, color: Colors.white),
           ],
-          if (isMe) ...[
+          if (showsStatus) ...[
             const SizedBox(width: 3),
             statusIcon(color: Colors.white, size: 12),
           ],

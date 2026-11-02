@@ -1,161 +1,153 @@
 import 'package:flutter/material.dart';
 
-import '../utils/tiled_svg.dart';
+@immutable
+class WallpaperPattern {
+  final String asset;
+  final Color inkStart;
+  final Color inkEnd;
+  final Color glow;
 
-// #***! встроенные обои, градиент плюс SVG узор
+  const WallpaperPattern({
+    required this.asset,
+    required this.inkStart,
+    required this.inkEnd,
+    required this.glow,
+  });
+}
+
 @immutable
 class ChatWallpaperTheme {
   final String id;
-  final List<Color> colors;
-  final AlignmentGeometry begin;
-  final AlignmentGeometry end;
-  final String? pattern;
-  final Color patternColor;
-  final double patternOpacity;
-  final double tileSize;
+  final Color top;
+  final Color bottom;
+  final Alignment begin;
+  final Alignment end;
+  final Color accent;
   final bool dark;
+  final WallpaperPattern? pattern;
 
   const ChatWallpaperTheme({
     required this.id,
-    required this.colors,
-    this.begin = Alignment.topLeft,
-    this.end = Alignment.bottomRight,
+    required this.top,
+    required this.bottom,
+    required this.accent,
+    required this.dark,
+    this.begin = Alignment.topCenter,
+    this.end = Alignment.bottomCenter,
     this.pattern,
-    this.patternColor = Colors.white,
-    this.patternOpacity = 0.1,
-    this.tileSize = 130,
-    this.dark = true,
   });
 
   Gradient get gradient =>
-      LinearGradient(colors: colors, begin: begin, end: end);
-
-  // #***! цвет пузыря под обои
-  Color get bubbleTint => colors.first;
-
-  // #***! один виджет и для фона и для превью, отличается масштабом плитки
-  Widget buildBackground() => _ChatWallpaperThemeView(theme: this);
-
-  Widget buildPreview() =>
-      _ChatWallpaperThemeView(theme: this, tileScale: 0.42);
+      LinearGradient(begin: begin, end: end, colors: [top, bottom]);
 }
 
-// #***! градиент, сверху узор
-class _ChatWallpaperThemeView extends StatelessWidget {
-  final ChatWallpaperTheme theme;
-  final double tileScale;
-
-  const _ChatWallpaperThemeView({required this.theme, this.tileScale = 1});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        DecoratedBox(decoration: BoxDecoration(gradient: theme.gradient)),
-        if (theme.pattern != null)
-          TiledSvgPattern(
-            asset: theme.pattern!,
-            color: theme.patternColor,
-            opacity: theme.patternOpacity,
-            tileSize: theme.tileSize * tileScale,
-          ),
-      ],
-    );
-  }
-}
-
-const String _kPatternDir = 'assets/wallpapers/patterns';
-
-// #***! сами пресеты, dark false значит текст и узор чёрные
 const List<ChatWallpaperTheme> kChatWallpaperThemes = <ChatWallpaperTheme>[
   ChatWallpaperTheme(
-    id: 'ocean',
-    colors: [Color(0xFF2A7B9B), Color(0xFF57C1EB), Color(0xFF246FA8)],
-    pattern: '$_kPatternDir/bubbles.svg',
-    patternOpacity: 0.1,
-  ),
-  ChatWallpaperTheme(
-    id: 'sunset',
-    colors: [Color(0xFFFF7E5F), Color(0xFFFEB47B)],
-    pattern: '$_kPatternDir/hearts.svg',
-    patternOpacity: 0.12,
-  ),
-  ChatWallpaperTheme(
-    id: 'lavender',
-    colors: [Color(0xFF9D50BB), Color(0xFF6E48AA)],
-    pattern: '$_kPatternDir/stars.svg',
-    patternOpacity: 0.11,
-  ),
-  ChatWallpaperTheme(
-    id: 'mint',
-    colors: [Color(0xFF43E97B), Color(0xFF38F9D7)],
-    pattern: '$_kPatternDir/plus.svg',
-    patternColor: Colors.black,
-    patternOpacity: 0.06,
-    tileSize: 66,
-    dark: false,
+    id: 'komet',
+    top: Color(0xFF111214),
+    bottom: Color(0xFF222326),
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    accent: Color(0xFF767676),
+    dark: true,
+    pattern: WallpaperPattern(
+      asset: 'assets/wallpapers/patterns/komet.svg',
+      inkStart: Color(0xFF33363B),
+      inkEnd: Color(0xFF44474D),
+      glow: Color(0xFF6A6F78),
+    ),
   ),
   ChatWallpaperTheme(
     id: 'graphite',
-    colors: [Color(0xFF232526), Color(0xFF414345)],
-    pattern: '$_kPatternDir/plus.svg',
-    patternOpacity: 0.06,
-    tileSize: 66,
+    top: Color(0xFF262626),
+    bottom: Color(0xFF1B1B1B),
+    accent: Color(0xFF767676),
+    dark: true,
   ),
   ChatWallpaperTheme(
-    id: 'sky',
-    colors: [Color(0xFF2193B0), Color(0xFF6DD5ED)],
-    pattern: '$_kPatternDir/planes.svg',
-    patternOpacity: 0.11,
+    id: 'ink',
+    top: Color(0xFF1B2335),
+    bottom: Color(0xFF121827),
+    accent: Color(0xFF4A6FA5),
+    dark: true,
   ),
   ChatWallpaperTheme(
-    id: 'peach',
-    colors: [Color(0xFFFFD3A5), Color(0xFFFD6585)],
-    pattern: '$_kPatternDir/rings.svg',
-    patternColor: Colors.black,
-    patternOpacity: 0.05,
+    id: 'pine',
+    top: Color(0xFF19241F),
+    bottom: Color(0xFF111915),
+    accent: Color(0xFF4E8A6C),
+    dark: true,
+  ),
+  ChatWallpaperTheme(
+    id: 'plum',
+    top: Color(0xFF241D2A),
+    bottom: Color(0xFF18131D),
+    accent: Color(0xFF7D5D96),
+    dark: true,
+  ),
+  ChatWallpaperTheme(
+    id: 'umber',
+    top: Color(0xFF2A221D),
+    bottom: Color(0xFF1D1714),
+    accent: Color(0xFF9C6B47),
+    dark: true,
+  ),
+  ChatWallpaperTheme(
+    id: 'paper',
+    top: Color(0xFFF3F1EC),
+    bottom: Color(0xFFE7E3DB),
+    accent: Color(0xFF7A7A7A),
     dark: false,
   ),
   ChatWallpaperTheme(
-    id: 'forest',
-    colors: [Color(0xFF134E5E), Color(0xFF71B280)],
-    pattern: '$_kPatternDir/rings.svg',
-    patternOpacity: 0.09,
+    id: 'fog',
+    top: Color(0xFFE8EBEF),
+    bottom: Color(0xFFDBE0E6),
+    accent: Color(0xFF56708F),
+    dark: false,
   ),
   ChatWallpaperTheme(
-    id: 'grape',
-    colors: [Color(0xFF4776E6), Color(0xFF8E54E9)],
-    pattern: '$_kPatternDir/stars.svg',
-    patternOpacity: 0.11,
+    id: 'sage',
+    top: Color(0xFFE5E9E2),
+    bottom: Color(0xFFD6DDD3),
+    accent: Color(0xFF5B7F5C),
+    dark: false,
   ),
   ChatWallpaperTheme(
-    id: 'night',
-    colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-    pattern: '$_kPatternDir/stars.svg',
-    patternOpacity: 0.08,
+    id: 'sand',
+    top: Color(0xFFF0E8DD),
+    bottom: Color(0xFFE3D8C8),
+    accent: Color(0xFF9A7650),
+    dark: false,
   ),
   ChatWallpaperTheme(
-    id: 'rose',
-    colors: [Color(0xFFF4C4F3), Color(0xFFFC67FA)],
-    pattern: '$_kPatternDir/hearts.svg',
-    patternOpacity: 0.14,
-  ),
-  ChatWallpaperTheme(
-    id: 'amber',
-    colors: [Color(0xFFF7971E), Color(0xFFFFD200)],
-    pattern: '$_kPatternDir/bubbles.svg',
-    patternColor: Colors.black,
-    patternOpacity: 0.05,
+    id: 'powder',
+    top: Color(0xFFF1E6E6),
+    bottom: Color(0xFFE4D5D6),
+    accent: Color(0xFF9C5E68),
     dark: false,
   ),
 ];
 
-// #***! поиск по id, незнакомый значит обои выпилили из сборки
+const Map<String, String> _retiredThemes = {
+  'ocean': 'ink',
+  'night': 'ink',
+  'sky': 'fog',
+  'sunset': 'sand',
+  'peach': 'sand',
+  'amber': 'sand',
+  'lavender': 'plum',
+  'grape': 'plum',
+  'mint': 'sage',
+  'forest': 'pine',
+  'rose': 'powder',
+};
+
 ChatWallpaperTheme? chatWallpaperThemeById(String? id) {
   if (id == null) return null;
+  final current = _retiredThemes[id] ?? id;
   for (final theme in kChatWallpaperThemes) {
-    if (theme.id == id) return theme;
+    if (theme.id == current) return theme;
   }
   return null;
 }

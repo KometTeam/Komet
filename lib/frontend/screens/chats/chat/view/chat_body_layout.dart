@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/chats.dart' show CachedChat;
 import 'package:komet/core/config/app_chat_chrome.dart';
@@ -31,7 +32,8 @@ class ChatBodyLayout extends StatelessWidget {
   final VoidCallback? onUnpinCurrentMessage;
   final VoidCallback? onJoinCall;
   final bool composerFrosted;
-  final ValueNotifier<double> composerHeight;
+  final ValueListenable<double> composerHeight;
+  final ValueChanged<double> onComposerMeasured;
   final ValueNotifier<double> pinnedBannerHeight;
   final Widget Function(BuildContext) composerAreaBuilder;
   final Widget messagesArea;
@@ -62,6 +64,7 @@ class ChatBodyLayout extends StatelessWidget {
     required this.onJoinCall,
     required this.composerFrosted,
     required this.composerHeight,
+    required this.onComposerMeasured,
     required this.pinnedBannerHeight,
     required this.composerAreaBuilder,
     required this.messagesArea,
@@ -124,7 +127,7 @@ class ChatBodyLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     final composer = ToastObstruction(
       child: MeasureSize(
-        onHeight: (value) => composerHeight.value = value,
+        onHeight: onComposerMeasured,
         child: Builder(builder: composerAreaBuilder),
       ),
     );

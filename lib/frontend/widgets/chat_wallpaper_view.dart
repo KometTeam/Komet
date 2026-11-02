@@ -8,6 +8,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 import 'package:komet/core/config/chat_wallpaper_themes.dart';
 import 'package:komet/core/storage/chat_wallpaper_store.dart';
 import 'package:komet/frontend/widgets/mesh_gradient_background.dart';
+import 'theme_wallpaper.dart';
 
 class WallpaperImages {
   WallpaperImages._();
@@ -89,7 +90,7 @@ class ChatWallpaperView extends StatelessWidget {
     }
     final theme = chatWallpaperThemeById(wallpaper.themeId);
     if (theme == null) return const SizedBox.shrink();
-    return theme.buildBackground();
+    return ThemeWallpaper(theme: theme, pinned: true);
   }
 }
 

@@ -4690,6 +4690,33 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get channelRecommendationsTitle => 'Рекомендуемые каналы';
+
+  @override
+  String get channelRecommendationsHide => 'Скрыть рекомендации';
+
+  @override
+  String get channelRecommendationsHidden =>
+      'Рекомендации скрыты в этом канале';
+
+  @override
+  String get channelRecommendationsHideEverywhere => 'Скрыть везде';
+
+  @override
+  String get channelPostViews => 'Просмотры';
+
+  @override
+  String get kometSettingsHideRecommendations =>
+      'Не показывать рекомендуемые каналы';
+
+  @override
+  String get kometSettingsHideRecommendationsSubtitle =>
+      'Похожие каналы внизу канала';
+
+  @override
+  String get chatScreenFormatMenu => 'Форматирование';
+
+  @override
   String get chatScreenFormatHeading => 'Заголовок';
 
   @override
@@ -4937,6 +4964,51 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get chatWallpaperSheetSampleOutgoing => 'Выглядит отлично 🔥';
+
+  @override
+  String get chatWallpaperSheetInherit => 'Как у всех';
+
+  @override
+  String get chatWallpaperSheetCurrent => 'Текущие';
+
+  @override
+  String get chatWallpaperSheetCustomGradient => 'Градиент';
+
+  @override
+  String get chatWallpaperSheetApply => 'Применить';
+
+  @override
+  String get chatWallpaperPresetKomet => 'Комета';
+
+  @override
+  String get chatWallpaperPresetGraphite => 'Графит';
+
+  @override
+  String get chatWallpaperPresetInk => 'Чернила';
+
+  @override
+  String get chatWallpaperPresetPine => 'Хвоя';
+
+  @override
+  String get chatWallpaperPresetPlum => 'Слива';
+
+  @override
+  String get chatWallpaperPresetUmber => 'Умбра';
+
+  @override
+  String get chatWallpaperPresetPaper => 'Бумага';
+
+  @override
+  String get chatWallpaperPresetFog => 'Туман';
+
+  @override
+  String get chatWallpaperPresetSage => 'Шалфей';
+
+  @override
+  String get chatWallpaperPresetSand => 'Песок';
+
+  @override
+  String get chatWallpaperPresetPowder => 'Пудра';
 
   @override
   String get chatWallpaperSheetNone => 'Без обоев';
@@ -7111,42 +7183,6 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get transcriptionNotRecognized => 'Не распознали голос';
-
-  @override
-  String get chatWallpaperThemeOcean => 'Океан';
-
-  @override
-  String get chatWallpaperThemeSunset => 'Закат';
-
-  @override
-  String get chatWallpaperThemeLavender => 'Лаванда';
-
-  @override
-  String get chatWallpaperThemeMint => 'Мята';
-
-  @override
-  String get chatWallpaperThemeGraphite => 'Графит';
-
-  @override
-  String get chatWallpaperThemeSky => 'Небо';
-
-  @override
-  String get chatWallpaperThemePeach => 'Персик';
-
-  @override
-  String get chatWallpaperThemeForest => 'Лес';
-
-  @override
-  String get chatWallpaperThemeGrape => 'Виноград';
-
-  @override
-  String get chatWallpaperThemeNight => 'Ночь';
-
-  @override
-  String get chatWallpaperThemeRose => 'Роза';
-
-  @override
-  String get chatWallpaperThemeAmber => 'Янтарь';
 
   @override
   String get mediaSaveFileNotFound => 'файл не найден';

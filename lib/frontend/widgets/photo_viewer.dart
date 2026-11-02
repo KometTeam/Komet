@@ -13,6 +13,8 @@ import '../../backend/modules/messages.dart';
 import '../../backend/modules/shared_content.dart';
 import '../../core/cache/info_cache.dart';
 import '../../core/config/app_frost.dart';
+import '../../core/config/app_motion.dart';
+import '../../core/media/preview_image.dart';
 import '../../core/utils/download_history.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/image_format.dart';
@@ -1222,7 +1224,10 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen>
         child: Center(
           child: RotatedBox(
             quarterTurns: _quarterTurns[item.id] ?? 0,
-            child: _buildImage(item.photo!),
+            child: _ViewerPhoto(
+              photo: item.photo!,
+              preview: isHero ? widget.hero?.image.value : null,
+            ),
           ),
         ),
       ),
@@ -1512,34 +1517,145 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen>
         : l10n.photoViewerSentOn(sender, formatDateWords(l10n, sentAt), time);
   }
 
-  Widget _buildImage(PhotoAttachment photo) {
-    final localPath = photo.localPath;
+}
+
+class _ViewerPhoto extends StatelessWidget {
+  const _ViewerPhoto({required this.photo, this.preview, this.local = true});
+
+  final PhotoAttachment photo;
+  final ImageProvider? preview;
+  final bool local;
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = preview ?? dataUriImage(photo, photo.previewData);
+    final localPath = local ? photo.localPath : null;
     if (localPath != null) {
-      return Image.file(
-        File(localPath),
-        fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => _buildRemoteImage(photo),
+      return _ProgressivePhoto(
+        image: FileImage(File(localPath)),
+        placeholder: placeholder,
+        fallback: _ViewerPhoto(photo: photo, preview: preview, local: false),
       );
     }
-    return _buildRemoteImage(photo);
-  }
-
-  Widget _buildRemoteImage(PhotoAttachment photo) {
     final url = photo.baseUrl ?? '';
-    if (url.isEmpty) return _broken();
-
-    return CachedNetworkImage(
-      imageUrl: url,
-      fit: BoxFit.contain,
-      fadeInDuration: const Duration(milliseconds: 120),
-      placeholder: (_, _) =>
-          const Center(child: SmallSpinner(size: 36, color: Colors.white)),
-      errorWidget: (_, _, _) => _broken(),
+    if (url.isEmpty) return const _BrokenPhoto();
+    return _ProgressivePhoto(
+      image: CachedNetworkImageProvider(url),
+      placeholder: placeholder,
+      fallback: const _BrokenPhoto(),
     );
   }
+}
 
-  Widget _broken() =>
-      const Icon(Symbols.broken_image, color: Colors.white54, size: 64);
+class _ProgressivePhoto extends StatefulWidget {
+  const _ProgressivePhoto({
+    required this.image,
+    required this.placeholder,
+    required this.fallback,
+  });
+
+  final ImageProvider image;
+  final ImageProvider? placeholder;
+  final Widget fallback;
+
+  @override
+  State<_ProgressivePhoto> createState() => _ProgressivePhotoState();
+}
+
+class _ProgressivePhotoState extends State<_ProgressivePhoto> {
+  static const Duration _reveal = Duration(milliseconds: 160);
+
+  bool _revealed = false;
+
+  @override
+  void didUpdateWidget(_ProgressivePhoto oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.image != widget.image) _revealed = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      child: Image(
+        image: widget.image,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => widget.fallback,
+        frameBuilder: (context, child, frame, synchronous) {
+          if (synchronous || _revealed) return child;
+          final loaded = frame != null;
+          final placeholder = widget.placeholder;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              if (placeholder != null)
+                Image(
+                  image: placeholder,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                ),
+              AnimatedOpacity(
+                opacity: loaded ? 1 : 0,
+                duration: AppMotion.of(_reveal),
+                curve: Curves.easeOut,
+                onEnd: () {
+                  if (loaded && mounted) setState(() => _revealed = true);
+                },
+                child: child,
+              ),
+              if (!loaded) const _PendingSpinner(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PendingSpinner extends StatefulWidget {
+  const _PendingSpinner();
+
+  @override
+  State<_PendingSpinner> createState() => _PendingSpinnerState();
+}
+
+class _PendingSpinnerState extends State<_PendingSpinner> {
+  static const Duration _delay = Duration(milliseconds: 500);
+
+  late final Timer _timer;
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(_delay, () => setState(() => _visible = true));
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: AnimatedOpacity(
+        opacity: _visible ? 1 : 0,
+        duration: AppMotion.of(const Duration(milliseconds: 200)),
+        child: const SmallSpinner(size: 36, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _BrokenPhoto extends StatelessWidget {
+  const _BrokenPhoto();
+
+  @override
+  Widget build(BuildContext context) => const Center(
+    child: Icon(Symbols.broken_image, color: Colors.white54, size: 64),
+  );
 }
 
 class _VideoPlaybackSession extends ChangeNotifier {

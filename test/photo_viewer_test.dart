@@ -108,8 +108,11 @@ void main() {
     await gesture.up(timeStamp: const Duration(milliseconds: 500));
     await tester.pump();
 
-    final flight = find.byWidgetPredicate(
-      (widget) => widget is Image && widget.image is RawImageProvider,
+    final flight = find.byElementPredicate(
+      (element) =>
+          element.widget is Image &&
+          (element.widget as Image).image is RawImageProvider &&
+          element.findAncestorWidgetOfExactType<PhotoViewerScreen>() == null,
     );
     expect(flight, findsOneWidget);
     expect(tester.getRect(flight).top, closeTo(draggedPhoto.top, 1));
@@ -315,8 +318,15 @@ void main() {
   ) async {
     await _pumpViewer(tester, message: _message());
 
-    double chromeOpacity() =>
-        tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity)).opacity;
+    double chromeOpacity() => tester
+        .widget<AnimatedOpacity>(
+          find.byElementPredicate(
+            (element) =>
+                element.widget is AnimatedOpacity &&
+                element.findAncestorWidgetOfExactType<PageView>() == null,
+          ),
+        )
+        .opacity;
 
     expect(chromeOpacity(), 1);
 

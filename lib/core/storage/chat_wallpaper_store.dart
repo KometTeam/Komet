@@ -12,7 +12,7 @@ import 'per_chat_json_store.dart';
 const int kGlobalWallpaperChatId = 0;
 
 // #***! обои, своя картинка, встроенная тема или свой градиент
-enum ChatWallpaperKind { image, theme, gradient }
+enum ChatWallpaperKind { image, theme, gradient, none }
 
 // #***! правки картинки, затемнение блюр параллакс сдвиг
 @immutable
@@ -82,11 +82,25 @@ class ChatWallpaper {
        motion = false,
        offsetX = 0;
 
+  const ChatWallpaper.none()
+    : kind = ChatWallpaperKind.none,
+      imagePath = null,
+      themeId = null,
+      gradientColors = null,
+      gradientAnimated = false,
+      gradientRotation = 0,
+      dim = 0,
+      blur = false,
+      motion = false,
+      offsetX = 0;
+
   bool get isImage => kind == ChatWallpaperKind.image;
   bool get isGradient => kind == ChatWallpaperKind.gradient;
+  bool get isNone => kind == ChatWallpaperKind.none;
 
   // #***! в джейсон или путь с настройками, или id темы, или свои цвета
   Map<String, dynamic> _toJson() {
+    if (isNone) return const {'none': true};
     if (isImage) {
       return {
         'path': imagePath,
@@ -108,6 +122,7 @@ class ChatWallpaper {
 
   static ChatWallpaper? _fromJson(Object? raw) {
     if (raw is! Map) return null;
+    if (raw['none'] == true) return const ChatWallpaper.none();
     final path = raw['path'];
     if (path is String && path.isNotEmpty) {
       return ChatWallpaper.image(
@@ -146,6 +161,18 @@ class ChatWallpaperStore extends PerChatJsonStore<ChatWallpaper> {
   static const String _dirName = 'chat_wallpapers';
 
   ChatWallpaper? get(int accountId, int chatId) => read(accountId, chatId);
+
+  Set<String> get themeIds => {
+    for (final entry in allEntries) ?entry.value.themeId,
+  };
+
+  ChatWallpaper? effective(int accountId, int chatId) {
+    final own = get(accountId, chatId);
+    if (own != null) return own.isNone ? null : own;
+    if (chatId == kGlobalWallpaperChatId) return null;
+    final global = get(accountId, kGlobalWallpaperChatId);
+    return global == null || global.isNone ? null : global;
+  }
 
   // #***! картинку копируем к себе, исходник из галереи может исчезнуть
   Future<ChatWallpaper?> setImage(
@@ -198,6 +225,9 @@ class ChatWallpaperStore extends PerChatJsonStore<ChatWallpaper> {
     await write(accountId, chatId, wallpaper);
     return wallpaper;
   }
+
+  Future<void> setNone(int accountId, int chatId) =>
+      write(accountId, chatId, const ChatWallpaper.none());
 
   Future<void> clear(int accountId, int chatId) =>
       write(accountId, chatId, null);

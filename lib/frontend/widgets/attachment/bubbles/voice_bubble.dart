@@ -24,6 +24,8 @@ class VoiceMessageBubble extends StatefulWidget {
   final String url;
   final Color textColor;
   final bool isMe;
+  final bool showsStatus;
+  final ValueListenable<int?>? views;
   final bool deleted;
   final String? status;
   final ValueListenable<int>? otherReadTime;
@@ -47,6 +49,8 @@ class VoiceMessageBubble extends StatefulWidget {
     required this.url,
     required this.textColor,
     required this.isMe,
+    required this.showsStatus,
+    this.views,
     this.deleted = false,
     this.status,
     this.otherReadTime,
@@ -188,6 +192,8 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
     final dim = widget.textColor.withValues(alpha: 0.6);
     return [
       if (widget.likelyForwarded) LikelyForwardedMark(color: dim),
+      if (widget.views case final views?)
+        ViewsMark(views: views, color: dim, fontSize: 10),
       Text(
         formatClock(
           DateTime.fromMillisecondsSinceEpoch(widget.time),
@@ -195,7 +201,10 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         ),
         style: TextStyle(color: dim, fontSize: 10),
       ),
-      if (widget.isMe) ...[const SizedBox(width: 2), _buildStatusIcon()],
+      if (widget.showsStatus) ...[
+        const SizedBox(width: 2),
+        _buildStatusIcon(),
+      ],
       if (widget.deleted) ...[
         const SizedBox(width: 2),
         Icon(Symbols.delete, size: 13, color: dim),

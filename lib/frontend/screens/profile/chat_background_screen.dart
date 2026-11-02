@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../core/config/app_wallpaper_tint.dart';
 import '../../../core/storage/app_database.dart';
@@ -9,7 +10,6 @@ import '../../widgets/chat_wallpaper_view.dart';
 import '../../widgets/custom_notification.dart';
 import '../chats/chat_wallpaper_preview_screen.dart';
 import '../../../core/config/app_fonts.dart';
-import '../../../core/config/app_shape.dart';
 
 class ChatBackgroundScreen extends StatefulWidget {
   const ChatBackgroundScreen({super.key});
@@ -35,7 +35,7 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
     if (!mounted) return;
     setState(() {
       _accountId = profile?.id ?? 0;
-      _wallpaper = ChatWallpaperStore.instance.get(
+      _wallpaper = ChatWallpaperStore.instance.effective(
         _accountId,
         kGlobalWallpaperChatId,
       );
@@ -46,7 +46,7 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
   void _refresh() {
     if (!mounted) return;
     setState(() {
-      _wallpaper = ChatWallpaperStore.instance.get(
+      _wallpaper = ChatWallpaperStore.instance.effective(
         _accountId,
         kGlobalWallpaperChatId,
       );
@@ -59,6 +59,7 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
     if (pick == null || !mounted) return;
     final store = ChatWallpaperStore.instance;
     switch (pick.type) {
+      case WallpaperPickType.inherit:
       case WallpaperPickType.none:
         await store.clear(_accountId, kGlobalWallpaperChatId);
         _refresh();
@@ -143,20 +144,16 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
   }
 
   Widget _preview(ColorScheme cs) {
+    final l10n = AppLocalizations.of(context)!;
+    final wallpaper = _wallpaper;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: ClipRRect(
-        borderRadius: AppShape.cardRadius,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (_wallpaper != null)
-              ChatWallpaperView(wallpaper: _wallpaper!)
-            else
-              ColoredBox(color: cs.surfaceContainerHighest),
-            _SampleBubbles(cs: cs),
-          ],
-        ),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: WallpaperPreview(
+        layer: wallpaper == null
+            ? const SizedBox.shrink()
+            : ChatWallpaperView(wallpaper: wallpaper),
+        incoming: l10n.chatBackgroundSampleIncoming,
+        outgoing: l10n.chatBackgroundSampleOutgoing,
       ),
     );
   }
@@ -166,10 +163,10 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: cs.surfaceContainerLow,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -220,96 +217,13 @@ class _ChatBackgroundScreenState extends State<ChatBackgroundScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          GestureDetector(
-            onTap: _ready ? _openPicker : null,
-            child: Container(
-              height: 52,
-              decoration: BoxDecoration(
-                color: cs.primary,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Center(
-                child: Text(
-                  l10n.chatBackgroundPick,
-                  style: TextStyle(
-                    color: cs.onPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: displayFontOf(context),
-                  ),
-                ),
-              ),
-            ),
+          FilledButton.icon(
+            style: wallpaperButtonStyle(context),
+            onPressed: _ready ? _openPicker : null,
+            icon: const Icon(Symbols.wallpaper, size: 20),
+            label: Text(l10n.chatBackgroundPick),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SampleBubbles extends StatelessWidget {
-  final ColorScheme cs;
-
-  const _SampleBubbles({required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _bubble(
-              context,
-              text: l10n.chatBackgroundSampleIncoming,
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.94),
-              textColor: cs.onSurface,
-              alignment: Alignment.centerLeft,
-            ),
-            const SizedBox(height: 8),
-            _bubble(
-              context,
-              text: l10n.chatBackgroundSampleOutgoing,
-              color: cs.primary,
-              textColor: cs.onPrimary,
-              alignment: Alignment.centerRight,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _bubble(
-    BuildContext context, {
-    required String text,
-    required Color color,
-    required Color textColor,
-    required Alignment alignment,
-  }) {
-    return Align(
-      alignment: alignment,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 260),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 15,
-              fontFamily: displayFontOf(context),
-            ),
-          ),
-        ),
       ),
     );
   }

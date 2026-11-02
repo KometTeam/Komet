@@ -1242,6 +1242,11 @@ class AccountModule {
         SyncKey.folderFiltersEnabled,
         serverConfig['enable-filters-for-folders'] == true ? '1' : '0',
       );
+      await AppDatabase.setSyncValue(
+        accountId,
+        SyncKey.viewsCountEnabled,
+        serverConfig['views-count-enabled'] == true ? '1' : '0',
+      );
       await _persistEntryBannerApps(accountId, serverConfig);
       final moneyBotId = parseIntOrNull(
         serverConfig[MoneyTransferApp.configKey],

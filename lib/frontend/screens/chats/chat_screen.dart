@@ -9,6 +9,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:komet/backend/modules/channel_stats.dart';
+import 'package:komet/backend/modules/channel_suggestions.dart';
 import 'package:komet/backend/modules/chat_preview.dart';
 import 'package:komet/backend/modules/chats.dart';
 import 'package:komet/backend/modules/comments.dart';
@@ -19,7 +21,6 @@ import 'package:komet/frontend/screens/webapp/web_app_bridge.dart'
     show WebAppEntryPoint;
 import 'package:komet/core/media/clipboard/clipboard_media.dart';
 import 'package:komet/core/media/clipboard/pasted_attachment.dart';
-import 'package:komet/frontend/widgets/paste_media_toolbar.dart';
 import 'package:komet/core/media/gallery_source.dart';
 import 'package:komet/core/utils/format.dart';
 import 'package:komet/frontend/screens/chats/chat_info_screen.dart';
@@ -72,7 +73,6 @@ import '../../../core/utils/logger.dart';
 import '../../../core/utils/route_settle.dart';
 import '../../../core/config/app_cache_extent.dart';
 import '../../../core/config/app_swipe_back_desktop.dart';
-import '../../../core/config/app_unchecked_links.dart';
 import 'chat/chat_prank_controller.dart';
 import 'chat/chat_controller.dart';
 import 'chat/message_flight.dart';
@@ -83,6 +83,11 @@ import 'chat/voice_record_controller.dart';
 import 'chat/video_note_controller.dart';
 import 'chat/command_panel_controller.dart';
 import 'chat/sticker_panel_controller.dart';
+import 'chat/composer_height.dart';
+import 'chat/channel_recommendations.dart';
+import 'chat/channel_views.dart';
+import 'chat/view/channel_recommendations_view.dart';
+import '../../widgets/theme_wallpaper.dart';
 import 'chat/chat_search_controller.dart';
 import 'chat/message_search_result.dart';
 import 'chat/typing_label.dart';
@@ -115,8 +120,6 @@ import '../../../models/contact_info.dart';
 import '../../commands/commands.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/rich_message_controller.dart';
-import '../../widgets/link_text.dart';
-import '../../widgets/prompt_dialog.dart';
 import '../../../core/utils/text_format.dart';
 import '../../widgets/call_link_handler.dart';
 import '../../widgets/direct_call.dart';
@@ -654,7 +657,9 @@ class _ChatScreenState extends State<ChatScreen>
   bool get _chromeVignette =>
       _effectiveChrome == ChatChromeStyle.none && _wallpaper == null;
 
-  final ValueNotifier<double> _composerHeight = ValueNotifier(96);
+  late final ComposerHeight _composerHeight;
+  ChannelRecommendations? _recommendations;
+  ChannelViews? _channelViewsStore;
   final ValueNotifier<double> _pinnedBannerHeight = ValueNotifier(0);
 
   final ValueNotifier<DateTime?> _floatingDate = ValueNotifier(null);
@@ -765,6 +770,22 @@ class _ChatScreenState extends State<ChatScreen>
       onSendTyping: () => messagesModule.sendTyping(widget.chatId, 'STICKER'),
       softKeyboard: !isDesktopPlatform,
     );
+    _composerHeight = ComposerHeight(_stickers);
+    if (_channelFeed) {
+      _recommendations = ChannelRecommendations(
+        chatId: widget.chatId,
+        fetch: () => ChannelSuggestions.forChannel(
+          api,
+          widget.chatId,
+          accountId: _myId,
+          ownChannelIds: chats
+              .chatsSnapshot()
+              .where((chat) => chat.type == 'CHANNEL')
+              .map((chat) => chat.id),
+        ),
+        join: (channel) => chats.joinChannel(api, channel.link, _myId),
+      );
+    }
     _showAttachmentPanel.addListener(_onAttachPanelToggle);
     _commandPanel = CommandPanelController(
       vsync: this,
@@ -1146,6 +1167,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _routeSettle.run(_kickoffHistory);
     _routeSettle.run(() => _routeSettled.value = true);
+    _routeSettle.run(() => unawaited(_recommendations?.load()));
   }
 
   Future<List<CachedMessage>>? _localHistoryLoad;
@@ -1849,6 +1871,27 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   bool get _isChannel => (chat?.type ?? widget.chatType) == 'CHANNEL';
+
+  bool get _channelFeed => _isChannel && !_commentsMode && !widget.preview;
+
+  ChannelViews get _channelViews => _channelViewsStore ??= ChannelViews(
+    (ids, {required count}) async => ChannelStats.views(
+      api,
+      widget.chatId,
+      ids,
+      countView: count && await _countsChannelViews(),
+    ),
+  );
+
+  Future<bool>? _serverCountsViews;
+
+  Future<bool> _countsChannelViews() async {
+    if (KometSettings.antiRead.value || _myId == 0) return false;
+    return _serverCountsViews ??= AppDatabase.getSyncValue(
+      _myId,
+      SyncKey.viewsCountEnabled,
+    ).then((value) => value == '1');
+  }
 
   bool get _canPostToChannel => _hasRight(AdminRight.createPosts);
 
@@ -2714,6 +2757,8 @@ class _ChatScreenState extends State<ChatScreen>
     KeyboardCover.instance.active.removeListener(_onKeyboardCoverChanged);
     if (_coversKeyboard) unawaited(KeyboardCover.instance.release());
     _stickers.dispose();
+    _recommendations?.dispose();
+    _channelViewsStore?.dispose();
     _scrollController.dispose();
     _shimmerStartTimer?.cancel();
     _shimmerController.dispose();
@@ -3218,8 +3263,6 @@ class _ChatScreenState extends State<ChatScreen>
       crossChatReplySupported: _crossChatReplySupported,
       onPickReplyChat: _pickReplyChat,
       formatElapsed: formatVoiceElapsed,
-      formatContextMenu: _formatContextMenu,
-      pasteMenuItem: _pasteMenuItem,
       onPasteMedia: ClipboardMedia.supported ? _handlePasteMedia : null,
       onInsertContent: _insertKeyboardContent,
       isMuted: chat?.isMuted ?? false,
@@ -3298,7 +3341,6 @@ class _ChatScreenState extends State<ChatScreen>
         text: original,
         formatRanges: formatRanges,
         photos: photos,
-        contextMenuBuilder: _formatContextMenu,
       ),
     );
 
@@ -3946,10 +3988,11 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   ChatWallpaper? _effectiveWallpaper(int accountId) {
-    final store = ChatWallpaperStore.instance;
-    final wallpaper =
-        store.get(accountId, widget.chatId) ??
-        store.get(accountId, kGlobalWallpaperChatId);
+    final wallpaper = ChatWallpaperStore.instance.effective(
+      accountId,
+      widget.chatId,
+    );
+    precacheWallpaperPattern(wallpaper);
     final path = wallpaper?.imagePath;
     if (path != null) WallpaperImages.holdRecent(path);
     return wallpaper;
@@ -3963,12 +4006,21 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _openWallpaperSheet() async {
     if (_myId == 0) return;
-    final pick = await showChatWallpaperSheet(context, current: _wallpaper);
-    if (pick == null || !mounted) return;
     final store = ChatWallpaperStore.instance;
+    final pick = await showChatWallpaperSheet(
+      context,
+      current: store.get(_myId, widget.chatId),
+      inherited: store.effective(_myId, kGlobalWallpaperChatId),
+      perChat: true,
+    );
+    if (pick == null || !mounted) return;
     switch (pick.type) {
-      case WallpaperPickType.none:
+      case WallpaperPickType.inherit:
         await store.clear(_myId, widget.chatId);
+        _applyEffectiveWallpaper();
+        break;
+      case WallpaperPickType.none:
+        await store.setNone(_myId, widget.chatId);
         _applyEffectiveWallpaper();
         break;
       case WallpaperPickType.theme:
@@ -4209,97 +4261,6 @@ class _ChatScreenState extends State<ChatScreen>
     if (c.participants[userId] == mark) return;
     c.participants[userId] = mark;
     _syncOtherReadTime();
-  }
-
-  static String _formatLabel(AppLocalizations l10n, TextFormat format) {
-    switch (format) {
-      case TextFormat.heading:
-        return l10n.chatScreenFormatHeading;
-      case TextFormat.strong:
-        return l10n.chatScreenFormatBold;
-      case TextFormat.emphasized:
-        return l10n.chatScreenFormatItalic;
-      case TextFormat.underline:
-        return l10n.chatScreenFormatUnderline;
-      case TextFormat.strikethrough:
-        return l10n.chatScreenFormatStrikethrough;
-      case TextFormat.monospaced:
-        return l10n.chatScreenFormatMonospace;
-      case TextFormat.code:
-        return l10n.chatScreenFormatRed;
-      case TextFormat.quote:
-        return l10n.chatScreenFormatQuote;
-      case TextFormat.link:
-        return l10n.chatScreenFormatLink;
-      case TextFormat.animoji:
-        return 'Animoji';
-      case TextFormat.userMention:
-        return l10n.chatScreenFormatMention;
-    }
-  }
-
-  Widget _formatContextMenu(
-    RichMessageController controller,
-    BuildContext context,
-    EditableTextState editableState, {
-    ContextMenuButtonItem? pasteItem,
-  }) {
-    final selection = controller.selection;
-    final buttonItems = <ContextMenuButtonItem>[];
-    if (selection.isValid && !selection.isCollapsed) {
-      final l10n = AppLocalizations.of(context)!;
-      for (final format in composerFormats) {
-        final active = controller.isFormatActive(format);
-        buttonItems.add(
-          ContextMenuButtonItem(
-            label: '${active ? '✓ ' : ''}${_formatLabel(l10n, format)}',
-            onPressed: () {
-              editableState.hideToolbar();
-              if (format != TextFormat.link) {
-                controller.toggleFormat(format);
-              } else if (active) {
-                controller.setLink(selection, null);
-              } else {
-                unawaited(_askFormatLink(controller, selection));
-              }
-            },
-          ),
-        );
-      }
-    }
-    if (pasteItem != null) buttonItems.add(pasteItem);
-    buttonItems.addAll(editableState.contextMenuButtonItems);
-    if (pasteItem == null) {
-      return AdaptiveTextSelectionToolbar.buttonItems(
-        anchors: editableState.contextMenuAnchors,
-        buttonItems: buttonItems,
-      );
-    }
-    return PasteMediaToolbar(
-      anchors: editableState.contextMenuAnchors,
-      buttonItems: buttonItems,
-      pasteItem: pasteItem,
-    );
-  }
-
-  Future<void> _askFormatLink(
-    RichMessageController controller,
-    TextRange range,
-  ) async {
-    final l10n = AppLocalizations.of(context)!;
-    final raw = await showTextInputDialog(
-      context,
-      title: l10n.chatScreenFormatLinkTitle,
-      hint: l10n.chatScreenFormatLinkHint,
-      keyboardType: TextInputType.url,
-    );
-    if (raw == null || !mounted) return;
-    final url = AppUncheckedLinks.current.value ? raw : linkFromInput(raw);
-    if (url == null) {
-      showCustomNotification(context, l10n.chatScreenFormatLinkInvalid);
-      return;
-    }
-    controller.setLink(range, url);
   }
 
   static bool _sameElements(
@@ -5060,9 +5021,11 @@ class _ChatScreenState extends State<ChatScreen>
     // TODO: Локализация
     // TODO: Cклонения
     final viewInsets = MediaQuery.viewInsetsOf(context);
+    final viewPadding = MediaQuery.viewPaddingOf(context);
     final keyboard = _keyboardReserve > 0
         ? math.max(viewInsets.bottom, _keyboardReserve)
         : viewInsets.bottom;
+    final heldKeyboard = keyboard > viewInsets.bottom;
     return ListenableBuilder(
       listenable: Listenable.merge([
         _selectedIds,
@@ -5099,17 +5062,23 @@ class _ChatScreenState extends State<ChatScreen>
       ),
       child: AnimatedBuilder(
         animation: _stickers.layout,
-        builder: (context, child) => MediaQuery(
-          data: context
-              .getInheritedWidgetOfExactType<MediaQuery>()!
-              .data
-              .copyWith(
-                viewInsets: viewInsets.copyWith(
-                  bottom: math.max(0, keyboard - _stickers.visibleHeight),
-                ),
+        builder: (context, child) {
+          final media = context.getInheritedWidgetOfExactType<MediaQuery>()!;
+          final data = media.data;
+          return MediaQuery(
+            data: data.copyWith(
+              viewInsets: viewInsets.copyWith(
+                bottom: math.max(0, keyboard - _stickers.visibleHeight),
               ),
-          child: child!,
-        ),
+              padding: heldKeyboard
+                  ? data.padding.copyWith(
+                      bottom: math.max(0, viewPadding.bottom - keyboard),
+                    )
+                  : data.padding,
+            ),
+            child: child!,
+          );
+        },
         child: Theme(
           data: theme,
           child: RepaintBoundary(
@@ -5126,101 +5095,104 @@ class _ChatScreenState extends State<ChatScreen>
                 child: HeroMode(
                   enabled: false,
                   child: LottieHoldScope(
-                  isHeld: _animojiHold,
-                  child: MessageFlightLayer(
-                    flight: _flight,
-                    child: ChatBodyLayout(
-                    underlap: underlap,
-                    cs: cs,
-                    chat: chat,
-                    effectiveChrome: _effectiveChrome,
-                    liquidChrome: _liquidChrome,
-                    pillBackdrop: _pillBackdrop,
-                    onJumpToPinnedMessage: _jumpToPinnedMessage,
-                    onUnpinCurrentMessage: _canPin
-                        ? _unpinCurrentMessage
-                        : null,
-                    onJoinCall: _commentsMode ? null : _joinChatCall,
-                    composerFrosted: _composerFrosted,
-                    composerHeight: _composerHeight,
-                    pinnedBannerHeight: _pinnedBannerHeight,
-                    composerAreaBuilder: (context) => widget.preview
-                        ? const SizedBox.shrink()
-                        : _composerAreaWidget(),
-                    messagesArea: _buildMessagesArea(),
-                    mentionPanel: _mentionPanel,
-                    commandPanel: _commandPanel,
-                    note: _note,
-                    searchAnim: _searchAnim,
-                    search: _search,
-                    onOpenSearchResult: _openSearchResult,
-                    searchSenderName: _searchSenderName,
-                    searchSenderAvatar: _searchSenderAvatar,
-                    chromeVignette: _chromeVignette,
-                    composerPaintsSurface: _composerPaintsSurface,
-                    pinnedBannerTop: _pinnedBannerTop(),
-                    defaultEdgeVignetteHeight: _defaultEdgeVignetteHeight(),
-                    wallpaper: _wallpaper,
-                  ),
-                  ),
+                    isHeld: _animojiHold,
+                    child: MessageFlightLayer(
+                      flight: _flight,
+                      child: ChatBodyLayout(
+                        underlap: underlap,
+                        cs: cs,
+                        chat: chat,
+                        effectiveChrome: _effectiveChrome,
+                        liquidChrome: _liquidChrome,
+                        pillBackdrop: _pillBackdrop,
+                        onJumpToPinnedMessage: _jumpToPinnedMessage,
+                        onUnpinCurrentMessage: _canPin
+                            ? _unpinCurrentMessage
+                            : null,
+                        onJoinCall: _commentsMode ? null : _joinChatCall,
+                        composerFrosted: _composerFrosted,
+                        composerHeight: _composerHeight,
+                        onComposerMeasured: _composerHeight.measured,
+                        pinnedBannerHeight: _pinnedBannerHeight,
+                        composerAreaBuilder: (context) => widget.preview
+                            ? const SizedBox.shrink()
+                            : _composerAreaWidget(),
+                        messagesArea: _buildMessagesArea(),
+                        mentionPanel: _mentionPanel,
+                        commandPanel: _commandPanel,
+                        note: _note,
+                        searchAnim: _searchAnim,
+                        search: _search,
+                        onOpenSearchResult: _openSearchResult,
+                        searchSenderName: _searchSenderName,
+                        searchSenderAvatar: _searchSenderAvatar,
+                        chromeVignette: _chromeVignette,
+                        composerPaintsSurface: _composerPaintsSurface,
+                        pinnedBannerTop: _pinnedBannerTop(),
+                        defaultEdgeVignetteHeight: _defaultEdgeVignetteHeight(),
+                        wallpaper: _wallpaper,
+                      ),
+                    ),
                   ),
                 ),
                 builder: (context, body) => ChatDropZone(
                   enabled: !widget.preview && _canReply && _myId != 0,
                   onDrop: (paths) => unawaited(_dropFiles(paths)),
                   child: Scaffold(
-                  backgroundColor: cs.surface,
-                  extendBodyBehindAppBar: underlap,
-                  appBar: _previewSafeBar(ChatAppBar(
-                    cs: cs,
-                    searchAnim: _searchAnim,
-                    selectionAnim: _selectionAnim,
-                    chrome: _effectiveChrome,
-                    chromeVignette: _chromeVignette,
-                    liquidChrome: _liquidChrome,
-                    barBackdrop: _barBackdrop,
-                    pillBackdrop: _pillBackdrop,
-                    glossyChrome: AppVisualStyle.current.value.glossyChrome,
-                    embedded: widget.embedded,
-                    chatId: widget.chatId,
-                    heroTag: _profileHeroTag,
-                    name: _headerName(),
-                    imageUrl: _headerAvatarUrl(),
-                    chatType: widget.chatType,
-                    isOfficial: widget.chatType == 'DIALOG'
-                        ? _peerOfficial
-                        : (chat?.isOfficial ?? false),
-                    encrypted: _encryptionEnabled,
-                    verified: _e2eeVerified,
-                    myId: _myId,
-                    headerStatus: _headerStatusNotifier,
-                    scheduledCount: _scheduledCount,
-                    otherUnread: _otherUnread,
-                    showCall:
-                        !_commentsMode &&
-                        widget.chatType == 'DIALOG' &&
-                        widget.chatId != 0 &&
-                        !_peerIsBot,
-                    onClose: widget.onClose,
-                    onOpenInfo: _commentsMode ? () {} : _openChatInfo,
-                    onOpenScheduled: _openScheduledMessages,
-                    onCall: _startCall,
-                    onMenu: _commentsMode ? (_) {} : _openChatMenu,
-                    selectedIds: _selectedIds,
-                    copyableSelection: _copyableSelection,
-                    singleEditable: _singleEditable,
-                    singleSavable: _singleSavable,
-                    onClearSelection: _clearSelection,
-                    onCopySelected: _copySelected,
-                    onEditSelected: _editSelected,
-                    onSaveSelected: _saveSelected,
-                    onDeleteSelected: _deleteSelected,
-                    search: _search,
-                    searchFocusNode: _searchFocusNode,
-                    onCloseSearch: _closeSearch,
-                  )),
-                  body: body,
-                ),
+                    backgroundColor: cs.surface,
+                    extendBodyBehindAppBar: underlap,
+                    appBar: _previewSafeBar(
+                      ChatAppBar(
+                        cs: cs,
+                        searchAnim: _searchAnim,
+                        selectionAnim: _selectionAnim,
+                        chrome: _effectiveChrome,
+                        chromeVignette: _chromeVignette,
+                        liquidChrome: _liquidChrome,
+                        barBackdrop: _barBackdrop,
+                        pillBackdrop: _pillBackdrop,
+                        glossyChrome: AppVisualStyle.current.value.glossyChrome,
+                        embedded: widget.embedded,
+                        chatId: widget.chatId,
+                        heroTag: _profileHeroTag,
+                        name: _headerName(),
+                        imageUrl: _headerAvatarUrl(),
+                        chatType: widget.chatType,
+                        isOfficial: widget.chatType == 'DIALOG'
+                            ? _peerOfficial
+                            : (chat?.isOfficial ?? false),
+                        encrypted: _encryptionEnabled,
+                        verified: _e2eeVerified,
+                        myId: _myId,
+                        headerStatus: _headerStatusNotifier,
+                        scheduledCount: _scheduledCount,
+                        otherUnread: _otherUnread,
+                        showCall:
+                            !_commentsMode &&
+                            widget.chatType == 'DIALOG' &&
+                            widget.chatId != 0 &&
+                            !_peerIsBot,
+                        onClose: widget.onClose,
+                        onOpenInfo: _commentsMode ? () {} : _openChatInfo,
+                        onOpenScheduled: _openScheduledMessages,
+                        onCall: _startCall,
+                        onMenu: _commentsMode ? (_) {} : _openChatMenu,
+                        selectedIds: _selectedIds,
+                        copyableSelection: _copyableSelection,
+                        singleEditable: _singleEditable,
+                        singleSavable: _singleSavable,
+                        onClearSelection: _clearSelection,
+                        onCopySelected: _copySelected,
+                        onEditSelected: _editSelected,
+                        onSaveSelected: _saveSelected,
+                        onDeleteSelected: _deleteSelected,
+                        search: _search,
+                        searchFocusNode: _searchFocusNode,
+                        onCloseSearch: _closeSearch,
+                      ),
+                    ),
+                    body: body,
+                  ),
                 ),
               ),
             ),
@@ -5391,277 +5363,269 @@ class _ChatScreenState extends State<ChatScreen>
                       context,
                     ).copyWith(scrollbars: false),
                     child: AnchoredMessageList(
-                    controller: _scrollController,
-                    cacheExtent: cacheExtent,
-                    cacheGrowthAllowed: _routeSettled,
-                    padding: _messagesListPadding(context),
-                    epoch: _scrollNav.listEpoch,
-                    itemCount: items.length,
-                    anchorIndex: _scrollNav.anchorIndexIn(
-                      items,
-                      _messageIdOfItem,
-                    ),
-                    loadingOlder: _isLoadingMore,
-                    loadingNewer: _chatController.isLoadingNewer,
-                    bottomSpacer: ValueListenableBuilder<double>(
-                      valueListenable: _composerHeight,
-                      builder: (context, height, _) => SizedBox(
-                        height: _composerUnderlap ? height : 0,
+                      controller: _scrollController,
+                      cacheExtent: cacheExtent,
+                      cacheGrowthAllowed: _routeSettled,
+                      padding: _messagesListPadding(context),
+                      epoch: _scrollNav.listEpoch,
+                      itemCount: items.length,
+                      anchorIndex: _scrollNav.anchorIndexIn(
+                        items,
+                        _messageIdOfItem,
                       ),
-                    ),
-                    itemBuilder: (context, itemIndex) {
-                              final item = items[itemIndex];
+                      loadingOlder: _isLoadingMore,
+                      loadingNewer: _chatController.isLoadingNewer,
+                      bottomSpacer: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_recommendations case final recommendations?
+                              when !_chatController.hasNewer)
+                            ChannelRecommendationsView(
+                              recommendations: recommendations,
+                            ),
+                          ValueListenableBuilder<double>(
+                            valueListenable: _composerHeight,
+                            builder: (context, height, _) => SizedBox(
+                              height: _composerUnderlap ? height : 0,
+                            ),
+                          ),
+                        ],
+                      ),
+                      itemBuilder: (context, itemIndex) {
+                        final item = items[itemIndex];
 
-                              if (item is _DateSeparatorItem) {
-                                return DateSeparatorLabel(
-                                  key: item.key,
-                                  date: item.date,
-                                );
-                              }
+                        if (item is _DateSeparatorItem) {
+                          return DateSeparatorLabel(
+                            key: item.key,
+                            date: item.date,
+                          );
+                        }
 
-                              if (item is _UnreadSeparatorItem) {
-                                return UnreadSeparatorBar(
-                                  key: _unreadSeparatorKey,
-                                );
-                              }
+                        if (item is _UnreadSeparatorItem) {
+                          return UnreadSeparatorBar(key: _unreadSeparatorKey);
+                        }
 
-                              final msgItem = item as _MessageItem;
-                              final message = msgItem.message;
-                              final msgIndex = msgItem.index;
-                              final flight = _flightFor(message.id);
-                              final isMe = message.senderId == _myId;
-                              final prevMessage = msgIndex > 0
-                                  ? _messages[msgIndex - 1]
-                                  : null;
-                              final nextMessage = msgIndex < visibleCount - 1
-                                  ? _messages[msgIndex + 1]
-                                  : null;
+                        final msgItem = item as _MessageItem;
+                        final message = msgItem.message;
+                        final msgIndex = msgItem.index;
+                        final flight = _flightFor(message.id);
+                        final isMe = message.senderId == _myId;
+                        final prevMessage = msgIndex > 0
+                            ? _messages[msgIndex - 1]
+                            : null;
+                        final nextMessage = msgIndex < visibleCount - 1
+                            ? _messages[msgIndex + 1]
+                            : null;
 
-                              final bool isChannelPost =
-                                  !_commentsMode &&
-                                  _commentsEnabled &&
-                                  (chat?.type ?? widget.chatType) ==
-                                      'CHANNEL' &&
-                                  !message.isControl;
-                              final bool isCommentedPost =
-                                  _commentsMode &&
-                                  message.id == widget.commentPostId;
+                        final channelPost =
+                            !_commentsMode && _isChannel && !message.isControl;
+                        final isChannelPost = channelPost && _commentsEnabled;
+                        final bool isCommentedPost =
+                            _commentsMode && message.id == widget.commentPostId;
 
-                              final bubble = MessageBubble(
-                                message: message,
-                                isMe: isMe,
-                                myId: _myId,
-                                prevMessage: prevMessage,
-                                nextMessage: nextMessage,
-                                separatedAbove:
-                                    itemIndex > 0 &&
-                                    items[itemIndex - 1] is! _MessageItem,
-                                separatedBelow:
-                                    itemIndex + 1 < items.length &&
-                                    items[itemIndex + 1] is! _MessageItem,
-                                chatType: _commentsMode
-                                    ? 'CHAT'
-                                    : (chat?.type ?? 'CHAT'),
-                                chatId: widget.chatId,
-                                photoActions: _photoActions,
-                                overrideStatus: _effectiveStatus(message),
-                                otherReadTime: _otherReadTime,
-                                reactionsListenable: _reactionNotifierFor(
+                        final bubble = MessageBubble(
+                          message: message,
+                          isMe: isMe,
+                          channelPost: channelPost,
+                          views: channelPost
+                              ? _channelViews.of(message.id)
+                              : null,
+                          myId: _myId,
+                          prevMessage: prevMessage,
+                          nextMessage: nextMessage,
+                          separatedAbove:
+                              itemIndex > 0 &&
+                              items[itemIndex - 1] is! _MessageItem,
+                          separatedBelow:
+                              itemIndex + 1 < items.length &&
+                              items[itemIndex + 1] is! _MessageItem,
+                          chatType: _commentsMode
+                              ? 'CHAT'
+                              : (chat?.type ?? 'CHAT'),
+                          chatId: widget.chatId,
+                          photoActions: _photoActions,
+                          overrideStatus: _effectiveStatus(message),
+                          otherReadTime: _otherReadTime,
+                          reactionsListenable: _reactionNotifierFor(message),
+                          reactionAnimation: _reactionAnimation,
+                          uploadProgress: _photoProgressFor(message),
+                          onCancelUpload: _cancelUploadFor(message),
+                          onCancelUploadItem: _cancelUploadItemFor(message),
+                          onReplyTap: (id) => unawaited(
+                            _scrollNav.goTo(
+                              id,
+                              time: message.replyInfo?.time ?? 0,
+                              fromId: message.id,
+                            ),
+                          ),
+                          resolveLocalMessage: _chatController.byId,
+                          listWidth: listWidth,
+                          onAvatarTap: _openSenderProfile,
+                          onForwardedSourceTap: _openForwardedSource,
+                          onStickerTap: _openStickerPack,
+                          onReactionTap: message.isControl
+                              ? null
+                              : (emoji) => _reactToMessage(message, emoji),
+                          peerName: widget.name,
+                          peerAvatarUrl: widget.imageUrl,
+                          senderNameOverride: isCommentedPost || channelPost
+                              ? _chatName
+                              : null,
+                          senderAvatarOverride: isCommentedPost
+                              ? _chatImageUrl
+                              : null,
+                          textSelection: _textSelection,
+                          textSelectionDrag: _textSelectionDrag,
+                          onExitTextSelection: _exitTextSelection,
+                          commentsLabel: isChannelPost
+                              ? _commentsLabelFor(message.id)
+                              : null,
+                          onCommentsTap: isChannelPost
+                              ? () => _openComments(message)
+                              : null,
+                          geometry: flight?.geometry,
+                        );
+
+                        final canReport = !isMe && !message.isControl;
+                        final reportTypeId = _complaintTypeId(
+                          chat?.type ?? widget.chatType,
+                        );
+
+                        final pressable = SelectableMessageRow(
+                          message: message,
+                          outgoing: isMe && !channelPost,
+                          composerHeight: _composerHeight,
+                          selectedIds: _selectedIds,
+                          selectionAnim: _selectionAnim,
+                          isSelectionActive: () => _selectionMode,
+                          onToggleSelection: () => _toggleSelection(message),
+                          onEnterSelection: () => _enterSelection(message),
+                          onStartTextSelection: (pos) =>
+                              _startTextSelection(message, pos),
+                          onDragTextSelection: (pos) =>
+                              _textSelectionDrag.value = pos,
+                          onDelete: () =>
+                              _confirmDeleteMessage(message.id, isMe),
+                          allowDelete:
+                              !message.isControl &&
+                              (isMe || !_isChannel || _canDeleteOthers),
+                          onEdit: _canEditMessage(message)
+                              ? () => _startEditMessage(message)
+                              : null,
+                          onReply: message.isControl || !_canReply
+                              ? null
+                              : () => _textSend.startReply(message),
+                          onForward:
+                              message.isControl ||
+                                  (chat?.forwardDisabled ?? false)
+                              ? null
+                              : () => _forwardMessages([message]),
+                          allowCopy: !(chat?.copyDisabled ?? false),
+                          onMarkUnread: message.isControl
+                              ? null
+                              : () => _markMessageUnread(message),
+                          onPin: _canPinMessage(message)
+                              ? () => _togglePinMessage(message)
+                              : null,
+                          onCopyLink: _canLinkMessage(message)
+                              ? () => _copyMessageLink(message)
+                              : null,
+                          onSave: _canSaveVoice(message)
+                              ? () => _saveVoice(message)
+                              : null,
+                          onSaveAs: _savableFile(message) == null
+                              ? null
+                              : () => _saveFileAs(message),
+                          isPinned: () =>
+                              chat?.pinnedMsgId == int.tryParse(message.id),
+                          loadReadBy: _canShowReadBy(message)
+                              ? () => _loadReadBy(message)
+                              : null,
+                          onReaderTap: _openSenderProfile,
+                          loadReportReasons: canReport
+                              ? () => _loadReportReasons(reportTypeId)
+                              : null,
+                          onReport: canReport
+                              ? (reasonId) => _reportMessage(
                                   message,
-                                ),
-                                reactionAnimation: _reactionAnimation,
-                                uploadProgress: _photoProgressFor(message),
-                                onCancelUpload: _cancelUploadFor(message),
-                                onCancelUploadItem: _cancelUploadItemFor(
+                                  reportTypeId,
+                                  reasonId,
+                                )
+                              : null,
+                          onReact: message.isControl
+                              ? null
+                              : (emoji) => _reactToMessage(message, emoji),
+                          onDoubleTapReact: message.isControl
+                              ? null
+                              : (emoji) => _reactToMessage(
                                   message,
+                                  emoji,
+                                  emphasize: true,
                                 ),
-                                onReplyTap: (id) => unawaited(
-                                  _scrollNav.goTo(
-                                    id,
-                                    time: message.replyInfo?.time ?? 0,
-                                    fromId: message.id,
-                                  ),
-                                ),
-                                resolveLocalMessage: _chatController.byId,
-                                listWidth: listWidth,
-                                onAvatarTap: _openSenderProfile,
-                                onForwardedSourceTap: _openForwardedSource,
-                                onStickerTap: _openStickerPack,
-                                onReactionTap: message.isControl
-                                    ? null
-                                    : (emoji) =>
-                                          _reactToMessage(message, emoji),
-                                peerName: widget.name,
-                                peerAvatarUrl: widget.imageUrl,
-                                senderNameOverride: isCommentedPost
-                                    ? _chatName
-                                    : null,
-                                senderAvatarOverride: isCommentedPost
-                                    ? _chatImageUrl
-                                    : null,
-                                textSelection: _textSelection,
-                                textSelectionDrag: _textSelectionDrag,
-                                onExitTextSelection: _exitTextSelection,
-                                commentsLabel: isChannelPost
-                                    ? _commentsLabelFor(message.id)
-                                    : null,
-                                onCommentsTap: isChannelPost
-                                    ? () => _openComments(message)
-                                    : null,
-                                geometry: flight?.geometry,
+                          reactions: _reactionNotifierFor(message),
+                          reactionSettings: _reactionSettings,
+                          child: bubble,
+                        );
+
+                        final isChannel =
+                            (chat?.type ?? widget.chatType) == 'CHANNEL';
+                        final swipeable =
+                            (message.isControl || isChannel || !_canReply)
+                            ? pressable
+                            : SwipeToReply(
+                                onReply: () => _textSend.startReply(message),
+                                child: pressable,
                               );
 
-                              final canReport = !isMe && !message.isControl;
-                              final reportTypeId = _complaintTypeId(
-                                chat?.type ?? widget.chatType,
-                              );
+                        final Widget child;
+                        if (_deletingIds.contains(message.id)) {
+                          child = DeletingMessageAnimation(
+                            key: ValueKey('del_${message.id}'),
+                            onComplete: () => _finalizeDelete(message.id),
+                            child: IgnorePointer(child: swipeable),
+                          );
+                        } else {
+                          child = swipeable;
+                        }
 
-                              final pressable = SelectableMessageRow(
-                                message: message,
-                                isMe: isMe,
-                                composerHeight: _composerHeight,
-                                selectedIds: _selectedIds,
-                                selectionAnim: _selectionAnim,
-                                isSelectionActive: () => _selectionMode,
-                                onToggleSelection: () =>
-                                    _toggleSelection(message),
-                                onEnterSelection: () =>
-                                    _enterSelection(message),
-                                onStartTextSelection: (pos) =>
-                                    _startTextSelection(message, pos),
-                                onDragTextSelection: (pos) =>
-                                    _textSelectionDrag.value = pos,
-                                onDelete: () =>
-                                    _confirmDeleteMessage(message.id, isMe),
-                                allowDelete:
-                                    !message.isControl &&
-                                    (isMe || !_isChannel || _canDeleteOthers),
-                                onEdit: _canEditMessage(message)
-                                    ? () => _startEditMessage(message)
-                                    : null,
-                                onReply: message.isControl || !_canReply
-                                    ? null
-                                    : () => _textSend.startReply(message),
-                                onForward:
-                                    message.isControl ||
-                                        (chat?.forwardDisabled ?? false)
-                                    ? null
-                                    : () => _forwardMessages([message]),
-                                allowCopy: !(chat?.copyDisabled ?? false),
-                                onMarkUnread: message.isControl
-                                    ? null
-                                    : () => _markMessageUnread(message),
-                                onPin: _canPinMessage(message)
-                                    ? () => _togglePinMessage(message)
-                                    : null,
-                                onCopyLink: _canLinkMessage(message)
-                                    ? () => _copyMessageLink(message)
-                                    : null,
-                                onSave: _canSaveVoice(message)
-                                    ? () => _saveVoice(message)
-                                    : null,
-                                onSaveAs: _savableFile(message) == null
-                                    ? null
-                                    : () => _saveFileAs(message),
-                                isPinned: () =>
-                                    chat?.pinnedMsgId ==
-                                    int.tryParse(message.id),
-                                loadReadBy: _canShowReadBy(message)
-                                    ? () => _loadReadBy(message)
-                                    : null,
-                                onReaderTap: _openSenderProfile,
-                                loadReportReasons: canReport
-                                    ? () => _loadReportReasons(reportTypeId)
-                                    : null,
-                                onReport: canReport
-                                    ? (reasonId) => _reportMessage(
-                                        message,
-                                        reportTypeId,
-                                        reasonId,
-                                      )
-                                    : null,
-                                onReact: message.isControl
-                                    ? null
-                                    : (emoji) =>
-                                          _reactToMessage(message, emoji),
-                                onDoubleTapReact: message.isControl
-                                    ? null
-                                    : (emoji) => _reactToMessage(
-                                        message,
-                                        emoji,
-                                        emphasize: true,
-                                      ),
-                                reactions: _reactionNotifierFor(message),
-                                reactionSettings: _reactionSettings,
-                                child: bubble,
-                              );
+                        final highlightable = ValueListenableBuilder<String?>(
+                          valueListenable: _scrollNav.highlightMessageId,
+                          builder: (context, hl, c) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            color: hl == message.id
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.12)
+                                : Colors.transparent,
+                            child: c,
+                          ),
+                          child: child,
+                        );
 
-                              final isChannel =
-                                  (chat?.type ?? widget.chatType) == 'CHANNEL';
-                              final swipeable =
-                                  (message.isControl ||
-                                      isChannel ||
-                                      !_canReply)
-                                  ? pressable
-                                  : SwipeToReply(
-                                      onReply: () => _textSend.startReply(message),
-                                      child: pressable,
-                                    );
-
-                              final Widget child;
-                              if (_deletingIds.contains(message.id)) {
-                                child = DeletingMessageAnimation(
-                                  key: ValueKey('del_${message.id}'),
-                                  onComplete: () => _finalizeDelete(message.id),
-                                  child: IgnorePointer(child: swipeable),
-                                );
-                              } else {
-                                child = swipeable;
-                              }
-
-                              final highlightable =
-                                  ValueListenableBuilder<String?>(
-                                    valueListenable: _scrollNav.highlightMessageId,
-                                    builder: (context, hl, c) =>
-                                        AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 250,
-                                          ),
-                                          color: hl == message.id
-                                              ? Theme.of(context)
-                                                    .colorScheme
-                                                    .primary
-                                                    .withValues(alpha: 0.12)
-                                              : Colors.transparent,
-                                          child: c,
-                                        ),
-                                    child: child,
-                                  );
-
-                              final builtItem = MessageEnter(
-                                key: ValueKey('msg_${message.id}'),
-                                entering:
-                                    flight != null ||
-                                    _enteringIds.contains(message.id),
-                                progress: flight?.controller,
-                                hidden: flight?.carriesBubble ?? false,
-                                child: RepaintBoundary(
-                                  child: KeyedSubtree(
-                                    key: _keyForMessage(message.id),
-                                    child: highlightable,
-                                  ),
-                                ),
-                              );
-                              if (widget.preview) {
-                                return IgnorePointer(child: builtItem);
-                              }
-                              return message.id == _prank.bubbleId
-                                  ? KeyedSubtree(
-                                      key: _prank.bubbleKey,
-                                      child: builtItem,
-                                    )
-                                  : builtItem;
-                            },
+                        final builtItem = MessageEnter(
+                          key: ValueKey('msg_${message.id}'),
+                          entering:
+                              flight != null ||
+                              _enteringIds.contains(message.id),
+                          progress: flight?.controller,
+                          hidden: flight?.carriesBubble ?? false,
+                          child: RepaintBoundary(
+                            child: KeyedSubtree(
+                              key: _keyForMessage(message.id),
+                              child: highlightable,
+                            ),
+                          ),
+                        );
+                        if (widget.preview) {
+                          return IgnorePointer(child: builtItem);
+                        }
+                        return message.id == _prank.bubbleId
+                            ? KeyedSubtree(
+                                key: _prank.bubbleKey,
+                                child: builtItem,
+                              )
+                            : builtItem;
+                      },
                     ),
                   );
                 },
@@ -5872,20 +5836,6 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     _showAttachmentPanel.value = false;
     showCustomNotification(context, message(AppLocalizations.of(context)!));
-  }
-
-  ContextMenuButtonItem? _pasteMenuItem(
-    BuildContext context,
-    EditableTextState editableState,
-  ) {
-    if (!ClipboardMedia.supported) return null;
-    return ContextMenuButtonItem(
-      label: AppLocalizations.of(context)!.composerPasteAttachment,
-      onPressed: () {
-        editableState.hideToolbar();
-        unawaited(_pasteClipboardMedia());
-      },
-    );
   }
 
   Future<bool> _handlePasteMedia() async {

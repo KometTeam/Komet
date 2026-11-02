@@ -20,6 +20,7 @@ import 'package:komet/frontend/screens/chats/chat/video_note_controller.dart';
 import 'package:komet/frontend/screens/chats/chat/voice_record_controller.dart';
 import 'package:komet/frontend/widgets/attachment_panel.dart';
 import 'package:komet/frontend/widgets/e2ee_banner.dart';
+import 'package:komet/frontend/widgets/format_selection_toolbar.dart';
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
 import 'package:komet/l10n/app_localizations.dart';
 
@@ -76,18 +77,6 @@ class ComposerArea extends StatelessWidget {
   final bool crossChatReplySupported;
   final Future<void> Function() onPickReplyChat;
   final String Function(int ms) formatElapsed;
-  final Widget Function(
-    RichMessageController controller,
-    BuildContext context,
-    EditableTextState editableState, {
-    ContextMenuButtonItem? pasteItem,
-  })
-  formatContextMenu;
-  final ContextMenuButtonItem? Function(
-    BuildContext context,
-    EditableTextState editableState,
-  )
-  pasteMenuItem;
   final Future<bool> Function()? onPasteMedia;
   final Future<void> Function(KeyboardInsertedContent content) onInsertContent;
   final bool isMuted;
@@ -154,8 +143,6 @@ class ComposerArea extends StatelessWidget {
     required this.crossChatReplySupported,
     required this.onPickReplyChat,
     required this.formatElapsed,
-    required this.formatContextMenu,
-    required this.pasteMenuItem,
     required this.onPasteMedia,
     required this.onInsertContent,
     required this.isMuted,
@@ -189,9 +176,16 @@ class ComposerArea extends StatelessWidget {
     );
   }
 
+  VoidCallback? get _pasteMediaAction {
+    final paste = onPasteMedia;
+    if (paste == null || !ClipboardMedia.supported) return null;
+    return () => unawaited(paste());
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    stickers.safeBottom = MediaQuery.paddingOf(context).bottom;
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -267,7 +261,7 @@ class ComposerArea extends StatelessWidget {
                 builder: (context, _) => _withBotStart(
                   context,
                   ComposerInputBar(
-                    bottomSafe: stickers.anim.value == 0,
+                    bottomPadding: stickers.barBottomPadding,
                     chatType: commentsMode ? 'CHAT' : chatType,
                     chrome: chrome,
                     vignette: chromeVignette,
@@ -298,11 +292,10 @@ class ComposerArea extends StatelessWidget {
                         ? null
                         : () => unawaited(onPickReplyChat()),
                     formatElapsed: formatElapsed,
-                    contextMenuBuilder: (ctx, state) => formatContextMenu(
-                      messageController,
-                      ctx,
-                      state,
-                      pasteItem: pasteMenuItem(ctx, state),
+                    contextMenuBuilder: (_, state) => FormatSelectionToolbar(
+                      controller: messageController,
+                      editableState: state,
+                      onPasteMedia: _pasteMediaAction,
                     ),
                     onPasteMedia: ClipboardMedia.supported
                         ? onPasteMedia

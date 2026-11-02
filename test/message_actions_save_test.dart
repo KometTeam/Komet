@@ -23,7 +23,7 @@ Future<void> _openMenu(WidgetTester tester, {VoidCallback? onSave}) async {
               context: context,
               originRect: const Rect.fromLTWH(20, 200, 200, 40),
               tapPoint: const Offset(60, 220),
-              isMe: false,
+              outgoing: false,
               messageText: null,
               copyText: null,
               controller: controller,

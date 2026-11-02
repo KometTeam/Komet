@@ -8492,6 +8492,54 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 subscriber} other{{count} subscribers}}'**
   String chatScreenSubscribersCount(int count);
 
+  /// No description provided for @channelRecommendationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommended channels'**
+  String get channelRecommendationsTitle;
+
+  /// No description provided for @channelRecommendationsHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide recommendations'**
+  String get channelRecommendationsHide;
+
+  /// No description provided for @channelRecommendationsHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Recommendations are hidden in this channel'**
+  String get channelRecommendationsHidden;
+
+  /// No description provided for @channelRecommendationsHideEverywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide everywhere'**
+  String get channelRecommendationsHideEverywhere;
+
+  /// No description provided for @channelPostViews.
+  ///
+  /// In en, this message translates to:
+  /// **'Views'**
+  String get channelPostViews;
+
+  /// No description provided for @kometSettingsHideRecommendations.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide recommended channels'**
+  String get kometSettingsHideRecommendations;
+
+  /// No description provided for @kometSettingsHideRecommendationsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t show similar channels at the bottom of a channel'**
+  String get kometSettingsHideRecommendationsSubtitle;
+
+  /// No description provided for @chatScreenFormatMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Formatting'**
+  String get chatScreenFormatMenu;
+
   /// No description provided for @chatScreenFormatHeading.
   ///
   /// In en, this message translates to:
@@ -8899,6 +8947,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Looks great 🔥'**
   String get chatWallpaperSheetSampleOutgoing;
+
+  /// No description provided for @chatWallpaperSheetInherit.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get chatWallpaperSheetInherit;
+
+  /// No description provided for @chatWallpaperSheetCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get chatWallpaperSheetCurrent;
+
+  /// No description provided for @chatWallpaperSheetCustomGradient.
+  ///
+  /// In en, this message translates to:
+  /// **'Gradient'**
+  String get chatWallpaperSheetCustomGradient;
+
+  /// No description provided for @chatWallpaperSheetApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get chatWallpaperSheetApply;
+
+  /// No description provided for @chatWallpaperPresetKomet.
+  ///
+  /// In en, this message translates to:
+  /// **'Comet'**
+  String get chatWallpaperPresetKomet;
+
+  /// No description provided for @chatWallpaperPresetGraphite.
+  ///
+  /// In en, this message translates to:
+  /// **'Graphite'**
+  String get chatWallpaperPresetGraphite;
+
+  /// No description provided for @chatWallpaperPresetInk.
+  ///
+  /// In en, this message translates to:
+  /// **'Ink'**
+  String get chatWallpaperPresetInk;
+
+  /// No description provided for @chatWallpaperPresetPine.
+  ///
+  /// In en, this message translates to:
+  /// **'Pine'**
+  String get chatWallpaperPresetPine;
+
+  /// No description provided for @chatWallpaperPresetPlum.
+  ///
+  /// In en, this message translates to:
+  /// **'Plum'**
+  String get chatWallpaperPresetPlum;
+
+  /// No description provided for @chatWallpaperPresetUmber.
+  ///
+  /// In en, this message translates to:
+  /// **'Umber'**
+  String get chatWallpaperPresetUmber;
+
+  /// No description provided for @chatWallpaperPresetPaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Paper'**
+  String get chatWallpaperPresetPaper;
+
+  /// No description provided for @chatWallpaperPresetFog.
+  ///
+  /// In en, this message translates to:
+  /// **'Fog'**
+  String get chatWallpaperPresetFog;
+
+  /// No description provided for @chatWallpaperPresetSage.
+  ///
+  /// In en, this message translates to:
+  /// **'Sage'**
+  String get chatWallpaperPresetSage;
+
+  /// No description provided for @chatWallpaperPresetSand.
+  ///
+  /// In en, this message translates to:
+  /// **'Sand'**
+  String get chatWallpaperPresetSand;
+
+  /// No description provided for @chatWallpaperPresetPowder.
+  ///
+  /// In en, this message translates to:
+  /// **'Powder'**
+  String get chatWallpaperPresetPowder;
 
   /// No description provided for @chatWallpaperSheetNone.
   ///
@@ -12541,78 +12679,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t recognize the voice'**
   String get transcriptionNotRecognized;
-
-  /// No description provided for @chatWallpaperThemeOcean.
-  ///
-  /// In en, this message translates to:
-  /// **'Ocean'**
-  String get chatWallpaperThemeOcean;
-
-  /// No description provided for @chatWallpaperThemeSunset.
-  ///
-  /// In en, this message translates to:
-  /// **'Sunset'**
-  String get chatWallpaperThemeSunset;
-
-  /// No description provided for @chatWallpaperThemeLavender.
-  ///
-  /// In en, this message translates to:
-  /// **'Lavender'**
-  String get chatWallpaperThemeLavender;
-
-  /// No description provided for @chatWallpaperThemeMint.
-  ///
-  /// In en, this message translates to:
-  /// **'Mint'**
-  String get chatWallpaperThemeMint;
-
-  /// No description provided for @chatWallpaperThemeGraphite.
-  ///
-  /// In en, this message translates to:
-  /// **'Graphite'**
-  String get chatWallpaperThemeGraphite;
-
-  /// No description provided for @chatWallpaperThemeSky.
-  ///
-  /// In en, this message translates to:
-  /// **'Sky'**
-  String get chatWallpaperThemeSky;
-
-  /// No description provided for @chatWallpaperThemePeach.
-  ///
-  /// In en, this message translates to:
-  /// **'Peach'**
-  String get chatWallpaperThemePeach;
-
-  /// No description provided for @chatWallpaperThemeForest.
-  ///
-  /// In en, this message translates to:
-  /// **'Forest'**
-  String get chatWallpaperThemeForest;
-
-  /// No description provided for @chatWallpaperThemeGrape.
-  ///
-  /// In en, this message translates to:
-  /// **'Grape'**
-  String get chatWallpaperThemeGrape;
-
-  /// No description provided for @chatWallpaperThemeNight.
-  ///
-  /// In en, this message translates to:
-  /// **'Night'**
-  String get chatWallpaperThemeNight;
-
-  /// No description provided for @chatWallpaperThemeRose.
-  ///
-  /// In en, this message translates to:
-  /// **'Rose'**
-  String get chatWallpaperThemeRose;
-
-  /// No description provided for @chatWallpaperThemeAmber.
-  ///
-  /// In en, this message translates to:
-  /// **'Amber'**
-  String get chatWallpaperThemeAmber;
 
   /// No description provided for @mediaSaveFileNotFound.
   ///

@@ -19,6 +19,7 @@ import 'package:komet/frontend/widgets/composer_morph_icon.dart';
 import 'package:komet/frontend/widgets/glossy_pill.dart';
 import 'package:komet/frontend/widgets/liquid_glass.dart';
 import 'package:komet/frontend/widgets/sender_badge.dart';
+import 'package:komet/frontend/widgets/selection_toolbar.dart';
 import 'package:komet/frontend/widgets/lottie_slash_icon.dart';
 import 'package:komet/frontend/widgets/paste_media_scope.dart';
 import 'package:komet/frontend/widgets/reply_preview.dart';
@@ -70,7 +71,7 @@ class ComposerInputBar extends StatelessWidget {
     this.forceSend = false,
     this.readOnly = false,
     this.hintText,
-    this.bottomSafe = true,
+    required this.bottomPadding,
     this.vignette = false,
   });
 
@@ -116,7 +117,7 @@ class ComposerInputBar extends StatelessWidget {
   final bool forceSend;
   final bool readOnly;
   final String? hintText;
-  final bool bottomSafe;
+  final double bottomPadding;
   final bool vignette;
 
   @override
@@ -159,7 +160,8 @@ class ComposerInputBar extends StatelessWidget {
     }
 
     final bar = SafeArea(
-      bottom: bottomSafe,
+      bottom: false,
+      minimum: EdgeInsets.only(bottom: bottomPadding),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -553,7 +555,7 @@ class ComposerInputBar extends StatelessWidget {
       ),
     );
 
-    return _barSurface(cs, bar);
+    return SelectionToolbarFloor(child: _barSurface(cs, bar));
   }
 
   bool get _flat => !ComposerChrome.isGlossy(style);

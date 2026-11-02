@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../../core/utils/haptics.dart';
 import '../../l10n/app_localizations.dart';
 import 'custom_notification.dart';
+import 'selection_toolbar.dart';
 
 void _collectParagraphs(RenderObject ro, List<RenderParagraph> out) {
   if (ro is RenderParagraph) {
@@ -521,7 +522,7 @@ class _SelectableMessageTextState extends State<SelectableMessageText>
     final rootOrigin = _rootBox?.localToGlobal(Offset.zero) ?? Offset.zero;
     final safeTop = media.padding.top + 8;
     final safeBottom = size.height - media.padding.bottom - 8;
-    const height = 48.0;
+    const height = SelectionToolbarStyle.height;
     const gap = 10.0;
 
     double top = rootOrigin.dy + first.top - gap - height;
@@ -552,42 +553,21 @@ class _SelectableMessageTextState extends State<SelectableMessageText>
   }
 
   Widget _pill(BuildContext ctx) {
-    final cs = Theme.of(ctx).colorScheme;
     final l10n = AppLocalizations.of(ctx)!;
-    return Material(
-      color: cs.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(14),
-      elevation: 8,
-      shadowColor: Colors.black.withValues(alpha: 0.4),
-      clipBehavior: Clip.antiAlias,
+    return SelectionToolbarSurface(
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _toolbarButton(cs, l10n.msgActionsCopy, _copy),
-          Container(
-            width: 1,
-            height: 24,
-            color: cs.outlineVariant.withValues(alpha: 0.4),
+          SelectionToolbarTextButton(
+            label: l10n.msgActionsCopy,
+            onPressed: _copy,
           ),
-          _toolbarButton(cs, l10n.msgActionsSelectAll, _selectAll),
+          SelectionToolbarTextButton(
+            label: l10n.msgActionsSelectAll,
+            onPressed: _selectAll,
+          ),
         ],
-      ),
-    );
-  }
-
-  Widget _toolbarButton(ColorScheme cs, String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: cs.onSurface,
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
       ),
     );
   }

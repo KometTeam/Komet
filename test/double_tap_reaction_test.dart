@@ -119,7 +119,7 @@ void main() {
       _app(
         SelectableMessageRow(
           message: _message(),
-          isMe: false,
+          outgoing: false,
           selectedIds: selected,
           selectionAnim: kAlwaysDismissedAnimation,
           isSelectionActive: () => false,

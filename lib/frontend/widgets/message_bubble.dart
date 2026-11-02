@@ -52,6 +52,7 @@ import 'message_animoji.dart';
 import 'bubble_geometry.dart';
 import 'text_with_meta.dart';
 import 'official_name.dart';
+import 'sending_clock_icon.dart';
 
 final Expando<MessageType> _contentTypeCache = Expando<MessageType>();
 final Expando<List<MessageAttachment>> _contentAttachmentsCache =
@@ -978,6 +979,8 @@ class MessageBubble extends StatelessWidget {
 
   final CachedMessage message;
   final bool isMe;
+  final bool channelPost;
+  final ValueListenable<int?>? views;
   final int myId;
   final CachedMessage? prevMessage;
   final CachedMessage? nextMessage;
@@ -1016,6 +1019,8 @@ class MessageBubble extends StatelessWidget {
     super.key,
     required this.message,
     required this.isMe,
+    this.channelPost = false,
+    this.views,
     required this.myId,
     this.prevMessage,
     this.nextMessage,
@@ -1115,8 +1120,17 @@ class MessageBubble extends StatelessWidget {
     return forwarded == null ? message.text : forwarded.originalText;
   }
 
+  bool get _outgoing => isMe && !channelPost;
+
+  bool get _showsStatus {
+    if (!isMe) return false;
+    if (!channelPost) return true;
+    final status = overrideStatus ?? message.status;
+    return isSendingStatus(status) || status == 'error';
+  }
+
   bool get _showsSenderName =>
-      !isMe && chatType == "CHAT" && !_groupedWithPrev;
+      !_outgoing && (chatType == "CHAT" || channelPost) && !_groupedWithPrev;
 
   bool get _stretchesTextRow => message.replyInfo != null || _showsSenderName;
 
@@ -1140,12 +1154,12 @@ class MessageBubble extends StatelessWidget {
   bool get _groupedWithNext =>
       !separatedBelow && _sameGroup(message, nextMessage);
 
-  static bool _sameGroup(CachedMessage? a, CachedMessage? b) =>
+  bool _sameGroup(CachedMessage? a, CachedMessage? b) =>
       a != null &&
       b != null &&
       !a.isControl &&
       !b.isControl &&
-      a.senderId == b.senderId &&
+      (channelPost || a.senderId == b.senderId) &&
       (b.time - a.time).abs() < _groupWindowMs;
 
   BubbleShape _computeShape() {
@@ -1277,7 +1291,7 @@ class MessageBubble extends StatelessWidget {
     final isBottom =
         shape == BubbleShape.singleBottom || shape == BubbleShape.singleMiddle;
     return computeBubbleRadius(
-      isMe: isMe,
+      isMe: _outgoing,
       isTop: isTop,
       isBottom: isBottom,
       style: bubbleStyle,
@@ -1304,7 +1318,9 @@ class MessageBubble extends StatelessWidget {
       _senderPalette[id.abs() % _senderPalette.length];
 
   Widget _buildSenderHeader(ColorScheme cs, bool needsInset) {
-    final name = senderNameOverride ?? ContactCache.get(message.senderId);
+    final name =
+        senderNameOverride ??
+        (channelPost ? peerName : ContactCache.get(message.senderId));
     if (name == null || name.isEmpty) return const SizedBox.shrink();
     final header = Padding(
       padding: needsInset
@@ -1319,18 +1335,20 @@ class MessageBubble extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: _senderColor(message.senderId),
-                fontSize: 13,
+                color: channelPost
+                    ? cs.onSurface
+                    : _senderColor(message.senderId),
+                fontSize: channelPost ? 14 : 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          SenderBadge(senderId: message.senderId, size: 13),
+          if (!channelPost) SenderBadge(senderId: message.senderId, size: 13),
         ],
       ),
     );
 
-    final cb = onAvatarTap;
+    final cb = channelPost ? null : onAvatarTap;
     if (cb == null) return header;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -1466,7 +1484,7 @@ class MessageBubble extends StatelessWidget {
         ? EdgeInsets.zero
         : _paddingFor(contentType, shape);
 
-    final showAvatarSlot = !isMe;
+    final showAvatarSlot = !_outgoing;
     final showAvatar =
         showAvatarSlot &&
         chatType == "CHAT" &&
@@ -1484,7 +1502,7 @@ class MessageBubble extends StatelessWidget {
         isVideoNote || _isSticker || jumboAnimoji != null;
     final bubbleColor = noBubbleBackground || BubbleChrome.hiddenOf(context)
         ? Colors.transparent
-        : (isMe ? cs.primaryContainer : cs.surfaceContainerHighest);
+        : (_outgoing ? cs.primaryContainer : cs.surfaceContainerHighest);
 
     BubbleContext makeCtx({bool metaInFooter = false}) => BubbleContext(
       context: context,
@@ -1497,7 +1515,8 @@ class MessageBubble extends StatelessWidget {
       hasPhotoWithCaption: hasPhotoCap,
       hasMultiplePhotosNoCaption: hasMultiPhotos,
       message: message,
-      isMe: isMe,
+      isMe: _outgoing,
+      showsStatus: _showsStatus,
       myId: myId,
       chatType: chatType,
       chatId: chatId,
@@ -1511,6 +1530,7 @@ class MessageBubble extends StatelessWidget {
       onStickerTap: onStickerTap,
       onForwardedSourceTap: onForwardedSourceTap,
       reactionInfo: _resolveReactionInfo(),
+      views: views,
       selectable: _wrapSelectable,
     );
 
@@ -1661,7 +1681,7 @@ class MessageBubble extends StatelessWidget {
       ),
       child: Align(
         child: Row(
-          mainAxisAlignment: isMe
+          mainAxisAlignment: _outgoing
               ? MainAxisAlignment.end
               : MainAxisAlignment.start,
           spacing: 8,
@@ -1672,7 +1692,7 @@ class MessageBubble extends StatelessWidget {
             else if (showAvatarSlot && chatType == "CHAT")
               const SizedBox(width: _groupAvatarSize),
             Column(
-              crossAxisAlignment: isMe
+              crossAxisAlignment: _outgoing
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
@@ -1694,7 +1714,7 @@ class MessageBubble extends StatelessWidget {
   Widget _buildCommentsFooter(BuildContext context, ColorScheme cs) {
     final label =
         commentsLabel ?? AppLocalizations.of(context)!.commentsTitle;
-    final accent = isMe ? cs.onPrimaryContainer : cs.primary;
+    final accent = _outgoing ? cs.onPrimaryContainer : cs.primary;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -2137,7 +2157,7 @@ class MessageBubble extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
           ),
-          if (ctx.isMe) ...[
+          if (ctx.showsStatus) ...[
             const SizedBox(width: 3),
             ctx.statusIcon(color: Colors.white, size: 13),
           ],
@@ -2353,9 +2373,9 @@ class MessageBubble extends StatelessWidget {
           Icon(Symbols.lock, size: 11, weight: 700, fill: 1, color: ctx.dim),
           const SizedBox(width: 3),
         ],
-        ...ctx.metaMarks(ctx.dim),
+        ...ctx.metaMarks(ctx.dim, fontSize: 10),
         Text(ctx.timeLabel, style: TextStyle(color: ctx.dim, fontSize: 10)),
-        if (isMe) ...[const SizedBox(width: 4), ctx.statusIcon()],
+        if (ctx.showsStatus) ...[const SizedBox(width: 4), ctx.statusIcon()],
         if (message.deleted) ...[const SizedBox(width: 4), ctx.deletedIcon()],
       ],
     );
@@ -2785,7 +2805,9 @@ class MessageBubble extends StatelessWidget {
       duration: duration,
       url: url,
       textColor: ctx.text,
-      isMe: isMe,
+      isMe: ctx.isMe,
+      showsStatus: ctx.showsStatus,
+      views: ctx.views,
       deleted: message.deleted,
       status: overrideStatus ?? message.status,
       otherReadTime: otherReadTime,

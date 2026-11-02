@@ -28,6 +28,7 @@ import 'package:komet/frontend/widgets/reaction_picker.dart'
     show availableReactions;
 import 'package:komet/frontend/widgets/rich_message_controller.dart';
 import 'package:komet/frontend/widgets/custom_notification.dart';
+import 'package:komet/frontend/widgets/format_selection_toolbar.dart';
 import 'package:komet/frontend/widgets/selection_check_circle.dart';
 import 'package:komet/frontend/widgets/small_spinner.dart';
 import 'package:komet/frontend/widgets/sticker_pin.dart';
@@ -228,7 +229,7 @@ class _PinnedMessageTextState extends State<PinnedMessageText> {
 class SelectableMessageRow extends StatefulWidget {
   final Widget child;
   final CachedMessage message;
-  final bool isMe;
+  final bool outgoing;
   final ValueListenable<Set<String>> selectedIds;
   final Animation<double> selectionAnim;
   final bool Function() isSelectionActive;
@@ -262,7 +263,7 @@ class SelectableMessageRow extends StatefulWidget {
     super.key,
     required this.child,
     required this.message,
-    required this.isMe,
+    required this.outgoing,
     required this.selectedIds,
     required this.selectionAnim,
     required this.isSelectionActive,
@@ -349,7 +350,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       snapshot: snapshot,
       originRect: rect,
       tapPoint: _lastTapDown ?? rect.center,
-      isMe: widget.isMe,
+      outgoing: widget.outgoing,
       bottomReservedSpace: widget.composerHeight?.value ?? 0,
       messageText: widget.message.text,
       copyText: MessageDecryptionCache.instance.readableText(widget.message),
@@ -454,7 +455,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       context: ctx,
       originRect: rect,
       tapPoint: details.globalPosition,
-      isMe: widget.isMe,
+      outgoing: widget.outgoing,
       bottomReservedSpace: widget.composerHeight?.value ?? 0,
       messageText: widget.message.text,
       copyText: MessageDecryptionCache.instance.readableText(widget.message),
@@ -705,18 +706,11 @@ class EditMessageSheet extends StatefulWidget {
   final String text;
   final Iterable<FormatRange> formatRanges;
   final List<PhotoAttachment>? photos;
-  final Widget Function(
-    RichMessageController controller,
-    BuildContext context,
-    EditableTextState editableState,
-  )
-  contextMenuBuilder;
 
   const EditMessageSheet({
     super.key,
     required this.text,
     required this.formatRanges,
-    required this.contextMenuBuilder,
     this.photos,
   });
 
@@ -815,8 +809,10 @@ class _EditMessageSheetState extends State<EditMessageSheet> {
             maxLines: 6,
             textCapitalization: TextCapitalization.sentences,
             style: TextStyle(color: cs.onSurface),
-            contextMenuBuilder: (ctx, state) =>
-                widget.contextMenuBuilder(_controller, ctx, state),
+            contextMenuBuilder: (_, state) => FormatSelectionToolbar(
+              controller: _controller,
+              editableState: state,
+            ),
             decoration: InputDecoration(
               hintText: media == null
                   ? l10n.scheduledMessageTextHint

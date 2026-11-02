@@ -4653,6 +4653,32 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get channelRecommendationsTitle => 'Recommended channels';
+
+  @override
+  String get channelRecommendationsHide => 'Hide recommendations';
+
+  @override
+  String get channelRecommendationsHidden =>
+      'Recommendations are hidden in this channel';
+
+  @override
+  String get channelRecommendationsHideEverywhere => 'Hide everywhere';
+
+  @override
+  String get channelPostViews => 'Views';
+
+  @override
+  String get kometSettingsHideRecommendations => 'Hide recommended channels';
+
+  @override
+  String get kometSettingsHideRecommendationsSubtitle =>
+      'Don\'t show similar channels at the bottom of a channel';
+
+  @override
+  String get chatScreenFormatMenu => 'Formatting';
+
+  @override
   String get chatScreenFormatHeading => 'Heading';
 
   @override
@@ -4897,6 +4923,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatWallpaperSheetSampleOutgoing => 'Looks great 🔥';
+
+  @override
+  String get chatWallpaperSheetInherit => 'Default';
+
+  @override
+  String get chatWallpaperSheetCurrent => 'Current';
+
+  @override
+  String get chatWallpaperSheetCustomGradient => 'Gradient';
+
+  @override
+  String get chatWallpaperSheetApply => 'Apply';
+
+  @override
+  String get chatWallpaperPresetKomet => 'Comet';
+
+  @override
+  String get chatWallpaperPresetGraphite => 'Graphite';
+
+  @override
+  String get chatWallpaperPresetInk => 'Ink';
+
+  @override
+  String get chatWallpaperPresetPine => 'Pine';
+
+  @override
+  String get chatWallpaperPresetPlum => 'Plum';
+
+  @override
+  String get chatWallpaperPresetUmber => 'Umber';
+
+  @override
+  String get chatWallpaperPresetPaper => 'Paper';
+
+  @override
+  String get chatWallpaperPresetFog => 'Fog';
+
+  @override
+  String get chatWallpaperPresetSage => 'Sage';
+
+  @override
+  String get chatWallpaperPresetSand => 'Sand';
+
+  @override
+  String get chatWallpaperPresetPowder => 'Powder';
 
   @override
   String get chatWallpaperSheetNone => 'No wallpaper';
@@ -7060,42 +7131,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get transcriptionNotRecognized => 'Couldn\'t recognize the voice';
-
-  @override
-  String get chatWallpaperThemeOcean => 'Ocean';
-
-  @override
-  String get chatWallpaperThemeSunset => 'Sunset';
-
-  @override
-  String get chatWallpaperThemeLavender => 'Lavender';
-
-  @override
-  String get chatWallpaperThemeMint => 'Mint';
-
-  @override
-  String get chatWallpaperThemeGraphite => 'Graphite';
-
-  @override
-  String get chatWallpaperThemeSky => 'Sky';
-
-  @override
-  String get chatWallpaperThemePeach => 'Peach';
-
-  @override
-  String get chatWallpaperThemeForest => 'Forest';
-
-  @override
-  String get chatWallpaperThemeGrape => 'Grape';
-
-  @override
-  String get chatWallpaperThemeNight => 'Night';
-
-  @override
-  String get chatWallpaperThemeRose => 'Rose';
-
-  @override
-  String get chatWallpaperThemeAmber => 'Amber';
 
   @override
   String get mediaSaveFileNotFound => 'file not found';

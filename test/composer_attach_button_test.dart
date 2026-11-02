@@ -55,6 +55,7 @@ void main() {
             composerContext = context;
             return Scaffold(
               bottomNavigationBar: ComposerInputBar(
+                bottomPadding: 0,
                 chatType: 'DIALOG',
                 chrome: ChatChromeStyle.color,
                 style: ComposerStyle.materialYou,

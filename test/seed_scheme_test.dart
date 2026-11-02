@@ -23,6 +23,8 @@ bool _isGray(Color color) {
   return r == g && g == b;
 }
 
+const Set<String> _neutralPresets = {'komet', 'graphite', 'paper'};
+
 Future<Color> _seedOf(String themeId) async {
   final seed = await computeWallpaperSeed(ChatWallpaper.theme(themeId));
   expect(seed, isNotNull, reason: themeId);
@@ -30,20 +32,26 @@ Future<Color> _seedOf(String themeId) async {
 }
 
 void main() {
-  test('серые обои дают серый акцент, а не синий', () async {
-    final seed = await _seedOf('graphite');
+  test('нейтральные обои дают серый акцент, а не синий', () async {
+    for (final id in _neutralPresets) {
+      final seed = await _seedOf(id);
 
-    expect(isAchromaticSeed(seed), isTrue);
-    for (final brightness in Brightness.values) {
-      final scheme = schemeFromSeed(seed, brightness);
-      expect(_isGray(scheme.primary), isTrue, reason: '$brightness');
-      expect(_isGray(scheme.secondaryContainer), isTrue, reason: '$brightness');
+      expect(isAchromaticSeed(seed), isTrue, reason: id);
+      for (final brightness in Brightness.values) {
+        final scheme = schemeFromSeed(seed, brightness);
+        expect(_isGray(scheme.primary), isTrue, reason: '$id $brightness');
+        expect(
+          _isGray(scheme.secondaryContainer),
+          isTrue,
+          reason: '$id $brightness',
+        );
+      }
     }
   });
 
   test('цветные встроенные обои остаются цветными', () async {
     for (final theme in kChatWallpaperThemes) {
-      if (theme.id == 'graphite') continue;
+      if (_neutralPresets.contains(theme.id)) continue;
       final seed = await _seedOf(theme.id);
 
       expect(isAchromaticSeed(seed), isFalse, reason: theme.id);

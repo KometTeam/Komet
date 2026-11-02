@@ -99,6 +99,16 @@ class KometSettingsScreen extends StatelessWidget {
                     onChanged: KometSettings.setShowTypingTime,
                   ),
                 ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: KometSettings.hideChannelRecommendations,
+                  builder: (context, value, _) => SettingsToggleTile(
+                    icon: Symbols.explore_off,
+                    label: l10n.kometSettingsHideRecommendations,
+                    subtitle: l10n.kometSettingsHideRecommendationsSubtitle,
+                    value: value,
+                    onChanged: KometSettings.setHideChannelRecommendations,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),

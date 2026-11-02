@@ -72,7 +72,7 @@ class StickerBubble extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
           ),
-          if (ctx.isMe) ...[
+          if (ctx.showsStatus) ...[
             const SizedBox(width: 3),
             ctx.statusIcon(color: Colors.white, size: 13),
           ],

@@ -116,6 +116,7 @@ import 'frontend/debug/performance_monitor.dart';
 import 'frontend/screens/auth/login_screen.dart';
 import 'frontend/widgets/adaptive_shell.dart';
 import 'frontend/widgets/chat_wallpaper_view.dart' show WallpaperImages;
+import 'frontend/widgets/theme_wallpaper.dart' show precacheWallpaperTheme;
 import 'frontend/widgets/custom_notification.dart';
 import 'frontend/widgets/hint_bubble.dart';
 import 'frontend/widgets/keyboard_cover.dart';
@@ -957,8 +958,12 @@ class KometAppState extends State<KometApp>
     await ChatWallpaperStore.instance.load();
     final wallpaper = accountId == 0
         ? null
-        : ChatWallpaperStore.instance.get(accountId, kGlobalWallpaperChatId);
+        : ChatWallpaperStore.instance.effective(
+            accountId,
+            kGlobalWallpaperChatId,
+          );
     WallpaperImages.holdGlobal(wallpaper);
+    ChatWallpaperStore.instance.themeIds.forEach(precacheWallpaperTheme);
     if (!AppWallpaperTint.current.value || wallpaper == null) {
       _globalWallpaper = null;
       wallpaperSeed.value = null;

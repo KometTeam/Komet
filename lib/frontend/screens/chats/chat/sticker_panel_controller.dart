@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/widgets.dart';
@@ -54,6 +55,7 @@ class StickerPanelController {
   final ValueNotifier<double> keyboardInset = ValueNotifier(0);
   double _baseHeight = _fallbackHeight;
   double maxHeight = _fallbackHeight;
+  double safeBottom = 0;
   bool _landscape = false;
   bool _yielding = false;
   Timer? _typingTimer;
@@ -69,6 +71,10 @@ class StickerPanelController {
 
   double get visibleHeight =>
       currentHeight * Curves.easeOutCubic.transform(anim.value.clamp(0.0, 1.0));
+
+  double get slotHeight => math.max(safeBottom, visibleHeight);
+
+  double get barBottomPadding => math.max(0, safeBottom - visibleHeight);
 
   // #***! клавиатура была открыта: панель сразу во всю её высоту, клавиатура
   // уезжает поверх и открывает её

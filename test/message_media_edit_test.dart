@@ -124,7 +124,6 @@ void main() {
                     text: '',
                     formatRanges: const [],
                     photos: const [_first, _second],
-                    contextMenuBuilder: (_, _, _) => const SizedBox.shrink(),
                   ),
                 ),
               ),

@@ -26,6 +26,9 @@ class KometSettings {
   static const _kAutoplayAnimoji = 'komet_autoplay_animoji';
   static const _kAutoplayVideoNote = 'komet_autoplay_video_note';
   static const _kRecordDebugLogs = 'komet_record_debug_logs';
+  static const _kHideChannelRecommendations =
+      'komet_hide_channel_recommendations';
+  static const _kRecommendationsHiddenIn = 'komet_recommendations_hidden_in';
 
   // #***! каждая настройка это ValueNotifier, юишка подписана напрямую
   static final ValueNotifier<bool> viewDeleted = ValueNotifier(false);
@@ -49,6 +52,12 @@ class KometSettings {
   static final ValueNotifier<bool> autoplayAnimoji = ValueNotifier(true);
   static final ValueNotifier<bool> autoplayVideoNote = ValueNotifier(true);
   static final ValueNotifier<bool> recordDebugLogs = ValueNotifier(true);
+  static final ValueNotifier<bool> hideChannelRecommendations = ValueNotifier(
+    false,
+  );
+  static final ValueNotifier<Set<int>> recommendationsHiddenIn = ValueNotifier(
+    const {},
+  );
 
   // #***! читаем всё разом на старте
   static Future<void> load() async {
@@ -84,6 +93,13 @@ class KometSettings {
     autoplayAnimoji.value = prefs.getBool(_kAutoplayAnimoji) ?? true;
     autoplayVideoNote.value = prefs.getBool(_kAutoplayVideoNote) ?? true;
     recordDebugLogs.value = prefs.getBool(_kRecordDebugLogs) ?? true;
+    hideChannelRecommendations.value =
+        prefs.getBool(_kHideChannelRecommendations) ?? false;
+    recommendationsHiddenIn.value = {
+      for (final raw
+          in prefs.getStringList(_kRecommendationsHiddenIn) ?? const [])
+        ?int.tryParse(raw),
+    };
   }
 
   // #***! дальше по сеттеру на настройку, память потом диск
@@ -198,5 +214,19 @@ class KometSettings {
     recordDebugLogs.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kRecordDebugLogs, value);
+  }
+
+  static Future<void> setHideChannelRecommendations(bool value) =>
+      _setFlag(hideChannelRecommendations, _kHideChannelRecommendations, value);
+
+  static Future<void> hideRecommendationsIn(int chatId) async {
+    final hidden = recommendationsHiddenIn.value;
+    if (hidden.contains(chatId)) return;
+    final next = {...hidden, chatId};
+    recommendationsHiddenIn.value = next;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_kRecommendationsHiddenIn, [
+      for (final id in next) '$id',
+    ]);
   }
 }

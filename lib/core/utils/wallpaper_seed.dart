@@ -16,9 +16,7 @@ Future<Color?> computeWallpaperSeed(ChatWallpaper? wallpaper) async {
     return _mostVivid(colors);
   }
   if (!wallpaper.isImage) {
-    final theme = chatWallpaperThemeById(wallpaper.themeId);
-    if (theme == null) return null;
-    return _mostVivid(theme.colors);
+    return chatWallpaperThemeById(wallpaper.themeId)?.accent;
   }
   final path = wallpaper.imagePath;
   if (path == null) return null;

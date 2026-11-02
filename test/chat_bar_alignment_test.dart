@@ -84,6 +84,7 @@ void main() {
             body: Align(
               alignment: Alignment.bottomCenter,
               child: ComposerInputBar(
+                bottomPadding: 0,
                 chatType: 'DIALOG',
                 chrome: ChatChromeStyle.none,
                 vignette: true,
