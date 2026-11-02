@@ -9224,6 +9224,12 @@ abstract class AppLocalizations {
   /// **'Close the mini app?'**
   String get webAppScreenCloseConfirm;
 
+  /// No description provided for @webAppUnsupportedPlatform.
+  ///
+  /// In en, this message translates to:
+  /// **'Mini apps aren\'t available in the Linux version yet'**
+  String get webAppUnsupportedPlatform;
+
   /// No description provided for @voiceRecordUnsupported.
   ///
   /// In en, this message translates to:

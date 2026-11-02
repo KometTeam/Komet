@@ -1,0 +1,23 @@
+name: flutter_inappwebview_linux
+description: >-
+  Replaces the WPE WebKit implementation of flutter_inappwebview on Linux.
+  The mini-app bridge cannot verify the document origin there and stays closed
+  (WebAppBridge.isSupported), so Komet ships no Linux webview and does not
+  depend on WPE WebKit at build or run time.
+version: 0.1.0-beta.1
+publish_to: none
+
+environment:
+  sdk: ^3.10.4
+  flutter: ">=3.32.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    implements: flutter_inappwebview
+    platforms:
+      linux:
+        dartPluginClass: LinuxInAppWebViewUnavailable

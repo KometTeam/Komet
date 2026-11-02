@@ -6,9 +6,11 @@ import '../../../backend/modules/webapp.dart' show WebAppLaunch;
 import '../../../core/utils/logger.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show digitalIdModule, webAppModule;
+import '../webapp/web_app_bridge.dart';
 import '../webapp/web_app_screen.dart';
 
 Future<void> resetDigitalIdWebData() async {
+  if (!WebAppBridge.isSupported) return;
   await CookieManager.instance().deleteAllCookies();
   try {
     await WebStorageManager.instance().deleteAllData();

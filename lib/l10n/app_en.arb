@@ -2048,6 +2048,7 @@
   "appearanceMessageActionsSubtitle": "How the menu appears when you long-press a message",
   "videoNoteBubbleTranscriptionFailed": "Couldn't transcribe",
   "webAppScreenCloseConfirm": "Close the mini app?",
+  "webAppUnsupportedPlatform": "Mini apps aren't available in the Linux version yet",
   "voiceRecordUnsupported": "Voice messages aren't available on this platform",
   "voiceRecordNoMicAccess": "No access to the microphone",
   "voiceRecordStartFailed": "Couldn't start recording",

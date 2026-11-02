@@ -5073,6 +5073,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get webAppScreenCloseConfirm => 'Close the mini app?';
 
   @override
+  String get webAppUnsupportedPlatform =>
+      'Mini apps aren\'t available in the Linux version yet';
+
+  @override
   String get voiceRecordUnsupported =>
       'Voice messages aren\'t available on this platform';
 

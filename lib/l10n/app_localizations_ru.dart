@@ -5113,6 +5113,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get webAppScreenCloseConfirm => 'Закрыть мини-приложение?';
 
   @override
+  String get webAppUnsupportedPlatform =>
+      'Мини-приложения пока недоступны в версии для Linux';
+
+  @override
   String get voiceRecordUnsupported =>
       'Голосовые сообщения недоступны на этой платформе';
 

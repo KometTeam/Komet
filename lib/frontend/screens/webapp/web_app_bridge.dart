@@ -219,8 +219,11 @@ class WebAppBridge {
         : {originPolicy!.origin},
   );
 
+  static bool get isSupported =>
+      !kIsWeb && defaultTargetPlatform != TargetPlatform.linux;
+
   Future<void> attach(InAppWebViewController controller) async {
-    if (defaultTargetPlatform == TargetPlatform.linux || kIsWeb) {
+    if (!isSupported) {
       throw UnsupportedError('Secure mini-app bridge is unavailable');
     }
     _disposed = false;

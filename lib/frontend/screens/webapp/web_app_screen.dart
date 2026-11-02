@@ -77,7 +77,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (WebAppBridge.isSupported) _load();
   }
 
   @override
@@ -291,6 +291,7 @@ class _WebAppScreenState extends State<WebAppScreen> {
   }
 
   Widget _buildBody(ColorScheme cs) {
+    if (!WebAppBridge.isSupported) return const _UnsupportedPlatformView();
     if (_loadError != null) {
       return ErrorView(message: _loadError!, onRetry: _load);
     }
@@ -380,6 +381,32 @@ class _WebAppScreenState extends State<WebAppScreen> {
           setState(() => _loadError = error.description);
         }
       },
+    );
+  }
+}
+
+class _UnsupportedPlatformView extends StatelessWidget {
+  const _UnsupportedPlatformView();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Symbols.web_asset_off, size: 48, color: cs.onSurfaceVariant),
+            const SizedBox(height: 16),
+            Text(
+              AppLocalizations.of(context)!.webAppUnsupportedPlatform,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -1645,6 +1645,7 @@
   "appearanceMessageActionsSubtitle": "Как показывается меню при долгом нажатии на сообщение",
   "videoNoteBubbleTranscriptionFailed": "Не удалось распознать",
   "webAppScreenCloseConfirm": "Закрыть мини-приложение?",
+  "webAppUnsupportedPlatform": "Мини-приложения пока недоступны в версии для Linux",
   "voiceRecordUnsupported": "Голосовые сообщения недоступны на этой платформе",
   "voiceRecordNoMicAccess": "Нет доступа к микрофону",
   "voiceRecordStartFailed": "Не удалось начать запись",

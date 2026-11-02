@@ -75,6 +75,9 @@ void main() {
       expect(store.valueOf(101, 12), isTrue);
       expect(store.valueOf(202, 22), isTrue);
       expect(store.revision.value, 2);
+      expect(persisted, isEmpty);
+      await store.flush();
+      expect(persisted, hasLength(1));
       expect(persisted.last, {'101/11': false, '101/12': true, '202/22': true});
       final restored = _ChatFlags();
       addTearDown(restored.revision.dispose);
@@ -115,6 +118,7 @@ void main() {
       await Future.wait([loading, deletion]);
       expect(store.valueOf(101, 11), isNull);
       expect(store.valueOf(202, 11), isFalse);
+      await store.flush();
       expect(persisted, {'202/11': false});
       expect(store.revision.value, 1);
     },
@@ -151,6 +155,7 @@ void main() {
       expect(loadCount, 2);
       expect(store.valueOf(101, 11), isTrue);
       expect(store.valueOf(202, 22), isFalse);
+      await store.flush();
       expect(persisted, {'101/11': true, '202/22': false});
     },
   );

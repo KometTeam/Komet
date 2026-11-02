@@ -540,12 +540,11 @@ packages:
     source: hosted
     version: "1.2.0-beta.3"
   flutter_inappwebview_linux:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: flutter_inappwebview_linux
-      sha256: "2e1a3b09bb911fb5a8bb155cb7f1eb1428a19b6e20363b9db48beef428b8cef5"
-      url: "https://pub.dev"
-    source: hosted
+      path: "native/flutter_inappwebview_linux"
+      relative: true
+    source: path
     version: "0.1.0-beta.1"
   flutter_inappwebview_macos:
     dependency: transitive
@@ -734,8 +733,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: fddd76a999c6181813d9b1fddfe65a835ea2e7b2
-      resolved-ref: fddd76a999c6181813d9b1fddfe65a835ea2e7b2
+      ref: cba2d1d0df3e9a6f6d6a27a2181570c085f53312
+      resolved-ref: cba2d1d0df3e9a6f6d6a27a2181570c085f53312
       url: "https://github.com/KometTeam/flutter-webrtc.git"
     source: git
     version: "1.5.2"
