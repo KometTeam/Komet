@@ -235,7 +235,8 @@ abstract class Opcode {
   static const int orgInfo = 256; // Инфо об организации / бизнес-профиле
   static const int getQr = 288; // Получение QR для входа
   static const int getQrStatus = 289; // Статус QR-входа
-  static const int loginByQr = 291; // Вход по QR
+  static const int authByTrack = 291;
+  static const int authCheckCall = 294;
   static const int msgDelivery = 303; // Подтверждение доставки сообщения
 
   // ── Human-readable names ───────────────────────────────────────────
@@ -425,7 +426,8 @@ abstract class Opcode {
     orgInfo: 'ORG_INFO',
     getQr: 'GET_QR',
     getQrStatus: 'GET_QR_STATUS',
-    loginByQr: 'LOGIN_BY_QR',
+    authByTrack: 'AUTH_BY_TRACK',
+    authCheckCall: 'AUTH_CHECK_CALL',
     msgDelivery: 'MSG_DELIVERY',
   };
 }

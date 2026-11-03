@@ -274,6 +274,21 @@ printf '{"token":"…"}' | dart run tool/review_blob.dart '+7 999 999 99 99' '12
 The tool derives the key exactly as `ReviewAccess` does and prints one space-free Cyrillic blob —
 that string is the secret's value.
 
+## Login by call (foreign numbers)
+
+The server rarely sends an SMS to a non-Russian number, and the way it confirms one is decided by
+the answer to `AUTH_REQUEST` (17), never by the client:
+
+- **`callOutParams` present** (`{trackId, ttl, pollingInterval}`, both in ms): the user calls a
+  robot. `CallOutConfirmationScreen` polls `AUTH_CHECK_CALL` (294, `{trackId}`) every
+  `pollingInterval` until `ttl` runs out — `status` 0 no number yet, 1 `callNumber` assigned, 2
+  passed, 3 timed out. On 2 it sends `AUTH_BY_TRACK` (291, `{trackId}`), whose answer has the
+  same shape as `AUTH` after a code (`tokenAttrs`, `passwordChallenge`, `presetAvatars`), so 2FA,
+  registration and login go through the same `VerifiedLoginFlow` as `CodeConfirmationScreen`.
+  "Refresh number" is a fresh `START_AUTH`.
+- **no `callOutParams`**: the code screen as usual, but for a non-`RU` country the server calls
+  the user and the code is the last 6 digits of the incoming number — the screen says so.
+
 ## Architecture
 
 The codebase follows a strict layered architecture:

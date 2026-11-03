@@ -5491,6 +5491,54 @@ class AppLocalizationsRu extends AppLocalizations {
   String get codeConfirmationCodeExpired => 'Код устарел — выслали новый';
 
   @override
+  String get codeConfirmationIncomingCall =>
+      'Звоним на ваш номер. Введите последние 6 цифр входящего номера. Если звонка нет, проверьте SMS и чат «Коды подтверждения» в МАХ.';
+
+  @override
+  String get callOutDescription =>
+      'Позвоните с этого номера на номер ниже, чтобы подтвердить вход. Дождитесь ответа робота и следуйте его подсказкам.';
+
+  @override
+  String get callOutWaitingNumber => 'Получаем номер для звонка…';
+
+  @override
+  String get callOutTapToCopy => 'Нажмите, чтобы скопировать';
+
+  @override
+  String callOutTimer(String time) {
+    return 'Позвоните в течение $time';
+  }
+
+  @override
+  String get callOutExpired => 'Время на звонок вышло — обновите номер';
+
+  @override
+  String get callOutVerified => 'Звонок принят, входим…';
+
+  @override
+  String callOutDial(String number) {
+    return 'Позвонить на $number';
+  }
+
+  @override
+  String get callOutDialPending => 'Позвонить';
+
+  @override
+  String get callOutRefresh => 'Обновить номер';
+
+  @override
+  String get callOutNewNumber => 'Получили новый номер — позвоните на него';
+
+  @override
+  String callOutRefreshFailed(String error) {
+    return 'Не удалось обновить номер: $error';
+  }
+
+  @override
+  String get callOutCommonError =>
+      'Не удалось войти в профиль, попробуйте ещё раз';
+
+  @override
   String get pollViewVoteFailed => 'Не удалось проголосовать';
 
   @override

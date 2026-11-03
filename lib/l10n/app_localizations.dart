@@ -9878,6 +9878,84 @@ abstract class AppLocalizations {
   /// **'The code expired — we sent a new one'**
   String get codeConfirmationCodeExpired;
 
+  /// No description provided for @codeConfirmationIncomingCall.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'re calling your number. Enter the last 6 digits of the incoming number. If there\'s no call, check SMS and the “Verification codes” chat in MAX.'**
+  String get codeConfirmationIncomingCall;
+
+  /// No description provided for @callOutDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Call the number below from this number to confirm sign-in. Wait for the robot to answer and follow its prompts.'**
+  String get callOutDescription;
+
+  /// No description provided for @callOutWaitingNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting a number to call…'**
+  String get callOutWaitingNumber;
+
+  /// No description provided for @callOutTapToCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to copy'**
+  String get callOutTapToCopy;
+
+  /// No description provided for @callOutTimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Call within {time}'**
+  String callOutTimer(String time);
+
+  /// No description provided for @callOutExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Time to call is up — refresh the number'**
+  String get callOutExpired;
+
+  /// No description provided for @callOutVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Call received, signing in…'**
+  String get callOutVerified;
+
+  /// No description provided for @callOutDial.
+  ///
+  /// In en, this message translates to:
+  /// **'Call {number}'**
+  String callOutDial(String number);
+
+  /// No description provided for @callOutDialPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Call'**
+  String get callOutDialPending;
+
+  /// No description provided for @callOutRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh number'**
+  String get callOutRefresh;
+
+  /// No description provided for @callOutNewNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'We got a new number — call it instead'**
+  String get callOutNewNumber;
+
+  /// No description provided for @callOutRefreshFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t refresh the number: {error}'**
+  String callOutRefreshFailed(String error);
+
+  /// No description provided for @callOutCommonError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t sign in, please try again'**
+  String get callOutCommonError;
+
   /// No description provided for @pollViewVoteFailed.
   ///
   /// In en, this message translates to:

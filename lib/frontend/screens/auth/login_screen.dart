@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'code_confirmation_screen.dart';
 import 'token_login_screen.dart';
 import 'select_country_screen.dart';
+import 'call_out_confirmation_screen.dart';
 import 'phone_input_formatter.dart';
 import 'proxy_settings_sheet.dart';
 import 'server_settings_sheet.dart';
@@ -643,6 +644,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   phoneNumber:
                                       '${_selectedCountry.phoneCode} $formattedPhone',
                                   rawPhone: fullPhone,
+                                  countryCode: _selectedCountry.code,
                                 ),
                               ),
                             );
@@ -669,15 +671,25 @@ class _LoginScreenState extends State<LoginScreen> {
                             );
 
                             if (!screenContext.mounted) return;
+                            final phoneNumber =
+                                '${_selectedCountry.phoneCode} $formattedPhone';
+                            final callOut = result.callOut;
                             Navigator.push(
                               screenContext,
                               MaterialPageRoute(
-                                builder: (context) => CodeConfirmationScreen(
-                                  phoneNumber:
-                                      '${_selectedCountry.phoneCode} $formattedPhone',
-                                  rawPhone: fullPhone,
-                                  token: result.token,
-                                ),
+                                builder: (context) => callOut == null
+                                    ? CodeConfirmationScreen(
+                                        phoneNumber: phoneNumber,
+                                        rawPhone: fullPhone,
+                                        countryCode: _selectedCountry.code,
+                                        token: result.token,
+                                      )
+                                    : CallOutConfirmationScreen(
+                                        phoneNumber: phoneNumber,
+                                        rawPhone: fullPhone,
+                                        countryCode: _selectedCountry.code,
+                                        callOut: callOut,
+                                      ),
                               ),
                             );
                           } catch (e, st) {

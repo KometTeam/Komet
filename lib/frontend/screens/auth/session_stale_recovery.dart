@@ -27,6 +27,17 @@ mixin SessionStaleRecovery<T extends StatefulWidget> on State<T> {
     _stateSub = null;
   }
 
+  Future<bool> waitForOnline() async {
+    if (api.state == SessionState.online) return true;
+    final back = await api.stateStream
+        .firstWhere((s) => s == SessionState.online)
+        .timeout(
+          const Duration(seconds: 12),
+          onTimeout: () => SessionState.disconnected,
+        );
+    return back == SessionState.online;
+  }
+
   void _onSessionState(SessionState state) {
     if (!mounted) return;
     if (state != SessionState.online) {
