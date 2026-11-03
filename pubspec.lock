@@ -733,8 +733,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: cba2d1d0df3e9a6f6d6a27a2181570c085f53312
-      resolved-ref: cba2d1d0df3e9a6f6d6a27a2181570c085f53312
+      ref: "5efd594b9f0057946d9f81667cdaaf482e4fb404"
+      resolved-ref: "5efd594b9f0057946d9f81667cdaaf482e4fb404"
       url: "https://github.com/KometTeam/flutter-webrtc.git"
     source: git
     version: "1.5.2"

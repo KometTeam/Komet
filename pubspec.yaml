@@ -127,7 +127,7 @@ dependency_overrides:
   flutter_webrtc:
     git:
       url: https://github.com/KometTeam/flutter-webrtc.git
-      ref: cba2d1d0df3e9a6f6d6a27a2181570c085f53312
+      ref: 5efd594b9f0057946d9f81667cdaaf482e4fb404
   flutter_inappwebview_linux:
     path: native/flutter_inappwebview_linux
 

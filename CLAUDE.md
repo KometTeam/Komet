@@ -211,7 +211,9 @@ focus only after the keyboard has stayed closed for 250 ms, so a single zero-ins
 
 `flutter_webrtc` is overridden with the private fork `KometTeam/flutter-webrtc` (upstream v1.5.2 +
 patches), pinned by commit in `dependency_overrides` in `pubspec.yaml`. To change the plugin, commit
-in the fork, push, and bump the `ref`. The patches:
+in the fork, push, and bump the `ref`. Never amend or force-push a commit that `ref` points at: pub
+clones the fork, and a commit no branch reaches is missing from a fresh clone (`Could not find a
+file named "pubspec.yaml"`), while runs with a warm pub cache keep passing and hide it. The patches:
 
 - desktop camera open/close and `getStats` run on background threads — libwebrtc does both through
   `Thread::BlockingCall` on its worker thread, and on Linux the window is drawn on the platform
