@@ -209,20 +209,22 @@ focus only after the keyboard has stayed closed for 250 ms, so a single zero-ins
 
 ## WebRTC plugin fork
 
-`flutter_webrtc` is overridden with the private fork `KometTeam/flutter-webrtc` (upstream v1.5.2 +
-patches), pinned by commit in `dependency_overrides` in `pubspec.yaml`. To change the plugin, commit
-in the fork, push, and bump the `ref`. Never amend or force-push a commit that `ref` points at: pub
-clones the fork, and a commit no branch reaches is missing from a fresh clone (`Could not find a
-file named "pubspec.yaml"`), while runs with a warm pub cache keep passing and hide it. The patches:
+`flutter_webrtc` comes from the public fork `KometTeam/flutter-webrtc` (upstream v1.5.2 + patches),
+a git dependency pinned by commit in `dependencies` in `pubspec.yaml` — nothing else depends on the
+plugin, so it needs no `dependency_overrides`, and a fresh clone builds without any token. To change
+the plugin, commit in the fork, push, and bump the `ref` (then `flutter pub get` to refresh
+`pubspec.lock`). The fork's `main` is protected against force-push and deletion, because pub clones
+the fork and a commit no branch reaches is missing from a fresh clone (`Could not find a file named
+"pubspec.yaml"`), while runs with a warm pub cache keep passing and hide it. CI caches pub
+(`cache: true`), so the `git-pins` job in `tests.yml` runs `tool/check_git_pins.sh`: it mirrors
+every git dependency of `pubspec.lock` the way pub does and fails when the `resolved-ref` is in no
+branch or tag. The patches:
 
 - desktop camera open/close and `getStats` run on background threads — libwebrtc does both through
   `Thread::BlockingCall` on its worker thread, and on Linux the window is drawn on the platform
   thread, so the UI froze for the 1–2 s a V4L2 camera takes to start;
 - `VideoFrameTap` hands the frames of a video track to Dart: raw I420 on Linux/Windows, VP8 encoded
   with MediaCodec on Android.
-
-CI fetches the fork with the repo secret `KOMET_DEPS_TOKEN` (read access to the fork): every Flutter
-workflow rewrites the fork URL through workflow-level `GIT_CONFIG_*` env.
 
 Call screen sharing follows MAX: in SERVER topology frames travel as VP8/VP9 over SFU data channels,
 not as an RTP track — `consumerScreenShare` to send (`ScreenSharePipeline`, libvpx encoder in an
@@ -275,6 +277,21 @@ printf '{"token":"…"}' | dart run tool/review_blob.dart '+7 999 999 99 99' '12
 
 The tool derives the key exactly as `ReviewAccess` does and prints one space-free Cyrillic blob —
 that string is the secret's value.
+
+## Login by call (foreign numbers)
+
+The server rarely sends an SMS to a non-Russian number, and the way it confirms one is decided by
+the answer to `AUTH_REQUEST` (17), never by the client:
+
+- **`callOutParams` present** (`{trackId, ttl, pollingInterval}`, both in ms): the user calls a
+  robot. `CallOutConfirmationScreen` polls `AUTH_CHECK_CALL` (294, `{trackId}`) every
+  `pollingInterval` until `ttl` runs out — `status` 0 no number yet, 1 `callNumber` assigned, 2
+  passed, 3 timed out. On 2 it sends `AUTH_BY_TRACK` (291, `{trackId}`), whose answer has the
+  same shape as `AUTH` after a code (`tokenAttrs`, `passwordChallenge`, `presetAvatars`), so 2FA,
+  registration and login go through the same `VerifiedLoginFlow` as `CodeConfirmationScreen`.
+  "Refresh number" is a fresh `START_AUTH`.
+- **no `callOutParams`**: the code screen as usual, but for a non-`RU` country the server calls
+  the user and the code is the last 6 digits of the incoming number — the screen says so.
 
 ## Architecture
 

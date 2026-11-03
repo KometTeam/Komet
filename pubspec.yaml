@@ -99,7 +99,10 @@ dependencies:
   firebase_messaging: ^16.0.2
   flutter_local_notifications: ^22.0.1
   flutter_inappwebview: 6.2.0-beta.3
-  flutter_webrtc: ^1.5.2
+  flutter_webrtc:
+    git:
+      url: https://github.com/KometTeam/flutter-webrtc.git
+      ref: 8fcca4e41c6f4e736fb1b48dc8d86638ff01c9bf
   record: ^6.0.0
   opus_dart: ^3.0.1
   opus_flutter_android: ^3.0.1
@@ -124,10 +127,6 @@ dependencies:
   desktop_drop: ^0.8.4
 
 dependency_overrides:
-  flutter_webrtc:
-    git:
-      url: https://github.com/KometTeam/flutter-webrtc.git
-      ref: 5efd594b9f0057946d9f81667cdaaf482e4fb404
   flutter_inappwebview_linux:
     path: native/flutter_inappwebview_linux
 

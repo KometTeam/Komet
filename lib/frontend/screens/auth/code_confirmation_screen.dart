@@ -3,27 +3,25 @@ import 'package:flutter/material.dart';
 import 'package:komet/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'call_out_confirmation_screen.dart';
 import 'login_needs_2fa_screen.dart';
-import 'password_2fa_screen.dart';
-import 'registration_screen.dart';
 import 'session_stale_recovery.dart';
 import 'slow_login_hint.dart';
-import '../../../backend/api.dart';
+import 'verified_login_flow.dart';
+import '../../../backend/modules/account.dart';
 import '../../../core/config/review_access.dart';
 import '../../../core/protocol/packet.dart';
 import '../../../core/storage/spoofing_service.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/sms_code_listener.dart';
 import '../../../main.dart';
-import '../../widgets/auth_limits_sheet.dart';
 import '../../widgets/custom_notification.dart';
-import '../../widgets/login_success_screen.dart';
 import '../../widgets/small_spinner.dart';
-import '../../widgets/temporary_password_recovery_dialog.dart';
 
 class CodeConfirmationScreen extends StatefulWidget {
   final String phoneNumber;
   final String rawPhone;
+  final String countryCode;
   final String token;
   final bool reviewAccess;
 
@@ -31,6 +29,7 @@ class CodeConfirmationScreen extends StatefulWidget {
     super.key,
     required this.phoneNumber,
     required this.rawPhone,
+    required this.countryCode,
     required this.token,
   }) : reviewAccess = false;
 
@@ -38,6 +37,7 @@ class CodeConfirmationScreen extends StatefulWidget {
     super.key,
     required this.phoneNumber,
     required this.rawPhone,
+    required this.countryCode,
   }) : token = '',
        reviewAccess = true;
 
@@ -46,7 +46,7 @@ class CodeConfirmationScreen extends StatefulWidget {
 }
 
 class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
-    with TickerProviderStateMixin, SessionStaleRecovery {
+    with TickerProviderStateMixin, SessionStaleRecovery, VerifiedLoginFlow {
   final TextEditingController _codeController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final SmsCodeListener _smsListener = SmsCodeListener();
@@ -68,6 +68,18 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
   @override
   String get connectionDroppedMessage =>
       AppLocalizations.of(context)!.codeConfirmationConnectionDropped;
+
+  @override
+  String get verifiedRawPhone => widget.rawPhone;
+
+  @override
+  String get verifiedPhoneNumber => widget.phoneNumber;
+
+  @override
+  void showVerificationError(String message) => _showError(message);
+
+  bool get _codeArrivesByCall =>
+      !widget.reviewAccess && widget.countryCode != 'RU';
 
   @override
   void initState() {
@@ -120,7 +132,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     if (recovering) return;
     setState(() => recovering = true);
     try {
-      if (!await _waitForOnline()) {
+      if (!await waitForOnline()) {
         if (mounted) {
           showCustomNotification(
             context,
@@ -150,22 +162,11 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     }
   }
 
-  Future<bool> _waitForOnline() async {
-    if (api.state == SessionState.online) return true;
-    final back = await api.stateStream
-        .firstWhere((s) => s == SessionState.online)
-        .timeout(
-          const Duration(seconds: 12),
-          onTimeout: () => SessionState.disconnected,
-        );
-    return back == SessionState.online;
-  }
-
   Future<void> _requestFreshCode(String notice, {bool resend = false}) async {
     if (recovering) return;
     setState(() => recovering = true);
     try {
-      if (!await _waitForOnline()) {
+      if (!await waitForOnline()) {
         if (mounted) {
           showCustomNotification(
             context,
@@ -178,6 +179,22 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
           ? await accountModule.resendCode(widget.rawPhone)
           : await accountModule.requestCode(widget.rawPhone);
       if (!mounted) return;
+      final callOut = fresh.callOut;
+      if (callOut != null) {
+        stopSessionRecovery();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CallOutConfirmationScreen(
+              phoneNumber: widget.phoneNumber,
+              rawPhone: widget.rawPhone,
+              countryCode: widget.countryCode,
+              callOut: callOut,
+            ),
+          ),
+        );
+        return;
+      }
       setState(() {
         _token = fresh.token;
         sessionEpoch = api.sessionEpoch;
@@ -290,29 +307,6 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     );
   }
 
-  Future<void> _completeLogin(String? avatarUrl) async {
-    if (!mounted) return;
-
-    final avatar = await precacheLoginAvatar(context, avatarUrl);
-
-    if (!mounted) return;
-
-    await markAuthLimitsPending(AuthEntry.login);
-
-    if (!mounted) return;
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 240),
-        pageBuilder: (_, _, _) => LoginSuccessScreen(avatar: avatar),
-        transitionsBuilder: (_, animation, _, child) =>
-            FadeTransition(opacity: animation, child: child),
-      ),
-      (route) => false,
-    );
-  }
-
   Future<void> _verifyReviewCode() async {
     setState(() => _verifying = true);
     try {
@@ -331,7 +325,7 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
 
       final loginResult = await accountModule.loginWithToken(credentials.token);
 
-      await _completeLogin(loginResult.profile.baseUrl);
+      await completeLogin(loginResult.profile.baseUrl);
     } catch (e) {
       if (!mounted) return;
       _showError(e.toString());
@@ -354,122 +348,33 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
     }
 
     setState(() => _verifying = true);
-    var verified = false;
-    int? verifiedAccountId;
     try {
-      final result = await accountModule.verifyCode(
-        _codeController.text,
-        _token,
-      );
-      verified = true;
-      verifiedAccountId = result.accountId;
+      final VerifyCodeResult result;
+      try {
+        result = await accountModule.verifyCode(_codeController.text, _token);
+      } catch (e, st) {
+        logger.d('[${api.debugTag}] код не принят: $e\n$st');
+        if (mounted) await _onCodeRejected(e);
+        return;
+      }
       stopSessionRecovery();
-
-      if (!mounted) return;
-
-      if (result.requiresPassword) {
-        final trackId = result.challengeTrackId;
-
-        if (trackId == null) {
-          showCustomNotification(
-            context,
-            AppLocalizations.of(context)!.codeError2faMissing,
-          );
-          return;
-        }
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => Password2FAScreen(
-              trackId: trackId,
-              hint: result.challengeHint,
-              rawPhone: widget.rawPhone,
-            ),
-          ),
-        );
-        return;
-      }
-
-      if (result.isRegistration) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => RegistrationScreen(
-              phoneNumber: widget.phoneNumber,
-              registerToken: result.registerToken!,
-              presetAvatars: result.presetAvatars,
-            ),
-          ),
-        );
-        return;
-      }
-
-      logger.d(
-        '[${api.debugTag}] код подтверждён: '
-        '${api.webHandshake ? 'SMS-вход через веб' : 'обычный вход'}',
-      );
-      // #***! эксперим. SMS-вход через веб: получаем сокетовый токен хитрой схемой
-      if (api.webHandshake) {
-        final token = result.loginToken;
-        final accId = result.accountId;
-        if (token == null || accId == null) {
-          _showError(AppLocalizations.of(context)!.codeConfirmationSmsNoToken);
-          return;
-        }
-        await accountModule.completeWebSmsSocketLogin(
-          phone: widget.rawPhone,
-          accountId: accId,
-          webToken: token,
-          existingPassword: null,
-        );
-        if (!mounted) return;
-        await showTemporaryPasswordRecovery(
-          context,
-          accId,
-          verifiedAccountId: verifiedAccountId,
-        );
-        if (!mounted) return;
-        await _completeLogin(null);
-        return;
-      }
-
-      final loginResult = await accountModule.login();
-
-      await _completeLogin(loginResult.profile.baseUrl);
-    } catch (e, st) {
-      logger.d(
-        '[${api.debugTag}] подтверждение кода упало '
-        '(код принят=$verified): $e\n$st',
-      );
-      if (!mounted) return;
-      if (!verified &&
-          e is PacketError &&
-          e.errorKey == loginNeeds2faErrorKey) {
-        await _showLoginNeeds2fa();
-        return;
-      }
-      if (verified && verifiedAccountId != null) {
-        await showTemporaryPasswordRecovery(
-          context,
-          verifiedAccountId,
-          verifiedAccountId: verifiedAccountId,
-        );
-        if (!mounted) return;
-      }
-      if (verified) {
-        _showError(e.toString());
-      } else if (isAuthSessionLostError(e)) {
-        await _requestFreshCode(
-          AppLocalizations.of(context)!.codeConfirmationCodeExpired,
-        );
-      } else if (isSessionStateError(e) || sessionStale) {
-        await recoverStaleSession();
-      } else {
-        _showError(e.toString());
-      }
+      await finishVerifiedLogin(result);
     } finally {
       if (mounted) setState(() => _verifying = false);
+    }
+  }
+
+  Future<void> _onCodeRejected(Object error) async {
+    if (error is PacketError && error.errorKey == loginNeeds2faErrorKey) {
+      await _showLoginNeeds2fa();
+    } else if (isAuthSessionLostError(error)) {
+      await _requestFreshCode(
+        AppLocalizations.of(context)!.codeConfirmationCodeExpired,
+      );
+    } else if (isSessionStateError(error) || sessionStale) {
+      await recoverStaleSession();
+    } else {
+      _showError(error.toString());
     }
   }
 
@@ -510,6 +415,8 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
                 Text(
                   api.webHandshake
                       ? l10n.codeConfirmationSmsSent
+                      : _codeArrivesByCall
+                      ? l10n.codeConfirmationIncomingCall
                       : l10n.codeConfirmationCheckMaxChat,
                   style: TextStyle(
                     color: cs.outline,

@@ -5450,6 +5450,53 @@ class AppLocalizationsEn extends AppLocalizations {
       'The code expired — we sent a new one';
 
   @override
+  String get codeConfirmationIncomingCall =>
+      'We\'re calling your number. Enter the last 6 digits of the incoming number. If there\'s no call, check SMS and the “Verification codes” chat in MAX.';
+
+  @override
+  String get callOutDescription =>
+      'Call the number below from this number to confirm sign-in. Wait for the robot to answer and follow its prompts.';
+
+  @override
+  String get callOutWaitingNumber => 'Getting a number to call…';
+
+  @override
+  String get callOutTapToCopy => 'Tap to copy';
+
+  @override
+  String callOutTimer(String time) {
+    return 'Call within $time';
+  }
+
+  @override
+  String get callOutExpired => 'Time to call is up — refresh the number';
+
+  @override
+  String get callOutVerified => 'Call received, signing in…';
+
+  @override
+  String callOutDial(String number) {
+    return 'Call $number';
+  }
+
+  @override
+  String get callOutDialPending => 'Call';
+
+  @override
+  String get callOutRefresh => 'Refresh number';
+
+  @override
+  String get callOutNewNumber => 'We got a new number — call it instead';
+
+  @override
+  String callOutRefreshFailed(String error) {
+    return 'Couldn\'t refresh the number: $error';
+  }
+
+  @override
+  String get callOutCommonError => 'Couldn\'t sign in, please try again';
+
+  @override
   String get pollViewVoteFailed => 'Couldn\'t vote';
 
   @override
