@@ -42,6 +42,14 @@ jobs:
       - name: Flutter test
         run: flutter test
 
+  git-pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check git dependencies in pubspec.lock are reachable
+        run: tool/check_git_pins.sh
+
   share-native:
     runs-on: ubuntu-latest
     timeout-minutes: 20

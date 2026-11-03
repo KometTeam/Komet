@@ -215,7 +215,10 @@ plugin, so it needs no `dependency_overrides`, and a fresh clone builds without 
 the plugin, commit in the fork, push, and bump the `ref` (then `flutter pub get` to refresh
 `pubspec.lock`). The fork's `main` is protected against force-push and deletion, because pub clones
 the fork and a commit no branch reaches is missing from a fresh clone (`Could not find a file named
-"pubspec.yaml"`), while runs with a warm pub cache keep passing and hide it. The patches:
+"pubspec.yaml"`), while runs with a warm pub cache keep passing and hide it. CI caches pub
+(`cache: true`), so the `git-pins` job in `tests.yml` runs `tool/check_git_pins.sh`: it mirrors
+every git dependency of `pubspec.lock` the way pub does and fails when the `resolved-ref` is in no
+branch or tag. The patches:
 
 - desktop camera open/close and `getStats` run on background threads — libwebrtc does both through
   `Thread::BlockingCall` on its worker thread, and on Linux the window is drawn on the platform
