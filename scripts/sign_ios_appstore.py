@@ -1,10 +1,22 @@
 import argparse
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from pathlib import Path
 import plistlib
+import re
 import shutil
 import subprocess
 import tempfile
+
+
+PROFILE_KEYS = (
+    "application-identifier",
+    "com.apple.developer.team-identifier",
+    "get-task-allow",
+    "beta-reports-active",
+)
+APP_GROUPS = "com.apple.security.application-groups"
+BUILD_VARIABLE = re.compile(r"\$\(([A-Za-z0-9_]+)\)")
 
 
 class SigningPlanError(ValueError):
@@ -23,6 +35,8 @@ class SigningPlan:
     app: ProfileIdentity
     share: ProfileIdentity | None
     group: str | None
+    app_entitlements: dict
+    share_entitlements: dict | None
 
 
 def profile_identity(profile):
@@ -49,10 +63,69 @@ def profile_groups(identity):
     return {value for value in values if isinstance(value, str) and value.startswith("group.") and "*" not in value}
 
 
-def create_plan(app_profile, share_profile=None, preferred_group=None):
+def expand(value, variables):
+    if isinstance(value, str):
+        def resolve(match):
+            name = match.group(1)
+            if name not in variables:
+                raise SigningPlanError(f"Unknown build variable $({name}) in entitlements")
+            return variables[name]
+        return BUILD_VARIABLE.sub(resolve, value)
+    if isinstance(value, list):
+        return [expand(item, variables) for item in value]
+    if isinstance(value, dict):
+        return {key: expand(item, variables) for key, item in value.items()}
+    return value
+
+
+def granted_by(value, granted):
+    if granted == "*":
+        return True
+    if isinstance(value, list):
+        return all(granted_by(item, granted) for item in value)
+    if isinstance(granted, list):
+        return any(granted_by(value, item) for item in granted)
+    if isinstance(value, str) and isinstance(granted, str):
+        return fnmatchcase(value, granted)
+    return value == granted
+
+
+def contains_wildcard(value):
+    if isinstance(value, str):
+        return "*" in value
+    if isinstance(value, list):
+        return any(contains_wildcard(item) for item in value)
+    if isinstance(value, dict):
+        return any(contains_wildcard(item) for item in value.values())
+    return False
+
+
+def signing_entitlements(identity, requested, group):
+    granted = identity.entitlements
+    variables = {
+        "AppIdentifierPrefix": f"{identity.team_id}.",
+        "TeamIdentifierPrefix": f"{identity.team_id}.",
+        "PRODUCT_BUNDLE_IDENTIFIER": identity.bundle_id,
+        "KOMET_SHARE_APP_GROUP": group or "",
+    }
+    result = {key: granted[key] for key in PROFILE_KEYS if key in granted}
+    for key, value in expand(requested, variables).items():
+        if key in PROFILE_KEYS:
+            continue
+        if key == APP_GROUPS and group is None:
+            continue
+        if key not in granted or not granted_by(value, granted[key]):
+            raise SigningPlanError(f"Provisioning profile does not allow entitlement {key}={value!r}")
+        if contains_wildcard(value):
+            raise SigningPlanError(f"Entitlement {key} must not contain a wildcard")
+        result[key] = value
+    return result
+
+
+def create_plan(app_profile, share_profile=None, preferred_group=None, app_requested=None, share_requested=None):
     app = profile_identity(app_profile)
     if share_profile is None:
-        return SigningPlan(app, None, None)
+        return SigningPlan(app, None, None, signing_entitlements(app, app_requested or {}, None), None)
     share = profile_identity(share_profile)
     if app.team_id != share.team_id:
         raise SigningPlanError("App and Share Extension profiles must belong to the same team")
@@ -62,7 +135,13 @@ def create_plan(app_profile, share_profile=None, preferred_group=None):
     if not groups:
         raise SigningPlanError("App and Share Extension profiles must allow a common explicit App Group")
     group = preferred_group if preferred_group in groups else sorted(groups)[0]
-    return SigningPlan(app, share, group)
+    return SigningPlan(
+        app,
+        share,
+        group,
+        signing_entitlements(app, app_requested or {}, group),
+        signing_entitlements(share, share_requested or {}, group),
+    )
 
 
 def read_plist(path):
@@ -128,10 +207,10 @@ def sign_bundles(app_path, share_path, plan, identity, keychain, run=subprocess.
             run([*common, str(bundle)], check=True)
         if plan.share is not None:
             share_entitlements = directory / "share.entitlements"
-            write_plist(share_entitlements, plan.share.entitlements)
+            write_plist(share_entitlements, plan.share_entitlements)
             run([*common, "--entitlements", str(share_entitlements), str(share_path)], check=True)
         app_entitlements = directory / "app.entitlements"
-        write_plist(app_entitlements, plan.app.entitlements)
+        write_plist(app_entitlements, plan.app_entitlements)
         run([*common, "--entitlements", str(app_entitlements), str(app_path)], check=True)
         run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app_path)], check=True)
 
@@ -141,12 +220,20 @@ def main():
     parser.add_argument("app", type=Path)
     parser.add_argument("--app-profile", type=Path, required=True)
     parser.add_argument("--share-profile", type=Path)
+    parser.add_argument("--app-entitlements", type=Path, required=True)
+    parser.add_argument("--share-entitlements", type=Path)
     parser.add_argument("--identity", required=True)
     parser.add_argument("--keychain", type=Path, required=True)
     args = parser.parse_args()
     app_profile = load_profile(args.app_profile)
     share_profile = load_profile(args.share_profile) if args.share_profile else None
-    plan = create_plan(app_profile, share_profile, read_plist(args.app / "Info.plist").get("KometShareAppGroup"))
+    plan = create_plan(
+        app_profile,
+        share_profile,
+        read_plist(args.app / "Info.plist").get("KometShareAppGroup"),
+        read_plist(args.app_entitlements),
+        read_plist(args.share_entitlements) if args.share_entitlements else None,
+    )
     share_path = prepare_app(args.app, plan, args.app_profile, args.share_profile)
     if plan.share is None:
         print("::notice::APPSTORE_SHARE_PROVISION_PROFILE_BASE64 is not set; building the app without Share Extension")
