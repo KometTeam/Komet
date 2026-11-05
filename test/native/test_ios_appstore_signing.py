@@ -75,6 +75,62 @@ class AppStoreSigningPlanTest(unittest.TestCase):
             SIGNING.create_plan(self.app_profile)
 
 
+APP_REQUESTED = {
+    "com.apple.security.application-groups": ["$(KOMET_SHARE_APP_GROUP)"],
+    "keychain-access-groups": ["$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)"],
+}
+SHARE_REQUESTED = {"com.apple.security.application-groups": ["$(KOMET_SHARE_APP_GROUP)"]}
+
+
+def wildcard_profile(bundle_id="example.synthetic.app", groups=None, team="SYNTH12345"):
+    result = profile(bundle_id, groups, team)
+    result["Entitlements"].update({
+        "keychain-access-groups": [f"{team}.*", "com.apple.token"],
+        "com.apple.developer.associated-domains": "*",
+        "beta-reports-active": True,
+    })
+    return result
+
+
+class AppStoreSigningEntitlementsTest(unittest.TestCase):
+    def test_signs_with_the_apps_own_entitlements_not_profile_templates(self):
+        plan = SIGNING.create_plan(wildcard_profile(), app_requested=APP_REQUESTED)
+        self.assertEqual(plan.app_entitlements, {
+            "application-identifier": "SYNTH12345.example.synthetic.app",
+            "com.apple.developer.team-identifier": "SYNTH12345",
+            "get-task-allow": False,
+            "beta-reports-active": True,
+            "keychain-access-groups": ["SYNTH12345.example.synthetic.app"],
+        })
+
+    def test_app_groups_are_signed_only_with_the_extension(self):
+        app_profile = wildcard_profile(groups=["group.synthetic.shared"])
+        share_profile = wildcard_profile("example.synthetic.app.ShareExtension", ["group.synthetic.shared"])
+        alone = SIGNING.create_plan(app_profile, app_requested=APP_REQUESTED)
+        self.assertNotIn(SIGNING.APP_GROUPS, alone.app_entitlements)
+        paired = SIGNING.create_plan(app_profile, share_profile, "group.synthetic.shared", APP_REQUESTED, SHARE_REQUESTED)
+        self.assertEqual(paired.app_entitlements[SIGNING.APP_GROUPS], ["group.synthetic.shared"])
+        self.assertEqual(paired.share_entitlements[SIGNING.APP_GROUPS], ["group.synthetic.shared"])
+        self.assertEqual(paired.share_entitlements["application-identifier"], "SYNTH12345.example.synthetic.app.ShareExtension")
+        self.assertNotIn("keychain-access-groups", paired.share_entitlements)
+
+    def test_rejects_entitlements_the_profile_does_not_grant(self):
+        for requested in [
+            {"com.apple.developer.icloud-services": ["CloudKit"]},
+            {"keychain-access-groups": ["OTHER12345.example.synthetic.app"]},
+        ]:
+            with self.subTest(requested=requested), self.assertRaises(SIGNING.SigningPlanError):
+                SIGNING.create_plan(wildcard_profile(), app_requested=requested)
+
+    def test_rejects_wildcards_and_unknown_build_variables(self):
+        for requested in [
+            {"keychain-access-groups": ["$(AppIdentifierPrefix)*"]},
+            {"keychain-access-groups": ["$(UNDEFINED_SETTING)"]},
+        ]:
+            with self.subTest(requested=requested), self.assertRaises(SIGNING.SigningPlanError):
+                SIGNING.create_plan(wildcard_profile(), app_requested=requested)
+
+
 class AppStoreBundlePreparationTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="synthetic signing ")
@@ -152,8 +208,8 @@ class AppStoreBundlePreparationTest(unittest.TestCase):
         self.assertEqual(calls[-3][-1], str(self.share))
         self.assertEqual(calls[-2][-1], str(self.app))
         self.assertEqual(calls[-1], ["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(self.app)])
-        self.assertEqual(entitlements[str(self.share)], plan.share.entitlements)
-        self.assertEqual(entitlements[str(self.app)], plan.app.entitlements)
+        self.assertEqual(entitlements[str(self.share)], plan.share_entitlements)
+        self.assertEqual(entitlements[str(self.app)], plan.app_entitlements)
         self.assertEqual({command[-1] for command in calls[:-3]}, {str(framework), str(nested)})
         for command in calls[:-1]:
             self.assertEqual(command[command.index("--sign") + 1], "Synthetic Identity With Spaces")

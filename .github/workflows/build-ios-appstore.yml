@@ -192,11 +192,15 @@ jobs:
           args=(
             build/ios/iphoneos/Runner.app
             --app-profile "$RUNNER_TEMP/appstore.mobileprovision"
+            --app-entitlements ios/Runner/Runner.entitlements
             --identity "$IDENTITY"
             --keychain "$KEYCHAIN_PATH"
           )
           if [ -f "$RUNNER_TEMP/appstore-share.mobileprovision" ]; then
-            args+=(--share-profile "$RUNNER_TEMP/appstore-share.mobileprovision")
+            args+=(
+              --share-profile "$RUNNER_TEMP/appstore-share.mobileprovision"
+              --share-entitlements ios/ShareExtension/ShareExtension.entitlements
+            )
           fi
           python3 scripts/sign_ios_appstore.py "${args[@]}"
 
