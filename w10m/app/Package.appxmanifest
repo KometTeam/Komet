@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+ xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+ xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+ IgnorableNamespaces="uap mp">
+ <Identity Name="Komet.W10M" Publisher="CN=Komet W10M Development" Version="0.2.6.0" ProcessorArchitecture="arm" />
+ <mp:PhoneIdentity PhoneProductId="c189a966-26b8-48dd-a337-3e46c0f1d1f0" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+ <Properties>
+  <DisplayName>Komet</DisplayName><PublisherDisplayName>Komet W10M</PublisherDisplayName><Logo>Assets\StoreLogo.png</Logo>
+ </Properties>
+ <Dependencies><TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.15063.0" MaxVersionTested="10.0.15254.0" /></Dependencies>
+ <Resources><Resource Language="ru-ru" /></Resources>
+ <Applications>
+  <Application Id="App" Executable="Komet.exe" EntryPoint="Komet.App">
+   <uap:VisualElements DisplayName="Komet" Description="Клиент MAX для Windows 10 Mobile" BackgroundColor="#15151F" Square150x150Logo="Assets\Logo.png" Square44x44Logo="Assets\SmallLogo.png">
+    <uap:DefaultTile Wide310x150Logo="Assets\WideLogo.png" Square310x310Logo="Assets\LargeLogo.png"><uap:ShowNameOnTiles><uap:ShowOn Tile="square150x150Logo" /><uap:ShowOn Tile="wide310x150Logo" /></uap:ShowNameOnTiles></uap:DefaultTile>
+    <uap:SplashScreen Image="Assets\Splash.png" />
+   </uap:VisualElements>
+  </Application>
+ </Applications>
+ <Capabilities><Capability Name="internetClient" /></Capabilities>
+</Package>
