@@ -323,7 +323,10 @@ class _CodeConfirmationScreenState extends State<CodeConfirmationScreen>
         await SpoofingService.saveProfile(SpoofingService.pendingScope, spoof);
       }
 
-      final loginResult = await accountModule.loginWithToken(credentials.token);
+      final loginResult = await accountModule.loginWithToken(
+        credentials.token,
+        accountPhone: widget.rawPhone,
+      );
 
       await completeLogin(loginResult.profile.baseUrl);
     } catch (e) {

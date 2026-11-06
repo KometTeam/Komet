@@ -357,6 +357,7 @@ class AccountModule {
     int? accountId,
     String? token,
     LoginSyncParams? syncParams,
+    String? accountPhone,
   }) async {
     _ensureOnline();
 
@@ -399,7 +400,12 @@ class AccountModule {
 
       // #***! вошли по чужому токену, id узнаём из ответа
       if (resolvedAccountId == null) {
-        resolvedAccountId = extractAccountId(dataMap);
+        resolvedAccountId = await resolveLoginAccountId(
+          dataMap,
+          phone: accountPhone,
+          lookupByPhone: (phone) async =>
+              (await ContactsModule.findByPhone(_api, phone, silent: true))?.id,
+        );
         if (resolvedAccountId == null) {
           logger.e(
             'login: accountId не найден в ответе; '
@@ -472,7 +478,7 @@ class AccountModule {
   }
 
   // #***! вход по чужому токену из дев меню
-  Future<LoginResult> loginWithToken(String token) async {
+  Future<LoginResult> loginWithToken(String token, {String? accountPhone}) async {
     if (token.isEmpty) {
       throw StateError('loginWithToken: пустой токен');
     }
@@ -501,7 +507,7 @@ class AccountModule {
     }
 
     logger.i('Вход по токену: сессия поднята со спуфом, выполняю login');
-    return login(token: token);
+    return login(token: token, accountPhone: accountPhone);
   }
 
   // #***! Экспериментальный SMS-вход через веб. Веб-клиент MAX всегда шлёт код по

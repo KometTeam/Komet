@@ -51,6 +51,26 @@ int? extractAccountId(dynamic response) {
       _coerceAccountId(response['account_id']);
 }
 
+typedef AccountIdByPhoneLookup = Future<int?> Function(String phone);
+
+// #***! LOGIN не всегда возвращает profile для уже известного серверу токена.
+// В таком случае review-вход может восстановить id по номеру, который всё равно
+// известен из специального сценария авторизации.
+Future<int?> resolveLoginAccountId(
+  dynamic response, {
+  String? phone,
+  AccountIdByPhoneLookup? lookupByPhone,
+}) async {
+  final embedded = extractAccountId(response);
+  if (embedded != null) return embedded;
+
+  final phoneHint = phone?.trim();
+  if (phoneHint == null || phoneHint.isEmpty || lookupByPhone == null) {
+    return null;
+  }
+  return lookupByPhone(phoneHint);
+}
+
 // #***! описание формы ответа для лога когда id не нашли
 String describeResponseShape(dynamic response) {
   if (response is! Map) return 'не-Map (${response.runtimeType})';
