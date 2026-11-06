@@ -10,6 +10,7 @@ on:
       - 'lib/**'
       - 'scripts/build_ios_share.sh'
       - 'scripts/sign_ios_appstore.py'
+      - 'scripts/validate_ios_appstore_metadata.py'
       - 'native/komet_share/**'
       - 'native/komet_tlottie/**'
       - 'native/crypto-core'
@@ -26,6 +27,7 @@ on:
       - 'lib/**'
       - 'scripts/build_ios_share.sh'
       - 'scripts/sign_ios_appstore.py'
+      - 'scripts/validate_ios_appstore_metadata.py'
       - 'native/komet_share/**'
       - 'native/komet_tlottie/**'
       - 'native/crypto-core'
@@ -80,6 +82,9 @@ jobs:
 
       - name: Pin kolibri crates
         uses: ./.github/actions/pin-kolibri-crates
+
+      - name: Validate App Store metadata
+        run: python3 scripts/validate_ios_appstore_metadata.py
 
       # Схема max:// принадлежит официальному приложению MAX, App Store-сборка её не заявляет
       - name: Drop the max URL scheme

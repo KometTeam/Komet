@@ -25,6 +25,22 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>MinimalIcon</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>MinimalIcon-76</string>
+					<string>MinimalIcon-83.5</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+		</dict>
+	</dict>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -83,12 +99,16 @@
 	<string>Face ID разблокирует Komet вместо кода-пароля.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Геолокация нужна, чтобы вы могли отправить своё местоположение в чат.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Геолокация нужна, чтобы вы могли отправить своё местоположение в чат.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Микрофон нужен для записи голосовых сообщений, видео и звонков.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Доступ к галерее нужен, чтобы сохранять полученные фото и видео.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Доступ к галерее нужен, чтобы отправлять фото и видео в чатах.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Распознавание речи нужно, чтобы превращать голосовые сообщения в текст.</string>
 
 	<key>UIApplicationSceneManifest</key>
 	<dict>

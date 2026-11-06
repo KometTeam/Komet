@@ -4,6 +4,8 @@ import 'package:image/image.dart' as img;
 const _sizes = {
   'ios/Runner/MinimalIcon@2x.png': 120,
   'ios/Runner/MinimalIcon@3x.png': 180,
+  'ios/Runner/MinimalIcon-76@2x.png': 152,
+  'ios/Runner/MinimalIcon-83.5@2x.png': 167,
 };
 
 void main() {
