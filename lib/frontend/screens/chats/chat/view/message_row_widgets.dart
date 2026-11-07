@@ -505,10 +505,16 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       if (!widget.failedSend) widget.onToggleSelection();
       return;
     }
+    if (widget.failedSend) {
+      _openTimer?.cancel();
+      _openTimer = Timer(const Duration(milliseconds: 200), () {
+        if (mounted && !widget.isSelectionActive()) _openMenu();
+      });
+      return;
+    }
     final emoji = accountModule.doubleTapReaction.value;
     final react = widget.onDoubleTapReact;
-    if (!widget.failedSend &&
-        emoji != null &&
+    if (emoji != null &&
         react != null &&
         (_openTimer?.isActive ?? false) &&
         _reactionFilter()(emoji)) {
