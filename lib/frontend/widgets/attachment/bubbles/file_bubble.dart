@@ -42,6 +42,7 @@ class FileBubble extends StatefulWidget {
   final FileAttachment file;
   final bool fill;
   final FileBubbleOpener openFile;
+  final FileBubbleOpener? cacheAudioFile;
   final AudioFileEnricher? enrichAudioFile;
   final AudioFileActivator? activateAudioFile;
 
@@ -51,6 +52,7 @@ class FileBubble extends StatefulWidget {
     required this.file,
     this.fill = false,
     this.openFile = openCachedFile,
+    this.cacheAudioFile,
     this.enrichAudioFile,
     this.activateAudioFile,
   });
@@ -638,7 +640,7 @@ class _FileBubbleState extends State<FileBubble> {
     }
     final cached = (await MediaCache.existing(cacheName)) != null;
     if (!cached) MediaDownloadProgress.set(cacheName, 0);
-    final result = await ensureCachedFile(
+    final result = await (widget.cacheAudioFile ?? ensureCachedFile)(
       cacheName,
       _fileUrl,
       onProgress: (value) => MediaDownloadProgress.set(cacheName, value),

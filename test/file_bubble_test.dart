@@ -34,6 +34,7 @@ Future<String> _pump(
   required FileBubbleOpener openFile,
   bool cached = false,
   double? progress,
+  FileBubbleOpener? audioCache,
   AudioFileEnricher? audioEnricher,
   AudioFileActivator? audioActivator,
   Widget Function(Widget child)? wrap,
@@ -61,6 +62,7 @@ Future<String> _pump(
               fill: true,
               file: FileAttachment(fileId: 901, name: name, size: 2048),
               openFile: openFile,
+              cacheAudioFile: audioCache,
               enrichAudioFile: audioEnricher,
               activateAudioFile: audioActivator,
               ctx: BubbleContext(
@@ -190,6 +192,12 @@ void main() {
       openFile: (cacheName, resolveUrl, {onProgress, onReady, download}) async {
         throw StateError('audio must not use the generic file opener');
       },
+      audioCache:
+          (cacheName, resolveUrl, {onProgress, onReady, download}) async {
+            onReady?.call();
+            final file = await MediaCache.fileFor(cacheName);
+            return FileDownloadResult(ok: true, path: file.path);
+          },
       audioEnricher: (track) async => track,
       audioActivator: (track, {required notificationChannelName}) async {
         expect(track.cacheName, '901_synthetic-track.mp3');
