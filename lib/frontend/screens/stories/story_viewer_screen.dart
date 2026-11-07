@@ -37,6 +37,37 @@ import '../../../core/utils/media_cache_names.dart';
 
 const Duration _photoDuration = Duration(seconds: 5);
 
+enum StoryViewerMenuAction { profile, hide, save, report, delete }
+
+List<StoryViewerMenuAction> storyViewerMenuActions({
+  required bool isOwn,
+  bool opensProfile = false,
+  bool allowsHidingAuthor = false,
+  bool allowsSaving = false,
+  bool allowsComplaints = false,
+}) => isOwn
+    ? const [StoryViewerMenuAction.save, StoryViewerMenuAction.delete]
+    : [
+        if (opensProfile) StoryViewerMenuAction.profile,
+        if (allowsHidingAuthor) StoryViewerMenuAction.hide,
+        if (allowsSaving) StoryViewerMenuAction.save,
+        if (allowsComplaints) StoryViewerMenuAction.report,
+      ];
+
+Duration storySeekPosition({
+  required Duration start,
+  required double deltaX,
+  required double viewportWidth,
+  required Duration duration,
+}) {
+  final total = duration.inMicroseconds;
+  if (total <= 0) return Duration.zero;
+  final width = viewportWidth.abs() < 1 ? 1.0 : viewportWidth.abs();
+  final delta = (total * deltaX / width).round();
+  final target = (start.inMicroseconds + delta).clamp(0, total).toInt();
+  return Duration(microseconds: target);
+}
+
 Offset? storyOriginOf(BuildContext context) {
   final box = context.findRenderObject() as RenderBox?;
   if (box == null || !box.hasSize) return null;
@@ -148,6 +179,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   final ValueNotifier<double> _segment = ValueNotifier<double>(0);
   int _storyIndex = 0;
   bool _paused = false;
+  bool _seeking = false;
+  double? _seekStartX;
+  Duration _seekStartPosition = Duration.zero;
+  Duration? _seekPreviewPosition;
+  Duration? _pendingSeekPosition;
+  bool _seekBusy = false;
+  bool _finishSeekWhenIdle = false;
+  int _seekEpoch = 0;
 
   double _dragDy = 0;
   bool _dragging = false;
@@ -212,6 +251,13 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   void _disposeVideo() {
     _videoEpoch++;
+    _seekEpoch++;
+    _seeking = false;
+    _seekStartX = null;
+    _seekPreviewPosition = null;
+    _pendingSeekPosition = null;
+    _seekBusy = false;
+    _finishSeekWhenIdle = false;
     _videoLoading.value = null;
     _video?.removeListener(_onVideoTick);
     _video?.dispose();
@@ -338,8 +384,15 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     if (c == null || !c.value.isInitialized) return;
     final total = c.value.duration.inMilliseconds;
     if (total <= 0) return;
-    _segment.value = (c.value.position.inMilliseconds / total).clamp(0.0, 1.0);
-    if (c.value.position >= c.value.duration && !c.value.isPlaying) {
+    if (!_seeking) {
+      _segment.value = (c.value.position.inMilliseconds / total).clamp(
+        0.0,
+        1.0,
+      );
+    }
+    if (!_seeking &&
+        c.value.position >= c.value.duration &&
+        !c.value.isPlaying) {
       _advance();
     }
   }
@@ -411,6 +464,92 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     }
   }
 
+  void _onStoryHoldStart(LongPressStartDetails details) {
+    final video = _video;
+    final canSeek = video != null && video.value.isInitialized;
+    _seekStartX = details.globalPosition.dx;
+    _seekStartPosition = canSeek ? video.value.position : Duration.zero;
+    _seekPreviewPosition = canSeek ? _seekStartPosition : null;
+    if (canSeek) {
+      _seekEpoch++;
+      _pendingSeekPosition = null;
+      _seekBusy = false;
+      _finishSeekWhenIdle = false;
+      setState(() => _seeking = true);
+    }
+    _setPaused(true);
+  }
+
+  void _onStoryHoldMove(LongPressMoveUpdateDetails details, double width) {
+    final video = _video;
+    final startX = _seekStartX;
+    if (!_seeking ||
+        video == null ||
+        !video.value.isInitialized ||
+        startX == null) {
+      return;
+    }
+    final duration = video.value.duration;
+    final target = storySeekPosition(
+      start: _seekStartPosition,
+      deltaX: details.globalPosition.dx - startX,
+      viewportWidth: width,
+      duration: duration,
+    );
+    if (target == _seekPreviewPosition) return;
+    setState(() => _seekPreviewPosition = target);
+    final total = duration.inMicroseconds;
+    if (total > 0) {
+      _segment.value = (target.inMicroseconds / total).clamp(0.0, 1.0);
+    }
+    _queueStorySeek(video, target);
+  }
+
+  void _queueStorySeek(VideoPlayerController video, Duration target) {
+    _pendingSeekPosition = target;
+    if (_seekBusy) return;
+    _seekBusy = true;
+    unawaited(_drainStorySeek(video, _seekEpoch));
+  }
+
+  Future<void> _drainStorySeek(VideoPlayerController video, int epoch) async {
+    while (mounted && _video == video && epoch == _seekEpoch && _seeking) {
+      final target = _pendingSeekPosition;
+      if (target == null) break;
+      _pendingSeekPosition = null;
+      try {
+        await video.seekTo(target);
+      } catch (_) {}
+    }
+    if (!mounted || _video != video || epoch != _seekEpoch) return;
+    _seekBusy = false;
+    if (_pendingSeekPosition != null) {
+      _queueStorySeek(video, _pendingSeekPosition!);
+      return;
+    }
+    if (!_finishSeekWhenIdle) return;
+    setState(() {
+      _seeking = false;
+      _seekPreviewPosition = null;
+      _finishSeekWhenIdle = false;
+    });
+    _setPaused(false);
+  }
+
+  void _onStoryHoldEnd() {
+    final video = _video;
+    final target = _seekPreviewPosition;
+    _seekStartX = null;
+    if (!_seeking || video == null || target == null) {
+      _seeking = false;
+      _seekPreviewPosition = null;
+      _setPaused(false);
+      return;
+    }
+    _finishSeekWhenIdle = true;
+    _queueStorySeek(video, target);
+  }
+
   void _onDragStart(DragStartDetails _) {
     _dragging = true;
     _setPaused(true);
@@ -479,37 +618,59 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     if (story == null || _deleting) return;
     final wasPaused = _paused;
     _setPaused(true);
-    final delete = await _pickDelete();
+    final action = await _pickOwnStoryAction();
     if (!mounted) return;
-    final confirmed = delete && await _confirmDelete();
-    if (!mounted) return;
-    if (confirmed) {
-      await _deleteStory(story);
-      if (!mounted) return;
+    switch (action) {
+      case StoryViewerMenuAction.save:
+        await _saveStory(story);
+      case StoryViewerMenuAction.delete:
+        if (await _confirmDelete()) {
+          if (!mounted) return;
+          await _deleteStory(story);
+        }
+      case null:
+      case StoryViewerMenuAction.profile:
+      case StoryViewerMenuAction.hide:
+      case StoryViewerMenuAction.report:
+        break;
     }
+    if (!mounted) return;
     if (!wasPaused && _currentStory != null) _setPaused(false);
   }
 
-  Future<bool> _pickDelete() async {
-    final picked = await showModalBottomSheet<bool>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final cs = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: ListTile(
-            leading: Icon(Symbols.delete, color: cs.error),
-            title: Text(
-              AppLocalizations.of(sheetContext)!.msgActionsDelete,
-              style: TextStyle(color: cs.error),
+  Future<StoryViewerMenuAction?> _pickOwnStoryAction() =>
+      showModalBottomSheet<StoryViewerMenuAction>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) {
+          final cs = Theme.of(sheetContext).colorScheme;
+          final l10n = AppLocalizations.of(sheetContext)!;
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Symbols.download),
+                  title: Text(l10n.storyMenuSave),
+                  onTap: () => Navigator.of(
+                    sheetContext,
+                  ).pop(StoryViewerMenuAction.save),
+                ),
+                ListTile(
+                  leading: Icon(Symbols.delete, color: cs.error),
+                  title: Text(
+                    l10n.msgActionsDelete,
+                    style: TextStyle(color: cs.error),
+                  ),
+                  onTap: () => Navigator.of(
+                    sheetContext,
+                  ).pop(StoryViewerMenuAction.delete),
+                ),
+              ],
             ),
-            onTap: () => Navigator.of(sheetContext).pop(true),
-          ),
-        );
-      },
-    );
-    return picked ?? false;
-  }
+          );
+        },
+      );
 
   Future<bool> _confirmDelete() async {
     final l10n = AppLocalizations.of(context)!;
@@ -644,8 +805,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
             _advance();
           }
         },
-        onLongPressStart: (_) => _setPaused(true),
-        onLongPressEnd: (_) => _setPaused(false),
+        onLongPressStart: _onStoryHoldStart,
+        onLongPressMoveUpdate: (details) =>
+            _onStoryHoldMove(details, constraints.maxWidth),
+        onLongPressEnd: (_) => _onStoryHoldEnd(),
+        onLongPressCancel: _onStoryHoldEnd,
         child: _buildCardContent(ownerId, loading, stories, story),
       ),
     );
@@ -695,6 +859,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                         )),
           ),
           const _TopScrim(),
+          if (_seeking && _seekPreviewPosition != null && _video != null)
+            _StorySeekOverlay(
+              position: _seekPreviewPosition!,
+              duration: _video!.value.duration,
+            ),
           if (loading)
             const Center(child: SmallSpinner(size: 28, color: Colors.white)),
           Column(
@@ -742,12 +911,13 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   bool _opensProfile(Story story) => !_isOwnStory(story) && story.allowsProfile;
 
-  bool _hasMenu(Story story) =>
-      _isOwnStory(story) ||
-      _opensProfile(story) ||
-      story.allowsHidingAuthor ||
-      story.allowsSaving ||
-      story.allowsComplaints;
+  bool _hasMenu(Story story) => storyViewerMenuActions(
+    isOwn: _isOwnStory(story),
+    opensProfile: _opensProfile(story),
+    allowsHidingAuthor: story.allowsHidingAuthor,
+    allowsSaving: story.allowsSaving,
+    allowsComplaints: story.allowsComplaints,
+  ).isNotEmpty;
 
   void _holdForInput(bool typing) {
     if (typing) {
@@ -818,45 +988,56 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     if (story == null) return;
     _pauseUntilUncovered();
     final l10n = AppLocalizations.of(context)!;
-    final action = await showModalBottomSheet<_StoryAction>(
+    final action = await showModalBottomSheet<StoryViewerMenuAction>(
       context: context,
       showDragHandle: true,
       builder: (sheetContext) {
         final cs = Theme.of(sheetContext).colorScheme;
-        Widget item(_StoryAction action, IconData icon, String label) =>
-            ListTile(
-              leading: Icon(
-                icon,
-                color: action == _StoryAction.report ? cs.error : null,
-              ),
-              title: Text(
-                label,
-                style: action == _StoryAction.report
-                    ? TextStyle(color: cs.error)
-                    : null,
-              ),
-              onTap: () => Navigator.of(sheetContext).pop(action),
-            );
+        Widget item(
+          StoryViewerMenuAction action,
+          IconData icon,
+          String label,
+        ) => ListTile(
+          leading: Icon(
+            icon,
+            color: action == StoryViewerMenuAction.report ? cs.error : null,
+          ),
+          title: Text(
+            label,
+            style: action == StoryViewerMenuAction.report
+                ? TextStyle(color: cs.error)
+                : null,
+          ),
+          onTap: () => Navigator.of(sheetContext).pop(action),
+        );
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (_opensProfile(story))
                 item(
-                  _StoryAction.profile,
+                  StoryViewerMenuAction.profile,
                   Symbols.account_circle,
                   l10n.storyMenuProfile,
                 ),
               if (story.allowsHidingAuthor)
                 item(
-                  _StoryAction.hide,
+                  StoryViewerMenuAction.hide,
                   Symbols.visibility_off,
                   l10n.storyMenuHide,
                 ),
               if (story.allowsSaving)
-                item(_StoryAction.save, Symbols.download, l10n.storyMenuSave),
+                item(
+                  StoryViewerMenuAction.save,
+                  Symbols.download,
+                  l10n.storyMenuSave,
+                ),
               if (story.allowsComplaints)
-                item(_StoryAction.report, Symbols.report, l10n.storyMenuReport),
+                item(
+                  StoryViewerMenuAction.report,
+                  Symbols.report,
+                  l10n.storyMenuReport,
+                ),
             ],
           ),
         );
@@ -864,15 +1045,16 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     );
     if (!mounted) return;
     switch (action) {
-      case _StoryAction.profile:
+      case StoryViewerMenuAction.profile:
         await _openOwnerProfile();
         return;
-      case _StoryAction.hide:
+      case StoryViewerMenuAction.hide:
         await _hideAuthor(story);
-      case _StoryAction.save:
+      case StoryViewerMenuAction.save:
         await _saveStory(story);
-      case _StoryAction.report:
+      case StoryViewerMenuAction.report:
         await _reportStory(story);
+      case StoryViewerMenuAction.delete:
       case null:
         break;
     }
@@ -972,7 +1154,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     if (count <= 0) count = 1;
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 200),
-      opacity: _paused ? 0.35 : 1.0,
+      opacity: _seeking ? 1.0 : (_paused ? 0.35 : 1.0),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
         child: Row(
@@ -1081,6 +1263,51 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
               ),
             _RoundIconButton(icon: Symbols.close, onTap: _close),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StorySeekOverlay extends StatelessWidget {
+  const _StorySeekOverlay({required this.position, required this.duration});
+
+  final Duration position;
+  final Duration duration;
+
+  static String _time(Duration value) {
+    final seconds = value.inSeconds.clamp(0, 359999);
+    final minutes = seconds ~/ 60;
+    final rest = seconds % 60;
+    return '$minutes:${rest.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.56),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Symbols.swap_horiz, color: Colors.white, size: 20),
+              const SizedBox(width: 7),
+              Text(
+                '${_time(position)} / ${_time(duration)}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: [ui.FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1476,8 +1703,6 @@ class _StoryFrame extends StatelessWidget {
     );
   }
 }
-
-enum _StoryAction { profile, hide, save, report }
 
 class _StoryReplyBar extends StatefulWidget {
   final bool canReply;
