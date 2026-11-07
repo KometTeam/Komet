@@ -638,7 +638,7 @@ class _FileBubbleState extends State<FileBubble> {
       await AudioPlaybackController.instance.toggle();
       return;
     }
-    final cached = (await MediaCache.existing(cacheName)) != null;
+    final cached = MediaCache.presence(cacheName).value;
     if (!cached) MediaDownloadProgress.set(cacheName, 0);
     final result = await (widget.cacheAudioFile ?? ensureCachedFile)(
       cacheName,

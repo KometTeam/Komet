@@ -207,8 +207,10 @@ void main() {
     );
 
     await tester.tap(find.text('synthetic-track.mp3'));
-    await tester.pump();
-    await activated.future;
+    for (var i = 0; i < 20 && !activated.isCompleted; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(activated.isCompleted, isTrue);
 
     expect(find.textContaining('Открытие'), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
