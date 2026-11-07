@@ -166,7 +166,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       flexibleSpace: Stack(
         fit: StackFit.expand,
         children: [
-          if (background != null) background,
+          ?background,
           Positioned.fill(
             child: SeasonalSnowLayer(
               flakeCount: 18,
