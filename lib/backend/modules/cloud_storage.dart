@@ -161,14 +161,33 @@ class CloudStorageModule {
     }
   }
 
-  static Future<List<CloudFile>> fetchFiles(
+  static const int pageSize = 100;
+
+  static Future<({List<CloudFile> files, int? oldestTime})> fetchPage(
     MessagesModule messages,
     int accountId,
     int chatId, {
-    int count = 200,
+    int? before,
   }) async {
-    final msgs = await messages.fetchHistory(accountId, chatId, count: count);
-    return _cloudFilesFrom(msgs, chatId, accountId).toList();
+    final fetched = await messages.fetchHistory(
+      accountId,
+      chatId,
+      fromTime: before,
+      count: pageSize,
+    );
+    final msgs = before == null
+        ? fetched
+        : [
+            for (final m in fetched)
+              if (m.time < before) m,
+          ];
+    int? oldest;
+    for (final m in msgs) {
+      if (oldest == null || m.time < oldest) oldest = m.time;
+    }
+    final files = _cloudFilesFrom(msgs, chatId, accountId).toList()
+      ..sort((a, b) => b.time.compareTo(a.time));
+    return (files: files, oldestTime: oldest);
   }
 
   // Fetches only the last few messages to find a newly uploaded file — avoids full 200-msg reload

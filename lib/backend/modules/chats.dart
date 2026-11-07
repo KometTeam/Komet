@@ -575,12 +575,12 @@ class ChatsModule {
     final row = Map<String, dynamic>.from(rows.first);
     if ((row['unread_count'] as int? ?? 0) == 0) return;
 
-    final ghost = KometSettings.ghostMode.value;
-    if (ghost) {
-      await _rememberGhostRead(accountId, chatId, rows.first, mark);
+    final readsStayLocal = _readsStayLocal;
+    if (readsStayLocal) {
+      await _rememberLocalRead(accountId, chatId, rows.first, mark, left: 0);
     }
     final msgIdNum = int.tryParse(messageId);
-    if (msgIdNum != null && !KometSettings.antiRead.value && !ghost) {
+    if (msgIdNum != null && !readsStayLocal) {
       try {
         await api.sendRequest(Opcode.chatMark, {
           'type': 'READ_MESSAGE',
@@ -611,9 +611,9 @@ class ChatsModule {
     int mark, {
     required int remaining,
   }) async {
-    final ghost = KometSettings.ghostMode.value;
+    final readsStayLocal = _readsStayLocal;
     final msgIdNum = int.tryParse(messageId);
-    if (msgIdNum != null && !KometSettings.antiRead.value && !ghost) {
+    if (msgIdNum != null && !readsStayLocal) {
       try {
         await api.sendRequest(Opcode.chatMark, {
           'type': 'READ_MESSAGE',
@@ -626,11 +626,11 @@ class ChatsModule {
 
     final rows = await AppDatabase.loadChat(accountId, chatId);
     if (rows.isEmpty) return;
-    if (ghost) {
-      await _rememberGhostRead(accountId, chatId, rows.first, mark);
+    final next = remaining < 0 ? 0 : remaining;
+    if (readsStayLocal) {
+      await _rememberLocalRead(accountId, chatId, rows.first, mark, left: next);
     }
     final cached = CachedChat.fromDbRow(rows.first);
-    final next = remaining < 0 ? 0 : remaining;
     final currentMark = cached.participants[accountId] ?? 0;
     final nextMark = mark > currentMark ? mark : currentMark;
     if (cached.unreadCount == next && nextMark == currentMark) {
@@ -665,6 +665,7 @@ class ChatsModule {
     }
     if (unread == null) return null;
 
+    await GhostReadStore.instance.forget(accountId, chatId);
     await _updateChat(accountId, chatId, (chat) {
       final participants = Map<int, int>.from(chat.participants)
         ..[accountId] = mark - 1;
@@ -932,31 +933,81 @@ class ChatsModule {
     unawaited(ChatInfoFetch.get(chatId));
   }
 
-  Future<void> _rememberGhostRead(
+  static bool get _readsStayLocal =>
+      KometSettings.ghostMode.value || KometSettings.antiRead.value;
+
+  Future<void> _rememberLocalRead(
     int accountId,
     int chatId,
     Map<String, Object?> row,
-    int mark,
-  ) {
+    int mark, {
+    required int left,
+  }) {
     final cached = CachedChat.fromDbRow(row);
-    return GhostReadStore.instance.remember(
+    return GhostReadStore.instance.noteLocalRead(
       accountId,
       chatId,
       mark: mark,
-      unread: cached.unreadCount,
-      ownMark: cached.participants[accountId] ?? 0,
+      left: left,
+      serverUnread: cached.unreadCount,
+      serverOwnMark: cached.participants[accountId] ?? 0,
     );
   }
 
+  CachedChat _withLocalRead(int accountId, CachedChat server) {
+    final local = GhostReadStore.instance.of(accountId, server.id);
+    if (local == null) return server;
+    final serverMark = server.participants[accountId] ?? 0;
+    if (serverMark >= local.mark) {
+      unawaited(GhostReadStore.instance.forget(accountId, server.id));
+      return server;
+    }
+    unawaited(
+      GhostReadStore.instance.noteServer(
+        accountId,
+        server.id,
+        unread: server.unreadCount,
+        ownMark: serverMark,
+      ),
+    );
+    return server.copyWith(
+      unreadCount: local.unreadFor(
+        server.unreadCount,
+        lastMessageTime: server.lastMsgTime,
+      ),
+      participants: Map<int, int>.from(server.participants)
+        ..[accountId] = local.mark,
+    );
+  }
+
+  int _unreadWithLocalRead(
+    int accountId,
+    int chatId,
+    int serverUnread, {
+    int? lastMessageTime,
+  }) {
+    final local = GhostReadStore.instance.of(accountId, chatId);
+    if (local == null) return serverUnread;
+    unawaited(
+      GhostReadStore.instance.noteServer(
+        accountId,
+        chatId,
+        unread: serverUnread,
+      ),
+    );
+    return local.unreadFor(serverUnread, lastMessageTime: lastMessageTime);
+  }
+
   Future<void> restoreGhostReads() async {
+    await GhostReadStore.instance.load();
     final entries = GhostReadStore.instance.snapshot();
     for (final entry in entries) {
       final read = entry.read;
       await _updateChat(entry.accountId, entry.chatId, (chat) {
         final participants = Map<int, int>.from(chat.participants)
-          ..[entry.accountId] = read.ownMark;
+          ..[entry.accountId] = read.serverOwnMark;
         return chat.copyWith(
-          unreadCount: read.unread,
+          unreadCount: read.serverUnread,
           participants: participants,
         );
       });
@@ -1285,7 +1336,12 @@ class ChatsModule {
         );
       } else if (unread != null) {
         final newRow = Map<String, dynamic>.from(rows.first);
-        newRow['unread_count'] = unread;
+        newRow['unread_count'] = _unreadWithLocalRead(
+          accountId,
+          chatId,
+          unread,
+          lastMessageTime: cachedChat.lastMsgTime,
+        );
         await _commitChatContent([(rows.first, newRow)]);
       }
       _messageEventsController.add(
@@ -1389,7 +1445,14 @@ class ChatsModule {
       if (senderId != null) newRow['last_msg_sender'] = senderId;
       newRow['last_msg_status'] = 'sent';
     }
-    if (unread != null) newRow['unread_count'] = unread;
+    if (unread != null) {
+      newRow['unread_count'] = _unreadWithLocalRead(
+        accountId,
+        chatId,
+        unread,
+        lastMessageTime: newRow['last_msg_time'] as int?,
+      );
+    }
 
     if (msgIdInt != null &&
         status != 'REMOVED' &&
@@ -1478,7 +1541,14 @@ class ChatsModule {
       newRow['last_msg_sender'] = null;
       newRow['last_msg_status'] = null;
     }
-    if (unread != null) newRow['unread_count'] = unread;
+    if (unread != null) {
+      newRow['unread_count'] = _unreadWithLocalRead(
+        accountId,
+        chatId,
+        unread,
+        lastMessageTime: newRow['last_msg_time'] as int?,
+      );
+    }
     await _commitChatContent([(chatRow, newRow)]);
   }
 
@@ -1630,19 +1700,43 @@ class ChatsModule {
     final ownRead = userId == accountId;
     final serverUnread = payload['unread'];
     final lastTime = cached.lastMsgTime;
+    final local = ownRead
+        ? GhostReadStore.instance.of(accountId, chatId)
+        : null;
+    final keepsLocal = local != null && mark < local.mark;
+    if (local != null && !keepsLocal) {
+      await GhostReadStore.instance.forget(accountId, chatId);
+    }
+    if (keepsLocal) {
+      await GhostReadStore.instance.noteServer(
+        accountId,
+        chatId,
+        ownMark: mark,
+      );
+    }
     final unread = !ownRead
         ? cached.unreadCount
         : serverUnread is int
-        ? serverUnread
+        ? (keepsLocal
+              ? _unreadWithLocalRead(
+                  accountId,
+                  chatId,
+                  serverUnread,
+                  lastMessageTime: lastTime,
+                )
+              : serverUnread)
         : lastTime != null && mark >= lastTime
         ? 0
         : cached.unreadCount;
-    if (cached.participants[userId] == mark && unread == cached.unreadCount) {
+    final shownMark = keepsLocal ? local.mark : mark;
+    if (cached.participants[userId] == shownMark &&
+        unread == cached.unreadCount) {
       return;
     }
     final updated = cached.copyWith(
       unreadCount: unread,
-      participants: Map<int, int>.from(cached.participants)..[userId] = mark,
+      participants: Map<int, int>.from(cached.participants)
+        ..[userId] = shownMark,
     );
     await _commitChatContent([(rows.first, updated.toDbRow())]);
     if (ownRead && unread == 0) {
@@ -1747,7 +1841,7 @@ class ChatsModule {
         existing = {id: CachedChat.fromDbRow(existingRow)};
       }
     }
-    final parsed = parseChatRow(
+    final serverChat = parseChatRow(
       chat,
       accountId,
       accountId,
@@ -1757,10 +1851,11 @@ class ChatsModule {
       existing,
       cachedAt,
     );
-    if (parsed == null) {
+    if (serverChat == null) {
       logger.w('cacheServerChat: parse returned null for chat=${chat['id']}');
       return null;
     }
+    final parsed = _withLocalRead(accountId, serverChat);
     final ex = existing[parsed.id];
     final listState = !inList
         ? ChatListState.notInList
@@ -1844,7 +1939,7 @@ class ChatsModule {
     for (final c in chats.whereType<Map>()) {
       final map = c.cast<dynamic, dynamic>();
       ChatMembersStore.instance.applyChatPayload(map);
-      final parsed = parseChatRow(
+      final serverChat = parseChatRow(
         map,
         accountId,
         currentUserId,
@@ -1854,7 +1949,8 @@ class ChatsModule {
         existing,
         cachedAt,
       );
-      if (parsed == null) continue;
+      if (serverChat == null) continue;
+      final parsed = _withLocalRead(accountId, serverChat);
       final row = parsed.toDbRow();
       row['in_list'] = chatListStateForStatus(
         map['status'],

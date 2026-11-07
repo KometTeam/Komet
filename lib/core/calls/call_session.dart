@@ -150,6 +150,7 @@ class CallSession {
   // #***! флаги своей и чужой стороны
   bool _muted = false;
   bool _speakerOn = false;
+  bool _speakerChosen = false;
   bool _accepted = false;
   bool _peerMuted = false;
   bool _peerVideo = false;
@@ -1485,6 +1486,10 @@ class CallSession {
 
   // #***! свои дорожки, микрофон всегда видео по требованию
   Future<void> _addLocalMedia(RTCPeerConnection pc) async {
+    if (_wantVideo && _speakerFollowsVideo && !_speakerOn) {
+      _speakerOn = true;
+      _notifyInfo();
+    }
     await _prepareAudioSession();
     await _disposeMicStream();
     try {
@@ -1644,10 +1649,20 @@ class CallSession {
 
   // #***! громкая связь
   Future<void> setSpeaker(bool on) async {
+    _speakerChosen = true;
     if (_speakerOn == on) return;
     _speakerOn = on;
     await applyAudioRoute();
     _notifyInfo();
+  }
+
+  bool get _speakerFollowsVideo => _canRouteAudio && !_speakerChosen;
+
+  Future<void> _speakerForVideo() async {
+    if (!_speakerFollowsVideo || _speakerOn) return;
+    _speakerOn = true;
+    _notifyInfo();
+    await applyAudioRoute();
   }
 
   Future<void> _prepareAudioSession() async {
@@ -1668,9 +1683,34 @@ class CallSession {
   Future<void> applyAudioRoute() async {
     if (!_canRouteAudio) return;
     try {
-      await Helper.setSpeakerphoneOn(_speakerOn);
+      if (_speakerOn && !_speakerChosen) {
+        await _speakerUnlessHeadset();
+      } else {
+        await Helper.setSpeakerphoneOn(_speakerOn);
+      }
     } catch (e) {
       logger.w('[call] setSpeakerphoneOn($_speakerOn) недоступен: $e');
+    }
+  }
+
+  static Future<void> _speakerUnlessHeadset() async {
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        !await _headsetConnected()) {
+      await Helper.setSpeakerphoneOn(true);
+      return;
+    }
+    await Helper.setSpeakerphoneOnButPreferBluetooth();
+  }
+
+  static Future<bool> _headsetConnected() async {
+    try {
+      final outputs = await Helper.audiooutputs;
+      return outputs.any(
+        (o) => o.deviceId == 'bluetooth' || o.deviceId == 'wired-headset',
+      );
+    } catch (e) {
+      logger.w('[call] список аудиовыходов недоступен: $e');
+      return false;
     }
   }
 
@@ -3317,6 +3357,7 @@ class CallSession {
     }
 
     _localVideo = true;
+    await _speakerForVideo();
     if (await _videoNegotiatedForSending(pc)) {
       logger.i('[call] camera on without renegotiation');
     } else {
@@ -3408,7 +3449,9 @@ class CallSession {
     if (!_isDesktop) {
       if (defaultTargetPlatform == TargetPlatform.android) {
         if (!await Helper.requestCapturePermission()) return null;
-        await CallBridge.instance.setScreenShare(true);
+        if (!await CallBridge.instance.setScreenShare(true)) {
+          throw StateError('система не дала звонку права на запись экрана');
+        }
       }
       return navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
         'video': true,
@@ -3609,7 +3652,10 @@ class CallSession {
       _peerVideo = video;
       _peerScreen = screen;
       _notifyInfo();
-      if (video || screen) unawaited(_collectReceivers());
+      if (video || screen) {
+        unawaited(_collectReceivers());
+        unawaited(_speakerForVideo());
+      }
     }
   }
 

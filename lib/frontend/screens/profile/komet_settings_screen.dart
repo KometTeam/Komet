@@ -166,7 +166,7 @@ class KometSettingsScreen extends StatelessWidget {
                       label: 'Anti read',
                       subtitle: l10n.kometSettingsAntiReadSubtitle,
                       value: value,
-                      onChanged: KometSettings.setAntiRead,
+                      onChanged: _setAntiRead,
                     ),
                   ),
                   ValueListenableBuilder<bool>(
@@ -219,7 +219,17 @@ class KometSettingsScreen extends StatelessWidget {
 
   Future<void> _setGhostMode(bool value) async {
     await KometSettings.setGhostMode(value);
-    if (!value) await chats.restoreGhostReads();
+    await _restoreReadsWhenSent();
     api.sendPing(interactive: !value);
+  }
+
+  Future<void> _setAntiRead(bool value) async {
+    await KometSettings.setAntiRead(value);
+    await _restoreReadsWhenSent();
+  }
+
+  Future<void> _restoreReadsWhenSent() async {
+    if (KometSettings.ghostMode.value || KometSettings.antiRead.value) return;
+    await chats.restoreGhostReads();
   }
 }

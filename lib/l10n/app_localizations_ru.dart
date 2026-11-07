@@ -706,6 +706,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get msgActionsDelete => 'Удалить';
 
   @override
+  String get msgActionsRetry => 'Отправить повторно';
+
+  @override
+  String get chatRetryFileMissing => 'Файла больше нет на устройстве';
+
+  @override
   String get msgActionsCopied => 'Скопировано';
 
   @override
@@ -2475,17 +2481,10 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get cloudStorageStartUploadHint =>
-      'Начните загрузку для прогресс-бара';
-
-  @override
   String get cloudStorageEmptyTitle => 'Облачных файлов пока нет...';
 
   @override
   String get cloudStorageEmptySubtitle => 'Добавите?';
-
-  @override
-  String get cloudStorageUpload => 'Загрузить';
 
   @override
   String get cloudStorageFromFile => 'С файла';
@@ -2521,6 +2520,15 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get cloudStorageSend => 'Отправить';
+
+  @override
+  String get cloudStorageDeleteFile => 'Удалить файл';
+
+  @override
+  String get cloudStorageFileDeleted => 'Файл удалён';
+
+  @override
+  String get cloudStorageDeleteFailed => 'Не удалось удалить файл';
 
   @override
   String get cloudStorageAboutTooltip => 'Как работает хранилище';
@@ -5576,6 +5584,14 @@ class AppLocalizationsRu extends AppLocalizations {
   String get customizationTitle => 'Кастомизация';
 
   @override
+  String get chatFoldersAddTo => 'Добавить в папку';
+
+  @override
+  String chatFoldersUpdateFailed(String title) {
+    return 'Не удалось изменить папку «$title»';
+  }
+
+  @override
   String get folderActionNewFolder => 'Новая папка';
 
   @override
@@ -7460,7 +7476,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get login2faRequiredRetry => 'Попробовать войти снова';
 
   @override
-  String get login2faRequiredNoAccess => 'У меня нет доступа к устройству';
+  String get login2faRequiredNoAccess => 'У меня нет доступа к аккаунту';
 
   @override
   String get login2faRequiredLinkFailed =>

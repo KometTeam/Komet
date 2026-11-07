@@ -252,6 +252,31 @@ void main() {
     expect((await chats.getChat(101, 303)).single.lastMsgStatus, 'pending');
   });
 
+  test('a rejected message goes back to the outbox on retry', () async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    final sending = harness.sender.sendTextMessage();
+    await harness.api.started.future;
+    harness.api.response.completeError(
+      const PacketError('Synthetic rejection'),
+    );
+    await sending;
+    final failed = harness.chat.messages.single;
+    harness.chat.persistSessionCache();
+    expect(failed.status, 'error');
+    expect(harness.sender.canRetry(failed), isTrue);
+    expect(await AppDatabase.loadPendingMessages(101), isEmpty);
+
+    await harness.sender.retry(failed);
+
+    final queued = harness.chat.messages.single;
+    expect(queued.status, 'pending');
+    expect(queued.id, failed.id);
+    expect(harness.sender.canRetry(queued), isFalse);
+    expect(await AppDatabase.loadPendingMessages(101), hasLength(1));
+    expect(MessageSessionCache.get(101, 303)!.messages.single.status, 'pending');
+  });
+
   test('a failed comment stays outside the ordinary message outbox', () async {
     final harness = _Harness(commentsMode: true);
     addTearDown(harness.dispose);

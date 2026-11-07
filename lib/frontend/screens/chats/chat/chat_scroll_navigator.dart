@@ -116,7 +116,7 @@ class ChatScrollNavigator {
   final List<ReturnPoint> _returnStack = [];
 
   bool _scrollDownVisible = false;
-  final ValueNotifier<int> newMessageCount = ValueNotifier(0);
+  final ValueNotifier<int> unreadBelow = ValueNotifier(0);
   bool _clearCountScheduled = false;
 
   bool get busy => _busy > 0;
@@ -126,7 +126,7 @@ class ChatScrollNavigator {
     _highlightTimer?.cancel();
     jumpCacheExtent.dispose();
     highlightMessageId.dispose();
-    newMessageCount.dispose();
+    unreadBelow.dispose();
   }
 
   void bumpGestureEpoch() => gestureEpoch++;
@@ -463,7 +463,7 @@ class ChatScrollNavigator {
   void scrollToBottom() {
     flushDeferredMessages();
     _returnStack.clear();
-    newMessageCount.value = 0;
+    unreadBelow.value = 0;
     if (chatController.hasNewer) {
       unawaited(_returnToLatest());
       return;
@@ -569,7 +569,7 @@ class ChatScrollNavigator {
   void updateScrollDownVisible() {
     if (!scrollController.hasClients) {
       _setScrollDownVisible(
-        newMessageCount.value > 0 || chatController.hasNewer,
+        unreadBelow.value > 0 || chatController.hasNewer,
       );
       return;
     }
@@ -580,8 +580,8 @@ class ChatScrollNavigator {
         pos.userScrollDirection != ScrollDirection.idle) {
       _returnStack.clear();
     }
-    if (atBottom && (newMessageCount.value > 0 || hasDeferredMessages())) {
-      clearNewMessageCountSoon();
+    if (atBottom && (unreadBelow.value > 0 || hasDeferredMessages())) {
+      clearUnreadBelowSoon();
     }
     final reveal = math.min(
       _scrollDownRevealExtent,
@@ -591,7 +591,7 @@ class ChatScrollNavigator {
       distanceFromBottom() >= reveal ||
           chatController.hasNewer ||
           _returnStack.isNotEmpty ||
-          newMessageCount.value > 0,
+          unreadBelow.value > 0,
     );
   }
 
@@ -605,19 +605,21 @@ class ChatScrollNavigator {
     }
   }
 
-  void noteMissedMessage() {
-    newMessageCount.value++;
+  void noteMissedMessage() => showUnreadBelow(unreadBelow.value + 1);
+
+  void showUnreadBelow(int count) {
+    unreadBelow.value = count;
     updateScrollDownVisible();
   }
 
-  void clearNewMessageCountSoon() {
+  void clearUnreadBelowSoon() {
     if (_clearCountScheduled) return;
     _clearCountScheduled = true;
     _afterFrame((_) {
       _clearCountScheduled = false;
       if (!isMounted() || !isNearBottom()) return;
       flushDeferredMessages();
-      newMessageCount.value = 0;
+      unreadBelow.value = 0;
       updateScrollDownVisible();
     });
   }

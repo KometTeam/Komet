@@ -203,63 +203,77 @@ class GlossyPill extends StatelessWidget {
     final base = color ?? cs.surfaceContainerHigh;
     final content = Padding(padding: padding, child: child);
     final sigma = _sigmaFor(base);
+    final fill = DecoratedBox(
+      decoration: BoxDecoration(
+        color: gradient ? null : base,
+        gradient: gradient ? GlossyDecor.fillGradient(base) : null,
+      ),
+    );
 
     return RepaintBoundary(
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: borderRadius,
-          color: gradient ? null : base,
-          gradient: gradient ? GlossyDecor.fillGradient(base) : null,
-          border: borderSide != null
-              ? Border.fromBorderSide(borderSide!)
-              : GlossyDecor.rimBorder(base),
           boxShadow: [GlossyDecor.dropShadow(base, depth)],
         ),
-        child: ClipRRect(
-          borderRadius: borderRadius,
-          child: Stack(
-            fit: StackFit.passthrough,
-            children: [
-              if (sigma != null)
+        child: DecoratedBox(
+          position: DecorationPosition.foreground,
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+            border: borderSide != null
+                ? Border.fromBorderSide(borderSide!)
+                : GlossyDecor.rimBorder(base),
+          ),
+          child: ClipRRect(
+            borderRadius: borderRadius,
+            child: Stack(
+              fit: StackFit.passthrough,
+              children: [
                 Positioned.fill(
-                  child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-                    backdropGroupKey: backdropKey,
-                    child: const SizedBox.expand(),
-                  ),
+                  child: sigma == null
+                      ? fill
+                      : BackdropFilter(
+                          filter: ui.ImageFilter.blur(
+                            sigmaX: sigma,
+                            sigmaY: sigma,
+                          ),
+                          backdropGroupKey: backdropKey,
+                          child: fill,
+                        ),
                 ),
-              if (gradient) ...[
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: GlossyDecor.topSheen(base),
+                if (gradient) ...[
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: GlossyDecor.topSheen(base),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: GlossyDecor.bottomShade(base),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: GlossyDecor.bottomShade(base),
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
+                if (_inert)
+                  content
+                else
+                  Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      onTap: onTap,
+                      onLongPress: onLongPress,
+                      child: content,
+                    ),
+                  ),
               ],
-              if (_inert)
-                content
-              else
-                Material(
-                  type: MaterialType.transparency,
-                  child: InkWell(
-                    onTap: onTap,
-                    onLongPress: onLongPress,
-                    child: content,
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),

@@ -279,47 +279,49 @@ class PhotoBubble extends StatelessWidget {
         ctx,
         photo,
         builder: (context, surface, playing) => Stack(
-        children: [
-          _buildLetterboxedImage(
-            ctx,
-            photo,
-            size,
-            shown,
-            memWidth: memWidth,
-            memHeight: memHeight,
-          ),
-          Positioned.fill(
-            child: shown == size
-                ? surface
-                : Center(child: SizedBox.fromSize(size: shown, child: surface)),
-          ),
-          ..._mediaBadges(ctx, photo, compact: false, playing: playing),
-          if (ctx.uploadProgress != null)
-            _buildUploadOverlay(ctx, ctx.uploadProgress!, 0),
-          if (ctx.uploadProgress == null)
+          children: [
+            _buildLetterboxedImage(
+              ctx,
+              photo,
+              size,
+              shown,
+              memWidth: memWidth,
+              memHeight: memHeight,
+            ),
             Positioned.fill(
-              child: Builder(
-                builder: (tileContext) => GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (_awaitsManualLoad(photo)) {
-                      AutoDownloadGate.loadManually(_previewUrlOf(photo));
-                      return;
-                    }
-                    _openMedia(
-                      ctx.context,
-                      0,
-                      tileContext: tileContext,
-                      radius: radius,
-                      memWidth: memWidth,
-                      memHeight: memHeight,
-                      letterboxed: shown != size,
-                    );
-                  },
+              child: shown == size
+                  ? surface
+                  : Center(
+                      child: SizedBox.fromSize(size: shown, child: surface),
+                    ),
+            ),
+            ..._mediaBadges(ctx, photo, compact: false, playing: playing),
+            if (ctx.uploadProgress != null)
+              _buildUploadOverlay(ctx, ctx.uploadProgress!, 0),
+            if (ctx.uploadProgress == null)
+              Positioned.fill(
+                child: Builder(
+                  builder: (tileContext) => GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      if (_awaitsManualLoad(photo)) {
+                        AutoDownloadGate.loadManually(_previewUrlOf(photo));
+                        return;
+                      }
+                      _openMedia(
+                        ctx.context,
+                        0,
+                        tileContext: tileContext,
+                        radius: radius,
+                        memWidth: memWidth,
+                        memHeight: memHeight,
+                        letterboxed: shown != size,
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
         ),
       ),
     );
@@ -471,11 +473,11 @@ class PhotoBubble extends StatelessWidget {
         KometSettings.autoDownloadPhoto,
       ]),
       builder: (context, _) {
-        if (!AutoDownloadGate.allows(
-          KometSettings.autoDownloadPhoto.value,
-          imageUrl,
-        )) {
-          return _manualLoadTile(ctx, photo, imageUrl, width, height);
+        final autoDownload = KometSettings.autoDownloadPhoto.value;
+        if (!AutoDownloadGate.allows(autoDownload, imageUrl)) {
+          return AutoDownloadGate.awaitsTap(autoDownload, imageUrl)
+              ? _manualLoadTile(ctx, photo, imageUrl, width, height)
+              : _buildPreviewImage(ctx, photo, width, height);
         }
         return NetworkPhoto(
           url: imageUrl,

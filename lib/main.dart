@@ -26,6 +26,7 @@ import 'core/cache/self_presence.dart';
 import 'core/storage/app_instance.dart';
 import 'core/storage/draft_store.dart';
 import 'core/storage/archived_chats_store.dart';
+import 'core/storage/ghost_read_store.dart';
 import 'core/storage/local_contact_avatars.dart';
 import 'core/crypto/e2ee_service.dart';
 import 'core/crypto/encrypted_photo_cache.dart';
@@ -310,6 +311,7 @@ void main(List<String> args) async {
   await FileHistoryCache.load(prefs);
   await DraftStore.instance.load();
   await ArchivedChatsStore.instance.load();
+  await GhostReadStore.instance.load();
   await LocalContactAvatars.instance.load();
   await badgeFuture;
   await notificationsFuture;
@@ -1183,14 +1185,10 @@ class KometAppState extends State<KometApp>
                     Widget scaledChild = AppMotionScope(
                       child: KeyboardCoverScope(child: appChild!),
                     );
-                    final effective = AppFonts.effectiveScale(_fontId, scale);
-                    if ((effective - 1.0).abs() > 0.001) {
-                      scaledChild = MediaQuery.withClampedTextScaling(
-                        minScaleFactor: effective,
-                        maxScaleFactor: effective,
-                        child: scaledChild,
-                      );
-                    }
+                    scaledChild = AppTextScaling(
+                      factor: AppFonts.effectiveScale(_fontId, scale),
+                      child: scaledChild,
+                    );
                     return ValueListenableBuilder<bool>(
                       valueListenable: fpsOverlayEnabled,
                       child: scaledChild,

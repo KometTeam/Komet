@@ -1167,13 +1167,7 @@ class MessagesModule {
       'elements': elements,
       'attaches': [...attaches],
     };
-    if (replyToMessageId != null) {
-      message['link'] = {
-        'type': 'REPLY',
-        'chatId': replySourceChatId ?? chatId,
-        'messageId': replyToMessageId,
-      };
-    }
+    _linkReply(message, chatId, replyToMessageId, replySourceChatId);
     if (scheduledTime != null) {
       message['delayedAttributes'] = {
         'timeToFire': scheduledTime,
@@ -1190,6 +1184,20 @@ class MessagesModule {
       encryptedPayload: encryptedPayload,
       encryptionControl: encryptionControl,
     );
+  }
+
+  static void _linkReply(
+    Map<String, dynamic> message,
+    int chatId,
+    int? replyToMessageId,
+    int? replySourceChatId,
+  ) {
+    if (replyToMessageId == null) return;
+    message['link'] = {
+      'type': 'REPLY',
+      'chatId': replySourceChatId ?? chatId,
+      'messageId': replyToMessageId,
+    };
   }
 
   // #***! системное сообщение
@@ -1847,6 +1855,8 @@ class MessagesModule {
     Duration retryDelay = const Duration(seconds: 1),
     void Function()? beforeSend,
     bool encryptedPayload = false,
+    int? replyToMessageId,
+    int? replySourceChatId,
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -1861,6 +1871,7 @@ class MessagesModule {
       ],
     };
     if (text != null && text.isNotEmpty) message['text'] = text;
+    _linkReply(message, chatId, replyToMessageId, replySourceChatId);
     if (scheduledTime != null) {
       message['delayedAttributes'] = {
         'timeToFire': scheduledTime,
@@ -1903,6 +1914,8 @@ class MessagesModule {
     int maxAttempts = 20,
     Duration retryDelay = const Duration(seconds: 1),
     void Function()? beforeSend,
+    int? replyToMessageId,
+    int? replySourceChatId,
   }) async {
     final message = <String, dynamic>{
       'cid': -_nextCid(),
@@ -1912,6 +1925,7 @@ class MessagesModule {
       ],
     };
     if (caption != null && caption.isNotEmpty) message['text'] = caption;
+    _linkReply(message, chatId, replyToMessageId, replySourceChatId);
     if (scheduledTime != null) {
       message['delayedAttributes'] = {
         'timeToFire': scheduledTime,
@@ -1966,6 +1980,8 @@ class MessagesModule {
     int maxAttempts = 30,
     Duration retryDelay = const Duration(seconds: 1),
     void Function()? beforeSend,
+    int? replyToMessageId,
+    int? replySourceChatId,
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -1977,6 +1993,7 @@ class MessagesModule {
       ],
     };
     if (caption != null && caption.isNotEmpty) message['text'] = caption;
+    _linkReply(message, chatId, replyToMessageId, replySourceChatId);
     if (scheduledTime != null) {
       message['delayedAttributes'] = {
         'timeToFire': scheduledTime,
@@ -2031,6 +2048,8 @@ class MessagesModule {
     int maxAttempts = 30,
     Duration retryDelay = const Duration(seconds: 1),
     void Function()? beforeSend,
+    int? replyToMessageId,
+    int? replySourceChatId,
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -2046,6 +2065,7 @@ class MessagesModule {
         },
       ],
     };
+    _linkReply(message, chatId, replyToMessageId, replySourceChatId);
     if (scheduledTime != null) {
       message['delayedAttributes'] = {
         'timeToFire': scheduledTime,
@@ -2100,6 +2120,8 @@ class MessagesModule {
     int maxAttempts = 30,
     Duration retryDelay = const Duration(seconds: 1),
     void Function()? beforeSend,
+    int? replyToMessageId,
+    int? replySourceChatId,
   }) async {
     final message = <String, dynamic>{
       'isLive': false,
@@ -2117,6 +2139,7 @@ class MessagesModule {
         },
       ],
     };
+    _linkReply(message, chatId, replyToMessageId, replySourceChatId);
     final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
     return _sendWithNotReadyRetry<Map<String, dynamic>?>(
@@ -2136,22 +2159,22 @@ class MessagesModule {
     double zoom = 15,
     bool notify = true,
     void Function()? beforeSend,
+    int? replyToMessageId,
+    int? replySourceChatId,
   }) async {
-    final payload = {
-      'chatId': chatId,
-      'message': {
-        'cid': -_nextCid(),
-        'attaches': [
-          {
-            '_type': 'LOCATION',
-            'latitude': latitude,
-            'longitude': longitude,
-            'zoom': zoom,
-          },
-        ],
-      },
-      'notify': notify,
+    final message = <String, dynamic>{
+      'cid': -_nextCid(),
+      'attaches': [
+        {
+          '_type': 'LOCATION',
+          'latitude': latitude,
+          'longitude': longitude,
+          'zoom': zoom,
+        },
+      ],
     };
+    _linkReply(message, chatId, replyToMessageId, replySourceChatId);
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
     final response = await _sendUserMessage(payload, beforeSend: beforeSend);
     return _sentMessageMap(response);
@@ -2162,17 +2185,17 @@ class MessagesModule {
     int contactId, {
     bool notify = true,
     void Function()? beforeSend,
+    int? replyToMessageId,
+    int? replySourceChatId,
   }) async {
-    final payload = {
-      'chatId': chatId,
-      'message': {
-        'cid': -_nextCid(),
-        'attaches': [
-          {'_type': 'CONTACT', 'contactId': contactId},
-        ],
-      },
-      'notify': notify,
+    final message = <String, dynamic>{
+      'cid': -_nextCid(),
+      'attaches': [
+        {'_type': 'CONTACT', 'contactId': contactId},
+      ],
     };
+    _linkReply(message, chatId, replyToMessageId, replySourceChatId);
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
     final response = await _sendUserMessage(payload, beforeSend: beforeSend);
     return _sentMessageMap(response);
@@ -2189,27 +2212,27 @@ class MessagesModule {
     bool anonymous = true,
     bool notify = true,
     void Function()? beforeSend,
+    int? replyToMessageId,
+    int? replySourceChatId,
   }) async {
     final settings =
         (anonymous ? _pollAnonymousFlag : 0) |
         (multiple ? _pollMultipleFlag : 0);
-    final payload = {
-      'chatId': chatId,
-      'message': {
-        'cid': -_nextCid(),
-        'attaches': [
-          {
-            '_type': 'POLL',
-            'title': title,
-            'settings': settings,
-            'answers': [
-              for (final a in answers) {'text': a},
-            ],
-          },
-        ],
-      },
-      'notify': notify,
+    final message = <String, dynamic>{
+      'cid': -_nextCid(),
+      'attaches': [
+        {
+          '_type': 'POLL',
+          'title': title,
+          'settings': settings,
+          'answers': [
+            for (final a in answers) {'text': a},
+          ],
+        },
+      ],
     };
+    _linkReply(message, chatId, replyToMessageId, replySourceChatId);
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
     final response = await _sendUserMessage(payload, beforeSend: beforeSend);
     return _sentMessageMap(response);
@@ -2232,17 +2255,17 @@ class MessagesModule {
     int stickerId, {
     bool notify = true,
     void Function()? beforeSend,
+    int? replyToMessageId,
+    int? replySourceChatId,
   }) async {
-    final payload = {
-      'chatId': chatId,
-      'message': {
-        'cid': -_nextCid(),
-        'attaches': [
-          {'_type': 'STICKER', 'stickerId': stickerId},
-        ],
-      },
-      'notify': notify,
+    final message = <String, dynamic>{
+      'cid': -_nextCid(),
+      'attaches': [
+        {'_type': 'STICKER', 'stickerId': stickerId},
+      ],
     };
+    _linkReply(message, chatId, replyToMessageId, replySourceChatId);
+    final payload = {'chatId': chatId, 'message': message, 'notify': notify};
 
     final response = await _sendUserMessage(payload, beforeSend: beforeSend);
     return _sentMessageMap(response);

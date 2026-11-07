@@ -65,6 +65,7 @@ const Set<int> _editableFilters = {
 Future<void> showFolderEditSheet(
   BuildContext context, {
   ChatFolder? folder,
+  Iterable<int> initialChatIds = const [],
 }) async {
   final cs = Theme.of(context).colorScheme;
   await showModalBottomSheet<void>(
@@ -72,14 +73,16 @@ Future<void> showFolderEditSheet(
     isScrollControlled: true,
     backgroundColor: cs.surfaceContainerHigh,
     shape: kSheetShape,
-    builder: (_) => _FolderEditSheet(folder: folder),
+    builder: (_) =>
+        _FolderEditSheet(folder: folder, initialChatIds: initialChatIds),
   );
 }
 
 class _FolderEditSheet extends StatefulWidget {
   final ChatFolder? folder;
+  final Iterable<int> initialChatIds;
 
-  const _FolderEditSheet({this.folder});
+  const _FolderEditSheet({this.folder, this.initialChatIds = const []});
 
   @override
   State<_FolderEditSheet> createState() => _FolderEditSheetState();
@@ -117,6 +120,8 @@ class _FolderEditSheetState extends State<_FolderEditSheet> {
       _preservedFilters = folder.filters
           .where((f) => !_editableFilters.contains(f))
           .toList();
+    } else {
+      _chatIds.addAll(widget.initialChatIds);
     }
     _load();
   }

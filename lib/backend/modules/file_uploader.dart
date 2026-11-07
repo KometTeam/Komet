@@ -68,6 +68,8 @@ class FileUploader {
     bool encryptedPayload = false,
     void Function()? beforeSend,
     int? scheduledTime,
+    int? replyToMessageId,
+    int? replySourceChatId,
     Duration autoForceAfter = const Duration(seconds: 1),
     Duration overallTimeout = const Duration(minutes: 5),
     Duration progressThrottle = const Duration(milliseconds: 16),
@@ -167,6 +169,8 @@ class FileUploader {
           text: text,
           encryptedPayload: encryptedPayload,
           scheduledTime: scheduledTime,
+          replyToMessageId: replyToMessageId,
+          replySourceChatId: replySourceChatId,
           beforeSend: () {
             if (!identical(api.session, initialSession)) {
               throw StateError('Account changed during upload');

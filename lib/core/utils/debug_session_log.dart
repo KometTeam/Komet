@@ -55,37 +55,6 @@ class _LogEntry {
 
   bool get pending => responseTime == null && error == null;
 
-  Map<String, dynamic> requestRecord() => {
-    'k': 'q',
-    'op': opcode,
-    'seq': seq,
-    't': requestTime.toIso8601String(),
-    'p': request,
-  };
-
-  Map<String, dynamic> responseRecord() => {
-    'k': 'r',
-    'seq': seq,
-    'cmd': cmd,
-    't': responseTime?.toIso8601String(),
-    'p': response,
-  };
-
-  Map<String, dynamic> errorRecord() => {
-    'k': 'e',
-    'seq': seq,
-    't': responseTime?.toIso8601String(),
-    'err': error,
-  };
-
-  List<Map<String, dynamic>> records() => [
-    requestRecord(),
-    if (error != null)
-      errorRecord()
-    else if (responseTime != null)
-      responseRecord(),
-  ];
-
   static _LogEntry fromRequestRecord(Map record) => _LogEntry(
     opcode: (record['op'] as num?)?.toInt() ?? 0,
     seq: (record['seq'] as num?)?.toInt() ?? 0,
@@ -107,6 +76,16 @@ class _LogEntry {
   static DateTime _recordTime(Map record) =>
       DateTime.tryParse(record['t']?.toString() ?? '') ??
       DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+class _LiveEntry {
+  _LiveEntry(this.seq, this.requestLine);
+
+  final int seq;
+  final String requestLine;
+  String? outcomeLine;
+
+  bool get pending => outcomeLine == null;
 }
 
 _LogEntry? _lastPending(List<_LogEntry> entries, int seq) {
@@ -232,14 +211,14 @@ class DebugSessionLog {
   Directory? _dir;
   File? _currentFile;
   DateTime? _currentStart;
-  final List<_LogEntry> _entries = [];
-  final List<String> _logLines = [];
-  final List<Map<String, dynamic>> _pending = [];
+  final List<_LiveEntry> _entries = [];
+  final List<String> _logRecords = [];
+  final List<String> _pending = [];
   bool _truncated = false;
   bool _logsTruncated = false;
   bool _initialized = false;
   bool _compact = false;
-  int _writtenChars = 0;
+  int _appendedSinceCompact = 0;
   Future<void> _writes = Future.value();
   Timer? _flushTimer;
 
@@ -278,50 +257,72 @@ class DebugSessionLog {
 
   void recordLogLine(String line) {
     final clean = _redactWireLine(line.replaceAll(_ansiEscape, ''));
-    _logLines.add(clean);
-    if (_logLines.length > _maxLogLinesPerSession) {
-      _logLines.removeRange(0, _logLines.length - _maxLogLinesPerSession);
+    final record = _encodeRecord({'k': 'l', 'v': clean});
+    _logRecords.add(record);
+    if (_logRecords.length > _maxLogLinesPerSession) {
+      _logRecords.removeRange(0, _logRecords.length - _maxLogLinesPerSession);
       _logsTruncated = true;
     }
-    _append({'k': 'l', 'v': clean});
+    _append(record);
   }
 
   // #***! исходящий запрос, payload чистим от секретов
   void recordRequest(int opcode, int seq, dynamic payload) {
-    final entry = _LogEntry(
-      opcode: opcode,
-      seq: seq,
-      requestTime: DateTime.now(),
-      request: redactForLog(payload),
+    final entry = _LiveEntry(
+      seq,
+      _encodeRecord({
+        'k': 'q',
+        'op': opcode,
+        'seq': seq,
+        't': DateTime.now().toIso8601String(),
+        'p': redactForLog(payload),
+      }),
     );
     _entries.add(entry);
     if (_entries.length > _maxEntriesPerSession) {
       _entries.removeRange(0, _entries.length - _maxEntriesPerSession);
       _truncated = true;
     }
-    _append(entry.requestRecord());
+    _append(entry.requestLine);
   }
 
   // #***! ответ подшиваем к запросу по seq
   void recordResponse(int seq, int cmd, dynamic payload) {
-    final entry = _lastPending(_entries, seq);
-    if (entry == null) return;
-    entry.responseTime = DateTime.now();
-    entry.cmd = cmd;
-    entry.response = redactForLog(payload);
-    _append(entry.responseRecord());
+    _settle(seq, {
+      'k': 'r',
+      'seq': seq,
+      'cmd': cmd,
+      't': DateTime.now().toIso8601String(),
+      'p': redactForLog(payload),
+    });
   }
 
   // #***! ошибку тоже подшиваем
   void recordError(int seq, Object error) {
-    final entry = _lastPending(_entries, seq);
-    if (entry == null) return;
-    entry.responseTime = DateTime.now();
-    entry.error = error.toString();
-    _append(entry.errorRecord());
+    _settle(seq, {
+      'k': 'e',
+      'seq': seq,
+      't': DateTime.now().toIso8601String(),
+      'err': error.toString(),
+    });
   }
 
-  void _append(Map<String, dynamic> record) {
+  void _settle(int seq, Map<String, dynamic> record) {
+    _LiveEntry? entry;
+    for (var i = _entries.length - 1; i >= 0; i--) {
+      final candidate = _entries[i];
+      if (candidate.seq == seq && candidate.pending) {
+        entry = candidate;
+        break;
+      }
+    }
+    if (entry == null) return;
+    final line = _encodeRecord(record);
+    entry.outcomeLine = line;
+    _append(line);
+  }
+
+  void _append(String record) {
     _pending.add(record);
     if (_pending.length > _maxPendingRecords) {
       _pending.clear();
@@ -347,31 +348,36 @@ class DebugSessionLog {
   Future<void> _writePending() async {
     final file = _currentFile;
     if (file == null) return;
-    final compact = _compact || _writtenChars > _compactAfterChars;
+    final compact = _compact || _appendedSinceCompact > _compactAfterChars;
     if (!compact && _pending.isEmpty) return;
-    final records = compact ? _snapshotRecords() : List.of(_pending);
+    final records = compact ? _snapshotLines() : List.of(_pending);
     _pending.clear();
     _compact = false;
     final buffer = StringBuffer();
-    for (final record in records) {
-      buffer.writeln(_encodeRecord(record));
-    }
+    records.forEach(buffer.writeln);
     final data = buffer.toString();
     try {
       await file.writeAsString(
         data,
         mode: compact ? FileMode.write : FileMode.append,
       );
-      _writtenChars = compact ? data.length : _writtenChars + data.length;
+      _appendedSinceCompact = compact ? 0 : _appendedSinceCompact + data.length;
     } catch (_) {
       _compact = true;
     }
   }
 
-  List<Map<String, dynamic>> _snapshotRecords() => [
-    {'k': 's', 'truncated': _truncated, 'logsTruncated': _logsTruncated},
-    for (final entry in _entries) ...entry.records(),
-    for (final line in _logLines) {'k': 'l', 'v': line},
+  List<String> _snapshotLines() => [
+    _encodeRecord({
+      'k': 's',
+      'truncated': _truncated,
+      'logsTruncated': _logsTruncated,
+    }),
+    for (final entry in _entries) ...[
+      entry.requestLine,
+      ?entry.outcomeLine,
+    ],
+    ..._logRecords,
   ];
 
   static String _encodeRecord(Map<String, dynamic> record) {
@@ -477,12 +483,9 @@ class DebugSessionLog {
       }
     }
     sessions.add(
-      _SessionData(
-        startedAt: _currentStart ?? DateTime.now(),
-        entries: List.of(_entries),
-        truncated: _truncated,
-        logLines: List.of(_logLines),
-        logsTruncated: _logsTruncated,
+      _SessionData.fromRecords(
+        _currentStart ?? DateTime.now(),
+        _snapshotLines().join('\n'),
       ),
     );
     sessions.sort((a, b) => a.startedAt.compareTo(b.startedAt));

@@ -7,6 +7,8 @@ import '../../../../backend/modules/chats.dart';
 import '../../../../backend/modules/comments.dart';
 import '../../../../backend/modules/message_copy.dart';
 import '../../../../backend/modules/messages.dart';
+import '../../../../backend/modules/outbox.dart';
+import '../../../../backend/modules/outgoing_reply.dart';
 import '../../../../backend/modules/sent_message.dart';
 import '../../../../core/config/app_commands.dart';
 import '../../../../core/crypto/message_decryption_cache.dart';
@@ -114,6 +116,39 @@ class ChatTextSendController {
   void cancelReply() {
     replyTo.value = null;
     replySourceChatId = null;
+  }
+
+  bool canRetry(CachedMessage message) =>
+      !commentsMode &&
+      message.status == 'error' &&
+      (message.attachments?.isEmpty ?? true) &&
+      (message.text?.isNotEmpty ?? false);
+
+  Future<void> retry(CachedMessage failed) async {
+    if (!canRetry(failed)) return;
+    final accountId = _myId;
+    final chatId = _chatId;
+    if (!await AppDatabase.requeueFailedMessage(accountId, chatId, failed.id)) {
+      return;
+    }
+    final queued = failed.copyWith(status: 'pending');
+    final index = chatController.indexOfId(failed.id);
+    if (index != -1 && isMounted()) {
+      chatController.setMessageAt(index, queued);
+      bumpMessages();
+    }
+    MessageSessionCache.replace(accountId, chatId, failed.id, (_) => queued);
+    await chats.reconcileLastMessage(accountId, chatId);
+    unawaited(OutboxService.instance.flush());
+  }
+
+  OutgoingReply? takeReply() {
+    final reply = OutgoingReply.of(
+      replyTo.value,
+      sourceChatId: replySourceChatId,
+    );
+    cancelReply();
+    return reply;
   }
 
   void setForwardRequest(ForwardRequest request) {
@@ -359,38 +394,20 @@ class ChatTextSendController {
     final now = DateTime.now().millisecondsSinceEpoch;
     final online = _api.state == SessionState.online;
 
-    final reply = replyTo.value;
-    final int? replyId = reply == null ? null : int.tryParse(reply.id);
-    final int? replySrcChatId = replyId == null ? null : replySourceChatId;
-    Map<String, dynamic>? replyPayload;
-    if (reply != null && replyId != null) {
-      final sourceLink = reply.payload?['link'];
-      replyPayload = {
-        'link': {
-          'type': 'REPLY',
-          'chatId': replySrcChatId ?? chatId,
-          'message': {
-            'id': replyId,
-            'sender': reply.senderId,
-            'text': reply.text,
-            'time': reply.time,
-            'attaches': reply.payload?['attaches'] ?? const [],
-            if (sourceLink is Map && sourceLink['type'] == 'FORWARD')
-              'link': sourceLink,
-          },
-        },
-      };
-    }
-    replyTo.value = null;
-    replySourceChatId = null;
+    final reply = takeReply();
+    final replyId = reply?.messageId;
+    final replySrcChatId = reply?.sourceChatId;
 
     final elements = encrypted
         ? const <Map<String, dynamic>>[]
         : trimmedElements(content.elements, rawText, text);
     final Map<String, dynamic>? composedPayload =
-        (replyPayload == null && elements.isEmpty)
+        (reply == null && elements.isEmpty)
         ? null
-        : {...?replyPayload, if (elements.isNotEmpty) 'elements': elements};
+        : {
+            if (reply != null) 'link': reply.linkIn(chatId),
+            if (elements.isNotEmpty) 'elements': elements,
+          };
 
     final composed = CachedMessage(
       id: tempId,

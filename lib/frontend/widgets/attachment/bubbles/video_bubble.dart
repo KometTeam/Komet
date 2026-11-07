@@ -98,10 +98,11 @@ class VideoBubble extends StatelessWidget {
             KometSettings.autoDownloadVideo,
           ]),
           builder: (context, _) {
-            if (!AutoDownloadGate.allows(
-              KometSettings.autoDownloadVideo.value,
-              previewUrl,
-            )) {
+            final autoDownload = KometSettings.autoDownloadVideo.value;
+            if (!AutoDownloadGate.allows(autoDownload, previewUrl)) {
+              if (!AutoDownloadGate.awaitsTap(autoDownload, previewUrl)) {
+                return placeholder();
+              }
               return SizedBox(
                 width: width,
                 height: height,

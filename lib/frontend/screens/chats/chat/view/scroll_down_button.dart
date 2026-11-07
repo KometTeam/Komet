@@ -15,7 +15,7 @@ class ScrollDownButton extends StatelessWidget {
   final bool liquidChrome;
   final BackdropKey? pillBackdrop;
   final Animation<double> scrollDownCurved;
-  final ValueListenable<int> newMessageCount;
+  final ValueListenable<int> unreadBelow;
   final VoidCallback onTap;
 
   static const double _scrollDownSize = 46.0;
@@ -30,7 +30,7 @@ class ScrollDownButton extends StatelessWidget {
     required this.liquidChrome,
     required this.pillBackdrop,
     required this.scrollDownCurved,
-    required this.newMessageCount,
+    required this.unreadBelow,
     required this.onTap,
   });
 
@@ -83,7 +83,7 @@ class ScrollDownButton extends StatelessWidget {
                       top: -5,
                       right: -3,
                       child: ValueListenableBuilder<int>(
-                        valueListenable: newMessageCount,
+                        valueListenable: unreadBelow,
                         builder: (context, count, _) => count <= 0
                             ? const SizedBox.shrink()
                             : AnimatedValueSwap<int>(

@@ -703,6 +703,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get msgActionsDelete => 'Delete';
 
   @override
+  String get msgActionsRetry => 'Send again';
+
+  @override
+  String get chatRetryFileMissing => 'The file is no longer on this device';
+
+  @override
   String get msgActionsCopied => 'Copied';
 
   @override
@@ -2464,17 +2470,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get cloudStorageStartUploadHint =>
-      'Start an upload to see the progress bar';
-
-  @override
   String get cloudStorageEmptyTitle => 'No cloud files yet...';
 
   @override
   String get cloudStorageEmptySubtitle => 'Add one?';
-
-  @override
-  String get cloudStorageUpload => 'Upload';
 
   @override
   String get cloudStorageFromFile => 'From file';
@@ -2510,6 +2509,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cloudStorageSend => 'Send';
+
+  @override
+  String get cloudStorageDeleteFile => 'Delete file';
+
+  @override
+  String get cloudStorageFileDeleted => 'File deleted';
+
+  @override
+  String get cloudStorageDeleteFailed => 'Couldn\'t delete the file';
 
   @override
   String get cloudStorageAboutTooltip => 'How storage works';
@@ -5532,6 +5540,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get customizationTitle => 'Customization';
 
   @override
+  String get chatFoldersAddTo => 'Add to folder';
+
+  @override
+  String chatFoldersUpdateFailed(String title) {
+    return 'Couldn\'t update the folder “$title”';
+  }
+
+  @override
   String get folderActionNewFolder => 'New folder';
 
   @override
@@ -7406,7 +7422,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get login2faRequiredRetry => 'Try signing in again';
 
   @override
-  String get login2faRequiredNoAccess => 'I can\'t access the device';
+  String get login2faRequiredNoAccess => 'I can\'t access the account';
 
   @override
   String get login2faRequiredLinkFailed =>

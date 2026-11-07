@@ -364,12 +364,13 @@ class MainActivity : AudioServiceFragmentActivity() {
                 "setScreenShare" -> {
                     val enabled = call.argument<Boolean>("enabled") ?: false
                     val caller = call.argument<String>("caller") ?: "Звонок"
-                    CallForegroundService.setScreenShare(
-                        applicationContext,
-                        enabled,
-                        caller,
+                    result.success(
+                        CallForegroundService.setScreenShare(
+                            applicationContext,
+                            enabled,
+                            caller,
+                        ),
                     )
-                    result.success(null)
                 }
                 "dropOngoing" -> {
                     CallForegroundService.stop(applicationContext)

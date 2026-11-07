@@ -150,6 +150,23 @@ String formatDateWords(AppLocalizations l10n, DateTime dt) =>
 String formatDateNumeric(DateTime dt) =>
     '${pad2(dt.day)}.${pad2(dt.month)}.${dt.year}';
 
+String formatChatListStamp(
+  AppLocalizations l10n,
+  DateTime dt, {
+  DateTime? now,
+}) {
+  final today = now ?? DateTime.now();
+  final daysAgo = DateTime.utc(
+    today.year,
+    today.month,
+    today.day,
+  ).difference(DateTime.utc(dt.year, dt.month, dt.day)).inDays;
+  if (daysAgo <= 0) return formatClock(dt);
+  if (daysAgo < 7) return formatWeekdayShort(l10n, dt.weekday);
+  if (dt.year == today.year) return formatDayMonth(l10n, dt);
+  return formatDateNumeric(dt);
+}
+
 String formatDateTimeNumeric(DateTime dt) =>
     '${formatDateNumeric(dt)} ${formatClock(dt)}';
 

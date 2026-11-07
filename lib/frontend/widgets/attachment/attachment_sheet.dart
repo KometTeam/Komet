@@ -825,42 +825,7 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          AnimatedBuilder(
-                            animation: Listenable.merge([
-                              _selected,
-                              _pageController,
-                            ]),
-                            builder: (context, _) {
-                              final count = _selected.value.length;
-                              final galleryT = (1 - _currentPageT()).clamp(
-                                0.0,
-                                1.0,
-                              );
-                              if (count == 0 || galleryT == 0) {
-                                return const SizedBox.shrink();
-                              }
-                              return Padding(
-                                padding: const EdgeInsets.only(
-                                  right: 16,
-                                  bottom: 8,
-                                ),
-                                child: Opacity(
-                                  opacity: galleryT,
-                                  child: IgnorePointer(
-                                    ignoring: galleryT < 0.5,
-                                    child: _buildSendButton(cs),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          _buildBottomBar(),
-                        ],
-                      ),
+                      child: _buildBottomBar(),
                     ),
                   ],
                 ),
@@ -1348,16 +1313,23 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
   }
 
   Widget _buildSendButton(ColorScheme cs) {
-    return Material(
-      color: cs.primary,
-      shape: const StadiumBorder(),
-      elevation: 3,
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: () => _sendSelection(),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Icon(Symbols.send, color: cs.onPrimary, size: 24, weight: 500),
+    return Tooltip(
+      message: AppLocalizations.of(context)!.pasteAttachSend,
+      child: Material(
+        color: cs.primary,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => _sendSelection(),
+          child: SizedBox.square(
+            dimension: _captionMinHeight,
+            child: Icon(
+              Symbols.send,
+              color: cs.onPrimary,
+              size: 24,
+              weight: 500,
+            ),
+          ),
         ),
       ),
     );
@@ -1485,17 +1457,18 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
       padding: const EdgeInsets.symmetric(
         vertical: (SlidingPillNav.height - _captionMinHeight) / 2,
       ),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: _captionMinHeight),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: _composerColor(cs),
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: _composerBorderColor(cs), width: 0.5),
-        ),
-        child: Row(
-          children: [
-            Expanded(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Container(
+              constraints: const BoxConstraints(minHeight: _captionMinHeight),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: _composerColor(cs),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: _composerBorderColor(cs), width: 0.5),
+              ),
               child: TextField(
                 controller: _captionCtrl,
                 minLines: 1,
@@ -1514,8 +1487,10 @@ class _AttachmentSheetState extends State<AttachmentSheet> {
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          _buildSendButton(cs),
+        ],
       ),
     );
   }

@@ -151,18 +151,24 @@ class SlidingPillNav extends StatelessWidget {
     final base = liquid
         ? (translucent ? backgroundColor! : AppLiquidGlass.navTint(cs))
         : (backgroundColor ??
-              (frost ? AppFrost.glassTint(cs) : cs.surfaceContainerHigh));
+              (frost ? AppFrost.controlTint(cs) : cs.surfaceContainerHigh));
     final useGradient = glossy && gradient && !liquid;
     final frosted = frost && !liquid && base.a < 1;
+    final fill = BoxDecoration(
+      color: useGradient || liquid ? null : base,
+      gradient: useGradient ? GlossyDecor.fillGradient(base) : null,
+    );
 
-    return Container(
+    final bar = Container(
       height: height,
       padding: const EdgeInsets.symmetric(horizontal: 2),
       decoration: BoxDecoration(
-        color: useGradient || liquid ? null : base,
-        gradient: useGradient ? GlossyDecor.fillGradient(base) : null,
+        color: frosted ? null : fill.color,
+        gradient: frosted ? null : fill.gradient,
         borderRadius: BorderRadius.circular(34),
-        border: glossy
+        border: frosted
+            ? Border.fromBorderSide(AppFrost.hairline(cs))
+            : glossy
             ? GlossyDecor.rimBorder(base)
             : (borderColor != null
                   ? Border.all(color: borderColor!, width: 0.5)
@@ -199,22 +205,6 @@ class SlidingPillNav extends StatelessWidget {
                     child: LiquidGlassSurface(
                       borderRadius: BorderRadius.circular(34),
                       tint: base,
-                    ),
-                  ),
-                ),
-              if (frosted)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(34),
-                      child: BackdropFilter(
-                        filter: ui.ImageFilter.blur(
-                          sigmaX: AppFrost.sigma,
-                          sigmaY: AppFrost.sigma,
-                        ),
-                        backdropGroupKey: backdropKey,
-                        child: const SizedBox.expand(),
-                      ),
                     ),
                   ),
                 ),
@@ -284,6 +274,27 @@ class SlidingPillNav extends StatelessWidget {
           );
         },
       ),
+    );
+    if (!frosted) return bar;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(34),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(
+                  sigmaX: AppFrost.sigma,
+                  sigmaY: AppFrost.sigma,
+                ),
+                backdropGroupKey: backdropKey,
+                child: DecoratedBox(decoration: fill),
+              ),
+            ),
+          ),
+        ),
+        bar,
+      ],
     );
   }
 }

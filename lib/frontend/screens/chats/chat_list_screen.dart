@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/scheduler.dart';
+import 'chat_folders_sheet.dart';
 import 'chat_preview_card.dart';
 import 'chat_screen.dart';
 import 'search_screen.dart';
@@ -358,6 +359,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   bool _isFabOpen = false;
   bool _storiesAnimClosing = false;
   Timer? _contactRebuildTimer;
+  Timer? _dayRolloverTimer;
   bool _deferReloads = false;
   bool _reloadQueued = false;
   bool _reloadInFlight = false;
@@ -894,6 +896,13 @@ class _ChatListScreenState extends State<ChatListScreen>
     _clearSelection();
   }
 
+  Future<void> _onAddToFolderTap() async {
+    final chatIds = _selectedChatObjects().map((c) => c.id).toList();
+    if (chatIds.isEmpty) return;
+    _clearSelection();
+    await showChatFoldersSheet(context, chatIds: chatIds);
+  }
+
   Future<void> _onMuteTap() async {
     final selected = _selectedChatObjects();
     if (selected.isEmpty) return;
@@ -1218,6 +1227,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       ChatListScreen._root = this;
     }
     _initShare();
+    _scheduleDayRollover();
     _fabController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -1752,6 +1762,16 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
   }
 
+  void _scheduleDayRollover() {
+    final now = DateTime.now();
+    final nextMidnight = DateTime(now.year, now.month, now.day + 1);
+    _dayRolloverTimer = Timer(nextMidnight.difference(now), () {
+      if (!mounted) return;
+      setState(() => _tilesRevision++);
+      _scheduleDayRollover();
+    });
+  }
+
   void _scheduleContactRebuild() {
     if (!mounted) return;
     _contactRebuildTimer?.cancel();
@@ -1930,7 +1950,10 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   String _formatTime(int? timestamp) {
     if (timestamp == null || timestamp == 0) return '';
-    return formatClock(DateTime.fromMillisecondsSinceEpoch(timestamp));
+    return formatChatListStamp(
+      AppLocalizations.of(context)!,
+      DateTime.fromMillisecondsSinceEpoch(timestamp),
+    );
   }
 
   void _onStoriesRevealTick() {
@@ -2150,6 +2173,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       c.dispose();
     }
     _contactRebuildTimer?.cancel();
+    _dayRolloverTimer?.cancel();
     _storiesUi.dispose();
     _navDragDx.dispose();
     super.dispose();
@@ -3307,8 +3331,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                                             NavPillMaterial.isFrost(navStyle);
                                         return GlossyPill(
                                           onTap: _toggleFab,
-                                          color: frost || liquid
+                                          color: liquid
                                               ? AppFrost.glassTint(cs)
+                                              : frost
+                                              ? AppFrost.controlTint(cs)
                                               : cs.primaryContainer,
                                           blurSigma: frost
                                               ? AppFrost.sigma
@@ -3574,6 +3600,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                     color: cs.onSurface,
                   ),
                   onPressed: selected.isEmpty ? null : _onPinTap,
+                ),
+                IconButton(
+                  icon: Icon(Symbols.drive_file_move, color: cs.onSurface),
+                  tooltip: AppLocalizations.of(context)!.chatFoldersAddTo,
+                  onPressed: selected.isEmpty ? null : _onAddToFolderTap,
                 ),
                 IconButton(
                   icon: Icon(
@@ -4319,9 +4350,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: SizedBox(
-                    height: 48,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Padding(

@@ -44,6 +44,45 @@ class AppFont {
   bool get isCustom => id.startsWith(AppFonts.customPrefix);
 }
 
+@immutable
+class AppTextScaler extends TextScaler {
+  const AppTextScaler(this.system, this.factor);
+
+  final TextScaler system;
+  final double factor;
+
+  @override
+  double scale(double fontSize) => system.scale(fontSize) * factor;
+
+  @override
+  double get textScaleFactor => scale(1);
+
+  @override
+  bool operator ==(Object other) =>
+      other is AppTextScaler &&
+      other.system == system &&
+      other.factor == factor;
+
+  @override
+  int get hashCode => Object.hash(system, factor);
+}
+
+class AppTextScaling extends StatelessWidget {
+  const AppTextScaling({super.key, required this.factor, required this.child});
+
+  final double factor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return MediaQuery(
+      data: media.copyWith(textScaler: AppTextScaler(media.textScaler, factor)),
+      child: child,
+    );
+  }
+}
+
 // #***! реестр шрифтов
 class AppFonts {
   static const String prefKey = 'app_font';

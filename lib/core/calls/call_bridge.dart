@@ -95,15 +95,17 @@ class CallBridge {
     }
   }
 
-  Future<void> setScreenShare(bool enabled, {String? caller}) async {
-    if (!_android) return;
+  Future<bool> setScreenShare(bool enabled, {String? caller}) async {
+    if (!_android) return true;
     try {
-      await _method.invokeMethod<void>('setScreenShare', {
-        'enabled': enabled,
-        'caller': caller,
-      });
+      return await _method.invokeMethod<bool>('setScreenShare', {
+            'enabled': enabled,
+            'caller': caller,
+          }) ??
+          true;
     } catch (e) {
       logger.w('CallBridge.setScreenShare: enabled=$enabled $e');
+      return !enabled;
     }
   }
 

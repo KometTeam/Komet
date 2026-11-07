@@ -240,6 +240,7 @@ class SelectableMessageRow extends StatefulWidget {
   final VoidCallback onDelete;
   final bool allowDelete;
   final VoidCallback? onEdit;
+  final VoidCallback? onRetry;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
   final bool allowCopy;
@@ -274,6 +275,7 @@ class SelectableMessageRow extends StatefulWidget {
     required this.onDelete,
     this.allowDelete = true,
     this.onEdit,
+    this.onRetry,
     this.onReply,
     this.onForward,
     this.allowCopy = true,
@@ -370,6 +372,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onForward: widget.onForward,
       allowCopy: widget.allowCopy,
       onMarkUnread: widget.onMarkUnread,
+      onRetry: widget.onRetry,
       onPin: widget.onPin,
       onCopyLink: widget.onCopyLink,
       onSave: widget.onSave,
@@ -475,6 +478,7 @@ class _SelectableMessageRowState extends State<SelectableMessageRow> {
       onForward: widget.onForward,
       allowCopy: widget.allowCopy,
       onMarkUnread: widget.onMarkUnread,
+      onRetry: widget.onRetry,
       onPin: widget.onPin,
       onCopyLink: widget.onCopyLink,
       onSave: widget.onSave,

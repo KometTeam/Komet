@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -12,6 +11,7 @@ import '../../../backend/modules/cloud_storage.dart';
 import '../../../backend/modules/upload_service.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
+import '../../../core/utils/logger.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../widgets/connection_status.dart';
@@ -22,6 +22,7 @@ import '../../widgets/info_action_sheet.dart';
 import '../../widgets/glossy_pill.dart';
 import '../../widgets/sheet_helpers.dart';
 import '../../widgets/small_spinner.dart';
+import '../../widgets/undo_notification.dart';
 import '../../../core/config/app_shape.dart';
 import '../../../core/security/app_lock.dart';
 
@@ -35,19 +36,20 @@ class CloudStorageScreen extends StatefulWidget {
 }
 
 class _CloudStorageScreenState extends State<CloudStorageScreen>
-    with SingleTickerProviderStateMixin, ReloadOnReconnect {
-  static const _translateFactor = 0.7;
+    with ReloadOnReconnect {
   static const _horizontalPadding = 32.0;
-  static const _hintSidePadding = 35.0;
-  static const _cornerSidePadding = 16.0;
-  static const _cornerBottomPadding = 24.0;
-  static const _cornerSlideAmount = 28.0;
-  static const _cardViewportFraction = 0.42;
+  static const _gridPadding = 16.0;
+  static const _gridSpacing = 12.0;
+  static const _maxCardExtent = 220.0;
+  static const _actionsPadding = 16.0;
+  static const _loadMoreExtent = 600.0;
+  static const _emptyPagesPerLoad = 5;
 
-  late final _UploadModeController _mode;
-  late final PageController _pageController;
-  final _currentFilePage = ValueNotifier<int>(0);
-
+  final ScrollController _gridController = ScrollController();
+  bool _filesLoaded = false;
+  bool _hasMore = false;
+  bool _loadingMore = false;
+  int? _oldestTime;
   _EnvState _envState = _EnvState.loading;
   bool _isCreatingEnv = false;
   int? _envGroupId;
@@ -62,15 +64,9 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   @override
   void initState() {
     super.initState();
-    _mode = _UploadModeController(this);
-    _pageController = PageController(viewportFraction: _cardViewportFraction);
-    _pageController.addListener(_onPageScroll);
+    _gridController.addListener(_maybeLoadMore);
     _checkEnv();
     _uploadEventSub = UploadService.instance.events.listen(_onUploadEvent);
-  }
-
-  void _onPageScroll() {
-    _currentFilePage.value = _pageController.page?.round() ?? 0;
   }
 
   void _syncUploadJob() {
@@ -91,9 +87,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
 
     job.progress.addListener(_onUploadProgress);
     _onUploadProgress();
-    if (_isUploading) return;
-    setState(() => _isUploading = true);
-    _mode.open();
+    if (!_isUploading) setState(() => _isUploading = true);
   }
 
   void _onUploadProgress() {
@@ -118,14 +112,21 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
       return;
     }
     if (event is! UploadJobDone) return;
+    await _showUploaded(accountId, chatId, event.fileId);
+  }
 
+  Future<void> _showUploaded(int accountId, int chatId, int? fileId) async {
     final newest = await CloudStorageModule.fetchLatestFile(
       messagesModule,
       accountId,
       chatId,
-      expectedFileId: event.fileId,
+      expectedFileId: fileId,
     );
-    if (!mounted || newest == null) return;
+    if (!mounted) return;
+    if (newest == null) {
+      await _loadFiles(accountId, chatId);
+      return;
+    }
     _prependFile(newest);
   }
 
@@ -133,10 +134,8 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   void dispose() {
     _uploadEventSub?.cancel();
     _uploadJob?.progress.removeListener(_onUploadProgress);
-    _mode.dispose();
-    _pageController.dispose();
-    _currentFilePage.dispose();
     _uploadProgress.dispose();
+    _gridController.dispose();
     super.dispose();
   }
 
@@ -229,29 +228,110 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     unawaited(_loadFiles(accountId, groupId));
   }
 
+  Future<void> _reload() async {
+    final accountId = _accountId;
+    final groupId = _envGroupId;
+    if (accountId == null || groupId == null) return;
+    try {
+      await _loadFiles(accountId, groupId);
+    } catch (e) {
+      logger.w('Облако: не удалось обновить список файлов: $e');
+    }
+  }
+
   Future<void> _loadFiles(int accountId, int chatId) async {
-    final files = await CloudStorageModule.fetchFiles(
+    final page = await CloudStorageModule.fetchPage(
       messagesModule,
       accountId,
       chatId,
     );
     if (!mounted) return;
-    setState(() => _files = files.reversed.toList());
+    final boundary = page.oldestTime;
+    setState(() {
+      final older = boundary == null
+          ? const <CloudFile>[]
+          : [
+              for (final f in _files)
+                if (f.time < boundary) f,
+            ];
+      _files = [...page.files, ...older];
+      _filesLoaded = true;
+      if (older.isEmpty) {
+        _oldestTime = boundary;
+        _hasMore = boundary != null;
+      }
+    });
     _syncUploadJob();
+    _scheduleLoadMoreCheck();
+  }
+
+  void _scheduleLoadMoreCheck() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeLoadMore();
+    });
+  }
+
+  void _maybeLoadMore() {
+    if (!_hasMore || _loadingMore) return;
+    if (_gridController.hasClients &&
+        _gridController.position.extentAfter > _loadMoreExtent) {
+      return;
+    }
+    unawaited(_loadMore());
+  }
+
+  static String _fileKey(CloudFile file) => '${file.messageId}_${file.fileId}';
+
+  Future<void> _loadMore() async {
+    final accountId = _accountId;
+    final chatId = _envGroupId;
+    var cursor = _oldestTime;
+    if (accountId == null || chatId == null || cursor == null) return;
+    setState(() => _loadingMore = true);
+    var grew = false;
+    try {
+      for (var page = 0; page < _emptyPagesPerLoad || _files.isEmpty; page++) {
+        final result = await CloudStorageModule.fetchPage(
+          messagesModule,
+          accountId,
+          chatId,
+          before: cursor,
+        );
+        if (!mounted) return;
+        final known = {for (final f in _files) _fileKey(f)};
+        final fresh = [
+          for (final f in result.files)
+            if (known.add(_fileKey(f))) f,
+        ];
+        final next = result.oldestTime;
+        setState(() {
+          _files = [..._files, ...fresh];
+          _oldestTime = next ?? cursor;
+          _hasMore = next != null;
+        });
+        if (next == null || fresh.isNotEmpty) {
+          grew = fresh.isNotEmpty;
+          break;
+        }
+        cursor = next;
+      }
+    } catch (e) {
+      logger.w('Облако: не удалось подгрузить старые файлы: $e');
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+    if (grew) _scheduleLoadMoreCheck();
   }
 
   void _prependFile(CloudFile file) {
     setState(() {
-      _files = [file, ..._files];
+      _files = [
+        file,
+        for (final f in _files)
+          if (f.messageId != file.messageId || f.fileId != file.fileId) f,
+      ];
       _animateNewCard = true;
     });
-    if (_pageController.hasClients) {
-      _pageController.animateToPage(
-        0,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOut,
-      );
-    }
     Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) setState(() => _animateNewCard = false);
     });
@@ -370,40 +450,75 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
         onSend: (id) async {
           final sentId = await messagesModule.sendFileMessage(chatId, id);
           if (sentId == null) return false;
-          final newest = await CloudStorageModule.fetchLatestFile(
-            messagesModule,
-            accountId,
-            chatId,
-            expectedFileId: id,
-          );
-          if (mounted) {
-            if (newest != null) {
-              _prependFile(newest);
-            } else {
-              _loadFiles(accountId, chatId);
-            }
-          }
+          if (mounted) await _showUploaded(accountId, chatId, id);
           return true;
         },
       ),
     );
   }
 
-  void _onCardTap(CloudFile file) {
-    showModalBottomSheet(
+  Future<void> _onCardTap(CloudFile file) async {
+    final delete = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _FileDetailsSheet(file: file),
     );
+    if (delete == true && mounted) _deleteFile(file);
   }
 
-  void _onBack() {
-    if (_mode.isOpen) {
-      _mode.close();
-    } else {
-      Navigator.pop(context);
+  void _deleteFile(CloudFile file) {
+    final l10n = AppLocalizations.of(context)!;
+    final removed = [
+      for (final f in _files)
+        if (f.messageId == file.messageId) f,
+    ];
+    setState(() {
+      _files = [
+        for (final f in _files)
+          if (f.messageId != file.messageId) f,
+      ];
+    });
+    void restore() {
+      if (!mounted) return;
+      final present = {for (final f in _files) _fileKey(f)};
+      setState(() {
+        _files = [
+          ..._files,
+          for (final f in removed)
+            if (!present.contains(_fileKey(f))) f,
+        ]..sort((a, b) => b.time.compareTo(a.time));
+      });
     }
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+    showUndoNotification(
+      context,
+      l10n.cloudStorageFileDeleted,
+      onUndo: restore,
+      onCommit: () async {
+        final ok = await messagesModule.deleteMessages(file.chatId, [
+          file.messageId,
+        ], forEveryone: true);
+        if (!ok) {
+          restore();
+          if (overlay.mounted) {
+            showCustomNotificationOnOverlay(
+              overlay,
+              l10n.cloudStorageDeleteFailed,
+            );
+          }
+          return;
+        }
+        try {
+          await AppDatabase.deleteMessage(
+            file.accountId,
+            file.chatId,
+            file.messageId,
+          );
+        } catch (_) {}
+      },
+    );
   }
 
   @override
@@ -418,7 +533,7 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
         elevation: 0,
         leading: IconButton(
           icon: Icon(Symbols.arrow_back, color: cs.onSurface),
-          onPressed: _onBack,
+          onPressed: () => Navigator.pop(context),
         ),
         title: ConnectionTitleText(
           l10n.cloudStorageTitle,
@@ -489,186 +604,47 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
   }
 
   Widget _buildReady(ColorScheme cs) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final h = constraints.maxHeight;
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onVerticalDragUpdate: (d) => _mode.handleDragUpdate(d, h),
-          onVerticalDragEnd: _mode.handleDragEnd,
-          child: AnimatedBuilder(
-            animation: _mode.anim,
-            builder: (context, _) {
-              final t = Curves.easeOutCubic.transform(_mode.anim.value);
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  _buildHint(cs, t),
-                  _buildUploadingCenterHint(cs, t, constraints.maxWidth),
-                  _buildEmptyState(cs, t, h),
-                  ..._buildCornerActions(cs, t),
-                ],
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildHint(ColorScheme cs, double t) {
-    return Positioned(
-      top: 0,
-      left: _hintSidePadding,
-      right: _hintSidePadding,
-      child: IgnorePointer(
-        child: Opacity(
-          opacity: t,
-          child: _DragDownHint(color: cs.onSurfaceVariant),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUploadingCenterHint(
-    ColorScheme cs,
-    double t,
-    double availableWidth,
-  ) {
-    final l10n = AppLocalizations.of(context)!;
-    final cardSide = availableWidth * _cardViewportFraction;
-    return Center(
-      child: Opacity(
-        opacity: t,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: _horizontalPadding),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_files.isNotEmpty) ...[
-                SizedBox(
-                  height: cardSide,
-                  width: availableWidth,
-                  child: ScrollConfiguration(
-                    behavior: _MouseDragScrollBehavior(),
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: _files.length,
-                      itemBuilder: (_, i) {
-                        final card = _CloudFileCard(
-                          file: _files[i],
-                          onTap: () => _onCardTap(_files[i]),
-                        );
-                        final padded = Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: card,
-                        );
-                        if (i == 0 && _animateNewCard) {
-                          return _FadeScaleEntry(
-                            key: ValueKey(
-                              '${_files[0].messageId}_${_files[0].time}',
-                            ),
-                            child: padded,
-                          );
-                        }
-                        return padded;
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ValueListenableBuilder<int>(
-                  valueListenable: _currentFilePage,
-                  builder: (context, page, child) => Text(
-                    '${page + 1} / ${_files.length}',
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              if (_isUploading) ...[
-                ValueListenableBuilder<double>(
-                  valueListenable: _uploadProgress,
-                  builder: (context, progress, _) => Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      LinearProgressIndicator(
-                        value: progress,
-                        borderRadius: BorderRadius.circular(4),
-                        minHeight: 5,
-                        color: cs.primary,
-                        backgroundColor: cs.surfaceContainerHighest,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        l10n.cloudStorageUploadingPercent(
-                          (progress * 100).toStringAsFixed(0),
-                        ),
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ] else if (_files.isEmpty) ...[
-                Text(
-                  l10n.cloudStorageStartUploadHint,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-                ),
-              ],
-            ],
+    return Column(
+      children: [
+        if (_isUploading) _buildUploadProgress(cs),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _reload,
+            child: _files.isNotEmpty
+                ? _buildGrid()
+                : !_filesLoaded || _hasMore
+                ? const Center(child: SmallSpinner(size: 36))
+                : _buildEmptyState(cs),
           ),
         ),
-      ),
+        _buildActions(),
+      ],
     );
   }
 
-  Widget _buildEmptyState(ColorScheme cs, double t, double availableHeight) {
+  Widget _buildUploadProgress(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
-    return Transform.translate(
-      offset: Offset(0, -t * availableHeight * _translateFactor),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: _horizontalPadding),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_gridPadding, 4, _gridPadding, 8),
+      child: ValueListenableBuilder<double>(
+        valueListenable: _uploadProgress,
+        builder: (context, progress, _) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              l10n.cloudStorageEmptyTitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-              ),
+            LinearProgressIndicator(
+              value: progress,
+              borderRadius: BorderRadius.circular(4),
+              minHeight: 5,
+              color: cs.primary,
+              backgroundColor: cs.surfaceContainerHighest,
             ),
             const SizedBox(height: 6),
             Text(
-              l10n.cloudStorageEmptySubtitle,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _mode.isOpen ? null : _mode.open,
-              style: FilledButton.styleFrom(
-                backgroundColor: cs.primary,
-                foregroundColor: cs.onPrimary,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 14,
-                ),
-                shape: AppShape.buttonBorder,
+              l10n.cloudStorageUploadingPercent(
+                (progress * 100).toStringAsFixed(0),
               ),
-              child: Text(
-                l10n.cloudStorageUpload,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
           ],
         ),
@@ -676,76 +652,129 @@ class _CloudStorageScreenState extends State<CloudStorageScreen>
     );
   }
 
-  List<Widget> _buildCornerActions(ColorScheme cs, double t) {
+  Widget _buildGrid() {
+    return CustomScrollView(
+      controller: _gridController,
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            _gridPadding,
+            8,
+            _gridPadding,
+            _gridPadding,
+          ),
+          sliver: _buildGridItems(),
+        ),
+        if (_loadingMore)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: _gridPadding),
+              child: Center(child: SmallSpinner()),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildGridItems() {
+    return SliverGrid.builder(
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: _maxCardExtent,
+        mainAxisSpacing: _gridSpacing,
+        crossAxisSpacing: _gridSpacing,
+      ),
+      itemCount: _files.length,
+      itemBuilder: (_, i) {
+        final file = _files[i];
+        final card = _CloudFileCard(
+          key: ValueKey('${file.messageId}_${file.fileId}'),
+          file: file,
+          onTap: () => _onCardTap(file),
+        );
+        if (i == 0 && _animateNewCard) {
+          return _FadeScaleEntry(
+            key: ValueKey('new_${file.messageId}_${file.fileId}'),
+            child: card,
+          );
+        }
+        return card;
+      },
+    );
+  }
+
+  Widget _buildEmptyState(ColorScheme cs) {
     final l10n = AppLocalizations.of(context)!;
-    final slide = (1 - t) * _cornerSlideAmount;
-    return [
-      Positioned(
-        bottom: _cornerBottomPadding,
-        left: _cornerSidePadding - slide,
-        child: Opacity(
-          opacity: t,
-          child: _CornerAction(
-            icon: Symbols.upload_file,
-            label: l10n.cloudStorageFromFile,
-            onTap: _pickAndUploadFile,
+    return LayoutBuilder(
+      builder: (context, constraints) => ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: _horizontalPadding,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    l10n.cloudStorageEmptyTitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    l10n.cloudStorageEmptySubtitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActions() {
+    final l10n = AppLocalizations.of(context)!;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          _actionsPadding,
+          8,
+          _actionsPadding,
+          _actionsPadding,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _CornerAction(
+                icon: Symbols.upload_file,
+                label: l10n.cloudStorageFromFile,
+                onTap: _pickAndUploadFile,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _CornerAction(
+                icon: Symbols.tag,
+                label: l10n.cloudStorageById,
+                onTap: _showSendByIdSheet,
+              ),
+            ),
+          ],
         ),
       ),
-      Positioned(
-        bottom: _cornerBottomPadding,
-        right: _cornerSidePadding - slide,
-        child: Opacity(
-          opacity: t,
-          child: _CornerAction(
-            icon: Symbols.tag,
-            label: l10n.cloudStorageById,
-            onTap: _showSendByIdSheet,
-          ),
-        ),
-      ),
-    ];
+    );
   }
-}
-
-class _UploadModeController {
-  static const _openDuration = Duration(milliseconds: 480);
-  static const _closeDuration = Duration(milliseconds: 320);
-  static const _dragRangeFactor = 0.55;
-  static const _flingVelocityThreshold = 280.0;
-  static const _snapMidpoint = 0.5;
-
-  final AnimationController anim;
-
-  _UploadModeController(TickerProvider vsync)
-    : anim = AnimationController(
-        vsync: vsync,
-        duration: _openDuration,
-        reverseDuration: _closeDuration,
-      );
-
-  bool get isOpen => anim.value > 0;
-
-  void open() => anim.forward();
-  void close() => anim.reverse();
-
-  void handleDragUpdate(DragUpdateDetails d, double availableHeight) {
-    if (anim.value == 0) return;
-    final delta = d.primaryDelta ?? 0;
-    final next = anim.value - delta / (availableHeight * _dragRangeFactor);
-    anim.value = next.clamp(0.0, 1.0);
-  }
-
-  void handleDragEnd(DragEndDetails d) {
-    final v = d.primaryVelocity ?? 0;
-    if (v.abs() > _flingVelocityThreshold) {
-      v > 0 ? close() : open();
-      return;
-    }
-    anim.value < _snapMidpoint ? close() : open();
-  }
-
-  void dispose() => anim.dispose();
 }
 
 class _CornerAction extends StatelessWidget {
@@ -762,117 +791,33 @@ class _CornerAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: GlossyPill(
-          color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(16),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          depth: 6,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: cs.onSurface, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+    return GlossyPill(
+      onTap: onTap,
+      color: cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      depth: 6,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: cs.onSurface, size: 20),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
-}
-
-class _DragDownHint extends StatefulWidget {
-  final Color color;
-
-  const _DragDownHint({required this.color});
-
-  @override
-  State<_DragDownHint> createState() => _DragDownHintState();
-}
-
-class _DragDownHintState extends State<_DragDownHint>
-    with SingleTickerProviderStateMixin {
-  static const _cycle = Duration(milliseconds: 2800);
-  static const _activeFraction = 0.4;
-  static const _height = 3.0;
-  static const _slotHeight = 28.0;
-  static const _startY = -6.0;
-  static const _travel = 16.0;
-  static const _peakOpacity = 0.32;
-
-  late final AnimationController _c;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(vsync: this, duration: _cycle)..repeat();
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: _slotHeight,
-      child: AnimatedBuilder(
-        animation: _c,
-        builder: (context, _) {
-          final ghost = _ghostFor(_c.value);
-          if (ghost.opacity <= 0) return const SizedBox.shrink();
-          return Stack(
-            children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                top: ghost.dy,
-                height: _height,
-                child: Opacity(
-                  opacity: ghost.opacity,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: widget.color,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  ({double dy, double opacity}) _ghostFor(double phase) {
-    if (phase > _activeFraction) return (dy: 0, opacity: 0);
-    final local = phase / _activeFraction;
-    final eased = Curves.easeOutCubic.transform(local);
-    return (dy: _startY + eased * _travel, opacity: (1 - local) * _peakOpacity);
-  }
-}
-
-class _MouseDragScrollBehavior extends MaterialScrollBehavior {
-  @override
-  Set<PointerDeviceKind> get dragDevices => {
-    PointerDeviceKind.touch,
-    PointerDeviceKind.mouse,
-  };
 }
 
 class _FadeScaleEntry extends StatefulWidget {
@@ -927,7 +872,7 @@ class _CloudFileCard extends StatelessWidget {
   final CloudFile file;
   final VoidCallback onTap;
 
-  const _CloudFileCard({required this.file, required this.onTap});
+  const _CloudFileCard({super.key, required this.file, required this.onTap});
 
   static IconData _icon(String name) {
     final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
@@ -945,64 +890,65 @@ class _CloudFileCard extends StatelessWidget {
     };
   }
 
-  static String _formatTime(int millis) {
+  static String _formatTime(AppLocalizations l10n, int millis) {
     final d = DateTime.fromMillisecondsSinceEpoch(millis);
     final now = DateTime.now();
     if (d.year == now.year && d.month == now.month && d.day == now.day) {
       return formatClock(d);
     }
-    return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}';
+    if (d.year == now.year) return formatDayMonth(l10n, d);
+    return formatDateNumeric(d);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
+    final l10n = AppLocalizations.of(context)!;
+    final size = file.size;
+    final details = [
+      if (size != null) formatBytes(l10n, size),
+      _formatTime(l10n, file.time),
+    ].join(' · ');
+    return GlossyPill(
       onTap: onTap,
-      child: AspectRatio(
-        aspectRatio: 1.0,
-        child: GlossyPill(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(16),
-          depth: 6,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Center(
-                  child: Icon(_icon(file.name), color: cs.primary, size: 34),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        file.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _formatTime(file.time),
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+      color: cs.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
+      depth: 6,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Center(
+              child: Icon(_icon(file.name), color: cs.primary, size: 40),
+            ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  file.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  details,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1168,6 +1114,21 @@ class _FileDetailsSheetState extends State<_FileDetailsSheet> {
                       ),
                     ),
             ],
+          ),
+          const SizedBox(height: 16),
+          Container(height: 0.5, color: cs.outlineVariant),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: cs.error,
+              padding: EdgeInsets.zero,
+            ),
+            icon: const Icon(Symbols.delete, size: 20),
+            label: Text(
+              l10n.cloudStorageDeleteFile,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),

@@ -8,6 +8,7 @@ class AppFrost {
   static const double mediaBackdropSigma = 30;
   static const double glassAlpha = 0.28;
   static const double blurPanelAlpha = 0.55;
+  static const double controlAlpha = 0.72;
   static const double scrimAlpha = 0.4;
 
   // #***! подкрашиваем блюр темой иначе он грязный
@@ -15,6 +16,8 @@ class AppFrost {
       cs.surfaceContainerHigh.withValues(alpha: alpha);
 
   static Color blurPanelTint(ColorScheme cs) => glassTint(cs, blurPanelAlpha);
+
+  static Color controlTint(ColorScheme cs) => glassTint(cs, controlAlpha);
 
   static Color scrim([double alpha = scrimAlpha]) =>
       Colors.black.withValues(alpha: alpha);

@@ -195,16 +195,6 @@ class _WebAppScreenState extends State<WebAppScreen> {
     NavigationAction action,
   ) async {
     final uri = action.request.url;
-    if (action.isForMainFrame == true &&
-        (uri == null ||
-            _bridge?.originPolicy?.accepts(Uri.parse(uri.toString())) !=
-                true)) {
-      _bridge?.documentStarted(null);
-      if (uri != null && mounted) {
-        await openExternalUrl(context, uri.toString(), fromWebContent: true);
-      }
-      return NavigationActionPolicy.CANCEL;
-    }
     final callback = widget.onExternalCallback;
     if (callback != null && uri?.queryParameters['externalCallback'] == '1') {
       try {
@@ -234,8 +224,24 @@ class _WebAppScreenState extends State<WebAppScreen> {
       }
       return NavigationActionPolicy.CANCEL;
     }
+    final leavesOrigin =
+        action.isForMainFrame == true &&
+        (uri == null ||
+            _bridge?.originPolicy?.accepts(Uri.parse(uri.toString())) != true);
     final handler = widget.shouldOverrideUrlLoading;
-    if (handler != null) return handler(controller, action, _launch?.url);
+    if (handler != null) {
+      final policy = await handler(controller, action, _launch?.url);
+      if (leavesOrigin && policy != NavigationActionPolicy.CANCEL) {
+        _bridge?.documentStarted(null);
+      }
+      return policy;
+    }
+    if (leavesOrigin) {
+      if (uri != null && mounted) {
+        await openExternalUrl(context, uri.toString(), fromWebContent: true);
+      }
+      return NavigationActionPolicy.CANCEL;
+    }
 
     if (uri != null && leavesWebView(uri.scheme)) {
       if (mounted) {

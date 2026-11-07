@@ -123,6 +123,8 @@ void main() {
     expect(text, contains('<= ошибка: synthetic failure'));
     expect(text, contains('synthetic legacy line'));
     expect(text, contains('first synthetic line'));
+    expect(text, contains('"probe": "answer"'));
+    expect(text, contains('"1": "numeric key"'));
     expect(files.where((file) => file.name.startsWith('session_')).length, 3);
   });
 }

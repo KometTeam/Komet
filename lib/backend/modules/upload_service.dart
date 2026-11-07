@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert' show base64Decode;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../../core/cache/message_session_cache.dart';
 import '../../core/crypto/outgoing_message_policy.dart';
@@ -16,10 +18,13 @@ import '../../models/upload_bytes.dart';
 import 'chats.dart' show chats;
 import 'file_uploader.dart';
 import 'messages.dart';
+import 'outgoing_reply.dart';
 import 'upload_notification_service.dart';
 
 export 'upload_notification_service.dart' show UploadKind;
 export '../../models/upload_bytes.dart';
+
+typedef UploadedPhoto = ({File file, String token, bool temporary});
 
 // #***! события очереди наружу
 sealed class UploadJobEvent {
@@ -344,6 +349,7 @@ class UploadService {
     required String caption,
     CachedMessage? placeholder,
     int? scheduledTime,
+    OutgoingReply? reply,
   }) {
     return _run(
       UploadJob._(
@@ -356,25 +362,45 @@ class UploadService {
         scheduledTime: scheduledTime,
       ),
       (job) async {
-        final tokens = await _uploadPhotos(jobs, job);
-        if (job.isCancelled) throw const UploadCancelled();
-        final kept = [
-          for (var i = 0; i < tokens.length; i++)
-            if (!job.isSlotCancelled(i)) tokens[i],
-        ];
-        if (kept.isEmpty) throw const UploadCancelled();
-        if (kept.any((token) => token == null)) {
-          throw const UploadFailure('upload_failed');
+        final uploaded = List<UploadedPhoto?>.filled(jobs.length, null);
+        try {
+          final tokens = await _uploadPhotos(
+            jobs,
+            job,
+            onUploaded: (index, photo) => uploaded[index] = photo,
+          );
+          if (job.isCancelled) throw const UploadCancelled();
+          final keptSlots = [
+            for (var i = 0; i < tokens.length; i++)
+              if (!job.isSlotCancelled(i)) i,
+          ];
+          final kept = [for (final i in keptSlots) tokens[i]];
+          if (kept.isEmpty) throw const UploadCancelled();
+          if (kept.any((token) => token == null)) {
+            throw const UploadFailure('upload_failed');
+          }
+          final sent = await messagesModule.sendPhotoMessage(
+            chatId,
+            kept.cast<String>(),
+            caption: caption.isEmpty ? null : caption,
+            scheduledTime: scheduledTime,
+            beforeSend: job.ensureSendAllowed,
+            replyToMessageId: reply?.messageId,
+            replySourceChatId: reply?.sourceChatId,
+          );
+          if (sent == null) return null;
+          final real = CachedMessage.fromPushPayload(accountId, chatId, sent);
+          await _seedPhotoCache(real, [
+            for (final i in keptSlots) ?uploaded[i],
+          ]);
+          return real;
+        } finally {
+          for (final photo in uploaded) {
+            if (photo != null && photo.temporary) {
+              unawaited(photo.file.delete().catchError((_) => photo.file));
+            }
+          }
         }
-        final sent = await messagesModule.sendPhotoMessage(
-          chatId,
-          kept.cast<String>(),
-          caption: caption.isEmpty ? null : caption,
-          scheduledTime: scheduledTime,
-          beforeSend: job.ensureSendAllowed,
-        );
-        if (sent == null) return null;
-        return CachedMessage.fromPushPayload(accountId, chatId, sent);
       },
     );
   }
@@ -388,6 +414,7 @@ class UploadService {
     required String caption,
     CachedMessage? placeholder,
     int? scheduledTime,
+    OutgoingReply? reply,
   }) {
     return _run(
       UploadJob._(
@@ -422,9 +449,13 @@ class UploadService {
           caption: caption.isEmpty ? null : caption,
           scheduledTime: scheduledTime,
           beforeSend: job.ensureSendAllowed,
+          replyToMessageId: reply?.messageId,
+          replySourceChatId: reply?.sourceChatId,
         );
         if (sent == null) return null;
-        return CachedMessage.fromPushPayload(accountId, chatId, sent);
+        final real = CachedMessage.fromPushPayload(accountId, chatId, sent);
+        await _seedVideoThumbnail(real, placeholder);
+        return real;
       },
     );
   }
@@ -438,6 +469,7 @@ class UploadService {
     required int durationMs,
     required Uint8List wave,
     CachedMessage? placeholder,
+    OutgoingReply? reply,
   }) {
     return _sendRecording(
       accountId: accountId,
@@ -458,6 +490,8 @@ class UploadService {
         duration: durationMs,
         wave: wave,
         beforeSend: beforeSend,
+        replyToMessageId: reply?.messageId,
+        replySourceChatId: reply?.sourceChatId,
       ),
     );
   }
@@ -470,6 +504,7 @@ class UploadService {
     required File file,
     required int durationMs,
     CachedMessage? placeholder,
+    OutgoingReply? reply,
   }) {
     return _sendRecording(
       accountId: accountId,
@@ -489,6 +524,8 @@ class UploadService {
         token,
         duration: durationMs,
         beforeSend: beforeSend,
+        replyToMessageId: reply?.messageId,
+        replySourceChatId: reply?.sourceChatId,
       ),
     );
   }
@@ -521,6 +558,7 @@ class UploadService {
         placeholder: placeholder,
       ),
       (job) async {
+        var delivered = false;
         try {
           final info = await requestUpload(job.ensureSendAllowed);
           if (info == null || info.url.isEmpty) {
@@ -537,11 +575,14 @@ class UploadService {
           job.markUploaded();
           final sent = await send(info.token, job.ensureSendAllowed);
           if (sent == null) return null;
+          delivered = true;
           return CachedMessage.fromPushPayload(accountId, chatId, sent);
         } finally {
-          try {
-            await file.delete();
-          } catch (_) {}
+          if (delivered || job.isCancelled) {
+            try {
+              await file.delete();
+            } catch (_) {}
+          }
         }
       },
     );
@@ -559,6 +600,7 @@ class UploadService {
     String? text,
     int? scheduledTime,
     bool encryptedPayload = false,
+    OutgoingReply? reply,
   }) {
     return _run(
       UploadJob._(
@@ -582,6 +624,7 @@ class UploadService {
           size: size,
           text: text,
           scheduledTime: scheduledTime,
+          reply: reply,
         );
         FileHistoryCache.add(
           FileHistoryEntry(
@@ -632,6 +675,7 @@ class UploadService {
     required int size,
     String? text,
     int? scheduledTime,
+    OutgoingReply? reply,
   }) async {
     final result = Completer<UploadDone>();
     late final StreamSubscription<UploadEvent> sub;
@@ -644,6 +688,8 @@ class UploadService {
           text: text,
           encryptedPayload: job.encryptedPayload,
           scheduledTime: scheduledTime,
+          replyToMessageId: reply?.messageId,
+          replySourceChatId: reply?.sourceChatId,
           beforeSend: job.ensureSendAllowed,
         )
         .listen(
@@ -766,7 +812,7 @@ class UploadService {
     }
 
     // #***! настоящее в базу, временное удаляем
-    final message = real!;
+    final message = OutgoingReply.keepQuote(real!, job.placeholder);
     try {
       await AppDatabase.saveMessages([message.toDbRow()]);
       if (message.id != job.id) {
@@ -830,8 +876,9 @@ class UploadService {
   // #***! фото пулом воркеров, первая ошибка рубит весь альбом
   Future<List<String?>> _uploadPhotos(
     List<({File file, GalleryItem? item})> jobs,
-    UploadJob job,
-  ) async {
+    UploadJob job, {
+    void Function(int index, UploadedPhoto photo)? onUploaded,
+  }) async {
     final tokens = List<String?>.filled(jobs.length, null);
     var nextIndex = 0;
     var failed = false;
@@ -841,7 +888,14 @@ class UploadService {
         final i = nextIndex++;
         if (i >= jobs.length) return;
         if (job.isSlotCancelled(i)) continue;
-        final token = await _uploadOnePhoto(jobs[i], i, job);
+        final token = await _uploadOnePhoto(
+          jobs[i],
+          i,
+          job,
+          onUploaded: onUploaded == null
+              ? null
+              : (photo) => onUploaded(i, photo),
+        );
         if (token == null) {
           if (job.isSlotCancelled(i)) continue;
           failed = true;
@@ -861,14 +915,16 @@ class UploadService {
   Future<String?> _uploadOnePhoto(
     ({File file, GalleryItem? item}) photo,
     int index,
-    UploadJob job,
-  ) => uploadPhoto(
+    UploadJob job, {
+    void Function(UploadedPhoto photo)? onUploaded,
+  }) => uploadPhoto(
     photo.file,
     item: photo.item,
     cancel: job.slotCancelled(index),
     onProgress: (sent, total) => job.report(index, sent, total),
     onRetry: () => job.resetSlot(index),
     beforeSend: job.ensureSendAllowed,
+    onUploaded: onUploaded,
   );
 
   // #***! перед заливкой пережимаем, три попытки с растущей паузой
@@ -879,8 +935,10 @@ class UploadService {
     required void Function(int sent, int total) onProgress,
     VoidCallback? onRetry,
     VoidCallback? beforeSend,
+    void Function(UploadedPhoto photo)? onUploaded,
   }) async {
     var stopped = false;
+    var handedOver = false;
     unawaited(cancel.then((_) => stopped = true));
     File file;
     try {
@@ -910,7 +968,17 @@ class UploadService {
             onProgress: onProgress,
             cancel: cancel,
           );
-          if (token != null) return token;
+          if (token != null) {
+            if (onUploaded != null) {
+              onUploaded((
+                file: file,
+                token: token,
+                temporary: file.path != source.path,
+              ));
+              handedOver = true;
+            }
+            return token;
+          }
         } catch (e) {
           logger.w('uploadPhoto attempt ${attempt + 1}: $e');
         }
@@ -918,9 +986,70 @@ class UploadService {
       }
       return null;
     } finally {
-      if (file.path != source.path) {
+      if (file.path != source.path && !handedOver) {
         unawaited(file.delete().catchError((_) => file));
       }
+    }
+  }
+
+  static Future<void> _seedPhotoCache(
+    CachedMessage message,
+    List<UploadedPhoto> uploaded,
+  ) async {
+    final photos = [...?message.attachments?.whereType<PhotoAttachment>()];
+    final byToken = {for (final photo in uploaded) photo.token: photo.file};
+    final sameOrder = photos.length == uploaded.length;
+    for (var i = 0; i < photos.length; i++) {
+      final photo = photos[i];
+      if (photo.isGif) continue;
+      final file =
+          byToken[photo.photoToken] ?? (sameOrder ? uploaded[i].file : null);
+      if (file == null) continue;
+      await _seedImageCache(photo.baseUrl, file.openRead());
+    }
+  }
+
+  static Future<void> _seedVideoThumbnail(
+    CachedMessage message,
+    CachedMessage? placeholder,
+  ) async {
+    final sent = message.attachments?.whereType<VideoAttachment>().firstOrNull;
+    final local = placeholder?.attachments
+        ?.whereType<VideoAttachment>()
+        .firstOrNull;
+    final thumbnail = sent?.thumbnail;
+    final url = thumbnail != null && thumbnail.isNotEmpty
+        ? thumbnail
+        : sent?.baseUrl;
+    final bytes = _dataUriBytes(local?.previewData);
+    if (bytes == null || bytes.isEmpty) return;
+    await _seedImageCache(url, Stream.value(bytes));
+  }
+
+  static Uint8List? _dataUriBytes(String? dataUri) {
+    if (dataUri == null || !dataUri.startsWith('data:')) return null;
+    final comma = dataUri.indexOf(',');
+    if (comma < 0) return null;
+    try {
+      return base64Decode(dataUri.substring(comma + 1));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _seedImageCache(
+    String? url,
+    Stream<List<int>> source,
+  ) async {
+    if (url == null || url.isEmpty || url.startsWith('data:')) return;
+    try {
+      await DefaultCacheManager().putFileStream(
+        url,
+        source,
+        fileExtension: 'jpg',
+      );
+    } catch (e) {
+      logger.w('UploadService: не удалось положить отправленное в кэш: $e');
     }
   }
 

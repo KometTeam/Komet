@@ -55,6 +55,7 @@ import '../stories/story_owner_info.dart';
 import '../stories/story_peanut.dart';
 import '../stories/story_ring.dart';
 import '../stories/story_viewer_screen.dart';
+import 'chat_folders_sheet.dart';
 import 'chat_screen.dart';
 import 'group_invite_sheets.dart';
 import 'join_requests_screen.dart';
@@ -1197,6 +1198,15 @@ class _ChatInfoScreenState extends State<ChatInfoScreen>
           onTap: _openJoinRequests,
         ));
       }
+    }
+
+    if (widget.chatId != 0) {
+      entries.add((
+        icon: Symbols.drive_file_move,
+        label: l10n.chatFoldersAddTo,
+        destructive: false,
+        onTap: () => showChatFoldersSheet(context, chatIds: [widget.chatId]),
+      ));
     }
 
     if (widget.chatType == 'DIALOG') {

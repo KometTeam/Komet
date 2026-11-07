@@ -1424,6 +1424,18 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get msgActionsDelete;
 
+  /// No description provided for @msgActionsRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Send again'**
+  String get msgActionsRetry;
+
+  /// No description provided for @chatRetryFileMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is no longer on this device'**
+  String get chatRetryFileMissing;
+
   /// No description provided for @msgActionsCopied.
   ///
   /// In en, this message translates to:
@@ -4712,12 +4724,6 @@ abstract class AppLocalizations {
   /// **'Uploading {percent}%'**
   String cloudStorageUploadingPercent(String percent);
 
-  /// No description provided for @cloudStorageStartUploadHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Start an upload to see the progress bar'**
-  String get cloudStorageStartUploadHint;
-
   /// No description provided for @cloudStorageEmptyTitle.
   ///
   /// In en, this message translates to:
@@ -4729,12 +4735,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add one?'**
   String get cloudStorageEmptySubtitle;
-
-  /// No description provided for @cloudStorageUpload.
-  ///
-  /// In en, this message translates to:
-  /// **'Upload'**
-  String get cloudStorageUpload;
 
   /// No description provided for @cloudStorageFromFile.
   ///
@@ -4801,6 +4801,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send'**
   String get cloudStorageSend;
+
+  /// No description provided for @cloudStorageDeleteFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete file'**
+  String get cloudStorageDeleteFile;
+
+  /// No description provided for @cloudStorageFileDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'File deleted'**
+  String get cloudStorageFileDeleted;
+
+  /// No description provided for @cloudStorageDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t delete the file'**
+  String get cloudStorageDeleteFailed;
 
   /// No description provided for @cloudStorageAboutTooltip.
   ///
@@ -10010,6 +10028,18 @@ abstract class AppLocalizations {
   /// **'Customization'**
   String get customizationTitle;
 
+  /// No description provided for @chatFoldersAddTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to folder'**
+  String get chatFoldersAddTo;
+
+  /// No description provided for @chatFoldersUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t update the folder “{title}”'**
+  String chatFoldersUpdateFailed(String title);
+
   /// No description provided for @folderActionNewFolder.
   ///
   /// In en, this message translates to:
@@ -13169,7 +13199,7 @@ abstract class AppLocalizations {
   /// No description provided for @login2faRequiredNoAccess.
   ///
   /// In en, this message translates to:
-  /// **'I can\'t access the device'**
+  /// **'I can\'t access the account'**
   String get login2faRequiredNoAccess;
 
   /// No description provided for @login2faRequiredLinkFailed.

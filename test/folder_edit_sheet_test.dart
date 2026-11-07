@@ -5,7 +5,11 @@ import 'package:komet/backend/models/chat_folder.dart';
 import 'package:komet/frontend/screens/chats/folder_edit_sheet.dart';
 import 'package:komet/frontend/widgets/sheet_helpers.dart';
 
-Future<void> _openSheet(WidgetTester tester, {ChatFolder? folder}) async {
+Future<void> _openSheet(
+  WidgetTester tester, {
+  ChatFolder? folder,
+  List<int> initialChatIds = const [],
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       locale: const Locale('ru'),
@@ -14,7 +18,11 @@ Future<void> _openSheet(WidgetTester tester, {ChatFolder? folder}) async {
       home: Scaffold(
         body: Builder(
           builder: (context) => TextButton(
-            onPressed: () => showFolderEditSheet(context, folder: folder),
+            onPressed: () => showFolderEditSheet(
+              context,
+              folder: folder,
+              initialChatIds: initialChatIds,
+            ),
             child: const Text('open'),
           ),
         ),
@@ -56,6 +64,17 @@ void main() {
     expect(find.text('Непрочитанные чаты'), findsOneWidget);
     expect(find.text('Очистить выбор'), findsOneWidget);
     expect(find.text('Создать папку'), findsOneWidget);
+  });
+
+  testWidgets('a folder started from a chat already holds that chat', (
+    tester,
+  ) async {
+    await _openSheet(tester, initialChatIds: const [900201]);
+
+    expect(_button(tester, 'Очистить выбор').onTap, isNotNull);
+    await tester.enterText(find.byType(TextField).first, 'Работа');
+    await tester.pump();
+    expect(_button(tester, 'Создать папку').onTap, isNotNull);
   });
 
   testWidgets('creating needs both a name and a selection', (tester) async {

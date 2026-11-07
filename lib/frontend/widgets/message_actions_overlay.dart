@@ -112,6 +112,7 @@ void showMessageActions({
   bool allowDelete = true,
   bool allowCopy = true,
   VoidCallback? onEdit,
+  VoidCallback? onRetry,
   VoidCallback? onReply,
   VoidCallback? onForward,
   VoidCallback? onMarkUnread,
@@ -164,6 +165,7 @@ void showMessageActions({
       allowDelete: allowDelete,
       allowCopy: allowCopy,
       onEdit: onEdit,
+      onRetry: onRetry,
       onReply: onReply,
       onForward: onForward,
       onMarkUnread: onMarkUnread,
@@ -215,6 +217,7 @@ class _MessageActionsLayer extends StatefulWidget {
   final bool allowDelete;
   final bool allowCopy;
   final VoidCallback? onEdit;
+  final VoidCallback? onRetry;
   final VoidCallback? onReply;
   final VoidCallback? onForward;
   final VoidCallback? onMarkUnread;
@@ -253,6 +256,7 @@ class _MessageActionsLayer extends StatefulWidget {
     this.allowDelete = true,
     this.allowCopy = true,
     this.onEdit,
+    this.onRetry,
     this.onReply,
     this.onForward,
     this.onMarkUnread,
@@ -549,6 +553,8 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final copyText = widget.copyText;
     final canCopy = widget.allowCopy && copyText != null && copyText.isNotEmpty;
     return <_Action>[
+      if (widget.onRetry != null)
+        _Action(Symbols.refresh, l10n.msgActionsRetry, _retry),
       if (widget.onReply != null)
         _Action(Symbols.reply, l10n.msgActionsReply, _reply),
       if (widget.onForward != null)
@@ -735,6 +741,12 @@ class _MessageActionsLayerState extends State<_MessageActionsLayer>
     final onEdit = widget.onEdit;
     await _close();
     onEdit?.call();
+  }
+
+  Future<void> _retry() async {
+    final onRetry = widget.onRetry;
+    await _close();
+    onRetry?.call();
   }
 
   Future<void> _reply() async {

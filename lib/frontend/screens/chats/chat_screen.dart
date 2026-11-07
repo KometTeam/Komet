@@ -268,6 +268,7 @@ class _ChatScreenState extends State<ChatScreen>
   int _historyAutoloadSuppressCount = 0;
   bool get _historyAutoloadSuppressed => _historyAutoloadSuppressCount > 0;
   int _readMarkTime = 0;
+  int _unreadAfterMark = 0;
   late final ReadMarkerGate _readMarker = ReadMarkerGate(
     onFlush: _updateReadMarker,
   );
@@ -720,6 +721,7 @@ class _ChatScreenState extends State<ChatScreen>
       encryptOutgoing: _encryptOutgoing,
       markHasScheduled: _markHasScheduled,
       confirmSend: _confirmSend,
+      takeReply: () => _commentsMode ? null : _textSend.takeReply(),
     );
     if (!_commentsMode && !widget.preview) ChatScreen._open.add(this);
     if (!widget.preview) {
@@ -1108,6 +1110,7 @@ class _ChatScreenState extends State<ChatScreen>
   void _resolveUnreadAnchor() {
     final c = chat;
     _readMarkTime = c?.participants[_myId] ?? 0;
+    _unreadAfterMark = c?.unreadCount ?? 0;
     final unread = c != null && c.unreadCount > 0;
     if (!unread) {
       _unreadAnchorTime = null;
@@ -1567,14 +1570,12 @@ class _ChatScreenState extends State<ChatScreen>
       _bumpMessages();
     }
 
-    if (candidate.time <= _readMarkTime) return;
-    _readMarkTime = candidate.time;
-    var remaining = _messages
-        .where((m) => m.time > _readMarkTime && m.senderId != _myId)
-        .length;
-    if (_chatController.hasNewer) {
-      remaining = math.max(remaining, chat?.unreadCount ?? 0);
-    }
+    final previousMark = _readMarkTime;
+    final advanced = candidate.time > previousMark;
+    if (advanced) _readMarkTime = candidate.time;
+    _unreadAfterMark = _countUnreadAfterMark(previousMark);
+    if (_tracksUnreadBelow) _scrollNav.showUnreadBelow(_unreadAfterMark);
+    if (!advanced) return;
     unawaited(
       chats.markReadUpTo(
         api,
@@ -1582,9 +1583,43 @@ class _ChatScreenState extends State<ChatScreen>
         widget.chatId,
         candidate.id,
         candidate.time,
-        remaining: remaining,
+        remaining: _unreadAfterMark,
       ),
     );
+  }
+
+  bool get _tracksUnreadBelow =>
+      !_commentsMode && !widget.preview && widget.chatId != 0;
+
+  int _incomingCount({required int after, int? upTo}) {
+    var count = 0;
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      final message = _messages[i];
+      if (message.senderId == _myId) continue;
+      if (message.time <= after) break;
+      if (upTo == null || message.time <= upTo) count++;
+    }
+    return count;
+  }
+
+  int _countUnreadAfterMark(int previousMark) {
+    final loaded = _incomingCount(after: _readMarkTime);
+    if (!_chatController.hasNewer) return loaded;
+    final justRead = _incomingCount(after: previousMark, upTo: _readMarkTime);
+    return math.max(loaded, _unreadAfterMark - justRead);
+  }
+
+  void _noteOffscreenArrival(CachedMessage message) {
+    if (!_tracksUnreadBelow) {
+      _scrollNav.noteMissedMessage();
+      return;
+    }
+    if (message.senderId == _myId || message.time <= _readMarkTime) {
+      _scrollNav.updateScrollDownVisible();
+      return;
+    }
+    _unreadAfterMark++;
+    _scrollNav.showUnreadBelow(_unreadAfterMark);
   }
 
   bool _unreadSeparatorScrolledPast(
@@ -1606,6 +1641,18 @@ class _ChatScreenState extends State<ChatScreen>
       if (top <= 0) return true;
     }
     return false;
+  }
+
+  bool _canRetrySend(CachedMessage message) =>
+      _textSend.canRetry(message) || _mediaSend.canRetry(message);
+
+  void _retrySend(CachedMessage message) {
+    if (_textSend.canRetry(message)) {
+      Haptics.send();
+      unawaited(_textSend.retry(message));
+    } else {
+      unawaited(_mediaSend.retry(message));
+    }
   }
 
   Future<void> _markMessageUnread(CachedMessage message) async {
@@ -3621,7 +3668,7 @@ class _ChatScreenState extends State<ChatScreen>
         _clearTyping(message.senderId);
         Haptics.tap();
         if (_chatController.hasNewer) {
-          _scrollNav.noteMissedMessage();
+          _noteOffscreenArrival(message);
           _prank.checkTrigger(message);
           return;
         }
@@ -3637,7 +3684,7 @@ class _ChatScreenState extends State<ChatScreen>
           _scrollNav.scrollToBottom();
           _scheduleReadMarker();
         } else {
-          _scrollNav.noteMissedMessage();
+          _noteOffscreenArrival(message);
         }
         _prank.checkTrigger(message);
       case MessageEditedEvent(:final message):
@@ -5487,6 +5534,7 @@ class _ChatScreenState extends State<ChatScreen>
                         );
 
                         final canReport = !isMe && !message.isControl;
+                        final unsent = int.tryParse(message.id) == null;
                         final reportTypeId = _complaintTypeId(
                           chat?.type ?? widget.chatType,
                         );
@@ -5512,16 +5560,20 @@ class _ChatScreenState extends State<ChatScreen>
                           onEdit: _canEditMessage(message)
                               ? () => _startEditMessage(message)
                               : null,
-                          onReply: message.isControl || !_canReply
+                          onRetry: isMe && _canRetrySend(message)
+                              ? () => _retrySend(message)
+                              : null,
+                          onReply: message.isControl || unsent || !_canReply
                               ? null
                               : () => _textSend.startReply(message),
                           onForward:
                               message.isControl ||
+                                  unsent ||
                                   (chat?.forwardDisabled ?? false)
                               ? null
                               : () => _forwardMessages([message]),
                           allowCopy: !(chat?.copyDisabled ?? false),
-                          onMarkUnread: message.isControl
+                          onMarkUnread: message.isControl || unsent
                               ? null
                               : () => _markMessageUnread(message),
                           onPin: _canPinMessage(message)
@@ -5675,7 +5727,7 @@ class _ChatScreenState extends State<ChatScreen>
           liquidChrome: _liquidChrome,
           pillBackdrop: _pillBackdrop,
           scrollDownCurved: _scrollDownCurved,
-          newMessageCount: _scrollNav.newMessageCount,
+          unreadBelow: _scrollNav.unreadBelow,
           onTap: _scrollNav.onScrollDownTap,
         ),
       ],
@@ -5821,13 +5873,15 @@ class _ChatScreenState extends State<ChatScreen>
     if (draft == null || !mounted) return;
     await _mediaSend.sendAttachMessage(
       [PollAttachment(pollId: 0, title: draft.title)],
-      (beforeSend) => messagesModule.sendPollMessage(
+      (beforeSend, reply) => messagesModule.sendPollMessage(
         widget.chatId,
         draft.title,
         draft.answers,
         multiple: draft.multiple,
         anonymous: draft.anonymous,
         beforeSend: beforeSend,
+        replyToMessageId: reply?.messageId,
+        replySourceChatId: reply?.sourceChatId,
       ),
     );
   }

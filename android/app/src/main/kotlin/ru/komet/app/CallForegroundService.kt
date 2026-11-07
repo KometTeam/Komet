@@ -32,12 +32,11 @@ class CallForegroundService : Service() {
         @Volatile
         private var running: CallForegroundService? = null
 
-        fun setScreenShare(ctx: Context, enabled: Boolean, caller: String) {
+        fun setScreenShare(ctx: Context, enabled: Boolean, caller: String): Boolean {
             screenShare = enabled
             val service = running
             if (service != null) {
-                service.startAsForeground(caller)
-                return
+                return service.startAsForeground(caller)
             }
             val intent = Intent(ctx, CallForegroundService::class.java).apply {
                 action = ACTION_SCREEN_SHARE
@@ -52,7 +51,10 @@ class CallForegroundService : Service() {
                 }
             } catch (e: Exception) {
                 Log.w("KometFcm", "screen share FGS update failed: ${e.message}")
+                screenShare = false
+                return !enabled
             }
+            return true
         }
 
         fun start(ctx: Context, caller: String) {
@@ -92,6 +94,8 @@ class CallForegroundService : Service() {
         }
     }
 
+    private var foreground = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -107,6 +111,7 @@ class CallForegroundService : Service() {
 
     private fun shutdown() {
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        foreground = false
         stopSelf()
     }
 
@@ -128,7 +133,7 @@ class CallForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startAsForeground(caller: String) {
+    private fun startAsForeground(caller: String): Boolean {
         val immutable = android.app.PendingIntent.FLAG_UPDATE_CURRENT or
             android.app.PendingIntent.FLAG_IMMUTABLE
         val open = LaunchIntents.app(this).apply {
@@ -164,14 +169,18 @@ class CallForegroundService : Service() {
             } else {
                 startForeground(ONGOING_ID, notif)
             }
+            foreground = true
+            return true
         } catch (e: Exception) {
-            Log.w("KometFcm", "startForeground failed: ${e.message}")
-            if (screenShare) {
-                screenShare = false
-                startAsForeground(caller)
-                return
+            Log.w("KometFcm", "startForeground failed (screenShare=$screenShare, foreground=$foreground): ${e.message}")
+            val wantedScreen = screenShare
+            screenShare = false
+            when {
+                foreground -> Unit
+                wantedScreen -> startAsForeground(caller)
+                else -> stopSelf()
             }
-            stopSelf()
+            return false
         }
     }
 }

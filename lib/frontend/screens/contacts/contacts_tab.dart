@@ -7,6 +7,7 @@ import '../../../core/config/ios_release.dart';
 import '../../../core/contacts/contact_labels.dart';
 import '../../../core/contacts/device_contacts_service.dart';
 import '../../../core/storage/app_database.dart';
+import '../../../core/storage/token_storage.dart';
 import '../../../backend/modules/contacts.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart' show api;
@@ -18,6 +19,7 @@ import '../../widgets/connection_status.dart';
 import '../../widgets/small_spinner.dart';
 import '../../widgets/spectrum_tint.dart';
 import '../../widgets/springy_tap.dart';
+import '../chats/chat_folders_sheet.dart';
 import '../chats/chat_info_screen.dart';
 import 'find_user_sheet.dart';
 import 'nfc_exchange_sheet.dart';
@@ -189,12 +191,31 @@ class _ContactsTabState extends State<ContactsTab> with SpectrumSurface {
       anchorRect: box.localToGlobal(Offset.zero) & box.size,
       items: [
         ChatMenuItem(
+          icon: Symbols.drive_file_move,
+          label: l10n.chatFoldersAddTo,
+          onTap: () => _addContactToFolder(contact),
+        ),
+        ChatMenuItem(
           icon: Symbols.delete,
           label: l10n.editContactDelete,
           destructive: true,
           onTap: () => _deleteContact(contact),
         ),
       ],
+    );
+  }
+
+  Future<void> _addContactToFolder(CachedContact contact) async {
+    final accountId = await TokenStorage.getActiveAccountId();
+    if (accountId == null || !mounted) return;
+    final existing = await AppDatabase.findDialogChatByParticipant(
+      accountId,
+      contact.id,
+    );
+    if (!mounted) return;
+    await showChatFoldersSheet(
+      context,
+      chatIds: [existing ?? (accountId ^ contact.id)],
     );
   }
 
