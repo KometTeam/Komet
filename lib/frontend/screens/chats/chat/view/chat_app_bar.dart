@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/messages.dart' show CachedMessage;
 import 'package:komet/core/config/app_chat_chrome.dart';
 import 'package:komet/core/config/app_frost.dart';
+import 'package:komet/frontend/widgets/seasonal_snow.dart';
 
 import 'chat_header.dart';
 import 'frosted_panel.dart';
@@ -124,44 +125,57 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       0.0,
       1.0,
     );
+    final background = chrome == ChatChromeStyle.blur
+        ? FrostedPanel(
+            tint: AppFrost.blurPanelTint(cs),
+            border: Border(bottom: AppFrost.hairline(cs)),
+            backdropKey: barBackdrop,
+            child: const SizedBox.expand(),
+          )
+        : (chromeVignette && !glossyChrome)
+        ? IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    cs.surface,
+                    cs.surface,
+                    cs.surface.withValues(alpha: 0.0),
+                  ],
+                  stops: [0.0, fadeStop, 1.0],
+                ),
+              ),
+              child: const SizedBox.expand(),
+            ),
+          )
+        : (chrome == ChatChromeStyle.transparent && !glossyChrome)
+        ? FrostedPanel(
+            sigma: AppFrost.sigma,
+            tint: AppFrost.glassTint(cs),
+            border: Border(bottom: AppFrost.hairline(cs)),
+            backdropKey: barBackdrop,
+            child: const SizedBox.expand(),
+          )
+        : null;
     return AppBar(
       backgroundColor: chrome == ChatChromeStyle.color
           ? (glossyChrome ? Colors.transparent : cs.surfaceContainerHigh)
           : Colors.transparent,
-      flexibleSpace: chrome == ChatChromeStyle.blur
-          ? FrostedPanel(
-              tint: AppFrost.blurPanelTint(cs),
-              border: Border(bottom: AppFrost.hairline(cs)),
-              backdropKey: barBackdrop,
-              child: const SizedBox.expand(),
-            )
-          : (chromeVignette && !glossyChrome)
-          ? IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      cs.surface,
-                      cs.surface,
-                      cs.surface.withValues(alpha: 0.0),
-                    ],
-                    stops: [0.0, fadeStop, 1.0],
-                  ),
-                ),
-                child: const SizedBox.expand(),
-              ),
-            )
-          : (chrome == ChatChromeStyle.transparent && !glossyChrome)
-          ? FrostedPanel(
-              sigma: AppFrost.sigma,
-              tint: AppFrost.glassTint(cs),
-              border: Border(bottom: AppFrost.hairline(cs)),
-              backdropKey: barBackdrop,
-              child: const SizedBox.expand(),
-            )
-          : null,
+      flexibleSpace: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (background != null) background,
+          Positioned.fill(
+            child: SeasonalSnowLayer(
+              flakeCount: 18,
+              seed: 3101 + chatId,
+              opacity: 0.86,
+            ),
+          ),
+        ],
+      ),
       foregroundColor: cs.onSurface,
       surfaceTintColor: Colors.transparent,
       iconTheme: IconThemeData(color: cs.onSurface),

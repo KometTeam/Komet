@@ -26,6 +26,7 @@ class KometSettings {
   static const _kAutoplayAnimoji = 'komet_autoplay_animoji';
   static const _kAutoplayVideoNote = 'komet_autoplay_video_note';
   static const _kRecordDebugLogs = 'komet_record_debug_logs';
+  static const _kDebugSnow = 'komet_debug_snow';
   static const _kHideChannelRecommendations =
       'komet_hide_channel_recommendations';
   static const _kRecommendationsHiddenIn = 'komet_recommendations_hidden_in';
@@ -52,6 +53,7 @@ class KometSettings {
   static final ValueNotifier<bool> autoplayAnimoji = ValueNotifier(true);
   static final ValueNotifier<bool> autoplayVideoNote = ValueNotifier(true);
   static final ValueNotifier<bool> recordDebugLogs = ValueNotifier(true);
+  static final ValueNotifier<bool> debugSnow = ValueNotifier(false);
   static final ValueNotifier<bool> hideChannelRecommendations = ValueNotifier(
     false,
   );
@@ -93,6 +95,7 @@ class KometSettings {
     autoplayAnimoji.value = prefs.getBool(_kAutoplayAnimoji) ?? true;
     autoplayVideoNote.value = prefs.getBool(_kAutoplayVideoNote) ?? true;
     recordDebugLogs.value = prefs.getBool(_kRecordDebugLogs) ?? true;
+    debugSnow.value = prefs.getBool(_kDebugSnow) ?? false;
     hideChannelRecommendations.value =
         prefs.getBool(_kHideChannelRecommendations) ?? false;
     recommendationsHiddenIn.value = {
@@ -215,6 +218,9 @@ class KometSettings {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kRecordDebugLogs, value);
   }
+
+  static Future<void> setDebugSnow(bool value) =>
+      _setFlag(debugSnow, _kDebugSnow, value);
 
   static Future<void> setHideChannelRecommendations(bool value) =>
       _setFlag(hideChannelRecommendations, _kHideChannelRecommendations, value);

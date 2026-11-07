@@ -6203,6 +6203,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kometSettingsDebugHeader => 'Debugging';
 
   @override
+  String get kometSettingsDebugSnowLabel => 'Snow in chats (debug)';
+
+  @override
+  String get kometSettingsDebugSnowSubtitle =>
+      'Forces snow outside the December 1–January 3 holiday period';
+
+  @override
   String get kometSettingsDebugLogsLabel => 'Record debug logs';
 
   @override

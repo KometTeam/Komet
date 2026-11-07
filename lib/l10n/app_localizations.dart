@@ -11126,6 +11126,18 @@ abstract class AppLocalizations {
   /// **'Debugging'**
   String get kometSettingsDebugHeader;
 
+  /// No description provided for @kometSettingsDebugSnowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Snow in chats (debug)'**
+  String get kometSettingsDebugSnowLabel;
+
+  /// No description provided for @kometSettingsDebugSnowSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Forces snow outside the December 1–January 3 holiday period'**
+  String get kometSettingsDebugSnowSubtitle;
+
   /// No description provided for @kometSettingsDebugLogsLabel.
   ///
   /// In en, this message translates to:

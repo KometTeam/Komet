@@ -1962,6 +1962,8 @@
   "kometSettingsAntiStoryViewSubtitle": "Смотреть истории так, чтобы автор не видел вас среди зрителей. Реакции и ответы он всё равно увидит",
   "kometSettingsSelfOnlineCheckSubtitle": "Каждые ~10 секунд сверяет, когда вы были онлайн. Полезно для проверки ghost mode",
   "kometSettingsDebugHeader": "Отладка",
+  "kometSettingsDebugSnowLabel": "Снег в чатах (отладка)",
+  "kometSettingsDebugSnowSubtitle": "Принудительно показывает снег вне периода с 1 декабря по 3 января",
   "kometSettingsDebugLogsLabel": "Запись отладочных логов",
   "kometSettingsDebugLogsSubtitle": "Пишет трафик протокола в файл на устройстве — помогает диагностировать баги при репортах",
   "sharedContentSavedToGallery": "Сохранено в галерею",
