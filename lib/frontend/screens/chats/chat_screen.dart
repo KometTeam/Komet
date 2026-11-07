@@ -5535,6 +5535,10 @@ class _ChatScreenState extends State<ChatScreen>
 
                         final canReport = !isMe && !message.isControl;
                         final unsent = int.tryParse(message.id) == null;
+                        final failedSend = isFailedOutgoingMessage(
+                          message,
+                          _myId,
+                        );
                         final reportTypeId = _complaintTypeId(
                           chat?.type ?? widget.chatType,
                         );
@@ -5542,6 +5546,7 @@ class _ChatScreenState extends State<ChatScreen>
                         final pressable = SelectableMessageRow(
                           message: message,
                           outgoing: isMe && !channelPost,
+                          failedSend: failedSend,
                           composerHeight: _composerHeight,
                           selectedIds: _selectedIds,
                           selectionAnim: _selectionAnim,
@@ -5622,7 +5627,10 @@ class _ChatScreenState extends State<ChatScreen>
                         final isChannel =
                             (chat?.type ?? widget.chatType) == 'CHANNEL';
                         final swipeable =
-                            (message.isControl || isChannel || !_canReply)
+                            (failedSend ||
+                                message.isControl ||
+                                isChannel ||
+                                !_canReply)
                             ? pressable
                             : SwipeToReply(
                                 onReply: () => _textSend.startReply(message),
