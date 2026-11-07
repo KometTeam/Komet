@@ -107,12 +107,16 @@ class AudioPlaybackController {
     bufferedPosition.value = Duration.zero;
     duration.value = Duration.zero;
     await _handler.load(track);
-    await _handler.play();
+    unawaited(_handler.play());
   }
 
-  Future<void> toggle() {
+  Future<void> toggle() async {
     _pausedByCall = false;
-    return playing.value ? _handler.pause() : _handler.play();
+    if (playing.value) {
+      await _handler.pause();
+    } else {
+      unawaited(_handler.play());
+    }
   }
 
   Future<void> seek(Duration value) => _handler.seek(value);

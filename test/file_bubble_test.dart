@@ -10,6 +10,7 @@ import 'package:komet/core/utils/download_progress.dart';
 import 'package:komet/core/utils/file_download.dart';
 import 'package:komet/core/utils/haptics.dart';
 import 'package:komet/core/utils/media_cache.dart';
+import 'package:komet/core/media/audio_file_track.dart';
 import 'package:komet/frontend/widgets/attachment/bubbles/bubble_context.dart';
 import 'package:komet/frontend/widgets/attachment/bubbles/file_bubble.dart';
 import 'package:komet/models/attachment.dart';
@@ -33,6 +34,7 @@ Future<String> _pump(
   required FileBubbleOpener openFile,
   bool cached = false,
   double? progress,
+  AudioFileActivator? audioActivator,
   Widget Function(Widget child)? wrap,
 }) async {
   final cacheName = '901_$name';
@@ -58,6 +60,7 @@ Future<String> _pump(
               fill: true,
               file: FileAttachment(fileId: 901, name: name, size: 2048),
               openFile: openFile,
+              activateAudioFile: audioActivator,
               ctx: BubbleContext(
                 context: context,
                 cs: Theme.of(context).colorScheme,
@@ -171,6 +174,37 @@ void main() {
     closed.complete(const FileDownloadResult(ok: true));
     await tester.pumpAndSettle();
     expect(find.text('Открыть · 2.0 КБ'), findsOneWidget);
+  });
+
+  testWidgets('audio starts without an opening label or an endless spinner', (
+    tester,
+  ) async {
+    final activated = Completer<void>();
+    final finished = Completer<void>();
+    final cacheName = await _pump(
+      tester,
+      name: 'synthetic-track.mp3',
+      cached: true,
+      openFile: (cacheName, resolveUrl, {onProgress, onReady, download}) async {
+        throw StateError('audio must not use the generic file opener');
+      },
+      audioActivator: (track, {required notificationChannelName}) async {
+        expect(track.cacheName, '901_synthetic-track.mp3');
+        activated.complete();
+        await finished.future;
+      },
+    );
+
+    await tester.tap(find.text('synthetic-track.mp3'));
+    await tester.pump();
+    await activated.future;
+
+    expect(find.textContaining('Открытие'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(MediaDownloadProgress.notifier(cacheName).value, isNull);
+
+    finished.complete();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('active download taps neither restart it nor open the row menu', (

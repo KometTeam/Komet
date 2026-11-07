@@ -3,8 +3,13 @@ import 'media_cache.dart';
 
 enum MediaCacheKind { photo, video, voice, file, kept }
 
-const List<String> _photoPrefixes = ['photo_', 'avatar_'];
-const List<String> _videoPrefixes = ['video_', 'videopreview_', 'gif_', 'story_'];
+const List<String> _photoPrefixes = ['photo_', 'avatar_', 'audioart_'];
+const List<String> _videoPrefixes = [
+  'video_',
+  'videopreview_',
+  'gif_',
+  'story_',
+];
 final RegExp _voiceName = RegExp(r'^-?\d+\.ogg$');
 
 String photoCacheName(PhotoAttachment photo, String url) =>

@@ -1,3 +1,11 @@
+enum AudioFileOrigin { message, downloads }
+
+typedef AudioFileActivator =
+    Future<void> Function(
+      AudioFileTrack track, {
+      required String notificationChannelName,
+    });
+
 // #***! аудиофайл в плеере плюс откуда он взялся
 class AudioFileTrack {
   const AudioFileTrack({
@@ -9,6 +17,7 @@ class AudioFileTrack {
     this.messageId,
     this.messageTime,
     this.thumbnailUrl,
+    this.origin = AudioFileOrigin.message,
   });
 
   final String cacheName;
@@ -19,4 +28,21 @@ class AudioFileTrack {
   final String? messageId;
   final int? messageTime;
   final String? thumbnailUrl;
+  final AudioFileOrigin origin;
+
+  AudioFileTrack copyWith({
+    String? name,
+    String? sourceName,
+    String? thumbnailUrl,
+  }) => AudioFileTrack(
+    cacheName: cacheName,
+    path: path,
+    name: name ?? this.name,
+    sourceName: sourceName ?? this.sourceName,
+    chatId: chatId,
+    messageId: messageId,
+    messageTime: messageTime,
+    thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+    origin: origin,
+  );
 }

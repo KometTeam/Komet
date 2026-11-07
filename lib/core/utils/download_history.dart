@@ -301,6 +301,7 @@ class DownloadHistory {
     for (final file in files) {
       final cacheName = p.basename(file.path);
       if (cacheName.startsWith('avatar_') ||
+          cacheName.startsWith('audioart_') ||
           cacheName.startsWith('decrypted_') ||
           cacheName.startsWith(MediaCache.keptPrefix) ||
           cacheName.startsWith('download_thumb_')) {

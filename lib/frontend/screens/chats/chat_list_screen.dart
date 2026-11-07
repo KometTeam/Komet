@@ -4686,6 +4686,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final record = await pushSwipeable<DownloadRecord>(
       context,
       (_) => const DownloadsScreen(),
+      settings: const RouteSettings(name: DownloadsScreen.routeName),
     );
     if (record == null || !mounted) return;
     await _openDownloadedMessage(record);

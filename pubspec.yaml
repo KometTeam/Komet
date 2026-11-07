@@ -110,6 +110,7 @@ dependencies:
   audio_service: ^0.18.19
   audio_session: ^0.2.4
   just_audio: ^0.10.6
+  audio_metadata_reader: ^1.8.1
   just_audio_media_kit: ^2.1.0
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1

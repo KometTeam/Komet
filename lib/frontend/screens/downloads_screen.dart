@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/utils/download_history.dart';
 import '../../core/media/audio_file_track.dart';
+import '../../core/media/audio_file_metadata.dart';
 import '../../core/media/media_playback.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/media_saver.dart';
@@ -21,7 +22,11 @@ import '../widgets/sheet_helpers.dart';
 import '../widgets/share_unopenable_file.dart';
 
 class DownloadsScreen extends StatefulWidget {
-  const DownloadsScreen({super.key});
+  const DownloadsScreen({super.key, this.highlightCacheName});
+
+  static const routeName = '/downloads';
+
+  final String? highlightCacheName;
 
   @override
   State<DownloadsScreen> createState() => _DownloadsScreenState();
@@ -29,6 +34,9 @@ class DownloadsScreen extends StatefulWidget {
 
 class _DownloadsScreenState extends State<DownloadsScreen> {
   late bool _loading = DownloadHistory.records.value.isEmpty;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _highlightKey = GlobalKey();
+  final Map<String, Future<AudioFileMetadataInfo?>> _audioMetadata = {};
 
   @override
   void initState() {
@@ -36,14 +44,57 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     if (!_loading) {
       DownloadHistory.refresh().ignore();
+      _revealHighlight();
       return;
     }
     await DownloadHistory.load();
     if (mounted) setState(() => _loading = false);
     await DownloadHistory.refresh();
+    _revealHighlight();
+  }
+
+  Future<AudioFileMetadataInfo?> _metadataFor(DownloadRecord record) =>
+      _audioMetadata.putIfAbsent(record.cacheName, () async {
+        final file = await DownloadHistory.fileFor(record, touch: false);
+        if (file == null) return null;
+        return AudioFileMetadata.read(file, cacheName: record.cacheName);
+      });
+
+  void _revealHighlight() {
+    final cacheName = widget.highlightCacheName;
+    if (cacheName == null || cacheName.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final records = DownloadHistory.records.value;
+      final index = records.indexWhere((item) => item.cacheName == cacheName);
+      if (index < 0 || !_scrollController.hasClients) return;
+      final target = (index * 79.0)
+          .clamp(0.0, _scrollController.position.maxScrollExtent)
+          .toDouble();
+      await _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+      if (!mounted) return;
+      final highlighted = _highlightKey.currentContext;
+      if (highlighted != null) {
+        await Scrollable.ensureVisible(
+          highlighted,
+          duration: const Duration(milliseconds: 160),
+          alignment: 0.35,
+        );
+      }
+    });
   }
 
   Future<void> _open(DownloadRecord record) async {
@@ -61,7 +112,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     }
     if (record.kind == DownloadKind.audio) {
       try {
-        await MediaPlayback.instance.activateAudioFile(
+        final track = await AudioFileMetadata.enrich(
           AudioFileTrack(
             cacheName: record.cacheName,
             path: file.path,
@@ -73,7 +124,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
             messageId: record.messageId,
             messageTime: record.messageTime,
             thumbnailUrl: record.thumbnailUrl,
+            origin: AudioFileOrigin.downloads,
           ),
+        );
+        await MediaPlayback.instance.activateAudioFile(
+          track,
           notificationChannelName: AppLocalizations.of(
             context,
           )!.audioPlaybackChannel,
@@ -248,6 +303,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 }
                 return ListView.separated(
                   key: const ValueKey('downloads-list'),
+                  controller: _scrollController,
                   physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.only(bottom: 32),
                   itemCount: records.length,
@@ -258,8 +314,15 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   ),
                   itemBuilder: (context, index) {
                     final record = records[index];
+                    final highlighted =
+                        record.cacheName == widget.highlightCacheName;
                     return _DownloadTile(
+                      key: highlighted ? _highlightKey : null,
                       record: record,
+                      highlighted: highlighted,
+                      audioMetadata: record.kind == DownloadKind.audio
+                          ? _metadataFor(record)
+                          : null,
                       onTap: () => _open(record),
                       onSaveToGallery: _fitsGallery(record)
                           ? () => _saveToGallery(record)
@@ -313,13 +376,18 @@ class _DownloadsEmpty extends StatelessWidget {
 
 class _DownloadTile extends StatelessWidget {
   final DownloadRecord record;
+  final bool highlighted;
+  final Future<AudioFileMetadataInfo?>? audioMetadata;
   final VoidCallback onTap;
   final VoidCallback? onSaveToGallery;
   final VoidCallback onSaveAs;
   final VoidCallback? onGoToMessage;
 
   const _DownloadTile({
+    super.key,
     required this.record,
+    required this.highlighted,
+    required this.audioMetadata,
     required this.onTap,
     required this.onSaveToGallery,
     required this.onSaveAs,
@@ -356,61 +424,88 @@ class _DownloadTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => FutureBuilder<AudioFileMetadataInfo?>(
+    future: audioMetadata,
+    builder: (context, snapshot) => _build(context, snapshot.data),
+  );
+
+  Widget _build(BuildContext context, AudioFileMetadataInfo? metadata) {
     final cs = Theme.of(context).colorScheme;
     final l10n = AppLocalizations.of(context)!;
-    final source = record.sourceName.trim().isEmpty
-        ? l10n.downloadsUnknownSource
-        : record.sourceName.trim();
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 10, 16, 10),
-        child: Row(
-          children: [
-            _DownloadPreview(record: record),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _title(l10n),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 17,
-                      height: 1.15,
-                      fontWeight: FontWeight.w700,
+    final metadataSource = metadata?.artist?.trim().isNotEmpty == true
+        ? metadata!.artist!.trim()
+        : metadata?.album?.trim().isNotEmpty == true
+        ? metadata!.album!.trim()
+        : null;
+    final source =
+        metadataSource ??
+        (record.sourceName.trim().isEmpty
+            ? l10n.downloadsUnknownSource
+            : record.sourceName.trim());
+    return AnimatedContainer(
+      key: highlighted
+          ? ValueKey('download-highlight-${record.cacheName}')
+          : null,
+      duration: const Duration(milliseconds: 240),
+      color: highlighted ? cs.primary.withValues(alpha: 0.14) : null,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 10, 16, 10),
+          child: Row(
+            children: [
+              _DownloadPreview(
+                record: record,
+                artworkUri: metadata?.artworkUri,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _title(l10n, metadata),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 17,
+                        height: 1.15,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    '${formatBytes(l10n, record.size)} · $source',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-                  ),
-                ],
+                    const SizedBox(height: 5),
+                    Text(
+                      '${formatBytes(l10n, record.size)} · $source',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Builder(
-              builder: (buttonContext) => IconButton(
-                key: ValueKey('download-more-${record.cacheName}'),
-                tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
-                icon: Icon(Symbols.more_vert, color: cs.onSurfaceVariant),
-                onPressed: () => _openMenu(buttonContext),
+              Builder(
+                builder: (buttonContext) => IconButton(
+                  key: ValueKey('download-more-${record.cacheName}'),
+                  tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+                  icon: Icon(Symbols.more_vert, color: cs.onSurfaceVariant),
+                  onPressed: () => _openMenu(buttonContext),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  String _title(AppLocalizations l10n) {
+  String _title(AppLocalizations l10n, AudioFileMetadataInfo? metadata) {
+    final metadataTitle = metadata?.title?.trim();
+    if (metadataTitle != null && metadataTitle.isNotEmpty) return metadataTitle;
     if (record.name.trim().isNotEmpty) return record.name.trim();
     return switch (record.kind) {
       DownloadKind.photo => l10n.downloadsPhoto,
@@ -424,8 +519,9 @@ class _DownloadTile extends StatelessWidget {
 
 class _DownloadPreview extends StatefulWidget {
   final DownloadRecord record;
+  final Uri? artworkUri;
 
-  const _DownloadPreview({required this.record});
+  const _DownloadPreview({required this.record, this.artworkUri});
 
   @override
   State<_DownloadPreview> createState() => _DownloadPreviewState();
@@ -448,13 +544,21 @@ class _DownloadPreviewState extends State<_DownloadPreview> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final artwork = widget.artworkUri;
     final preview = widget.record.thumbnailUrl;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(
         width: 58,
         height: 58,
-        child: preview != null && preview.isNotEmpty
+        child: artwork?.scheme == 'file'
+            ? Image.file(
+                File.fromUri(artwork!),
+                fit: BoxFit.cover,
+                cacheWidth: 160,
+                errorBuilder: (_, _, _) => _fallback(cs),
+              )
+            : preview != null && preview.isNotEmpty
             ? CachedNetworkImage(
                 imageUrl: preview,
                 fit: BoxFit.cover,

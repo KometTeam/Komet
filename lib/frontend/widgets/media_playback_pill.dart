@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -8,7 +10,9 @@ import '../../core/media/media_playback.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/haptics.dart';
 import '../../l10n/app_localizations.dart';
+import '../screens/downloads_screen.dart';
 import 'max_link_nav.dart';
+import 'swipe_route.dart';
 
 class MediaPlaybackPill extends StatelessWidget {
   const MediaPlaybackPill({
@@ -102,9 +106,18 @@ class _AudioFilePill extends StatelessWidget {
             : 0.0;
       },
       label: source.isEmpty ? track.name : '${track.name} · $source',
+      artwork: _audioArtwork(track.thumbnailUrl),
       onToggle: audio.toggle,
       onClose: MediaPlayback.instance.closeAudioFile,
       onOpen: () {
+        if (track.origin == AudioFileOrigin.downloads) {
+          pushSwipeable<void>(
+            context,
+            (_) => DownloadsScreen(highlightCacheName: track.cacheName),
+            settings: const RouteSettings(name: DownloadsScreen.routeName),
+          );
+          return;
+        }
         final chatId = track.chatId;
         final messageId = track.messageId;
         final messageTime = track.messageTime;
@@ -117,6 +130,17 @@ class _AudioFilePill extends StatelessWidget {
         );
       },
     );
+  }
+
+  ImageProvider? _audioArtwork(String? value) {
+    if (value == null || value.isEmpty) return null;
+    final uri = Uri.tryParse(value);
+    if (uri == null) return null;
+    if (uri.scheme == 'file') return FileImage(File.fromUri(uri));
+    if (uri.scheme == 'http' || uri.scheme == 'https') {
+      return NetworkImage(value);
+    }
+    return null;
   }
 }
 
@@ -235,6 +259,7 @@ class _PillSurface extends StatelessWidget {
     this.isMe,
     this.time,
     required this.label,
+    this.artwork,
     required this.onToggle,
     this.onSpeed,
     required this.onClose,
@@ -251,6 +276,7 @@ class _PillSurface extends StatelessWidget {
   final bool? isMe;
   final int? time;
   final String? label;
+  final ImageProvider? artwork;
   final VoidCallback onToggle;
   final VoidCallback? onSpeed;
   final VoidCallback onClose;
@@ -302,6 +328,21 @@ class _PillSurface extends StatelessWidget {
                             onTap: onToggle,
                           ),
                         ),
+                        if (artwork != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 7),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(5),
+                              child: Image(
+                                image: artwork!,
+                                width: 22,
+                                height: 22,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    const SizedBox(width: 22, height: 22),
+                              ),
+                            ),
+                          ),
                         Expanded(
                           child: Text(
                             label ?? '$author ${l10n.playbackPillAt} $clock',

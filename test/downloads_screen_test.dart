@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komet/core/media/audio_file_metadata.dart';
 import 'package:komet/core/utils/download_history.dart';
 import 'package:komet/core/utils/media_cache.dart';
 import 'package:komet/frontend/screens/downloads_screen.dart';
@@ -74,7 +75,7 @@ void main() {
         locale: Locale('ru'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: DownloadsScreen(),
+        home: DownloadsScreen(highlightCacheName: 'synthetic-package.zip'),
       ),
     );
     await tester.pump();
@@ -84,6 +85,10 @@ void main() {
     expect(find.text('sample-package.zip'), findsOneWidget);
     expect(find.text('2.0 КБ · Synthetic channel'), findsOneWidget);
     expect(find.byKey(const ValueKey('downloads-settings')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('download-highlight-synthetic-package.zip')),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('download-more-synthetic-package.zip')),
@@ -92,5 +97,56 @@ void main() {
 
     expect(find.text('Перейти к сообщению'), findsOneWidget);
     expect(find.text('Сохранить как…'), findsOneWidget);
+  });
+
+  testWidgets('audio downloads show embedded title, artist and cover', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'synthetic_audio_downloads_test',
+    );
+    addTearDown(() {
+      AudioFileMetadata.resetForTesting();
+      DownloadHistory.resetForTesting();
+      MediaCache.resetForTesting();
+      if (directory.existsSync()) directory.deleteSync(recursive: true);
+    });
+    PathProviderPlatform.instance = _SyntheticPathProvider(directory.path);
+    MediaCache.resetForTesting();
+    AudioFileMetadata.resetForTesting();
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.runAsync(() async {
+      DownloadHistory.resetForTesting();
+      final file = await MediaCache.fileFor('synthetic-audio.mp3');
+      await file.writeAsBytes(
+        await File('test/fixtures/audio_metadata.mp3').readAsBytes(),
+      );
+      await DownloadHistory.record(
+        const DownloadMetadata(
+          cacheName: 'synthetic-audio.mp3',
+          name: 'fallback-name.mp3',
+          kind: DownloadKind.audio,
+          sourceName: 'Fallback source',
+        ),
+        file,
+      );
+      await AudioFileMetadata.read(file, cacheName: 'synthetic-audio.mp3');
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        locale: Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: DownloadsScreen(),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Synthetic Track'), findsOneWidget);
+    expect(find.textContaining('Synthetic Artist'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
   });
 }

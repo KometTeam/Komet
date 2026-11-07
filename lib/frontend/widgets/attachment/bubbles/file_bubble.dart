@@ -14,6 +14,7 @@ import '../../../../core/utils/media_cache.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/utils/haptics.dart';
 import '../../../../core/media/audio_file_track.dart';
+import '../../../../core/media/audio_file_metadata.dart';
 import '../../../../core/media/audio_playback_controller.dart';
 import '../../../../core/media/media_playback.dart';
 import '../../../../core/crypto/chat_crypto_service.dart';
@@ -41,6 +42,7 @@ class FileBubble extends StatefulWidget {
   final FileAttachment file;
   final bool fill;
   final FileBubbleOpener openFile;
+  final AudioFileActivator? activateAudioFile;
 
   const FileBubble({
     super.key,
@@ -48,6 +50,7 @@ class FileBubble extends StatefulWidget {
     required this.file,
     this.fill = false,
     this.openFile = openCachedFile,
+    this.activateAudioFile,
   });
 
   static bool isViewableImage(String name) =>
@@ -107,11 +110,12 @@ class _FileBubbleState extends State<FileBubble> {
       builder: (context, _) {
         final cached = MediaCache.presence(cacheName).value;
         final progress = MediaDownloadProgress.notifier(cacheName).value;
-        final busy = _opening || progress != null;
+        final openingFile = _opening && !audioFile;
+        final busy = openingFile || progress != null;
         final available = fileId != null && ctx.uploadProgress == null;
         final status = progress != null
             ? 'Загрузка ${(progress * 100).round()}%'
-            : _opening
+            : openingFile
             ? 'Открытие…'
             : cached
             ? 'Открыть'
@@ -310,7 +314,6 @@ class _FileBubbleState extends State<FileBubble> {
     '.heic',
     '.heif',
   };
-
 
   Uint8List? get _sealedTicket => ctx.message.e2ee == CachedMessage.e2eeFile
       ? ctx.message.sealedText
@@ -662,7 +665,7 @@ class _FileBubbleState extends State<FileBubble> {
       return;
     }
     try {
-      await playback.activateAudioFile(
+      final track = await AudioFileMetadata.enrich(
         AudioFileTrack(
           cacheName: cacheName,
           path: result.path!,
@@ -673,6 +676,9 @@ class _FileBubbleState extends State<FileBubble> {
           messageTime: ctx.message.time,
           thumbnailUrl: _thumbnailUrl,
         ),
+      );
+      await (widget.activateAudioFile ?? playback.activateAudioFile)(
+        track,
         notificationChannelName: l10n.audioPlaybackChannel,
       );
     } catch (_) {
