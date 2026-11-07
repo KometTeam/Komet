@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -227,12 +226,7 @@ void main() {
   testWidgets('cached audio shows metadata and a compact cover in the bubble', (
     tester,
   ) async {
-    final artwork = File('${directory.path}/synthetic-audio-cover.png');
-    await artwork.writeAsBytes(
-      base64Decode(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-      ),
-    );
+    final artwork = Uri.file('${directory.path}/synthetic-audio-cover.png');
 
     var metadataLoads = 0;
     await _pump(
@@ -247,12 +241,13 @@ void main() {
         return AudioFileMetadataInfo(
           title: 'Metadata title',
           artist: 'Metadata artist',
-          artworkUri: artwork.uri,
+          artworkUri: artwork,
         );
       },
     );
-    await tester.pumpAndSettle();
-    await tester.pump();
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
 
     expect(metadataLoads, 1);
     expect(find.text('Metadata title'), findsOneWidget);
