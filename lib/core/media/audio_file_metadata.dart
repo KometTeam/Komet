@@ -34,7 +34,7 @@ abstract final class AudioFileMetadata {
       final stat = await file.stat();
       final key =
           '${file.path}:${stat.size}:${stat.modified.millisecondsSinceEpoch}';
-      return _cache.putIfAbsent(key, () => _read(file, cacheName));
+      return await _cache.putIfAbsent(key, () => _read(file, cacheName));
     } catch (_) {
       return null;
     }

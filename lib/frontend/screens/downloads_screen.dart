@@ -87,7 +87,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       );
       if (!mounted) return;
       final highlighted = _highlightKey.currentContext;
-      if (highlighted != null) {
+      if (highlighted != null && highlighted.mounted) {
         await Scrollable.ensureVisible(
           highlighted,
           duration: const Duration(milliseconds: 160),
@@ -127,6 +127,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
             origin: AudioFileOrigin.downloads,
           ),
         );
+        if (!mounted) return;
         await MediaPlayback.instance.activateAudioFile(
           track,
           notificationChannelName: AppLocalizations.of(
