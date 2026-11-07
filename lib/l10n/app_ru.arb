@@ -2272,6 +2272,8 @@
   "callMicMutedByAdmin": "Администратор выключил ваш микрофон",
   "callCameraMutedByAdmin": "Администратор выключил вашу камеру",
   "callScreenMutedByAdmin": "Администратор остановил вашу демонстрацию экрана",
+  "callMicUnavailable": "Нет доступа к микрофону — вас не слышно",
+  "callMicSettings": "Настройки",
   "callMediaLocked": "Администратор запретил это в звонке",
   "callRecordingBy": "{name} записывает звонок",
   "callRecordingSelf": "Вы записываете звонок",

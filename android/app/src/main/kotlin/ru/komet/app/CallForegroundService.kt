@@ -1,8 +1,10 @@
 package ru.komet.app
 
+import android.Manifest
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -11,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 
 object CallState {
     @Volatile
@@ -25,22 +28,31 @@ class CallForegroundService : Service() {
         const val ACTION_SCREEN_SHARE = "ru.komet.app.CALL_SCREEN_SHARE"
         const val EXTRA_SCREEN_SHARE = "screenShare"
         const val ONGOING_ID = 424243
+        private const val DEFAULT_CALLER = "Звонок"
+        private const val TAG = "KometFcm"
 
         @Volatile
         var screenShare = false
 
         @Volatile
+        private var caller = DEFAULT_CALLER
+
+        @Volatile
         private var running: CallForegroundService? = null
 
-        fun setScreenShare(ctx: Context, enabled: Boolean, caller: String): Boolean {
+        private fun remember(name: String?) {
+            if (!name.isNullOrBlank()) caller = name
+        }
+
+        fun setScreenShare(ctx: Context, enabled: Boolean, name: String?): Boolean {
+            remember(name)
             screenShare = enabled
             val service = running
             if (service != null) {
-                return service.startAsForeground(caller)
+                return service.startAsForeground()
             }
             val intent = Intent(ctx, CallForegroundService::class.java).apply {
                 action = ACTION_SCREEN_SHARE
-                putExtra(CallConst.EXTRA_CALLER, caller)
                 putExtra(EXTRA_SCREEN_SHARE, enabled)
             }
             try {
@@ -50,18 +62,23 @@ class CallForegroundService : Service() {
                     ctx.startService(intent)
                 }
             } catch (e: Exception) {
-                Log.w("KometFcm", "screen share FGS update failed: ${e.message}")
+                Log.w(TAG, "screen share FGS update failed: ${e.message}")
                 screenShare = false
                 return !enabled
             }
             return true
         }
 
-        fun start(ctx: Context, caller: String) {
+        fun start(ctx: Context, name: String?) {
             CallState.inCall = true
+            remember(name)
+            val service = running
+            if (service != null) {
+                service.startAsForeground()
+                return
+            }
             val intent = Intent(ctx, CallForegroundService::class.java).apply {
                 action = ACTION_START
-                putExtra(CallConst.EXTRA_CALLER, caller)
             }
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -70,13 +87,18 @@ class CallForegroundService : Service() {
                     ctx.startService(intent)
                 }
             } catch (e: Exception) {
-                Log.w("KometFcm", "ongoing FGS start failed: ${e.message}")
+                Log.w(TAG, "ongoing FGS start failed: ${e.message}")
             }
+        }
+
+        fun refreshTypes() {
+            running?.updateTypes()
         }
 
         fun stop(ctx: Context) {
             CallState.inCall = false
             screenShare = false
+            caller = DEFAULT_CALLER
             val service = running
             if (service != null) {
                 service.shutdown()
@@ -95,6 +117,7 @@ class CallForegroundService : Service() {
     }
 
     private var foreground = false
+    private var activeTypes = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -112,28 +135,44 @@ class CallForegroundService : Service() {
     private fun shutdown() {
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         foreground = false
+        activeTypes = 0
         stopSelf()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP -> shutdown()
-            ACTION_SCREEN_SHARE -> {
-                screenShare = intent.getBooleanExtra(EXTRA_SCREEN_SHARE, false)
-                val caller = intent.getStringExtra(CallConst.EXTRA_CALLER) ?: "Звонок"
-                CallNotifier.ensureChannel(this)
-                startAsForeground(caller)
-            }
-            else -> {
-                val caller = intent?.getStringExtra(CallConst.EXTRA_CALLER) ?: "Звонок"
-                CallNotifier.ensureChannel(this)
-                startAsForeground(caller)
-            }
+        if (intent?.action == ACTION_STOP) {
+            shutdown()
+            return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_SCREEN_SHARE) {
+            screenShare = intent.getBooleanExtra(EXTRA_SCREEN_SHARE, false)
+        }
+        CallNotifier.ensureChannel(this)
+        startAsForeground()
         return START_NOT_STICKY
     }
 
-    private fun startAsForeground(caller: String): Boolean {
+    private fun updateTypes() {
+        if (!foreground || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        if (foregroundTypes().first() == activeTypes) return
+        startAsForeground()
+    }
+
+    private fun micGranted(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun foregroundTypes(): List<Int> {
+        val playback = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+        val base = if (micGranted()) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else playback
+        return buildList {
+            if (screenShare) add(base or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            add(base)
+            if (base != playback) add(playback)
+        }
+    }
+
+    private fun startAsForeground(): Boolean {
         val immutable = android.app.PendingIntent.FLAG_UPDATE_CURRENT or
             android.app.PendingIntent.FLAG_IMMUTABLE
         val open = LaunchIntents.app(this).apply {
@@ -159,28 +198,34 @@ class CallForegroundService : Service() {
             .setStyle(NotificationCompat.CallStyle.forOngoingCall(person, hangup))
             .build()
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                if (screenShare) {
-                    types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-                }
-                startForeground(ONGOING_ID, notif, types)
-            } else {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return try {
                 startForeground(ONGOING_ID, notif)
+                foreground = true
+                true
+            } catch (e: Exception) {
+                Log.w(TAG, "startForeground failed: ${e.message}")
+                if (!foreground) stopSelf()
+                false
+            }
+        }
+
+        val wantedScreen = screenShare
+        for (types in foregroundTypes()) {
+            try {
+                startForeground(ONGOING_ID, notif, types)
+            } catch (e: Exception) {
+                Log.w(TAG, "startForeground(types=$types) failed: ${e.message}")
+                continue
             }
             foreground = true
-            return true
-        } catch (e: Exception) {
-            Log.w("KometFcm", "startForeground failed (screenShare=$screenShare, foreground=$foreground): ${e.message}")
-            val wantedScreen = screenShare
-            screenShare = false
-            when {
-                foreground -> Unit
-                wantedScreen -> startAsForeground(caller)
-                else -> stopSelf()
-            }
-            return false
+            activeTypes = types
+            val sharing = (types and ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION) != 0
+            screenShare = sharing
+            return sharing || !wantedScreen
         }
+        screenShare = false
+        if (!foreground) stopSelf()
+        return false
     }
 }

@@ -12986,6 +12986,18 @@ abstract class AppLocalizations {
   /// **'An admin stopped your screen sharing'**
   String get callScreenMutedByAdmin;
 
+  /// No description provided for @callMicUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No microphone access — others can\'t hear you'**
+  String get callMicUnavailable;
+
+  /// No description provided for @callMicSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get callMicSettings;
+
   /// No description provided for @callMediaLocked.
   ///
   /// In en, this message translates to:

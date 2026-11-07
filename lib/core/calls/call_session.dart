@@ -44,6 +44,7 @@ enum CallNotice {
   micMutedByAdmin,
   cameraMutedByAdmin,
   screenMutedByAdmin,
+  micUnavailable,
 }
 
 class CallRecord {
@@ -149,6 +150,7 @@ class CallSession {
 
   // #***! флаги своей и чужой стороны
   bool _muted = false;
+  bool _micUnavailable = false;
   bool _speakerOn = false;
   bool _speakerChosen = false;
   bool _accepted = false;
@@ -448,6 +450,7 @@ class CallSession {
   bool get peerIsKomet => _peerIsKomet;
 
   bool get isMuted => _muted;
+  bool get micUnavailable => _micUnavailable;
   bool get audioTransmitting => !_muted || LaunchFlags.noMute;
   String? get micDeviceId => _micDeviceId;
   String? get pulseSource => _pulseSource;
@@ -1388,7 +1391,10 @@ class CallSession {
     final pc = await _createPc(ice);
     _pc = pc;
     await _addLocalMedia(pc);
-    if (role != CallRole.callee) await _addVideoTransceiver(pc);
+    if (role != CallRole.callee) {
+      await _reserveAudioSender(pc);
+      await _addVideoTransceiver(pc);
+    }
 
     await _setupKometProbe(pc);
 
@@ -1501,19 +1507,67 @@ class CallSession {
       await _resetMicRoute();
     }
     await _selectMicInsideEngine();
-    _localStream = await navigator.mediaDevices.getUserMedia({
-      'audio': AudioDevices.micConstraints(
-        _micDeviceId,
-        monitorCapture: _monitorCapture,
-      ),
-      'video': _wantVideo,
-    });
-    for (final track in _localStream!.getTracks()) {
-      final sender = await pc.addTrack(track, _localStream!);
-      if (track.kind == 'audio') _audioSender = sender;
+    final stream = await _openLocalStream();
+    _localStream = stream;
+    if (stream != null) {
+      for (final track in stream.getTracks()) {
+        final sender = await pc.addTrack(track, stream);
+        if (track.kind == 'audio') _audioSender = sender;
+      }
     }
     _applyAudioTracks();
     await applyAudioRoute();
+  }
+
+  Object get _micConstraints => AudioDevices.micConstraints(
+    _micDeviceId,
+    monitorCapture: _monitorCapture,
+  );
+
+  Future<MediaStream?> _openLocalStream() async {
+    if (_micUnavailable) return null;
+    if (_wantVideo) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+          'audio': _micConstraints,
+          'video': true,
+        });
+      } catch (e) {
+        logger.w('[call] камера недоступна, открываю только микрофон: $e');
+      }
+    }
+    try {
+      return await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+        'audio': _micConstraints,
+        'video': false,
+      });
+    } catch (e) {
+      logger.w('[call] микрофон недоступен, остаюсь в звонке без него: $e');
+      _micUnavailable = true;
+      _muted = true;
+      _notifyInfo();
+      _notice(CallNotice.micUnavailable);
+      return null;
+    }
+  }
+
+  Future<void> _reserveAudioSender(RTCPeerConnection pc) async {
+    if (_audioSender != null) return;
+    final transceiver = await pc.addTransceiver(
+      kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
+      init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
+    );
+    _audioSender = transceiver.sender;
+  }
+
+  Future<void> _adoptOfferedAudio(RTCPeerConnection pc) async {
+    if (_topology == 'SERVER' || _audioSender != null) return;
+    final offered = (await pc.getTransceivers())
+        .where((t) => t.mid.isNotEmpty && t.receiver.track?.kind == 'audio')
+        .firstOrNull;
+    if (offered == null) return;
+    await offered.setDirection(TransceiverDirection.SendRecv);
+    _audioSender = offered.sender;
   }
 
   // #***! на мобилках микрофон выбирает движок
@@ -1619,10 +1673,7 @@ class CallSession {
     final sender = _audioSender;
     if (sender == null) return;
     final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
-      'audio': AudioDevices.micConstraints(
-        _micDeviceId,
-        monitorCapture: _monitorCapture,
-      ),
+      'audio': _micConstraints,
       'video': false,
     });
     final tracks = stream.getAudioTracks();
@@ -2019,7 +2070,8 @@ class CallSession {
   }
 
   // #***! сервер сам выделяет слоты под нашу камеру и экран, экранный узнаём по s в mid
-  ({String? camera, String? screen}) _sendSlotMids(String sdp) {
+  ({String? audio, String? camera, String? screen}) _sendSlotMids(String sdp) {
+    String? audio;
     String? camera;
     String? screen;
     String? kind;
@@ -2028,7 +2080,12 @@ class CallSession {
 
     void flush() {
       final id = mid;
-      if (kind != 'video' || id == null) return;
+      if (id == null) return;
+      if (kind == 'audio') {
+        if (recvOnly) audio ??= id;
+        return;
+      }
+      if (kind != 'video') return;
       if (id.contains('s')) {
         screen ??= id;
       } else if (recvOnly) {
@@ -2050,18 +2107,20 @@ class CallSession {
       }
     }
     flush();
-    return (camera: camera, screen: screen);
+    return (audio: audio, camera: camera, screen: screen);
   }
 
   Future<void> _prepareSendSlots(RTCPeerConnection pc, String offerSdp) async {
     final slots = _sendSlotMids(offerSdp);
     logger.i(
-      '[call][sfu] send slots camera=${slots.camera} screen=${slots.screen}',
+      '[call][sfu] send slots audio=${slots.audio} camera=${slots.camera} '
+      'screen=${slots.screen}',
     );
-    if (slots.camera == null && slots.screen == null) return;
     for (final transceiver in await pc.getTransceivers()) {
       final mid = transceiver.mid;
-      if (mid == slots.camera) {
+      if (mid == slots.audio) {
+        if (_audioSender == null) await _claimAudioSlot(transceiver);
+      } else if (mid == slots.camera) {
         _videoSender =
             await _claimSendSlot(transceiver, _cameraStream) ?? _videoSender;
       } else if (mid == slots.screen) {
@@ -2069,6 +2128,17 @@ class CallSession {
             await _claimSendSlot(transceiver, _screenStream) ?? _screenSender;
       }
     }
+  }
+
+  Future<void> _claimAudioSlot(RTCRtpTransceiver transceiver) async {
+    try {
+      await transceiver.setDirection(TransceiverDirection.SendOnly);
+    } catch (e) {
+      logger.w('[call][sfu] audio slot ${transceiver.mid} setDirection: $e');
+      return;
+    }
+    _audioSender = transceiver.sender;
+    logger.i('[call][sfu] audio slot mid=${transceiver.mid} без микрофона');
   }
 
   Future<RTCRtpSender?> _claimSendSlot(
@@ -3073,6 +3143,7 @@ class CallSession {
     await _flushCandidates();
 
     if (type == 'offer') {
+      await _adoptOfferedAudio(pc);
       await _adoptOfferedVideo(pc);
       if (_isDesktop) await _preferVp8Codecs(pc);
       final answer = await pc.createAnswer({});
@@ -3169,7 +3240,48 @@ class CallSession {
 
   // #***! мьют, дорожку не убираем а глушим иначе собеседник увидит разрыв
   Future<void> setMuted(bool muted) async {
+    if (!muted && _micUnavailable && !await _restoreMic()) {
+      _notifyInfo();
+      _notice(CallNotice.micUnavailable);
+      return;
+    }
     await _applyMuted(muted, announce: true);
+  }
+
+  Future<bool> _restoreMic() async {
+    final pc = _pc;
+    if (pc == null) return false;
+    try {
+      if (_audioSender == null) {
+        await _addMicTrack(pc);
+      } else {
+        await _replaceMicTrack();
+      }
+    } catch (e) {
+      logger.w('[call] микрофон по-прежнему недоступен: $e');
+      return false;
+    }
+    if (_audioTracks.isEmpty) return false;
+    _micUnavailable = false;
+    logger.i('[call] микрофон подключён в идущем звонке');
+    return true;
+  }
+
+  Future<void> _addMicTrack(RTCPeerConnection pc) async {
+    final stream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
+      'audio': _micConstraints,
+      'video': false,
+    });
+    final track = stream.getAudioTracks().firstOrNull;
+    if (track == null) {
+      await _disposeStream(stream);
+      throw StateError('нет аудиодорожки');
+    }
+    track.enabled = audioTransmitting;
+    _audioSender = await pc.addTrack(track, stream);
+    final previous = _micStream;
+    _micStream = stream;
+    await _disposeStream(previous);
   }
 
   Future<void> _applyMuted(bool muted, {bool announce = false}) async {

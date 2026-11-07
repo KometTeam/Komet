@@ -170,7 +170,7 @@
             tools:node="remove" />
         <service
             android:name=".CallForegroundService"
-            android:foregroundServiceType="microphone|mediaProjection"
+            android:foregroundServiceType="microphone|mediaProjection|mediaPlayback"
             android:exported="false" />
         <service
             android:name=".FkmService"

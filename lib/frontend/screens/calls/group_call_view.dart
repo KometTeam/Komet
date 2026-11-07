@@ -254,13 +254,15 @@ class _GroupCallViewState extends State<GroupCallView> {
   void _onNotice(CallNotice notice) {
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
-    showCustomNotification(context, switch (notice) {
+    final text = switch (notice) {
       CallNotice.handLoweredByAdmin => l10n.callHandLoweredByAdmin,
       CallNotice.allHandsLoweredByAdmin => l10n.callAllHandsLoweredByAdmin,
       CallNotice.micMutedByAdmin => l10n.callMicMutedByAdmin,
       CallNotice.cameraMutedByAdmin => l10n.callCameraMutedByAdmin,
       CallNotice.screenMutedByAdmin => l10n.callScreenMutedByAdmin,
-    });
+      CallNotice.micUnavailable => null,
+    };
+    if (text != null) showCustomNotification(context, text);
   }
 
   List<CallParticipant> _ordered() {
@@ -879,8 +881,7 @@ class _GroupCallViewState extends State<GroupCallView> {
     );
     return CallStage(
       key: ValueKey(focus),
-      media:
-          widget.mediaOf(p, avatar, source: focus.$2, stage: true) ?? avatar,
+      media: widget.mediaOf(p, avatar, source: focus.$2, stage: true) ?? avatar,
       label: screen ? l10n.callScreenOf(view.name) : view.name,
       labelIcon: screen ? Symbols.screen_share : Symbols.videocam,
       speaking: !screen && !muted && _session.isSpeaking(p.id),

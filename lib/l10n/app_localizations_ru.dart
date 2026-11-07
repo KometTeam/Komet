@@ -7358,6 +7358,12 @@ class AppLocalizationsRu extends AppLocalizations {
       'Администратор остановил вашу демонстрацию экрана';
 
   @override
+  String get callMicUnavailable => 'Нет доступа к микрофону — вас не слышно';
+
+  @override
+  String get callMicSettings => 'Настройки';
+
+  @override
   String get callMediaLocked => 'Администратор запретил это в звонке';
 
   @override

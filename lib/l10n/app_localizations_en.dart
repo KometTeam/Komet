@@ -7304,6 +7304,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callScreenMutedByAdmin => 'An admin stopped your screen sharing';
 
   @override
+  String get callMicUnavailable =>
+      'No microphone access — others can\'t hear you';
+
+  @override
+  String get callMicSettings => 'Settings';
+
+  @override
   String get callMediaLocked => 'An admin has disabled this in the call';
 
   @override

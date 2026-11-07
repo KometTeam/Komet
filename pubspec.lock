@@ -77,7 +77,7 @@ packages:
     dependency: "direct main"
     description:
       name: audio_metadata_reader
-      sha256: 66e8e216deab90008fa161c345e93c7c3cab28667042264976eb03865122a7b9
+      sha256: "66e8e216deab90008fa161c345e93c7c3cab28667042264976eb03865122a7b9"
       url: "https://pub.dev"
     source: hosted
     version: "1.8.1"
@@ -221,7 +221,7 @@ packages:
     dependency: transitive
     description:
       name: charset
-      sha256: 27802032a581e01ac565904ece8c8962564b1070690794f0072f6865958ce8b9
+      sha256: "27802032a581e01ac565904ece8c8962564b1070690794f0072f6865958ce8b9"
       url: "https://pub.dev"
     source: hosted
     version: "2.0.1"

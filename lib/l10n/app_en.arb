@@ -2774,6 +2774,8 @@
   "callMicMutedByAdmin": "An admin turned off your microphone",
   "callCameraMutedByAdmin": "An admin turned off your camera",
   "callScreenMutedByAdmin": "An admin stopped your screen sharing",
+  "callMicUnavailable": "No microphone access — others can't hear you",
+  "callMicSettings": "Settings",
   "callMediaLocked": "An admin has disabled this in the call",
   "callRecordingBy": "{name} is recording the call",
   "@callRecordingBy": {"placeholders": {"name": {"type": "String"}}},
