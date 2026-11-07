@@ -1410,6 +1410,10 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get callMicrophonePermissionDenied =>
+      'Для звонка разрешите Komet доступ к микрофону в настройках устройства';
+
+  @override
   String get callTooltipMicrophone => 'Микрофон';
 
   @override

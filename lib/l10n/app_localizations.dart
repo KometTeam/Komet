@@ -2732,6 +2732,12 @@ abstract class AppLocalizations {
   /// **'Camera unavailable: {error}'**
   String callCameraUnavailable(Object error);
 
+  /// No description provided for @callMicrophonePermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow Komet to access the microphone in device settings to make calls'**
+  String get callMicrophonePermissionDenied;
+
   /// No description provided for @callTooltipMicrophone.
   ///
   /// In en, this message translates to:

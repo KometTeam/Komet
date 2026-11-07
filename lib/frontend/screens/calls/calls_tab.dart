@@ -7,6 +7,7 @@ import '../../../backend/modules/account.dart';
 import '../../../core/storage/app_database.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/calls/call_controller.dart';
+import '../../../core/calls/call_permissions.dart';
 import '../../../backend/modules/calls.dart';
 import '../../widgets/komet_avatar.dart';
 import '../../widgets/connection_status.dart';
@@ -379,6 +380,9 @@ class _CallsTabState extends State<CallsTab>
               CallScreen(name: name, session: session, isGroup: true),
         ),
       );
+    } on CallMicrophonePermissionException {
+      if (!mounted) return;
+      showCustomNotification(context, l10n.callMicrophonePermissionDenied);
     } catch (e) {
       if (!mounted) return;
       showCustomNotification(context, l10n.callsTabStartFailed('$e'));

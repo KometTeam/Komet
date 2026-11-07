@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../backend/modules/calls.dart';
 import '../../core/calls/call_controller.dart';
+import '../../core/calls/call_permissions.dart';
 import '../../l10n/app_localizations.dart';
 import '../screens/calls/call_screen.dart';
 import 'custom_notification.dart';
@@ -44,6 +45,11 @@ Future<bool> startDirectCall(
     return true;
   } on CallPeerIsBotException {
     if (context.mounted) showCustomNotification(context, l10n.callPeerIsBot);
+    return false;
+  } on CallMicrophonePermissionException {
+    if (context.mounted) {
+      showCustomNotification(context, l10n.callMicrophonePermissionDenied);
+    }
     return false;
   } catch (_) {
     if (context.mounted) {

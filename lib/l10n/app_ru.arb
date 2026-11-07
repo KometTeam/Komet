@@ -454,6 +454,7 @@
   "callMute": "Выкл. звук",
   "callEndButton": "Завершить",
   "callCameraUnavailable": "Камера недоступна: {error}",
+  "callMicrophonePermissionDenied": "Для звонка разрешите Komet доступ к микрофону в настройках устройства",
   "callTooltipMicrophone": "Микрофон",
   "callMicrophoneTitle": "Микрофон",
   "callMicrophoneSystem": "Системный по умолчанию",

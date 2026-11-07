@@ -507,6 +507,7 @@
   "callMute": "Mute",
   "callEndButton": "End",
   "callCameraUnavailable": "Camera unavailable: {error}",
+  "callMicrophonePermissionDenied": "Allow Komet to access the microphone in device settings to make calls",
   "callTooltipMicrophone": "Microphone",
   "callMicrophoneTitle": "Microphone",
   "callMicrophoneSystem": "System default",

@@ -9,6 +9,7 @@ import '../utils/logger.dart';
 import '../utils/parse.dart';
 import 'call_bridge.dart';
 import 'call_link.dart';
+import 'call_permissions.dart';
 import 'call_session.dart';
 import 'conversation_params.dart';
 import 'ws2_signaling.dart';
@@ -194,6 +195,7 @@ class CallController {
   // #***! исходящий звонок
   Future<CallSession> startOutgoing(int calleeId, {bool isVideo = false}) =>
       _startExclusive(() async {
+        await CallPermissions.requireMicrophone();
         final out = await _calls!.initiateCall(calleeId, isVideo: isVideo);
         final config = Ws2Config.fromEndpoint(
           out.endpoint,
@@ -217,6 +219,7 @@ class CallController {
   // #***! вход по ссылке
   Future<CallSession> joinByLink(String token, {bool isVideo = false}) =>
       _startExclusive(() async {
+        await CallPermissions.requireMicrophone();
         final params = await _calls!.joinByLink(token, isVideo: isVideo);
         final config = Ws2Config.fromEndpoint(
           params.endpoint,
@@ -247,6 +250,7 @@ class CallController {
 
   // #***! принятие входящего
   Future<CallSession> acceptIncoming(IncomingCall call) async {
+    await CallPermissions.requireMicrophone();
     _pending = null;
     CallBridge.instance.cancelIncoming(conversationId: call.conversationId);
     final config = Ws2Config.fromVcp(

@@ -12,6 +12,7 @@ import '../../../backend/modules/messages.dart' show ContactCache;
 import '../../../core/cache/info_cache.dart';
 import '../../../core/calls/active_call.dart';
 import '../../../core/calls/call_controller.dart';
+import '../../../core/calls/call_permissions.dart';
 import '../../../core/calls/call_info.dart';
 import '../../../core/calls/call_session.dart';
 import '../../../core/config/app_colors.dart';
@@ -358,6 +359,13 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       final session = await CallController.instance.acceptIncoming(incoming);
       if (!mounted) return;
       _bind(session);
+    } on CallMicrophonePermissionException {
+      if (!mounted) return;
+      setState(() => _incomingPending = true);
+      showCustomNotification(
+        context,
+        AppLocalizations.of(context)!.callMicrophonePermissionDenied,
+      );
     } catch (_) {
       _close();
     }

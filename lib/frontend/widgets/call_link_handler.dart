@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/calls/call_controller.dart';
+import '../../core/calls/call_permissions.dart';
 import '../../core/calls/call_link.dart';
 import '../../l10n/app_localizations.dart';
 import '../screens/calls/call_screen.dart';
@@ -78,6 +79,10 @@ Future<void> joinGroupCall(
         builder: (_) => CallScreen(name: name, session: session, isGroup: true),
       ),
     );
+  } on CallMicrophonePermissionException {
+    if (context.mounted) {
+      showCustomNotification(context, l10n.callMicrophonePermissionDenied);
+    }
   } catch (_) {
     if (context.mounted) {
       showCustomNotification(context, l10n.callLinkHandlerJoinFailed);

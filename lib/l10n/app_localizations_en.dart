@@ -1407,6 +1407,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get callMicrophonePermissionDenied =>
+      'Allow Komet to access the microphone in device settings to make calls';
+
+  @override
   String get callTooltipMicrophone => 'Microphone';
 
   @override
