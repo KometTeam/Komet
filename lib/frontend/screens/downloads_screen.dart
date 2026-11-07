@@ -21,12 +21,20 @@ import '../widgets/small_spinner.dart';
 import '../widgets/sheet_helpers.dart';
 import '../widgets/share_unopenable_file.dart';
 
+typedef DownloadAudioMetadataLoader =
+    Future<AudioFileMetadataInfo?> Function(DownloadRecord record);
+
 class DownloadsScreen extends StatefulWidget {
-  const DownloadsScreen({super.key, this.highlightCacheName});
+  const DownloadsScreen({
+    super.key,
+    this.highlightCacheName,
+    this.audioMetadataLoader,
+  });
 
   static const routeName = '/downloads';
 
   final String? highlightCacheName;
+  final DownloadAudioMetadataLoader? audioMetadataLoader;
 
   @override
   State<DownloadsScreen> createState() => _DownloadsScreenState();
@@ -64,9 +72,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
   Future<AudioFileMetadataInfo?> _metadataFor(DownloadRecord record) =>
       _audioMetadata.putIfAbsent(record.cacheName, () async {
+        final loader = widget.audioMetadataLoader;
+        if (loader != null) return await loader(record);
         final file = await DownloadHistory.fileFor(record, touch: false);
         if (file == null) return null;
-        return AudioFileMetadata.read(file, cacheName: record.cacheName);
+        return await AudioFileMetadata.read(file, cacheName: record.cacheName);
       });
 
   void _revealHighlight() {

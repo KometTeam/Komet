@@ -1,5 +1,8 @@
 enum AudioFileOrigin { message, downloads }
 
+typedef AudioFileEnricher =
+    Future<AudioFileTrack> Function(AudioFileTrack track);
+
 typedef AudioFileActivator =
     Future<void> Function(
       AudioFileTrack track, {

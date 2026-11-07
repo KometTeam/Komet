@@ -42,6 +42,7 @@ class FileBubble extends StatefulWidget {
   final FileAttachment file;
   final bool fill;
   final FileBubbleOpener openFile;
+  final AudioFileEnricher? enrichAudioFile;
   final AudioFileActivator? activateAudioFile;
 
   const FileBubble({
@@ -50,6 +51,7 @@ class FileBubble extends StatefulWidget {
     required this.file,
     this.fill = false,
     this.openFile = openCachedFile,
+    this.enrichAudioFile,
     this.activateAudioFile,
   });
 
@@ -665,7 +667,7 @@ class _FileBubbleState extends State<FileBubble> {
       return;
     }
     try {
-      final track = await AudioFileMetadata.enrich(
+      final track = await (widget.enrichAudioFile ?? AudioFileMetadata.enrich)(
         AudioFileTrack(
           cacheName: cacheName,
           path: result.path!,

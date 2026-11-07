@@ -115,6 +115,7 @@ void main() {
     MediaCache.resetForTesting();
     AudioFileMetadata.resetForTesting();
     SharedPreferences.setMockInitialValues({});
+    late AudioFileMetadataInfo metadata;
 
     await tester.runAsync(() async {
       DownloadHistory.resetForTesting();
@@ -131,15 +132,18 @@ void main() {
         ),
         file,
       );
-      await AudioFileMetadata.read(file, cacheName: 'synthetic-audio.mp3');
+      metadata = (await AudioFileMetadata.read(
+        file,
+        cacheName: 'synthetic-audio.mp3',
+      ))!;
     });
 
     await tester.pumpWidget(
-      const MaterialApp(
-        locale: Locale('ru'),
+      MaterialApp(
+        locale: const Locale('ru'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: DownloadsScreen(),
+        home: DownloadsScreen(audioMetadataLoader: (_) async => metadata),
       ),
     );
     await tester.pump();
