@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:komet/core/media/audio_file_metadata.dart';
 import 'package:komet/core/utils/media_cache.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -44,7 +45,25 @@ void main() {
       expect(metadata.artist, 'Synthetic Artist');
       expect(metadata.album, 'Synthetic Album');
       expect(metadata.artworkUri, isNotNull);
-      expect(await File.fromUri(metadata.artworkUri!).exists(), isTrue);
+      final artwork = File.fromUri(metadata.artworkUri!);
+      expect(await artwork.exists(), isTrue);
+      final decoded = img.decodeImage(await artwork.readAsBytes());
+      expect(decoded, isNotNull);
+      expect(decoded!.width, 160);
+      expect(decoded.height, 160);
+      expect(AudioFileMetadata.parseCountForTesting, 1);
+
+      await File(
+        'test/fixtures/audio_metadata.mp3',
+      ).setLastModified(DateTime.now().add(const Duration(seconds: 1)));
+      AudioFileMetadata.resetMemoryForTesting();
+      final cached = await AudioFileMetadata.read(
+        File('test/fixtures/audio_metadata.mp3'),
+        cacheName: 'synthetic-audio.mp3',
+      );
+      expect(cached?.title, 'Synthetic Track');
+      expect(cached?.artworkUri, metadata.artworkUri);
+      expect(AudioFileMetadata.parseCountForTesting, 1);
     },
   );
 }

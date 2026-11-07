@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image/image.dart' as img;
 
 import '../utils/media_cache.dart';
 import 'audio_file_track.dart';
@@ -24,7 +25,10 @@ class AudioFileMetadataInfo {
 }
 
 abstract final class AudioFileMetadata {
+  static const int _cacheVersion = 2;
+  static const int _artworkMaxEdge = 160;
   static final Map<String, Future<AudioFileMetadataInfo?>> _cache = {};
+  static int _parseCount = 0;
 
   static Future<AudioFileMetadataInfo?> read(
     File file, {
@@ -32,9 +36,8 @@ abstract final class AudioFileMetadata {
   }) async {
     try {
       final stat = await file.stat();
-      final key =
-          '${file.path}:${stat.size}:${stat.modified.millisecondsSinceEpoch}';
-      return await _cache.putIfAbsent(key, () => _read(file, cacheName));
+      final key = '${file.path}:${stat.size}';
+      return await _cache.putIfAbsent(key, () => _read(file, cacheName, stat));
     } catch (_) {
       return null;
     }
@@ -52,41 +55,89 @@ abstract final class AudioFileMetadata {
   }
 
   @visibleForTesting
-  static void resetForTesting() => _cache.clear();
+  static int get parseCountForTesting => _parseCount;
+
+  @visibleForTesting
+  static void resetMemoryForTesting() => _cache.clear();
+
+  @visibleForTesting
+  static void resetForTesting() {
+    _cache.clear();
+    _parseCount = 0;
+  }
 
   static Future<AudioFileMetadataInfo?> _read(
     File file,
     String cacheName,
+    FileStat stat,
   ) async {
-    final parsed = await Isolate.run(() => _parseAudioMetadata(file.path));
-    if (parsed == null) return null;
+    final digest = sha1.convert(utf8.encode(cacheName)).toString();
+    final metadataFile = await MediaCache.fileFor('audiometa_$digest.json');
+    final artworkFile = await MediaCache.fileFor('audioart_$digest.jpg');
+    final cached = await _readDiskCache(metadataFile, artworkFile, stat);
+    if (cached != null) return cached;
 
+    _parseCount++;
+    final parsed = await Isolate.run(
+      () => _parseAudioMetadata(file.path, _artworkMaxEdge),
+    );
+    final artwork = parsed?.artwork;
     Uri? artworkUri;
-    final artwork = parsed.artwork;
     if (artwork != null) {
-      final extension = _artworkExtension(parsed.artworkMime);
-      final digest = sha1.convert(utf8.encode(cacheName)).toString();
-      final target = await MediaCache.fileFor('audioart_$digest.$extension');
-      await target.writeAsBytes(
+      await artworkFile.writeAsBytes(
         artwork.materialize().asUint8List(),
         flush: true,
       );
-      artworkUri = target.uri;
+      artworkUri = artworkFile.uri;
+    } else if (await artworkFile.exists()) {
+      await artworkFile.delete();
     }
 
-    return AudioFileMetadataInfo(
-      title: _text(parsed.title),
-      artist: _text(parsed.artist),
-      album: _text(parsed.album),
+    final info = AudioFileMetadataInfo(
+      title: _text(parsed?.title),
+      artist: _text(parsed?.artist),
+      album: _text(parsed?.album),
       artworkUri: artworkUri,
     );
+    await metadataFile.writeAsString(
+      jsonEncode({
+        'version': _cacheVersion,
+        'sourceSize': stat.size,
+        'title': info.title,
+        'artist': info.artist,
+        'album': info.album,
+        'hasArtwork': artworkUri != null,
+      }),
+      flush: true,
+    );
+    return info;
   }
 
-  static String _artworkExtension(String? mime) => switch (mime) {
-    'image/png' => 'png',
-    'image/webp' => 'webp',
-    _ => 'jpg',
-  };
+  static Future<AudioFileMetadataInfo?> _readDiskCache(
+    File metadataFile,
+    File artworkFile,
+    FileStat source,
+  ) async {
+    if (!await metadataFile.exists()) return null;
+    try {
+      final decoded = jsonDecode(await metadataFile.readAsString());
+      if (decoded is! Map) return null;
+      if (decoded['version'] != _cacheVersion ||
+          decoded['sourceSize'] != source.size) {
+        return null;
+      }
+      final hasArtwork = decoded['hasArtwork'] == true;
+      if (hasArtwork && !await artworkFile.exists()) return null;
+      return AudioFileMetadataInfo(
+        title: _text(decoded['title']?.toString()),
+        artist: _text(decoded['artist']?.toString()),
+        album: _text(decoded['album']?.toString()),
+        artworkUri: hasArtwork ? artworkFile.uri : null,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   static String? _text(String? value) {
     final normalized = value?.trim();
@@ -98,10 +149,9 @@ abstract final class AudioFileMetadata {
   String? title,
   String? artist,
   String? album,
-  String? artworkMime,
   TransferableTypedData? artwork,
 })?
-_parseAudioMetadata(String path) {
+_parseAudioMetadata(String path, int artworkMaxEdge) {
   try {
     final metadata = readMetadata(File(path), getImage: true);
     Picture? picture;
@@ -112,14 +162,36 @@ _parseAudioMetadata(String path) {
       }
       picture ??= candidate;
     }
+
+    TransferableTypedData? artwork;
+    if (picture != null && picture.bytes.isNotEmpty) {
+      final decoded = img.decodeImage(picture.bytes);
+      if (decoded != null) {
+        final resized =
+            decoded.width <= artworkMaxEdge && decoded.height <= artworkMaxEdge
+            ? decoded
+            : decoded.width >= decoded.height
+            ? img.copyResize(
+                decoded,
+                width: artworkMaxEdge,
+                interpolation: img.Interpolation.average,
+              )
+            : img.copyResize(
+                decoded,
+                height: artworkMaxEdge,
+                interpolation: img.Interpolation.average,
+              );
+        artwork = TransferableTypedData.fromList([
+          img.encodeJpg(resized, quality: 82),
+        ]);
+      }
+    }
+
     return (
       title: metadata.title,
       artist: metadata.artist ?? metadata.albumArtist,
       album: metadata.album,
-      artworkMime: picture?.mimetype.toLowerCase(),
-      artwork: picture == null || picture.bytes.isEmpty
-          ? null
-          : TransferableTypedData.fromList([picture.bytes]),
+      artwork: artwork,
     );
   } catch (_) {
     return null;

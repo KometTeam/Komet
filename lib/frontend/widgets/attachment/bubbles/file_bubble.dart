@@ -28,6 +28,9 @@ import '../../share_unopenable_file.dart';
 import '../../upload_progress_ring.dart';
 import 'bubble_context.dart';
 
+typedef FileBubbleAudioMetadataLoader =
+    Future<AudioFileMetadataInfo?> Function(String cacheName);
+
 typedef FileBubbleOpener =
     Future<FileDownloadResult> Function(
       String cacheName,
@@ -43,6 +46,7 @@ class FileBubble extends StatefulWidget {
   final bool fill;
   final FileBubbleOpener openFile;
   final FileBubbleOpener? cacheAudioFile;
+  final FileBubbleAudioMetadataLoader? loadAudioMetadata;
   final AudioFileEnricher? enrichAudioFile;
   final AudioFileActivator? activateAudioFile;
 
@@ -53,6 +57,7 @@ class FileBubble extends StatefulWidget {
     this.fill = false,
     this.openFile = openCachedFile,
     this.cacheAudioFile,
+    this.loadAudioMetadata,
     this.enrichAudioFile,
     this.activateAudioFile,
   });
@@ -248,6 +253,15 @@ class _FileBubbleState extends State<FileBubble> {
                     ),
                 ],
               ),
+              if (audioFile && cached)
+                _AudioFileMetadataPreview(
+                  cacheName: cacheName,
+                  fallbackTitle: name,
+                  fallbackArtworkUrl: previewUrl,
+                  textColor: ctx.text,
+                  dimColor: ctx.dim,
+                  loader: widget.loadAudioMetadata,
+                ),
               if (audioFile)
                 _AudioFilePlaybackControl(
                   cacheName: cacheName,
@@ -690,6 +704,147 @@ class _FileBubbleState extends State<FileBubble> {
         showCustomNotification(context, l10n.audioPlaybackFailed);
       }
     }
+  }
+}
+
+class _AudioFileMetadataPreview extends StatefulWidget {
+  const _AudioFileMetadataPreview({
+    required this.cacheName,
+    required this.fallbackTitle,
+    required this.fallbackArtworkUrl,
+    required this.textColor,
+    required this.dimColor,
+    this.loader,
+  });
+
+  final String cacheName;
+  final String fallbackTitle;
+  final String fallbackArtworkUrl;
+  final Color textColor;
+  final Color dimColor;
+  final FileBubbleAudioMetadataLoader? loader;
+
+  @override
+  State<_AudioFileMetadataPreview> createState() =>
+      _AudioFileMetadataPreviewState();
+}
+
+class _AudioFileMetadataPreviewState extends State<_AudioFileMetadataPreview> {
+  late Future<AudioFileMetadataInfo?> _metadata = _load();
+
+  @override
+  void didUpdateWidget(covariant _AudioFileMetadataPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.cacheName != widget.cacheName ||
+        oldWidget.loader != widget.loader) {
+      _metadata = _load();
+    }
+  }
+
+  Future<AudioFileMetadataInfo?> _load() async {
+    final loader = widget.loader;
+    if (loader != null) return loader(widget.cacheName);
+    final file = await MediaCache.existing(widget.cacheName);
+    if (file == null) return null;
+    return AudioFileMetadata.read(file, cacheName: widget.cacheName);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<AudioFileMetadataInfo?>(
+      future: _metadata,
+      builder: (context, snapshot) {
+        final metadata = snapshot.data;
+        final title = metadata?.title?.trim();
+        final artist = metadata?.artist?.trim();
+        final album = metadata?.album?.trim();
+        final subtitle = [
+          if (artist != null && artist.isNotEmpty) artist,
+          if (album != null && album.isNotEmpty && album != artist) album,
+        ].join(' · ');
+        final artwork = metadata?.artworkUri;
+        final fallbackArtwork = widget.fallbackArtworkUrl.trim();
+        if ((title == null || title.isEmpty) &&
+            subtitle.isEmpty &&
+            artwork == null &&
+            fallbackArtwork.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(
+            children: [
+              if (artwork != null || fallbackArtwork.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: SizedBox(
+                    key: ValueKey('audio-metadata-cover-${widget.cacheName}'),
+                    width: 36,
+                    height: 36,
+                    child: _artwork(artwork, fallbackArtwork),
+                  ),
+                ),
+                const SizedBox(width: 9),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title == null || title.isEmpty
+                          ? widget.fallbackTitle
+                          : title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: widget.textColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        height: 1.15,
+                      ),
+                    ),
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: widget.dimColor,
+                          fontSize: 11,
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _artwork(Uri? artwork, String fallbackArtwork) {
+    if (artwork != null && artwork.scheme == 'file') {
+      return Image.file(
+        File.fromUri(artwork),
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.low,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      );
+    }
+    final url = artwork?.toString() ?? fallbackArtwork;
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: BoxFit.cover,
+      memCacheWidth: 72,
+      memCacheHeight: 72,
+      errorWidget: (_, _, _) => const SizedBox.shrink(),
+    );
   }
 }
 
