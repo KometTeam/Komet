@@ -199,16 +199,6 @@ class KometSettingsScreen extends StatelessWidget {
             SettingsCard(
               children: [
                 ValueListenableBuilder<bool>(
-                  valueListenable: KometSettings.debugSnow,
-                  builder: (context, value, _) => SettingsToggleTile(
-                    icon: Symbols.ac_unit,
-                    label: l10n.kometSettingsDebugSnowLabel,
-                    subtitle: l10n.kometSettingsDebugSnowSubtitle,
-                    value: value,
-                    onChanged: KometSettings.setDebugSnow,
-                  ),
-                ),
-                ValueListenableBuilder<bool>(
                   valueListenable: KometSettings.recordDebugLogs,
                   builder: (context, value, _) => SettingsToggleTile(
                     icon: Symbols.bug_report,

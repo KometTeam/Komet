@@ -150,8 +150,8 @@ class ChatBodyLayout extends StatelessWidget {
                   Positioned.fill(
                     child: ChatWallpaperView(wallpaper: wallpaper!),
                   ),
-                Positioned.fill(child: messagesArea),
                 const Positioned.fill(child: SeasonalSnowLayer()),
+                Positioned.fill(child: messagesArea),
                 ValueListenableBuilder<double>(
                   valueListenable: composerHeight,
                   builder: (context, height, _) => Positioned(
@@ -187,8 +187,8 @@ class ChatBodyLayout extends StatelessWidget {
       children: [
         if (wallpaper != null)
           Positioned.fill(child: ChatWallpaperView(wallpaper: wallpaper!)),
-        Positioned.fill(child: messagesArea),
         const Positioned.fill(child: SeasonalSnowLayer()),
+        Positioned.fill(child: messagesArea),
         SearchOverlay(
           cs: cs,
           searchAnim: searchAnim,

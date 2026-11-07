@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:komet/backend/modules/messages.dart' show CachedMessage;
 import 'package:komet/core/config/app_chat_chrome.dart';
 import 'package:komet/core/config/app_frost.dart';
-import 'package:komet/frontend/widgets/seasonal_snow.dart';
 
 import 'chat_header.dart';
 import 'frosted_panel.dart';
@@ -163,19 +162,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: chrome == ChatChromeStyle.color
           ? (glossyChrome ? Colors.transparent : cs.surfaceContainerHigh)
           : Colors.transparent,
-      flexibleSpace: Stack(
-        fit: StackFit.expand,
-        children: [
-          ?background,
-          Positioned.fill(
-            child: SeasonalSnowLayer(
-              flakeCount: 18,
-              seed: 3101 + chatId,
-              opacity: 0.86,
-            ),
-          ),
-        ],
-      ),
+      flexibleSpace: background,
       foregroundColor: cs.onSurface,
       surfaceTintColor: Colors.transparent,
       iconTheme: IconThemeData(color: cs.onSurface),

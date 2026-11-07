@@ -6250,13 +6250,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get kometSettingsDebugHeader => 'Отладка';
 
   @override
-  String get kometSettingsDebugSnowLabel => 'Снег в чатах (отладка)';
-
-  @override
-  String get kometSettingsDebugSnowSubtitle =>
-      'Принудительно показывает снег вне периода с 1 декабря по 3 января';
-
-  @override
   String get kometSettingsDebugLogsLabel => 'Запись отладочных логов';
 
   @override

@@ -133,6 +133,7 @@ import '../../../core/config/app_fonts.dart';
 import '../lock/lock_glyph.dart';
 import '../../../core/security/app_lock.dart';
 import '../../widgets/verified_mark.dart';
+import '../../widgets/seasonal_snow.dart';
 
 const String _savedWelcomeKey = 'welcome.saved.dialog.message';
 
@@ -2397,6 +2398,19 @@ class _ChatListScreenState extends State<ChatListScreen>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const SizedBox(
+            height: 0,
+            child: OverflowBox(
+              alignment: Alignment.topCenter,
+              minHeight: 220,
+              maxHeight: 220,
+              child: SeasonalSnowLayer(
+                flakeCount: 12,
+                seed: 1203,
+                opacity: 0.72,
+              ),
+            ),
+          ),
           ListenableBuilder(
             listenable: _storiesUi,
             builder: (context, _) => ClipRect(

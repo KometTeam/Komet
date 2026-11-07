@@ -11,6 +11,7 @@ import '../../core/config/app_stories.dart';
 import '../../core/config/app_swipe_back_desktop.dart';
 import '../../core/config/app_unchecked_links.dart';
 import '../../core/config/app_video_note_quality.dart';
+import '../../core/config/komet_settings.dart';
 import '../../core/contacts/device_contacts_service.dart';
 import '../screens/digital_id/digital_id_web_screen.dart';
 import '../widgets/custom_notification.dart';
@@ -61,6 +62,14 @@ class DebugFeatureTogglesSection extends StatelessWidget {
               description: (_) => 'Лента историй в списке чатов',
               valueListenable: AppStories.current,
               onChanged: AppStories.save,
+            ),
+            DevToggleRow(
+              title: 'Снег',
+              description: (_) =>
+                  'Принудительно показывает снег вне периода '
+                  'с 1 декабря по 3 января',
+              valueListenable: KometSettings.debugSnow,
+              onChanged: KometSettings.setDebugSnow,
             ),
             DevToggleRow(
               title: 'Команды',

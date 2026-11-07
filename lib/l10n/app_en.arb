@@ -2413,8 +2413,6 @@
   "kometSettingsAntiStoryViewSubtitle": "Watch stories without appearing among their viewers. The author still sees your reactions and replies",
   "kometSettingsSelfOnlineCheckSubtitle": "Checks every ~10 seconds when you were last online. Useful for testing ghost mode",
   "kometSettingsDebugHeader": "Debugging",
-  "kometSettingsDebugSnowLabel": "Snow in chats (debug)",
-  "kometSettingsDebugSnowSubtitle": "Forces snow outside the December 1–January 3 holiday period",
   "kometSettingsDebugLogsLabel": "Record debug logs",
   "kometSettingsDebugLogsSubtitle": "Writes protocol traffic to a file on the device — helps diagnose bugs in reports",
   "sharedContentSavedToGallery": "Saved to gallery",
