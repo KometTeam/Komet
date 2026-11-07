@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../core/config/komet_settings.dart';
@@ -53,7 +54,7 @@ class _SeasonalSnowLayerState extends State<SeasonalSnowLayer>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final tickerMode = TickerMode.of(context);
+    final tickerMode = TickerMode.valuesOf(context).enabled;
     if (_tickerMode == tickerMode) return;
     _tickerMode = tickerMode;
     _syncAnimation();
