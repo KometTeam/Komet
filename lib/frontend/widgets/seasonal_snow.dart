@@ -30,7 +30,10 @@ class SeasonalSnowLayer extends StatefulWidget {
 
 class _SeasonalSnowLayerState extends State<SeasonalSnowLayer>
     with WidgetsBindingObserver {
-  static const _frameInterval = Duration(milliseconds: 125);
+  static const _targetFps = 24;
+  static const _frameInterval = Duration(
+    microseconds: Duration.microsecondsPerSecond ~/ _targetFps,
+  );
 
   final ValueNotifier<double> _elapsedSeconds = ValueNotifier(0);
   final Stopwatch _clock = Stopwatch();
