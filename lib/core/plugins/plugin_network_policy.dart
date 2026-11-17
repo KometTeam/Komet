@@ -68,6 +68,7 @@ class PluginNetworkPolicy {
   static HttpClient createClient({
     bool allowHttpForTesting = false,
     Future<List<InternetAddress>> Function(String host)? lookup,
+    SecurityContext? context,
   }) {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 10);
@@ -82,6 +83,14 @@ class PluginNetworkPolicy {
       ).timeout(const Duration(seconds: 10));
       if (!allowHttpForTesting) validateAddresses(addresses);
       if (addresses.isEmpty) throw const SocketException('No address for host');
+      // #***! HttpClient при заданном connectionFactory не поднимает TLS сам:
+      // SecureSocket он создаёт только без фабрики (SDK, _ConnectionTarget.connect),
+      // а после фабрики TLS остаётся лишь в прокси-туннеле. Значит для https
+      // фабрика обязана вернуть уже защищённый сокет: сначала TCP, затем
+      // SecureSocket.secure с SNI/верификацией по uri.host. Иначе запрос
+      // уходит plaintext'ом на 443 и сервер отвечает
+      // "400 The plain HTTP request was sent to HTTPS port".
+      final secure = uri.isScheme('https');
       ConnectionTask<Socket>? attempt;
       var cancelled = false;
       Future<Socket> connect() async {
@@ -95,14 +104,25 @@ class PluginNetworkPolicy {
               task.cancel();
               throw const SocketException('Connection cancelled');
             }
-            return await task.socket.timeout(
+            final socket = await task.socket.timeout(
               const Duration(seconds: 10),
               onTimeout: () {
                 task.cancel();
                 throw const SocketException('Connection timed out');
               },
             );
+            if (!secure) return socket;
+            return await SecureSocket.secure(
+              socket,
+              host: uri.host,
+              context: context,
+            );
           } on SocketException catch (error) {
+            lastError = error;
+          } on TlsException catch (error) {
+            // Следующий адрес может оказаться рабочим (перебор IPv6→IPv4),
+            // поэтому неудачное рукопожатие тоже переводится на следующий
+            // адрес, а не роняет всю попытку.
             lastError = error;
           }
         }
