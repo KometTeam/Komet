@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -317,6 +318,75 @@ void main() {
       } finally {
         HttpOverrides.global = original;
       }
+    },
+  );
+  // Регресс: HttpClient не поднимает TLS для сокета из connectionFactory,
+  // поэтому фабрика обязана вернуть SecureSocket для https. Проверяем end-to-end
+  // на локальном TLS-сервере с самоподписанным сертификатом: до фикса запрос
+  // уходил plaintext'ом (сервер рвал соединение до ответа), после фикса
+  // клиент делает рукопожатие и получает 200.
+  test(
+    'https plugin fetch goes through TLS, not plaintext port 443',
+    () async {
+      final context = SecurityContext()
+        ..useCertificateChainBytes(
+          File('test/fixtures/tls/test_cert.pem').readAsBytesSync(),
+        )
+        ..usePrivateKeyBytes(
+          File('test/fixtures/tls/test_key.pem').readAsBytesSync(),
+        );
+      final server = await HttpServer.bindSecure(
+        InternetAddress.loopbackIPv4,
+        0,
+        context,
+        backlog: 1,
+      );
+      server.listen((request) {
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..write('tls ok')
+          ..close();
+      });
+      final original = HttpOverrides.current;
+      HttpOverrides.global = null;
+      Object? failure;
+      try {
+        // allowHttpForTesting снимает запрет приватных адресов; схема URL
+        // остаётся https — TLS-путь фабрики включается. Клиентскому контексту
+        // доверяем наш самоподписанный сертификат.
+        final trust = SecurityContext()
+          ..setTrustedCertificatesBytes(
+            File('test/fixtures/tls/test_cert.pem').readAsBytesSync(),
+          );
+        final client = PluginNetworkPolicy.createClient(
+          allowHttpForTesting: true,
+          lookup: (host) async => [InternetAddress('127.0.0.1')],
+          context: trust,
+        );
+        try {
+          final request = await client.getUrl(
+            Uri(
+              scheme: 'https',
+              host: 'synthetic.example.invalid',
+              port: server.port,
+              path: '/',
+            ),
+          );
+          final response = await request.close().timeout(
+            const Duration(seconds: 10),
+          );
+          expect(response.statusCode, HttpStatus.ok);
+          expect(await response.transform(utf8.decoder).join(), 'tls ok');
+        } catch (error) {
+          failure = error;
+        } finally {
+          client.close(force: true);
+        }
+      } finally {
+        HttpOverrides.global = original;
+        server.close(force: true);
+      }
+      expect(failure, isNull, reason: 'TLS-соединение не установлено: $failure');
     },
   );
   test('mini-app bridge refuses plain http origins', () {
