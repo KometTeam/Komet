@@ -14,6 +14,8 @@ import '../screens/downloads_screen.dart';
 import 'max_link_nav.dart';
 import 'swipe_route.dart';
 
+const double mediaPlaybackControlExtent = 40;
+
 class MediaPlaybackPill extends StatelessWidget {
   const MediaPlaybackPill({
     super.key,
@@ -24,7 +26,7 @@ class MediaPlaybackPill extends StatelessWidget {
   final BorderRadius? borderRadius;
   final EdgeInsets margin;
 
-  static const double height = 30;
+  static const double height = mediaPlaybackControlExtent;
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +326,7 @@ class _PillSurface extends StatelessWidget {
                                 ? Symbols.pause
                                 : Symbols.play_arrow,
                             color: cs.primary,
-                            size: 19,
+                            size: 22,
                             onTap: onToggle,
                           ),
                         ),
@@ -335,11 +337,11 @@ class _PillSurface extends StatelessWidget {
                               borderRadius: BorderRadius.circular(5),
                               child: Image(
                                 image: artwork!,
-                                width: 22,
-                                height: 22,
+                                width: 28,
+                                height: 28,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, _, _) =>
-                                    const SizedBox(width: 22, height: 22),
+                                    const SizedBox(width: 28, height: 28),
                               ),
                             ),
                           ),
@@ -359,7 +361,7 @@ class _PillSurface extends StatelessWidget {
                         _IconTap(
                           icon: Symbols.close,
                           color: cs.onSurfaceVariant,
-                          size: 17,
+                          size: 20,
                           onTap: onClose,
                         ),
                       ],
@@ -404,15 +406,17 @@ class _IconTap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkResponse(
-      onTap: () {
-        Haptics.tap();
-        onTap();
-      },
-      radius: 22,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 9),
-        child: Icon(icon, color: color, size: size, fill: 1),
+    return SizedBox.square(
+      dimension: mediaPlaybackControlExtent,
+      child: InkResponse(
+        onTap: () {
+          Haptics.tap();
+          onTap();
+        },
+        radius: mediaPlaybackControlExtent / 2,
+        child: Center(
+          child: Icon(icon, color: color, size: size, fill: 1),
+        ),
       ),
     );
   }
@@ -427,28 +431,33 @@ class _SpeedChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return InkResponse(
-      onTap: () {
-        Haptics.selection();
-        onTap();
-      },
-      radius: 22,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-            width: 1.2,
-          ),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: cs.onSurfaceVariant,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
+    return SizedBox(
+      width: 44,
+      height: mediaPlaybackControlExtent,
+      child: InkResponse(
+        onTap: () {
+          Haptics.selection();
+          onTap();
+        },
+        radius: mediaPlaybackControlExtent / 2,
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                width: 1.2,
+              ),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: cs.onSurfaceVariant,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ),
       ),

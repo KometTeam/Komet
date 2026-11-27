@@ -74,6 +74,7 @@ class VoiceMessageBubble extends StatefulWidget {
 }
 
 const double _transcriptionMaxHeight = 132;
+const double voiceTranscriptionButtonExtent = 40;
 
 class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   bool _transcriptionVisible = false;
@@ -391,21 +392,22 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
+                key: const ValueKey('voice-transcription-button'),
+                behavior: HitTestBehavior.opaque,
                 onTap: _requestTranscription,
-                child: SizedBox(
-                  width: 20,
-                  height: 32,
+                child: SizedBox.square(
+                  dimension: voiceTranscriptionButtonExtent,
                   child: Center(
                     child: _transcriptionLoading
                         ? SmallSpinner(
-                            size: 12,
+                            size: 14,
                             color: widget.textColor.withValues(alpha: 0.6),
                           )
                         : Text(
                             AppLocalizations.of(context)!.voiceBubbleTranscribe,
                             style: TextStyle(
                               color: widget.textColor.withValues(alpha: 0.6),
-                              fontSize: 13,
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
