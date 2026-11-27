@@ -218,17 +218,14 @@ class KometSettingsScreen extends StatelessWidget {
 
   Future<void> _setGhostMode(bool value) async {
     await KometSettings.setGhostMode(value);
-    await _restoreReadsWhenSent();
     api.sendPing(interactive: !value);
+    if (!KometSettings.readReceiptsStayLocal) {
+      await chats.revealAllLocalReads(api);
+    }
   }
 
   Future<void> _setAntiRead(bool value) async {
     await KometSettings.setAntiRead(value);
-    await _restoreReadsWhenSent();
-  }
-
-  Future<void> _restoreReadsWhenSent() async {
-    if (KometSettings.ghostMode.value || KometSettings.antiRead.value) return;
-    await chats.restoreGhostReads();
+    if (!value) await chats.revealAllLocalReads(api);
   }
 }

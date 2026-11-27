@@ -39,6 +39,7 @@ class KometSettings {
   static final ValueNotifier<bool> showTypingTime = ValueNotifier(false);
   static final ValueNotifier<bool> ghostMode = ValueNotifier(false);
   static final ValueNotifier<bool> antiRead = ValueNotifier(false);
+  static bool get readReceiptsStayLocal => antiRead.value;
   static final ValueNotifier<bool> antiStoryView = ValueNotifier(false);
   static final ValueNotifier<bool> selfOnlineCheck = ValueNotifier(true);
   static final ValueNotifier<bool> hideAllChatsFolder = ValueNotifier(false);

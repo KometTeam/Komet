@@ -111,7 +111,7 @@ Future<void> _handleMarkRead(String payloadJson) async {
 
   await _prepareIsolate();
   await KometSettings.load();
-  if (KometSettings.ghostMode.value || KometSettings.antiRead.value) return;
+  if (KometSettings.readReceiptsStayLocal) return;
 
   await _withSession(account, (api) async {
     final response = await api.sendRequest(Opcode.chatMark, {

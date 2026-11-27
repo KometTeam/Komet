@@ -67,6 +67,32 @@ void main() {
     expect(_read().unreadFor(9, lastMessageTime: 1400), 1);
   });
 
+  test('stores the message id for revealing a read after an action', () async {
+    await GhostReadStore.instance.noteLocalRead(
+      _account,
+      _chat,
+      messageId: '70001',
+      mark: 1000,
+      left: 0,
+      serverUnread: 5,
+      serverOwnMark: 400,
+    );
+    await GhostReadStore.instance.noteLocalRead(
+      _account,
+      _chat,
+      messageId: '70002',
+      mark: 1300,
+      left: 0,
+      serverUnread: 5,
+      serverOwnMark: 400,
+    );
+
+    expect(_read().messageId, '70002');
+    expect(_read().needsReveal, isTrue);
+    await GhostReadStore.instance.markRevealed(_account, _chat, 1300);
+    expect(_read().needsReveal, isFalse);
+  });
+
   test('a partial read keeps what is left below', () async {
     await GhostReadStore.instance.noteLocalRead(
       _account,

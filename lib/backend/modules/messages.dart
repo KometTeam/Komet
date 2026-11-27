@@ -1120,7 +1120,7 @@ class MessagesModule {
     if (await TokenStorage.getActiveAccountId() != owner) {
       throw StateError('Account changed before message dispatch');
     }
-    return _api.sendRequest(
+    final response = await _api.sendRequest(
       opcode,
       payload,
       beforeSend: () {
@@ -1139,6 +1139,12 @@ class MessagesModule {
         }
       },
     );
+    if (response.isOk) {
+      unawaited(
+        chats.revealLocalReadAfterAction(_api, chatId, accountId: owner),
+      );
+    }
+    return response;
   }
 
   static String _outgoingText(Map<dynamic, dynamic> payload) {
@@ -1695,6 +1701,7 @@ class MessagesModule {
     } catch (e) {
       logger.w('Реакция на $messageId не сохранилась: $e');
     }
+    unawaited(chats.revealLocalReadAfterAction(_api, chatId));
     return (ok: true, info: info);
   }
 
@@ -1779,6 +1786,7 @@ class MessagesModule {
 
     final response = await _api.sendRequest(Opcode.msgSendCallback, request);
     if (!response.isOk) return null;
+    unawaited(chats.revealLocalReadAfterAction(_api, chatId));
     final data = response.payload;
     return data is Map ? Map<String, dynamic>.from(data) : null;
   }

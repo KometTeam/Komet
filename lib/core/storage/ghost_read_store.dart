@@ -2,6 +2,8 @@ import 'per_chat_json_store.dart';
 
 class GhostRead {
   final int mark;
+  final String? messageId;
+  final int revealedMark;
   final int serverUnread;
   final int serverOwnMark;
   final int baseUnread;
@@ -9,11 +11,15 @@ class GhostRead {
 
   const GhostRead({
     required this.mark,
+    required this.messageId,
+    required this.revealedMark,
     required this.serverUnread,
     required this.serverOwnMark,
     required this.baseUnread,
     required this.left,
   });
+
+  bool get needsReveal => revealedMark < mark;
 
   int unreadFor(int serverUnread, {int? lastMessageTime}) {
     if (lastMessageTime != null && lastMessageTime <= mark) return 0;
@@ -22,8 +28,20 @@ class GhostRead {
 
   GhostRead withServer({int? unread, int? ownMark}) => GhostRead(
     mark: mark,
+    messageId: messageId,
+    revealedMark: revealedMark,
     serverUnread: unread ?? serverUnread,
     serverOwnMark: ownMark ?? serverOwnMark,
+    baseUnread: baseUnread,
+    left: left,
+  );
+
+  GhostRead withRevealedMark(int value) => GhostRead(
+    mark: mark,
+    messageId: messageId,
+    revealedMark: value > revealedMark ? value : revealedMark,
+    serverUnread: serverUnread,
+    serverOwnMark: serverOwnMark,
     baseUnread: baseUnread,
     left: left,
   );
@@ -36,6 +54,8 @@ class GhostReadStore extends PerChatJsonStore<GhostRead> {
         fromJson: _fromJson,
         toJson: (value) => {
           'mark': value.mark,
+          if (value.messageId != null) 'messageId': value.messageId,
+          'revealed': value.revealedMark,
           'unread': value.serverUnread,
           'ownMark': value.serverOwnMark,
           'base': value.baseUnread,
@@ -53,8 +73,12 @@ class GhostReadStore extends PerChatJsonStore<GhostRead> {
     if (mark is! int || unread is! int || ownMark is! int) return null;
     final base = raw['base'];
     final left = raw['left'];
+    final messageId = raw['messageId'];
+    final revealed = raw['revealed'];
     return GhostRead(
       mark: mark,
+      messageId: messageId is String && messageId.isNotEmpty ? messageId : null,
+      revealedMark: revealed is int ? revealed : 0,
       serverUnread: unread,
       serverOwnMark: ownMark,
       baseUnread: base is int ? base : unread,
@@ -67,6 +91,7 @@ class GhostReadStore extends PerChatJsonStore<GhostRead> {
   Future<void> noteLocalRead(
     int accountId,
     int chatId, {
+    String? messageId,
     required int mark,
     required int left,
     required int serverUnread,
@@ -74,17 +99,27 @@ class GhostReadStore extends PerChatJsonStore<GhostRead> {
   }) {
     final prev = read(accountId, chatId);
     final known = prev?.serverUnread ?? serverUnread;
+    final previousMark = prev?.mark ?? -1;
+    final advanced = mark > previousMark;
     return write(
       accountId,
       chatId,
       GhostRead(
-        mark: prev == null || mark > prev.mark ? mark : prev.mark,
+        mark: advanced ? mark : previousMark,
+        messageId: advanced ? messageId : prev?.messageId ?? messageId,
+        revealedMark: prev?.revealedMark ?? 0,
         serverUnread: known,
         serverOwnMark: prev?.serverOwnMark ?? serverOwnMark,
         baseUnread: known,
         left: left,
       ),
     );
+  }
+
+  Future<void> markRevealed(int accountId, int chatId, int mark) {
+    final prev = read(accountId, chatId);
+    if (prev == null || mark <= prev.revealedMark) return Future.value();
+    return write(accountId, chatId, prev.withRevealedMark(mark));
   }
 
   Future<void> noteServer(

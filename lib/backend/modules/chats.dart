@@ -577,7 +577,14 @@ class ChatsModule {
 
     final readsStayLocal = _readsStayLocal;
     if (readsStayLocal) {
-      await _rememberLocalRead(accountId, chatId, rows.first, mark, left: 0);
+      await _rememberLocalRead(
+        accountId,
+        chatId,
+        rows.first,
+        messageId,
+        mark,
+        left: 0,
+      );
     }
     final msgIdNum = int.tryParse(messageId);
     if (msgIdNum != null && !readsStayLocal) {
@@ -628,7 +635,14 @@ class ChatsModule {
     if (rows.isEmpty) return;
     final next = remaining < 0 ? 0 : remaining;
     if (readsStayLocal) {
-      await _rememberLocalRead(accountId, chatId, rows.first, mark, left: next);
+      await _rememberLocalRead(
+        accountId,
+        chatId,
+        rows.first,
+        messageId,
+        mark,
+        left: next,
+      );
     }
     final cached = CachedChat.fromDbRow(rows.first);
     final currentMark = cached.participants[accountId] ?? 0;
@@ -933,13 +947,13 @@ class ChatsModule {
     unawaited(ChatInfoFetch.get(chatId));
   }
 
-  static bool get _readsStayLocal =>
-      KometSettings.ghostMode.value || KometSettings.antiRead.value;
+  static bool get _readsStayLocal => KometSettings.readReceiptsStayLocal;
 
   Future<void> _rememberLocalRead(
     int accountId,
     int chatId,
     Map<String, Object?> row,
+    String messageId,
     int mark, {
     required int left,
   }) {
@@ -947,6 +961,7 @@ class ChatsModule {
     return GhostReadStore.instance.noteLocalRead(
       accountId,
       chatId,
+      messageId: messageId,
       mark: mark,
       left: left,
       serverUnread: cached.unreadCount,
@@ -998,21 +1013,58 @@ class ChatsModule {
     return local.unreadFor(serverUnread, lastMessageTime: lastMessageTime);
   }
 
-  Future<void> restoreGhostReads() async {
+  Future<void> revealLocalReadAfterAction(
+    Api api,
+    int chatId, {
+    int? accountId,
+  }) async {
+    var owner = accountId ?? TokenStorage.knownActiveAccountId;
+    owner ??= await TokenStorage.getActiveAccountId();
+    if (owner == null) return;
+    await GhostReadStore.instance.load();
+    await _revealStoredRead(api, owner, chatId);
+  }
+
+  Future<void> revealAllLocalReads(Api api, {int? accountId}) async {
+    var owner = accountId ?? TokenStorage.knownActiveAccountId;
+    owner ??= await TokenStorage.getActiveAccountId();
+    if (owner == null) return;
     await GhostReadStore.instance.load();
     final entries = GhostReadStore.instance.snapshot();
     for (final entry in entries) {
-      final read = entry.read;
-      await _updateChat(entry.accountId, entry.chatId, (chat) {
-        final participants = Map<int, int>.from(chat.participants)
-          ..[entry.accountId] = read.serverOwnMark;
-        return chat.copyWith(
-          unreadCount: read.serverUnread,
-          participants: participants,
-        );
-      });
+      if (entry.accountId != owner) continue;
+      await _revealStoredRead(api, owner, entry.chatId);
     }
-    await GhostReadStore.instance.clearAll();
+  }
+
+  Future<bool> _revealStoredRead(Api api, int accountId, int chatId) async {
+    final read = GhostReadStore.instance.of(accountId, chatId);
+    if (read == null || !read.needsReveal) return true;
+    var messageId = int.tryParse(read.messageId ?? '');
+    if (messageId == null && read.left == 0) {
+      final rows = await AppDatabase.loadChat(accountId, chatId);
+      if (rows.isNotEmpty) {
+        final chat = CachedChat.fromDbRow(rows.first);
+        final lastTime = chat.lastMsgTime;
+        if (chat.lastMsgId != null && lastTime != null && lastTime <= read.mark) {
+          messageId = chat.lastMsgId;
+        }
+      }
+    }
+    if (messageId == null) return false;
+    try {
+      final response = await api.sendRequest(Opcode.chatMark, {
+        'type': 'READ_MESSAGE',
+        'chatId': chatId,
+        'messageId': messageId,
+        'mark': read.mark,
+      }, silent: true);
+      if (!response.isOk) return false;
+      await GhostReadStore.instance.markRevealed(accountId, chatId, read.mark);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   // #***! шаблон прочитать поменять сохранить оповестить

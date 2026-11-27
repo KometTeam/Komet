@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../api.dart';
+import 'chats.dart' show chats;
 import '../../core/protocol/opcode_map.dart';
 import '../../core/utils/logger.dart';
 import '../../models/poll.dart';
@@ -78,6 +81,7 @@ class PollsModule extends ChangeNotifier {
         'answersIds': answersIds,
       });
       if (!response.isOk) return false;
+      unawaited(chats.revealLocalReadAfterAction(_api, chatId));
 
       final data = response.payload;
       final state = data is Map ? data['state'] : null;
